@@ -4,6 +4,7 @@ import Link from "next/link";
 import { ChatStrip } from "@/components/shell/ChatStrip";
 import { useAssistant } from "@/components/inspector/AssistantContext";
 import { AssistantDrawer } from "@/components/inspector/AssistantDrawer";
+import { BreadcrumbProvider, useBreadcrumb } from "@/components/shell/BreadcrumbContext";
 
 function TopBar() {
   return (
@@ -21,18 +22,44 @@ function TopBar() {
   );
 }
 
-function BackToProjects() {
+function BreadcrumbBar() {
+  const { items, extras } = useBreadcrumb();
+
   return (
-    <div className="flex-none border-b border-vs-border-default bg-vs-bg-primary px-6 py-2.5">
-      <Link
-        href="/projects"
-        className="inline-flex items-center gap-1.5 text-[12px] text-vs-text-muted hover:text-vs-text-primary no-underline transition-colors"
-      >
-        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" className="flex-none">
-          <path d="M7.5 9.5L4 6L7.5 2.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-        Projects
-      </Link>
+    <div className="flex-none border-b border-vs-border-default bg-vs-bg-primary px-6 py-2.5 flex items-center justify-between min-h-[40px]">
+      <nav className="flex items-center gap-1.5 text-[12px]">
+        {/* Always start with Projects */}
+        <Link
+          href="/projects"
+          className="inline-flex items-center gap-1.5 text-vs-text-muted hover:text-vs-text-primary no-underline transition-colors"
+        >
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" className="flex-none">
+            <path d="M7.5 9.5L4 6L7.5 2.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          Projects
+        </Link>
+
+        {/* Additional breadcrumb items */}
+        {items.map((item, i) => (
+          <span key={i} className="flex items-center gap-1.5">
+            <span className="text-vs-text-muted">/</span>
+            {item.href ? (
+              <Link href={item.href} className="text-vs-text-muted hover:text-vs-text-primary no-underline transition-colors">
+                {item.label}
+              </Link>
+            ) : (
+              <span className="text-vs-text-primary font-medium">{item.label}</span>
+            )}
+          </span>
+        ))}
+      </nav>
+
+      {/* Extra items (pills, buttons) on the right side of the breadcrumb */}
+      {extras && (
+        <div className="flex items-center gap-2">
+          {extras}
+        </div>
+      )}
     </div>
   );
 }
@@ -47,17 +74,19 @@ export function InspectLayoutInner({
   const { isOpen } = useAssistant();
 
   return (
-    <div className="flex flex-col w-full h-screen min-h-[720px] overflow-hidden">
-      <TopBar />
-      <div className="flex flex-1 min-h-0 overflow-hidden">
-        {navRail}
-        <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
-          <BackToProjects />
-          <main className="flex-1 min-w-0 overflow-hidden">{children}</main>
+    <BreadcrumbProvider>
+      <div className="flex flex-col w-full h-screen min-h-[720px] overflow-hidden">
+        <TopBar />
+        <div className="flex flex-1 min-h-0 overflow-hidden">
+          {navRail}
+          <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
+            <BreadcrumbBar />
+            <main className="flex-1 min-w-0 overflow-hidden">{children}</main>
+          </div>
+          {isOpen && <AssistantDrawer />}
+          <ChatStrip />
         </div>
-        {isOpen && <AssistantDrawer />}
-        <ChatStrip />
       </div>
-    </div>
+    </BreadcrumbProvider>
   );
 }
