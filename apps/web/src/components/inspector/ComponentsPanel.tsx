@@ -6,29 +6,29 @@ import { CompletenessScore } from "@/components/ui/completeness-score";
 import { StatusChip } from "@/components/ui/status-chip";
 import type { ComponentSummary } from "@/lib/data/components";
 
-function ComponentPreview({ type }: { type: string }) {
-  switch (type) {
-    case "button":
-      return <span className="inline-flex items-center justify-center font-sans font-medium text-[11px] bg-[#2563EB] text-white rounded-md px-3 py-1.5">Continue</span>;
-    case "input":
-      return (
-        <div className="w-[100px] h-[28px] bg-white border border-[#D4D4D8] rounded flex items-center px-2">
-          <span className="text-[10px] text-[#9BA1AB]">Search…</span>
-        </div>
-      );
-    case "card":
-      return <div className="w-[80px] h-[48px] bg-white border border-[#D4D4D8] rounded-md" />;
-    case "modal":
-      return (
-        <div className="w-[80px] h-[50px] bg-white border border-[#D4D4D8] rounded-md relative">
-          <div className="absolute top-1.5 right-1.5 w-3 h-3 rounded-full border border-[#D4D4D8]" />
-        </div>
-      );
-    case "badge":
-      return <span className="font-mono text-[9px] text-[#6B7280] border border-[#D4D4D8] bg-white rounded-full px-2 py-0.5">DRAFT</span>;
-    default:
-      return null;
-  }
+function ComponentIcon({ name }: { name: string }) {
+  const lower = name.toLowerCase();
+
+  // Pick icon based on component name
+  if (lower.includes("nav")) return <span className="text-[20px]">🧭</span>;
+  if (lower.includes("header")) return <span className="text-[20px]">📐</span>;
+  if (lower.includes("footer")) return <span className="text-[20px]">🔻</span>;
+  if (lower.includes("button")) return <span className="text-[20px]">🔘</span>;
+  if (lower.includes("input") || lower.includes("textarea")) return <span className="text-[20px]">📝</span>;
+  if (lower.includes("list")) return <span className="text-[20px]">📋</span>;
+  if (lower.includes("icon")) return <span className="text-[20px]">✦</span>;
+  if (lower.includes("grid")) return <span className="text-[20px]">⊞</span>;
+  if (lower.includes("text")) return <span className="text-[20px]">T</span>;
+  if (lower.includes("flex")) return <span className="text-[20px]">⬚</span>;
+  if (lower.includes("form")) return <span className="text-[20px]">📄</span>;
+
+  // Fallback: show component initial in a box
+  const initial = name.charAt(0).toUpperCase();
+  return (
+    <div className="w-10 h-10 rounded-lg border-2 border-dashed border-vs-border-strong flex items-center justify-center">
+      <span className="font-mono text-[14px] text-vs-text-muted font-medium">{initial}</span>
+    </div>
+  );
 }
 
 export function ComponentsPanel({ initialComponents }: { initialComponents?: ComponentSummary[] }) {
@@ -56,29 +56,35 @@ export function ComponentsPanel({ initialComponents }: { initialComponents?: Com
       </div>
 
       <div className="flex-1 overflow-y-auto p-6">
-        <div className="grid grid-cols-3 gap-4">
-          {filtered.map((comp) => (
-            <Link
-              key={comp.id}
-              href={`components/${comp.id}`}
-              className="bg-vs-bg-surface border border-vs-border-default rounded-lg overflow-hidden text-inherit no-underline transition-colors hover:border-vs-border-strong group"
-            >
-              <div className="h-[120px] bg-vs-bg-elevated border-b border-vs-border-default flex items-center justify-center">
-                <ComponentPreview type={comp.preview} />
-              </div>
-              <div className="p-4">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-[13px] font-semibold">{comp.name}</span>
-                  <StatusChip status={comp.status} />
+        {filtered.length === 0 ? (
+          <div className="text-center py-12 text-[13px] text-vs-text-muted">
+            {components.length === 0 ? "No components detected." : "No components match your search."}
+          </div>
+        ) : (
+          <div className="grid grid-cols-3 gap-4">
+            {filtered.map((comp) => (
+              <Link
+                key={comp.id}
+                href={`components/${comp.id}`}
+                className="bg-vs-bg-surface border border-vs-border-default rounded-lg overflow-hidden text-inherit no-underline transition-colors hover:border-vs-border-strong group"
+              >
+                <div className="h-[100px] bg-vs-bg-elevated border-b border-vs-border-default flex items-center justify-center">
+                  <ComponentIcon name={comp.name} />
                 </div>
-                <div className="flex items-center justify-between">
-                  <span className="font-mono text-[11px] text-vs-text-muted">{comp.variants} variants</span>
-                  <CompletenessScore score={comp.score} />
+                <div className="p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[13px] font-semibold truncate mr-2">{comp.name}</span>
+                    <StatusChip status={comp.status} />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="font-mono text-[11px] text-vs-text-muted">{comp.variants} variants</span>
+                    <CompletenessScore score={comp.score} />
+                  </div>
                 </div>
-              </div>
-            </Link>
-          ))}
-        </div>
+              </Link>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
