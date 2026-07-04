@@ -1,11 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
+import { useParams } from "next/navigation";
 import { CompletenessScore } from "@/components/ui/completeness-score";
 import { StatusChip } from "@/components/ui/status-chip";
 import { ProvenanceDot } from "@/components/ui/provenance-dot";
 import { useToast } from "@/components/ui/toast";
+import { useBreadcrumb } from "@/components/shell/BreadcrumbContext";
 import type { ComponentDetailData } from "@/lib/data/components";
 
 const defaultTokenBindings = [
@@ -88,6 +90,24 @@ export function ComponentDetail({ initialData }: { initialData?: ComponentDetail
   const [showApproveDialog, setShowApproveDialog] = useState(false);
   const [componentName, setComponentName] = useState(initialData?.name ?? "Button");
   const [isRenaming, setIsRenaming] = useState(false);
+  const params = useParams<{ id: string }>();
+  const projectId = params.id ?? "";
+  const { setItems, setExtras } = useBreadcrumb();
+
+  // Set breadcrumb: Projects / Components / <name>  + pills
+  useEffect(() => {
+    setItems([
+      { label: "Components", href: `/projects/${projectId}/inspect/components` },
+      { label: componentName },
+    ]);
+    setExtras(
+      <>
+        <StatusChip status={status} />
+        <CompletenessScore score={componentScore} />
+      </>
+    );
+    return () => { setItems([]); setExtras(null); };
+  }, [componentName, status, componentScore, projectId, setItems, setExtras]);
 
   const bgColor = tokenValues.t1;
   const textColor = tokenValues.t2;
@@ -140,27 +160,7 @@ export function ComponentDetail({ initialData }: { initialData?: ComponentDetail
   return (
     <div className="flex flex-col h-full overflow-y-auto">
       {/* Header */}
-      <div className="px-6 py-5 border-b border-vs-border-default flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1.5 text-[13px]">
-            <Link href="../components" className="text-vs-text-secondary hover:text-vs-text-primary no-underline">Components</Link>
-            <span className="text-vs-text-muted">/</span>
-            {isRenaming ? (
-              <input
-                autoFocus
-                value={componentName}
-                onChange={(e) => setComponentName(e.target.value)}
-                onBlur={() => { setIsRenaming(false); showToast(`Renamed to ${componentName} — Patch applied`); }}
-                onKeyDown={(e) => { if (e.key === "Enter") { setIsRenaming(false); showToast(`Renamed to ${componentName} — Patch applied`); } if (e.key === "Escape") setIsRenaming(false); }}
-                className="font-semibold bg-vs-bg-elevated border border-vs-accent rounded px-1.5 py-0.5 text-[13px] text-vs-text-primary outline-none w-[120px]"
-              />
-            ) : (
-              <span className="font-semibold cursor-pointer hover:text-vs-accent" onDoubleClick={() => setIsRenaming(true)}>{componentName}</span>
-            )}
-          </div>
-          <StatusChip status={status} />
-          <CompletenessScore score={componentScore} />
-        </div>
+      <div className="px-6 py-3 border-b border-vs-border-default flex items-center justify-end">
         <button
           onClick={handleApprove}
           className="bg-vs-accent text-white rounded-lg px-4 py-2 text-[13px] font-medium border-none cursor-pointer hover:brightness-110"
