@@ -1,4 +1,5 @@
-import { llmJSON } from "../lib/llm";
+import { llmJSON, logUsage } from "@vortspec/llm";
+import { z } from "zod";
 import { generateId } from "../lib/id";
 import type {
   ComponentIR,
@@ -24,17 +25,28 @@ function makeLiteral(value: string | number): StyleValue {
   return { kind: "literal" as const, value, flagged: true as const };
 }
 
-interface DetectedComponent {
-  name: string;
-  description: string;
-  htmlSnippet: string;
-  category: "navigation" | "layout" | "content" | "interactive" | "media" | "form";
-  isReusable: boolean;
-  occurrences: number;
-  variants?: string[];
-  props?: Array<{ name: string; type: string; description: string }>;
-  styles: Record<string, string>;
-}
+// Zod schema for LLM response validation
+const DetectedComponentSchema = z.object({
+  name: z.string(),
+  description: z.string(),
+  htmlSnippet: z.string(),
+  category: z.enum(["navigation", "layout", "content", "interactive", "media", "form"]),
+  isReusable: z.boolean(),
+  occurrences: z.number(),
+  variants: z.array(z.string()).optional(),
+  props: z.array(z.object({
+    name: z.string(),
+    type: z.string(),
+    description: z.string(),
+  })).optional(),
+  styles: z.record(z.string(), z.string()),
+});
+
+const ComponentDetectionResponseSchema = z.object({
+  components: z.array(DetectedComponentSchema),
+});
+
+type DetectedComponent = z.infer<typeof DetectedComponentSchema>;
 
 const SYSTEM_PROMPT = `You are a design system component detector. You analyze HTML/CSS from design exports and identify reusable UI components.
 
@@ -49,6 +61,7 @@ Rules:
 - Name components clearly: "Primary Button", "Navigation Bar", "Module Card", "Hero Section"
 - Identify variants: "Primary Button" and "Secondary Button" are variants of "Button"
 - Extract key styles that define the component's visual identity
+- Aim for 5-15 high-quality components. Quality over quantity — fewer well-identified components are better than many low-confidence fragments
 
 Return valid JSON only. No markdown fences, no explanation.`;
 
@@ -142,6 +155,7 @@ function buildNodeFromDetection(comp: DetectedComponent): IRNode {
  */
 export async function detectComponentsWithLLM(
   files: Array<{ path: string; content: string }>,
+  options?: { projectId?: string },
 ): Promise<{ components: ComponentIR[]; model: string; tokensUsed: number }> {
   // Filter to HTML files only, take up to 5 representative pages
   const htmlFiles = files
@@ -154,17 +168,11 @@ export async function detectComponentsWithLLM(
 
   const samples = htmlFiles.map((f) => ({ filename: f.path, html: f.content }));
 
-  const result = await llmJSON<{ components: DetectedComponent[] }>(
+  const result = await llmJSON(
     SYSTEM_PROMPT,
     buildUserPrompt(samples),
-    (data) => {
-      const obj = data as { components?: unknown[] };
-      if (!obj.components || !Array.isArray(obj.components)) {
-        throw new Error("Response must have a 'components' array");
-      }
-      return { components: obj.components as DetectedComponent[] };
-    },
-    { temperature: 0, maxTokens: 4096 },
+    (data) => ComponentDetectionResponseSchema.parse(data),
+    { temperature: 0, maxTokens: 4096, projectId: options?.projectId, purpose: "component-detection" },
   );
 
   const provenance = makeProvenance();
@@ -233,3 +241,6 @@ export async function detectComponentsWithLLM(
     tokensUsed: result.tokensIn + result.tokensOut,
   };
 }
+
+/** Alias for consistent naming with other stage functions. */
+export const runLLMComponentDetectionCore = detectComponentsWithLLM;

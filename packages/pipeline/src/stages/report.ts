@@ -336,10 +336,16 @@ export interface ReportResult {
 /**
  * Core report logic -- pure function.
  * Promotes repeated style values to tokens, rewrites components, computes completeness.
+ *
+ * @param tokenNames  Optional map from "property::value" to semantic token name
+ *                    (e.g. "background-color::#2563EB" -> "color/primary/500").
+ *                    When provided, tokens get LLM-assigned names instead of
+ *                    raw "property/value" fallback names.
  */
 export function runReportCore(
   components: ComponentIR[],
   styleGroups: StyleGroup[],
+  tokenNames?: Map<string, string>,
 ): ReportResult {
   const provenance = makeProvenance();
   const tokens: DesignToken[] = [];
@@ -357,7 +363,8 @@ export function runReportCore(
     if (!tokenValue) continue;
 
     const tokenId = generateId("tok");
-    const tokenName = `${group.property}/${group.value}`;
+    const nameKey = `${group.property}::${group.value}`;
+    const tokenName = tokenNames?.get(nameKey) ?? `${group.property}/${group.value}`;
 
     const token: DesignToken = {
       id: tokenId,
@@ -531,8 +538,9 @@ export async function runReportStage(
   projectId: string,
   components: ComponentIR[],
   styleGroups: StyleGroup[],
+  tokenNames?: Map<string, string>,
 ): Promise<ReportResult> {
-  const result = runReportCore(components, styleGroups);
+  const result = runReportCore(components, styleGroups, tokenNames);
 
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,

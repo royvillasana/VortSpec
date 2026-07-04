@@ -11,7 +11,14 @@ export {
   runStructureInferenceCore,
   type StructureInferenceResult,
 } from "./stages/structure-inference";
-export { detectComponentsWithLLM } from "./stages/llm-component-detection";
+export {
+  detectComponentsWithLLM,
+  runLLMComponentDetectionCore,
+} from "./stages/llm-component-detection";
+export {
+  runTokenInferenceCore,
+  type TokenInferenceResult,
+} from "./stages/token-inference";
 export {
   runReportCore,
   runReportStage,

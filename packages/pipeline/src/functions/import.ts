@@ -4,6 +4,7 @@ import { inngest } from "../client";
 import { updateStageStatus, updateImportStatus } from "../lib/stage-status";
 import { runParseStage } from "../stages/parse";
 import { runStyleMiningCore, type StyleMiningResult } from "../stages/style-mining";
+import { runTokenInferenceCore } from "../stages/token-inference";
 import { runStructureInferenceCore } from "../stages/structure-inference";
 import { detectComponentsWithLLM } from "../stages/llm-component-detection";
 import { runReportCore } from "../stages/report";
@@ -104,12 +105,31 @@ export const importPipeline = inngest.createFunction(
       }
     });
 
-    // Stage 3: Token Inference (STUB -- tokens are promoted in report stage)
-    await step.run("token_inference", async () => {
+    // Stage 3: Token Inference (LLM-powered semantic naming)
+    const tokenInferenceResult = await step.run("token_inference", async () => {
       await updateStageStatus(importId, "token_inference", "running");
-      await updateStageStatus(importId, "token_inference", "done", {
-        result: { tokenCount: 0, note: "Token promotion handled in report stage" },
-      });
+      try {
+        const result = await runTokenInferenceCore(styleMiningResult.groups, { projectId });
+        console.log(
+          `[pipeline] Token inference: ${result.namedTokens.length} tokens named using ${result.model} (${result.tokensUsed} tokens)`,
+        );
+        await updateStageStatus(importId, "token_inference", "done", {
+          result: {
+            namedTokenCount: result.namedTokens.length,
+            nearDuplicateCount: result.nearDuplicates.length,
+            model: result.model,
+            tokensUsed: result.tokensUsed,
+          },
+        });
+        return result;
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        await updateStageStatus(importId, "token_inference", "failed", {
+          error: message,
+        });
+        await updateImportStatus(importId, "failed", message);
+        throw err;
+      }
     });
 
     // Stage 4: Structure Inference (LLM-assisted when API key available, deterministic fallback)
@@ -121,7 +141,7 @@ export const importPipeline = inngest.createFunction(
 
         if (process.env.OPENROUTER_API_KEY) {
           try {
-            const llmResult = await detectComponentsWithLLM(files);
+            const llmResult = await detectComponentsWithLLM(files, { projectId });
             components = llmResult.components;
             method = `llm:${llmResult.model}`;
             console.log(`[pipeline] LLM detected ${components.length} components using ${llmResult.model} (${llmResult.tokensUsed} tokens)`);
@@ -164,9 +184,16 @@ export const importPipeline = inngest.createFunction(
     const reportResult = await step.run("report", async () => {
       await updateStageStatus(importId, "report", "running");
       try {
+        // Build tokenNames map from LLM inference results
+        const tokenNames = new Map<string, string>();
+        for (const nt of tokenInferenceResult.namedTokens) {
+          tokenNames.set(`${nt.property}::${nt.value}`, nt.name);
+        }
+
         const result = runReportCore(
           structureResult.components,
           styleMiningResult.groups,
+          tokenNames.size > 0 ? tokenNames : undefined,
         );
 
         // Persist to Supabase
