@@ -1,0 +1,60 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`Style Mining -- Claude Design export > processes without errors and produces groups 1`] = `
+{
+  "groupCount": 483,
+  "top10": [
+    {
+      "count": 275,
+      "property": "display",
+      "value": "flex",
+    },
+    {
+      "count": 192,
+      "property": "align-items",
+      "value": "center",
+    },
+    {
+      "count": 145,
+      "property": "font-family",
+      "value": "'Geist Mono',monospace",
+    },
+    {
+      "count": 131,
+      "property": "border-radius",
+      "value": "6px",
+    },
+    {
+      "count": 127,
+      "property": "font-size",
+      "value": "12px",
+    },
+    {
+      "count": 108,
+      "property": "font-size",
+      "value": "11px",
+    },
+    {
+      "count": 103,
+      "property": "color",
+      "value": "#9BA1AB",
+    },
+    {
+      "count": 95,
+      "property": "color",
+      "value": "#6B7280",
+    },
+    {
+      "count": 86,
+      "property": "flex",
+      "value": "none",
+    },
+    {
+      "count": 83,
+      "property": "color",
+      "value": "#E7E9EC",
+    },
+  ],
+  "totalDeclarations": 4181,
+}
+`;

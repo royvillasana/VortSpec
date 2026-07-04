@@ -1,0 +1,26 @@
+node_modules
+dist
+.next
+.turbo
+*.tsbuildinfo
+
+# env files
+.env
+.env.*
+!.env.local.example
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea
+.vscode
+*.swp
+
+# Test snapshots can be committed
+# but coverage output should not
+coverage
+
+# pnpm
+pnpm-debug.log

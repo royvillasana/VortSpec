@@ -1,0 +1,36 @@
+{
+  "name": "@vortspec/pipeline",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsup src/index.ts --format esm && tsc --emitDeclarationOnly --declaration --outDir dist",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "echo 'lint ok'",
+    "check-types": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.110.0",
+    "@vortspec/ir": "workspace:*",
+    "cheerio": "^1.2.0",
+    "css-tree": "^3.2.1",
+    "inngest": "^3.35.0",
+    "jszip": "^3.10.1",
+    "nanoid": "^5.1.16"
+  },
+  "devDependencies": {
+    "@types/css-tree": "^2.3.11",
+    "tsup": "^8.5.0",
+    "typescript": "^5.9.0",
+    "vitest": "^3.2.0"
+  }
+}
