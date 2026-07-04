@@ -197,29 +197,24 @@ export function ComponentDetail({ initialData }: { initialData?: ComponentDetail
               )}
             </div>
 
-            {/* Controls */}
+            {/* Controls — dynamic from variant axes */}
             <div className="px-4 py-3 grid grid-cols-[110px_1fr] gap-y-2.5 gap-x-4 text-[12px] border-b border-vs-border-default">
-              <span className="text-vs-text-muted">label</span>
-              <input value={label} onChange={(e) => setLabel(e.target.value)} className="bg-vs-bg-elevated border border-vs-border-default rounded px-2 py-1 text-[12px] text-vs-text-primary outline-none focus:border-vs-accent w-full" />
-
-              <span className="text-vs-text-muted">intent</span>
-              <div className="flex gap-0.5 bg-vs-bg-primary border border-vs-border-default rounded-md p-0.5 w-fit">
-                {["primary", "secondary", "ghost"].map((v) => (
-                  <button key={v} onClick={() => setIntent(v)} className={`text-[11px] px-2 py-0.5 rounded border-none cursor-pointer font-mono ${intent === v ? "bg-vs-bg-elevated text-vs-text-primary" : "text-vs-text-muted hover:text-vs-text-primary"}`}>{v}</button>
-                ))}
-              </div>
-
-              <span className="text-vs-text-muted">size</span>
-              <div className="flex gap-0.5 bg-vs-bg-primary border border-vs-border-default rounded-md p-0.5 w-fit">
-                {["sm", "md", "lg"].map((v) => (
-                  <button key={v} onClick={() => setSize(v)} className={`text-[11px] px-2 py-0.5 rounded border-none cursor-pointer font-mono ${size === v ? "bg-vs-bg-elevated text-vs-text-primary" : "text-vs-text-muted hover:text-vs-text-primary"}`}>{v}</button>
-                ))}
-              </div>
-
-              <span className="text-vs-text-muted">disabled</span>
-              <button onClick={() => setDisabled(!disabled)} className={`w-[30px] h-[17px] rounded-full border-none cursor-pointer relative transition-colors ${disabled ? "bg-vs-accent" : "bg-vs-border-default"}`}>
-                <span className={`absolute top-[2px] w-[13px] h-[13px] rounded-full bg-vs-text-primary transition-transform ${disabled ? "left-[15px]" : "left-[2px]"}`} />
-              </button>
+              {variantAxes.map((axis) => (
+                <>
+                  <span key={`label-${axis.name}`} className="text-vs-text-muted truncate">{axis.name}</span>
+                  <div key={`ctrl-${axis.name}`} className="flex gap-0.5 bg-vs-bg-primary border border-vs-border-default rounded-md p-0.5 w-fit flex-wrap">
+                    {axis.options.map((opt) => (
+                      <button key={opt} className="text-[11px] px-2 py-0.5 rounded border-none cursor-pointer font-mono bg-vs-bg-elevated text-vs-text-primary">{opt}</button>
+                    ))}
+                  </div>
+                </>
+              ))}
+              {props.length > 0 && props.map((p) => (
+                <>
+                  <span key={`plabel-${p.name}`} className="text-vs-text-muted truncate">{p.name}</span>
+                  <span key={`pval-${p.name}`} className="font-mono text-[11px] text-vs-text-secondary">{p.default}</span>
+                </>
+              ))}
             </div>
 
             {/* Tokens table */}
@@ -254,48 +249,40 @@ export function ComponentDetail({ initialData }: { initialData?: ComponentDetail
             </div>
           </section>
 
-          {/* Variants matrix */}
-          <section className="bg-vs-bg-surface border border-vs-border-default rounded-lg overflow-hidden">
-            <div className="px-4 py-3 border-b border-vs-border-default flex items-center justify-between">
-              <h2 className="text-[15px] font-semibold">Variants</h2>
-              {variantAxes.map((axis) => (
-                <div key={axis.name} className="flex items-center gap-2">
-                  <ProvenanceDot confidence={confirmedAxes.has(axis.name) ? "confirmed" : axis.confidence} />
-                  <span className="font-mono text-[11px] text-vs-text-secondary">{axis.name}</span>
-                  {axis.confidence === "inferred" && !confirmedAxes.has(axis.name) && (
-                    <button onClick={() => { setConfirmedAxes((s) => new Set([...s, axis.name])); showToast(`Confirm axis ${axis.name} on Button — Patch applied`); }} className="text-[10px] text-vs-accent border-none bg-transparent cursor-pointer font-sans hover:underline">Confirm</button>
-                  )}
+          {/* Variants */}
+          {variantAxes.length > 0 && (
+            <section className="bg-vs-bg-surface border border-vs-border-default rounded-lg overflow-hidden">
+              <div className="px-4 py-3 border-b border-vs-border-default">
+                <h2 className="text-[15px] font-semibold mb-2">Variants</h2>
+                <div className="flex flex-wrap gap-3">
+                  {variantAxes.map((axis) => (
+                    <div key={axis.name} className="flex items-center gap-2">
+                      <ProvenanceDot confidence={confirmedAxes.has(axis.name) ? "confirmed" : axis.confidence} />
+                      <span className="font-mono text-[11px] text-vs-text-secondary">{axis.name}</span>
+                      <span className="font-mono text-[10px] text-vs-text-muted">({axis.options.length} options)</span>
+                      {axis.confidence === "inferred" && !confirmedAxes.has(axis.name) && (
+                        <button onClick={() => { setConfirmedAxes((s) => new Set([...s, axis.name])); showToast(`Confirm axis ${axis.name} — Patch applied`); }} className="text-[10px] text-vs-accent border-none bg-transparent cursor-pointer font-sans hover:underline">Confirm</button>
+                      )}
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-            <div className="p-4">
-              <div className="grid grid-cols-[64px_1fr_1fr_1fr] gap-2">
-                <div />
-                {["sm", "md", "lg"].map((s) => (
-                  <div key={s} className="text-center font-mono text-[10px] text-vs-text-muted py-1">{s}</div>
-                ))}
-                {["primary", "secondary", "ghost"].map((i) => (
-                  <>
-                    <div key={`label-${i}`} className="flex items-center font-mono text-[10px] text-vs-text-muted">{i}</div>
-                    {["sm", "md", "lg"].map((s) => {
-                      const style = i === "primary"
-                        ? { background: bgColor, color: textColor, border: "none", borderRadius }
-                        : i === "secondary"
-                          ? { background: "transparent", color: "#E7E9EC", border: "1px solid #34373D", borderRadius }
-                          : { background: "transparent", color: "#9BA1AB", border: "none", borderRadius };
-                      const sc = s === "sm" ? "text-[9px] px-1.5 py-0.5" : s === "lg" ? "text-[12px] px-3 py-1.5" : "text-[10px] px-2 py-1";
-                      return (
-                        <div key={`${i}-${s}`} className="h-[64px] bg-vs-bg-elevated border border-vs-border-default rounded-md flex items-center justify-center group relative">
-                          <span className={`inline-flex items-center justify-center font-sans font-medium ${sc}`} style={style}>Btn</span>
-                          <span className="absolute bottom-1 font-mono text-[9px] text-vs-text-muted opacity-0 group-hover:opacity-100 transition-opacity">{i}/{s}</span>
-                        </div>
-                      );
-                    })}
-                  </>
-                ))}
               </div>
-            </div>
-          </section>
+              <div className="p-4">
+                <div className="flex flex-wrap gap-2">
+                  {variantAxes.map((axis) => (
+                    <div key={axis.name} className="flex-1 min-w-[140px]">
+                      <div className="font-mono text-[10px] text-vs-text-muted mb-2">{axis.name}</div>
+                      {axis.options.map((opt) => (
+                        <div key={opt} className="h-[40px] bg-vs-bg-elevated border border-vs-border-default rounded-md flex items-center px-3 mb-1.5">
+                          <span className="font-mono text-[11px] text-vs-text-secondary">{opt}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </section>
+          )}
 
           {/* Structure */}
           <section className="bg-vs-bg-surface border border-vs-border-default rounded-lg overflow-hidden">
