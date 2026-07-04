@@ -144,7 +144,7 @@ describe("Structure Inference -- minimal fixture", () => {
 });
 
 describe("Structure Inference -- edge cases", () => {
-  it("returns no components for HTML with unique elements", () => {
+  it("detects structurally similar elements even with different classes", () => {
     const html = `<html><body>
       <div class="unique-a"><span>one</span></div>
       <div class="unique-b"><span>two</span></div>
@@ -152,8 +152,8 @@ describe("Structure Inference -- edge cases", () => {
     const files = [{ path: "unique.html", content: html }];
     const styleResult = runStyleMiningCore(files);
     const result = runStructureInferenceCore(files, styleResult.groups);
-    // No repeated primary classes, so no candidates
-    expect(result.components.length).toBe(0);
+    // Strategy 2 detects these as structurally identical (div[span])
+    expect(result.components.length).toBeGreaterThanOrEqual(1);
   });
 
   it("handles HTML with no class attributes", () => {
