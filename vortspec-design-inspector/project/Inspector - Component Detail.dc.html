@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous">
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&amp;family=Geist+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+  <style>
+    html, body { margin:0; padding:0; background:#0B0C0E; }
+    * { box-sizing:border-box; }
+    @keyframes vsToastIn { from { transform:translateY(12px); opacity:0; } to { transform:translateY(0); opacity:1; } }
+    @keyframes vsDlgIn { from { transform:scale(0.97); opacity:0; } to { transform:scale(1); opacity:1; } }
+    ::-webkit-scrollbar { width:10px; height:10px; }
+    ::-webkit-scrollbar-thumb { background:#26282D; border-radius:8px; border:2px solid #0B0C0E; }
+    ::-webkit-scrollbar-track { background:transparent; }
+  </style>
+</helmet>
+
+<div data-screen-label="Inspector — Component Detail" style="display:flex; width:100%; height:100vh; min-height:720px; background:#0B0C0E; color:#E7E9EC; font-family:'Geist',system-ui,sans-serif; font-size:13px; overflow:hidden;">
+
+  <!-- ============ LEFT RAIL ============ -->
+  <nav style="width:220px; flex:none; background:#141518; border-right:1px solid #26282D; display:flex; flex-direction:column; padding:16px 12px 12px;">
+    <a href="Projects Dashboard.dc.html" title="All projects" style="display:flex; align-items:center; gap:8px; padding:0 8px 16px; border-bottom:1px solid #26282D; margin-bottom:12px; text-decoration:none; color:inherit; border-radius:6px;" style-hover="opacity:0.85;">
+      <div style="width:20px; height:20px; flex:none; border-radius:6px; background:#7C6FF0; display:flex; align-items:center; justify-content:center; font-family:'Geist Mono',monospace; font-size:11px; font-weight:500; color:#0B0C0E;">M</div>
+      <div style="min-width:0;">
+        <div style="font-weight:600; font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Meridian Design System</div>
+        <div style="font-size:11px; color:#6B7280; font-family:'Geist Mono',monospace;">v13 · 48 tokens</div>
+      </div>
+    </a>
+
+    <div style="display:flex; flex-direction:column; gap:2px;">
+      <a href="Inspector - Tokens.dc.html" style="display:flex; align-items:center; gap:10px; padding:7px 8px; border-radius:6px; color:#9BA1AB; text-decoration:none;" style-hover="background:#1B1D21; color:#E7E9EC;">
+        <svg width="14" height="14" viewBox="0 0 14 14"><circle cx="7" cy="7" r="5" fill="none" stroke="currentColor" stroke-width="1.5"></circle><circle cx="7" cy="7" r="2" fill="currentColor"></circle></svg>
+        <span style="flex:1;">Tokens</span>
+      </a>
+      <a href="#" style="display:flex; align-items:center; gap:10px; padding:7px 8px; border-radius:6px; background:#1B1D21; color:#7C6FF0; font-weight:500; text-decoration:none;" style-hover="background:#1B1D21;">
+        <svg width="14" height="14" viewBox="0 0 14 14"><rect x="2" y="2" width="10" height="10" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"></rect></svg>
+        <span style="flex:1;">Components</span>
+      </a>
+      <a href="Inspector - Graph.dc.html" style="display:flex; align-items:center; gap:10px; padding:7px 8px; border-radius:6px; color:#9BA1AB; text-decoration:none;" style-hover="background:#1B1D21; color:#E7E9EC;">
+        <svg width="14" height="14" viewBox="0 0 14 14"><circle cx="3.5" cy="3.5" r="2" fill="none" stroke="currentColor" stroke-width="1.4"></circle><circle cx="10.5" cy="7" r="2" fill="none" stroke="currentColor" stroke-width="1.4"></circle><circle cx="4.5" cy="11" r="2" fill="none" stroke="currentColor" stroke-width="1.4"></circle><path d="M5.3 4.4 L8.7 6.1 M8.6 8 L6 9.9" fill="none" stroke="currentColor" stroke-width="1.2"></path></svg>
+        <span style="flex:1;">Graph</span>
+      </a>
+      <a href="Inspector - Issues.dc.html" style="display:flex; align-items:center; gap:10px; padding:7px 8px; border-radius:6px; color:#9BA1AB; text-decoration:none;" style-hover="background:#1B1D21; color:#E7E9EC;">
+        <svg width="14" height="14" viewBox="0 0 14 14"><rect x="2.6" y="2.6" width="8.8" height="8.8" rx="2" fill="none" stroke="currentColor" stroke-width="1.5" transform="rotate(45 7 7)"></rect></svg>
+        <span style="flex:1;">Issues</span>
+        <span style="font-family:'Geist Mono',monospace; font-size:11px; background:#1B1D21; border:1px solid #34373D; color:#FFB224; border-radius:999px; padding:1px 7px;">{{ issueTotal }}</span>
+      </a>
+      <a href="Inspector - History.dc.html" style="display:flex; align-items:center; gap:10px; padding:7px 8px; border-radius:6px; color:#9BA1AB; text-decoration:none;" style-hover="background:#1B1D21; color:#E7E9EC;">
+        <svg width="14" height="14" viewBox="0 0 14 14"><circle cx="7" cy="7" r="5" fill="none" stroke="currentColor" stroke-width="1.5"></circle><path d="M7 4.5 L7 7 L9 8.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></path></svg>
+        <span style="flex:1;">History</span>
+      </a>
+    </div>
+
+    <div style="flex:1;"></div>
+
+    <a href="#" style="display:flex; align-items:center; gap:10px; padding:7px 8px; border-radius:6px; color:#6B7280; text-decoration:none;" style-hover="background:#1B1D21; color:#E7E9EC;">
+      <span style="font-size:14px; line-height:1;">⚙</span>
+      <span>Settings</span>
+    </a>
+  </nav>
+
+  <!-- ============ MAIN ============ -->
+  <main style="flex:1; min-width:0; display:flex; flex-direction:column; background:#0B0C0E;">
+
+    <!-- Header -->
+    <header style="flex:none; padding:20px 24px 16px; border-bottom:1px solid #26282D; display:flex; align-items:center; gap:12px;">
+      <div style="display:flex; align-items:baseline; gap:8px; min-width:0;">
+        <a href="#" style="font-size:13px; color:#9BA1AB; text-decoration:none;" style-hover="color:#E7E9EC; text-decoration:underline;">Components</a>
+        <span style="color:#6B7280;">/</span>
+        <span style="font-size:20px; font-weight:600; letter-spacing:-0.01em;">Button</span>
+      </div>
+      <span style="display:inline-flex; align-items:center; gap:6px; font-size:12px; padding:3px 10px; border-radius:999px; border:1px solid #34373D; background:#1B1D21; color:{{ statusColor }};">
+        <span style="width:6px; height:6px; border-radius:50%; background:{{ statusColor }}; display:inline-block;"></span>
+        {{ statusLabel }}
+      </span>
+      <span title="Completeness score" style="display:inline-flex; align-items:center; font-family:'Geist Mono',monospace; font-size:12px; font-weight:500; padding:3px 10px; border-radius:999px; border:1px solid #34373D; background:#1B1D21; color:#30A46C;">82</span>
+      <div style="flex:1;"></div>
+      <sc-if value="{{ notApproved }}" hint-placeholder-val="{{ true }}">
+        <button onClick="{{ openApprove }}" style="border:none; cursor:pointer; font-family:'Geist',sans-serif; font-size:13px; font-weight:500; color:#FFFFFF; background:#7C6FF0; border-radius:8px; padding:8px 16px;" style-hover="filter:brightness(1.12);">Approve component</button>
+      </sc-if>
+      <sc-if value="{{ isApproved }}" hint-placeholder-val="{{ false }}">
+        <span style="display:inline-flex; align-items:center; gap:6px; font-size:13px; color:#30A46C; padding:8px 4px;">✓ Approved</span>
+      </sc-if>
+    </header>
+
+    <!-- Content -->
+    <div style="flex:1; overflow-y:auto; padding:24px; display:grid; grid-template-columns:2fr 1fr; gap:24px; align-items:start;">
+
+      <!-- MAIN COLUMN -->
+      <div style="display:flex; flex-direction:column; gap:24px; min-width:0;">
+
+        <!-- Playground -->
+        <section style="background:#141518; border:1px solid #26282D; border-radius:8px;">
+          <div style="display:flex; align-items:center; gap:10px; padding:12px 16px; border-bottom:1px solid #26282D;">
+            <span style="font-size:15px; font-weight:600;">Playground</span>
+            <span style="font-family:'Geist Mono',monospace; font-size:11px; color:#6B7280;">live render</span>
+            <div style="flex:1;"></div>
+            <div style="display:flex; gap:2px; background:#0B0C0E; border:1px solid #26282D; border-radius:6px; padding:2px;">
+              <sc-for list="{{ canvasOpts }}" as="c" hint-placeholder-count="2">
+                <button onClick="{{ c.click }}" style="border:none; cursor:pointer; font-family:'Geist',sans-serif; font-size:11px; padding:3px 10px; border-radius:4px; background:{{ c.bg }}; color:{{ c.color }};" style-hover="color:#E7E9EC;">{{ c.label }}</button>
+              </sc-for>
+            </div>
+            <button onClick="{{ resetControls }}" style="border:1px solid #34373D; background:transparent; cursor:pointer; font-family:'Geist',sans-serif; font-size:11px; color:#9BA1AB; border-radius:6px; padding:4px 10px;" style-hover="background:#1B1D21; color:#E7E9EC;">Reset controls</button>
+          </div>
+
+          <!-- Canvas -->
+          <div style="height:160px; display:flex; align-items:center; justify-content:center; border-bottom:1px solid #26282D; background:{{ pgCanvasBg }};">
+            <span style="display:inline-flex; align-items:center; justify-content:center; font-family:'Geist',sans-serif; font-weight:500; background:{{ pgBg }}; color:{{ pgFg }}; border:{{ pgBorder }}; border-radius:{{ tokRadius }}; font-size:{{ pgFs }}; padding:{{ pgPad }}; line-height:{{ pgLh }}; opacity:{{ pgOpacity }}; cursor:{{ pgCursor }};">{{ pgLabelText }}</span>
+          </div>
+
+          <!-- Controls -->
+          <div style="padding:8px 16px 12px; display:flex; flex-direction:column;">
+            <div style="display:grid; grid-template-columns:110px 1fr; gap:4px; align-items:center; padding:7px 0; border-bottom:1px solid #26282D;">
+              <span style="font-family:'Geist Mono',monospace; font-size:12px; color:#9BA1AB;">label</span>
+              <input value="{{ pgLabel }}" onChange="{{ onPgLabel }}" style="width:200px; background:#1B1D21; border:1px solid #26282D; border-radius:6px; color:#E7E9EC; font-family:'Geist',sans-serif; font-size:12px; padding:5px 10px; outline:none;" style-focus="border-color:#7C6FF0; box-shadow:0 0 0 2px rgba(124,111,240,0.25);">
+            </div>
+            <div style="display:grid; grid-template-columns:110px 1fr; gap:4px; align-items:center; padding:7px 0; border-bottom:1px solid #26282D;">
+              <span style="font-family:'Geist Mono',monospace; font-size:12px; color:#9BA1AB;">intent</span>
+              <div style="display:flex; gap:2px; background:#0B0C0E; border:1px solid #26282D; border-radius:6px; padding:2px; width:fit-content;">
+                <sc-for list="{{ intentOpts }}" as="o" hint-placeholder-count="3">
+                  <button onClick="{{ o.click }}" style="border:none; cursor:pointer; font-family:'Geist Mono',monospace; font-size:11px; padding:3px 10px; border-radius:4px; background:{{ o.bg }}; color:{{ o.color }};" style-hover="color:#E7E9EC;">{{ o.label }}</button>
+                </sc-for>
+              </div>
+            </div>
+            <div style="display:grid; grid-template-columns:110px 1fr; gap:4px; align-items:center; padding:7px 0; border-bottom:1px solid #26282D;">
+              <span style="font-family:'Geist Mono',monospace; font-size:12px; color:#9BA1AB;">size</span>
+              <div style="display:flex; gap:2px; background:#0B0C0E; border:1px solid #26282D; border-radius:6px; padding:2px; width:fit-content;">
+                <sc-for list="{{ sizeOpts }}" as="o" hint-placeholder-count="3">
+                  <button onClick="{{ o.click }}" style="border:none; cursor:pointer; font-family:'Geist Mono',monospace; font-size:11px; padding:3px 10px; border-radius:4px; background:{{ o.bg }}; color:{{ o.color }};" style-hover="color:#E7E9EC;">{{ o.label }}</button>
+                </sc-for>
+              </div>
+            </div>
+            <div style="display:grid; grid-template-columns:110px 1fr; gap:4px; align-items:center; padding:7px 0;">
+              <span style="font-family:'Geist Mono',monospace; font-size:12px; color:#9BA1AB;">disabled</span>
+              <button onClick="{{ togglePgDisabled }}" style="width:30px; height:17px; flex:none; border:1px solid #34373D; border-radius:999px; cursor:pointer; padding:1px; background:{{ pgToggleBg }}; display:flex; justify-content:{{ pgTogglePos }};" style-hover="border-color:#7C6FF0;">
+                <span style="width:13px; height:13px; border-radius:50%; background:#E7E9EC; display:block;"></span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Tokens used -->
+          <div style="border-top:1px solid #26282D; padding:10px 16px 12px;">
+            <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px;">
+              <span style="font-size:11px; font-weight:500; letter-spacing:0.08em; text-transform:uppercase; color:#6B7280;">Tokens</span>
+              <span style="font-size:11px; color:#6B7280;">edits apply to every preview on this page</span>
+            </div>
+            <sc-for list="{{ tokenRows }}" as="tk" hint-placeholder-count="4">
+              <div style="display:grid; grid-template-columns:170px 1fr 90px 70px; gap:8px; align-items:center; padding:6px 0; border-bottom:1px solid #26282D;">
+                <span style="display:flex; align-items:center; gap:8px;">
+                  <span title="{{ tk.provLabel }}" style="width:8px; height:8px; flex:none; border-radius:50%; background:{{ tk.provColor }}; display:inline-block;"></span>
+                  <span style="font-family:'Geist Mono',monospace; font-size:12px; color:#E7E9EC;">{{ tk.name }}</span>
+                </span>
+                <span>
+                  <sc-if value="{{ tk.isColor }}">
+                    <input type="color" value="{{ tk.value }}" onChange="{{ tk.onChange }}" style="width:32px; height:24px; padding:2px; background:#1B1D21; border:1px solid #26282D; border-radius:6px; cursor:pointer;" style-hover="border-color:#34373D;">
+                  </sc-if>
+                  <sc-if value="{{ tk.isNumber }}">
+                    <input type="number" value="{{ tk.value }}" onChange="{{ tk.onChange }}" min="0" max="24" style="width:60px; background:#1B1D21; border:1px solid #26282D; border-radius:6px; color:#E7E9EC; font-family:'Geist Mono',monospace; font-size:12px; padding:4px 8px; outline:none;" style-focus="border-color:#7C6FF0; box-shadow:0 0 0 2px rgba(124,111,240,0.25);">
+                  </sc-if>
+                </span>
+                <span style="font-family:'Geist Mono',monospace; font-size:11px; color:#9BA1AB;">{{ tk.display }}</span>
+                <span style="justify-self:end;">
+                  <sc-if value="{{ tk.modified }}">
+                    <button onClick="{{ tk.reset }}" style="border:none; background:transparent; cursor:pointer; font-family:'Geist',sans-serif; font-size:11px; color:#7C6FF0; padding:2px 6px; border-radius:4px;" style-hover="background:#1B1D21; text-decoration:underline;">Reset</button>
+                  </sc-if>
+                </span>
+              </div>
+            </sc-for>
+          </div>
+
+          <!-- Checks -->
+          <div style="border-top:1px solid #26282D; padding:10px 16px 12px;">
+            <div style="font-size:11px; font-weight:500; letter-spacing:0.08em; text-transform:uppercase; color:#6B7280; margin-bottom:8px;">Checks</div>
+            <div style="display:flex; flex-wrap:wrap; gap:8px;">
+              <sc-for list="{{ checks }}" as="ch" hint-placeholder-count="4">
+                <span style="display:inline-flex; align-items:center; gap:6px; font-size:11px; border:1px solid #26282D; background:#0B0C0E; border-radius:6px; padding:4px 10px; cursor:default;" style-hover="border-color:#34373D;">
+                  <span style="color:{{ ch.color }};">{{ ch.icon }}</span>
+                  <span style="color:#E7E9EC;">{{ ch.label }}</span>
+                  <span style="font-family:'Geist Mono',monospace; color:#6B7280;">{{ ch.detail }}</span>
+                </span>
+              </sc-for>
+            </div>
+          </div>
+        </section>
+
+        <!-- Variants -->
+        <section style="background:#141518; border:1px solid #26282D; border-radius:8px;">
+          <div style="display:flex; align-items:center; gap:10px; padding:12px 16px; border-bottom:1px solid #26282D;">
+            <span style="font-size:15px; font-weight:600;">Variants</span>
+            <span style="font-family:'Geist Mono',monospace; font-size:11px; color:#6B7280;">3 × 3 matrix</span>
+          </div>
+          <div style="padding:16px; overflow-x:auto;">
+            <div style="display:grid; grid-template-columns:64px repeat(3, 1fr); gap:8px; align-items:center; min-width:480px;">
+              <div style="display:flex; align-items:center; gap:6px;">
+                <span style="font-size:11px; color:#6B7280;">intent</span>
+                <sc-if value="{{ intentInferred }}" hint-placeholder-val="{{ true }}">
+                  <span title="Axis name inferred" style="width:6px; height:6px; border-radius:50%; background:#FFB224; display:inline-block;"></span>
+                </sc-if>
+              </div>
+              <sc-for list="{{ intents }}" as="i" hint-placeholder-count="3">
+                <div style="display:flex; align-items:center; justify-content:center; gap:8px; font-family:'Geist Mono',monospace; font-size:12px; color:#9BA1AB; padding:4px 6px; border-radius:6px; cursor:default;" style-hover="background:#1B1D21; color:#E7E9EC;">{{ i }}</div>
+              </sc-for>
+              <sc-for list="{{ matrixRows }}" as="row" hint-placeholder-count="3">
+                <div style="display:contents;">
+                  <div style="font-family:'Geist Mono',monospace; font-size:12px; color:#9BA1AB; padding:4px 6px; border-radius:6px; cursor:default;" style-hover="background:#1B1D21; color:#E7E9EC;">{{ row.size }}</div>
+                  <sc-for list="{{ row.cells }}" as="cell" hint-placeholder-count="3">
+                    <div onMouseEnter="{{ cell.enter }}" onMouseLeave="{{ cell.leave }}" style="position:relative; background:#1B1D21; border:1px solid #26282D; border-radius:6px; height:64px; display:flex; align-items:center; justify-content:center;" style-hover="border-color:#34373D;">
+                      <span style="display:inline-flex; align-items:center; justify-content:center; font-family:'Geist',sans-serif; font-weight:500; background:{{ cell.bg }}; color:{{ cell.fg }}; border:{{ cell.border }}; border-radius:{{ tokRadius }}; font-size:{{ cell.fs }}; padding:{{ cell.pad }};">{{ cell.label }}</span>
+                      <sc-if value="{{ cell.hovered }}">
+                        <span style="position:absolute; bottom:4px; right:6px; font-family:'Geist Mono',monospace; font-size:10px; color:#6B7280;">{{ cell.combo }}</span>
+                      </sc-if>
+                    </div>
+                  </sc-for>
+                </div>
+              </sc-for>
+            </div>
+            <sc-if value="{{ intentInferred }}" hint-placeholder-val="{{ true }}">
+              <div style="display:flex; align-items:center; gap:8px; margin-top:12px;">
+                <span style="font-size:12px; color:#9BA1AB;">Axis <span style="font-family:'Geist Mono',monospace;">intent</span> was inferred from class names.</span>
+                <button onClick="{{ confirmIntent }}" style="border:1px solid #34373D; background:transparent; cursor:pointer; font-family:'Geist',sans-serif; font-size:11px; color:#E7E9EC; border-radius:6px; padding:3px 10px;" style-hover="background:#1B1D21; border-color:#7C6FF0;">Confirm</button>
+              </div>
+            </sc-if>
+            <sc-if value="{{ intentConfirmed }}" hint-placeholder-val="{{ false }}">
+              <div style="margin-top:12px; font-size:12px; color:#30A46C;">✓ Axis <span style="font-family:'Geist Mono',monospace;">intent</span> confirmed</div>
+            </sc-if>
+          </div>
+        </section>
+
+        <!-- Structure -->
+        <section style="background:#141518; border:1px solid #26282D; border-radius:8px;">
+          <div style="display:flex; align-items:center; gap:10px; padding:12px 16px; border-bottom:1px solid #26282D;">
+            <span style="font-size:15px; font-weight:600;">Structure</span>
+            <span style="font-family:'Geist Mono',monospace; font-size:11px; color:#6B7280;">7 nodes</span>
+          </div>
+          <div style="padding:8px 8px 12px; font-family:'Geist Mono',monospace; font-size:12px;">
+            <sc-for list="{{ treeRows }}" as="n" hint-placeholder-count="6">
+              <div style="display:flex; align-items:center; gap:8px; height:30px; padding-right:10px; padding-left:{{ n.pad }}; border-radius:6px;" style-hover="background:#1B1D21;">
+                <sc-if value="{{ n.isFrame }}"><svg width="11" height="11" viewBox="0 0 11 11" style="flex:none;"><rect x="1.5" y="1.5" width="8" height="8" rx="1.5" fill="none" stroke="#6B7280" stroke-width="1.3"></rect></svg></sc-if>
+                <sc-if value="{{ n.isText }}"><span style="flex:none; color:#6B7280; font-size:11px; width:11px; text-align:center;">T</span></sc-if>
+                <span style="color:#E7E9EC;">{{ n.name }}</span>
+                <span style="color:#6B7280; font-size:11px;">{{ n.meta }}</span>
+                <span style="flex:1;"></span>
+                <sc-if value="{{ n.flagged }}">
+                  <span onMouseEnter="{{ n.enter }}" onMouseLeave="{{ n.leave }}" style="display:inline-flex; align-items:center; gap:8px;">
+                    <span style="display:inline-flex; align-items:center; gap:6px; font-size:11px; color:#FFB224; background:rgba(255,178,36,0.08); border:1px solid rgba(255,178,36,0.35); border-radius:6px; padding:2px 8px;">
+                      <span style="width:5px; height:5px; border-radius:50%; background:#FFB224; display:inline-block;"></span>
+                      {{ n.flagText }}
+                    </span>
+                    <sc-if value="{{ n.hovered }}">
+                      <button onClick="{{ n.promote }}" style="border:none; cursor:pointer; font-family:'Geist',sans-serif; font-size:11px; font-weight:500; color:#FFFFFF; background:#7C6FF0; border-radius:6px; padding:3px 10px;" style-hover="filter:brightness(1.12);">Promote to token</button>
+                    </sc-if>
+                  </span>
+                </sc-if>
+                <sc-if value="{{ n.promoted }}">
+                  <span style="display:inline-flex; align-items:center; gap:6px; font-size:11px; color:#30A46C; background:rgba(48,164,108,0.08); border:1px solid rgba(48,164,108,0.35); border-radius:6px; padding:2px 8px;">✓ color/surface/base</span>
+                </sc-if>
+              </div>
+            </sc-for>
+          </div>
+        </section>
+
+        <!-- States -->
+        <section style="background:#141518; border:1px solid #26282D; border-radius:8px;">
+          <div style="display:flex; align-items:center; gap:10px; padding:12px 16px; border-bottom:1px solid #26282D;">
+            <span style="font-size:15px; font-weight:600;">States</span>
+          </div>
+          <div style="padding:8px 16px 12px; display:flex; flex-direction:column;">
+            <div style="display:flex; align-items:center; gap:16px; padding:10px 8px; border-radius:6px;" style-hover="background:#1B1D21;">
+              <span style="font-family:'Geist Mono',monospace; font-size:12px; color:#E7E9EC; width:80px;">hover</span>
+              <span style="display:inline-flex; align-items:center; justify-content:center; font-weight:500; font-size:12px; background:{{ tokP600 }}; color:#FFFFFF; border-radius:{{ tokRadius }}; padding:6px 14px;">Continue</span>
+              <span style="flex:1;"></span>
+              <span style="display:flex; align-items:center; gap:6px;"><span style="width:8px; height:8px; border-radius:50%; background:#FFB224;"></span><span style="font-size:12px; color:#9BA1AB;">Inferred</span></span>
+            </div>
+            <div style="display:flex; align-items:center; gap:16px; padding:10px 8px; border-radius:6px;" style-hover="background:#1B1D21;">
+              <span style="font-family:'Geist Mono',monospace; font-size:12px; color:#E7E9EC; width:80px;">disabled</span>
+              <span style="display:inline-flex; align-items:center; justify-content:center; font-weight:500; font-size:12px; background:#26282D; color:#6B7280; border-radius:{{ tokRadius }}; padding:6px 14px;">Continue</span>
+              <span style="flex:1;"></span>
+              <span style="display:flex; align-items:center; gap:6px;"><span style="width:8px; height:8px; border-radius:50%; background:#30A46C;"></span><span style="font-size:12px; color:#9BA1AB;">Confirmed</span></span>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <!-- SIDE COLUMN -->
+      <div style="display:flex; flex-direction:column; gap:16px; min-width:0;">
+
+        <!-- Props -->
+        <section style="background:#141518; border:1px solid #26282D; border-radius:8px;">
+          <div style="padding:12px 16px; border-bottom:1px solid #26282D; font-size:15px; font-weight:600;">Props</div>
+          <div style="padding:8px 8px 10px;">
+            <div style="display:grid; grid-template-columns:1fr 1fr 1fr 20px; gap:4px; padding:4px 8px; font-size:11px; color:#6B7280;">
+              <span>name</span><span>type</span><span>default</span><span></span>
+            </div>
+            <div style="display:grid; grid-template-columns:1fr 1fr 1fr 20px; gap:4px; align-items:center; padding:7px 8px; border-radius:6px; font-family:'Geist Mono',monospace; font-size:12px;" style-hover="background:#1B1D21;">
+              <span style="color:#E7E9EC;">label</span><span style="color:#9BA1AB;">string</span><span style="color:#9BA1AB;">required</span>
+              <span title="Confirmed" style="width:8px; height:8px; border-radius:50%; background:#30A46C; justify-self:end;"></span>
+            </div>
+            <div style="display:grid; grid-template-columns:1fr 1fr 1fr 20px; gap:4px; align-items:center; padding:7px 8px; border-radius:6px; font-family:'Geist Mono',monospace; font-size:12px;" style-hover="background:#1B1D21;">
+              <span style="color:#E7E9EC;">disabled</span><span style="color:#9BA1AB;">boolean</span><span style="color:#9BA1AB;">false</span>
+              <span title="Inferred" style="width:8px; height:8px; border-radius:50%; background:#FFB224; justify-self:end;"></span>
+            </div>
+          </div>
+        </section>
+
+        <!-- Issues -->
+        <section style="background:#141518; border:1px solid #26282D; border-radius:8px;">
+          <div style="padding:12px 16px; border-bottom:1px solid #26282D; font-size:15px; font-weight:600;">Issues ({{ issueCount }})</div>
+          <div style="padding:8px; display:flex; flex-direction:column; gap:4px;">
+            <sc-if value="{{ warnVisible }}" hint-placeholder-val="{{ true }}">
+              <div style="display:flex; flex-direction:column; gap:8px; padding:10px; border-radius:6px;" style-hover="background:#1B1D21;">
+                <div style="display:flex; align-items:flex-start; gap:8px;">
+                  <span style="flex:none; margin-top:3px; width:8px; height:8px; border-radius:50%; background:#FFB224;"></span>
+                  <span style="font-size:12px; color:#E7E9EC; line-height:1.5;">Text color <span style="font-family:'Geist Mono',monospace;">#FFFFFF</span> is a raw value</span>
+                </div>
+                <button onClick="{{ promoteFromIssue }}" style="align-self:flex-start; margin-left:16px; border:1px solid #34373D; background:transparent; cursor:pointer; font-family:'Geist',sans-serif; font-size:11px; color:#E7E9EC; border-radius:6px; padding:3px 10px;" style-hover="background:#1B1D21; border-color:#7C6FF0;">Promote to token</button>
+              </div>
+            </sc-if>
+            <sc-if value="{{ warnResolved }}" hint-placeholder-val="{{ false }}">
+              <div style="display:flex; align-items:center; gap:8px; padding:10px; font-size:12px; color:#30A46C;">✓ Promoted to <span style="font-family:'Geist Mono',monospace;">color/surface/base</span></div>
+            </sc-if>
+            <div style="display:flex; align-items:flex-start; gap:8px; padding:10px; border-radius:6px;" style-hover="background:#1B1D21;">
+              <span style="flex:none; margin-top:3px; width:8px; height:8px; border-radius:50%; background:#6B7280;"></span>
+              <span style="font-size:12px; color:#9BA1AB; line-height:1.5;">No focus state detected</span>
+            </div>
+          </div>
+        </section>
+
+        <!-- Provenance -->
+        <section style="background:#141518; border:1px solid #26282D; border-radius:8px;">
+          <div style="padding:12px 16px; border-bottom:1px solid #26282D; font-size:15px; font-weight:600;">Provenance</div>
+          <div style="padding:12px 16px; display:flex; flex-direction:column; gap:10px; font-size:12px;">
+            <div style="display:flex; justify-content:space-between; gap:12px;"><span style="color:#6B7280;">Source</span><span style="font-family:'Geist Mono',monospace; color:#E7E9EC; text-align:right; word-break:break-all;">stitch-export-checkout.zip</span></div>
+            <div style="display:flex; justify-content:space-between; gap:12px;"><span style="color:#6B7280;">Extractor</span><span style="font-family:'Geist Mono',monospace; color:#E7E9EC;">zip-html v0.4.2</span></div>
+            <div style="display:flex; justify-content:space-between; gap:12px;"><span style="color:#6B7280;">Imported</span><span style="color:#9BA1AB;">Jul 2, 2026 · 14:32</span></div>
+          </div>
+        </section>
+      </div>
+    </div>
+  </main>
+
+  <!-- ============ CHAT STRIP ============ -->
+  <div style="width:48px; flex:none; background:#141518; border-left:1px solid #26282D; display:flex; flex-direction:column; align-items:center; padding-top:12px;">
+    <a href="Inspector - Assistant.dc.html" title="Open Assistant" style="width:32px; height:32px; border:none; background:transparent; cursor:pointer; color:#9BA1AB; border-radius:6px; display:flex; align-items:center; justify-content:center; text-decoration:none;" style-hover="background:#1B1D21; color:#E7E9EC;">
+      <svg width="16" height="16" viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="9" rx="3" fill="none" stroke="currentColor" stroke-width="1.5"></rect><path d="M6 12 L6 14.5 L9 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"></path></svg>
+    </a>
+  </div>
+
+  <!-- ============ APPROVE DIALOG ============ -->
+  <sc-if value="{{ dialogOpen }}" hint-placeholder-val="{{ false }}">
+    <div style="position:fixed; inset:0; z-index:50; background:rgba(0,0,0,0.55); display:flex; align-items:center; justify-content:center;" onClick="{{ closeDialog }}">
+      <div onClick="{{ stop }}" style="width:440px; background:#141518; border:1px solid #34373D; border-radius:8px; box-shadow:0 16px 48px rgba(0,0,0,0.6); animation:vsDlgIn 0.15s ease;">
+        <div style="padding:16px 20px 12px; border-bottom:1px solid #26282D;">
+          <div style="font-size:15px; font-weight:600;">Approve Button?</div>
+          <div style="font-size:12px; color:#9BA1AB; margin-top:4px;">These issues will remain tracked.</div>
+        </div>
+        <div style="padding:12px 20px; display:flex; flex-direction:column; gap:8px;">
+          <sc-if value="{{ warnVisible }}">
+            <div style="display:flex; align-items:flex-start; gap:8px;">
+              <span style="flex:none; margin-top:3px; width:8px; height:8px; border-radius:50%; background:#FFB224;"></span>
+              <span style="font-size:12px; color:#E7E9EC;">Text color <span style="font-family:'Geist Mono',monospace;">#FFFFFF</span> is a raw value</span>
+            </div>
+          </sc-if>
+          <div style="display:flex; align-items:flex-start; gap:8px;">
+            <span style="flex:none; margin-top:3px; width:8px; height:8px; border-radius:50%; background:#6B7280;"></span>
+            <span style="font-size:12px; color:#9BA1AB;">No focus state detected</span>
+          </div>
+        </div>
+        <div style="padding:12px 20px 16px; display:flex; justify-content:flex-end; gap:8px;">
+          <button onClick="{{ closeDialog }}" style="border:1px solid #34373D; background:transparent; cursor:pointer; font-family:'Geist',sans-serif; font-size:12px; color:#E7E9EC; border-radius:6px; padding:7px 14px;" style-hover="background:#1B1D21;">Cancel</button>
+          <button onClick="{{ doApprove }}" style="border:none; cursor:pointer; font-family:'Geist',sans-serif; font-size:12px; font-weight:500; color:#FFFFFF; background:#7C6FF0; border-radius:6px; padding:7px 14px;" style-hover="filter:brightness(1.12);">Approve anyway</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- ============ TOAST ============ -->
+  <sc-if value="{{ toastVisible }}" hint-placeholder-val="{{ false }}">
+    <div style="position:fixed; bottom:24px; left:50%; transform:translateX(-50%); z-index:60; display:flex; align-items:center; gap:8px; background:#1B1D21; border:1px solid #34373D; border-radius:8px; padding:10px 16px; font-size:12px; color:#E7E9EC; box-shadow:0 8px 24px rgba(0,0,0,0.5); animation:vsToastIn 0.18s ease;">
+      <span style="color:#30A46C;">✓</span> {{ toastText }}
+    </div>
+  </sc-if>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{
+  &quot;$preview&quot;: { &quot;width&quot;: 1440, &quot;height&quot;: 900 }
+}">
+class Component extends DCLogic {
+  state = {
+    pg: { label: 'Continue', intent: 'primary', size: 'md', disabled: false },
+    tok: { p500: '#2563EB', p600: '#1D4ED8', n300: '#D4D4D8', radius: 8 },
+    canvas: 'dark',
+    approved: false,
+    dialogOpen: false,
+    toast: '',
+    intentConfirmed: false,
+    promoted: false,
+    hoverCell: '',
+    hoverNode: '',
+  };
+
+  showToast(text) {
+    this.setState({ toast: text });
+    clearTimeout(this._toastT);
+    this._toastT = setTimeout(() => this.setState({ toast: '' }), 2600);
+  }
+
+  componentWillUnmount() { clearTimeout(this._toastT); }
+
+  contrast(hexA, hexB) {
+    const lum = hex => {
+      const n = parseInt(hex.slice(1), 16);
+      const c = [n >> 16 & 255, n >> 8 & 255, n & 255].map(v => {
+        v /= 255;
+        return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+      });
+      return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+    };
+    const a = lum(hexA), b = lum(hexB);
+    return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+  }
+
+  renderVals() {
+    const st = this.state;
+    const intents = ['primary', 'secondary', 'ghost'];
+    const sizes = [
+      { size: 'sm', fs: '11px', pad: '4px 10px' },
+      { size: 'md', fs: '12px', pad: '6px 14px' },
+      { size: 'lg', fs: '13px', pad: '8px 18px' },
+    ];
+    const tok = this.state.tok;
+    const styleFor = intent => intent === 'primary'
+      ? { bg: tok.p500, fg: '#FFFFFF', border: 'none' }
+      : intent === 'secondary'
+        ? { bg: 'transparent', fg: '#E7E9EC', border: '1px solid #34373D' }
+        : { bg: 'transparent', fg: '#9BA1AB', border: 'none' };
+
+    const matrixRows = sizes.map(s => ({
+      size: s.size,
+      cells: intents.map(intent => {
+        const key = intent + '/' + s.size;
+        const v = styleFor(intent);
+        return {
+          label: 'Continue', combo: key,
+          bg: v.bg, fg: v.fg, border: v.border, fs: s.fs, pad: s.pad,
+          hovered: st.hoverCell === key,
+          enter: () => this.setState({ hoverCell: key }),
+          leave: () => this.setState({ hoverCell: '' }),
+        };
+      }),
+    }));
+
+    const mkNode = (name, meta, depth, kind, opts) => Object.assign({
+      name, meta, pad: (10 + depth * 18) + 'px',
+      isFrame: kind === 'frame', isText: kind === 'text',
+      flagged: false, promoted: false, hovered: false,
+    }, opts || {});
+
+    const treeRows = [
+      mkNode('Button', 'root frame', 0, 'frame'),
+      mkNode('background', 'fill: color/primary/500', 1, 'frame'),
+      mkNode('content', 'auto-layout, gap 8', 1, 'frame'),
+      mkNode('icon-slot', 'optional', 2, 'frame'),
+      st.promoted
+        ? mkNode('label', 'text style: type/body', 2, 'text', { promoted: true })
+        : mkNode('label', 'text style: type/body', 2, 'text', {
+            flagged: true, flagText: '#FFFFFF flagged',
+            hovered: st.hoverNode === 'label',
+            enter: () => this.setState({ hoverNode: 'label' }),
+            leave: () => this.setState({ hoverNode: '' }),
+            promote: e => { e.stopPropagation(); this.setState({ promoted: true }); this.showToast('#FFFFFF promoted to color/surface/base'); },
+          }),
+      mkNode('focus-ring', 'not detected', 1, 'frame'),
+      mkNode('hover-overlay', 'state layer', 1, 'frame'),
+    ];
+
+    const issueCount = st.promoted ? 1 : 2;
+
+    // ---- Playground ----
+    const pg = st.pg;
+    const light = st.canvas === 'light';
+    const canvasHex = light ? '#FFFFFF' : '#1B1D21';
+    const sizeSpec = { sm: { fs: '11px', pad: '4px 10px', lh: '16px', h: 26 }, md: { fs: '12px', pad: '6px 14px', lh: '18px', h: 32 }, lg: { fs: '13px', pad: '8px 18px', lh: '20px', h: 38 } }[pg.size];
+    const pgColors = pg.intent === 'primary'
+      ? { bg: tok.p500, fg: '#FFFFFF', border: 'none', eff: tok.p500 }
+      : pg.intent === 'secondary'
+        ? { bg: 'transparent', fg: light ? '#111827' : '#E7E9EC', border: light ? '1px solid ' + tok.n300 : '1px solid #34373D', eff: canvasHex }
+        : { bg: 'transparent', fg: light ? '#52525B' : '#9BA1AB', border: 'none', eff: canvasHex };
+    const seg = (opts, cur, set) => opts.map(label => ({
+      label,
+      bg: cur === label ? '#1B1D21' : 'transparent',
+      color: cur === label ? '#E7E9EC' : '#6B7280',
+      click: () => set(label),
+    }));
+    const setPg = patch => this.setState(s => ({ pg: Object.assign({}, s.pg, patch) }));
+    const TOK_DEFAULTS = { p500: '#2563EB', p600: '#1D4ED8', n300: '#D4D4D8', radius: 8 };
+    const setTok = patch => this.setState(s => ({ tok: Object.assign({}, s.tok, patch) }));
+    const tokenRows = [
+      { key: 'p500', name: 'color/primary/500', prov: 'confirmed', isColor: true },
+      { key: 'p600', name: 'color/primary/600', prov: 'inferred', isColor: true },
+      { key: 'n300', name: 'color/neutral/300', prov: 'inferred', isColor: true },
+      { key: 'radius', name: 'radius/md', prov: 'confirmed', isColor: false },
+    ].map(r => {
+      const v = tok[r.key];
+      return {
+        name: r.name,
+        isColor: r.isColor, isNumber: !r.isColor,
+        value: r.isColor ? v : String(v),
+        display: r.isColor ? String(v).toUpperCase() : v + 'px',
+        provColor: r.prov === 'confirmed' ? '#30A46C' : '#FFB224',
+        provLabel: r.prov,
+        modified: v !== TOK_DEFAULTS[r.key],
+        onChange: e => setTok({ [r.key]: r.isColor ? e.target.value.toUpperCase() : Math.max(0, Number(e.target.value) || 0) }),
+        reset: () => setTok({ [r.key]: TOK_DEFAULTS[r.key] }),
+      };
+    });
+    const ratio = this.contrast(pgColors.fg, pgColors.eff);
+    const contrastCheck = pg.disabled
+      ? { icon: '—', color: '#6B7280', label: 'Text contrast', detail: 'exempt when disabled' }
+      : ratio >= 4.5
+        ? { icon: '✓', color: '#30A46C', label: 'Text contrast', detail: ratio.toFixed(1) + ':1 AA' }
+        : ratio >= 3
+          ? { icon: '!', color: '#FFB224', label: 'Text contrast', detail: ratio.toFixed(1) + ':1 below AA' }
+          : { icon: '✕', color: '#E5484D', label: 'Text contrast', detail: ratio.toFixed(1) + ':1 fails' };
+    const checks = [
+      { icon: '✓', color: '#30A46C', label: 'Renders', detail: '9/9 variants' },
+      contrastCheck,
+      sizeSpec.h >= 32
+        ? { icon: '✓', color: '#30A46C', label: 'Hit target', detail: sizeSpec.h + 'px' }
+        : { icon: '!', color: '#FFB224', label: 'Hit target', detail: sizeSpec.h + 'px, below 32px' },
+      { icon: '—', color: '#6B7280', label: 'Focus state', detail: 'not detected' },
+    ];
+
+    return {
+      canvasOpts: seg(['dark', 'light'], st.canvas, v => this.setState({ canvas: v })),
+      resetControls: () => this.setState({ pg: { label: 'Continue', intent: 'primary', size: 'md', disabled: false }, canvas: 'dark', tok: Object.assign({}, TOK_DEFAULTS) }),
+      tokenRows,
+      tokRadius: tok.radius + 'px',
+      tokP600: tok.p600,
+      pgCanvasBg: canvasHex,
+      pgBg: pgColors.bg, pgFg: pgColors.fg, pgBorder: pgColors.border,
+      pgFs: sizeSpec.fs, pgPad: sizeSpec.pad, pgLh: sizeSpec.lh,
+      pgOpacity: pg.disabled ? '0.45' : '1',
+      pgCursor: pg.disabled ? 'not-allowed' : 'pointer',
+      pgLabelText: pg.label || ' ',
+      pgLabel: pg.label,
+      onPgLabel: e => setPg({ label: e.target.value }),
+      intentOpts: seg(['primary', 'secondary', 'ghost'], pg.intent, v => setPg({ intent: v })),
+      sizeOpts: seg(['sm', 'md', 'lg'], pg.size, v => setPg({ size: v })),
+      togglePgDisabled: () => setPg({ disabled: !pg.disabled }),
+      pgToggleBg: pg.disabled ? '#7C6FF0' : '#26282D',
+      pgTogglePos: pg.disabled ? 'flex-end' : 'flex-start',
+      checks,
+      intents,
+      matrixRows,
+      treeRows,
+      issueCount,
+      issueTotal: st.promoted ? 30 : 31,
+      warnVisible: !st.promoted,
+      warnResolved: st.promoted,
+      promoteFromIssue: () => { this.setState({ promoted: true }); this.showToast('#FFFFFF promoted to color/surface/base'); },
+      intentInferred: !st.intentConfirmed,
+      intentConfirmed: st.intentConfirmed,
+      confirmIntent: () => { this.setState({ intentConfirmed: true }); this.showToast('Axis intent confirmed'); },
+      statusLabel: st.approved ? 'approved' : 'normalized',
+      statusColor: st.approved ? '#30A46C' : '#FFB224',
+      notApproved: !st.approved,
+      isApproved: st.approved,
+      openApprove: () => this.setState({ dialogOpen: true }),
+      closeDialog: () => this.setState({ dialogOpen: false }),
+      dialogOpen: st.dialogOpen,
+      stop: e => e.stopPropagation(),
+      doApprove: () => { this.setState({ approved: true, dialogOpen: false }); this.showToast('Button approved'); },
+      toastVisible: !!st.toast,
+      toastText: st.toast,
+    };
+  }
+}
+</script>
+</body>
+</html>

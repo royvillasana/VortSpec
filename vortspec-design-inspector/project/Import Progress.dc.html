@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous">
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&amp;family=Geist+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+  <style>
+    html, body { margin:0; padding:0; background:#0B0C0E; }
+    * { box-sizing:border-box; }
+    @keyframes vsSpin { to { transform:rotate(360deg); } }
+    @keyframes vsFade { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+  </style>
+</helmet>
+
+<div data-screen-label="Import progress" style="min-height:100vh; background:#0B0C0E; color:#E7E9EC; font-family:'Geist',system-ui,sans-serif; font-size:13px;">
+
+  <!-- Top bar -->
+  <div style="height:48px; border-bottom:1px solid #26282D; display:flex; align-items:center; justify-content:space-between; padding:0 24px;">
+    <div style="display:flex; align-items:center; gap:8px;">
+      <div style="width:18px; height:18px; border-radius:5px; background:#7C6FF0; display:flex; align-items:center; justify-content:center; font-family:'Geist Mono',monospace; font-size:10px; font-weight:500; color:#0B0C0E;">V</div>
+      <a href="Projects Dashboard.dc.html" style="font-weight:600; color:#E7E9EC; text-decoration:none;" style-hover="text-decoration:underline;">VortSpec</a>
+      <span style="color:#6B7280;">/</span>
+      <span style="color:#9BA1AB;">Meridian Design System</span>
+    </div>
+    <button title="Dana Reyes" style="width:28px; height:28px; border-radius:50%; border:1px solid #34373D; background:#1B1D21; color:#9BA1AB; font-family:'Geist',sans-serif; font-size:11px; font-weight:500; cursor:pointer;" style-hover="border-color:#7C6FF0; color:#E7E9EC;">DR</button>
+  </div>
+
+  <div style="max-width:720px; margin:0 auto; padding:40px 24px 64px; display:flex; flex-direction:column; gap:24px;">
+
+    <!-- Pipeline view -->
+    <sc-if value="{{ inProgress }}" hint-placeholder-val="{{ true }}">
+      <div style="display:flex; flex-direction:column; gap:4px;">
+        <h1 style="margin:0; font-size:20px; font-weight:600; letter-spacing:-0.01em;">Importing <span style="font-family:'Geist Mono',monospace; font-weight:500;">stitch-export-checkout.zip</span></h1>
+        <span style="font-size:13px; color:#9BA1AB;">Meridian Design System</span>
+      </div>
+
+      <div style="display:flex; flex-direction:column; gap:8px;">
+        <sc-for list="{{ stages }}" as="s" hint-placeholder-count="6">
+          <div style="display:flex; align-items:center; gap:14px; background:#141518; border:1px solid #26282D; border-radius:8px; padding:12px 16px; box-shadow:{{ s.edge }};">
+            <span style="font-family:'Geist Mono',monospace; font-size:12px; color:#6B7280; width:16px; flex:none;">{{ s.n }}</span>
+            <div style="flex:1; min-width:0;">
+              <div style="font-size:13px; font-weight:500; color:{{ s.nameColor }};">{{ s.name }}</div>
+              <sc-if value="{{ s.hasCaption }}">
+                <div style="font-size:12px; color:{{ s.captionColor }}; margin-top:2px; line-height:1.5;">{{ s.caption }}</div>
+              </sc-if>
+            </div>
+            <sc-if value="{{ s.failed }}">
+              <button onClick="{{ retry }}" style="flex:none; border:1px solid #34373D; background:transparent; cursor:pointer; font-family:'Geist',sans-serif; font-size:11px; color:#E7E9EC; border-radius:6px; padding:4px 10px;" style-hover="background:#1B1D21; border-color:#7C6FF0;">Retry stage</button>
+            </sc-if>
+            <sc-if value="{{ s.done }}"><span style="flex:none; color:#30A46C; font-size:13px;">✓</span></sc-if>
+            <sc-if value="{{ s.running }}"><span style="flex:none; width:14px; height:14px; border:2px solid #26282D; border-top-color:#7C6FF0; border-radius:50%; animation:vsSpin 0.8s linear infinite;"></span></sc-if>
+            <sc-if value="{{ s.failed }}"><span style="flex:none; color:#E5484D; font-size:13px;">✕</span></sc-if>
+            <sc-if value="{{ s.queued }}"><span style="flex:none; width:8px; height:8px; border-radius:50%; background:#6B7280;"></span></sc-if>
+          </div>
+        </sc-for>
+      </div>
+
+      <div style="display:flex; flex-direction:column; gap:8px;">
+        <div style="height:4px; background:#26282D; border-radius:999px; overflow:hidden;">
+          <div style="height:100%; width:{{ pct }}; background:#7C6FF0; border-radius:999px; transition:width 0.6s ease;"></div>
+        </div>
+        <span style="font-family:'Geist Mono',monospace; font-size:12px; color:#9BA1AB;">{{ stageLabel }}</span>
+      </div>
+
+      <div style="display:flex; justify-content:flex-end;">
+        <a href="Projects Dashboard.dc.html" style="border:1px solid #34373D; background:#1B1D21; font-family:'Geist',sans-serif; font-size:13px; font-weight:500; color:#E7E9EC; border-radius:8px; padding:8px 16px; text-decoration:none;" style-hover="border-color:#7C6FF0; background:#26282D;">Continue in background</a>
+      </div>
+    </sc-if>
+
+    <!-- Completion summary -->
+    <sc-if value="{{ complete }}" hint-placeholder-val="{{ false }}">
+      <div style="display:flex; flex-direction:column; align-items:center; gap:32px; padding:64px 0; animation:vsFade 0.3s ease;">
+        <div style="display:flex; flex-direction:column; align-items:center; gap:4px;">
+          <span style="color:#30A46C; font-size:20px;">✓</span>
+          <h1 style="margin:0; font-size:20px; font-weight:600;">Import complete</h1>
+          <span style="font-family:'Geist Mono',monospace; font-size:12px; color:#6B7280;">stitch-export-checkout.zip</span>
+        </div>
+        <div style="display:flex; gap:48px;">
+          <div style="display:flex; flex-direction:column; align-items:center; gap:6px;">
+            <span style="font-family:'Geist Mono',monospace; font-size:44px; font-weight:500; letter-spacing:-0.02em;">48</span>
+            <span style="font-size:13px; color:#9BA1AB;">tokens</span>
+          </div>
+          <div style="display:flex; flex-direction:column; align-items:center; gap:6px;">
+            <span style="font-family:'Geist Mono',monospace; font-size:44px; font-weight:500; letter-spacing:-0.02em;">12</span>
+            <span style="font-size:13px; color:#9BA1AB;">components</span>
+          </div>
+          <div style="display:flex; flex-direction:column; align-items:center; gap:6px;">
+            <span style="font-family:'Geist Mono',monospace; font-size:44px; font-weight:500; letter-spacing:-0.02em; color:#FFB224;">31</span>
+            <span style="font-size:13px; color:#9BA1AB;">issues found</span>
+          </div>
+        </div>
+        <a href="Inspector - Tokens.dc.html" style="border:none; font-family:'Geist',sans-serif; font-size:13px; font-weight:500; color:#FFFFFF; background:#7C6FF0; border-radius:8px; padding:9px 20px; text-decoration:none;" style-hover="filter:brightness(1.12);">Open Inspector</a>
+      </div>
+    </sc-if>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{
+  &quot;mode&quot;: { &quot;editor&quot;: &quot;enum&quot;, &quot;default&quot;: &quot;running&quot;, &quot;tsType&quot;: &quot;string&quot;, &quot;options&quot;: [&quot;running&quot;, &quot;failed&quot;], &quot;section&quot;: &quot;States&quot; },
+  &quot;autoAdvance&quot;: { &quot;editor&quot;: &quot;boolean&quot;, &quot;default&quot;: true, &quot;tsType&quot;: &quot;boolean&quot;, &quot;section&quot;: &quot;States&quot; }
+}">
+class Component extends DCLogic {
+  state = { cur: 2, failedOverride: null };
+
+  componentDidMount() {
+    this._t = setInterval(() => {
+      const failed = this.state.failedOverride ?? ((this.props.mode ?? 'running') === 'failed');
+      if (!failed && this.state.cur < 6 && (this.props.autoAdvance ?? true)) {
+        this.setState(s => ({ cur: s.cur + 1 }));
+      }
+    }, 1800);
+  }
+  componentWillUnmount() { clearInterval(this._t); }
+
+  renderVals() {
+    const cur = this.state.cur;
+    const failed = this.state.failedOverride ?? ((this.props.mode ?? 'running') === 'failed');
+    const defs = [
+      { n: '1', name: 'Parse', doneCap: '214 nodes, 3 stylesheets' },
+      { n: '2', name: 'Style mining', doneCap: '1,082 style values collected' },
+      { n: '3', name: 'Token inference', runCap: 'Naming 47 candidates…', doneCap: '47 tokens named', failCap: 'AI provider key is invalid. Deterministic stages completed; token naming is paused.' },
+      { n: '4', name: 'Structure inference', runCap: 'Grouping 12 component candidates…', doneCap: '12 components detected' },
+      { n: '5', name: 'Design system merge', queueCap: 'tokens.json attached', runCap: 'Matching against tokens.json…', doneCap: '9 conflicts flagged' },
+      { n: '6', name: 'Report', runCap: 'Scoring completeness…', doneCap: '31 issues found' },
+    ];
+    const stages = defs.map((d, i) => {
+      const isFailedRow = failed && i === 2 && cur === 2;
+      const done = i < cur;
+      const running = !failed && i === cur && cur < 6;
+      const queued = i > cur || (failed && i >= 2 && !isFailedRow && i > 2);
+      const caption = isFailedRow ? d.failCap
+        : done ? d.doneCap
+        : running ? d.runCap
+        : d.queueCap;
+      return {
+        n: d.n, name: d.name,
+        nameColor: queued && !done && !running && !isFailedRow ? '#6B7280' : '#E7E9EC',
+        hasCaption: !!caption,
+        caption: caption || '',
+        captionColor: isFailedRow ? '#E5484D' : running ? '#E7E9EC' : done ? '#9BA1AB' : '#6B7280',
+        done, running, failed: isFailedRow,
+        queued: !done && !running && !isFailedRow,
+        edge: running ? 'inset 2px 0 0 #7C6FF0' : isFailedRow ? 'inset 2px 0 0 #E5484D' : 'none',
+      };
+    });
+    return {
+      stages,
+      inProgress: cur < 6,
+      complete: cur >= 6,
+      pct: Math.round(cur / 6 * 100) + '%',
+      stageLabel: 'Stage ' + Math.min(cur + 1, 6) + ' of 6',
+      retry: () => this.setState({ failedOverride: false }),
+    };
+  }
+}
+</script>
+</body>
+</html>

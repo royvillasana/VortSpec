@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous">
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&amp;family=Geist+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+  <style>
+    html, body { margin:0; padding:0; background:#0B0C0E; }
+    * { box-sizing:border-box; }
+    @keyframes vsToastIn { from { transform:translateY(12px); opacity:0; } to { transform:translateY(0); opacity:1; } }
+    ::-webkit-scrollbar { width:10px; height:10px; }
+    ::-webkit-scrollbar-thumb { background:#26282D; border-radius:8px; border:2px solid #0B0C0E; }
+    ::-webkit-scrollbar-track { background:transparent; }
+  </style>
+</helmet>
+
+<div data-screen-label="Inspector — Graph" style="display:flex; width:100%; height:100vh; min-height:720px; background:#0B0C0E; color:#E7E9EC; font-family:'Geist',system-ui,sans-serif; font-size:13px; overflow:hidden;">
+
+  <!-- ============ LEFT RAIL ============ -->
+  <nav style="width:220px; flex:none; background:#141518; border-right:1px solid #26282D; display:flex; flex-direction:column; padding:16px 12px 12px;">
+    <a href="Projects Dashboard.dc.html" title="All projects" style="display:flex; align-items:center; gap:8px; padding:0 8px 16px; border-bottom:1px solid #26282D; margin-bottom:12px; text-decoration:none; color:inherit; border-radius:6px;" style-hover="opacity:0.85;">
+      <div style="width:20px; height:20px; flex:none; border-radius:6px; background:#7C6FF0; display:flex; align-items:center; justify-content:center; font-family:'Geist Mono',monospace; font-size:11px; font-weight:500; color:#0B0C0E;">M</div>
+      <div style="min-width:0;">
+        <div style="font-weight:600; font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Meridian Design System</div>
+        <div style="font-size:11px; color:#6B7280; font-family:'Geist Mono',monospace;">{{ versionLabel }} · 48 tokens</div>
+      </div>
+    </a>
+
+    <div style="display:flex; flex-direction:column; gap:2px;">
+      <a href="Inspector - Tokens.dc.html" style="display:flex; align-items:center; gap:10px; padding:7px 8px; border-radius:6px; color:#9BA1AB; text-decoration:none;" style-hover="background:#1B1D21; color:#E7E9EC;">
+        <svg width="14" height="14" viewBox="0 0 14 14"><circle cx="7" cy="7" r="5" fill="none" stroke="currentColor" stroke-width="1.5"></circle><circle cx="7" cy="7" r="2" fill="currentColor"></circle></svg>
+        <span style="flex:1;">Tokens</span>
+      </a>
+      <a href="Inspector - Component Detail.dc.html" style="display:flex; align-items:center; gap:10px; padding:7px 8px; border-radius:6px; color:#9BA1AB; text-decoration:none;" style-hover="background:#1B1D21; color:#E7E9EC;">
+        <svg width="14" height="14" viewBox="0 0 14 14"><rect x="2" y="2" width="10" height="10" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"></rect></svg>
+        <span style="flex:1;">Components</span>
+      </a>
+      <a href="#" style="display:flex; align-items:center; gap:10px; padding:7px 8px; border-radius:6px; background:#1B1D21; color:#7C6FF0; font-weight:500; text-decoration:none;" style-hover="background:#1B1D21;">
+        <svg width="14" height="14" viewBox="0 0 14 14"><circle cx="3.5" cy="3.5" r="2" fill="none" stroke="currentColor" stroke-width="1.4"></circle><circle cx="10.5" cy="7" r="2" fill="none" stroke="currentColor" stroke-width="1.4"></circle><circle cx="4.5" cy="11" r="2" fill="none" stroke="currentColor" stroke-width="1.4"></circle><path d="M5.3 4.4 L8.7 6.1 M8.6 8 L6 9.9" fill="none" stroke="currentColor" stroke-width="1.2"></path></svg>
+        <span style="flex:1;">Graph</span>
+      </a>
+      <a href="Inspector - Issues.dc.html" style="display:flex; align-items:center; gap:10px; padding:7px 8px; border-radius:6px; color:#9BA1AB; text-decoration:none;" style-hover="background:#1B1D21; color:#E7E9EC;">
+        <svg width="14" height="14" viewBox="0 0 14 14"><rect x="2.6" y="2.6" width="8.8" height="8.8" rx="2" fill="none" stroke="currentColor" stroke-width="1.5" transform="rotate(45 7 7)"></rect></svg>
+        <span style="flex:1;">Issues</span>
+        <span style="font-family:'Geist Mono',monospace; font-size:11px; background:#1B1D21; border:1px solid #34373D; color:#FFB224; border-radius:999px; padding:1px 7px;">31</span>
+      </a>
+      <a href="Inspector - History.dc.html" style="display:flex; align-items:center; gap:10px; padding:7px 8px; border-radius:6px; color:#9BA1AB; text-decoration:none;" style-hover="background:#1B1D21; color:#E7E9EC;">
+        <svg width="14" height="14" viewBox="0 0 14 14"><circle cx="7" cy="7" r="5" fill="none" stroke="currentColor" stroke-width="1.5"></circle><path d="M7 4.5 L7 7 L9 8.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></path></svg>
+        <span style="flex:1;">History</span>
+      </a>
+    </div>
+
+    <div style="flex:1;"></div>
+
+    <a href="#" style="display:flex; align-items:center; gap:10px; padding:7px 8px; border-radius:6px; color:#6B7280; text-decoration:none;" style-hover="background:#1B1D21; color:#E7E9EC;">
+      <span style="font-size:14px; line-height:1;">⚙</span>
+      <span>Settings</span>
+    </a>
+  </nav>
+
+  <!-- ============ CANVAS ============ -->
+  <main onMouseMove="{{ canvasMove }}" onMouseUp="{{ canvasUp }}" style="flex:1; min-width:0; position:relative; overflow:hidden; background:#0B0C0E; background-image:radial-gradient(#1B1D21 1px, transparent 1px); background-size:24px 24px; cursor:{{ canvasCursor }};">
+
+    <!-- Lens switcher overlay -->
+    <div style="position:absolute; top:16px; left:16px; z-index:10; display:flex; gap:8px; align-items:center;">
+      <div style="display:flex; gap:2px; background:#141518; border:1px solid #26282D; border-radius:8px; padding:2px;">
+        <sc-for list="{{ lensOpts }}" as="l" hint-placeholder-count="2">
+          <button onClick="{{ l.click }}" style="border:none; cursor:pointer; font-family:'Geist',sans-serif; font-size:12px; padding:4px 12px; border-radius:6px; background:{{ l.bg }}; color:{{ l.color }};" style-hover="color:#E7E9EC;">{{ l.label }}</button>
+        </sc-for>
+      </div>
+      <sc-if value="{{ isComponentLens }}" hint-placeholder-val="{{ true }}">
+        <select style="background:#141518; border:1px solid #26282D; border-radius:6px; color:#E7E9EC; font-family:'Geist Mono',monospace; font-size:12px; padding:5px 10px; outline:none; appearance:none; cursor:pointer;" style-hover="border-color:#34373D;" style-focus="border-color:#7C6FF0;">
+          <option>Button</option><option>Input</option><option>Card</option><option>Modal</option>
+        </select>
+      </sc-if>
+      <sc-if value="{{ isTokenLens }}" hint-placeholder-val="{{ false }}">
+        <span style="font-family:'Geist Mono',monospace; font-size:12px; color:#9BA1AB; background:#141518; border:1px solid #26282D; border-radius:6px; padding:5px 10px;">color/neutral/500</span>
+      </sc-if>
+    </div>
+
+    <!-- Scalable content -->
+    <div style="position:absolute; inset:0; transform:scale({{ scale }}); transform-origin:0 0;">
+
+      <!-- edges -->
+      <svg width="1200" height="700" style="position:absolute; top:0; left:0; pointer-events:none;">
+        <sc-for list="{{ edges }}" as="ed" hint-placeholder-count="4">
+          <path d="{{ ed.d }}" fill="none" stroke="{{ ed.stroke }}" stroke-width="{{ ed.w }}" stroke-dasharray="{{ ed.dash }}"></path>
+        </sc-for>
+      </svg>
+
+      <!-- COMPONENT LENS -->
+      <sc-if value="{{ isComponentLens }}">
+        <div>
+          <!-- token nodes -->
+          <sc-for list="{{ tokenNodes }}" as="n" hint-placeholder-count="5">
+            <div onMouseUp="{{ n.up }}" style="position:absolute; left:60px; top:{{ n.top }}; width:210px; height:64px; background:#141518; border:1px solid {{ n.border }}; border-radius:6px; display:flex; align-items:center; gap:10px; padding:0 12px; opacity:{{ n.opacity }}; box-shadow:{{ n.glow }}; cursor:default;" style-hover="border-color:#34373D;">
+              <sc-if value="{{ n.isColor }}"><span style="width:18px; height:18px; flex:none; border-radius:5px; background:{{ n.swatch }}; border:1px solid #34373D;"></span></sc-if>
+              <sc-if value="{{ n.isType }}"><span style="width:18px; height:18px; flex:none; border-radius:5px; background:#1B1D21; border:1px solid #34373D; display:flex; align-items:center; justify-content:center; font-size:9px; color:#E7E9EC;">Ag</span></sc-if>
+              <sc-if value="{{ n.isSpacing }}"><span style="width:18px; height:18px; flex:none; border-radius:5px; background:#1B1D21; border:1px solid #34373D; display:flex; align-items:center; justify-content:center;"><span style="width:9px; height:2px; background:#9BA1AB; border-radius:1px;"></span></span></sc-if>
+              <sc-if value="{{ n.isRadius }}"><span style="width:18px; height:18px; flex:none; border-radius:5px; background:#1B1D21; border:1px solid #34373D; display:flex; align-items:center; justify-content:center;"><span style="width:9px; height:9px; border:1.5px solid #9BA1AB; border-radius:3px 1px 1px 1px;"></span></span></sc-if>
+              <div style="min-width:0; flex:1;">
+                <div style="font-family:'Geist Mono',monospace; font-size:11px; color:#E7E9EC; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ n.name }}</div>
+                <div style="font-family:'Geist Mono',monospace; font-size:11px; color:#9BA1AB;">{{ n.value }}</div>
+              </div>
+              <span style="width:7px; height:7px; flex:none; border-radius:50%; background:{{ n.provColor }};"></span>
+              <!-- output socket -->
+              <span style="position:absolute; right:-5px; top:27px; width:10px; height:10px; border-radius:50%; background:#0B0C0E; border:1.5px solid {{ n.socketColor }};"></span>
+              <!-- incompatible tooltip -->
+              <sc-if value="{{ n.showTip }}">
+                <span style="position:absolute; left:0; top:-30px; white-space:nowrap; background:#1B1D21; border:1px solid #34373D; border-radius:6px; padding:4px 9px; font-size:11px; color:#9BA1AB;">radius/md is not a color</span>
+              </sc-if>
+            </div>
+          </sc-for>
+
+          <!-- component node -->
+          <div style="position:absolute; left:600px; top:140px; width:360px; height:360px; background:#141518; border:1px solid #34373D; border-radius:8px;">
+            <!-- input handles -->
+            <sc-for list="{{ handles }}" as="h" hint-placeholder-count="5">
+              <div style="position:absolute; left:-5px; top:{{ h.top }}; display:flex; align-items:center; gap:8px;">
+                <span onMouseDown="{{ h.down }}" title="{{ h.label }}" style="width:10px; height:10px; flex:none; border-radius:50%; background:#0B0C0E; border:1.5px solid {{ h.socketColor }}; cursor:{{ h.cursor }};" style-hover="border-color:#7C6FF0;"></span>
+                <span style="font-family:'Geist Mono',monospace; font-size:10px; color:#9BA1AB;">{{ h.label }}</span>
+                <sc-if value="{{ h.flagged }}">
+                  <span onMouseEnter="{{ h.flagEnter }}" onMouseLeave="{{ h.flagLeave }}" style="display:inline-flex; align-items:center; gap:6px;">
+                    <span style="display:inline-flex; align-items:center; gap:5px; font-family:'Geist Mono',monospace; font-size:10px; color:#FFB224; background:rgba(255,178,36,0.08); border:1px solid rgba(255,178,36,0.35); border-radius:5px; padding:2px 7px;">#FFFFFF flagged</span>
+                    <sc-if value="{{ h.flagHover }}">
+                      <button onClick="{{ h.promote }}" style="border:none; cursor:pointer; font-family:'Geist',sans-serif; font-size:10px; font-weight:500; color:#FFFFFF; background:#7C6FF0; border-radius:5px; padding:2px 8px;" style-hover="filter:brightness(1.12);">Promote to token</button>
+                    </sc-if>
+                  </span>
+                </sc-if>
+                <sc-if value="{{ h.promoted }}">
+                  <span style="font-family:'Geist Mono',monospace; font-size:10px; color:#30A46C; background:rgba(48,164,108,0.08); border:1px solid rgba(48,164,108,0.35); border-radius:5px; padding:2px 7px;">✓ color/surface/base</span>
+                </sc-if>
+              </div>
+            </sc-for>
+
+            <!-- node content -->
+            <div style="position:absolute; left:130px; right:16px; top:14px; bottom:14px; display:flex; flex-direction:column; gap:10px;">
+              <div style="display:flex; gap:2px; background:#0B0C0E; border:1px solid #26282D; border-radius:6px; padding:2px; align-self:flex-start;">
+                <sc-for list="{{ variantOpts }}" as="v" hint-placeholder-count="3">
+                  <button onClick="{{ v.click }}" style="border:none; cursor:pointer; font-family:'Geist Mono',monospace; font-size:10px; padding:3px 8px; border-radius:4px; background:{{ v.bg }}; color:{{ v.color }};" style-hover="color:#E7E9EC;">{{ v.label }}</button>
+                </sc-for>
+              </div>
+              <div style="flex:1; background:#1B1D21; border:1px solid #26282D; border-radius:6px; display:flex; align-items:center; justify-content:center;">
+                <span style="display:inline-flex; align-items:center; justify-content:center; font-family:'Geist',sans-serif; font-weight:500; font-size:12px; background:{{ pvBg }}; color:{{ pvFg }}; border:{{ pvBorder }}; border-radius:8px; padding:6px 14px;">Continue</span>
+              </div>
+              <div style="display:flex; align-items:center; gap:8px;">
+                <span style="font-family:'Geist Mono',monospace; font-size:11px; color:#9BA1AB;">Button · 82</span>
+                <span style="font-family:'Geist Mono',monospace; font-size:10px; font-weight:500; padding:1px 7px; border-radius:999px; border:1px solid #34373D; background:#1B1D21; color:#30A46C;">82</span>
+                <span style="flex:1;"></span>
+                <a href="Inspector - Component Detail.dc.html" style="font-size:11px; color:#7C6FF0; text-decoration:none;" style-hover="text-decoration:underline;">Open</a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- TOKEN LENS -->
+      <sc-if value="{{ isTokenLens }}">
+        <div>
+          <!-- central token node -->
+          <div style="position:absolute; left:60px; top:268px; width:220px; height:72px; background:#141518; border:1px solid #34373D; border-radius:8px; display:flex; align-items:center; gap:10px; padding:0 14px; box-shadow:0 0 0 3px rgba(124,111,240,0.15);">
+            <span style="width:20px; height:20px; flex:none; border-radius:6px; background:{{ tlValue }}; border:1px solid #34373D;"></span>
+            <div style="min-width:0; flex:1;">
+              <div style="font-family:'Geist Mono',monospace; font-size:11px; color:#E7E9EC;">color/neutral/500</div>
+              <div style="font-family:'Geist Mono',monospace; font-size:11px; color:#9BA1AB;">{{ tlValueUpper }} · 22 uses</div>
+            </div>
+            <span style="width:7px; height:7px; flex:none; border-radius:50%; background:#FFB224;"></span>
+            <span style="position:absolute; right:-5px; top:31px; width:10px; height:10px; border-radius:50%; background:#0B0C0E; border:1.5px solid #6B7280;"></span>
+          </div>
+
+          <!-- component thumbnails -->
+          <sc-for list="{{ thumbs }}" as="t" hint-placeholder-count="4">
+            <a href="Inspector - Component Detail.dc.html" style="position:absolute; left:620px; top:{{ t.top }}; width:220px; height:88px; background:#141518; border:1px solid #26282D; border-radius:8px; display:flex; flex-direction:column; text-decoration:none; color:inherit; overflow:hidden;" style-hover="border-color:#34373D;">
+              <span style="flex:1; background:#1B1D21; display:flex; align-items:center; justify-content:center; border-bottom:1px solid #26282D;">
+                <sc-if value="{{ t.isButton }}"><span style="font-size:10px; font-weight:500; background:#2563EB; color:#FFFFFF; border-radius:6px; padding:4px 10px;">Continue</span></sc-if>
+                <sc-if value="{{ t.isCard }}"><span style="width:64px; height:34px; background:#FFFFFF; border:1px solid {{ tlValue }}; border-radius:5px;"></span></sc-if>
+                <sc-if value="{{ t.isInput }}"><span style="width:80px; height:22px; background:#FFFFFF; border:1px solid #D4D4D8; border-radius:4px; display:flex; align-items:center; padding:0 6px;"><span style="font-size:9px; color:{{ tlValue }};">Search…</span></span></sc-if>
+                <sc-if value="{{ t.isBadge }}"><span style="font-size:9px; font-family:'Geist Mono',monospace; color:{{ tlValue }}; border:1px solid #D4D4D8; background:#FFFFFF; border-radius:999px; padding:2px 8px;">DRAFT</span></sc-if>
+              </span>
+              <span style="display:flex; align-items:center; gap:8px; padding:6px 10px;">
+                <span style="font-size:11px; font-weight:500;">{{ t.name }}</span>
+                <span style="font-family:'Geist Mono',monospace; font-size:10px; color:{{ t.propColor }}">{{ t.prop }}</span>
+                <span style="flex:1;"></span>
+                <span style="font-family:'Geist Mono',monospace; font-size:10px; font-weight:500; padding:1px 7px; border-radius:999px; border:1px solid #34373D; background:#1B1D21; color:{{ t.scoreColor }};">{{ t.score }}</span>
+              </span>
+              <span style="position:absolute; left:-5px; top:39px; width:10px; height:10px; border-radius:50%; background:#0B0C0E; border:1.5px solid #6B7280;"></span>
+            </a>
+          </sc-for>
+        </div>
+      </sc-if>
+    </div>
+
+    <!-- Token lens detail panel (unscaled overlay) -->
+    <sc-if value="{{ isTokenLens }}">
+      <div style="position:absolute; top:16px; right:16px; width:260px; z-index:10; background:#141518; border:1px solid #26282D; border-radius:8px; padding:14px; display:flex; flex-direction:column; gap:12px;">
+        <div style="display:flex; align-items:center; justify-content:space-between;">
+          <span style="font-size:11px; font-weight:500; letter-spacing:0.08em; text-transform:uppercase; color:#6B7280;">Token details</span>
+          <span style="font-family:'Geist Mono',monospace; font-size:10px; color:#6B7280;">Color</span>
+        </div>
+        <div style="font-family:'Geist Mono',monospace; font-size:12px; color:#E7E9EC;">color/neutral/500</div>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <input type="color" value="{{ tlValue }}" onChange="{{ tlChange }}" style="width:34px; height:30px; flex:none; padding:2px; background:#1B1D21; border:1px solid #26282D; border-radius:6px; cursor:pointer;">
+          <input value="{{ tlValueUpper }}" onChange="{{ tlTextChange }}" style="flex:1; min-width:0; background:#1B1D21; border:1px solid #26282D; border-radius:6px; color:#E7E9EC; font-family:'Geist Mono',monospace; font-size:12px; padding:7px 10px; outline:none;" style-focus="border-color:#7C6FF0; box-shadow:0 0 0 2px rgba(124,111,240,0.25);">
+        </div>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span style="width:8px; height:8px; border-radius:50%; background:#FFB224;"></span>
+          <span style="font-size:11px; color:#9BA1AB;">Inferred by VortSpec from stitch-export.zip</span>
+        </div>
+        <div style="font-size:11px; color:#6B7280; line-height:1.5;">Edits ripple to the 4 connected components instantly.</div>
+      </div>
+    </sc-if>
+
+    <!-- Zoom controls -->
+    <div style="position:absolute; bottom:16px; right:16px; z-index:10; display:flex; gap:2px; background:#141518; border:1px solid #26282D; border-radius:8px; padding:2px;">
+      <button onClick="{{ zoomOut }}" style="border:none; cursor:pointer; font-family:'Geist Mono',monospace; font-size:12px; width:28px; height:26px; border-radius:6px; background:transparent; color:#9BA1AB;" style-hover="background:#1B1D21; color:#E7E9EC;">−</button>
+      <span style="font-family:'Geist Mono',monospace; font-size:11px; color:#6B7280; display:flex; align-items:center; padding:0 4px;">{{ scalePct }}</span>
+      <button onClick="{{ zoomIn }}" style="border:none; cursor:pointer; font-family:'Geist Mono',monospace; font-size:12px; width:28px; height:26px; border-radius:6px; background:transparent; color:#9BA1AB;" style-hover="background:#1B1D21; color:#E7E9EC;">+</button>
+      <button onClick="{{ fitView }}" style="border:none; cursor:pointer; font-family:'Geist Mono',monospace; font-size:11px; padding:0 10px; height:26px; border-radius:6px; background:transparent; color:#9BA1AB;" style-hover="background:#1B1D21; color:#E7E9EC;">Fit view</button>
+    </div>
+  </main>
+
+  <!-- ============ CHAT STRIP ============ -->
+  <div style="width:48px; flex:none; background:#141518; border-left:1px solid #26282D; display:flex; flex-direction:column; align-items:center; padding-top:12px;">
+    <a href="Inspector - Assistant.dc.html" title="Open Assistant" style="width:32px; height:32px; border:none; background:transparent; cursor:pointer; color:#9BA1AB; border-radius:6px; display:flex; align-items:center; justify-content:center; text-decoration:none;" style-hover="background:#1B1D21; color:#E7E9EC;">
+      <svg width="16" height="16" viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="9" rx="3" fill="none" stroke="currentColor" stroke-width="1.5"></rect><path d="M6 12 L6 14.5 L9 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"></path></svg>
+    </a>
+  </div>
+
+  <!-- ============ TOAST ============ -->
+  <sc-if value="{{ toastVisible }}" hint-placeholder-val="{{ false }}">
+    <div style="position:fixed; bottom:24px; left:50%; transform:translateX(-50%); z-index:60; display:flex; align-items:center; gap:8px; background:#1B1D21; border:1px solid #34373D; border-radius:8px; padding:10px 16px; font-size:12px; color:#E7E9EC; box-shadow:0 8px 24px rgba(0,0,0,0.5); animation:vsToastIn 0.18s ease;">
+      <span style="color:#30A46C;">✓</span> <span style="font-family:'Geist Mono',monospace;">{{ toastText }}</span>
+    </div>
+  </sc-if>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{
+  &quot;$preview&quot;: { &quot;width&quot;: 1440, &quot;height&quot;: 900 }
+}">
+class Component extends DCLogic {
+  state = {
+    lens: 'Component',
+    variant: 'primary',
+    scale: 1,
+    version: 14,
+    // rewiring
+    dragging: false,
+    mx: 0, my: 0,
+    bgSource: 'p500',        // which token feeds the background handle
+    promoted: false,
+    flagHover: false,
+    // token lens
+    tlValue: '#6B7280',
+    ripple: false,
+    toast: '',
+  };
+
+  componentWillUnmount() { clearTimeout(this._toastT); clearTimeout(this._rippleT); }
+
+  showToast(text) {
+    this.setState({ toast: text });
+    clearTimeout(this._toastT);
+    this._toastT = setTimeout(() => this.setState({ toast: '' }), 3000);
+  }
+
+  bumpVersion(title) {
+    const v = this.state.version;
+    this.setState({ version: v + 1 });
+    this.showToast(title + ' — Patch applied, v' + v + ' → v' + (v + 1));
+  }
+
+  bez(x1, y1, x2, y2) {
+    const dx = Math.max(50, (x2 - x1) / 2);
+    return 'M ' + x1 + ' ' + y1 + ' C ' + (x1 + dx) + ' ' + y1 + ', ' + (x2 - dx) + ' ' + y2 + ', ' + x2 + ' ' + y2;
+  }
+
+  renderVals() {
+    const st = this.state;
+    const tokens = [
+      { key:'p500', top: 120, cy: 152, name:'color/primary/500', value:'#2563EB', swatch:'#2563EB', kind:'color', prov:'#30A46C' },
+      { key:'p600', top: 200, cy: 232, name:'color/primary/600', value:'#1D4ED8', swatch:'#1D4ED8', kind:'color', prov:'#FFB224' },
+      { key:'rmd',  top: 280, cy: 312, name:'radius/md', value:'8px', kind:'radius', prov:'#30A46C' },
+      { key:'body', top: 360, cy: 392, name:'type/body', value:'Geist 14/20', kind:'type', prov:'#30A46C' },
+      { key:'sp2',  top: 440, cy: 472, name:'spacing/2', value:'8px', kind:'spacing', prov:'#30A46C' },
+    ];
+    const handleDefs = [
+      { key:'background', label:'background', y: 200 },
+      { key:'textcolor',  label:'text color', y: 256 },
+      { key:'radius',     label:'radius', y: 312 },
+      { key:'typography', label:'typography', y: 368 },
+      { key:'gap',        label:'gap', y: 424 },
+    ];
+    const tokenX = 270, compX = 600;
+    const bgToken = tokens.find(t => t.key === st.bgSource);
+
+    // ---- edges ----
+    const edges = [];
+    if (st.lens === 'Component') {
+      if (!st.dragging) {
+        edges.push({ d: this.bez(tokenX, bgToken.cy, compX, 200), stroke: 'rgba(37,99,235,0.8)', w: '2', dash: 'none' });
+      } else {
+        edges.push({ d: this.bez(compX, 200, st.mx, st.my), stroke: '#7C6FF0', w: '2', dash: '6 4' });
+      }
+      edges.push({ d: this.bez(tokenX, 312, compX, 312), stroke: '#34373D', w: '1.5', dash: 'none' });
+      edges.push({ d: this.bez(tokenX, 392, compX, 368), stroke: '#34373D', w: '1.5', dash: 'none' });
+      edges.push({ d: this.bez(tokenX, 472, compX, 424), stroke: '#34373D', w: '1.5', dash: 'none' });
+    } else {
+      const rippleStroke = st.ripple ? '#7C6FF0' : 'rgba(37,99,235,0.5)';
+      [124, 244, 364, 484].forEach(cy => {
+        edges.push({ d: this.bez(280, 304, 620, cy), stroke: rippleStroke, w: st.ripple ? '2' : '1.5', dash: 'none' });
+      });
+    }
+
+    // ---- token nodes ----
+    const tokenNodes = tokens.map(t => {
+      const isColor = t.kind === 'color';
+      const dimmed = st.dragging && !isColor;
+      const glowing = st.dragging && isColor;
+      return {
+        top: t.top + 'px', name: t.name, value: t.value,
+        isColor, isType: t.kind === 'type', isSpacing: t.kind === 'spacing', isRadius: t.kind === 'radius',
+        swatch: t.swatch || '', provColor: t.prov,
+        opacity: dimmed ? '0.4' : '1',
+        border: glowing ? '#7C6FF0' : '#26282D',
+        glow: glowing ? '0 0 0 3px rgba(124,111,240,0.2)' : 'none',
+        socketColor: (!st.dragging && t.key === st.bgSource) ? 'rgba(37,99,235,0.9)' : '#6B7280',
+        showTip: st.dragging && t.key === 'rmd',
+        up: e => {
+          if (!st.dragging) return;
+          e.stopPropagation();
+          if (isColor && t.key !== st.bgSource) {
+            this.setState({ dragging: false, bgSource: t.key });
+            this.bumpVersion('Rewire Button background to ' + t.name);
+          } else {
+            this.setState({ dragging: false });
+          }
+        },
+      };
+    });
+
+    // ---- handles ----
+    const handles = handleDefs.map(h => ({
+      label: h.label,
+      top: (h.y - 140 - 5) + 'px',
+      socketColor: h.key === 'background' ? 'rgba(37,99,235,0.9)' : (h.key === 'textcolor' && !st.promoted) ? '#FFB224' : '#6B7280',
+      cursor: h.key === 'background' ? 'grab' : 'default',
+      down: e => {
+        if (h.key !== 'background') return;
+        e.preventDefault(); e.stopPropagation();
+        this._canvasEl = e.target.closest('main');
+        this.setState({ dragging: true, mx: 600, my: 200 });
+      },
+      flagged: h.key === 'textcolor' && !st.promoted,
+      promoted: h.key === 'textcolor' && st.promoted,
+      flagHover: st.flagHover,
+      flagEnter: () => this.setState({ flagHover: true }),
+      flagLeave: () => this.setState({ flagHover: false }),
+      promote: e => {
+        e.stopPropagation();
+        this.setState({ promoted: true, flagHover: false });
+        this.bumpVersion('Promote #FFFFFF to color/surface/base');
+      },
+    }));
+
+    // ---- preview button ----
+    const pv = st.variant === 'primary'
+      ? { bg: bgToken.value, fg: '#FFFFFF', border: 'none' }
+      : st.variant === 'secondary'
+        ? { bg: 'transparent', fg: '#E7E9EC', border: '1px solid #34373D' }
+        : { bg: 'transparent', fg: '#9BA1AB', border: 'none' };
+
+    // ---- token lens thumbs ----
+    const thumbs = [
+      { top: '80px', name: 'Button', prop: 'meta text', score: '82', scoreColor: '#30A46C', isButton: true },
+      { top: '200px', name: 'Card', prop: 'border', score: '74', scoreColor: '#FFB224', isCard: true },
+      { top: '320px', name: 'Input', prop: 'placeholder', score: '68', scoreColor: '#FFB224', isInput: true },
+      { top: '440px', name: 'Badge', prop: 'text', score: '91', scoreColor: '#30A46C', isBadge: true },
+    ].map(t => Object.assign({ isButton:false, isCard:false, isInput:false, isBadge:false, propColor:'#6B7280' }, t));
+
+    const setTl = v => {
+      this.setState({ tlValue: v, ripple: true });
+      clearTimeout(this._rippleT);
+      this._rippleT = setTimeout(() => this.setState({ ripple: false }), 900);
+      this.bumpVersion('Edit color/neutral/500 to ' + v.toUpperCase());
+    };
+
+    return {
+      versionLabel: 'v' + st.version,
+      lensOpts: ['Component', 'Token'].map(label => ({
+        label,
+        bg: st.lens === label ? '#1B1D21' : 'transparent',
+        color: st.lens === label ? '#E7E9EC' : '#9BA1AB',
+        click: () => this.setState({ lens: label, dragging: false }),
+      })),
+      isComponentLens: st.lens === 'Component',
+      isTokenLens: st.lens === 'Token',
+      edges, tokenNodes, handles, thumbs,
+      variantOpts: ['primary', 'secondary', 'ghost'].map(label => ({
+        label,
+        bg: st.variant === label ? '#1B1D21' : 'transparent',
+        color: st.variant === label ? '#E7E9EC' : '#6B7280',
+        click: () => this.setState({ variant: label }),
+      })),
+      pvBg: pv.bg, pvFg: pv.fg, pvBorder: pv.border,
+      canvasCursor: st.dragging ? 'grabbing' : 'default',
+      canvasMove: e => {
+        if (!st.dragging) return;
+        const rect = (this._canvasEl || e.currentTarget).getBoundingClientRect();
+        this.setState({ mx: (e.clientX - rect.left) / st.scale, my: (e.clientY - rect.top) / st.scale });
+      },
+      canvasUp: () => { if (st.dragging) this.setState({ dragging: false }); },
+      scale: st.scale,
+      scalePct: Math.round(st.scale * 100) + '%',
+      zoomIn: () => this.setState(s => ({ scale: Math.min(1.5, +(s.scale + 0.1).toFixed(2)) })),
+      zoomOut: () => this.setState(s => ({ scale: Math.max(0.5, +(s.scale - 0.1).toFixed(2)) })),
+      fitView: () => this.setState({ scale: 0.85 }),
+      tlValue: st.tlValue,
+      tlValueUpper: st.tlValue.toUpperCase(),
+      tlChange: e => setTl(e.target.value),
+      tlTextChange: e => setTl(e.target.value),
+      toastVisible: !!st.toast,
+      toastText: st.toast,
+    };
+  }
+}
+</script>
+</body>
+</html>

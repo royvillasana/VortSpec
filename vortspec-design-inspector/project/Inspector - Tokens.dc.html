@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous">
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&amp;family=Geist+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+  <style>
+    html, body { margin:0; padding:0; background:#0B0C0E; }
+    * { box-sizing:border-box; }
+    @keyframes vsPanelIn { from { transform:translateX(24px); opacity:0; } to { transform:translateX(0); opacity:1; } }
+    @keyframes vsTipIn { from { opacity:0; } to { opacity:1; } }
+    input::placeholder { color:#6B7280; }
+    ::-webkit-scrollbar { width:10px; height:10px; }
+    ::-webkit-scrollbar-thumb { background:#26282D; border-radius:8px; border:2px solid #0B0C0E; }
+    ::-webkit-scrollbar-track { background:transparent; }
+  </style>
+</helmet>
+
+<div data-screen-label="Inspector — Tokens" style="display:flex; width:100%; height:100vh; min-height:720px; background:#0B0C0E; color:#E7E9EC; font-family:'Geist',system-ui,sans-serif; font-size:13px; overflow:hidden;" onClick="{{ closeMenus }}">
+
+  <!-- ============ LEFT RAIL ============ -->
+  <nav style="width:220px; flex:none; background:#141518; border-right:1px solid #26282D; display:flex; flex-direction:column; padding:16px 12px 12px;">
+    <a href="Projects Dashboard.dc.html" title="All projects" style="display:flex; align-items:center; gap:8px; padding:0 8px 16px; border-bottom:1px solid #26282D; margin-bottom:12px; text-decoration:none; color:inherit; border-radius:6px;" style-hover="opacity:0.85;">
+      <div style="width:20px; height:20px; flex:none; border-radius:6px; background:{{ accent }}; display:flex; align-items:center; justify-content:center; font-family:'Geist Mono',monospace; font-size:11px; font-weight:500; color:#0B0C0E;">M</div>
+      <div style="min-width:0;">
+        <div style="font-weight:600; font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Meridian Design System</div>
+        <div style="font-size:11px; color:#6B7280; font-family:'Geist Mono',monospace;">v13 · 48 tokens</div>
+      </div>
+    </a>
+
+    <div style="display:flex; flex-direction:column; gap:2px;">
+      <a href="#" style="display:flex; align-items:center; gap:10px; padding:7px 8px; border-radius:6px; background:#1B1D21; color:{{ accent }}; font-weight:500; text-decoration:none;" style-hover="background:#1B1D21;">
+        <svg width="14" height="14" viewBox="0 0 14 14"><circle cx="7" cy="7" r="5" fill="none" stroke="currentColor" stroke-width="1.5"></circle><circle cx="7" cy="7" r="2" fill="currentColor"></circle></svg>
+        <span style="flex:1;">Tokens</span>
+      </a>
+      <a href="Inspector - Component Detail.dc.html" style="display:flex; align-items:center; gap:10px; padding:7px 8px; border-radius:6px; color:#9BA1AB; text-decoration:none;" style-hover="background:#1B1D21; color:#E7E9EC;">
+        <svg width="14" height="14" viewBox="0 0 14 14"><rect x="2" y="2" width="10" height="10" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"></rect></svg>
+        <span style="flex:1;">Components</span>
+      </a>
+      <a href="Inspector - Graph.dc.html" style="display:flex; align-items:center; gap:10px; padding:7px 8px; border-radius:6px; color:#9BA1AB; text-decoration:none;" style-hover="background:#1B1D21; color:#E7E9EC;">
+        <svg width="14" height="14" viewBox="0 0 14 14"><circle cx="3.5" cy="3.5" r="2" fill="none" stroke="currentColor" stroke-width="1.4"></circle><circle cx="10.5" cy="7" r="2" fill="none" stroke="currentColor" stroke-width="1.4"></circle><circle cx="4.5" cy="11" r="2" fill="none" stroke="currentColor" stroke-width="1.4"></circle><path d="M5.3 4.4 L8.7 6.1 M8.6 8 L6 9.9" fill="none" stroke="currentColor" stroke-width="1.2"></path></svg>
+        <span style="flex:1;">Graph</span>
+      </a>
+      <a href="Inspector - Issues.dc.html" style="display:flex; align-items:center; gap:10px; padding:7px 8px; border-radius:6px; color:#9BA1AB; text-decoration:none;" style-hover="background:#1B1D21; color:#E7E9EC;">
+        <svg width="14" height="14" viewBox="0 0 14 14"><rect x="2.6" y="2.6" width="8.8" height="8.8" rx="2" fill="none" stroke="currentColor" stroke-width="1.5" transform="rotate(45 7 7)"></rect></svg>
+        <span style="flex:1;">Issues</span>
+        <span style="font-family:'Geist Mono',monospace; font-size:11px; background:#1B1D21; border:1px solid #34373D; color:#FFB224; border-radius:999px; padding:1px 7px;">31</span>
+      </a>
+      <a href="Inspector - History.dc.html" style="display:flex; align-items:center; gap:10px; padding:7px 8px; border-radius:6px; color:#9BA1AB; text-decoration:none;" style-hover="background:#1B1D21; color:#E7E9EC;">
+        <svg width="14" height="14" viewBox="0 0 14 14"><circle cx="7" cy="7" r="5" fill="none" stroke="currentColor" stroke-width="1.5"></circle><path d="M7 4.5 L7 7 L9 8.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></path></svg>
+        <span style="flex:1;">History</span>
+      </a>
+    </div>
+
+    <div style="flex:1;"></div>
+
+    <a href="#" style="display:flex; align-items:center; gap:10px; padding:7px 8px; border-radius:6px; color:#6B7280; text-decoration:none;" style-hover="background:#1B1D21; color:#E7E9EC;">
+      <span style="font-size:14px; line-height:1;">⚙</span>
+      <span>Settings</span>
+    </a>
+  </nav>
+
+  <!-- ============ MAIN AREA ============ -->
+  <main style="flex:1; min-width:0; display:flex; flex-direction:column; background:#0B0C0E;">
+
+    <!-- Header -->
+    <header style="flex:none; padding:20px 24px 12px; border-bottom:1px solid #26282D; display:flex; flex-direction:column; gap:14px;">
+      <div style="display:flex; align-items:center; gap:12px;">
+        <h1 style="margin:0; font-size:20px; font-weight:600; letter-spacing:-0.01em;">Tokens</h1>
+        <span style="font-family:'Geist Mono',monospace; font-size:12px; color:#6B7280;">{{ totalCount }} shown</span>
+      </div>
+      <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+        <div style="display:flex; gap:2px; background:#141518; border:1px solid #26282D; border-radius:8px; padding:2px;">
+          <sc-for list="{{ segments }}" as="s" hint-placeholder-count="6">
+            <button onClick="{{ s.click }}" style="border:none; cursor:pointer; font-family:'Geist',sans-serif; font-size:12px; padding:4px 10px; border-radius:6px; background:{{ s.bg }}; color:{{ s.color }};" style-hover="color:#E7E9EC;">{{ s.label }}</button>
+          </sc-for>
+        </div>
+        <div style="position:relative;">
+          <input value="{{ search }}" onChange="{{ onSearch }}" placeholder="Search tokens…" style="width:220px; background:#141518; border:1px solid #26282D; border-radius:6px; color:#E7E9EC; font-family:'Geist',sans-serif; font-size:12px; padding:6px 10px; outline:none;" style-focus="border-color:#7C6FF0; box-shadow:0 0 0 2px rgba(124,111,240,0.25);">
+        </div>
+        <button onClick="{{ toggleInferred }}" style="display:flex; align-items:center; gap:6px; cursor:pointer; font-family:'Geist',sans-serif; font-size:12px; padding:5px 10px; border-radius:999px; background:{{ chipBg }}; border:1px solid {{ chipBorder }}; color:{{ chipColor }};" style-hover="border-color:#34373D;">
+          <span style="width:6px; height:6px; border-radius:50%; background:#FFB224; display:inline-block;"></span>
+          Inferred only
+          <sc-if value="{{ inferredOnly }}"><span style="color:#9BA1AB; margin-left:2px;">×</span></sc-if>
+        </button>
+      </div>
+    </header>
+
+    <!-- Table -->
+    <div style="flex:1; overflow-y:auto; overflow-x:hidden;">
+      <sc-if value="{{ hasResults }}" hint-placeholder-val="{{ true }}">
+        <sc-for list="{{ groups }}" as="g" hint-placeholder-count="2">
+          <div>
+            <div style="position:sticky; top:0; z-index:3; background:#0B0C0E; border-bottom:1px solid #26282D; padding:16px 24px 8px; display:flex; align-items:baseline; gap:8px;">
+              <span style="font-size:15px; font-weight:600;">{{ g.title }}</span>
+              <span style="font-family:'Geist Mono',monospace; font-size:11px; color:#6B7280;">{{ g.count }} tokens</span>
+            </div>
+            <sc-for list="{{ g.tokens }}" as="t" hint-placeholder-count="5">
+              <div onClick="{{ t.select }}" style="position:relative; display:flex; align-items:center; gap:12px; height:44px; padding:0 24px 0 22px; border-bottom:1px solid #26282D; cursor:pointer; background:{{ t.bg }}; box-shadow:{{ t.edge }};" style-hover="background:#17181C;">
+
+                <!-- swatch -->
+                <sc-if value="{{ t.isColor }}"><span style="width:20px; height:20px; flex:none; border-radius:6px; background:{{ t.value }}; border:1px solid #34373D;"></span></sc-if>
+                <sc-if value="{{ t.isType }}"><span style="width:20px; height:20px; flex:none; border-radius:6px; background:#1B1D21; border:1px solid #34373D; display:flex; align-items:center; justify-content:center; font-size:10px; color:#E7E9EC;">Ag</span></sc-if>
+                <sc-if value="{{ t.isSpacing }}"><span style="width:20px; height:20px; flex:none; border-radius:6px; background:#1B1D21; border:1px solid #34373D; display:flex; align-items:center; justify-content:center;"><span style="width:10px; height:2px; background:#9BA1AB; border-radius:1px;"></span></span></sc-if>
+                <sc-if value="{{ t.isRadius }}"><span style="width:20px; height:20px; flex:none; border-radius:6px; background:#1B1D21; border:1px solid #34373D; display:flex; align-items:center; justify-content:center;"><span style="width:10px; height:10px; border:1.5px solid #9BA1AB; border-radius:4px 1px 1px 1px;"></span></span></sc-if>
+                <sc-if value="{{ t.isShadow }}"><span style="width:20px; height:20px; flex:none; border-radius:6px; background:#1B1D21; border:1px solid #34373D; display:flex; align-items:center; justify-content:center;"><span style="width:10px; height:10px; border-radius:3px; background:#3A3D44; box-shadow:0 2px 4px rgba(0,0,0,0.7);"></span></span></sc-if>
+
+                <span style="font-family:'Geist Mono',monospace; font-size:12px; color:#E7E9EC; width:220px; flex:none; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ t.name }}</span>
+                <span style="font-family:'Geist Mono',monospace; font-size:12px; color:#9BA1AB; width:170px; flex:none; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ t.value }}</span>
+
+                <!-- provenance badge -->
+                <span style="display:flex; align-items:center; gap:6px; width:100px; flex:none;">
+                  <span style="width:8px; height:8px; border-radius:50%; background:{{ t.provColor }}; display:inline-block;"></span>
+                  <span style="font-size:12px; color:#9BA1AB;">{{ t.provLabel }}</span>
+                </span>
+
+                <!-- duplicate flag -->
+                <span style="width:24px; flex:none; display:flex; align-items:center;">
+                  <sc-if value="{{ t.dup }}">
+                    <span onMouseEnter="{{ t.tipShow }}" onMouseLeave="{{ t.tipHide }}" style="position:relative; display:flex; align-items:center; justify-content:center; width:18px; height:18px; border-radius:4px; cursor:default;" style-hover="background:#1B1D21;">
+                      <svg width="12" height="12" viewBox="0 0 12 12"><circle cx="4.2" cy="6" r="2.6" fill="none" stroke="#FFB224" stroke-width="1.4"></circle><circle cx="7.8" cy="6" r="2.6" fill="none" stroke="#FFB224" stroke-width="1.4"></circle></svg>
+                      <sc-if value="{{ t.tipOpen }}">
+                        <span style="position:absolute; bottom:24px; left:50%; transform:translateX(-50%); z-index:20; white-space:nowrap; background:#1B1D21; border:1px solid #34373D; border-radius:6px; padding:5px 9px; font-size:11px; color:#E7E9EC; box-shadow:0 4px 12px rgba(0,0,0,0.5); animation:vsTipIn 0.12s ease;">Possible duplicate, review suggested</span>
+                      </sc-if>
+                    </span>
+                  </sc-if>
+                </span>
+
+                <span style="flex:1;"></span>
+
+                <button onClick="{{ t.usesClick }}" style="border:none; background:transparent; cursor:pointer; font-family:'Geist Mono',monospace; font-size:12px; color:#9BA1AB; padding:4px 6px; border-radius:4px; text-align:right;" style-hover="color:#E7E9EC; background:#1B1D21; text-decoration:underline;">{{ t.usesText }}</button>
+
+                <!-- overflow menu -->
+                <span style="position:relative; flex:none;">
+                  <button onClick="{{ t.menuToggle }}" style="border:none; background:transparent; cursor:pointer; color:#6B7280; font-size:14px; line-height:1; padding:4px 6px; border-radius:4px; letter-spacing:1px;" style-hover="color:#E7E9EC; background:#1B1D21;">⋯</button>
+                  <sc-if value="{{ t.menuOpen }}">
+                    <div style="position:absolute; right:0; top:26px; z-index:30; width:160px; background:#1B1D21; border:1px solid #34373D; border-radius:8px; padding:4px; box-shadow:0 8px 24px rgba(0,0,0,0.55);">
+                      <button onClick="{{ t.mRename }}" style="display:block; width:100%; text-align:left; border:none; background:transparent; cursor:pointer; font-family:'Geist',sans-serif; font-size:12px; color:#E7E9EC; padding:6px 8px; border-radius:4px;" style-hover="background:#26282D;">Rename</button>
+                      <button onClick="{{ t.mEdit }}" style="display:block; width:100%; text-align:left; border:none; background:transparent; cursor:pointer; font-family:'Geist',sans-serif; font-size:12px; color:#E7E9EC; padding:6px 8px; border-radius:4px;" style-hover="background:#26282D;">Edit value</button>
+                      <button onClick="{{ t.mAlias }}" style="display:block; width:100%; text-align:left; border:none; background:transparent; cursor:pointer; font-family:'Geist',sans-serif; font-size:12px; color:#E7E9EC; padding:6px 8px; border-radius:4px;" style-hover="background:#26282D;">Alias…</button>
+                      <button onClick="{{ t.mMerge }}" style="display:block; width:100%; text-align:left; border:none; background:transparent; cursor:pointer; font-family:'Geist',sans-serif; font-size:12px; color:#E7E9EC; padding:6px 8px; border-radius:4px;" style-hover="background:#26282D;">Merge into…</button>
+                      <div style="height:1px; background:#26282D; margin:4px 0;"></div>
+                      <button onClick="{{ t.mDelete }}" style="display:block; width:100%; text-align:left; border:none; background:transparent; cursor:pointer; font-family:'Geist',sans-serif; font-size:12px; color:#E5484D; padding:6px 8px; border-radius:4px;" style-hover="background:#26282D;">Delete</button>
+                    </div>
+                  </sc-if>
+                </span>
+              </div>
+            </sc-for>
+          </div>
+        </sc-for>
+      </sc-if>
+      <sc-if value="{{ noResults }}" hint-placeholder-val="{{ false }}">
+        <div style="padding:64px 24px; text-align:center; color:#6B7280;">
+          <div style="font-size:13px; margin-bottom:8px;">No tokens match</div>
+          <button onClick="{{ clearFilters }}" style="border:none; background:transparent; cursor:pointer; font-family:'Geist',sans-serif; font-size:12px; color:{{ accent }}; text-decoration:underline; padding:2px 4px;" style-hover="color:#E7E9EC;">Clear filters</button>
+        </div>
+      </sc-if>
+    </div>
+  </main>
+
+  <!-- ============ DETAIL PANEL ============ -->
+  <sc-if value="{{ panelOpen }}" hint-placeholder-val="{{ false }}">
+    <aside style="width:360px; flex:none; background:#141518; border-left:1px solid #26282D; display:flex; flex-direction:column; overflow-y:auto; animation:vsPanelIn 0.18s ease;">
+      <div style="display:flex; align-items:center; justify-content:space-between; padding:16px 16px 12px; border-bottom:1px solid #26282D;">
+        <span style="font-size:11px; font-weight:500; letter-spacing:0.08em; text-transform:uppercase; color:#6B7280;">Token details</span>
+        <button onClick="{{ closePanel }}" style="border:none; background:transparent; cursor:pointer; color:#6B7280; font-size:15px; line-height:1; padding:4px 6px; border-radius:4px;" style-hover="color:#E7E9EC; background:#1B1D21;">×</button>
+      </div>
+
+      <div style="padding:16px; display:flex; flex-direction:column; gap:16px;">
+        <div style="display:flex; flex-direction:column; gap:6px;">
+          <label style="font-size:11px; color:#6B7280;">Name</label>
+          <input value="{{ selName }}" onChange="{{ onNameChange }}" style="width:100%; background:#1B1D21; border:1px solid #26282D; border-radius:6px; color:#E7E9EC; font-family:'Geist Mono',monospace; font-size:12px; padding:8px 10px; outline:none;" style-focus="border-color:#7C6FF0; box-shadow:0 0 0 2px rgba(124,111,240,0.25);">
+        </div>
+
+        <div style="display:flex; align-items:center; gap:24px;">
+          <div style="display:flex; flex-direction:column; gap:4px;">
+            <span style="font-size:11px; color:#6B7280;">Type</span>
+            <span style="font-size:12px; color:#E7E9EC;">{{ selKindLabel }}</span>
+          </div>
+          <div style="display:flex; flex-direction:column; gap:4px;">
+            <span style="font-size:11px; color:#6B7280;">Usage</span>
+            <span style="font-family:'Geist Mono',monospace; font-size:12px; color:#E7E9EC;">{{ selUsesText }}</span>
+          </div>
+        </div>
+
+        <div style="display:flex; flex-direction:column; gap:6px;">
+          <label style="font-size:11px; color:#6B7280;">Value</label>
+          <sc-if value="{{ selIsColor }}">
+            <div style="display:flex; align-items:center; gap:8px;">
+              <input type="color" value="{{ selValue }}" onChange="{{ onValueChange }}" style="width:36px; height:32px; flex:none; padding:2px; background:#1B1D21; border:1px solid #26282D; border-radius:6px; cursor:pointer;">
+              <input value="{{ selValue }}" onChange="{{ onValueTextChange }}" style="flex:1; background:#1B1D21; border:1px solid #26282D; border-radius:6px; color:#E7E9EC; font-family:'Geist Mono',monospace; font-size:12px; padding:8px 10px; outline:none;" style-focus="border-color:#7C6FF0; box-shadow:0 0 0 2px rgba(124,111,240,0.25);">
+            </div>
+          </sc-if>
+          <sc-if value="{{ selIsNotColor }}">
+            <input value="{{ selValue }}" onChange="{{ onValueTextChange }}" style="width:100%; background:#1B1D21; border:1px solid #26282D; border-radius:6px; color:#E7E9EC; font-family:'Geist Mono',monospace; font-size:12px; padding:8px 10px; outline:none;" style-focus="border-color:#7C6FF0; box-shadow:0 0 0 2px rgba(124,111,240,0.25);">
+          </sc-if>
+        </div>
+
+        <div style="display:flex; flex-direction:column; gap:6px;">
+          <label style="font-size:11px; color:#6B7280;">Alias of</label>
+          <select onChange="{{ onAliasChange }}" value="{{ selAlias }}" style="width:100%; background:#1B1D21; border:1px solid #26282D; border-radius:6px; color:#E7E9EC; font-family:'Geist Mono',monospace; font-size:12px; padding:8px 10px; outline:none; appearance:none; cursor:pointer;" style-focus="border-color:#7C6FF0;">
+            <option value="">No alias</option>
+            <sc-for list="{{ aliasOptions }}" as="o" hint-placeholder-count="0">
+              <option value="{{ o }}">{{ o }}</option>
+            </sc-for>
+          </select>
+        </div>
+
+        <div style="border-top:1px solid #26282D; padding-top:16px; display:flex; flex-direction:column; gap:10px;">
+          <div style="display:flex; align-items:center; gap:8px;">
+            <span style="width:8px; height:8px; border-radius:50%; background:{{ selProvColor }}; display:inline-block;"></span>
+            <span style="font-size:12px; color:#9BA1AB;">{{ selProvLine }}</span>
+          </div>
+          <sc-if value="{{ selUnconfirmed }}">
+            <button onClick="{{ confirmToken }}" style="align-self:flex-start; border:none; cursor:pointer; font-family:'Geist',sans-serif; font-size:12px; font-weight:500; color:#FFFFFF; background:{{ accent }}; border-radius:6px; padding:7px 14px;" style-hover="filter:brightness(1.12);">Confirm token</button>
+          </sc-if>
+          <sc-if value="{{ selConfirmed }}">
+            <span style="display:inline-flex; align-items:center; gap:6px; font-size:12px; color:#30A46C;">✓ Confirmed</span>
+          </sc-if>
+        </div>
+
+        <div style="border-top:1px solid #26282D; padding-top:16px; display:flex; flex-direction:column; gap:8px;">
+          <span style="font-size:11px; font-weight:500; letter-spacing:0.08em; text-transform:uppercase; color:#6B7280;">Where used</span>
+          <div style="display:flex; flex-direction:column;">
+            <sc-for list="{{ selUsage }}" as="u" hint-placeholder-count="3">
+              <div style="display:flex; align-items:center; justify-content:space-between; padding:7px 8px; border-radius:6px; cursor:default;" style-hover="background:#1B1D21;">
+                <span style="font-size:12px; color:#E7E9EC;">{{ u.comp }}</span>
+                <span style="font-family:'Geist Mono',monospace; font-size:11px; color:#9BA1AB;">{{ u.prop }}</span>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </div>
+    </aside>
+  </sc-if>
+
+  <!-- ============ CHAT STRIP (collapsed drawer) ============ -->
+  <sc-if value="{{ stripVisible }}" hint-placeholder-val="{{ true }}">
+    <div style="width:48px; flex:none; background:#141518; border-left:1px solid #26282D; display:flex; flex-direction:column; align-items:center; padding-top:12px;">
+      <a href="Inspector - Assistant.dc.html" title="Open Assistant" style="width:32px; height:32px; border:none; background:transparent; cursor:pointer; color:#9BA1AB; border-radius:6px; display:flex; align-items:center; justify-content:center; text-decoration:none;" style-hover="background:#1B1D21; color:#E7E9EC;">
+        <svg width="16" height="16" viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="9" rx="3" fill="none" stroke="currentColor" stroke-width="1.5"></rect><path d="M6 12 L6 14.5 L9 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"></path></svg>
+      </a>
+    </div>
+  </sc-if>
+
+  <!-- ============ MERGE MODAL ============ -->
+  <sc-if value="{{ mergeOpen }}" hint-placeholder-val="{{ false }}">
+    <div style="position:fixed; inset:0; z-index:50; background:rgba(0,0,0,0.55); display:flex; align-items:center; justify-content:center;" onClick="{{ closeMerge }}">
+      <div onClick="{{ mergeStop }}" style="width:640px; max-height:80vh; overflow-y:auto; background:#141518; border:1px solid #34373D; border-radius:8px; box-shadow:0 16px 48px rgba(0,0,0,0.6);">
+        <div style="display:flex; align-items:center; justify-content:space-between; padding:16px 20px 12px; border-bottom:1px solid #26282D;">
+          <span style="font-size:15px; font-weight:600;">Merge tokens</span>
+          <button onClick="{{ closeMerge }}" style="border:none; background:transparent; cursor:pointer; color:#6B7280; font-size:15px; line-height:1; padding:4px 6px; border-radius:4px;" style-hover="color:#E7E9EC; background:#1B1D21;">×</button>
+        </div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; padding:16px 20px;">
+          <div style="display:flex; flex-direction:column; gap:8px;">
+            <span style="font-size:11px; font-weight:500; letter-spacing:0.08em; text-transform:uppercase; color:#6B7280;">Merging 3 tokens</span>
+            <sc-for list="{{ mergeSources }}" as="m" hint-placeholder-count="3">
+              <div style="display:flex; align-items:center; gap:10px; background:#1B1D21; border:1px solid #26282D; border-radius:6px; padding:8px 10px;">
+                <span style="width:16px; height:16px; flex:none; border-radius:4px; background:{{ m.value }}; border:1px solid #34373D;"></span>
+                <span style="font-family:'Geist Mono',monospace; font-size:11px; color:#E7E9EC; flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ m.name }}</span>
+                <span style="font-family:'Geist Mono',monospace; font-size:11px; color:#9BA1AB;">{{ m.value }}</span>
+              </div>
+            </sc-for>
+          </div>
+          <div style="display:flex; flex-direction:column; gap:8px;">
+            <span style="font-size:11px; font-weight:500; letter-spacing:0.08em; text-transform:uppercase; color:#6B7280;">Into</span>
+            <div style="display:flex; align-items:center; gap:10px; background:#1B1D21; border:1px solid #7C6FF0; border-radius:6px; padding:12px 10px;">
+              <span style="width:20px; height:20px; flex:none; border-radius:6px; background:#6B7280; border:1px solid #34373D;"></span>
+              <div style="min-width:0;">
+                <div style="font-family:'Geist Mono',monospace; font-size:12px; color:#E7E9EC;">color/neutral/500</div>
+                <div style="font-family:'Geist Mono',monospace; font-size:11px; color:#9BA1AB;">#6B7280 · 49 uses after merge</div>
+              </div>
+            </div>
+            <span style="font-size:12px; color:#6B7280; line-height:1.5;">Values within ΔE 2.3. The three unnamed greys are visually indistinguishable from the target.</span>
+          </div>
+        </div>
+        <div style="padding:0 20px 16px;">
+          <div style="font-family:'Geist Mono',monospace; font-size:11px; color:#9BA1AB; margin-bottom:8px;">27 references will be rewritten</div>
+          <div style="border:1px solid #26282D; border-radius:6px; overflow:hidden;">
+            <sc-for list="{{ mergeRefs }}" as="r" hint-placeholder-count="6">
+              <div style="display:flex; align-items:center; gap:8px; padding:6px 10px; border-bottom:1px solid #26282D; font-size:11px;" style-hover="background:#1B1D21;">
+                <span style="color:#E7E9EC; width:80px; flex:none;">{{ r.comp }}</span>
+                <span style="font-family:'Geist Mono',monospace; color:#9BA1AB; width:110px; flex:none;">{{ r.prop }}</span>
+                <span style="font-family:'Geist Mono',monospace; color:#6B7280; text-decoration:line-through;">{{ r.from }}</span>
+                <span style="color:#6B7280;">→</span>
+                <span style="font-family:'Geist Mono',monospace; color:#E7E9EC; background:rgba(48,164,108,0.12); border-radius:4px; padding:1px 6px;">color/neutral/500</span>
+              </div>
+            </sc-for>
+            <div style="padding:6px 10px; font-family:'Geist Mono',monospace; font-size:11px; color:#6B7280;">+19 more</div>
+          </div>
+        </div>
+        <div style="display:flex; justify-content:flex-end; gap:8px; padding:12px 20px 16px; border-top:1px solid #26282D;">
+          <button onClick="{{ closeMerge }}" style="border:1px solid #34373D; background:transparent; cursor:pointer; font-family:'Geist',sans-serif; font-size:12px; color:#E7E9EC; border-radius:6px; padding:7px 14px;" style-hover="background:#1B1D21;">Cancel</button>
+          <button onClick="{{ confirmMerge }}" style="border:none; cursor:pointer; font-family:'Geist',sans-serif; font-size:12px; font-weight:500; color:#FFFFFF; background:#7C6FF0; border-radius:6px; padding:7px 14px;" style-hover="filter:brightness(1.12);">Merge 3 tokens</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- ============ TOAST ============ -->
+  <sc-if value="{{ toastVisible }}" hint-placeholder-val="{{ false }}">
+    <div style="position:fixed; bottom:24px; left:50%; transform:translateX(-50%); z-index:60; display:flex; align-items:center; gap:8px; background:#1B1D21; border:1px solid #34373D; border-radius:8px; padding:10px 16px; font-size:12px; color:#E7E9EC; box-shadow:0 8px 24px rgba(0,0,0,0.5); animation:vsTipIn 0.18s ease;">
+      <span style="color:#30A46C;">✓</span> {{ toastText }}
+    </div>
+  </sc-if>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{
+  &quot;accentColor&quot;: { &quot;editor&quot;: &quot;color&quot;, &quot;default&quot;: &quot;#7C6FF0&quot;, &quot;tsType&quot;: &quot;string&quot;, &quot;options&quot;: [&quot;#7C6FF0&quot;, &quot;#5B8DEF&quot;, &quot;#30A46C&quot;, &quot;#E58C4A&quot;], &quot;section&quot;: &quot;Theme&quot; },
+  &quot;showChatStrip&quot;: { &quot;editor&quot;: &quot;boolean&quot;, &quot;default&quot;: true, &quot;tsType&quot;: &quot;boolean&quot;, &quot;section&quot;: &quot;Layout&quot; }
+}">
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    const T = (id, kind, name, value, prov, uses, dup) => ({ id, kind, name, value, prov, uses, dup: !!dup, alias: '' });
+    this.state = {
+      segment: 'All',
+      search: '',
+      inferredOnly: false,
+      selectedId: null,
+      menuId: null,
+      tipId: null,
+      mergeOpen: false,
+      toast: '',
+      tokens: [
+        T('c1','color','color/primary/500','#2563EB','confirmed',14),
+        T('c2','color','color/primary/600','#1D4ED8','inferred',6),
+        T('c3','color','color/primary/700','#1E40AF','inferred',3),
+        T('c4','color','color/primary/50','#EFF6FF','confirmed',9),
+        T('c5','color','color/neutral/100','#F4F4F5','confirmed',12),
+        T('c6','color','color/neutral/300','#D4D4D8','inferred',8),
+        T('c7','color','color/neutral/500','#6B7280','inferred',22),
+        T('c8','color','color/neutral/700','#3F3F46','confirmed',11),
+        T('c9','color','color/neutral/900','#18181B','confirmed',17),
+        T('c10','color','color/grey/untitled-1','#71717A','inferred',4,true),
+        T('c11','color','color/grey/untitled-2','#6E7076','inferred',2,true),
+        T('c19','color','color/grey/untitled-3','#6F7178','inferred',21,true),
+        T('c12','color','color/success/500','#16A34A','confirmed',5),
+        T('c13','color','color/warning/500','#F59E0B','inferred',4),
+        T('c14','color','color/error/500','#DC2626','confirmed',7),
+        T('c15','color','color/surface/base','#FFFFFF','confirmed',26),
+        T('c16','color','color/surface/raised','#FAFAFA','inferred',6),
+        T('c17','color','color/text/primary','#111827','confirmed',24),
+        T('c18','color','color/text/secondary','#52525B','inferred',13),
+        T('t1','typography','type/body','Geist 14/20','confirmed',31),
+        T('t2','typography','type/heading-lg','Geist 24/32','confirmed',8),
+        T('t3','typography','type/heading-md','Geist 18/28','inferred',6),
+        T('t4','typography','type/caption','Geist 12/16','inferred',9),
+        T('s1','spacing','spacing/1','4px','confirmed',42),
+        T('s2','spacing','spacing/2','8px','confirmed',38),
+        T('s3','spacing','spacing/3','12px','inferred',21),
+        T('s4','spacing','spacing/4','16px','confirmed',33),
+        T('s5','spacing','spacing/6','24px','inferred',12),
+        T('r1','radius','radius/sm','6px','confirmed',12),
+        T('r2','radius','radius/md','8px','confirmed',19),
+        T('r3','radius','radius/full','9999px','inferred',3),
+        T('sh1','shadow','shadow/sm','0 1px 2px rgba(0,0,0,.05)','inferred',7),
+        T('sh2','shadow','shadow/md','0 4px 12px rgba(0,0,0,.08)','inferred',5),
+      ],
+      usage: {
+        'c1': [{comp:'Button',prop:'background'},{comp:'Link',prop:'color'},{comp:'Tab',prop:'active indicator'},{comp:'Checkbox',prop:'checked fill'},{comp:'Badge',prop:'background'}],
+        'c2': [{comp:'Button',prop:'hover background'},{comp:'Link',prop:'hover color'}],
+        'c7': [{comp:'Input',prop:'placeholder color'},{comp:'Card',prop:'meta text'},{comp:'Table',prop:'header text'},{comp:'Breadcrumb',prop:'separator'}],
+        'c10': [{comp:'Divider',prop:'stroke'},{comp:'Icon',prop:'muted fill'}],
+        'c11': [{comp:'Tooltip',prop:'border'}],
+        'r2': [{comp:'Button',prop:'border-radius'},{comp:'Card',prop:'border-radius'},{comp:'Input',prop:'border-radius'},{comp:'Modal',prop:'border-radius'}],
+        't1': [{comp:'Button',prop:'label'},{comp:'Input',prop:'value text'},{comp:'Card',prop:'body text'},{comp:'Table',prop:'cell text'}],
+      },
+    };
+    this._onDocClick = () => { if (this.state.menuId) this.setState({ menuId: null }); };
+  }
+
+  componentDidMount() { document.addEventListener('click', this._onDocClick); }
+  componentWillUnmount() { document.removeEventListener('click', this._onDocClick); clearTimeout(this._toastT); }
+
+  showToast(text) {
+    this.setState({ toast: text });
+    clearTimeout(this._toastT);
+    this._toastT = setTimeout(() => this.setState({ toast: '' }), 3000);
+  }
+
+  provColor(p) { return { confirmed:'#30A46C', inferred:'#FFB224', pending:'#6B7280', error:'#E5484D' }[p] || '#6B7280'; }
+  provLabel(p) { return p.charAt(0).toUpperCase() + p.slice(1); }
+
+  defaultUsage(t) {
+    const pool = [
+      {comp:'Button',prop:'background'},{comp:'Card',prop:'border'},{comp:'Input',prop:'border'},
+      {comp:'Modal',prop:'surface'},{comp:'Table',prop:'row divider'},{comp:'Badge',prop:'text'},
+    ];
+    const n = Math.min(t.uses, 6);
+    const out = [];
+    for (let i = 0; i < n; i++) out.push(pool[(t.name.length + i) % pool.length]);
+    if (t.uses > 6) out.push({ comp: '+' + (t.uses - 6) + ' more', prop: '' });
+    return out;
+  }
+
+  updateSel(patch) {
+    this.setState(s => ({ tokens: s.tokens.map(t => t.id === s.selectedId ? Object.assign({}, t, patch) : t) }));
+  }
+
+  renderVals() {
+    const accent = this.props.accentColor ?? '#7C6FF0';
+    const st = this.state;
+    const kinds = [
+      { key:'color', title:'Color', seg:'Color' },
+      { key:'typography', title:'Typography', seg:'Typography' },
+      { key:'spacing', title:'Spacing', seg:'Spacing' },
+      { key:'radius', title:'Radius', seg:'Radius' },
+      { key:'shadow', title:'Shadow', seg:'Shadow' },
+    ];
+    const segNames = ['All','Color','Typography','Spacing','Radius','Shadow'];
+    const segments = segNames.map(label => ({
+      label,
+      bg: st.segment === label ? '#1B1D21' : 'transparent',
+      color: st.segment === label ? '#E7E9EC' : '#9BA1AB',
+      click: () => this.setState({ segment: label }),
+    }));
+
+    const q = st.search.trim().toLowerCase();
+    const match = t =>
+      (st.segment === 'All' || kinds.find(k => k.seg === st.segment)?.key === t.kind) &&
+      (!st.inferredOnly || t.prov === 'inferred') &&
+      (!q || t.name.toLowerCase().includes(q) || t.value.toLowerCase().includes(q));
+
+    const enrich = t => ({
+      name: t.name, value: t.value, dup: t.dup,
+      isColor: t.kind === 'color', isType: t.kind === 'typography',
+      isSpacing: t.kind === 'spacing', isRadius: t.kind === 'radius', isShadow: t.kind === 'shadow',
+      provColor: this.provColor(t.prov), provLabel: this.provLabel(t.prov),
+      usesText: t.uses + ' uses',
+      bg: st.selectedId === t.id ? '#1B1D21' : 'transparent',
+      edge: st.selectedId === t.id ? 'inset 2px 0 0 ' + accent : 'none',
+      menuOpen: st.menuId === t.id,
+      tipOpen: st.tipId === t.id,
+      select: () => this.setState({ selectedId: t.id, menuId: null }),
+      usesClick: e => { e.stopPropagation(); this.setState({ selectedId: t.id, menuId: null }); },
+      menuToggle: e => { e.stopPropagation(); this.setState(s => ({ menuId: s.menuId === t.id ? null : t.id })); },
+      tipShow: () => this.setState({ tipId: t.id }),
+      tipHide: () => this.setState({ tipId: null }),
+      mRename: e => { e.stopPropagation(); this.setState({ selectedId: t.id, menuId: null }); },
+      mEdit: e => { e.stopPropagation(); this.setState({ selectedId: t.id, menuId: null }); },
+      mAlias: e => { e.stopPropagation(); this.setState({ selectedId: t.id, menuId: null }); },
+      mMerge: e => { e.stopPropagation(); if (t.dup) { this.setState({ mergeOpen: true, menuId: null }); } else { this.setState({ selectedId: t.id, menuId: null }); } },
+      mDelete: e => { e.stopPropagation(); this.setState(s => ({ tokens: s.tokens.filter(x => x.id !== t.id), selectedId: s.selectedId === t.id ? null : s.selectedId, menuId: null })); },
+    });
+
+    const groups = kinds
+      .map(k => {
+        const toks = st.tokens.filter(t => t.kind === k.key && match(t));
+        return { title: k.title, count: toks.length, tokens: toks.map(enrich) };
+      })
+      .filter(g => g.count > 0);
+
+    const totalCount = groups.reduce((a, g) => a + g.count, 0);
+    const sel = st.tokens.find(t => t.id === st.selectedId) || null;
+    const kindLabels = { color:'Color', typography:'Typography', spacing:'Spacing', radius:'Radius', shadow:'Shadow' };
+
+    return {
+      accent,
+      segments,
+      search: st.search,
+      onSearch: e => this.setState({ search: e.target.value }),
+      inferredOnly: st.inferredOnly,
+      toggleInferred: () => this.setState(s => ({ inferredOnly: !s.inferredOnly })),
+      chipBg: st.inferredOnly ? '#1B1D21' : '#141518',
+      chipBorder: st.inferredOnly ? accent : '#26282D',
+      chipColor: st.inferredOnly ? '#E7E9EC' : '#9BA1AB',
+      clearFilters: () => this.setState({ search: '', inferredOnly: false, segment: 'All' }),
+      groups,
+      totalCount,
+      hasResults: totalCount > 0,
+      noResults: totalCount === 0,
+      closeMenus: () => { if (st.menuId) this.setState({ menuId: null }); },
+      stripVisible: (this.props.showChatStrip ?? true) && !sel,
+      panelOpen: !!sel,
+      closePanel: () => this.setState({ selectedId: null }),
+      selName: sel ? sel.name : '',
+      onNameChange: e => this.updateSel({ name: e.target.value }),
+      selValue: sel ? sel.value : '',
+      onValueChange: e => this.updateSel({ value: e.target.value.toUpperCase() }),
+      onValueTextChange: e => this.updateSel({ value: e.target.value }),
+      selKindLabel: sel ? kindLabels[sel.kind] : '',
+      selUsesText: sel ? sel.uses + ' uses' : '',
+      selIsColor: !!sel && sel.kind === 'color',
+      selIsNotColor: !!sel && sel.kind !== 'color',
+      selAlias: sel ? sel.alias : '',
+      onAliasChange: e => this.updateSel({ alias: e.target.value }),
+      aliasOptions: sel ? st.tokens.filter(t => t.kind === sel.kind && t.id !== sel.id).map(t => t.name) : [],
+      selProvColor: sel ? this.provColor(sel.prov) : '#6B7280',
+      selProvLine: sel ? (sel.prov === 'confirmed' ? 'Confirmed · originally extracted from stitch-export.zip' : 'Inferred by VortSpec from stitch-export.zip') : '',
+      selUnconfirmed: !!sel && sel.prov !== 'confirmed',
+      selConfirmed: !!sel && sel.prov === 'confirmed',
+      confirmToken: () => this.updateSel({ prov: 'confirmed' }),
+      selUsage: sel ? (st.usage[sel.id] || this.defaultUsage(sel)) : [],
+      mergeOpen: st.mergeOpen,
+      closeMerge: () => this.setState({ mergeOpen: false }),
+      mergeStop: e => e.stopPropagation(),
+      mergeSources: [
+        { name: 'color/grey/untitled-1', value: '#71717A' },
+        { name: 'color/grey/untitled-2', value: '#6E7076' },
+        { name: 'color/grey/untitled-3', value: '#6F7178' },
+      ],
+      mergeRefs: [
+        { comp: 'Divider', prop: 'stroke', from: 'color/grey/untitled-1' },
+        { comp: 'Icon', prop: 'muted fill', from: 'color/grey/untitled-1' },
+        { comp: 'Table', prop: 'header divider', from: 'color/grey/untitled-1' },
+        { comp: 'Breadcrumb', prop: 'separator', from: 'color/grey/untitled-1' },
+        { comp: 'Tooltip', prop: 'border', from: 'color/grey/untitled-2' },
+        { comp: 'Card', prop: 'meta divider', from: 'color/grey/untitled-2' },
+        { comp: 'Input', prop: 'placeholder color', from: 'color/grey/untitled-3' },
+        { comp: 'Tabs', prop: 'inactive label', from: 'color/grey/untitled-3' },
+      ],
+      confirmMerge: () => {
+        const dupIds = ['c10', 'c11', 'c19'];
+        this.setState(s => ({
+          tokens: s.tokens.filter(x => !dupIds.includes(x.id)).map(x => x.id === 'c7' ? Object.assign({}, x, { uses: 49 }) : x),
+          mergeOpen: false,
+          selectedId: dupIds.includes(s.selectedId) ? null : s.selectedId,
+        }));
+        this.showToast('Merged 3 tokens into color/neutral/500 · 27 references rewritten');
+      },
+      toastVisible: !!st.toast,
+      toastText: st.toast,
+    };
+  }
+}
+</script>
+</body>
+</html>

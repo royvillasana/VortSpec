@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous">
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&amp;family=Geist+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+  <style>
+    html, body { margin:0; padding:0; background:#0B0C0E; }
+    * { box-sizing:border-box; }
+  </style>
+</helmet>
+
+<div data-screen-label="New import" onDragEnter="{{ dragEnter }}" style="min-height:100vh; background:#0B0C0E; color:#E7E9EC; font-family:'Geist',system-ui,sans-serif; font-size:13px;">
+
+  <!-- Top bar -->
+  <div style="height:48px; border-bottom:1px solid #26282D; display:flex; align-items:center; justify-content:space-between; padding:0 24px;">
+    <div style="display:flex; align-items:center; gap:8px;">
+      <div style="width:18px; height:18px; border-radius:5px; background:#7C6FF0; display:flex; align-items:center; justify-content:center; font-family:'Geist Mono',monospace; font-size:10px; font-weight:500; color:#0B0C0E;">V</div>
+      <a href="Projects Dashboard.dc.html" style="font-weight:600; color:#E7E9EC; text-decoration:none;" style-hover="text-decoration:underline;">VortSpec</a>
+      <span style="color:#6B7280;">/</span>
+      <span style="color:#9BA1AB;">Meridian Design System</span>
+    </div>
+    <button title="Dana Reyes" style="width:28px; height:28px; border-radius:50%; border:1px solid #34373D; background:#1B1D21; color:#9BA1AB; font-family:'Geist',sans-serif; font-size:11px; font-weight:500; cursor:pointer;" style-hover="border-color:#7C6FF0; color:#E7E9EC;">DR</button>
+  </div>
+
+  <div style="max-width:640px; margin:0 auto; padding:40px 24px 64px; display:flex; flex-direction:column; gap:24px;">
+    <h1 style="margin:0; font-size:20px; font-weight:600; letter-spacing:-0.01em;">Import a design</h1>
+
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
+      <!-- ZIP card -->
+      <div style="background:#141518; border:1px solid #26282D; border-radius:8px; padding:24px; display:flex; flex-direction:column; gap:12px;">
+        <div>
+          <div style="font-size:15px; font-weight:600;">Upload a ZIP export</div>
+          <div style="font-size:12px; color:#9BA1AB; margin-top:4px; line-height:1.5;">Google Stitch, Claude Design, or any HTML/CSS export</div>
+        </div>
+        <sc-if value="{{ noFile }}" hint-placeholder-val="{{ true }}">
+          <button onClick="{{ attachFile }}" style="height:120px; border:1px dashed #34373D; background:transparent; border-radius:8px; cursor:pointer; display:flex; align-items:center; justify-content:center; padding:16px; font-family:'Geist',sans-serif; font-size:12px; color:#9BA1AB; line-height:1.6; text-align:center;" style-hover="border-color:#7C6FF0; color:#E7E9EC; background:rgba(124,111,240,0.04);">Drop your .zip here or click to browse. Up to 50 MB.</button>
+        </sc-if>
+        <sc-if value="{{ hasFile }}" hint-placeholder-val="{{ false }}">
+          <div style="height:120px; border:1px dashed #34373D; border-radius:8px; display:flex; align-items:center; justify-content:center;">
+            <span style="display:inline-flex; align-items:center; gap:8px; background:#1B1D21; border:1px solid #34373D; border-radius:6px; padding:6px 10px;">
+              <span style="font-family:'Geist Mono',monospace; font-size:11px; color:#E7E9EC;">stitch-export-checkout.zip</span>
+              <span style="font-family:'Geist Mono',monospace; font-size:10px; color:#6B7280;">4.2 MB</span>
+              <button onClick="{{ removeFile }}" title="Remove" style="border:none; background:transparent; cursor:pointer; color:#6B7280; font-size:13px; line-height:1; padding:2px 4px; border-radius:4px;" style-hover="color:#E5484D; background:#26282D;">×</button>
+            </span>
+          </div>
+        </sc-if>
+        <sc-if value="{{ showError }}" hint-placeholder-val="{{ false }}">
+          <div style="font-size:12px; color:#E5484D;">We could not find HTML or CSS inside this file</div>
+        </sc-if>
+      </div>
+
+      <!-- Figma card -->
+      <div style="background:#141518; border:1px solid #26282D; border-radius:8px; padding:24px; display:flex; flex-direction:column; gap:12px;">
+        <div>
+          <div style="font-size:15px; font-weight:600;">Connect Figma</div>
+          <div style="font-size:12px; color:#9BA1AB; margin-top:4px; line-height:1.5;">Import published components and variables from a Figma file</div>
+        </div>
+        <button style="align-self:flex-start; border:1px solid #34373D; background:#1B1D21; cursor:pointer; font-family:'Geist',sans-serif; font-size:13px; font-weight:500; color:#E7E9EC; border-radius:8px; padding:8px 16px;" style-hover="border-color:#7C6FF0; background:#26282D;">Connect Figma</button>
+        <div style="font-size:12px; color:#6B7280; line-height:1.5; margin-top:auto;">Optional. You can always start with a ZIP and connect Figma later.</div>
+      </div>
+    </div>
+
+    <!-- Optional design system section -->
+    <div style="border:1px solid #26282D; border-radius:8px; background:#141518;">
+      <button onClick="{{ toggleDs }}" style="width:100%; display:flex; align-items:center; gap:8px; border:none; background:transparent; cursor:pointer; font-family:'Geist',sans-serif; font-size:13px; font-weight:500; color:#E7E9EC; padding:14px 16px; text-align:left;" style-hover="background:#17181C;">
+        <span style="display:inline-block; transition:transform 0.15s ease; transform:{{ chevron }}; color:#6B7280; font-size:10px;">▶</span>
+        Attach a design system <span style="color:#6B7280; font-weight:400;">(optional)</span>
+      </button>
+      <sc-if value="{{ dsOpen }}" hint-placeholder-val="{{ false }}">
+        <div style="padding:0 16px 16px; display:flex; flex-direction:column; gap:10px;">
+          <sc-if value="{{ noDsFile }}">
+            <button onClick="{{ attachDs }}" style="height:72px; border:1px dashed #34373D; background:transparent; border-radius:8px; cursor:pointer; display:flex; align-items:center; justify-content:center; font-family:'Geist',sans-serif; font-size:12px; color:#9BA1AB;" style-hover="border-color:#7C6FF0; color:#E7E9EC; background:rgba(124,111,240,0.04);">tokens.json, CSS variables, or a second ZIP</button>
+          </sc-if>
+          <sc-if value="{{ hasDsFile }}">
+            <div style="height:72px; border:1px dashed #34373D; border-radius:8px; display:flex; align-items:center; justify-content:center;">
+              <span style="display:inline-flex; align-items:center; gap:8px; background:#1B1D21; border:1px solid #34373D; border-radius:6px; padding:6px 10px;">
+                <span style="font-family:'Geist Mono',monospace; font-size:11px; color:#E7E9EC;">tokens.json</span>
+                <button onClick="{{ removeDs }}" title="Remove" style="border:none; background:transparent; cursor:pointer; color:#6B7280; font-size:13px; line-height:1; padding:2px 4px; border-radius:4px;" style-hover="color:#E5484D; background:#26282D;">×</button>
+              </span>
+            </div>
+          </sc-if>
+          <div style="font-size:12px; color:#6B7280; line-height:1.5;">We will match extracted values against your official tokens and flag conflicts, like the 3 grey duplicates you saw in the Inspector.</div>
+        </div>
+      </sc-if>
+    </div>
+
+    <div style="display:flex; justify-content:flex-end;">
+      <sc-if value="{{ hasFile }}">
+        <button onClick="{{ startImport }}" style="border:none; cursor:pointer; font-family:'Geist',sans-serif; font-size:13px; font-weight:500; color:#FFFFFF; background:#7C6FF0; border-radius:8px; padding:9px 18px;" style-hover="filter:brightness(1.12);">Start import</button>
+      </sc-if>
+      <sc-if value="{{ noFile }}">
+        <button title="Provide a source first" style="border:none; cursor:not-allowed; font-family:'Geist',sans-serif; font-size:13px; font-weight:500; color:#6B7280; background:#1B1D21; border:1px solid #26282D; border-radius:8px; padding:9px 18px;">Start import</button>
+      </sc-if>
+    </div>
+  </div>
+
+  <!-- Drag-over overlay -->
+  <sc-if value="{{ dragActive }}" hint-placeholder-val="{{ false }}">
+    <div onDragOver="{{ overlayDragOver }}" onDrop="{{ overlayDrop }}" onDragLeave="{{ overlayLeave }}" onClick="{{ overlayLeave }}" style="position:fixed; inset:0; z-index:50; background:rgba(11,12,14,0.88); display:flex; align-items:center; justify-content:center; padding:24px;">
+      <div style="position:absolute; inset:16px; border:2px dashed #7C6FF0; border-radius:8px; pointer-events:none;"></div>
+      <div style="display:flex; flex-direction:column; align-items:center; gap:8px; pointer-events:none;">
+        <span style="font-size:20px; font-weight:600; letter-spacing:-0.01em;">Drop to import into Meridian Design System</span>
+        <span style="font-family:'Geist Mono',monospace; font-size:12px; color:#9BA1AB;">.zip up to 50 MB</span>
+      </div>
+    </div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{
+  &quot;showError&quot;: { &quot;editor&quot;: &quot;boolean&quot;, &quot;default&quot;: false, &quot;tsType&quot;: &quot;boolean&quot;, &quot;section&quot;: &quot;States&quot; },
+  &quot;showDragOverlay&quot;: { &quot;editor&quot;: &quot;boolean&quot;, &quot;default&quot;: false, &quot;tsType&quot;: &quot;boolean&quot;, &quot;section&quot;: &quot;States&quot; }
+}">
+class Component extends DCLogic {
+  state = { file: false, dsOpen: false, dsFile: false, drag: false };
+
+  renderVals() {
+    const st = this.state;
+    return {
+      noFile: !st.file,
+      hasFile: st.file,
+      attachFile: () => this.setState({ file: true }),
+      removeFile: () => this.setState({ file: false }),
+      showError: (this.props.showError ?? false) && !st.file,
+      dsOpen: st.dsOpen,
+      chevron: st.dsOpen ? 'rotate(90deg)' : 'rotate(0deg)',
+      toggleDs: () => this.setState(s => ({ dsOpen: !s.dsOpen })),
+      noDsFile: !st.dsFile,
+      hasDsFile: st.dsFile,
+      attachDs: () => this.setState({ dsFile: true }),
+      removeDs: () => this.setState({ dsFile: false }),
+      startImport: () => { window.location.href = 'Import Progress.dc.html'; },
+      dragActive: st.drag || (this.props.showDragOverlay ?? false),
+      dragEnter: e => { e.preventDefault(); this.setState({ drag: true }); },
+      overlayDragOver: e => e.preventDefault(),
+      overlayDrop: e => { e.preventDefault(); this.setState({ drag: false, file: true }); },
+      overlayLeave: () => this.setState({ drag: false }),
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous">
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&amp;family=Geist+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+  <style>
+    html, body { margin:0; padding:0; background:#0B0C0E; }
+    * { box-sizing:border-box; }
+    @keyframes vsPulse { 0%, 100% { opacity:0.35; } 50% { opacity:0.7; } }
+    input::placeholder { color:#6B7280; }
+    ::-webkit-scrollbar { width:10px; height:10px; }
+    ::-webkit-scrollbar-thumb { background:#26282D; border-radius:8px; border:2px solid #0B0C0E; }
+    ::-webkit-scrollbar-track { background:transparent; }
+  </style>
+</helmet>
+
+<div data-screen-label="Inspector — Assistant drawer" style="display:flex; width:100%; height:100vh; min-height:720px; background:#0B0C0E; color:#E7E9EC; font-family:'Geist',system-ui,sans-serif; font-size:13px; overflow:hidden;">
+
+  <!-- ============ LEFT RAIL ============ -->
+  <nav style="width:220px; flex:none; background:#141518; border-right:1px solid #26282D; display:flex; flex-direction:column; padding:16px 12px 12px;">
+    <a href="Projects Dashboard.dc.html" title="All projects" style="display:flex; align-items:center; gap:8px; padding:0 8px 16px; border-bottom:1px solid #26282D; margin-bottom:12px; text-decoration:none; color:inherit; border-radius:6px;" style-hover="opacity:0.85;">
+      <div style="width:20px; height:20px; flex:none; border-radius:6px; background:#7C6FF0; display:flex; align-items:center; justify-content:center; font-family:'Geist Mono',monospace; font-size:11px; font-weight:500; color:#0B0C0E;">M</div>
+      <div style="min-width:0;">
+        <div style="font-weight:600; font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Meridian Design System</div>
+        <div style="font-size:11px; color:#6B7280; font-family:'Geist Mono',monospace;">{{ versionLabel }} · 48 tokens</div>
+      </div>
+    </a>
+    <div style="display:flex; flex-direction:column; gap:2px;">
+      <a href="Inspector - Tokens.dc.html" style="display:flex; align-items:center; gap:10px; padding:7px 8px; border-radius:6px; background:#1B1D21; color:#7C6FF0; font-weight:500; text-decoration:none;" style-hover="background:#1B1D21;">
+        <svg width="14" height="14" viewBox="0 0 14 14"><circle cx="7" cy="7" r="5" fill="none" stroke="currentColor" stroke-width="1.5"></circle><circle cx="7" cy="7" r="2" fill="currentColor"></circle></svg>
+        <span style="flex:1;">Tokens</span>
+      </a>
+      <a href="Inspector - Component Detail.dc.html" style="display:flex; align-items:center; gap:10px; padding:7px 8px; border-radius:6px; color:#9BA1AB; text-decoration:none;" style-hover="background:#1B1D21; color:#E7E9EC;">
+        <svg width="14" height="14" viewBox="0 0 14 14"><rect x="2" y="2" width="10" height="10" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"></rect></svg>
+        <span style="flex:1;">Components</span>
+      </a>
+      <a href="Inspector - Graph.dc.html" style="display:flex; align-items:center; gap:10px; padding:7px 8px; border-radius:6px; color:#9BA1AB; text-decoration:none;" style-hover="background:#1B1D21; color:#E7E9EC;">
+        <svg width="14" height="14" viewBox="0 0 14 14"><circle cx="3.5" cy="3.5" r="2" fill="none" stroke="currentColor" stroke-width="1.4"></circle><circle cx="10.5" cy="7" r="2" fill="none" stroke="currentColor" stroke-width="1.4"></circle><circle cx="4.5" cy="11" r="2" fill="none" stroke="currentColor" stroke-width="1.4"></circle><path d="M5.3 4.4 L8.7 6.1 M8.6 8 L6 9.9" fill="none" stroke="currentColor" stroke-width="1.2"></path></svg>
+        <span style="flex:1;">Graph</span>
+      </a>
+      <a href="Inspector - Issues.dc.html" style="display:flex; align-items:center; gap:10px; padding:7px 8px; border-radius:6px; color:#9BA1AB; text-decoration:none;" style-hover="background:#1B1D21; color:#E7E9EC;">
+        <svg width="14" height="14" viewBox="0 0 14 14"><rect x="2.6" y="2.6" width="8.8" height="8.8" rx="2" fill="none" stroke="currentColor" stroke-width="1.5" transform="rotate(45 7 7)"></rect></svg>
+        <span style="flex:1;">Issues</span>
+        <span style="font-family:'Geist Mono',monospace; font-size:11px; background:#1B1D21; border:1px solid #34373D; color:#FFB224; border-radius:999px; padding:1px 7px;">31</span>
+      </a>
+      <a href="Inspector - History.dc.html" style="display:flex; align-items:center; gap:10px; padding:7px 8px; border-radius:6px; color:#9BA1AB; text-decoration:none;" style-hover="background:#1B1D21; color:#E7E9EC;">
+        <svg width="14" height="14" viewBox="0 0 14 14"><circle cx="7" cy="7" r="5" fill="none" stroke="currentColor" stroke-width="1.5"></circle><path d="M7 4.5 L7 7 L9 8.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></path></svg>
+        <span style="flex:1;">History</span>
+      </a>
+    </div>
+    <div style="flex:1;"></div>
+    <a href="#" style="display:flex; align-items:center; gap:10px; padding:7px 8px; border-radius:6px; color:#6B7280; text-decoration:none;" style-hover="background:#1B1D21; color:#E7E9EC;">
+      <span style="font-size:14px; line-height:1;">⚙</span>
+      <span>Settings</span>
+    </a>
+  </nav>
+
+  <!-- ============ MAIN: condensed tokens table ============ -->
+  <main style="flex:1; min-width:0; display:flex; flex-direction:column; background:#0B0C0E;">
+    <header style="flex:none; padding:20px 24px 12px; border-bottom:1px solid #26282D; display:flex; align-items:center; gap:12px;">
+      <h1 style="margin:0; font-size:20px; font-weight:600; letter-spacing:-0.01em;">Tokens</h1>
+      <span style="font-family:'Geist Mono',monospace; font-size:12px; color:#6B7280;">21 shown</span>
+    </header>
+    <div style="flex:1; overflow-y:auto;">
+      <sc-for list="{{ groups }}" as="g" hint-placeholder-count="2">
+        <div>
+          <div style="position:sticky; top:0; z-index:3; background:#0B0C0E; border-bottom:1px solid #26282D; padding:16px 24px 8px; display:flex; align-items:baseline; gap:8px;">
+            <span style="font-size:15px; font-weight:600;">{{ g.title }}</span>
+            <span style="font-family:'Geist Mono',monospace; font-size:11px; color:#6B7280;">{{ g.count }} tokens</span>
+          </div>
+          <sc-for list="{{ g.tokens }}" as="t" hint-placeholder-count="5">
+            <div style="display:flex; align-items:center; gap:12px; height:44px; padding:0 24px; border-bottom:1px solid #26282D; cursor:pointer; background:{{ t.bg }};" style-hover="background:#17181C;">
+              <sc-if value="{{ t.isColor }}"><span style="width:20px; height:20px; flex:none; border-radius:6px; background:{{ t.value }}; border:1px solid #34373D;"></span></sc-if>
+              <sc-if value="{{ t.isRadius }}"><span style="width:20px; height:20px; flex:none; border-radius:6px; background:#1B1D21; border:1px solid #34373D; display:flex; align-items:center; justify-content:center;"><span style="width:10px; height:10px; border:1.5px solid #9BA1AB; border-radius:4px 1px 1px 1px;"></span></span></sc-if>
+              <span style="font-family:'Geist Mono',monospace; font-size:12px; color:{{ t.nameColor }}; width:210px; flex:none; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ t.name }}</span>
+              <span style="font-family:'Geist Mono',monospace; font-size:12px; color:#9BA1AB; flex:none;">{{ t.value }}</span>
+              <span style="flex:1;"></span>
+              <span style="display:flex; align-items:center; gap:6px; width:100px; flex:none;">
+                <span style="width:8px; height:8px; border-radius:50%; background:{{ t.provColor }}; display:inline-block;"></span>
+                <span style="font-size:12px; color:#9BA1AB;">{{ t.provLabel }}</span>
+              </span>
+            </div>
+          </sc-for>
+        </div>
+      </sc-for>
+    </div>
+  </main>
+
+  <!-- ============ CHAT DRAWER (open, 400px) ============ -->
+  <aside style="width:400px; flex:none; background:#141518; border-left:1px solid #26282D; display:flex; flex-direction:column;">
+    <div style="flex:none; padding:14px 16px 12px; border-bottom:1px solid #26282D; display:flex; align-items:baseline; justify-content:space-between; gap:8px;">
+      <span style="font-size:15px; font-weight:600;">Assistant</span>
+      <span style="font-family:'Geist Mono',monospace; font-size:11px; color:#6B7280; flex:1; text-align:right;">proposes changes, never applies them without you</span>
+      <a href="Inspector - Tokens.dc.html" title="Collapse drawer" style="color:#6B7280; text-decoration:none; font-size:15px; line-height:1; padding:2px 6px; border-radius:4px;" style-hover="color:#E7E9EC; background:#1B1D21;">×</a>
+    </div>
+
+    <div style="flex:1; overflow-y:auto; padding:16px; display:flex; flex-direction:column; gap:14px;">
+
+      <!-- earlier exchange: applied patch -->
+      <div style="align-self:flex-end; max-width:85%; background:#1B1D21; border:1px solid #26282D; border-radius:8px; padding:8px 12px; font-size:12px; line-height:1.5;">normaliza el espaciado a múltiplos de 4</div>
+      <div style="display:flex; flex-direction:column; gap:8px; max-width:95%;">
+        <div style="background:#1B1D21; border:1px solid #34373D; border-radius:8px;">
+          <div style="display:flex; align-items:center; gap:8px; padding:10px 12px;">
+            <sc-if value="{{ earlierApplied }}" hint-placeholder-val="{{ true }}"><span style="color:#30A46C; font-size:12px;">✓</span></sc-if>
+            <span style="font-size:12px; font-weight:500; flex:1;">Normalize spacing scale to 4px grid</span>
+            <span style="font-family:'Geist Mono',monospace; font-size:10px; color:#6B7280; border:1px solid #26282D; border-radius:4px; padding:1px 6px;">patch</span>
+          </div>
+          <div style="display:flex; align-items:center; gap:10px; padding:0 12px 10px;">
+            <sc-if value="{{ earlierApplied }}"><span style="font-family:'Geist Mono',monospace; font-size:11px; color:#9BA1AB;">Applied, v12 → v13</span></sc-if>
+            <sc-if value="{{ earlierUndone }}" hint-placeholder-val="{{ false }}"><span style="font-family:'Geist Mono',monospace; font-size:11px; color:#6B7280;">Undone, back to v12</span></sc-if>
+            <sc-if value="{{ earlierApplied }}">
+              <button onClick="{{ undoEarlier }}" style="border:none; background:transparent; cursor:pointer; font-family:'Geist',sans-serif; font-size:11px; color:#9BA1AB; padding:2px 6px; border-radius:4px;" style-hover="background:#26282D; color:#E7E9EC;">Undo</button>
+            </sc-if>
+          </div>
+        </div>
+      </div>
+
+      <!-- rename exchange -->
+      <div style="align-self:flex-end; max-width:85%; background:#1B1D21; border:1px solid #26282D; border-radius:8px; padding:8px 12px; font-size:12px; line-height:1.5;">renombra todos los tokens de color al formato semantic/primary/500</div>
+
+      <div style="display:flex; flex-direction:column; gap:8px; max-width:95%;">
+        <div style="font-size:12px; line-height:1.5; color:#E7E9EC;">I propose renaming 18 color tokens to the semantic format. Review the changes:</div>
+
+        <!-- PATCH CARD -->
+        <div style="background:#1B1D21; border:1px solid #34373D; border-radius:8px; overflow:hidden;">
+          <div style="display:flex; align-items:center; gap:8px; padding:10px 12px; border-bottom:1px solid #26282D;">
+            <sc-if value="{{ patchApplied }}" hint-placeholder-val="{{ false }}"><span style="color:#30A46C; font-size:12px;">✓</span></sc-if>
+            <span style="font-size:12px; font-weight:500; flex:1;">Rename 18 color tokens</span>
+            <span style="font-family:'Geist Mono',monospace; font-size:10px; color:#6B7280; border:1px solid #26282D; border-radius:4px; padding:1px 6px;">patch</span>
+          </div>
+
+          <sc-if value="{{ patchPending }}" hint-placeholder-val="{{ true }}">
+            <div style="padding:6px 12px; display:flex; flex-direction:column;">
+              <sc-for list="{{ diffRows }}" as="d" hint-placeholder-count="5">
+                <div style="display:flex; align-items:center; gap:8px; padding:4px 0; font-family:'Geist Mono',monospace; font-size:11px;">
+                  <span style="color:#6B7280; text-decoration:line-through; width:88px; flex:none;">{{ d.from }}</span>
+                  <span style="color:#6B7280;">→</span>
+                  <span style="color:#E7E9EC; background:rgba(48,164,108,0.12); border-radius:4px; padding:1px 6px;">{{ d.to }}</span>
+                </div>
+              </sc-for>
+              <sc-if value="{{ showExpander }}" hint-placeholder-val="{{ true }}">
+                <button onClick="{{ expandDiff }}" style="align-self:flex-start; border:none; background:transparent; cursor:pointer; font-family:'Geist Mono',monospace; font-size:11px; color:#7C6FF0; padding:4px 0;" style-hover="text-decoration:underline;">+13 more</button>
+              </sc-if>
+            </div>
+            <div style="display:flex; justify-content:flex-end; gap:8px; padding:10px 12px; border-top:1px solid #26282D;">
+              <button onClick="{{ rejectPatch }}" style="border:1px solid #34373D; background:transparent; cursor:pointer; font-family:'Geist',sans-serif; font-size:12px; color:#9BA1AB; border-radius:6px; padding:6px 12px;" style-hover="background:#26282D; color:#E7E9EC;">Reject</button>
+              <button onClick="{{ applyPatch }}" style="border:none; cursor:pointer; font-family:'Geist',sans-serif; font-size:12px; font-weight:500; color:#FFFFFF; background:#7C6FF0; border-radius:6px; padding:6px 12px;" style-hover="filter:brightness(1.12);">Apply 18 changes</button>
+            </div>
+          </sc-if>
+          <sc-if value="{{ patchApplied }}">
+            <div style="display:flex; align-items:center; gap:10px; padding:8px 12px;">
+              <span style="font-family:'Geist Mono',monospace; font-size:11px; color:#9BA1AB;">Applied, v13 → v14</span>
+              <button onClick="{{ undoPatch }}" style="border:none; background:transparent; cursor:pointer; font-family:'Geist',sans-serif; font-size:11px; color:#9BA1AB; padding:2px 6px; border-radius:4px;" style-hover="background:#26282D; color:#E7E9EC;">Undo</button>
+            </div>
+          </sc-if>
+          <sc-if value="{{ patchRejected }}" hint-placeholder-val="{{ false }}">
+            <div style="padding:8px 12px; font-size:11px; color:#6B7280;">Rejected — no changes applied</div>
+          </sc-if>
+        </div>
+      </div>
+
+      <!-- ambiguity exchange -->
+      <div style="align-self:flex-end; max-width:85%; background:#1B1D21; border:1px solid #26282D; border-radius:8px; padding:8px 12px; font-size:12px; line-height:1.5;">haz los botones mas redondeados</div>
+
+      <div style="display:flex; flex-direction:column; gap:8px; max-width:95%;">
+        <div style="font-size:12px; line-height:1.5; color:#E7E9EC;">That could mean two different changes. Which one do you want?</div>
+        <sc-if value="{{ ambIdle }}" hint-placeholder-val="{{ true }}">
+          <div style="display:flex; flex-direction:column; gap:6px; align-items:flex-start;">
+            <button onClick="{{ chooseToken }}" style="border:1px solid #34373D; background:transparent; cursor:pointer; font-family:'Geist Mono',monospace; font-size:11px; color:#E7E9EC; border-radius:999px; padding:5px 12px; text-align:left;" style-hover="border-color:#7C6FF0; background:#1B1D21;">radius/md 8 → 12px (affects 4 components)</button>
+            <button onClick="{{ chooseButton }}" style="border:1px solid #34373D; background:transparent; cursor:pointer; font-family:'Geist Mono',monospace; font-size:11px; color:#E7E9EC; border-radius:999px; padding:5px 12px; text-align:left;" style-hover="border-color:#7C6FF0; background:#1B1D21;">Only the Button component</button>
+          </div>
+        </sc-if>
+        <sc-if value="{{ ambChosen }}" hint-placeholder-val="{{ false }}">
+          <div style="align-self:flex-start; font-family:'Geist Mono',monospace; font-size:11px; color:#9BA1AB; border:1px solid #26282D; border-radius:999px; padding:5px 12px;">{{ ambChoiceText }}</div>
+        </sc-if>
+
+        <!-- drafting skeleton -->
+        <sc-if value="{{ ambDrafting }}" hint-placeholder-val="{{ false }}">
+          <div style="background:#1B1D21; border:1px solid #34373D; border-radius:8px; padding:12px; display:flex; flex-direction:column; gap:8px;">
+            <div style="height:10px; width:60%; border-radius:4px; background:#26282D; animation:vsPulse 1.2s ease infinite;"></div>
+            <div style="height:10px; width:80%; border-radius:4px; background:#26282D; animation:vsPulse 1.2s ease infinite 0.15s;"></div>
+            <div style="font-family:'Geist Mono',monospace; font-size:11px; color:#6B7280;">Drafting patch…</div>
+          </div>
+        </sc-if>
+
+        <!-- drafted radius patch -->
+        <sc-if value="{{ ambDrafted }}" hint-placeholder-val="{{ false }}">
+          <div style="background:#1B1D21; border:1px solid #34373D; border-radius:8px; overflow:hidden;">
+            <div style="display:flex; align-items:center; gap:8px; padding:10px 12px; border-bottom:1px solid #26282D;">
+              <span style="font-size:12px; font-weight:500; flex:1;">{{ ambPatchTitle }}</span>
+              <span style="font-family:'Geist Mono',monospace; font-size:10px; color:#6B7280; border:1px solid #26282D; border-radius:4px; padding:1px 6px;">patch</span>
+            </div>
+            <div style="padding:6px 12px; display:flex; align-items:center; gap:8px; font-family:'Geist Mono',monospace; font-size:11px;">
+              <span style="color:#6B7280; text-decoration:line-through;">{{ ambFrom }}</span>
+              <span style="color:#6B7280;">→</span>
+              <span style="color:#E7E9EC; background:rgba(48,164,108,0.12); border-radius:4px; padding:1px 6px;">{{ ambTo }}</span>
+            </div>
+            <div style="display:flex; justify-content:flex-end; gap:8px; padding:10px 12px; border-top:1px solid #26282D;">
+              <button onClick="{{ ambReject }}" style="border:1px solid #34373D; background:transparent; cursor:pointer; font-family:'Geist',sans-serif; font-size:12px; color:#9BA1AB; border-radius:6px; padding:6px 12px;" style-hover="background:#26282D; color:#E7E9EC;">Reject</button>
+              <button onClick="{{ ambApply }}" style="border:none; cursor:pointer; font-family:'Geist',sans-serif; font-size:12px; font-weight:500; color:#FFFFFF; background:#7C6FF0; border-radius:6px; padding:6px 12px;" style-hover="filter:brightness(1.12);">{{ ambApplyLabel }}</button>
+            </div>
+          </div>
+        </sc-if>
+        <sc-if value="{{ ambApplied }}" hint-placeholder-val="{{ false }}">
+          <div style="background:#1B1D21; border:1px solid #34373D; border-radius:8px; padding:8px 12px; display:flex; align-items:center; gap:10px;">
+            <span style="color:#30A46C; font-size:12px;">✓</span>
+            <span style="font-size:12px; font-weight:500; flex:1;">{{ ambPatchTitle }}</span>
+            <span style="font-family:'Geist Mono',monospace; font-size:11px; color:#9BA1AB;">Applied, {{ ambVersionText }}</span>
+          </div>
+        </sc-if>
+      </div>
+
+      <!-- unsafe-change error exchange -->
+      <div style="align-self:flex-end; max-width:85%; background:#1B1D21; border:1px solid #26282D; border-radius:8px; padding:8px 12px; font-size:12px; line-height:1.5;">elimina todos los tokens que no estén en uso</div>
+      <div style="display:flex; flex-direction:column; gap:8px; max-width:95%;">
+        <div style="font-size:12px; line-height:1.5; color:#E7E9EC;">I could not turn that into a safe change — usage data is still being computed for 3 components, so some of those tokens may be in use.</div>
+        <button style="align-self:flex-start; border:1px solid #34373D; background:transparent; cursor:pointer; font-family:'Geist',sans-serif; font-size:11px; color:#9BA1AB; border-radius:6px; padding:4px 10px;" style-hover="background:#1B1D21; color:#E7E9EC;">Try again when indexing finishes</button>
+      </div>
+    </div>
+
+    <!-- input -->
+    <div style="flex:none; border-top:1px solid #26282D; padding:12px; display:flex; gap:8px;">
+      <input placeholder="Describe a change in English or Spanish…" style="flex:1; background:#1B1D21; border:1px solid #26282D; border-radius:6px; color:#E7E9EC; font-family:'Geist',sans-serif; font-size:12px; padding:8px 10px; outline:none;" style-focus="border-color:#7C6FF0; box-shadow:0 0 0 2px rgba(124,111,240,0.25);">
+      <button title="Send" style="width:34px; height:34px; flex:none; border:none; cursor:pointer; background:#7C6FF0; color:#FFFFFF; border-radius:6px; display:flex; align-items:center; justify-content:center;" style-hover="filter:brightness(1.12);">
+        <svg width="14" height="14" viewBox="0 0 14 14"><path d="M2 7 L12 7 M8 3 L12 7 L8 11" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+      </button>
+    </div>
+  </aside>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{
+  &quot;$preview&quot;: { &quot;width&quot;: 1440, &quot;height&quot;: 900 }
+}">
+class Component extends DCLogic {
+  state = {
+    diffExpanded: false,
+    patch: 'pending',      // pending | applied | rejected
+    earlier: 'applied',    // applied | undone
+    amb: 'idle',           // idle | drafting | drafted | applied
+    ambChoice: '',
+  };
+
+  componentWillUnmount() { clearTimeout(this._draftT); }
+
+  renderVals() {
+    const st = this.state;
+    const renames = [
+      ['blue-500','color/primary/500','#2563EB','confirmed'],
+      ['blue-600','color/primary/600','#1D4ED8','inferred'],
+      ['blue-700','color/primary/700','#1E40AF','inferred'],
+      ['blue-50','color/primary/50','#EFF6FF','confirmed'],
+      ['gray-100','color/neutral/100','#F4F4F5','confirmed'],
+      ['gray-300','color/neutral/300','#D4D4D8','inferred'],
+      ['gray-500','color/neutral/500','#6B7280','inferred'],
+      ['gray-700','color/neutral/700','#3F3F46','confirmed'],
+      ['gray-900','color/neutral/900','#18181B','confirmed'],
+      ['zinc-500','color/grey/untitled-1','#71717A','inferred'],
+      ['zinc-450','color/grey/untitled-2','#6E7076','inferred'],
+      ['green-600','color/success/500','#16A34A','confirmed'],
+      ['amber-500','color/warning/500','#F59E0B','inferred'],
+      ['red-600','color/error/500','#DC2626','confirmed'],
+      ['white','color/surface/base','#FFFFFF','confirmed'],
+      ['gray-50','color/surface/raised','#FAFAFA','inferred'],
+      ['slate-900','color/text/primary','#111827','confirmed'],
+      ['zinc-600','color/text/secondary','#52525B','inferred'],
+    ];
+    const applied = st.patch === 'applied';
+    const radiusBumped = st.amb === 'applied' && st.ambChoice === 'token';
+    const provColor = p => ({ confirmed:'#30A46C', inferred:'#FFB224' }[p]);
+    const provLabel = p => p.charAt(0).toUpperCase() + p.slice(1);
+
+    const colorTokens = renames.map(r => ({
+      name: applied ? r[1] : r[0],
+      nameColor: applied ? '#30A46C' : '#E7E9EC',
+      value: r[2], isColor: true, isRadius: false,
+      provColor: provColor(r[3]), provLabel: provLabel(r[3]),
+      bg: 'transparent',
+    }));
+    const radiusTokens = [
+      ['radius/sm','6px','confirmed', false],
+      ['radius/md', radiusBumped ? '12px' : '8px', 'confirmed', radiusBumped],
+      ['radius/full','9999px','inferred', false],
+    ].map(r => ({
+      name: r[0], nameColor: '#E7E9EC', value: r[1],
+      isColor: false, isRadius: true,
+      provColor: provColor(r[2]), provLabel: provLabel(r[2]),
+      bg: r[3] ? 'rgba(48,164,108,0.06)' : 'transparent',
+    }));
+
+    const diffAll = renames.map(r => ({ from: r[0], to: r[1] }));
+    const version = 12 + (st.earlier === 'applied' ? 1 : 0) + (applied ? 1 : 0) + (st.amb === 'applied' ? 1 : 0);
+    const isTokenChoice = st.ambChoice === 'token';
+
+    const choose = choice => {
+      this.setState({ amb: 'drafting', ambChoice: choice });
+      clearTimeout(this._draftT);
+      this._draftT = setTimeout(() => this.setState({ amb: 'drafted' }), 1100);
+    };
+
+    return {
+      versionLabel: 'v' + version,
+      groups: [
+        { title: 'Color', count: colorTokens.length, tokens: colorTokens },
+        { title: 'Radius', count: radiusTokens.length, tokens: radiusTokens },
+      ],
+      earlierApplied: st.earlier === 'applied',
+      earlierUndone: st.earlier === 'undone',
+      undoEarlier: () => this.setState({ earlier: 'undone' }),
+      patchPending: st.patch === 'pending',
+      patchApplied: applied,
+      patchRejected: st.patch === 'rejected',
+      applyPatch: () => this.setState({ patch: 'applied' }),
+      rejectPatch: () => this.setState({ patch: 'rejected' }),
+      undoPatch: () => this.setState({ patch: 'pending' }),
+      diffRows: st.diffExpanded ? diffAll : diffAll.slice(0, 5),
+      showExpander: !st.diffExpanded,
+      expandDiff: () => this.setState({ diffExpanded: true }),
+      ambIdle: st.amb === 'idle',
+      ambChosen: st.amb !== 'idle',
+      ambChoiceText: isTokenChoice ? 'radius/md 8 → 12px (affects 4 components)' : 'Only the Button component',
+      ambDrafting: st.amb === 'drafting',
+      ambDrafted: st.amb === 'drafted',
+      ambApplied: st.amb === 'applied',
+      ambPatchTitle: isTokenChoice ? 'Increase radius/md to 12px' : 'Round Button corners to 12px',
+      ambFrom: isTokenChoice ? 'radius/md: 8px' : 'Button radius: radius/md (8px)',
+      ambTo: isTokenChoice ? 'radius/md: 12px' : 'Button radius: 12px (local override)',
+      ambApplyLabel: isTokenChoice ? 'Apply 1 change' : 'Apply to Button',
+      ambApply: () => this.setState({ amb: 'applied' }),
+      ambReject: () => this.setState({ amb: 'idle', ambChoice: '' }),
+      ambVersionText: 'v' + (st.amb === 'applied' ? version - 1 : version) + ' → v' + (st.amb === 'applied' ? version : version + 1),
+      chooseToken: () => choose('token'),
+      chooseButton: () => choose('button'),
+    };
+  }
+}
+</script>
+</body>
+</html>
