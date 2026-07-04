@@ -2,13 +2,14 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { CompletenessScore } from "@/components/ui/completeness-score";
 import { StatusChip } from "@/components/ui/status-chip";
 import { ProvenanceDot } from "@/components/ui/provenance-dot";
 import { useToast } from "@/components/ui/toast";
 import { useBreadcrumb } from "@/components/shell/BreadcrumbContext";
 import { IRPreview } from "@/components/inspector/IRPreview";
+import { approveComponent, renameComponent } from "@/lib/data/patches";
 import type { ComponentDetailData } from "@/lib/data/components";
 
 const defaultTokenBindings = [
@@ -91,8 +92,10 @@ export function ComponentDetail({ initialData }: { initialData?: ComponentDetail
   const [showApproveDialog, setShowApproveDialog] = useState(false);
   const [componentName, setComponentName] = useState(initialData?.name ?? "Button");
   const [isRenaming, setIsRenaming] = useState(false);
-  const params = useParams<{ id: string }>();
+  const params = useParams<{ id: string; componentId?: string }>();
+  const router = useRouter();
   const projectId = params.id ?? "";
+  const componentId = params.componentId ?? initialData?.id ?? "";
   const { setItems, setExtras } = useBreadcrumb();
 
   // Set breadcrumb: Projects / Components / <name>  + pills
@@ -153,7 +156,7 @@ export function ComponentDetail({ initialData }: { initialData?: ComponentDetail
     { name: "Focus state", value: states.some(s => s.name === "focus") ? "Present" : "Missing", passed: states.some(s => s.name === "focus") },
   ];
 
-  const handleApprove = () => {
+  const handleApprove = async () => {
     const hasErrors = issues.some((i) => i.severity === "error" && !resolvedIssues.has(i.id));
     if (hasErrors) return;
     const hasWarnings = issues.some((i) => i.severity === "warning" && !resolvedIssues.has(i.id));
@@ -161,8 +164,14 @@ export function ComponentDetail({ initialData }: { initialData?: ComponentDetail
       setShowApproveDialog(true);
       return;
     }
-    setStatus("approved");
-    showToast(`${componentName} approved — status set to approved`);
+    try {
+      await approveComponent(projectId, componentId);
+      setStatus("approved");
+      showToast(`${componentName} approved — status set to approved`);
+      router.refresh();
+    } catch (err) {
+      showToast(`Error: ${err instanceof Error ? err.message : "approval failed"}`);
+    }
   };
 
   return (
@@ -414,7 +423,7 @@ export function ComponentDetail({ initialData }: { initialData?: ComponentDetail
             </div>
             <div className="px-5 py-3 border-t border-vs-border-default flex justify-end gap-3">
               <button onClick={() => setShowApproveDialog(false)} className="text-[13px] text-vs-text-secondary border border-vs-border-strong rounded-lg px-4 py-2 bg-transparent cursor-pointer hover:bg-vs-bg-elevated">Cancel</button>
-              <button onClick={() => { setShowApproveDialog(false); setStatus("approved"); showToast("Button approved — status set to approved"); }} className="text-[13px] font-medium text-white bg-vs-accent rounded-lg px-4 py-2 border-none cursor-pointer hover:brightness-110">Approve anyway</button>
+              <button onClick={async () => { setShowApproveDialog(false); try { await approveComponent(projectId, componentId); setStatus("approved"); showToast(`${componentName} approved`); router.refresh(); } catch {} }} className="text-[13px] font-medium text-white bg-vs-accent rounded-lg px-4 py-2 border-none cursor-pointer hover:brightness-110">Approve anyway</button>
             </div>
           </div>
         </div>

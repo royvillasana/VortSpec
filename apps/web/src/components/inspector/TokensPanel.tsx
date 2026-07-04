@@ -1,11 +1,13 @@
 "use client";
 
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
+import { useParams, useRouter } from "next/navigation";
 import type { DesignToken, TokenKind, Confidence } from "@/types/ir";
 import { SegmentedControl } from "@/components/ui/segmented-control";
 import { TokenSwatch } from "@/components/ui/token-swatch";
 import { ProvenanceDot } from "@/components/ui/provenance-dot";
 import { useToast } from "@/components/ui/toast";
+import { renameToken, deleteToken, mergeTokens } from "@/lib/data/patches";
 import { cn } from "@/lib/utils";
 
 type ModalAction = "rename" | "merge" | "delete" | null;
@@ -461,6 +463,9 @@ function DetailPanel({
 
 export function TokensPanel({ initialTokens }: { initialTokens?: DesignToken[] }) {
   const { showToast } = useToast();
+  const router = useRouter();
+  const params = useParams<{ id: string }>();
+  const projectId = params.id ?? "";
   const [activeFilter, setActiveFilter] = useState<TypeFilter>("All");
   const [searchQuery, setSearchQuery] = useState("");
   const [inferredOnly, setInferredOnly] = useState(false);
@@ -470,7 +475,7 @@ export function TokensPanel({ initialTokens }: { initialTokens?: DesignToken[] }
   const [modalAction, setModalAction] = useState<ModalAction>(null);
   const [modalTokenId, setModalTokenId] = useState<string | null>(null);
   const [tokens, setTokens] = useState<DesignToken[]>(initialTokens ?? []);
-  const [version, setVersion] = useState(14);
+  const [version, setVersion] = useState(1);
 
   const openModal = useCallback((tokenId: string, action: ModalAction) => {
     setModalTokenId(tokenId);
@@ -484,43 +489,53 @@ export function TokensPanel({ initialTokens }: { initialTokens?: DesignToken[] }
 
   const modalToken = modalTokenId ? tokens.find((t) => t.id === modalTokenId) : null;
 
-  const handleRename = useCallback((newName: string) => {
+  const handleRename = useCallback(async (newName: string) => {
     if (!modalTokenId) return;
-    setTokens((prev) => prev.map((t) => t.id === modalTokenId ? { ...t, name: newName } : t));
-    setVersion((v) => v + 1);
-    showToast(`Rename to ${newName} — Patch applied, v${version} → v${version + 1}`);
+    try {
+      const { version: v } = await renameToken(projectId, modalTokenId, newName);
+      setTokens((prev) => prev.map((t) => t.id === modalTokenId ? { ...t, name: newName } : t));
+      setVersion(v);
+      showToast(`Rename to ${newName} — Patch applied, v${v}`);
+      router.refresh();
+    } catch (err) {
+      showToast(`Error: ${err instanceof Error ? err.message : "rename failed"}`);
+    }
     closeModal();
-  }, [modalTokenId, version, showToast, closeModal]);
+  }, [modalTokenId, projectId, showToast, closeModal, router]);
 
-  const handleMerge = useCallback((targetId: string) => {
+  const handleMerge = useCallback(async (targetId: string) => {
     if (!modalTokenId) return;
     const source = tokens.find((t) => t.id === modalTokenId);
     const target = tokens.find((t) => t.id === targetId);
-    setTokens((prev) => prev.filter((t) => t.id !== modalTokenId).map((t) =>
-      t.id === targetId ? { ...t, usageCount: t.usageCount + (source?.usageCount ?? 0) } : t
-    ));
-    setVersion((v) => v + 1);
-    showToast(`Merge ${source?.name} into ${target?.name} — Patch applied, v${version} → v${version + 1}`);
-    setSelectedTokenId(null);
+    try {
+      const { version: v } = await mergeTokens(projectId, modalTokenId, targetId);
+      setTokens((prev) => prev.filter((t) => t.id !== modalTokenId));
+      setVersion(v);
+      showToast(`Merge ${source?.name} into ${target?.name} — Patch applied, v${v}`);
+      setSelectedTokenId(null);
+      router.refresh();
+    } catch (err) {
+      showToast(`Error: ${err instanceof Error ? err.message : "merge failed"}`);
+    }
     closeModal();
-  }, [modalTokenId, tokens, version, showToast, closeModal]);
+  }, [modalTokenId, tokens, projectId, showToast, closeModal, router]);
 
-  const handleDelete = useCallback((fallback: "literal" | "remap", targetId?: string) => {
+  const handleDelete = useCallback(async (fallback: "literal" | "remap", targetId?: string) => {
     if (!modalTokenId) return;
     const deleted = tokens.find((t) => t.id === modalTokenId);
-    if (fallback === "remap" && targetId) {
-      setTokens((prev) => prev.filter((t) => t.id !== modalTokenId).map((t) =>
-        t.id === targetId ? { ...t, usageCount: t.usageCount + (deleted?.usageCount ?? 0) } : t
-      ));
-    } else {
+    try {
+      const { version: v } = await deleteToken(projectId, modalTokenId, fallback, targetId);
       setTokens((prev) => prev.filter((t) => t.id !== modalTokenId));
+      setVersion(v);
+      const strategy = fallback === "remap" ? "remapped" : "inlined as flagged literals";
+      showToast(`Delete ${deleted?.name} (${strategy}) — Patch applied, v${v}`);
+      setSelectedTokenId(null);
+      router.refresh();
+    } catch (err) {
+      showToast(`Error: ${err instanceof Error ? err.message : "delete failed"}`);
     }
-    setVersion((v) => v + 1);
-    const strategy = fallback === "remap" ? "remapped" : "inlined as flagged literals";
-    showToast(`Delete ${deleted?.name} (${strategy}) — Patch applied, v${version} → v${version + 1}`);
-    setSelectedTokenId(null);
     closeModal();
-  }, [modalTokenId, tokens, version, showToast, closeModal]);
+  }, [modalTokenId, tokens, projectId, showToast, closeModal, router]);
 
   // Filter tokens
   const filteredTokens = useMemo(() => {
