@@ -11,6 +11,7 @@ export {
   runStructureInferenceCore,
   type StructureInferenceResult,
 } from "./stages/structure-inference";
+export { detectComponentsWithLLM } from "./stages/llm-component-detection";
 export {
   runReportCore,
   runReportStage,

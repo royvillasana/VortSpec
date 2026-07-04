@@ -4,8 +4,9 @@ import { inngest } from "../client";
 import { updateStageStatus, updateImportStatus } from "../lib/stage-status";
 import { runParseStage } from "../stages/parse";
 import { runStyleMiningCore, type StyleMiningResult } from "../stages/style-mining";
-import { runStructureInferenceCore, type StructureInferenceResult } from "../stages/structure-inference";
-import { runReportCore, type ReportResult } from "../stages/report";
+import { runStructureInferenceCore } from "../stages/structure-inference";
+import { detectComponentsWithLLM } from "../stages/llm-component-detection";
+import { runReportCore } from "../stages/report";
 
 /**
  * Download a ZIP from Supabase storage and extract text files.
@@ -111,18 +112,36 @@ export const importPipeline = inngest.createFunction(
       });
     });
 
-    // Stage 4: Structure Inference
+    // Stage 4: Structure Inference (LLM-assisted when API key available, deterministic fallback)
     const structureResult = await step.run("structure_inference", async () => {
       await updateStageStatus(importId, "structure_inference", "running");
       try {
-        const result = runStructureInferenceCore(files, styleMiningResult.groups);
+        let components;
+        let method = "deterministic";
+
+        if (process.env.OPENROUTER_API_KEY) {
+          try {
+            const llmResult = await detectComponentsWithLLM(files);
+            components = llmResult.components;
+            method = `llm:${llmResult.model}`;
+            console.log(`[pipeline] LLM detected ${components.length} components using ${llmResult.model} (${llmResult.tokensUsed} tokens)`);
+          } catch (llmErr) {
+            console.warn(`[pipeline] LLM detection failed, falling back to deterministic:`, llmErr);
+            const detResult = runStructureInferenceCore(files, styleMiningResult.groups);
+            components = detResult.components;
+          }
+        } else {
+          const detResult = runStructureInferenceCore(files, styleMiningResult.groups);
+          components = detResult.components;
+        }
+
         await updateStageStatus(importId, "structure_inference", "done", {
           result: {
-            componentCount: result.components.length,
-            candidateCount: result.candidateCount,
+            componentCount: components.length,
+            method,
           },
         });
-        return result;
+        return { components, candidateCount: components.length };
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         await updateStageStatus(importId, "structure_inference", "failed", {
