@@ -6,7 +6,6 @@ import { SegmentedControl } from "@/components/ui/segmented-control";
 import { TokenSwatch } from "@/components/ui/token-swatch";
 import { ProvenanceDot } from "@/components/ui/provenance-dot";
 import { useToast } from "@/components/ui/toast";
-import { mockTokens } from "@/lib/mock-data/tokens";
 import { cn } from "@/lib/utils";
 
 type ModalAction = "rename" | "merge" | "delete" | null;
@@ -460,7 +459,7 @@ function DetailPanel({
 
 // ─── Main Panel ───────────────────────────────────────────────────────────
 
-export function TokensPanel() {
+export function TokensPanel({ initialTokens }: { initialTokens?: DesignToken[] }) {
   const { showToast } = useToast();
   const [activeFilter, setActiveFilter] = useState<TypeFilter>("All");
   const [searchQuery, setSearchQuery] = useState("");
@@ -469,7 +468,7 @@ export function TokensPanel() {
   const [overflowMenuId, setOverflowMenuId] = useState<string | null>(null);
   const [modalAction, setModalAction] = useState<ModalAction>(null);
   const [modalTokenId, setModalTokenId] = useState<string | null>(null);
-  const [tokens, setTokens] = useState<DesignToken[]>(mockTokens);
+  const [tokens, setTokens] = useState<DesignToken[]>(initialTokens ?? []);
   const [version, setVersion] = useState(14);
 
   const openModal = useCallback((tokenId: string, action: ModalAction) => {

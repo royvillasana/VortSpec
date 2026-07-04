@@ -191,7 +191,8 @@ export function NewImport() {
       return;
     }
 
-    router.push(`/projects/${projectId}/import/${result.importId}`);
+    const pid = result.projectId || projectId;
+    router.push(`/projects/${pid}/import/${result.importId}`);
   }, [rawFile, projectId, router]);
 
   return (

@@ -3,7 +3,6 @@
 import { useState, useMemo } from "react";
 import type { Issue, IssueSeverity, IssueKind } from "@/types/ir";
 import { SegmentedControl } from "@/components/ui/segmented-control";
-import { mockIssues } from "@/lib/mock-data/issues";
 import { cn } from "@/lib/utils";
 
 // ─── Constants ────────────────────────────────────────────────────────────
@@ -171,36 +170,37 @@ function IssueRow({
 
 // ─── Main Panel ───────────────────────────────────────────────────────────
 
-export function IssuesPanel() {
+export function IssuesPanel({ initialIssues }: { initialIssues?: Issue[] }) {
   const [severityFilter, setSeverityFilter] = useState<SeverityFilter>("All");
   const [kindFilter, setKindFilter] = useState<IssueKind | "all">("all");
   const [componentFilter, setComponentFilter] = useState<string>("all");
   const [resolvedIds, setResolvedIds] = useState<Set<string>>(new Set());
 
-  const allComponents = useMemo(() => getUniqueComponents(mockIssues), []);
+  const issues = initialIssues ?? [];
+  const allComponents = useMemo(() => getUniqueComponents(issues), [issues]);
 
   // Filter issues
   const filteredIssues = useMemo(() => {
-    let issues = mockIssues;
+    let filtered = issues;
 
     // Severity filter
     const severity = severityFilterMap[severityFilter];
     if (severity) {
-      issues = issues.filter((i) => i.severity === severity);
+      filtered = filtered.filter((i) => i.severity === severity);
     }
 
     // Kind filter
     if (kindFilter !== "all") {
-      issues = issues.filter((i) => i.kind === kindFilter);
+      filtered = filtered.filter((i) => i.kind === kindFilter);
     }
 
     // Component filter
     if (componentFilter !== "all") {
-      issues = issues.filter((i) => i.componentName === componentFilter);
+      filtered = filtered.filter((i) => i.componentName === componentFilter);
     }
 
-    return issues;
-  }, [severityFilter, kindFilter, componentFilter]);
+    return filtered;
+  }, [issues, severityFilter, kindFilter, componentFilter]);
 
   // Group issues by kind
   const groupedIssues = useMemo(() => {

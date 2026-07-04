@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { CompletenessScore } from "@/components/ui/completeness-score";
+import type { ProjectWithStats } from "@/lib/data/projects";
 
 /* ── Icons ─────────────────────────────────────────────────────── */
 
@@ -71,7 +72,7 @@ interface Project {
   updated: string;
 }
 
-const projects: Project[] = [
+const defaultProjects: Project[] = [
   {
     id: "proj-1",
     name: "Meridian Design System",
@@ -103,6 +104,40 @@ const projects: Project[] = [
     updated: "Updated yesterday",
   },
 ];
+
+function mapProjectWithStats(p: ProjectWithStats): Project {
+  const isImporting = p.import_status === "running";
+  return {
+    id: p.id,
+    name: p.name,
+    sources: p.sources.map((s) => (s === "figma" ? "figma" : "zip")) as ("figma" | "zip")[],
+    href: isImporting
+      ? `/projects/${p.id}/import`
+      : `/projects/${p.id}/inspect/tokens`,
+    importing: isImporting && p.import_stage != null && p.import_total_stages != null
+      ? { stage: p.import_stage, totalStages: p.import_total_stages }
+      : undefined,
+    tokens: p.token_count,
+    components: p.component_count,
+    approved: p.approved_count,
+    score: p.completeness_score ?? undefined,
+    updated: formatRelativeTime(p.created_at),
+  };
+}
+
+function formatRelativeTime(isoDate: string): string {
+  const now = Date.now();
+  const then = new Date(isoDate).getTime();
+  const diffMs = now - then;
+  const diffMin = Math.floor(diffMs / 60000);
+  if (diffMin < 1) return "Updated just now";
+  if (diffMin < 60) return `Updated ${diffMin}m ago`;
+  const diffHr = Math.floor(diffMin / 60);
+  if (diffHr < 24) return `Updated ${diffHr}h ago`;
+  const diffDays = Math.floor(diffHr / 24);
+  if (diffDays === 1) return "Updated yesterday";
+  return `Updated ${diffDays}d ago`;
+}
 
 /* ── Top Bar ───────────────────────────────────────────────────── */
 
@@ -218,7 +253,11 @@ function EmptyState() {
 
 /* ── Dashboard ─────────────────────────────────────────────────── */
 
-export function ProjectsDashboard() {
+export function ProjectsDashboard({ initialProjects }: { initialProjects?: ProjectWithStats[] }) {
+  const projects = initialProjects && initialProjects.length > 0
+    ? initialProjects.map(mapProjectWithStats)
+    : defaultProjects;
+
   return (
     <div className="min-h-screen bg-vs-bg-primary">
       <TopBar />
@@ -245,7 +284,7 @@ export function ProjectsDashboard() {
         </div>
 
         {/* Empty state shown below for reference */}
-        <EmptyState />
+        {projects.length === 0 && <EmptyState />}
       </main>
     </div>
   );
