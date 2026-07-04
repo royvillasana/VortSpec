@@ -1,9 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-
-const PROJECT_ID = "meridian"; // TODO: derive from route params
+import { usePathname, useParams } from "next/navigation";
 
 interface NavItemProps {
   href: string;
@@ -163,7 +161,9 @@ const navItems = [
 
 export function NavRail() {
   const pathname = usePathname();
-  const basePath = `/projects/${PROJECT_ID}/inspect`;
+  const params = useParams<{ id: string }>();
+  const projectId = params.id ?? "unknown";
+  const basePath = `/projects/${projectId}/inspect`;
 
   return (
     <nav className="flex-none w-[220px] bg-vs-bg-surface border-r border-vs-border-default flex flex-col">
