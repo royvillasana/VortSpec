@@ -410,7 +410,130 @@ export function runStructureInferenceCore(
     }
   }
 
-  return { components, candidateCount: candidateIndex };
+  // ─── Deduplication pass ───
+  // Group components by structural fingerprint and merge duplicates
+  const deduped = deduplicateComponents(components);
+
+  return { components: deduped, candidateCount: deduped.length };
+}
+
+/**
+ * Generate a fingerprint for an IRNode tree (ignoring IDs and specific values).
+ */
+function irNodeFingerprint(node: IRNode, depth: number = 0): string {
+  if (depth > 8) return node.type;
+  const kids = (node.children ?? []).map((c) => irNodeFingerprint(c, depth + 1)).join(",");
+  const styleKeys = node.styles ? Object.keys(node.styles).sort().join("+") : "";
+  return `${node.type}:${styleKeys}${kids ? `[${kids}]` : ""}`;
+}
+
+/**
+ * Deduplicate components by structural fingerprint.
+ * When duplicates are found, keep the one with the most styles/children
+ * and derive a better name from the HTML tag.
+ */
+function deduplicateComponents(components: ComponentIR[]): ComponentIR[] {
+  const groups = new Map<string, ComponentIR[]>();
+
+  for (const comp of components) {
+    const fp = irNodeFingerprint(comp.structure);
+    const arr = groups.get(fp) ?? [];
+    arr.push(comp);
+    groups.set(fp, arr);
+  }
+
+  const result: ComponentIR[] = [];
+  let index = 0;
+
+  for (const [, group] of groups) {
+    // Pick the best representative (most children/styles)
+    const best = group.reduce((a, b) => {
+      const aSize = JSON.stringify(a.structure).length;
+      const bSize = JSON.stringify(b.structure).length;
+      return bSize > aSize ? b : a;
+    });
+
+    index++;
+    const tag = best.structure.type === "text" ? (best.structure.name || "text") : (best.structure.name || "frame");
+    const baseName = inferComponentName(best, tag, index);
+
+    best.name = baseName;
+    best.slug = baseName.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+    best.description = group.length > 1
+      ? `Detected ${group.length} instances across pages`
+      : undefined;
+
+    // Merge variant info from duplicates
+    if (group.length > 1) {
+      for (const dup of group) {
+        if (dup === best) continue;
+        for (const axis of dup.variantAxes) {
+          if (!best.variantAxes.some((a) => a.name === axis.name)) {
+            best.variantAxes.push(axis);
+          }
+        }
+        for (const state of dup.states) {
+          if (!best.states.some((s) => s.name === state.name)) {
+            best.states.push(state);
+          }
+        }
+      }
+    }
+
+    result.push(best);
+  }
+
+  return result;
+}
+
+/**
+ * Try to derive a meaningful name from the component's structure.
+ */
+function inferComponentName(comp: ComponentIR, tag: string, index: number): string {
+  const rootTag = comp.structure.type === "frame"
+    ? (comp.structure.name || "div")
+    : comp.structure.type;
+
+  // Use semantic tag names
+  const semanticNames: Record<string, string> = {
+    nav: "Navigation",
+    header: "Header",
+    footer: "Footer",
+    button: "Button",
+    input: "Input",
+    form: "Form",
+    select: "Select",
+    textarea: "TextArea",
+    section: "Section",
+    article: "Article",
+    aside: "Sidebar",
+    ul: "List",
+    ol: "OrderedList",
+    li: "ListItem",
+    table: "Table",
+  };
+
+  // Check root tag
+  for (const [htmlTag, name] of Object.entries(semanticNames)) {
+    if (rootTag === htmlTag || tag === htmlTag) return `${name}-${index}`;
+  }
+
+  // Check if it contains text (likely a text component)
+  if (comp.structure.type === "text" && comp.structure.text?.content) {
+    const text = comp.structure.text.content.slice(0, 20).replace(/[^a-zA-Z0-9 ]/g, "").trim();
+    if (text) return `Text-${text.split(" ")[0]}-${index}`;
+  }
+
+  // Check children count for layout detection
+  const childCount = comp.structure.children?.length ?? 0;
+  if (comp.structure.layout?.mode === "flex" && childCount > 2) return `FlexGroup-${index}`;
+  if (comp.structure.layout?.mode === "grid") return `Grid-${index}`;
+
+  // Fallback
+  if (comp.structure.type === "image") return `Icon-${index}`;
+  if (comp.structure.type === "text") return `TextBlock-${index}`;
+
+  return `Component-${index}`;
 }
 
 function buildComponent(

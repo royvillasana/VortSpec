@@ -8,6 +8,7 @@ import { StatusChip } from "@/components/ui/status-chip";
 import { ProvenanceDot } from "@/components/ui/provenance-dot";
 import { useToast } from "@/components/ui/toast";
 import { useBreadcrumb } from "@/components/shell/BreadcrumbContext";
+import { IRPreview } from "@/components/inspector/IRPreview";
 import type { ComponentDetailData } from "@/lib/data/components";
 
 const defaultTokenBindings = [
@@ -184,10 +185,16 @@ export function ComponentDetail({ initialData }: { initialData?: ComponentDetail
             </div>
 
             {/* Canvas */}
-            <div className={`h-[160px] flex items-center justify-center border-b border-vs-border-default ${canvasBg === "dark" ? "bg-vs-bg-elevated" : "bg-white"}`}>
-              <span className={`inline-flex items-center justify-center font-sans font-medium ${sizeClass}`} style={buttonStyle}>
-                {label}
-              </span>
+            <div className={`min-h-[160px] border-b border-vs-border-default ${canvasBg === "dark" ? "bg-vs-bg-elevated" : "bg-white"}`}>
+              {initialData?.rawStructure ? (
+                <IRPreview structure={initialData.rawStructure} />
+              ) : (
+                <div className="h-[160px] flex items-center justify-center">
+                  <span className={`inline-flex items-center justify-center font-sans font-medium ${sizeClass}`} style={buttonStyle}>
+                    {label}
+                  </span>
+                </div>
+              )}
             </div>
 
             {/* Controls */}
