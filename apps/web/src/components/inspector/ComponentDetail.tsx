@@ -6,8 +6,9 @@ import { CompletenessScore } from "@/components/ui/completeness-score";
 import { StatusChip } from "@/components/ui/status-chip";
 import { ProvenanceDot } from "@/components/ui/provenance-dot";
 import { useToast } from "@/components/ui/toast";
+import type { ComponentDetailData } from "@/lib/data/components";
 
-const tokenBindings = [
+const defaultTokenBindings = [
   { id: "t1", name: "color/primary/500", value: "#2563EB", kind: "color" as const, property: "background", editable: true },
   { id: "t2", name: "color/surface/base", value: "#FFFFFF", kind: "color" as const, property: "text color", editable: true },
   { id: "t3", name: "radius/md", value: "8", kind: "radius" as const, property: "border-radius", editable: true },
@@ -15,52 +16,77 @@ const tokenBindings = [
   { id: "t5", name: "spacing/1.5", value: "6", kind: "spacing" as const, property: "padding-y", editable: false },
 ];
 
-const variantAxes = [
+const defaultVariantAxes = [
   { name: "intent", options: ["primary", "secondary", "ghost"], confidence: "inferred" as const },
   { name: "size", options: ["sm", "md", "lg"], confidence: "confirmed" as const },
 ];
 
-const props = [
+const defaultProps = [
   { name: "label", type: "string", default: "Continue", provenance: "confirmed" as const },
   { name: "disabled", type: "boolean", default: "false", provenance: "confirmed" as const },
   { name: "icon", type: "string", default: "—", provenance: "inferred" as const },
   { name: "onClick", type: "function", default: "—", provenance: "confirmed" as const },
 ];
 
-const states = [
+const defaultStates = [
   { name: "hover", provenance: "confirmed" as const },
   { name: "disabled", provenance: "confirmed" as const },
   { name: "focus", provenance: "inferred" as const },
 ];
 
-const structureNodes = [
+const defaultStructureNodes = [
   { depth: 0, tag: "button", name: "root", flagged: false },
   { depth: 1, tag: "span", name: "icon-slot", flagged: false },
   { depth: 1, tag: "span", name: "label", flagged: false },
   { depth: 1, tag: "span", name: "ripple", flagged: true, literalValue: "#FFFFFF", promotedTo: null as string | null },
 ];
 
-const issues: Array<{ id: string; text: string; severity: "error" | "warning" | "info"; action: string }> = [
+const defaultIssues: Array<{ id: string; text: string; severity: "error" | "warning" | "info"; action: string }> = [
   { id: "i1", text: "Raw value #FFFFFF on ripple element", severity: "warning", action: "Promote to token" },
   { id: "i2", text: "Focus state inferred, not confirmed", severity: "info", action: "Confirm" },
 ];
 
-export function ComponentDetail() {
+export function ComponentDetail({ initialData }: { initialData?: ComponentDetailData }) {
+  // Resolve data: use initialData from Supabase when available, fall back to hardcoded defaults
+  const tokenBindings = initialData?.tokenBindings ?? defaultTokenBindings;
+  const variantAxes = initialData
+    ? initialData.variantAxes.map((a) => ({ name: a.name, options: a.options, confidence: a.confidence }))
+    : defaultVariantAxes;
+  const props = initialData
+    ? initialData.props.map((p) => ({ name: p.name, type: p.type, default: p.default, provenance: p.provenance }))
+    : defaultProps;
+  const states = initialData
+    ? initialData.states.map((s) => ({ name: s.name, provenance: s.provenance }))
+    : defaultStates;
+  const structureNodes = initialData
+    ? initialData.structure.map((n) => ({ depth: n.depth, tag: n.tag, name: n.name, flagged: n.flagged, literalValue: n.literalValue, promotedTo: null as string | null }))
+    : defaultStructureNodes;
+  const issues = initialData
+    ? initialData.issues.map((i) => ({ id: i.id, text: i.text, severity: i.severity, action: i.action }))
+    : defaultIssues;
+  const componentScore = initialData?.score ?? 82;
+
   const { showToast } = useToast();
   const [intent, setIntent] = useState("primary");
   const [size, setSize] = useState("md");
   const [label, setLabel] = useState("Continue");
   const [disabled, setDisabled] = useState(false);
   const [canvasBg, setCanvasBg] = useState<"dark" | "light">("dark");
-  const [status, setStatus] = useState<"normalized" | "approved">("normalized");
+  const [status, setStatus] = useState<"normalized" | "approved">(
+    initialData?.status === "approved" ? "approved" : "normalized"
+  );
   const [confirmedAxes, setConfirmedAxes] = useState<Set<string>>(new Set());
-  const [tokenValues, setTokenValues] = useState<Record<string, string>>({
-    t1: "#2563EB", t2: "#FFFFFF", t3: "8",
+  const [tokenValues, setTokenValues] = useState<Record<string, string>>(() => {
+    const defaults: Record<string, string> = {};
+    for (const t of tokenBindings) {
+      if (t.editable) defaults[t.id] = t.value;
+    }
+    return Object.keys(defaults).length > 0 ? defaults : { t1: "#2563EB", t2: "#FFFFFF", t3: "8" };
   });
   const [promotedNodes, setPromotedNodes] = useState<Set<number>>(new Set());
   const [resolvedIssues, setResolvedIssues] = useState<Set<string>>(new Set());
   const [showApproveDialog, setShowApproveDialog] = useState(false);
-  const [componentName, setComponentName] = useState("Button");
+  const [componentName, setComponentName] = useState(initialData?.name ?? "Button");
   const [isRenaming, setIsRenaming] = useState(false);
 
   const bgColor = tokenValues.t1;
@@ -133,7 +159,7 @@ export function ComponentDetail() {
             )}
           </div>
           <StatusChip status={status} />
-          <CompletenessScore score={82} />
+          <CompletenessScore score={componentScore} />
         </div>
         <button
           onClick={handleApprove}

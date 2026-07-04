@@ -8,7 +8,14 @@ import { createClient } from "@supabase/supabase-js";
 export async function createServerSupabaseClient() {
   const devBypass = process.env.VORTSPEC_DEV_BYPASS_AUTH === "true";
 
-  if (devBypass && process.env.NODE_ENV === "production") {
+  // Hard guard: bypass must never reach a real production deployment.
+  // Allow during `next build` (which sets NODE_ENV=production) by checking
+  // for the NEXT_PHASE env var that distinguishes build from runtime.
+  if (
+    devBypass &&
+    process.env.NODE_ENV === "production" &&
+    process.env.NEXT_PHASE !== "phase-production-build"
+  ) {
     throw new Error(
       "VORTSPEC_DEV_BYPASS_AUTH must not be enabled in production. " +
         "Remove it from your environment before deploying.",

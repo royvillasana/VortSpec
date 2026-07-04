@@ -4,14 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { CompletenessScore } from "@/components/ui/completeness-score";
 import { StatusChip } from "@/components/ui/status-chip";
-
-const components = [
-  { id: "btn", name: "Button", variants: 9, score: 82, status: "normalized" as const, preview: "button" },
-  { id: "input", name: "Input", variants: 4, score: 68, status: "normalized" as const, preview: "input" },
-  { id: "card", name: "Card", variants: 3, score: 74, status: "normalized" as const, preview: "card" },
-  { id: "modal", name: "Modal", variants: 2, score: 55, status: "normalized" as const, preview: "modal" },
-  { id: "badge", name: "Badge", variants: 5, score: 91, status: "approved" as const, preview: "badge" },
-];
+import type { ComponentSummary } from "@/lib/data/components";
 
 function ComponentPreview({ type }: { type: string }) {
   switch (type) {
@@ -38,9 +31,10 @@ function ComponentPreview({ type }: { type: string }) {
   }
 }
 
-export function ComponentsPanel() {
+export function ComponentsPanel({ initialComponents }: { initialComponents?: ComponentSummary[] }) {
   const [search, setSearch] = useState("");
 
+  const components = initialComponents ?? [];
   const filtered = components.filter((c) =>
     c.name.toLowerCase().includes(search.toLowerCase())
   );

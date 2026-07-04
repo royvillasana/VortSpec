@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useEffect } from "react";
 import { useToast } from "@/components/ui/toast";
+import type { HistoryEntry as DataHistoryEntry } from "@/lib/data/history";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                             */
@@ -16,7 +17,7 @@ interface RenameOp {
 }
 
 interface HistoryEntry {
-  id: number;
+  id: number | string;
   title: string;
   author: Author;
   kind: Kind;
@@ -302,10 +303,28 @@ function HistoryCard({
 /*  History Panel (main export)                                       */
 /* ------------------------------------------------------------------ */
 
-export function HistoryPanel() {
+function mapDataEntries(entries: DataHistoryEntry[]): HistoryEntry[] {
+  return entries.map((e) => ({
+    id: e.id,
+    title: e.title,
+    author: e.author,
+    kind: e.kind,
+    rejected: e.rejected,
+    versionFrom: e.versionFrom,
+    versionTo: e.versionTo,
+    timestamp: e.timestamp,
+    renames: e.renames,
+    undoable: e.undoable,
+    importMeta: e.importMeta,
+  }));
+}
+
+export function HistoryPanel({ initialEntries }: { initialEntries?: DataHistoryEntry[] }) {
+  const entries = initialEntries ? mapDataEntries(initialEntries) : ENTRIES;
+
   const { showToast } = useToast();
-  const [expandedEntry, setExpandedEntry] = useState<number | null>(null);
-  const [undoneIds, setUndoneIds] = useState<Set<number>>(new Set());
+  const [expandedEntry, setExpandedEntry] = useState<number | string | null>(null);
+  const [undoneIds, setUndoneIds] = useState<Set<number | string>>(new Set());
   const [version, setVersion] = useState(14);
 
   const handleUndo = useCallback(
@@ -322,13 +341,13 @@ export function HistoryPanel() {
     function handleKeyDown(e: KeyboardEvent) {
       if ((e.metaKey || e.ctrlKey) && e.key === "z" && !e.shiftKey) {
         e.preventDefault();
-        const active = ENTRIES.filter((en) => !en.rejected && !undoneIds.has(en.id));
+        const active = entries.filter((en) => !en.rejected && !undoneIds.has(en.id));
         if (active.length > 0) handleUndo(active[0]);
       }
     }
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [undoneIds, handleUndo]);
+  }, [entries, undoneIds, handleUndo]);
 
   return (
     <div className="px-6 py-6 max-w-[640px]">
@@ -338,8 +357,8 @@ export function HistoryPanel() {
 
       {/* Timeline list */}
       <div className="relative">
-        {ENTRIES.map((entry, idx) => {
-          const isLast = idx === ENTRIES.length - 1;
+        {entries.map((entry, idx) => {
+          const isLast = idx === entries.length - 1;
           const isRejected = entry.rejected;
           const isUndone = undoneIds.has(entry.id);
           const dimmed = isRejected || isUndone;
