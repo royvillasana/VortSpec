@@ -104,9 +104,16 @@ export function ComponentDetail({ initialData }: { initialData?: ComponentDetail
       <>
         <StatusChip status={status} />
         <CompletenessScore score={componentScore} />
+        <button
+          onClick={handleApprove}
+          className="bg-vs-accent text-white rounded-lg px-3.5 py-1.5 text-[12px] font-medium border-none cursor-pointer hover:brightness-110 transition-all"
+        >
+          {status === "approved" ? "✓ Approved" : "Approve"}
+        </button>
       </>
     );
     return () => { setItems([]); setExtras(null); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [componentName, status, componentScore, projectId, setItems, setExtras]);
 
   const bgColor = tokenValues.t1;
@@ -159,16 +166,6 @@ export function ComponentDetail({ initialData }: { initialData?: ComponentDetail
 
   return (
     <div className="flex flex-col h-full overflow-y-auto">
-      {/* Header */}
-      <div className="px-6 py-3 border-b border-vs-border-default flex items-center justify-end">
-        <button
-          onClick={handleApprove}
-          className="bg-vs-accent text-white rounded-lg px-4 py-2 text-[13px] font-medium border-none cursor-pointer hover:brightness-110"
-        >
-          {status === "approved" ? "✓ Approved" : "Approve component"}
-        </button>
-      </div>
-
       {/* Content grid */}
       <div className="p-6 grid grid-cols-[2fr_1fr] gap-6">
         {/* Left column */}
