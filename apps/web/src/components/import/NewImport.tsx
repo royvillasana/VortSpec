@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useRef, useCallback } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useParams } from "next/navigation";
+import { startImport } from "@/app/projects/[id]/import/actions";
 
 /* ── File chip ─────────────────────────────────────────────────── */
 
@@ -40,6 +41,7 @@ function Dropzone({
   inputRef,
   height = 120,
   placeholder,
+  accept,
 }: {
   file: { name: string; size: string } | null;
   error: string | null;
@@ -52,6 +54,7 @@ function Dropzone({
   inputRef: React.RefObject<HTMLInputElement | null>;
   height?: number;
   placeholder: string;
+  accept?: string;
 }) {
   const handleClick = () => inputRef.current?.click();
 
@@ -89,7 +92,7 @@ function Dropzone({
       <input
         ref={inputRef}
         type="file"
-        accept=".zip"
+        accept={accept ?? ".zip"}
         className="hidden"
         onChange={(e) => {
           const f = e.target.files?.[0];
@@ -113,8 +116,11 @@ function formatSize(bytes: number): string {
 
 export function NewImport() {
   const router = useRouter();
+  const params = useParams<{ id: string }>();
+  const projectId = params.id;
 
-  // ZIP state
+  // ZIP state — keep the actual File object for upload
+  const [rawFile, setRawFile] = useState<File | null>(null);
   const [zipFile, setZipFile] = useState<{ name: string; size: string } | null>(null);
   const [zipError, setZipError] = useState<string | null>(null);
   const [zipDragOver, setZipDragOver] = useState(false);
@@ -126,6 +132,10 @@ export function NewImport() {
   const [dsDragOver, setDsDragOver] = useState(false);
   const dsInputRef = useRef<HTMLInputElement>(null);
 
+  // Upload state
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+
   const hasSource = zipFile !== null;
 
   // ZIP file handler
@@ -133,14 +143,17 @@ export function NewImport() {
     if (!f.name.toLowerCase().endsWith(".zip")) {
       setZipError("We could not find HTML or CSS inside this file");
       setZipFile(null);
+      setRawFile(null);
       return;
     }
     if (f.size > MAX_SIZE) {
       setZipError("File exceeds the 50 MB limit. Try a smaller export.");
       setZipFile(null);
+      setRawFile(null);
       return;
     }
     setZipError(null);
+    setRawFile(f);
     setZipFile({ name: f.name, size: formatSize(f.size) });
   }, []);
 
@@ -160,6 +173,26 @@ export function NewImport() {
     const f = e.dataTransfer.files[0];
     if (f) handleDsAttach(f);
   }, [handleDsAttach]);
+
+  // Start import — calls the server action
+  const handleStartImport = useCallback(async () => {
+    if (!rawFile || !projectId) return;
+    setUploading(true);
+    setUploadError(null);
+
+    const formData = new FormData();
+    formData.append("file", rawFile);
+
+    const result = await startImport(projectId, formData);
+
+    if (result.error) {
+      setUploadError(result.error);
+      setUploading(false);
+      return;
+    }
+
+    router.push(`/projects/${projectId}/import/${result.importId}`);
+  }, [rawFile, projectId, router]);
 
   return (
     <div className="min-h-screen bg-vs-bg-primary">
@@ -193,7 +226,7 @@ export function NewImport() {
               error={zipError}
               dragOver={zipDragOver}
               onAttach={handleZipAttach}
-              onRemove={() => { setZipFile(null); setZipError(null); }}
+              onRemove={() => { setZipFile(null); setRawFile(null); setZipError(null); }}
               onDragOver={() => setZipDragOver(true)}
               onDragLeave={() => setZipDragOver(false)}
               onDrop={handleZipDrop}
@@ -266,19 +299,24 @@ export function NewImport() {
           )}
         </div>
 
+        {/* Upload error */}
+        {uploadError && (
+          <p className="mb-4 text-[12px] text-vs-error">{uploadError}</p>
+        )}
+
         {/* Start import */}
         <div className="flex justify-end">
           <button
             type="button"
-            disabled={!hasSource}
-            onClick={() => hasSource && router.push("/projects/proj-1/import/imp-1")}
+            disabled={!hasSource || uploading}
+            onClick={handleStartImport}
             className={`rounded-lg px-5 py-2 text-[13px] font-medium transition-all ${
-              hasSource
+              hasSource && !uploading
                 ? "bg-vs-accent text-white cursor-pointer hover:brightness-110"
                 : "bg-vs-bg-elevated border border-vs-border-default text-vs-text-muted cursor-not-allowed"
             }`}
           >
-            Start import
+            {uploading ? "Uploading…" : "Start import"}
           </button>
         </div>
       </main>
