@@ -466,6 +466,7 @@ export function TokensPanel({ initialTokens }: { initialTokens?: DesignToken[] }
   const [inferredOnly, setInferredOnly] = useState(false);
   const [selectedTokenId, setSelectedTokenId] = useState<string | null>(null);
   const [overflowMenuId, setOverflowMenuId] = useState<string | null>(null);
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
   const [modalAction, setModalAction] = useState<ModalAction>(null);
   const [modalTokenId, setModalTokenId] = useState<string | null>(null);
   const [tokens, setTokens] = useState<DesignToken[]>(initialTokens ?? []);
@@ -621,40 +622,64 @@ export function TokensPanel({ initialTokens }: { initialTokens?: DesignToken[] }
               No tokens match the current filters.
             </div>
           ) : (
-            groupedTokens.map((group) => (
-              <div key={group.kind}>
-                {/* Group header */}
-                <div className="sticky top-0 z-[5] bg-vs-bg-primary border-b border-vs-border-default px-6 py-4 flex items-center gap-2">
-                  <span className="text-[15px] font-semibold text-vs-text-primary">
-                    {group.label}
-                  </span>
-                  <span className="font-mono text-[11px] text-vs-text-muted">
-                    {group.tokens.length}
-                  </span>
-                </div>
+            groupedTokens.map((group) => {
+              const isCollapsed = collapsedGroups.has(group.kind);
+              return (
+                <div key={group.kind}>
+                  {/* Group header — clickable to collapse/expand */}
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setCollapsedGroups((prev) => {
+                        const next = new Set(prev);
+                        if (next.has(group.kind)) next.delete(group.kind);
+                        else next.add(group.kind);
+                        return next;
+                      })
+                    }
+                    className="sticky top-0 z-[5] w-full bg-vs-bg-primary border-b border-vs-border-default px-6 py-4 flex items-center gap-2 cursor-pointer hover:bg-vs-bg-hover transition-colors text-left"
+                  >
+                    <svg
+                      width="10"
+                      height="10"
+                      viewBox="0 0 10 10"
+                      fill="none"
+                      className={`flex-none text-vs-text-muted transition-transform duration-150 ${isCollapsed ? "" : "rotate-90"}`}
+                    >
+                      <path d="M3 1.5L7 5L3 8.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                    <span className="text-[15px] font-semibold text-vs-text-primary">
+                      {group.label}
+                    </span>
+                    <span className="font-mono text-[11px] text-vs-text-muted">
+                      {group.tokens.length}
+                    </span>
+                  </button>
 
-                {/* Token rows */}
-                {group.tokens.map((token) => (
-                  <TokenRow
-                    key={token.id}
-                    token={token}
-                    selected={selectedTokenId === token.id}
-                    onSelect={() =>
-                      setSelectedTokenId(
-                        selectedTokenId === token.id ? null : token.id
-                      )
-                    }
-                    overflowOpen={overflowMenuId === token.id}
-                    onToggleOverflow={() =>
-                      setOverflowMenuId(
-                        overflowMenuId === token.id ? null : token.id
-                      )
-                    }
-                    onAction={(action) => openModal(token.id, action)}
-                  />
-                ))}
-              </div>
-            ))
+                  {/* Token rows — hidden when collapsed */}
+                  {!isCollapsed &&
+                    group.tokens.map((token) => (
+                      <TokenRow
+                        key={token.id}
+                        token={token}
+                        selected={selectedTokenId === token.id}
+                        onSelect={() =>
+                          setSelectedTokenId(
+                            selectedTokenId === token.id ? null : token.id
+                          )
+                        }
+                        overflowOpen={overflowMenuId === token.id}
+                        onToggleOverflow={() =>
+                          setOverflowMenuId(
+                            overflowMenuId === token.id ? null : token.id
+                          )
+                        }
+                        onAction={(action) => openModal(token.id, action)}
+                      />
+                    ))}
+                </div>
+              );
+            })
           )}
         </div>
       </div>
