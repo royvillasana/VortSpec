@@ -52,6 +52,8 @@ export interface ComponentDetailData {
     action: string;
   }>;
   score: number;
+  rawStructure: Record<string, unknown>;
+  description?: string;
 }
 
 /**
@@ -175,5 +177,7 @@ export async function getComponentDetail(
       action: i.suggestedAction ? "Fix" : "Review",
     })),
     score: Number(completeness.score ?? 0),
+    rawStructure: structure,
+    description: doc.description ? String(doc.description) : undefined,
   };
 }
