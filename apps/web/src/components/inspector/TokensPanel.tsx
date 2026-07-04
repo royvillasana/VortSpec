@@ -592,7 +592,7 @@ export function TokensPanel({ initialTokens }: { initialTokens?: DesignToken[] }
             {/* Search input */}
             <input
               type="text"
-              placeholder="Search tokens\u2026"
+              placeholder="Search tokens…"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-[220px] bg-vs-bg-surface border border-vs-border-default rounded-md text-[12px] text-vs-text-primary px-2.5 py-1.5 placeholder:text-vs-text-muted focus:border-vs-accent focus:shadow-[0_0_0_2px_rgba(124,111,240,0.25)] outline-none transition-colors"
