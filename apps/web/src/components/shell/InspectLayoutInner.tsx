@@ -21,6 +21,22 @@ function TopBar() {
   );
 }
 
+function BackToProjects() {
+  return (
+    <div className="flex-none border-b border-vs-border-default bg-vs-bg-primary px-6 py-2.5">
+      <Link
+        href="/projects"
+        className="inline-flex items-center gap-1.5 text-[12px] text-vs-text-muted hover:text-vs-text-primary no-underline transition-colors"
+      >
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" className="flex-none">
+          <path d="M7.5 9.5L4 6L7.5 2.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+        Projects
+      </Link>
+    </div>
+  );
+}
+
 export function InspectLayoutInner({
   children,
   navRail,
@@ -35,7 +51,10 @@ export function InspectLayoutInner({
       <TopBar />
       <div className="flex flex-1 min-h-0 overflow-hidden">
         {navRail}
-        <main className="flex-1 min-w-0 overflow-hidden">{children}</main>
+        <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
+          <BackToProjects />
+          <main className="flex-1 min-w-0 overflow-hidden">{children}</main>
+        </div>
         {isOpen && <AssistantDrawer />}
         <ChatStrip />
       </div>

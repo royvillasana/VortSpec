@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
-import Link from "next/link";
 import type { DesignToken, TokenKind, Confidence } from "@/types/ir";
 import { SegmentedControl } from "@/components/ui/segmented-control";
 import { TokenSwatch } from "@/components/ui/token-swatch";
@@ -577,15 +576,6 @@ export function TokensPanel({ initialTokens }: { initialTokens?: DesignToken[] }
       <div className="flex-1 min-w-0 flex flex-col">
         {/* Header */}
         <div className="sticky top-0 z-10 bg-vs-bg-primary px-6 py-5 border-b border-vs-border-default">
-          <Link
-            href="/projects"
-            className="inline-flex items-center gap-1.5 text-[12px] text-vs-text-muted hover:text-vs-text-primary no-underline mb-2 transition-colors"
-          >
-            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" className="flex-none">
-              <path d="M7.5 9.5L4 6L7.5 2.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-            Projects
-          </Link>
           <h1 className="text-[20px] font-semibold tracking-tight text-vs-text-primary mb-4">
             Tokens
           </h1>
