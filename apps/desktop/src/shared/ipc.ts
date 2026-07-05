@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { agentRunOptionsSchema } from "./run-events";
+import { flowSchema, stageStatusSchema } from "./flow";
 
 // Re-exported so renderer code can import run + IPC types from one module.
 export type {
@@ -8,6 +9,13 @@ export type {
   AgentEventEnvelope,
   AgentRawEnvelope,
 } from "./run-events";
+export type {
+  Flow,
+  StageDef,
+  StageState,
+  StageStatus,
+  StageKind,
+} from "./flow";
 
 /**
  * The typed, zod-validated contract between the main and renderer processes.
@@ -103,6 +111,40 @@ export const ipcContract = {
     response: z.object({ runId: z.string() }),
   },
   "agent:cancelRun": { request: z.string(), response: z.void() },
+
+  "flow:get": { request: z.string(), response: flowSchema },
+  "flow:setStageStatus": {
+    request: z.object({
+      projectPath: z.string(),
+      stageId: z.string(),
+      status: stageStatusSchema,
+    }),
+    response: flowSchema,
+  },
+  "flow:approveStage": {
+    request: z.object({ projectPath: z.string(), stageId: z.string() }),
+    response: flowSchema,
+  },
+  "flow:requestChanges": {
+    request: z.object({
+      projectPath: z.string(),
+      stageId: z.string(),
+      notes: z.string(),
+    }),
+    response: flowSchema,
+  },
+  "flow:saveIntake": {
+    request: z.object({ projectPath: z.string(), content: z.string() }),
+    response: flowSchema,
+  },
+  "flow:completeInput": {
+    request: z.object({ projectPath: z.string(), stageId: z.string() }),
+    response: flowSchema,
+  },
+  "artifact:read": {
+    request: z.object({ projectPath: z.string(), relPath: z.string() }),
+    response: z.string().nullable(),
+  },
 } as const;
 
 export type IpcContract = typeof ipcContract;

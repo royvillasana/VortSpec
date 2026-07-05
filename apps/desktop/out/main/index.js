@@ -68,6 +68,106 @@ z.object({
   runId: z.string(),
   line: z.string()
 });
+const stageKindSchema = z.enum(["input", "intake", "agent", "verify"]);
+const stageStatusSchema = z.enum([
+  "pending",
+  "running",
+  "needs-review",
+  "approved",
+  "failed"
+]);
+const stageDefSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  summary: z.string(),
+  kind: stageKindSchema,
+  /** produces an artifact that must be approved before advancing */
+  gated: z.boolean().default(false),
+  /** relative path of the artifact this stage produces, if any */
+  artifact: z.string().optional(),
+  /** prompt handed to Claude Code for agent/verify stages */
+  promptTemplate: z.string().optional(),
+  allowedTools: z.array(z.string()).optional()
+});
+const stageStateSchema = z.object({
+  id: z.string(),
+  status: stageStatusSchema,
+  updatedAt: z.string(),
+  decisionNotes: z.string().optional()
+});
+const flowStateSchema = z.object({
+  currentStageId: z.string(),
+  stages: z.array(stageStateSchema)
+});
+const flowSchema = z.object({
+  definitions: z.array(stageDefSchema),
+  state: flowStateSchema
+});
+const DEFAULT_FLOW = [
+  {
+    id: "design-input",
+    title: "Design input",
+    summary: "Provide the design source: a Figma link, a dropped export ZIP, or a folder.",
+    kind: "input",
+    gated: false
+  },
+  {
+    id: "intake",
+    title: "Intake",
+    summary: "Answer the initial discovery questions so the agent has product context.",
+    kind: "intake",
+    gated: false,
+    artifact: "intake.md"
+  },
+  {
+    id: "enrich-brief",
+    title: "Enrich brief",
+    summary: "The agent turns the intake and design into an enriched brief for review.",
+    kind: "agent",
+    gated: true,
+    artifact: "brief.enriched.md",
+    promptTemplate: "Run the SDD-DE enrich-brief step: read the intake answers and design input, and write an enriched brief.",
+    allowedTools: ["Read", "Write", "Edit"]
+  },
+  {
+    id: "spec",
+    title: "Spec",
+    summary: "Generate the component/screen spec from the approved brief.",
+    kind: "agent",
+    gated: true,
+    artifact: "spec.md",
+    promptTemplate: "Run the SDD-DE spec step: from the approved enriched brief, produce a spec.",
+    allowedTools: ["Read", "Write", "Edit"]
+  },
+  {
+    id: "plan",
+    title: "Plan",
+    summary: "Produce an implementation plan from the approved spec.",
+    kind: "agent",
+    gated: true,
+    artifact: "plan.md",
+    promptTemplate: "Run the SDD-DE plan step: from the approved spec, produce an implementation plan.",
+    allowedTools: ["Read", "Write", "Edit"]
+  },
+  {
+    id: "implement",
+    title: "Implement",
+    summary: "Generate the component code into the project from the approved plan.",
+    kind: "agent",
+    gated: false,
+    promptTemplate: "Run the SDD-DE implementation step: implement the approved plan as real code in this project.",
+    allowedTools: ["Read", "Write", "Edit", "Bash"]
+  },
+  {
+    id: "verify",
+    title: "Verify",
+    summary: "Run visual-verify and adversarial review; approve or send findings back.",
+    kind: "verify",
+    gated: false,
+    promptTemplate: "Run the SDD-DE verification steps (visual-verify, adversarial review) and report findings.",
+    allowedTools: ["Read", "Bash"]
+  }
+];
 const checkStatusSchema = z.enum(["pass", "fail", "unknown", "checking"]);
 const fixActionSchema = z.object({
   /** install-link → open an external URL; open-login → run login in the PTY; verify → re-run the check */
@@ -127,7 +227,40 @@ const ipcContract = {
     request: agentRunOptionsSchema,
     response: z.object({ runId: z.string() })
   },
-  "agent:cancelRun": { request: z.string(), response: z.void() }
+  "agent:cancelRun": { request: z.string(), response: z.void() },
+  "flow:get": { request: z.string(), response: flowSchema },
+  "flow:setStageStatus": {
+    request: z.object({
+      projectPath: z.string(),
+      stageId: z.string(),
+      status: stageStatusSchema
+    }),
+    response: flowSchema
+  },
+  "flow:approveStage": {
+    request: z.object({ projectPath: z.string(), stageId: z.string() }),
+    response: flowSchema
+  },
+  "flow:requestChanges": {
+    request: z.object({
+      projectPath: z.string(),
+      stageId: z.string(),
+      notes: z.string()
+    }),
+    response: flowSchema
+  },
+  "flow:saveIntake": {
+    request: z.object({ projectPath: z.string(), content: z.string() }),
+    response: flowSchema
+  },
+  "flow:completeInput": {
+    request: z.object({ projectPath: z.string(), stageId: z.string() }),
+    response: flowSchema
+  },
+  "artifact:read": {
+    request: z.object({ projectPath: z.string(), relPath: z.string() }),
+    response: z.string().nullable()
+  }
 };
 function execFileSafe(command, args, opts = {}) {
   return new Promise((resolve) => {
@@ -651,6 +784,107 @@ function startRun(sender, opts) {
 function cancelRun(runId) {
   runs.get(runId)?.cancel();
 }
+function vortspecDir(projectPath) {
+  return join(projectPath, ".vortspec");
+}
+function flowFile(projectPath) {
+  return join(vortspecDir(projectPath), "flow.json");
+}
+function initialState() {
+  const first = DEFAULT_FLOW[0];
+  return {
+    currentStageId: first.id,
+    stages: DEFAULT_FLOW.map((def) => ({
+      id: def.id,
+      status: "pending",
+      updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+    }))
+  };
+}
+async function readState(projectPath) {
+  try {
+    const raw = await readFile(flowFile(projectPath), "utf8");
+    const parsed = flowStateSchema.safeParse(JSON.parse(raw));
+    if (parsed.success) return reconcile(parsed.data);
+  } catch {
+  }
+  return initialState();
+}
+function reconcile(state) {
+  const byId = new Map(state.stages.map((s) => [s.id, s]));
+  const stages = DEFAULT_FLOW.map(
+    (def) => byId.get(def.id) ?? {
+      id: def.id,
+      status: "pending",
+      updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+    }
+  );
+  const currentValid = DEFAULT_FLOW.some((d) => d.id === state.currentStageId);
+  return {
+    currentStageId: currentValid ? state.currentStageId : DEFAULT_FLOW[0].id,
+    stages
+  };
+}
+async function writeState(projectPath, state) {
+  await mkdir(vortspecDir(projectPath), { recursive: true });
+  await writeFile(flowFile(projectPath), JSON.stringify(state, null, 2), "utf8");
+}
+function withFlow(state) {
+  return { definitions: DEFAULT_FLOW, state };
+}
+function patchStage(state, stageId, patch) {
+  return {
+    ...state,
+    stages: state.stages.map(
+      (s) => s.id === stageId ? { ...s, ...patch, updatedAt: (/* @__PURE__ */ new Date()).toISOString() } : s
+    )
+  };
+}
+function nextStageId(stageId) {
+  const index = DEFAULT_FLOW.findIndex((d) => d.id === stageId);
+  const next = DEFAULT_FLOW[index + 1];
+  return next ? next.id : null;
+}
+async function getFlow(projectPath) {
+  return withFlow(await readState(projectPath));
+}
+async function setStageStatus(projectPath, stageId, status) {
+  const next = patchStage(await readState(projectPath), stageId, { status });
+  await writeState(projectPath, next);
+  return withFlow(next);
+}
+async function approveStage(projectPath, stageId) {
+  let state = patchStage(await readState(projectPath), stageId, {
+    status: "approved",
+    decisionNotes: void 0
+  });
+  const next = nextStageId(stageId);
+  if (next) state = { ...state, currentStageId: next };
+  await writeState(projectPath, state);
+  return withFlow(state);
+}
+async function requestChanges(projectPath, stageId, notes) {
+  const next = patchStage(await readState(projectPath), stageId, {
+    status: "needs-review",
+    decisionNotes: notes
+  });
+  await writeState(projectPath, next);
+  return withFlow(next);
+}
+async function saveIntake(projectPath, content) {
+  await writeFile(join(projectPath, "intake.md"), content, "utf8");
+  return approveStage(projectPath, "intake");
+}
+async function completeInput(projectPath, stageId) {
+  return approveStage(projectPath, stageId);
+}
+async function readArtifact(projectPath, relPath) {
+  try {
+    return await readFile(join(projectPath, relPath), "utf8");
+  } catch {
+    return null;
+  }
+}
 const handlers = {
   "system:isElectron": () => true,
   "system:getVersion": () => app.getVersion(),
@@ -667,7 +901,14 @@ const handlers = {
   "agent:cancelRun": ((runId) => {
     cancelRun(runId);
     return void 0;
-  })
+  }),
+  "flow:get": ((projectPath) => getFlow(projectPath)),
+  "flow:setStageStatus": ((req) => setStageStatus(req.projectPath, req.stageId, req.status)),
+  "flow:approveStage": ((req) => approveStage(req.projectPath, req.stageId)),
+  "flow:requestChanges": ((req) => requestChanges(req.projectPath, req.stageId, req.notes)),
+  "flow:saveIntake": ((req) => saveIntake(req.projectPath, req.content)),
+  "flow:completeInput": ((req) => completeInput(req.projectPath, req.stageId)),
+  "artifact:read": ((req) => readArtifact(req.projectPath, req.relPath))
 };
 function registerIpc() {
   Object.keys(ipcContract).forEach((channel) => {

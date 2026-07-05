@@ -105,7 +105,7 @@ export function Dashboard({
                     Open folder
                   </Button>
                   <Button variant="primary" onClick={() => onOpenProject(project)}>
-                    Run a step
+                    Open flow
                   </Button>
                 </div>
               </Card>

@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from "electron";
-import type { IpcChannel, IpcRequest, IpcResponse } from "../shared/ipc";
+import type { IpcChannel, IpcRequest, IpcResponse, StageStatus } from "../shared/ipc";
 import {
   AGENT_EVENT_CHANNEL,
   AGENT_RAW_CHANNEL,
@@ -52,6 +52,20 @@ const api = {
     subscribe(AGENT_EVENT_CHANNEL, callback),
   onAgentRaw: (callback: (payload: AgentRawEnvelope) => void) =>
     subscribe(AGENT_RAW_CHANNEL, callback),
+
+  getFlow: (projectPath: string) => invoke("flow:get", projectPath),
+  setStageStatus: (projectPath: string, stageId: string, status: StageStatus) =>
+    invoke("flow:setStageStatus", { projectPath, stageId, status }),
+  approveStage: (projectPath: string, stageId: string) =>
+    invoke("flow:approveStage", { projectPath, stageId }),
+  requestChanges: (projectPath: string, stageId: string, notes: string) =>
+    invoke("flow:requestChanges", { projectPath, stageId, notes }),
+  saveIntake: (projectPath: string, content: string) =>
+    invoke("flow:saveIntake", { projectPath, content }),
+  completeInput: (projectPath: string, stageId: string) =>
+    invoke("flow:completeInput", { projectPath, stageId }),
+  readArtifact: (projectPath: string, relPath: string) =>
+    invoke("artifact:read", { projectPath, relPath }),
 };
 
 export type VortSpecApi = typeof api;

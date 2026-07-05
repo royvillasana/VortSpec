@@ -9,7 +9,17 @@ import {
 } from "./workspace/workspace-manager";
 import { getToolkitStatus, installToolkit } from "./workspace/toolkit-manager";
 import { startRun, cancelRun } from "./agent/run-manager";
+import {
+  getFlow,
+  setStageStatus,
+  approveStage,
+  requestChanges,
+  saveIntake,
+  completeInput,
+  readArtifact,
+} from "./flow/flow-manager";
 import type { AgentRunOptions } from "../shared/run-events";
+import type { StageStatus } from "../shared/flow";
 
 /**
  * The single place IPC handlers are registered. Every request and response is
@@ -45,6 +55,26 @@ const handlers: Record<IpcChannel, Handler> = {
     cancelRun(runId);
     return undefined;
   }) as Handler,
+
+  "flow:get": ((projectPath: string) => getFlow(projectPath)) as Handler,
+  "flow:setStageStatus": ((req: {
+    projectPath: string;
+    stageId: string;
+    status: StageStatus;
+  }) => setStageStatus(req.projectPath, req.stageId, req.status)) as Handler,
+  "flow:approveStage": ((req: { projectPath: string; stageId: string }) =>
+    approveStage(req.projectPath, req.stageId)) as Handler,
+  "flow:requestChanges": ((req: {
+    projectPath: string;
+    stageId: string;
+    notes: string;
+  }) => requestChanges(req.projectPath, req.stageId, req.notes)) as Handler,
+  "flow:saveIntake": ((req: { projectPath: string; content: string }) =>
+    saveIntake(req.projectPath, req.content)) as Handler,
+  "flow:completeInput": ((req: { projectPath: string; stageId: string }) =>
+    completeInput(req.projectPath, req.stageId)) as Handler,
+  "artifact:read": ((req: { projectPath: string; relPath: string }) =>
+    readArtifact(req.projectPath, req.relPath)) as Handler,
 };
 
 export function registerIpc(): void {

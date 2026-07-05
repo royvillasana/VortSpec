@@ -1468,8 +1468,8 @@ function requireReactDomClient_production() {
     0 === (nextRetryLane & 62914560) && (nextRetryLane = 4194304);
     return lane;
   }
-  function createLaneMap(initial2) {
-    for (var laneMap = [], i = 0; 31 > i; i++) laneMap.push(initial2);
+  function createLaneMap(initial) {
+    for (var laneMap = [], i = 0; 31 > i; i++) laneMap.push(initial);
     return laneMap;
   }
   function markRootUpdated$1(root2, updateLane) {
@@ -12687,12 +12687,12 @@ function Dashboard({
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex shrink-0 items-center gap-2", children: [
         !project.toolkit.present && /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { onClick: () => void installToolkit(project), children: "Install toolkit" }),
         /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "ghost", onClick: () => void api.openFolder(project.path), children: "Open folder" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "primary", onClick: () => onOpenProject(project), children: "Run a step" })
+        /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "primary", onClick: () => onOpenProject(project), children: "Open flow" })
       ] })
     ] }) }, project.id)) })
   ] });
 }
-const initial = {
+const initialRun = {
   status: "idle",
   streamingText: "",
   activity: [],
@@ -12701,12 +12701,12 @@ const initial = {
   mcpErrors: []
 };
 let activitySeq = 0;
-function reduce(state, action) {
+function reduceRun(state, action) {
   switch (action.type) {
     case "reset":
-      return initial;
+      return initialRun;
     case "start":
-      return { ...initial, status: "running" };
+      return { ...initialRun, status: "running" };
     case "raw":
       return { ...state, raw: [...state.raw, action.line] };
     case "event":
@@ -12757,14 +12757,20 @@ function applyEvent(state, event) {
       return state.status === "running" ? { ...state, status: event.code === null ? "canceled" : "done" } : state;
   }
 }
-const DEFAULT_PROMPT = "Run the SDD-DE intake and enrich-brief step for this project: read the intake answers, and produce an enriched brief as a markdown file. Ask for nothing; work from the files present.";
-function RunView({
-  project,
-  onBack
-}) {
-  const [model, dispatch] = reactExports.useReducer(reduce, initial);
-  const [prompt, setPrompt] = reactExports.useState(DEFAULT_PROMPT);
-  const [showRaw, setShowRaw] = reactExports.useState(false);
+function activityTone(tone) {
+  switch (tone) {
+    case "tool":
+      return "text-vs-accent";
+    case "retry":
+      return "text-vs-warning";
+    case "error":
+      return "text-vs-error";
+    default:
+      return "text-vs-text-muted";
+  }
+}
+function useAgentRun() {
+  const [model, dispatch] = reactExports.useReducer(reduceRun, initialRun);
   const runIdRef = reactExports.useRef(null);
   reactExports.useEffect(() => {
     const offEvent = api.onAgentEvent(({ runId, event }) => {
@@ -12778,54 +12784,38 @@ function RunView({
       offRaw();
     };
   }, []);
-  async function start() {
+  async function start(opts) {
     dispatch({ type: "start" });
-    const { runId } = await api.startRun({
-      prompt,
-      cwd: project.path,
-      allowedTools: ["Read", "Write", "Edit"]
-    });
+    const { runId } = await api.startRun(opts);
     runIdRef.current = runId;
   }
   async function cancel() {
     if (runIdRef.current) await api.cancelRun(runIdRef.current);
   }
+  return {
+    model,
+    running: model.status === "running",
+    start,
+    cancel,
+    reset: () => dispatch({ type: "reset" })
+  };
+}
+function RunPanel({ model }) {
+  const [showRaw, setShowRaw] = reactExports.useState(false);
   const running = model.status === "running";
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "mx-auto flex w-full max-w-3xl flex-col gap-4 px-6 py-8", children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("header", { className: "flex items-center justify-between", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2", children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "ghost", onClick: onBack, children: "← Projects" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsx("h2", { className: "text-sm font-semibold text-vs-text-primary", children: project.name }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-xs text-vs-text-muted", children: "Run a step" })
-        ] })
-      ] }),
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2", children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx(
-          Button,
-          {
-            variant: "ghost",
-            onClick: () => setShowRaw((v) => !v),
-            title: "Toggle the raw Claude Code output",
-            children: showRaw ? "Friendly view" : "Terminal"
-          }
-        ),
-        running ? /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "default", onClick: () => void cancel(), children: "Cancel" }) : /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "primary", onClick: () => void start(), children: model.status === "idle" ? "Start" : "Run again" })
-      ] })
-    ] }),
-    model.status === "idle" && /* @__PURE__ */ jsxRuntimeExports.jsxs(Card, { className: "p-3", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx("label", { className: "mb-1 block text-xs text-vs-text-muted", children: "Step prompt" }),
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col gap-3", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx(StatusBar, { model }),
       /* @__PURE__ */ jsxRuntimeExports.jsx(
-        "textarea",
+        "button",
         {
-          value: prompt,
-          onChange: (e) => setPrompt(e.target.value),
-          rows: 3,
-          className: "w-full resize-y rounded-md border border-vs-border-default bg-vs-bg-primary px-3 py-2 text-sm text-vs-text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-vs-accent-subtle"
+          onClick: () => setShowRaw((v) => !v),
+          className: "text-xs text-vs-text-secondary hover:text-vs-text-primary",
+          title: "Toggle the raw Claude Code output",
+          children: showRaw ? "Friendly view" : "Terminal"
         }
       )
     ] }),
-    /* @__PURE__ */ jsxRuntimeExports.jsx(StatusBar, { model }),
     showRaw ? /* @__PURE__ */ jsxRuntimeExports.jsx(RawTerminal, { lines: model.raw }) : /* @__PURE__ */ jsxRuntimeExports.jsx(FriendlyView, { model, running })
   ] });
 }
@@ -12861,6 +12851,10 @@ function FriendlyView({
   model,
   running
 }) {
+  const idle = model.status === "idle";
+  if (idle) {
+    return /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-xs text-vs-text-muted", children: "Start the step to stream live progress here." });
+  }
   return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col gap-3", children: [
     model.mcpErrors.length > 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "rounded-md border border-vs-warning-border bg-vs-warning-muted px-3 py-2 text-xs text-vs-warning", children: [
       "MCP issue: ",
@@ -12884,36 +12878,330 @@ function FriendlyView({
         " ",
         a.label
       ] }, a.key)) })
-    ] }),
-    model.result && /* @__PURE__ */ jsxRuntimeExports.jsx(
-      "div",
-      {
-        className: `rounded-md border px-3 py-2 text-sm ${model.result.isError ? "border-vs-error/40 bg-vs-error/10 text-vs-error" : "border-vs-success-border bg-vs-success-muted text-vs-success"}`,
-        children: model.result.text ?? (model.result.isError ? "Run failed." : "Run complete.")
-      }
-    )
+    ] })
   ] });
-}
-function activityTone(tone) {
-  switch (tone) {
-    case "tool":
-      return "text-vs-accent";
-    case "retry":
-      return "text-vs-warning";
-    case "error":
-      return "text-vs-error";
-    default:
-      return "text-vs-text-muted";
-  }
 }
 function RawTerminal({ lines }) {
   const endRef = reactExports.useRef(null);
   reactExports.useEffect(() => {
     endRef.current?.scrollIntoView();
   }, [lines.length]);
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "h-96 overflow-auto rounded-md border border-vs-border-default bg-black/40 p-3", children: [
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "h-80 overflow-auto rounded-md border border-vs-border-default bg-black/40 p-3", children: [
     /* @__PURE__ */ jsxRuntimeExports.jsx("pre", { className: "font-mono text-[11px] leading-relaxed text-vs-text-secondary", children: lines.length === 0 ? "Raw Claude Code output will appear here…" : lines.join("\n") }),
     /* @__PURE__ */ jsxRuntimeExports.jsx("div", { ref: endRef })
+  ] });
+}
+function StageDot({
+  status,
+  locked
+}) {
+  if (locked) {
+    return /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "inline-block h-2.5 w-2.5 rounded-full bg-vs-border-strong" });
+  }
+  if (status === "running") return /* @__PURE__ */ jsxRuntimeExports.jsx(Spinner, {});
+  const color = {
+    pending: "bg-vs-text-muted",
+    "needs-review": "bg-vs-warning",
+    approved: "bg-vs-success",
+    failed: "bg-vs-error"
+  };
+  return /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: `inline-block h-2.5 w-2.5 rounded-full ${color[status]}` });
+}
+function GuidedFlow({
+  project,
+  onBack
+}) {
+  const [flow, setFlow] = reactExports.useState(null);
+  const [selectedId, setSelectedId] = reactExports.useState(null);
+  reactExports.useEffect(() => {
+    void api.getFlow(project.path).then((f) => {
+      setFlow(f);
+      setSelectedId(f.state.currentStageId);
+    });
+  }, [project.path]);
+  if (!flow || !selectedId) {
+    return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "px-6 py-10 text-sm text-vs-text-secondary", children: "Loading flow…" });
+  }
+  const def = flow.definitions.find((d) => d.id === selectedId);
+  const state = flow.state.stages.find((s) => s.id === selectedId);
+  const currentIndex = flow.definitions.findIndex((d) => d.id === flow.state.currentStageId);
+  const selectedIndex = flow.definitions.findIndex((d) => d.id === selectedId);
+  const locked = selectedIndex > currentIndex;
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "mx-auto flex w-full max-w-4xl gap-6 px-6 py-8", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("aside", { className: "w-56 shrink-0", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx(
+        "button",
+        {
+          onClick: onBack,
+          className: "mb-3 text-xs text-vs-text-secondary hover:text-vs-text-primary",
+          children: "← Projects"
+        }
+      ),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("h2", { className: "mb-1 truncate text-sm font-semibold text-vs-text-primary", children: project.name }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "mb-4 text-xs text-vs-text-muted", children: "Guided SDD flow" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(
+        Stepper,
+        {
+          flow,
+          selectedId,
+          currentIndex,
+          onSelect: setSelectedId
+        }
+      )
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("section", { className: "min-w-0 flex-1", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+      StageDetail,
+      {
+        project,
+        def,
+        state,
+        locked,
+        onFlow: setFlow
+      },
+      def.id
+    ) })
+  ] });
+}
+function Stepper({
+  flow,
+  selectedId,
+  currentIndex,
+  onSelect
+}) {
+  return /* @__PURE__ */ jsxRuntimeExports.jsx("ol", { className: "flex flex-col gap-1", children: flow.definitions.map((def, i) => {
+    const state = flow.state.stages.find((s) => s.id === def.id);
+    const locked = i > currentIndex;
+    const selected = def.id === selectedId;
+    return /* @__PURE__ */ jsxRuntimeExports.jsx("li", { children: /* @__PURE__ */ jsxRuntimeExports.jsxs(
+      "button",
+      {
+        disabled: locked,
+        onClick: () => onSelect(def.id),
+        className: `flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm transition-colors ${selected ? "bg-vs-bg-elevated text-vs-text-primary" : "text-vs-text-secondary hover:bg-vs-bg-hover"} ${locked ? "opacity-40" : ""}`,
+        children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx(StageDot, { status: state.status, locked }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "truncate", children: def.title })
+        ]
+      }
+    ) }, def.id);
+  }) });
+}
+function StageDetail({
+  project,
+  def,
+  state,
+  locked,
+  onFlow
+}) {
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col gap-4", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("header", { children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx(StageDot, { status: state.status, locked }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("h3", { className: "text-base font-semibold text-vs-text-primary", children: def.title }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(StatusBadge, { status: state.status, locked })
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "mt-1 text-sm text-vs-text-secondary", children: def.summary })
+    ] }),
+    locked ? /* @__PURE__ */ jsxRuntimeExports.jsx(Card, { className: "px-4 py-6 text-center text-sm text-vs-text-muted", children: "Complete the previous stages first." }) : def.kind === "input" ? /* @__PURE__ */ jsxRuntimeExports.jsx(DesignInputStage, { project, def, onFlow, done: state.status === "approved" }) : def.kind === "intake" ? /* @__PURE__ */ jsxRuntimeExports.jsx(IntakeStage, { project, onFlow, done: state.status === "approved" }) : /* @__PURE__ */ jsxRuntimeExports.jsx(AgentStage, { project, def, state, onFlow })
+  ] });
+}
+function StatusBadge({
+  status,
+  locked
+}) {
+  const label = locked ? "locked" : status;
+  return /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "rounded-full border border-vs-border-default px-2 py-0.5 text-[10px] uppercase tracking-wide text-vs-text-muted", children: label });
+}
+function DesignInputStage({
+  project,
+  def,
+  onFlow,
+  done
+}) {
+  const [figma, setFigma] = reactExports.useState("");
+  const [busy, setBusy] = reactExports.useState(false);
+  async function complete() {
+    setBusy(true);
+    try {
+      onFlow(await api.completeInput(project.path, def.id));
+    } finally {
+      setBusy(false);
+    }
+  }
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs(Card, { className: "flex flex-col gap-3 p-4", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-sm text-vs-text-secondary", children: "Provide your design source. Claude Code reaches Figma through your own Figma MCP; ZIP exports and folders are read from the project." }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("label", { className: "text-xs text-vs-text-muted", children: "Figma link (optional)" }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx(
+      "input",
+      {
+        value: figma,
+        onChange: (e) => setFigma(e.target.value),
+        placeholder: "https://www.figma.com/design/…",
+        className: "rounded-md border border-vs-border-default bg-vs-bg-primary px-3 py-2 text-sm text-vs-text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-vs-accent-subtle"
+      }
+    ),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-xs text-vs-text-muted", children: "Or drop a ZIP export / place an existing folder into the project, then continue." }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "primary", disabled: busy || done, onClick: () => void complete(), children: done ? "Provided ✓" : busy ? "Saving…" : "Continue" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "ghost", onClick: () => void api.openFolder(project.path), children: "Open folder" })
+    ] })
+  ] });
+}
+const INTAKE_QUESTIONS = [
+  { id: "product", q: "What are you building?" },
+  { id: "users", q: "Who are the primary users?" },
+  { id: "goals", q: "What does success look like?" },
+  { id: "constraints", q: "Any technical constraints or preferences?" }
+];
+function IntakeStage({
+  project,
+  onFlow,
+  done
+}) {
+  const [answers, setAnswers] = reactExports.useState({});
+  const [busy, setBusy] = reactExports.useState(false);
+  async function save() {
+    setBusy(true);
+    try {
+      const content = "# Intake\n\n" + INTAKE_QUESTIONS.map((q) => `## ${q.q}
+
+${answers[q.id]?.trim() ?? ""}
+`).join("\n");
+      onFlow(await api.saveIntake(project.path, content));
+    } finally {
+      setBusy(false);
+    }
+  }
+  const complete = INTAKE_QUESTIONS.every((q) => (answers[q.id]?.trim().length ?? 0) > 0);
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs(Card, { className: "flex flex-col gap-4 p-4", children: [
+    INTAKE_QUESTIONS.map((q) => /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col gap-1", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("label", { className: "text-sm font-medium text-vs-text-primary", children: q.q }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(
+        "textarea",
+        {
+          rows: 2,
+          value: answers[q.id] ?? "",
+          onChange: (e) => setAnswers((a) => ({ ...a, [q.id]: e.target.value })),
+          className: "resize-y rounded-md border border-vs-border-default bg-vs-bg-primary px-3 py-2 text-sm text-vs-text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-vs-accent-subtle"
+        }
+      )
+    ] }, q.id)),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { children: /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "primary", disabled: busy || !complete, onClick: () => void save(), children: done ? "Saved ✓ — re-save" : busy ? "Saving…" : "Save & continue" }) })
+  ] });
+}
+function AgentStage({
+  project,
+  def,
+  state,
+  onFlow
+}) {
+  const run = useAgentRun();
+  const [artifact, setArtifact] = reactExports.useState(null);
+  const [notes, setNotes] = reactExports.useState("");
+  const justFinished = run.model.status === "done";
+  const prompt = reactExports.useMemo(() => {
+    const base = def.promptTemplate ?? "Run this step.";
+    return state.decisionNotes ? `${base}
+
+Requested changes to address:
+${state.decisionNotes}` : base;
+  }, [def.promptTemplate, state.decisionNotes]);
+  async function start() {
+    setArtifact(null);
+    await run.start({ prompt, cwd: project.path, allowedTools: def.allowedTools });
+    if (def.gated) await onFlow(await api.setStageStatus(project.path, def.id, "running"));
+  }
+  reactExports.useEffect(() => {
+    if (justFinished && def.gated && def.artifact) {
+      void api.readArtifact(project.path, def.artifact).then(setArtifact);
+      void api.setStageStatus(project.path, def.id, "needs-review").then(onFlow);
+    }
+  }, [justFinished]);
+  async function approve() {
+    onFlow(await api.approveStage(project.path, def.id));
+  }
+  async function requestChanges() {
+    onFlow(await api.requestChanges(project.path, def.id, notes));
+    setNotes("");
+  }
+  async function completeImplement() {
+    onFlow(await api.approveStage(project.path, def.id));
+  }
+  const approved = state.status === "approved";
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col gap-4", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs(Card, { className: "flex flex-col gap-3 p-4", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-xs text-vs-text-muted", children: state.decisionNotes ? "Re-run addresses your requested changes." : "Runs your own Claude Code." }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex gap-2", children: run.running ? /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { onClick: () => void run.cancel(), children: "Cancel" }) : /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "primary", onClick: () => void start(), children: state.status === "pending" ? "Run step" : "Run again" }) })
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(RunPanel, { model: run.model })
+    ] }),
+    def.gated && artifact !== null && !approved && /* @__PURE__ */ jsxRuntimeExports.jsx(
+      ArtifactGate,
+      {
+        path: def.artifact ?? "",
+        content: artifact,
+        notes,
+        onNotes: setNotes,
+        onApprove: () => void approve(),
+        onRequestChanges: () => void requestChanges()
+      }
+    ),
+    !def.gated && justFinished && !approved && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between rounded-md border border-vs-border-default bg-vs-bg-surface px-4 py-3", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-sm text-vs-text-secondary", children: "Implementation run complete." }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "primary", onClick: () => void completeImplement(), children: "Mark done & continue" })
+    ] }),
+    approved && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "rounded-md border border-vs-success-border bg-vs-success-muted px-4 py-2 text-sm text-vs-success", children: [
+      "Approved. ",
+      def.artifact ? `Artifact: ${def.artifact}` : ""
+    ] })
+  ] });
+}
+function ArtifactGate({
+  path,
+  content,
+  notes,
+  onNotes,
+  onApprove,
+  onRequestChanges
+}) {
+  const [mode, setMode] = reactExports.useState("view");
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs(Card, { className: "flex flex-col gap-3 p-4", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "text-xs font-medium text-vs-text-secondary", children: [
+        "Review artifact · ",
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono", children: path })
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "rounded-full border border-vs-warning-border px-2 py-0.5 text-[10px] uppercase tracking-wide text-vs-warning", children: "needs review" })
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "max-h-80 overflow-auto rounded-md border border-vs-border-default bg-vs-bg-primary p-3", children: /* @__PURE__ */ jsxRuntimeExports.jsx("pre", { className: "whitespace-pre-wrap font-mono text-xs text-vs-text-primary", children: content }) }),
+    mode === "changes" ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col gap-2", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx(
+        "textarea",
+        {
+          rows: 3,
+          value: notes,
+          onChange: (e) => onNotes(e.target.value),
+          placeholder: "Describe the changes you want the agent to make…",
+          className: "resize-y rounded-md border border-vs-border-default bg-vs-bg-primary px-3 py-2 text-sm text-vs-text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-vs-accent-subtle"
+        }
+      ),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex gap-2", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          Button,
+          {
+            variant: "primary",
+            disabled: notes.trim().length === 0,
+            onClick: onRequestChanges,
+            children: "Send back for changes"
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "ghost", onClick: () => setMode("view"), children: "Cancel" })
+      ] })
+    ] }) : /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex gap-2", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "primary", onClick: onApprove, children: "Approve" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "default", onClick: () => setMode("changes"), children: "Request changes" })
+    ] })
   ] });
 }
 const CORE_IDS = ["node", "git", "claude-install"];
@@ -12965,7 +13253,7 @@ function App() {
         coreReady,
         onContinue: () => setView("dashboard")
       }
-    ) : activeProject ? /* @__PURE__ */ jsxRuntimeExports.jsx(RunView, { project: activeProject, onBack: () => setActiveProject(null) }) : /* @__PURE__ */ jsxRuntimeExports.jsx(
+    ) : activeProject ? /* @__PURE__ */ jsxRuntimeExports.jsx(GuidedFlow, { project: activeProject, onBack: () => setActiveProject(null) }) : /* @__PURE__ */ jsxRuntimeExports.jsx(
       Dashboard,
       {
         projects,

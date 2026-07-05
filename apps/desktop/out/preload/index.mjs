@@ -80,7 +80,14 @@ const api = {
   startRun: (opts) => invoke("agent:startRun", opts),
   cancelRun: (runId) => invoke("agent:cancelRun", runId),
   onAgentEvent: (callback) => subscribe(AGENT_EVENT_CHANNEL, callback),
-  onAgentRaw: (callback) => subscribe(AGENT_RAW_CHANNEL, callback)
+  onAgentRaw: (callback) => subscribe(AGENT_RAW_CHANNEL, callback),
+  getFlow: (projectPath) => invoke("flow:get", projectPath),
+  setStageStatus: (projectPath, stageId, status) => invoke("flow:setStageStatus", { projectPath, stageId, status }),
+  approveStage: (projectPath, stageId) => invoke("flow:approveStage", { projectPath, stageId }),
+  requestChanges: (projectPath, stageId, notes) => invoke("flow:requestChanges", { projectPath, stageId, notes }),
+  saveIntake: (projectPath, content) => invoke("flow:saveIntake", { projectPath, content }),
+  completeInput: (projectPath, stageId) => invoke("flow:completeInput", { projectPath, stageId }),
+  readArtifact: (projectPath, relPath) => invoke("artifact:read", { projectPath, relPath })
 };
 if (process.contextIsolated) {
   try {

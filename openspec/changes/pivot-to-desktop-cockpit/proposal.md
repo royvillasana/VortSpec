@@ -24,6 +24,7 @@ VortSpec v1 was a Next.js web platform that re-implemented a design→code norma
 - `run-view`: Live rendering of a run — current task, files created/edited with paths, tool activity, friendly log — with a toggle to the raw embedded terminal and an always-available clean cancel.
 - `dev-preview`: Running the project's detected dev environment in a managed PTY and rendering its URL in an embedded preview panel with an open-in-browser escape hatch.
 - `run-history`: Recording every run locally as plain files (`.vortspec/runs/`) — stages, timestamps, artifacts, approval decisions, outcome — browsable as a timeline.
+- `first-run-automation`: A one-click guided setup after install that automates opening a terminal, authenticating Claude Code via the browser, and installing the Figma MCP if absent — resumable and idempotent (skips already-complete steps).
 
 ### Modified Capabilities
 <!-- These existing web-app capabilities are being REMOVED/superseded by the pivot; their delta specs mark them removed. -->

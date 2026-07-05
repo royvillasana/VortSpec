@@ -3,7 +3,7 @@ import type { EnvReport, Project } from "../../shared/ipc";
 import { api } from "./lib/api";
 import { EnvironmentCheck } from "./views/EnvironmentCheck";
 import { Dashboard } from "./views/Dashboard";
-import { RunView } from "./views/RunView";
+import { GuidedFlow } from "./views/GuidedFlow";
 import { Spinner } from "./components/ui";
 
 type View = "env" | "dashboard";
@@ -63,7 +63,7 @@ export default function App(): React.JSX.Element {
             onContinue={() => setView("dashboard")}
           />
         ) : activeProject ? (
-          <RunView project={activeProject} onBack={() => setActiveProject(null)} />
+          <GuidedFlow project={activeProject} onBack={() => setActiveProject(null)} />
         ) : (
           <Dashboard
             projects={projects}

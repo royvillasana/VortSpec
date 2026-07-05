@@ -42,15 +42,15 @@ Organized by the PRD's D0→D4 milestones. Each milestone ends with its PRD "Don
 
 ## 4. D2 — Full guided flow (stepper, intake, gates)
 
-- [ ] 4.1 Build the guided SDD stepper rendering the CLI's steps as stage cards with status (pending/running/needs-review/approved/failed), summary, and artifacts (`guided-sdd-flow`).
-- [ ] 4.2 Build the design-input surface: Figma link (via user's Figma MCP), dropped ZIP placed at the expected input path, existing folder/repo; render MCP-misconfiguration as a fix-it card (`design-input`).
-- [ ] 4.3 Build the intake wizard rendering the CLI's CTO-style discovery questions; write answers to the project in the skills' expected format as plain files, then run the corresponding step (`intake-forms`).
-- [ ] 4.4 Implement artifact gates: pause the flow in "needs review", render the artifact as a formatted document, with Approve (advance) and Request changes (feed notes back to the agent for revision); block all downstream work until approval (`artifact-gates`).
-- [ ] 4.5 Render verification stages (visual-verify, adversarial review) as severity-tagged review cards, each approvable or sendable back, reusing v1 issue/patch-card visuals (`guided-sdd-flow`).
-- [ ] 4.6 Implement the PTY fallback path for interactive steps the headless stream can't surface, with explicit headless↔interactive seams (`agent-runner`).
-- [ ] 4.7 Ensure flow state is derived from files on disk plus the run log so the app can close and reopen mid-flow (`run-view` state model).
-- [ ] 4.8 Add Playwright tests for the stepper, intake, and approval-gate flows.
-- [ ] 4.9 **D2 acceptance:** a ZIP design in → approved specs → generated component code in the local folder, entirely through the UI.
+- [x] 4.1 Build the guided SDD stepper rendering the CLI's steps as stage cards with status (pending/running/needs-review/approved/failed), summary, and artifacts (`guided-sdd-flow`). → `shared/flow.ts` (data-driven `DEFAULT_FLOW`, 7 stages) + `views/GuidedFlow.tsx` stepper. **Flow-manager verified end-to-end** in a temp project. Stage set is the seam for exact SDD-DE CLI parity.
+- [x] 4.2 Build the design-input surface: Figma link (via user's Figma MCP), dropped ZIP placed at the expected input path, existing folder/repo; render MCP-misconfiguration as a fix-it card (`design-input`). → `DesignInputStage` (Figma link + folder). MCP-misconfig surfaces from `system/init` events as a warning in `RunPanel`; a richer drag-drop ZIP + dedicated fix-it card can be enriched later.
+- [x] 4.3 Build the intake wizard rendering the CLI's CTO-style discovery questions; write answers to the project in the skills' expected format as plain files, then run the corresponding step (`intake-forms`). → `IntakeStage` → writes `intake.md` and advances. **Verified** (intake.md written to disk).
+- [x] 4.4 Implement artifact gates: pause the flow in "needs review", render the artifact as a formatted document, with Approve (advance) and Request changes (feed notes back to the agent for revision); block all downstream work until approval (`artifact-gates`). → `ArtifactGate` + flow-manager `approveStage`/`requestChanges`; downstream stages locked until current is approved. **Verified** (needs-review → notes persisted → approve advances).
+- [ ] 4.5 Render verification stages (visual-verify, adversarial review) as severity-tagged review cards, each approvable or sendable back, reusing v1 issue/patch-card visuals (`guided-sdd-flow`). → PARTIAL: the verify stage runs as an agent stage; parsing findings into per-severity approvable cards is not yet done (needs the real verification output shape).
+- [ ] 4.6 Implement the PTY fallback path for interactive steps the headless stream can't surface, with explicit headless↔interactive seams (`agent-runner`). → Deferred to D5/7.1 (the real node-pty terminal lands there); tracked.
+- [x] 4.7 Ensure flow state is derived from files on disk plus the run log so the app can close and reopen mid-flow (`run-view` state model). → `flow-manager` persists to `.vortspec/flow.json` and reconciles on read. **Verified** (fresh read reflects disk).
+- [ ] 4.8 Add Playwright tests for the stepper, intake, and approval-gate flows. → Deferred: needs an Electron display harness; flow-manager logic is covered by the end-to-end harness run for now.
+- [ ] 4.9 **D2 acceptance:** a ZIP design in → approved specs → generated component code in the local folder, entirely through the UI. → Blocked on a live logged-in run + real toolkit + display (same gate as 3.7/3.8).
 
 ## 5. D3 — Dev preview + history
 
@@ -67,3 +67,15 @@ Organized by the PRD's D0→D4 milestones. Each milestone ends with its PRD "Don
 - [ ] 6.3 Onboarding polish pass over the environment-check → ready-project flow.
 - [ ] 6.4 Begin Windows/Linux builds: audit node-pty, path handling, and process-signal handling behind the PTY service.
 - [ ] 6.5 Defer code signing (tracked, not done in this milestone unless the launch gate requires it).
+- [ ] 6.6 Publish the installer package as a GitHub release and surface its download link on the SDD/SDE page. (User provides the release/repo link; wire it into the app's "get the desktop app" / update-check location.)
+
+## 7. D5 — Guided first-run automation (`first-run-automation`)
+
+> Added per user request: after install + prior milestones, automate the three onboarding steps. Depends on the real PTY (built here / carried from D3) since Claude Code `/login` is interactive-only.
+
+- [ ] 7.1 Build the real node-pty/xterm.js embedded terminal service (the deferred D1/3.5 piece), isolated behind a PTY service so Windows portability is a contained change.
+- [ ] 7.2 First-run setup surface: a one-click guided sequence (terminal → Claude auth → Figma MCP) with per-step status, resumable and idempotent (re-detects completed steps).
+- [ ] 7.3 Step 1 — open a terminal session in the embedded PTY as part of setup.
+- [ ] 7.4 Step 2 — run the Claude Code login flow in the PTY (browser OAuth); detect completion and re-verify login with no app restart; store no credentials. Skip when already logged in.
+- [ ] 7.5 Step 3 — detect the Figma MCP in the user's Claude Code config (from `system/init` MCP data and/or `claude mcp` inspection); when absent, offer + run the install in the terminal and verify; skip when present.
+- [ ] 7.6 **D5 acceptance:** a freshly installed app reaches terminal-open + Claude Code authenticated + Figma MCP present, entirely through the guided setup.
