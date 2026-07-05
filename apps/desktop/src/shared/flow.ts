@@ -7,7 +7,14 @@ import { z } from "zod";
  * always derivable from disk and survives closing/reopening the app.
  */
 
-export const stageKindSchema = z.enum(["source", "input", "intake", "agent", "verify"]);
+export const stageKindSchema = z.enum([
+  "source",
+  "components",
+  "input",
+  "intake",
+  "agent",
+  "verify",
+]);
 export type StageKind = z.infer<typeof stageKindSchema>;
 
 export const stageStatusSchema = z.enum([
@@ -45,6 +52,17 @@ export const stageStateSchema = z.object({
 });
 export type StageState = z.infer<typeof stageStateSchema>;
 
+/** A component detected in the design source, written to `.sdd-de/components.json`. */
+export const detectedComponentSchema = z.object({
+  name: z.string(),
+  level: z.enum(["atom", "molecule", "organism"]).optional(),
+  description: z.string().optional(),
+});
+export type DetectedComponent = z.infer<typeof detectedComponentSchema>;
+export const detectedComponentsSchema = z.array(detectedComponentSchema);
+
+export const COMPONENTS_MANIFEST = ".sdd-de/components.json";
+
 export const flowStateSchema = z.object({
   currentStageId: z.string(),
   stages: z.array(stageStateSchema),
@@ -69,22 +87,30 @@ export const DEFAULT_FLOW: StageDef[] = [
     id: "design-system",
     title: "Design system",
     summary:
-      "Connect to your configured design source (e.g. the Figma file) and generate design tokens + every component in your framework and language.",
+      "Connect to your configured design source (e.g. the Figma file), extract design tokens + variables, and detect every component — no brief needed.",
     kind: "source",
     gated: true,
-    artifactGlob: "-component-spec.md",
+    artifact: COMPONENTS_MANIFEST,
     promptTemplate:
       "Read .sdd-de/project.yaml for `design_source` and the project configuration " +
-      "(framework, language, token_file, component_dir). Connect to the configured source and " +
-      "build the design system — do NOT ask for a brief; the design source is the input.\n\n" +
+      "(framework, language, token_file, component_dir). Connect to the configured source — do NOT " +
+      "ask for a brief; the design source is the input.\n\n" +
       "For `design_source: figma`, use the Figma MCP to read the file at `figma_file_url` and the " +
       "variable collection named `figma_token_collection`.\n\n" +
       "1. Extract every design token and variable from the source into the configured `token_file`.\n" +
-      "2. Generate every component in the design system into `component_dir` as components in the " +
-      "configured framework and language, using ONLY those tokens (build tokens → atoms → molecules " +
-      "→ organisms), and write a component spec (`specs/[component]/[component]-component-spec.md`) " +
-      "for each.\n\n" +
-      "Follow the SDD-DE /enrich-brief and /generate-artifacts skills for the design_source branch.",
+      "2. Detect every component in the design system and write `.sdd-de/components.json` — a JSON " +
+      "array of objects `{ \"name\": string, \"level\": \"atom\"|\"molecule\"|\"organism\", " +
+      "\"description\": string }`, ordered tokens → atoms → molecules → organisms.\n\n" +
+      "Do NOT implement the components yet — this stage only extracts tokens and detects the inventory.",
+    allowedTools: ["Read", "Write", "Edit"],
+  },
+  {
+    id: "components",
+    title: "Components",
+    summary:
+      "Choose to build every detected component at once, or one by one. Each is generated in your framework and language using the extracted tokens.",
+    kind: "components",
+    gated: true,
     allowedTools: ["Read", "Write", "Edit", "Bash"],
   },
   {

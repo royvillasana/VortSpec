@@ -51,9 +51,13 @@ export default function App(): React.JSX.Element {
       <TopBar
         view={view}
         coreReady={coreReady}
+        breadcrumb={setupProject?.name ?? activeProject?.name ?? null}
         onNavigate={(v) => {
           setView(v);
-          if (v === "dashboard") setActiveProject(null);
+          if (v === "dashboard") {
+            setActiveProject(null);
+            setSetupProject(null);
+          }
         }}
       />
       <main className="flex-1">
@@ -97,59 +101,56 @@ function TopBar({
   view,
   coreReady,
   onNavigate,
+  breadcrumb,
 }: {
   view: View;
   coreReady: boolean;
   onNavigate: (v: View) => void;
+  breadcrumb?: string | null;
 }): React.JSX.Element {
   return (
     <header
-      className="flex h-12 shrink-0 items-center justify-between border-b border-vs-border-default bg-vs-bg-surface px-4"
+      className="flex h-12 shrink-0 items-center justify-between border-b border-vs-border-default px-6"
       style={{ WebkitAppRegion: "drag" } as React.CSSProperties}
     >
-      <div className="flex items-center gap-2 pl-16">
-        <span className="grid h-6 w-6 place-items-center rounded-md bg-vs-accent-muted text-xs font-semibold text-vs-accent">
-          V
-        </span>
-        <span className="text-sm font-semibold">VortSpec</span>
-      </div>
-      <nav
-        className="flex items-center gap-1 text-xs"
+      <div
+        className="flex items-center gap-2 pl-16 text-[13px]"
         style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
       >
-        <NavButton active={view === "env"} onClick={() => onNavigate("env")}>
+        <span className="grid h-[18px] w-[18px] place-items-center rounded-[5px] bg-vs-accent font-mono text-[10px] font-medium text-vs-bg-primary">
+          V
+        </span>
+        <button
+          onClick={() => onNavigate("dashboard")}
+          className="font-semibold tracking-[-0.01em] text-vs-text-primary hover:underline"
+        >
+          VortSpec
+        </button>
+        {breadcrumb && (
+          <>
+            <span className="text-vs-text-muted">/</span>
+            <span className="max-w-[280px] truncate text-vs-text-secondary">{breadcrumb}</span>
+          </>
+        )}
+      </div>
+      <div
+        className="flex items-center gap-3 text-xs"
+        style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
+      >
+        <button
+          onClick={() => onNavigate("env")}
+          title="Environment"
+          className="flex items-center gap-1.5 rounded-md px-2 py-1 text-vs-text-secondary transition-colors hover:text-vs-text-primary"
+        >
           <span
-            className={`mr-1.5 inline-block h-1.5 w-1.5 rounded-full ${coreReady ? "bg-vs-success" : "bg-vs-warning"}`}
+            className={`inline-block h-1.5 w-1.5 rounded-full ${coreReady ? "bg-vs-success" : "bg-vs-warning"}`}
           />
-          Environment
-        </NavButton>
-        <NavButton active={view === "dashboard"} onClick={() => onNavigate("dashboard")}>
-          Projects
-        </NavButton>
-      </nav>
+          {view === "env" ? "Environment" : "Ready"}
+        </button>
+        <span className="grid h-7 w-7 place-items-center rounded-full border border-vs-border-strong bg-vs-bg-elevated text-[11px] font-medium text-vs-text-secondary">
+          You
+        </span>
+      </div>
     </header>
-  );
-}
-
-function NavButton({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}): React.JSX.Element {
-  return (
-    <button
-      onClick={onClick}
-      className={`flex items-center rounded-md px-2.5 py-1 transition-colors ${
-        active
-          ? "bg-vs-bg-elevated text-vs-text-primary"
-          : "text-vs-text-secondary hover:text-vs-text-primary"
-      }`}
-    >
-      {children}
-    </button>
   );
 }

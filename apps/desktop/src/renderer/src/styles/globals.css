@@ -74,6 +74,9 @@
 }
 
 :root {
+  --font-geist-sans: "Geist Variable", system-ui, -apple-system, sans-serif;
+  --font-geist-mono: "Geist Mono Variable", ui-monospace, "SF Mono", monospace;
+
   --background: #0B0C0E;
   --foreground: #E7E9EC;
   --card: #141518;
@@ -117,6 +120,9 @@
     @apply bg-vs-bg-primary text-vs-text-primary;
     margin: 0;
     padding: 0;
+    font-size: 13px;
+    letter-spacing: -0.006em;
+    -webkit-font-smoothing: antialiased;
   }
   html {
     @apply font-sans;
