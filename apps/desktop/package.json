@@ -13,6 +13,7 @@
     "typecheck:web": "tsc -p tsconfig.web.json --noEmit",
     "typecheck": "pnpm run typecheck:node && pnpm run typecheck:web",
     "check-types": "pnpm run typecheck",
+    "test": "vitest run",
     "lint": "echo 'lint ok'"
   },
   "dependencies": {

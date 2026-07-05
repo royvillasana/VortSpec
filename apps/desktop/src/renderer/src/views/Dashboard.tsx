@@ -11,9 +11,11 @@ import { Button, Card } from "../components/ui";
 export function Dashboard({
   projects,
   onProjects,
+  onOpenProject,
 }: {
   projects: Project[];
   onProjects: (p: Project[]) => void;
+  onOpenProject: (project: Project) => void;
 }): React.JSX.Element {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -102,8 +104,8 @@ export function Dashboard({
                   <Button variant="ghost" onClick={() => void api.openFolder(project.path)}>
                     Open folder
                   </Button>
-                  <Button variant="default" disabled title="Guided flow arrives in D1">
-                    Open flow
+                  <Button variant="primary" onClick={() => onOpenProject(project)}>
+                    Run a step
                   </Button>
                 </div>
               </Card>

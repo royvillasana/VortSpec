@@ -1468,8 +1468,8 @@ function requireReactDomClient_production() {
     0 === (nextRetryLane & 62914560) && (nextRetryLane = 4194304);
     return lane;
   }
-  function createLaneMap(initial) {
-    for (var laneMap = [], i = 0; 31 > i; i++) laneMap.push(initial);
+  function createLaneMap(initial2) {
+    for (var laneMap = [], i = 0; 31 > i; i++) laneMap.push(initial2);
     return laneMap;
   }
   function markRootUpdated$1(root2, updateLane) {
@@ -12632,7 +12632,8 @@ function patchCheck(report, id, patch) {
 }
 function Dashboard({
   projects,
-  onProjects
+  onProjects,
+  onOpenProject
 }) {
   const [busy, setBusy] = reactExports.useState(false);
   const [error, setError] = reactExports.useState(null);
@@ -12686,9 +12687,233 @@ function Dashboard({
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex shrink-0 items-center gap-2", children: [
         !project.toolkit.present && /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { onClick: () => void installToolkit(project), children: "Install toolkit" }),
         /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "ghost", onClick: () => void api.openFolder(project.path), children: "Open folder" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "default", disabled: true, title: "Guided flow arrives in D1", children: "Open flow" })
+        /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "primary", onClick: () => onOpenProject(project), children: "Run a step" })
       ] })
     ] }) }, project.id)) })
+  ] });
+}
+const initial = {
+  status: "idle",
+  streamingText: "",
+  activity: [],
+  files: [],
+  raw: [],
+  mcpErrors: []
+};
+let activitySeq = 0;
+function reduce(state, action) {
+  switch (action.type) {
+    case "reset":
+      return initial;
+    case "start":
+      return { ...initial, status: "running" };
+    case "raw":
+      return { ...state, raw: [...state.raw, action.line] };
+    case "event":
+      return applyEvent(state, action.event);
+  }
+}
+function pushActivity(state, label, tone) {
+  return {
+    ...state,
+    activity: [...state.activity, { key: `a${activitySeq++}`, label, tone }]
+  };
+}
+function applyEvent(state, event) {
+  switch (event.kind) {
+    case "system-init":
+      return { ...state, model: event.model, mcpErrors: event.mcpErrors };
+    case "text-delta":
+      return { ...state, streamingText: state.streamingText + event.text };
+    case "assistant-text":
+      return {
+        ...state,
+        streamingText: state.streamingText + (state.streamingText ? "\n" : "") + event.text
+      };
+    case "tool-use": {
+      const label = event.path ? `${event.name} · ${event.path}` : event.name;
+      const files = event.path && !state.files.includes(event.path) ? [...state.files, event.path] : state.files;
+      return pushActivity({ ...state, files }, label, "tool");
+    }
+    case "tool-result":
+      return event.isError ? pushActivity(state, "Tool reported an error", "error") : state;
+    case "api-retry":
+      return pushActivity(
+        state,
+        `Retrying (${event.errorCategory}) — attempt ${event.attempt}/${event.maxRetries}`,
+        "retry"
+      );
+    case "notice":
+      return pushActivity(state, event.text, "notice");
+    case "result":
+      return {
+        ...state,
+        status: event.isError ? "error" : "done",
+        result: { isError: event.isError, text: event.text, costUsd: event.costUsd }
+      };
+    case "error":
+      return pushActivity({ ...state, status: "error" }, event.message, "error");
+    case "exit":
+      return state.status === "running" ? { ...state, status: event.code === null ? "canceled" : "done" } : state;
+  }
+}
+const DEFAULT_PROMPT = "Run the SDD-DE intake and enrich-brief step for this project: read the intake answers, and produce an enriched brief as a markdown file. Ask for nothing; work from the files present.";
+function RunView({
+  project,
+  onBack
+}) {
+  const [model, dispatch] = reactExports.useReducer(reduce, initial);
+  const [prompt, setPrompt] = reactExports.useState(DEFAULT_PROMPT);
+  const [showRaw, setShowRaw] = reactExports.useState(false);
+  const runIdRef = reactExports.useRef(null);
+  reactExports.useEffect(() => {
+    const offEvent = api.onAgentEvent(({ runId, event }) => {
+      if (runId === runIdRef.current) dispatch({ type: "event", event });
+    });
+    const offRaw = api.onAgentRaw(({ runId, line }) => {
+      if (runId === runIdRef.current) dispatch({ type: "raw", line });
+    });
+    return () => {
+      offEvent();
+      offRaw();
+    };
+  }, []);
+  async function start() {
+    dispatch({ type: "start" });
+    const { runId } = await api.startRun({
+      prompt,
+      cwd: project.path,
+      allowedTools: ["Read", "Write", "Edit"]
+    });
+    runIdRef.current = runId;
+  }
+  async function cancel() {
+    if (runIdRef.current) await api.cancelRun(runIdRef.current);
+  }
+  const running = model.status === "running";
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "mx-auto flex w-full max-w-3xl flex-col gap-4 px-6 py-8", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("header", { className: "flex items-center justify-between", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "ghost", onClick: onBack, children: "← Projects" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("h2", { className: "text-sm font-semibold text-vs-text-primary", children: project.name }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-xs text-vs-text-muted", children: "Run a step" })
+        ] })
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          Button,
+          {
+            variant: "ghost",
+            onClick: () => setShowRaw((v) => !v),
+            title: "Toggle the raw Claude Code output",
+            children: showRaw ? "Friendly view" : "Terminal"
+          }
+        ),
+        running ? /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "default", onClick: () => void cancel(), children: "Cancel" }) : /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "primary", onClick: () => void start(), children: model.status === "idle" ? "Start" : "Run again" })
+      ] })
+    ] }),
+    model.status === "idle" && /* @__PURE__ */ jsxRuntimeExports.jsxs(Card, { className: "p-3", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("label", { className: "mb-1 block text-xs text-vs-text-muted", children: "Step prompt" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(
+        "textarea",
+        {
+          value: prompt,
+          onChange: (e) => setPrompt(e.target.value),
+          rows: 3,
+          className: "w-full resize-y rounded-md border border-vs-border-default bg-vs-bg-primary px-3 py-2 text-sm text-vs-text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-vs-accent-subtle"
+        }
+      )
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx(StatusBar, { model }),
+    showRaw ? /* @__PURE__ */ jsxRuntimeExports.jsx(RawTerminal, { lines: model.raw }) : /* @__PURE__ */ jsxRuntimeExports.jsx(FriendlyView, { model, running })
+  ] });
+}
+function StatusBar({ model }) {
+  const label = {
+    idle: "Ready",
+    running: "Running",
+    done: "Completed",
+    error: "Failed",
+    canceled: "Canceled"
+  };
+  const tone = {
+    idle: "text-vs-text-muted",
+    running: "text-vs-warning",
+    done: "text-vs-success",
+    error: "text-vs-error",
+    canceled: "text-vs-text-secondary"
+  };
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2 text-xs", children: [
+    model.status === "running" && /* @__PURE__ */ jsxRuntimeExports.jsx(Spinner, {}),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: tone[model.status], children: label[model.status] }),
+    model.model && /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-vs-text-muted", children: [
+      "· ",
+      model.model
+    ] }),
+    model.result?.costUsd !== void 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-vs-text-muted", children: [
+      "· $",
+      model.result.costUsd.toFixed(4)
+    ] })
+  ] });
+}
+function FriendlyView({
+  model,
+  running
+}) {
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col gap-3", children: [
+    model.mcpErrors.length > 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "rounded-md border border-vs-warning-border bg-vs-warning-muted px-3 py-2 text-xs text-vs-warning", children: [
+      "MCP issue: ",
+      model.mcpErrors.join("; ")
+    ] }),
+    model.files.length > 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs(Card, { className: "p-3", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "mb-1 text-xs font-medium text-vs-text-secondary", children: "Files touched" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("ul", { className: "flex flex-col gap-0.5", children: model.files.map((f) => /* @__PURE__ */ jsxRuntimeExports.jsx("li", { className: "font-mono text-xs text-vs-text-primary", children: f }, f)) })
+    ] }),
+    (model.streamingText || running) && /* @__PURE__ */ jsxRuntimeExports.jsxs(Card, { className: "p-3", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "mb-1 text-xs font-medium text-vs-text-secondary", children: "Assistant" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "whitespace-pre-wrap text-sm text-vs-text-primary", children: [
+        model.streamingText,
+        running && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-vs-text-muted", children: " ▍" })
+      ] })
+    ] }),
+    model.activity.length > 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs(Card, { className: "p-3", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "mb-1 text-xs font-medium text-vs-text-secondary", children: "Activity" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("ul", { className: "flex flex-col gap-1", children: model.activity.map((a) => /* @__PURE__ */ jsxRuntimeExports.jsxs("li", { className: "text-xs text-vs-text-secondary", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: activityTone(a.tone), children: "•" }),
+        " ",
+        a.label
+      ] }, a.key)) })
+    ] }),
+    model.result && /* @__PURE__ */ jsxRuntimeExports.jsx(
+      "div",
+      {
+        className: `rounded-md border px-3 py-2 text-sm ${model.result.isError ? "border-vs-error/40 bg-vs-error/10 text-vs-error" : "border-vs-success-border bg-vs-success-muted text-vs-success"}`,
+        children: model.result.text ?? (model.result.isError ? "Run failed." : "Run complete.")
+      }
+    )
+  ] });
+}
+function activityTone(tone) {
+  switch (tone) {
+    case "tool":
+      return "text-vs-accent";
+    case "retry":
+      return "text-vs-warning";
+    case "error":
+      return "text-vs-error";
+    default:
+      return "text-vs-text-muted";
+  }
+}
+function RawTerminal({ lines }) {
+  const endRef = reactExports.useRef(null);
+  reactExports.useEffect(() => {
+    endRef.current?.scrollIntoView();
+  }, [lines.length]);
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "h-96 overflow-auto rounded-md border border-vs-border-default bg-black/40 p-3", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsx("pre", { className: "font-mono text-[11px] leading-relaxed text-vs-text-secondary", children: lines.length === 0 ? "Raw Claude Code output will appear here…" : lines.join("\n") }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { ref: endRef })
   ] });
 }
 const CORE_IDS = ["node", "git", "claude-install"];
@@ -12702,6 +12927,7 @@ function App() {
   const [report, setReport] = reactExports.useState(null);
   const [projects, setProjects] = reactExports.useState([]);
   const [view, setView] = reactExports.useState("env");
+  const [activeProject, setActiveProject] = reactExports.useState(null);
   const [loading, setLoading] = reactExports.useState(true);
   reactExports.useEffect(() => {
     void (async () => {
@@ -12722,7 +12948,10 @@ function App() {
       {
         view,
         coreReady,
-        onNavigate: (v) => setView(v)
+        onNavigate: (v) => {
+          setView(v);
+          if (v === "dashboard") setActiveProject(null);
+        }
       }
     ),
     /* @__PURE__ */ jsxRuntimeExports.jsx("main", { className: "flex-1", children: loading || !report ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex h-full items-center justify-center gap-2 py-24 text-vs-text-secondary", children: [
@@ -12736,7 +12965,14 @@ function App() {
         coreReady,
         onContinue: () => setView("dashboard")
       }
-    ) : /* @__PURE__ */ jsxRuntimeExports.jsx(Dashboard, { projects, onProjects: setProjects }) })
+    ) : activeProject ? /* @__PURE__ */ jsxRuntimeExports.jsx(RunView, { project: activeProject, onBack: () => setActiveProject(null) }) : /* @__PURE__ */ jsxRuntimeExports.jsx(
+      Dashboard,
+      {
+        projects,
+        onProjects: setProjects,
+        onOpenProject: setActiveProject
+      }
+    ) })
   ] });
 }
 function TopBar({

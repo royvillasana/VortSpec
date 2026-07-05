@@ -3,6 +3,7 @@ import type { EnvReport, Project } from "../../shared/ipc";
 import { api } from "./lib/api";
 import { EnvironmentCheck } from "./views/EnvironmentCheck";
 import { Dashboard } from "./views/Dashboard";
+import { RunView } from "./views/RunView";
 import { Spinner } from "./components/ui";
 
 type View = "env" | "dashboard";
@@ -20,6 +21,7 @@ export default function App(): React.JSX.Element {
   const [report, setReport] = useState<EnvReport | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
   const [view, setView] = useState<View>("env");
+  const [activeProject, setActiveProject] = useState<Project | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -43,7 +45,10 @@ export default function App(): React.JSX.Element {
       <TopBar
         view={view}
         coreReady={coreReady}
-        onNavigate={(v) => setView(v)}
+        onNavigate={(v) => {
+          setView(v);
+          if (v === "dashboard") setActiveProject(null);
+        }}
       />
       <main className="flex-1">
         {loading || !report ? (
@@ -57,8 +62,14 @@ export default function App(): React.JSX.Element {
             coreReady={coreReady}
             onContinue={() => setView("dashboard")}
           />
+        ) : activeProject ? (
+          <RunView project={activeProject} onBack={() => setActiveProject(null)} />
         ) : (
-          <Dashboard projects={projects} onProjects={setProjects} />
+          <Dashboard
+            projects={projects}
+            onProjects={setProjects}
+            onOpenProject={setActiveProject}
+          />
         )}
       </main>
     </div>

@@ -1,4 +1,13 @@
 import { z } from "zod";
+import { agentRunOptionsSchema } from "./run-events";
+
+// Re-exported so renderer code can import run + IPC types from one module.
+export type {
+  RunEvent,
+  AgentRunOptions,
+  AgentEventEnvelope,
+  AgentRawEnvelope,
+} from "./run-events";
 
 /**
  * The typed, zod-validated contract between the main and renderer processes.
@@ -88,6 +97,12 @@ export const ipcContract = {
 
   "toolkit:status": { request: z.string(), response: toolkitStatusSchema },
   "toolkit:install": { request: z.string(), response: toolkitStatusSchema },
+
+  "agent:startRun": {
+    request: agentRunOptionsSchema,
+    response: z.object({ runId: z.string() }),
+  },
+  "agent:cancelRun": { request: z.string(), response: z.void() },
 } as const;
 
 export type IpcContract = typeof ipcContract;

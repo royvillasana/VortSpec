@@ -5,11 +5,69 @@ import { z } from "zod";
 import { spawn } from "node:child_process";
 import { join, basename } from "node:path";
 import { readFile, mkdir, writeFile } from "node:fs/promises";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
+import { EventEmitter } from "node:events";
 import __cjs_mod__ from "node:module";
 const __filename = import.meta.filename;
 const __dirname = import.meta.dirname;
 const require2 = __cjs_mod__.createRequire(import.meta.url);
+const runEventSchema = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("system-init"),
+    sessionId: z.string().optional(),
+    model: z.string().optional(),
+    tools: z.array(z.string()),
+    mcpServers: z.array(z.string()),
+    mcpErrors: z.array(z.string())
+  }),
+  z.object({ kind: z.literal("text-delta"), text: z.string() }),
+  z.object({ kind: z.literal("assistant-text"), text: z.string() }),
+  z.object({
+    kind: z.literal("tool-use"),
+    id: z.string(),
+    name: z.string(),
+    path: z.string().optional()
+  }),
+  z.object({
+    kind: z.literal("tool-result"),
+    toolUseId: z.string(),
+    isError: z.boolean()
+  }),
+  z.object({
+    kind: z.literal("api-retry"),
+    attempt: z.number(),
+    maxRetries: z.number(),
+    errorCategory: z.string(),
+    retryDelayMs: z.number().optional()
+  }),
+  z.object({ kind: z.literal("notice"), text: z.string() }),
+  z.object({
+    kind: z.literal("result"),
+    isError: z.boolean(),
+    text: z.string().optional(),
+    costUsd: z.number().optional(),
+    sessionId: z.string().optional()
+  }),
+  z.object({ kind: z.literal("error"), message: z.string() }),
+  z.object({ kind: z.literal("exit"), code: z.number().nullable() })
+]);
+const agentRunOptionsSchema = z.object({
+  prompt: z.string().min(1),
+  cwd: z.string().min(1),
+  appendSystemPrompt: z.string().optional(),
+  allowedTools: z.array(z.string()).optional(),
+  resumeSessionId: z.string().optional()
+});
+const AGENT_EVENT_CHANNEL = "agent:event";
+const AGENT_RAW_CHANNEL = "agent:raw";
+z.object({
+  runId: z.string(),
+  event: runEventSchema
+});
+z.object({
+  runId: z.string(),
+  line: z.string()
+});
 const checkStatusSchema = z.enum(["pass", "fail", "unknown", "checking"]);
 const fixActionSchema = z.object({
   /** install-link → open an external URL; open-login → run login in the PTY; verify → re-run the check */
@@ -64,7 +122,12 @@ const ipcContract = {
   "workspace:openFolder": { request: z.string(), response: z.void() },
   "workspace:refreshProject": { request: z.string(), response: projectSchema },
   "toolkit:status": { request: z.string(), response: toolkitStatusSchema },
-  "toolkit:install": { request: z.string(), response: toolkitStatusSchema }
+  "toolkit:install": { request: z.string(), response: toolkitStatusSchema },
+  "agent:startRun": {
+    request: agentRunOptionsSchema,
+    response: z.object({ runId: z.string() })
+  },
+  "agent:cancelRun": { request: z.string(), response: z.void() }
 };
 function execFileSafe(command, args, opts = {}) {
   return new Promise((resolve) => {
@@ -348,6 +411,246 @@ async function refreshProject(path) {
 async function openFolder(path) {
   await shell.openPath(path);
 }
+function truncate(s, n = 200) {
+  return s.length > n ? `${s.slice(0, n)}…` : s;
+}
+function toolPath(input) {
+  if (typeof input !== "object" || input === null) return void 0;
+  const record = input;
+  for (const key of ["file_path", "path", "filePath", "notebook_path"]) {
+    const value = record[key];
+    if (typeof value === "string" && value.length > 0) return value;
+  }
+  return void 0;
+}
+function mapAssistant(message) {
+  if (typeof message !== "object" || message === null) return [];
+  const content = message.content;
+  if (!Array.isArray(content)) return [];
+  const events = [];
+  for (const block of content) {
+    if (typeof block !== "object" || block === null) continue;
+    const b = block;
+    if (b.type === "text" && typeof b.text === "string" && b.text.trim()) {
+      events.push({ kind: "assistant-text", text: b.text });
+    } else if (b.type === "tool_use") {
+      events.push({
+        kind: "tool-use",
+        id: typeof b.id === "string" ? b.id : "",
+        name: typeof b.name === "string" ? b.name : "tool",
+        path: toolPath(b.input)
+      });
+    }
+  }
+  return events;
+}
+function mapToolResults(message) {
+  if (typeof message !== "object" || message === null) return [];
+  const content = message.content;
+  if (!Array.isArray(content)) return [];
+  const events = [];
+  for (const block of content) {
+    if (typeof block !== "object" || block === null) continue;
+    const b = block;
+    if (b.type === "tool_result") {
+      events.push({
+        kind: "tool-result",
+        toolUseId: typeof b.tool_use_id === "string" ? b.tool_use_id : "",
+        isError: b.is_error === true
+      });
+    }
+  }
+  return events;
+}
+function mapObject(obj) {
+  switch (obj.type) {
+    case "system": {
+      if (obj.subtype === "init") {
+        const mcp = Array.isArray(obj.mcp_servers) ? obj.mcp_servers : [];
+        const pluginErrors = Array.isArray(obj.plugin_errors) ? obj.plugin_errors : [];
+        return [
+          {
+            kind: "system-init",
+            sessionId: typeof obj.session_id === "string" ? obj.session_id : void 0,
+            model: typeof obj.model === "string" ? obj.model : void 0,
+            tools: (Array.isArray(obj.tools) ? obj.tools : []).map(String),
+            mcpServers: mcp.map(
+              (m) => typeof m === "object" && m !== null ? String(m.name ?? "") : String(m)
+            ).filter(Boolean),
+            mcpErrors: pluginErrors.map(
+              (e) => typeof e === "object" && e !== null ? String(e.message ?? "plugin error") : String(e)
+            )
+          }
+        ];
+      }
+      if (obj.subtype === "api_retry") {
+        return [
+          {
+            kind: "api-retry",
+            attempt: Number(obj.attempt ?? 0),
+            maxRetries: Number(obj.max_retries ?? 0),
+            errorCategory: typeof obj.error === "string" ? obj.error : "unknown",
+            retryDelayMs: typeof obj.retry_delay_ms === "number" ? obj.retry_delay_ms : void 0
+          }
+        ];
+      }
+      if (obj.subtype === "plugin_install") {
+        return [
+          {
+            kind: "notice",
+            text: `Plugin ${String(obj.name ?? "")} ${String(obj.status ?? "")}`.trim()
+          }
+        ];
+      }
+      return [];
+    }
+    case "assistant":
+      return mapAssistant(obj.message);
+    case "user":
+      return mapToolResults(obj.message);
+    case "stream_event": {
+      const event = obj.event;
+      const delta = event?.delta;
+      if (delta?.type === "text_delta" && typeof delta.text === "string") {
+        return [{ kind: "text-delta", text: delta.text }];
+      }
+      return [];
+    }
+    case "result":
+      return [
+        {
+          kind: "result",
+          isError: obj.is_error === true || obj.subtype === "error",
+          text: typeof obj.result === "string" ? obj.result : void 0,
+          costUsd: typeof obj.total_cost_usd === "number" ? obj.total_cost_usd : void 0,
+          sessionId: typeof obj.session_id === "string" ? obj.session_id : void 0
+        }
+      ];
+    default:
+      return [];
+  }
+}
+function parseStreamLine(line) {
+  const trimmed = line.trim();
+  if (!trimmed) return [];
+  let obj;
+  try {
+    obj = JSON.parse(trimmed);
+  } catch {
+    return [{ kind: "error", message: `Unparseable stream line: ${truncate(trimmed)}` }];
+  }
+  if (typeof obj !== "object" || obj === null) return [];
+  return mapObject(obj);
+}
+class AgentAdapter extends EventEmitter {
+  child = null;
+  stdoutBuffer = "";
+  canceled = false;
+  start(opts) {
+    const args = [
+      "-p",
+      opts.prompt,
+      "--output-format",
+      "stream-json",
+      "--verbose",
+      "--include-partial-messages"
+    ];
+    if (opts.appendSystemPrompt) {
+      args.push("--append-system-prompt", opts.appendSystemPrompt);
+    }
+    if (opts.allowedTools && opts.allowedTools.length > 0) {
+      args.push("--allowedTools", opts.allowedTools.join(","));
+    }
+    if (opts.resumeSessionId) {
+      args.push("--resume", opts.resumeSessionId);
+    }
+    this.child = spawn("claude", args, {
+      cwd: opts.cwd,
+      env: process.env,
+      shell: false
+    });
+    this.child.stdout?.on("data", (chunk) => this.onStdout(chunk.toString()));
+    this.child.stderr?.on("data", (chunk) => {
+      const text = chunk.toString().trim();
+      if (text) this.emitEvent({ kind: "notice", text });
+    });
+    this.child.on("error", (err) => {
+      this.emitEvent({
+        kind: "error",
+        message: `Could not start Claude Code: ${err.message}. Is it installed and on PATH?`
+      });
+    });
+    this.child.on("close", (code) => {
+      this.flush();
+      if (!this.canceled) this.emitEvent({ kind: "exit", code });
+      this.child = null;
+    });
+  }
+  cancel() {
+    if (this.canceled) return;
+    this.canceled = true;
+    const child = this.child;
+    if (child) {
+      child.kill("SIGTERM");
+      setTimeout(() => {
+        if (!child.killed) child.kill("SIGKILL");
+      }, 2e3);
+    }
+    this.emitEvent({ kind: "notice", text: "Run canceled." });
+    this.emitEvent({ kind: "exit", code: null });
+  }
+  onStdout(chunk) {
+    this.stdoutBuffer += chunk;
+    let newlineIndex = this.stdoutBuffer.indexOf("\n");
+    while (newlineIndex >= 0) {
+      const line = this.stdoutBuffer.slice(0, newlineIndex);
+      this.stdoutBuffer = this.stdoutBuffer.slice(newlineIndex + 1);
+      this.dispatch(line);
+      newlineIndex = this.stdoutBuffer.indexOf("\n");
+    }
+  }
+  flush() {
+    if (this.stdoutBuffer.trim()) {
+      this.dispatch(this.stdoutBuffer);
+    }
+    this.stdoutBuffer = "";
+  }
+  dispatch(line) {
+    if (line.trim()) this.emit("raw", line);
+    for (const event of parseStreamLine(line)) {
+      this.emitEvent(event);
+    }
+  }
+  emitEvent(event) {
+    this.emit("event", event);
+  }
+}
+const runs = /* @__PURE__ */ new Map();
+function startRun(sender, opts) {
+  const runId = randomUUID();
+  const adapter = new AgentAdapter();
+  runs.set(runId, adapter);
+  adapter.on("event", (raw) => {
+    const parsed = runEventSchema.safeParse(raw);
+    const event = parsed.success ? parsed.data : { kind: "error", message: "Invalid run event dropped at the boundary" };
+    if (!sender.isDestroyed()) {
+      sender.send(AGENT_EVENT_CHANNEL, { runId, event });
+    }
+    if (event.kind === "exit") {
+      runs.delete(runId);
+    }
+  });
+  adapter.on("raw", (line) => {
+    if (!sender.isDestroyed()) {
+      sender.send(AGENT_RAW_CHANNEL, { runId, line });
+    }
+  });
+  adapter.start(opts);
+  return { runId };
+}
+function cancelRun(runId) {
+  runs.get(runId)?.cancel();
+}
 const handlers = {
   "system:isElectron": () => true,
   "system:getVersion": () => app.getVersion(),
@@ -359,14 +662,19 @@ const handlers = {
   "workspace:openFolder": ((path) => openFolder(path)),
   "workspace:refreshProject": ((path) => refreshProject(path)),
   "toolkit:status": ((path) => getToolkitStatus(path)),
-  "toolkit:install": ((path) => installToolkit(path))
+  "toolkit:install": ((path) => installToolkit(path)),
+  "agent:startRun": ((opts, sender) => startRun(sender, opts)),
+  "agent:cancelRun": ((runId) => {
+    cancelRun(runId);
+    return void 0;
+  })
 };
 function registerIpc() {
   Object.keys(ipcContract).forEach((channel) => {
     const contract = ipcContract[channel];
-    ipcMain.handle(channel, async (_event, rawRequest) => {
+    ipcMain.handle(channel, async (event, rawRequest) => {
       const request = contract.request.parse(rawRequest);
-      const result = await handlers[channel](request);
+      const result = await handlers[channel](request, event.sender);
       return contract.response.parse(result);
     });
   });

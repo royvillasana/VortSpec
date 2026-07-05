@@ -1,0 +1,10 @@
+{"type":"system","subtype":"init","session_id":"sess_abc","model":"claude-opus-4","tools":["Read","Edit","Write","Bash"],"mcp_servers":[{"name":"figma","status":"connected"}],"plugin_errors":[]}
+{"type":"stream_event","event":{"type":"content_block_delta","delta":{"type":"text_delta","text":"Reading the "}}}
+{"type":"stream_event","event":{"type":"content_block_delta","delta":{"type":"text_delta","text":"intake answers…"}}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"I'll enrich the brief from the intake answers."},{"type":"tool_use","id":"tu_1","name":"Read","input":{"file_path":"intake.md"}}]},"session_id":"sess_abc"}
+{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tu_1","is_error":false}]}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"tu_2","name":"Write","input":{"file_path":"brief.enriched.md"}}]}}
+{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tu_2","is_error":false}]}}
+{"type":"system","subtype":"api_retry","attempt":1,"max_retries":3,"retry_delay_ms":2000,"error":"overloaded"}
+{not valid json
+{"type":"result","subtype":"success","is_error":false,"result":"Enriched brief written to brief.enriched.md","session_id":"sess_abc","total_cost_usd":0.0123}

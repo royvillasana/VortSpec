@@ -31,14 +31,14 @@ Organized by the PRD's D0→D4 milestones. Each milestone ends with its PRD "Don
 
 ## 3. D1 — First wrapped run (AgentAdapter + run view)
 
-- [ ] 3.1 Implement the `AgentAdapter` interface as the single owner of Claude Code CLI flags and event shapes; spawn headless with `--output-format stream-json` using arg arrays in the project folder (`agent-runner`).
-- [ ] 3.2 Parse the stream into typed, zod-validated run events (assistant text, tool call, file edit, completion); surface malformed events as adapter errors (`agent-runner`).
-- [ ] 3.3 Add Vitest unit tests for the adapter's event parsing against the recorded transcript fixture from task 0.2 (`agent-runner`).
-- [ ] 3.4 Build the run view: live current task, files created/edited with paths, tool activity, and a friendly log (`run-view`).
-- [ ] 3.5 Wire the node-pty/xterm.js embedded terminal and the friendly↔raw terminal toggle (`run-view`).
-- [ ] 3.6 Implement clean cancel that kills the child process without corrupting flow state (`run-view`).
-- [ ] 3.7 Run one real SDD-DE step (intake + enrich-brief) headless against a project via the adapter.
-- [ ] 3.8 **D1 acceptance:** the intake + enrich-brief step completes end-to-end from the UI, with live progress, working terminal toggle, and working cancel.
+- [x] 3.1 Implement the `AgentAdapter` interface as the single owner of Claude Code CLI flags and event shapes; spawn headless with `--output-format stream-json` using arg arrays in the project folder (`agent-runner`). → `src/main/agent/adapter.ts` (non-bare `claude -p`, arg arrays, line-buffered stdout). **Verified end-to-end** against a fake `claude` binary: spawn→buffer→parse→exit all correct.
+- [x] 3.2 Parse the stream into typed, zod-validated run events (assistant text, tool call, file edit, completion); surface malformed events as adapter errors (`agent-runner`). → `src/main/agent/events.ts` + `src/shared/run-events.ts` (contract); run-manager re-validates every event before it crosses IPC; malformed line → `error` event.
+- [x] 3.3 Add Vitest unit tests for the adapter's event parsing against the recorded transcript fixture from task 0.2 (`agent-runner`). → `src/main/agent/events.test.ts` (8 tests, green). Fixture `__fixtures__/enrich-brief.stream.jsonl` synthesized from the official stream-json docs; replace with a live-recorded transcript when 3.7 runs.
+- [x] 3.4 Build the run view: live current task, files created/edited with paths, tool activity, and a friendly log (`run-view`). → `src/renderer/src/views/RunView.tsx` (streaming text, files-touched, activity log, cost/status).
+- [x] 3.5 Wire the ~~node-pty/xterm.js embedded terminal~~ and the friendly↔raw terminal toggle (`run-view`). → friendly↔raw toggle implemented; raw view shows actual Claude Code stdout. DEVIATION: true node-pty/xterm is deferred to D3 (dev-preview), the first milestone that needs an interactive TTY — headless runs are piped stdout, so a monospace raw panel is the honest representation here.
+- [x] 3.6 Implement clean cancel that kills the child process without corrupting flow state (`run-view`). → `AgentAdapter.cancel()` (SIGTERM→SIGKILL after 2s); run-manager de-registers; renderer keeps derived state.
+- [ ] 3.7 Run one real SDD-DE step (intake + enrich-brief) headless against a project via the adapter. → Plumbing complete and RunView wired; needs a logged-in Claude Code + a project with the SDD-DE toolkit. Run on your Mac and capture the transcript to replace the synthesized fixture.
+- [ ] 3.8 **D1 acceptance:** the intake + enrich-brief step completes end-to-end from the UI, with live progress, working terminal toggle, and working cancel. → Blocked on 3.7 (live login/toolkit + display).
 
 ## 4. D2 — Full guided flow (stepper, intake, gates)
 
