@@ -4,18 +4,20 @@ import { api } from "../lib/api";
 import { Button, Card } from "../components/ui";
 
 /**
- * Project dashboard (US-03). Lists known projects with toolkit version and
- * quick actions. "New project" opens a folder picker. Flow/terminal actions
- * are placeholders until D1.
+ * Project dashboard (US-03). Lists known projects with toolkit status and
+ * quick actions. "New project" picks a folder, then runs the setup wizard
+ * (the CLI's init questions) before the flow can open.
  */
 export function Dashboard({
   projects,
   onProjects,
   onOpenProject,
+  onSetup,
 }: {
   projects: Project[];
   onProjects: (p: Project[]) => void;
   onOpenProject: (project: Project) => void;
+  onSetup: (project: Project) => void;
 }): React.JSX.Element {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -26,24 +28,13 @@ export function Dashboard({
     try {
       const project = await api.pickFolder(false);
       if (!project) return;
-      const next = [project, ...projects.filter((p) => p.path !== project.path)];
-      onProjects(next);
+      onProjects([project, ...projects.filter((p) => p.path !== project.path)]);
+      // New projects go straight to setup (design source + framework questions).
+      if (!project.toolkit.present) onSetup(project);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not add project");
     } finally {
       setBusy(false);
-    }
-  }
-
-  async function installToolkit(project: Project): Promise<void> {
-    setError(null);
-    try {
-      const toolkit = await api.installToolkit(project.path);
-      onProjects(
-        projects.map((p) => (p.path === project.path ? { ...p, toolkit } : p)),
-      );
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Toolkit install failed");
     }
   }
 
@@ -71,7 +62,7 @@ export function Dashboard({
         <Card className="flex flex-col items-center gap-2 px-6 py-14 text-center">
           <p className="text-sm font-medium text-vs-text-primary">No projects yet</p>
           <p className="max-w-xs text-xs text-vs-text-muted">
-            Add a project folder to install the SDD-DE toolkit and start the guided flow.
+            Add a project folder, answer a few setup questions, and start the guided flow.
           </p>
           <Button variant="primary" className="mt-2" onClick={() => void addProject()}>
             Add a project
@@ -94,22 +85,23 @@ export function Dashboard({
                         {project.toolkit.version ? `v${project.toolkit.version}` : "installed"}
                       </>
                     ) : (
-                      <span className="text-vs-warning">Toolkit not installed</span>
+                      <span className="text-vs-warning">Not set up yet</span>
                     )}
                   </p>
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
-                  {!project.toolkit.present && (
-                    <Button onClick={() => void installToolkit(project)}>
-                      Install toolkit
-                    </Button>
-                  )}
                   <Button variant="ghost" onClick={() => void api.openFolder(project.path)}>
                     Open folder
                   </Button>
-                  <Button variant="primary" onClick={() => onOpenProject(project)}>
-                    Open flow
-                  </Button>
+                  {project.toolkit.present ? (
+                    <Button variant="primary" onClick={() => onOpenProject(project)}>
+                      Open flow
+                    </Button>
+                  ) : (
+                    <Button variant="primary" onClick={() => onSetup(project)}>
+                      Set up
+                    </Button>
+                  )}
                 </div>
               </Card>
             </li>

@@ -1,5 +1,11 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from "electron";
-import type { IpcChannel, IpcRequest, IpcResponse, StageStatus } from "../shared/ipc";
+import type {
+  IpcChannel,
+  IpcRequest,
+  IpcResponse,
+  StageStatus,
+  SetupAnswers,
+} from "../shared/ipc";
 import {
   AGENT_EVENT_CHANNEL,
   AGENT_RAW_CHANNEL,
@@ -42,6 +48,8 @@ const api = {
   listProjects: () => invoke("workspace:listProjects"),
   openFolder: (path: string) => invoke("workspace:openFolder", path),
   refreshProject: (path: string) => invoke("workspace:refreshProject", path),
+  createProject: (path: string, answers: SetupAnswers) =>
+    invoke("workspace:createProject", { path, answers }),
 
   toolkitStatus: (path: string) => invoke("toolkit:status", path),
   installToolkit: (path: string) => invoke("toolkit:install", path),

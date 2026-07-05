@@ -75,6 +75,7 @@ const api = {
   listProjects: () => invoke("workspace:listProjects"),
   openFolder: (path) => invoke("workspace:openFolder", path),
   refreshProject: (path) => invoke("workspace:refreshProject", path),
+  createProject: (path, answers) => invoke("workspace:createProject", { path, answers }),
   toolkitStatus: (path) => invoke("toolkit:status", path),
   installToolkit: (path) => invoke("toolkit:install", path),
   startRun: (opts) => invoke("agent:startRun", opts),

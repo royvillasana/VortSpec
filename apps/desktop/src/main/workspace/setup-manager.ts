@@ -1,0 +1,108 @@
+import { createRequire } from "node:module";
+import { dirname, join } from "node:path";
+import {
+  cp,
+  mkdir,
+  writeFile,
+  copyFile,
+  readdir,
+  symlink,
+  readFile,
+  appendFile,
+  access,
+} from "node:fs/promises";
+import { buildProjectYaml, type SetupAnswers } from "../../shared/setup";
+import { refreshProject } from "./workspace-manager";
+import type { Project } from "../../shared/ipc";
+
+/**
+ * Performs the SDD-DE init non-interactively from the GUI wizard answers — the
+ * same file operations as `npx @royvillasana/sdd-de`, sourced from the bundled
+ * `@royvillasana/sdd-de` package (no interactive prompts, no network):
+ *   - copy skills → `.sdd-de/ai-specs/skills/`, docs → `.sdd-de/docs/`
+ *   - write `.sdd-de/project.yaml` from the answers
+ *   - copy CLAUDE.md / AGENTS.md / GEMINI.md / codex.md (if absent)
+ *   - symlink each skill into `.claude/skills/` so Claude Code can invoke it
+ *   - add `.sdd-de/` to `.gitignore`
+ */
+
+const require = createRequire(import.meta.url);
+
+function packageDir(): string {
+  return dirname(require.resolve("@royvillasana/sdd-de/package.json"));
+}
+
+async function exists(path: string): Promise<boolean> {
+  try {
+    await access(path);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function createSkillSymlinks(sourceDir: string, targetDir: string): Promise<void> {
+  if (!(await exists(sourceDir))) return;
+  await mkdir(targetDir, { recursive: true });
+  const entries = await readdir(sourceDir, { withFileTypes: true });
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    const linkPath = join(targetDir, entry.name);
+    const linkTarget = `../../.sdd-de/ai-specs/skills/${entry.name}`;
+    if (!(await exists(linkPath))) {
+      try {
+        await symlink(linkTarget, linkPath);
+      } catch {
+        /* symlink may be unsupported; skills still readable via .sdd-de/ */
+      }
+    }
+  }
+}
+
+export async function createProject(
+  projectPath: string,
+  answers: SetupAnswers,
+): Promise<Project> {
+  const pkgDir = packageDir();
+  const sddeDir = join(projectPath, ".sdd-de");
+
+  // Skills + docs
+  await mkdir(sddeDir, { recursive: true });
+  await cp(join(pkgDir, "ai-specs", "skills"), join(sddeDir, "ai-specs", "skills"), {
+    recursive: true,
+  });
+  await cp(join(pkgDir, "docs"), join(sddeDir, "docs"), { recursive: true });
+
+  // project.yaml
+  await writeFile(join(sddeDir, "project.yaml"), buildProjectYaml(answers), "utf8");
+
+  // CLAUDE.md + multi-agent companions (only if absent)
+  const claudeSrc = join(pkgDir, "CLAUDE.md");
+  for (const name of ["CLAUDE.md", "AGENTS.md", "GEMINI.md", "codex.md"]) {
+    const dst = join(projectPath, name);
+    if (!(await exists(dst))) {
+      try {
+        await copyFile(claudeSrc, dst);
+      } catch {
+        /* CLAUDE.md may not ship in older toolkit versions */
+      }
+    }
+  }
+
+  // .claude/skills symlinks
+  await createSkillSymlinks(
+    join(sddeDir, "ai-specs", "skills"),
+    join(projectPath, ".claude", "skills"),
+  );
+
+  // .gitignore
+  const gitignorePath = join(projectPath, ".gitignore");
+  if (await exists(gitignorePath)) {
+    const content = await readFile(gitignorePath, "utf8");
+    if (!content.includes(".sdd-de")) {
+      await appendFile(gitignorePath, "\n# SDD-DE toolkit\n.sdd-de/\n");
+    }
+  }
+
+  return refreshProject(projectPath);
+}

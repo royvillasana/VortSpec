@@ -1,6 +1,9 @@
 import { z } from "zod";
 import { agentRunOptionsSchema } from "./run-events";
 import { flowSchema, stageStatusSchema } from "./flow";
+import { setupAnswersSchema } from "./setup";
+
+export type { SetupAnswers } from "./setup";
 
 // Re-exported so renderer code can import run + IPC types from one module.
 export type {
@@ -102,6 +105,10 @@ export const ipcContract = {
   "workspace:listProjects": { request: z.void(), response: projectListSchema },
   "workspace:openFolder": { request: z.string(), response: z.void() },
   "workspace:refreshProject": { request: z.string(), response: projectSchema },
+  "workspace:createProject": {
+    request: z.object({ path: z.string(), answers: setupAnswersSchema }),
+    response: projectSchema,
+  },
 
   "toolkit:status": { request: z.string(), response: toolkitStatusSchema },
   "toolkit:install": { request: z.string(), response: toolkitStatusSchema },

@@ -8,6 +8,8 @@ import {
   openFolder,
 } from "./workspace/workspace-manager";
 import { getToolkitStatus, installToolkit } from "./workspace/toolkit-manager";
+import { createProject } from "./workspace/setup-manager";
+import type { SetupAnswers } from "../shared/setup";
 import { startRun, cancelRun } from "./agent/run-manager";
 import {
   getFlow,
@@ -46,6 +48,8 @@ const handlers: Record<IpcChannel, Handler> = {
   "workspace:listProjects": () => listProjects(),
   "workspace:openFolder": ((path: string) => openFolder(path)) as Handler,
   "workspace:refreshProject": ((path: string) => refreshProject(path)) as Handler,
+  "workspace:createProject": ((req: { path: string; answers: SetupAnswers }) =>
+    createProject(req.path, req.answers)) as Handler,
 
   "toolkit:status": ((path: string) => getToolkitStatus(path)) as Handler,
   "toolkit:install": ((path: string) => installToolkit(path)) as Handler,

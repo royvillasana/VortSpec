@@ -4,6 +4,7 @@ import { api } from "./lib/api";
 import { EnvironmentCheck } from "./views/EnvironmentCheck";
 import { Dashboard } from "./views/Dashboard";
 import { GuidedFlow } from "./views/GuidedFlow";
+import { NewProjectWizard } from "./views/NewProjectWizard";
 import { Spinner } from "./components/ui";
 
 type View = "env" | "dashboard";
@@ -22,7 +23,12 @@ export default function App(): React.JSX.Element {
   const [projects, setProjects] = useState<Project[]>([]);
   const [view, setView] = useState<View>("env");
   const [activeProject, setActiveProject] = useState<Project | null>(null);
+  const [setupProject, setSetupProject] = useState<Project | null>(null);
   const [loading, setLoading] = useState(true);
+
+  function mergeProject(project: Project): void {
+    setProjects((prev) => [project, ...prev.filter((p) => p.path !== project.path)]);
+  }
 
   useEffect(() => {
     void (async () => {
@@ -62,6 +68,16 @@ export default function App(): React.JSX.Element {
             coreReady={coreReady}
             onContinue={() => setView("dashboard")}
           />
+        ) : setupProject ? (
+          <NewProjectWizard
+            project={setupProject}
+            onCancel={() => setSetupProject(null)}
+            onCreated={(project) => {
+              mergeProject(project);
+              setSetupProject(null);
+              setActiveProject(project);
+            }}
+          />
         ) : activeProject ? (
           <GuidedFlow project={activeProject} onBack={() => setActiveProject(null)} />
         ) : (
@@ -69,6 +85,7 @@ export default function App(): React.JSX.Element {
             projects={projects}
             onProjects={setProjects}
             onOpenProject={setActiveProject}
+            onSetup={setSetupProject}
           />
         )}
       </main>
