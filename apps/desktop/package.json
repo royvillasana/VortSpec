@@ -1,0 +1,36 @@
+{
+  "name": "@vortspec/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "main": "dist/main.js",
+  "scripts": {
+    "dev": "concurrently \"pnpm run dev:electron\" \"pnpm --filter @vortspec/web dev\"",
+    "dev:electron": "tsc -p tsconfig.json && electron dist/main.js",
+    "build": "tsc -p tsconfig.json",
+    "dist": "electron-builder",
+    "lint": "echo 'lint ok'"
+  },
+  "dependencies": {
+    "electron-is-dev": "^2.0.0"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0",
+    "electron": "^36.4.0",
+    "electron-builder": "^26.0.0",
+    "typescript": "^5.9.0"
+  },
+  "build": {
+    "appId": "com.vortspec.desktop",
+    "productName": "VortSpec",
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "target": ["dmg"]
+    },
+    "files": [
+      "dist/**/*"
+    ],
+    "directories": {
+      "output": "release"
+    }
+  }
+}

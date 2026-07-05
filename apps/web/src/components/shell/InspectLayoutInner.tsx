@@ -1,10 +1,12 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { ChatStrip } from "@/components/shell/ChatStrip";
 import { useAssistant } from "@/components/inspector/AssistantContext";
 import { AssistantDrawer } from "@/components/inspector/AssistantDrawer";
 import { BreadcrumbProvider, useBreadcrumb } from "@/components/shell/BreadcrumbContext";
+import { Terminal } from "@/components/shell/Terminal";
 
 function TopBar() {
   return (
@@ -28,7 +30,6 @@ function BreadcrumbBar() {
   return (
     <div className="flex-none border-b border-vs-border-default bg-vs-bg-primary px-6 py-2.5 flex items-center justify-between min-h-[40px]">
       <nav className="flex items-center gap-1.5 text-[12px]">
-        {/* Always start with Projects */}
         <Link
           href="/projects"
           className="inline-flex items-center gap-1.5 text-vs-text-muted hover:text-vs-text-primary no-underline transition-colors"
@@ -38,8 +39,6 @@ function BreadcrumbBar() {
           </svg>
           Projects
         </Link>
-
-        {/* Additional breadcrumb items */}
         {items.map((item, i) => (
           <span key={i} className="flex items-center gap-1.5">
             <span className="text-vs-text-muted">/</span>
@@ -53,8 +52,6 @@ function BreadcrumbBar() {
           </span>
         ))}
       </nav>
-
-      {/* Extra items (pills, buttons) on the right side of the breadcrumb */}
       {extras && (
         <div className="flex items-center gap-2">
           {extras}
@@ -72,6 +69,18 @@ export function InspectLayoutInner({
   navRail: React.ReactNode;
 }) {
   const { isOpen } = useAssistant();
+  // Terminal is hidden by default — only shown via keyboard shortcut (Ctrl+`)
+  const [terminalOpen, setTerminalOpen] = useState(false);
+
+  // Debug shortcut: Ctrl+` toggles terminal
+  if (typeof window !== "undefined") {
+    window.addEventListener("keydown", (e) => {
+      if (e.ctrlKey && e.key === "`") {
+        e.preventDefault();
+        setTerminalOpen((v) => !v);
+      }
+    }, { once: true });
+  }
 
   return (
     <BreadcrumbProvider>
@@ -82,6 +91,7 @@ export function InspectLayoutInner({
           <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
             <BreadcrumbBar />
             <main className="flex-1 min-w-0 overflow-hidden">{children}</main>
+            <Terminal visible={terminalOpen} onClose={() => setTerminalOpen(false)} />
           </div>
           {isOpen && <AssistantDrawer />}
           <ChatStrip />
