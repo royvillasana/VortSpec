@@ -16776,7 +16776,12 @@ ${state.decisionNotes}` : base;
   }, [def.promptTemplate, state.decisionNotes]);
   async function start() {
     setArtifact(null);
-    await run.start({ prompt, cwd: project.path, allowedTools: def.allowedTools });
+    await run.start({
+      prompt,
+      cwd: project.path,
+      allowedTools: def.allowedTools,
+      bypassPermissions: true
+    });
     if (def.gated) await onFlow(await api.setStageStatus(project.path, def.id, "running"));
   }
   reactExports.useEffect(() => {
@@ -16803,7 +16808,7 @@ ${state.decisionNotes}` : base;
     header,
     /* @__PURE__ */ jsxRuntimeExports.jsxs(Card, { className: "flex flex-col gap-3 p-4", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between", children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-xs text-vs-text-muted", children: state.decisionNotes ? "Re-run addresses your requested changes." : "Runs your own Claude Code." }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-xs text-vs-text-muted", children: state.decisionNotes ? "Re-run addresses your requested changes." : "Runs autonomously — Figma MCP, file, and shell access are granted for this run." }),
         /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex gap-2", children: run.running ? /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { onClick: () => void run.cancel(), children: "Cancel" }) : /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "primary", onClick: () => void start(), children: state.status === "pending" ? runLabel2 ?? "Run step" : "Run again" }) })
       ] }),
       /* @__PURE__ */ jsxRuntimeExports.jsx(RunPanel, { model: run.model })
@@ -16857,7 +16862,8 @@ function ComponentsStage({
     await run.start({
       prompt: "Read .sdd-de/components.json and .sdd-de/project.yaml. Implement EVERY detected component into component_dir as components in the configured framework and language, using ONLY the extracted design tokens. For each, run /generate-artifacts to produce its specs, then implement it. Build in order: atoms → molecules → organisms.",
       cwd: project.path,
-      allowedTools: def.allowedTools
+      allowedTools: def.allowedTools,
+      bypassPermissions: true
     });
   }
   async function buildOne(c) {
@@ -16865,7 +16871,8 @@ function ComponentsStage({
     await run.start({
       prompt: `Read .sdd-de/project.yaml. Implement the "${c.name}" component` + (c.level ? ` (${c.level})` : "") + " into component_dir in the configured framework and language, using ONLY the extracted design tokens. Run /generate-artifacts for it to produce its specs, then implement it.",
       cwd: project.path,
-      allowedTools: def.allowedTools
+      allowedTools: def.allowedTools,
+      bypassPermissions: true
     });
   }
   async function approve() {

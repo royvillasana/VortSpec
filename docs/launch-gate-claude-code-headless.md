@@ -46,5 +46,11 @@ claude -p "<prompt>" --output-format stream-json --verbose --include-partial-mes
 - User-invoked **skills/custom commands work in `-p`** (`/skill-name` in the prompt is expanded) ⇒ SDD-DE skills can be triggered headless.
 - `/config key=value` can set a setting from a `-p` invocation (v2.1.181+).
 
+## Permissions in headless mode (important)
+`claude -p` **cannot show interactive permission prompts**, so any tool not pre-allowed is auto-**denied** — this is why MCP tools (e.g. `mcp__claude_ai_Figma__get_variable_defs`) fail with "you haven't granted it yet" even when the MCP server is enabled. Mechanisms (verified against `/en/cli-reference`):
+- `--allowedTools "<rules>"` — allowlist. MCP pattern is `mcp__<server>` (all tools of a server) or `mcp__<server>__<tool>`. Fragile for us: the server name varies per user (`claude_ai_Figma`, `figma-console`, …).
+- `--permission-mode` — `default|acceptEdits|plan|auto|dontAsk|bypassPermissions`. `acceptEdits` auto-approves file edits + common fs commands but **not** MCP/network. `dontAsk` denies anything not allowlisted.
+- **`--dangerously-skip-permissions`** (= `--permission-mode bypassPermissions`) — skips all prompts; works for any MCP server + Bash. **VortSpec uses this for guided-flow runs** (`AgentRunOptions.bypassPermissions`) because the user explicitly triggers each stage and the run is confined to the project folder. (`--permission-prompt-tool` could later route prompts to an MCP handler for a "guarded" mode.)
+
 ## AgentAdapter contract (implication)
 The adapter owns: building the arg array (never shell-interpolating user input), spawning non-bare `claude` in the project cwd, parsing each stream-json line into a Zod-validated typed event, mapping `system/init` MCP data + `api_retry` error categories to fix-it signals, capturing `session_id` for `--resume`, and routing `/login` + dev-server to the PTY. Recorded stream-json transcripts are the test fixtures.

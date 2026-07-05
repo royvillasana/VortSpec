@@ -316,7 +316,12 @@ function AgentStage({
 
   async function start(): Promise<void> {
     setArtifact(null);
-    await run.start({ prompt, cwd: project.path, allowedTools: def.allowedTools });
+    await run.start({
+      prompt,
+      cwd: project.path,
+      allowedTools: def.allowedTools,
+      bypassPermissions: true,
+    });
     if (def.gated) await onFlow(await api.setStageStatus(project.path, def.id, "running"));
   }
 
@@ -356,7 +361,9 @@ function AgentStage({
       <Card className="flex flex-col gap-3 p-4">
         <div className="flex items-center justify-between">
           <p className="text-xs text-vs-text-muted">
-            {state.decisionNotes ? "Re-run addresses your requested changes." : "Runs your own Claude Code."}
+            {state.decisionNotes
+              ? "Re-run addresses your requested changes."
+              : "Runs autonomously — Figma MCP, file, and shell access are granted for this run."}
           </p>
           <div className="flex gap-2">
             {run.running ? (
@@ -447,6 +454,7 @@ function ComponentsStage({
         "implement it. Build in order: atoms → molecules → organisms.",
       cwd: project.path,
       allowedTools: def.allowedTools,
+      bypassPermissions: true,
     });
   }
 
@@ -460,6 +468,7 @@ function ComponentsStage({
         "design tokens. Run /generate-artifacts for it to produce its specs, then implement it.",
       cwd: project.path,
       allowedTools: def.allowedTools,
+      bypassPermissions: true,
     });
   }
 

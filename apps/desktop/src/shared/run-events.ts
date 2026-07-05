@@ -55,6 +55,14 @@ export const agentRunOptionsSchema = z.object({
   appendSystemPrompt: z.string().optional(),
   allowedTools: z.array(z.string()).optional(),
   resumeSessionId: z.string().optional(),
+  /**
+   * Bypass Claude Code permission prompts for this run
+   * (`--dangerously-skip-permissions`). Headless `-p` mode cannot show
+   * interactive prompts, so MCP tools (Figma, Stitch…) and Bash are otherwise
+   * auto-denied. The guided flow sets this because the user explicitly triggers
+   * each stage; the run is confined to the project folder.
+   */
+  bypassPermissions: z.boolean().optional(),
 });
 export type AgentRunOptions = z.infer<typeof agentRunOptionsSchema>;
 

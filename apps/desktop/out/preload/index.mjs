@@ -45,7 +45,15 @@ z.object({
   cwd: z.string().min(1),
   appendSystemPrompt: z.string().optional(),
   allowedTools: z.array(z.string()).optional(),
-  resumeSessionId: z.string().optional()
+  resumeSessionId: z.string().optional(),
+  /**
+   * Bypass Claude Code permission prompts for this run
+   * (`--dangerously-skip-permissions`). Headless `-p` mode cannot show
+   * interactive prompts, so MCP tools (Figma, Stitch…) and Bash are otherwise
+   * auto-denied. The guided flow sets this because the user explicitly triggers
+   * each stage; the run is confined to the project folder.
+   */
+  bypassPermissions: z.boolean().optional()
 });
 const AGENT_EVENT_CHANNEL = "agent:event";
 const AGENT_RAW_CHANNEL = "agent:raw";

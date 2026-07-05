@@ -39,6 +39,11 @@ export class AgentAdapter extends EventEmitter {
     if (opts.resumeSessionId) {
       args.push("--resume", opts.resumeSessionId);
     }
+    if (opts.bypassPermissions) {
+      // Headless `-p` cannot prompt; without this, MCP tools (Figma/Stitch)
+      // and Bash are auto-denied. Equivalent to `--permission-mode bypassPermissions`.
+      args.push("--dangerously-skip-permissions");
+    }
 
     this.child = spawn("claude", args, {
       cwd: opts.cwd,
