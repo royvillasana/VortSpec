@@ -33,6 +33,8 @@ function createWindow(): void {
 
   mainWindow.on("ready-to-show", () => {
     mainWindow.show();
+    // Surface console errors during development.
+    if (is.dev) mainWindow.webContents.openDevTools({ mode: "detach" });
   });
 
   // Open external links in the user's browser, never in-app.

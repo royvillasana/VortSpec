@@ -29,8 +29,9 @@ export function Dashboard({
       const project = await api.pickFolder(false);
       if (!project) return;
       onProjects([project, ...projects.filter((p) => p.path !== project.path)]);
-      // New projects go straight to setup (design source + framework questions).
-      if (!project.toolkit.present) onSetup(project);
+      // "New project" always runs setup (design source + framework questions)
+      // before the flow — even for a folder that already has .sdd-de.
+      onSetup(project);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not add project");
     } finally {

@@ -12645,7 +12645,7 @@ function Dashboard({
       const project = await api.pickFolder(false);
       if (!project) return;
       onProjects([project, ...projects.filter((p) => p.path !== project.path)]);
-      if (!project.toolkit.present) onSetup(project);
+      onSetup(project);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not add project");
     } finally {
