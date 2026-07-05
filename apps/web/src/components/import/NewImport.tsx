@@ -142,6 +142,8 @@ export function NewImport() {
   const [figmaUrl, setFigmaUrl] = useState("");
   const [figmaPat, setFigmaPat] = useState("");
   const [showPatInput, setShowPatInput] = useState(false);
+  const [patSaved, setPatSaved] = useState(false);
+  const [patSaving, setPatSaving] = useState(false);
   const [figmaError, setFigmaError] = useState<string | null>(null);
   const [figmaImporting, setFigmaImporting] = useState(false);
 
@@ -265,7 +267,18 @@ export function NewImport() {
             />
 
             {/* PAT section */}
-            {!showPatInput ? (
+            {patSaved ? (
+              <div className="mb-3 flex items-center gap-2">
+                <span className="text-[11px] text-vs-success">✓ Figma token saved</span>
+                <button
+                  type="button"
+                  onClick={() => { setPatSaved(false); setShowPatInput(true); }}
+                  className="text-[11px] text-vs-text-muted hover:text-vs-text-primary cursor-pointer bg-transparent border-none"
+                >
+                  Change
+                </button>
+              </div>
+            ) : !showPatInput ? (
               <button
                 type="button"
                 onClick={() => setShowPatInput(true)}
@@ -280,26 +293,43 @@ export function NewImport() {
                   <input
                     type="password"
                     value={figmaPat}
-                    onChange={(e) => setFigmaPat(e.target.value)}
+                    onChange={(e) => { setFigmaPat(e.target.value); setFigmaError(null); }}
                     placeholder="figd_..."
                     className="flex-1 bg-vs-bg-primary border border-vs-border-default rounded px-2 py-1.5 text-[11px] text-vs-text-primary font-mono placeholder:text-vs-text-muted outline-none focus:border-vs-accent"
                   />
                   <button
                     type="button"
+                    disabled={!figmaPat.trim() || patSaving}
                     onClick={async () => {
-                      if (figmaPat && projectId !== "new") {
-                        await saveFigmaPAT(projectId, figmaPat);
+                      if (!figmaPat.trim()) return;
+                      setPatSaving(true);
+                      setFigmaError(null);
+                      try {
+                        let pid = projectId;
+                        // If project is "new", create one first
+                        if (pid === "new") {
+                          const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+                          // Can't create project from client — show error
+                          setFigmaError("Create a project first (upload a ZIP), then add the Figma token from the project's import page.");
+                          setPatSaving(false);
+                          return;
+                        }
+                        await saveFigmaPAT(pid, figmaPat);
+                        setPatSaved(true);
                         setShowPatInput(false);
                         setFigmaPat("");
+                      } catch (err) {
+                        setFigmaError(`Failed to save token: ${err instanceof Error ? err.message : "unknown error"}`);
                       }
+                      setPatSaving(false);
                     }}
-                    className="text-[11px] bg-vs-accent text-white rounded px-2 py-1.5 cursor-pointer border-none hover:brightness-110"
+                    className="text-[11px] bg-vs-accent text-white rounded px-2 py-1.5 cursor-pointer border-none hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    Save
+                    {patSaving ? "Saving…" : "Save"}
                   </button>
                 </div>
                 <p className="text-[10px] text-vs-text-muted mt-1">
-                  Get one at <a href="https://www.figma.com/developers/api#access-tokens" target="_blank" rel="noopener" className="text-vs-accent hover:underline">figma.com/developers</a>
+                  Get one free at <a href="https://www.figma.com/developers/api#access-tokens" target="_blank" rel="noopener" className="text-vs-accent hover:underline no-underline">figma.com/developers</a>
                 </p>
               </div>
             )}
