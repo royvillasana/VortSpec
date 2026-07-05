@@ -10,7 +10,7 @@ const processManager = new ProcessManager();
 const terminalManager = new TerminalManager();
 
 const isDev = !app.isPackaged;
-const NEXT_PORT = 3000;
+const NEXT_PORT = parseInt(process.env.VORTSPEC_PORT ?? "3000", 10);
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -29,8 +29,8 @@ function createWindow() {
     },
   });
 
-  // Load the Next.js app
-  mainWindow.loadURL(`http://localhost:${NEXT_PORT}`);
+  // Load the wizard as the landing page
+  mainWindow.loadURL(`http://localhost:${NEXT_PORT}/wizard`);
 
   if (isDev) {
     mainWindow.webContents.openDevTools({ mode: "detach" });
@@ -105,15 +105,17 @@ ipcMain.on("terminal:subscribe", (event) => {
 // ── App Lifecycle ──
 
 app.whenReady().then(async () => {
-  // Start Next.js if in dev mode (in production it would be built)
-  if (isDev) {
-    console.log("[vortspec] Starting Next.js dev server...");
-    processManager.startNextDev();
+  console.log("[vortspec] Starting Next.js...");
 
-    // Wait for Next.js to be ready
-    await waitForPort(NEXT_PORT, 30000);
-    console.log("[vortspec] Next.js ready on port", NEXT_PORT);
+  if (isDev) {
+    processManager.startNextDev();
+  } else {
+    // Production: run `next start` from the bundled web app
+    processManager.startNextProd();
   }
+
+  await waitForPort(NEXT_PORT, 30000);
+  console.log("[vortspec] Next.js ready on port", NEXT_PORT);
 
   createWindow();
   createTray();

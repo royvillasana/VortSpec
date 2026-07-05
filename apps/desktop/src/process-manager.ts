@@ -60,6 +60,11 @@ export class ProcessManager {
     return this.spawnProcess("next", "pnpm", ["dev"], webDir, 3000);
   }
 
+  startNextProd(): ProcessInfo {
+    const webDir = path.join(this.projectRoot, "apps", "web");
+    return this.spawnProcess("next", "pnpm", ["start"], webDir, 3000);
+  }
+
   startStorybook(): ProcessInfo {
     const webDir = path.join(this.projectRoot, "apps", "web");
     return this.spawnProcess(

@@ -64,10 +64,12 @@ export async function generateAllComponents(
       );
 
       // Store in code_artifacts table
+      // Delete existing artifact for this component (if regenerating)
+      await supabase.from("code_artifacts").delete().eq("component_id", component.id);
+
       const { error: upsertError } = await supabase
         .from("code_artifacts")
-        .upsert(
-          {
+        .insert({
             component_id: component.id,
             project_id: projectId,
             component_code: result.componentCode,
@@ -76,9 +78,7 @@ export async function generateAllComponents(
             token_css: result.tokenCSS,
             framework: config.framework,
             llm_model: result.model,
-            generated_at: new Date().toISOString(),
           },
-          { onConflict: "component_id" },
         );
 
       if (upsertError) {
@@ -159,22 +159,20 @@ export async function generateSingleComponent(
       { projectId },
     );
 
+    await supabase.from("code_artifacts").delete().eq("component_id", componentId);
+
     const { error: upsertError } = await supabase
       .from("code_artifacts")
-      .upsert(
-        {
-          component_id: componentId,
-          project_id: projectId,
-          component_code: result.componentCode,
-          story_code: result.storyCode,
-          types_code: result.typesCode,
-          token_css: result.tokenCSS,
-          framework: config.framework,
-          llm_model: result.model,
-          generated_at: new Date().toISOString(),
-        },
-        { onConflict: "component_id" },
-      );
+      .insert({
+        component_id: componentId,
+        project_id: projectId,
+        component_code: result.componentCode,
+        story_code: result.storyCode,
+        types_code: result.typesCode,
+        token_css: result.tokenCSS,
+        framework: config.framework,
+        llm_model: result.model,
+      });
 
     if (upsertError) {
       return { success: false, error: `Failed to store artifact: ${upsertError.message}` };

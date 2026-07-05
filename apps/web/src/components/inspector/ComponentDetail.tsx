@@ -50,7 +50,16 @@ const defaultIssues: Array<{ id: string; text: string; severity: "error" | "warn
   { id: "i2", text: "Focus state inferred, not confirmed", severity: "info", action: "Confirm" },
 ];
 
-export function ComponentDetail({ initialData }: { initialData?: ComponentDetailData }) {
+interface CodeArtifactData {
+  componentCode: string;
+  storyCode: string;
+  typesCode: string;
+  tokenCSS: string;
+  framework: string;
+  llmModel: string;
+}
+
+export function ComponentDetail({ initialData, codeArtifact }: { initialData?: ComponentDetailData; codeArtifact?: CodeArtifactData | null }) {
   // Resolve data: use initialData from Supabase when available, fall back to hardcoded defaults
   const tokenBindings = initialData?.tokenBindings ?? defaultTokenBindings;
   const variantAxes = initialData
@@ -92,6 +101,7 @@ export function ComponentDetail({ initialData }: { initialData?: ComponentDetail
   const [showApproveDialog, setShowApproveDialog] = useState(false);
   const [componentName, setComponentName] = useState(initialData?.name ?? "Button");
   const [isRenaming, setIsRenaming] = useState(false);
+  const [activeCodeTab, setActiveCodeTab] = useState("component");
   const params = useParams<{ id: string; componentId?: string }>();
   const router = useRouter();
   const projectId = params.id ?? "";
@@ -195,16 +205,93 @@ export function ComponentDetail({ initialData }: { initialData?: ComponentDetail
 
             {/* Canvas */}
             <div className={`min-h-[160px] border-b border-vs-border-default ${canvasBg === "dark" ? "bg-vs-bg-elevated" : "bg-white"}`}>
-              {initialData?.rawStructure ? (
-                <IRPreview structure={initialData.rawStructure} />
+              {codeArtifact?.componentCode ? (
+                <div className="p-4">
+                  <div className="bg-vs-bg-primary rounded-lg border border-vs-border-default p-4 overflow-auto max-h-[300px]">
+                    <pre className="font-mono text-[11px] text-vs-text-secondary leading-relaxed whitespace-pre-wrap">{codeArtifact.componentCode}</pre>
+                  </div>
+                </div>
+              ) : initialData?.rawStructure ? (
+                <div className="relative">
+                  <IRPreview structure={initialData.rawStructure} />
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          const { generateSingleComponent } = await import("@/lib/data/codegen");
+                          showToast("Generating code...");
+                          const result = await generateSingleComponent(projectId, componentId);
+                          if (result.success) {
+                            showToast("Code generated! Reloading...");
+                            router.refresh();
+                          } else {
+                            showToast(`Error: ${result.error}`);
+                          }
+                        } catch (err) {
+                          showToast(`Error: ${err instanceof Error ? err.message : "generation failed"}`);
+                        }
+                      }}
+                      className="bg-vs-accent text-white rounded-lg px-5 py-2.5 text-[13px] font-medium cursor-pointer hover:brightness-110 shadow-lg"
+                    >
+                      Generate Code
+                    </button>
+                  </div>
+                </div>
               ) : (
                 <div className="h-[160px] flex items-center justify-center">
-                  <span className={`inline-flex items-center justify-center font-sans font-medium ${sizeClass}`} style={buttonStyle}>
-                    {label}
-                  </span>
+                  <span className="text-vs-text-muted text-[12px]">No preview available</span>
                 </div>
               )}
             </div>
+
+            {/* Code tabs — show when code exists */}
+            {codeArtifact && (
+              <div className="border-b border-vs-border-default">
+                <div className="flex gap-0.5 px-4 pt-2 pb-0">
+                  {[
+                    { key: "component", label: "Component" },
+                    { key: "story", label: "Story" },
+                    { key: "types", label: "Types" },
+                    { key: "tokens", label: "Token CSS" },
+                  ].map((tab) => (
+                    <button
+                      key={tab.key}
+                      onClick={() => setActiveCodeTab(tab.key)}
+                      className={`text-[11px] px-3 py-1.5 rounded-t border-none cursor-pointer font-mono ${
+                        activeCodeTab === tab.key
+                          ? "bg-vs-bg-primary text-vs-text-primary"
+                          : "text-vs-text-muted hover:text-vs-text-primary"
+                      }`}
+                    >
+                      {tab.label}
+                    </button>
+                  ))}
+                  <div className="flex-1" />
+                  <button
+                    onClick={() => {
+                      const code = activeCodeTab === "component" ? codeArtifact.componentCode
+                        : activeCodeTab === "story" ? codeArtifact.storyCode
+                        : activeCodeTab === "types" ? codeArtifact.typesCode
+                        : codeArtifact.tokenCSS;
+                      navigator.clipboard.writeText(code || "");
+                      showToast("Copied to clipboard");
+                    }}
+                    className="text-[10px] text-vs-text-muted hover:text-vs-text-primary cursor-pointer bg-transparent border-none px-2 py-1"
+                  >
+                    Copy
+                  </button>
+                </div>
+                <div className="bg-vs-bg-primary px-4 py-3 overflow-auto max-h-[200px]">
+                  <pre className="font-mono text-[11px] text-vs-text-secondary leading-relaxed whitespace-pre-wrap">
+                    {activeCodeTab === "component" ? codeArtifact.componentCode
+                      : activeCodeTab === "story" ? codeArtifact.storyCode
+                      : activeCodeTab === "types" ? codeArtifact.typesCode
+                      : codeArtifact.tokenCSS || "No token CSS generated"}
+                  </pre>
+                </div>
+              </div>
+            )}
 
             {/* Controls — dynamic from variant axes */}
             <div className="px-4 py-3 grid grid-cols-[110px_1fr] gap-y-2.5 gap-x-4 text-[12px] border-b border-vs-border-default">
