@@ -104,14 +104,10 @@ export const figmaImportPipeline = inngest.createFunction(
     const componentCount = await step.run("extract_components", async () => {
       await updateStageStatus(importId, "extract_components", "running");
       try {
-        // Determine which nodes to fetch: component sets + standalone components
-        const setNodeIds = new Set(discovery.componentSetIds.map((cs) => cs.nodeId));
-        const nodeIdsToFetch = [
-          ...discovery.componentSetIds.map((cs) => cs.nodeId),
-          ...discovery.componentIds
-            .filter((c) => !c.containingSetId) // Only standalone, not variant children
-            .map((c) => c.nodeId),
-        ];
+        // Only fetch published component sets (the curated, reusable components)
+        // Skip standalone components — in a large file (6000+), most are internal
+        // variants, sub-components, or deprecated items
+        const nodeIdsToFetch = discovery.componentSetIds.map((cs) => cs.nodeId);
 
         if (nodeIdsToFetch.length === 0) {
           await updateStageStatus(importId, "extract_components", "done", {
