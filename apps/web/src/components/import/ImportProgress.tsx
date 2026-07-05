@@ -17,13 +17,20 @@ interface Stage {
   result?: Record<string, unknown>;
 }
 
-const STAGE_META: Array<{ key: string; name: string; description: string }> = [
+const ZIP_STAGES: Array<{ key: string; name: string; description: string }> = [
   { key: "parse", name: "Parse", description: "Extract HTML, CSS, and assets from the uploaded file." },
   { key: "style_mining", name: "Style mining", description: "Collect every literal style value, group duplicates, compute usage." },
   { key: "token_inference", name: "Token inference", description: "Promote candidates to tokens with semantic names." },
   { key: "structure_inference", name: "Structure inference", description: "Detect repeated patterns as components, infer variants and states." },
   { key: "ds_merge", name: "Design system merge", description: "Match mined tokens to official design system tokens." },
   { key: "report", name: "Report", description: "Compute completeness scores and generate the project summary." },
+];
+
+const FIGMA_STAGES: Array<{ key: string; name: string; description: string }> = [
+  { key: "discover", name: "Discover", description: "Read file structure, find components and pages." },
+  { key: "extract_variables", name: "Extract variables", description: "Read Figma variables and map to design tokens." },
+  { key: "extract_components", name: "Extract components", description: "Read component sets, variants, and styles." },
+  { key: "report", name: "Report", description: "Compute completeness scores and persist to database." },
 ];
 
 /* ── spinner ────────────────────────────────────────────────────── */
@@ -139,11 +146,13 @@ interface ImportProgressProps {
   importId: string;
   projectId: string;
   fileName?: string;
+  sourceKind?: "zip" | "figma";
 }
 
-export function ImportProgress({ importId, projectId, fileName }: ImportProgressProps) {
+export function ImportProgress({ importId, projectId, fileName, sourceKind = "zip" }: ImportProgressProps) {
+  const stageMeta = sourceKind === "figma" ? FIGMA_STAGES : ZIP_STAGES;
   const [stages, setStages] = useState<Stage[]>(
-    STAGE_META.map((m, i) => ({
+    stageMeta.map((m, i) => ({
       ...m,
       number: i + 1,
       status: "queued" as StageStatus,

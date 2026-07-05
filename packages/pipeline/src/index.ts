@@ -1,5 +1,6 @@
 export { inngest } from "./client";
 export { importPipeline } from "./functions/import";
+export { figmaImportPipeline } from "./functions/figma-import";
 export { runParseStage, type ParseResult } from "./stages/parse";
 export {
   runStyleMiningCore,
