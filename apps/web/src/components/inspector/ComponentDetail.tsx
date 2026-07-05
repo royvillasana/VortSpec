@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Fragment } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { CompletenessScore } from "@/components/ui/completeness-score";
@@ -208,21 +208,21 @@ export function ComponentDetail({ initialData }: { initialData?: ComponentDetail
 
             {/* Controls — dynamic from variant axes */}
             <div className="px-4 py-3 grid grid-cols-[110px_1fr] gap-y-2.5 gap-x-4 text-[12px] border-b border-vs-border-default">
-              {variantAxes.map((axis) => (
-                <>
-                  <span key={`label-${axis.name}`} className="text-vs-text-muted truncate">{axis.name}</span>
-                  <div key={`ctrl-${axis.name}`} className="flex gap-0.5 bg-vs-bg-primary border border-vs-border-default rounded-md p-0.5 w-fit flex-wrap">
+              {variantAxes.map((axis, i) => (
+                <Fragment key={`axis-${i}`}>
+                  <span className="text-vs-text-muted truncate">{axis.name}</span>
+                  <div className="flex gap-0.5 bg-vs-bg-primary border border-vs-border-default rounded-md p-0.5 w-fit flex-wrap">
                     {axis.options.map((opt) => (
                       <button key={opt} className="text-[11px] px-2 py-0.5 rounded border-none cursor-pointer font-mono bg-vs-bg-elevated text-vs-text-primary">{opt}</button>
                     ))}
                   </div>
-                </>
+                </Fragment>
               ))}
-              {props.length > 0 && props.map((p) => (
-                <>
-                  <span key={`plabel-${p.name}`} className="text-vs-text-muted truncate">{p.name}</span>
-                  <span key={`pval-${p.name}`} className="font-mono text-[11px] text-vs-text-secondary">{p.default}</span>
-                </>
+              {props.map((p, i) => (
+                <Fragment key={`prop-${i}`}>
+                  <span className="text-vs-text-muted truncate">{p.name}</span>
+                  <span className="font-mono text-[11px] text-vs-text-secondary">{p.default}</span>
+                </Fragment>
               ))}
             </div>
 
@@ -331,13 +331,13 @@ export function ComponentDetail({ initialData }: { initialData?: ComponentDetail
                 <span className="text-vs-text-muted font-medium">Type</span>
                 <span className="text-vs-text-muted font-medium">Default</span>
                 <span />
-                {props.map((p) => (
-                  <>
-                    <span key={`n-${p.name}`} className="font-mono text-vs-text-primary">{p.name}</span>
-                    <span key={`t-${p.name}`} className="font-mono text-vs-text-secondary">{p.type}</span>
-                    <span key={`d-${p.name}`} className="font-mono text-vs-text-muted">{p.default}</span>
-                    <ProvenanceDot key={`p-${p.name}`} confidence={p.provenance} />
-                  </>
+                {props.map((p, i) => (
+                  <Fragment key={`prop-row-${i}`}>
+                    <span className="font-mono text-vs-text-primary">{p.name}</span>
+                    <span className="font-mono text-vs-text-secondary">{p.type}</span>
+                    <span className="font-mono text-vs-text-muted">{p.default}</span>
+                    <ProvenanceDot confidence={p.provenance} />
+                  </Fragment>
                 ))}
               </div>
             </div>
