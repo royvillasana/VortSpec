@@ -1,7 +1,14 @@
 import { createClient } from "@supabase/supabase-js";
 import { inngest } from "../client";
 import { updateStageStatus, updateImportStatus } from "../lib/stage-status";
-import { FigmaClient, mapVariablesToTokens, mapComponentSetToIR, mineFills } from "@vortspec/adapters";
+import { FigmaClient, mapVariablesToTokens, mapComponentSetToIR } from "@vortspec/adapters";
+
+function getSupabase() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  );
+}
 
 export const figmaImportPipeline = inngest.createFunction(
   { id: "figma-import-pipeline", name: "Figma Import Pipeline" },
@@ -17,16 +24,37 @@ export const figmaImportPipeline = inngest.createFunction(
 
     const client = new FigmaClient({ pat });
 
-    // Stage 1: Discover — read the file tree
-    const fileData = await step.run("discover", async () => {
+    // Stage 1: Discover — get file name + component node IDs (minimal output)
+    const discovery = await step.run("discover", async () => {
       await updateStageStatus(importId, "discover", "running");
       try {
-        const file = await client.getFile(fileKey);
+        const file = await client.getFile(fileKey, 1);
+        const componentsRes = await client.getComponents(fileKey);
+        const componentSetsRes = await client.getComponentSets(fileKey);
+
+        // Extract ONLY the node IDs and names — keep step output small
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const componentIds = (componentsRes.meta?.components ?? []).map((c: any) => ({
+          nodeId: c.node_id as string,
+          name: c.name as string,
+          containingSetId: c.containing_frame?.containingComponentSetId as string | undefined,
+        }));
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const componentSetIds = (componentSetsRes.meta?.component_sets ?? []).map((cs: any) => ({
+          nodeId: cs.node_id as string,
+          name: cs.name as string,
+        }));
+
         await updateStageStatus(importId, "discover", "done", {
-          result: { pageCount: file.document.children?.length ?? 0 },
+          result: {
+            fileName: file.name,
+            componentCount: componentIds.length,
+            componentSetCount: componentSetIds.length,
+          },
         });
-        // Return serializable data
-        return JSON.parse(JSON.stringify({ document: file.document, name: file.name }));
+
+        // Return only IDs and names — NOT full metadata
+        return { fileName: file.name, componentIds, componentSetIds };
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         await updateStageStatus(importId, "discover", "failed", { error: msg });
@@ -35,28 +63,35 @@ export const figmaImportPipeline = inngest.createFunction(
       }
     });
 
-    // Stage 2: Extract Variables → tokens
-    const tokenData = await step.run("extract_variables", async () => {
+    // Stage 2: Extract Variables → tokens, persist directly to DB
+    const tokenCount = await step.run("extract_variables", async () => {
       await updateStageStatus(importId, "extract_variables", "running");
       try {
-        let tokenList: unknown[];
-        let varMap: Record<string, string> = {};
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        let tokens: any[] = [];
+        let varMapObj: Record<string, string> = {};
 
         try {
           const variables = await client.getVariables(fileKey);
           const result = mapVariablesToTokens(variables);
-          tokenList = result.tokens;
-          // Convert Map to plain object for serialization
-          varMap = Object.fromEntries(result.variableIdToTokenId);
+          tokens = result.tokens;
+          varMapObj = Object.fromEntries(result.variableIdToTokenId);
         } catch {
-          console.warn("[figma] Variables not available, mining fills");
-          tokenList = mineFills(fileData.document);
+          console.warn("[figma] Variables not available");
+        }
+
+        // Persist tokens directly to DB (don't pass through step output)
+        const supabase = getSupabase();
+        for (const token of tokens) {
+          await supabase.from("tokens").insert({ project_id: projectId, doc: token });
         }
 
         await updateStageStatus(importId, "extract_variables", "done", {
-          result: { tokenCount: tokenList.length },
+          result: { tokenCount: tokens.length },
         });
-        return JSON.parse(JSON.stringify({ tokens: tokenList, varMap }));
+
+        // Return only the count + varMap (small)
+        return { count: tokens.length, varMap: varMapObj };
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         await updateStageStatus(importId, "extract_variables", "failed", { error: msg });
@@ -65,47 +100,62 @@ export const figmaImportPipeline = inngest.createFunction(
       }
     });
 
-    // Stage 3: Extract Components
-    const componentData = await step.run("extract_components", async () => {
+    // Stage 3: Extract Components — fetch nodes, map to IR, persist directly to DB
+    const componentCount = await step.run("extract_components", async () => {
       await updateStageStatus(importId, "extract_components", "running");
       try {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        function findNodes(node: any, types: string[]): any[] {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const results: any[] = [];
-          if (types.includes(node.type)) results.push(node);
-          if (node.children) {
-            for (const child of node.children) results.push(...findNodes(child, types));
-          }
-          return results;
+        // Determine which nodes to fetch: component sets + standalone components
+        const setNodeIds = new Set(discovery.componentSetIds.map((cs) => cs.nodeId));
+        const nodeIdsToFetch = [
+          ...discovery.componentSetIds.map((cs) => cs.nodeId),
+          ...discovery.componentIds
+            .filter((c) => !c.containingSetId) // Only standalone, not variant children
+            .map((c) => c.nodeId),
+        ];
+
+        if (nodeIdsToFetch.length === 0) {
+          await updateStageStatus(importId, "extract_components", "done", {
+            result: { componentCount: 0 },
+          });
+          return { count: 0 };
         }
 
-        const allNodes = findNodes(fileData.document, ["COMPONENT_SET", "COMPONENT"]);
+        const nodesResponse = await client.getNodes(fileKey, nodeIdsToFetch);
+        const varMap = new Map<string, string>(
+          Object.entries(tokenCount.varMap || {}).map(([k, v]) => [k, String(v)]),
+        );
 
-        // Filter: component sets + standalone components (not variant children)
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const topLevel = allNodes.filter((n: any) => {
-          if (n.type === "COMPONENT_SET") return true;
+        const supabase = getSupabase();
+        let count = 0;
+
+        for (const [, nodeData] of Object.entries(nodesResponse.nodes || {})) {
+          if (!nodeData) continue;
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const isVariant = allNodes.some((cs: any) =>
-            cs.type === "COMPONENT_SET" && cs.children?.some((c: any) => c.id === n.id),
-          );
-          return !isVariant;
-        });
+          const node = (nodeData as any).document;
+          if (!node) continue;
 
-        const varMapObj = tokenData.varMap as Record<string, string>;
-        const varMap = new Map(Object.entries(varMapObj));
+          try {
+            const children = node.children ?? [];
+            const ir = mapComponentSetToIR(node, children, varMap);
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const componentIRs = topLevel.map((n: any) => {
-          const children = n.children ?? [];
-          return mapComponentSetToIR(n, children, varMap);
-        });
+            // Persist directly to DB
+            await supabase.from("components").insert({
+              project_id: projectId,
+              doc: ir,
+              status: "normalized",
+              version: 1,
+            });
+            count++;
+          } catch (mapErr) {
+            console.warn(`[figma] Failed to map component ${node.name}:`, mapErr);
+          }
+        }
 
         await updateStageStatus(importId, "extract_components", "done", {
-          result: { componentCount: componentIRs.length },
+          result: { componentCount: count },
         });
-        return JSON.parse(JSON.stringify(componentIRs));
+
+        return { count };
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         await updateStageStatus(importId, "extract_components", "failed", { error: msg });
@@ -114,39 +164,16 @@ export const figmaImportPipeline = inngest.createFunction(
       }
     });
 
-    // Stage 4: Report — persist to DB
+    // Stage 4: Report — mark done with final counts
     await step.run("report", async () => {
       await updateStageStatus(importId, "report", "running");
       try {
-        const supabase = createClient(
-          process.env.NEXT_PUBLIC_SUPABASE_URL!,
-          process.env.SUPABASE_SERVICE_ROLE_KEY!,
-        );
-
-        const tokens = tokenData.tokens as unknown[];
-        const components = componentData as unknown[];
-
-        for (const token of tokens) {
-          await supabase.from("tokens").insert({ project_id: projectId, doc: token });
-        }
-
-        for (const comp of components) {
-          await supabase.from("components").insert({
-            project_id: projectId,
-            doc: comp,
-            status: "normalized",
-            version: 1,
-          });
-        }
-
-        let issueCount = 0;
-        for (const comp of components) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          issueCount += (comp as any).completeness?.issues?.length ?? 0;
-        }
-
         await updateStageStatus(importId, "report", "done", {
-          result: { tokenCount: tokens.length, componentCount: components.length, issueCount },
+          result: {
+            tokenCount: tokenCount.count,
+            componentCount: componentCount.count,
+            issueCount: 0,
+          },
         });
         await updateImportStatus(importId, "done");
       } catch (err) {

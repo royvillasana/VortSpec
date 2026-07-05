@@ -243,9 +243,10 @@ export class FigmaClient {
     throw lastError ?? new Error(`Failed after ${MAX_RETRIES} retries`);
   }
 
-  async getFile(fileKey: string): Promise<FigmaFileResponse> {
+  async getFile(fileKey: string, depth?: number): Promise<FigmaFileResponse> {
+    const depthParam = depth != null ? `?depth=${depth}` : "?depth=1";
     return (await this.request(
-      `/v1/files/${fileKey}`,
+      `/v1/files/${fileKey}${depthParam}`,
     )) as FigmaFileResponse;
   }
 
