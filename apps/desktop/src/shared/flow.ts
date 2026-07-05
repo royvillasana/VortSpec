@@ -7,7 +7,7 @@ import { z } from "zod";
  * always derivable from disk and survives closing/reopening the app.
  */
 
-export const stageKindSchema = z.enum(["input", "intake", "agent", "verify"]);
+export const stageKindSchema = z.enum(["source", "input", "intake", "agent", "verify"]);
 export type StageKind = z.infer<typeof stageKindSchema>;
 
 export const stageStatusSchema = z.enum([
@@ -66,46 +66,25 @@ export type Flow = z.infer<typeof flowSchema>;
  */
 export const DEFAULT_FLOW: StageDef[] = [
   {
-    id: "brief",
-    title: "Brief",
+    id: "design-system",
+    title: "Design system",
     summary:
-      "Provide the design brief, Figma frame URL, or user story that starts this cycle.",
-    kind: "intake",
-    gated: false,
-  },
-  {
-    id: "enrich",
-    title: "Enrich",
-    summary:
-      "/enrich-brief — turn the brief into an implementation-ready spec story with acceptance criteria.",
-    kind: "agent",
-    gated: true,
-    artifactGlob: "enriched-story.md",
-    promptTemplate:
-      "/enrich-brief\n\nRead the brief in .sdd-de/brief.md and .sdd-de/project.yaml, then run the enrich-brief skill to produce the enriched spec story.",
-    allowedTools: ["Read", "Write", "Edit"],
-  },
-  {
-    id: "specify",
-    title: "Specify",
-    summary:
-      "/generate-artifacts — generate the component, interaction, and page specs from the enriched story.",
-    kind: "agent",
+      "Connect to your configured design source (e.g. the Figma file) and generate design tokens + every component in your framework and language.",
+    kind: "source",
     gated: true,
     artifactGlob: "-component-spec.md",
     promptTemplate:
-      "/generate-artifacts\n\nRun the generate-artifacts skill to produce the component, interaction, and page/feature specs under specs/ from the approved enriched story.",
-    allowedTools: ["Read", "Write", "Edit"],
-  },
-  {
-    id: "apply",
-    title: "Apply",
-    summary:
-      "Create a feature branch and implement the spec one task at a time, tokens only — no hardcoded values.",
-    kind: "agent",
-    gated: false,
-    promptTemplate:
-      "First create a feature branch (feature/[component]-spec). Then read the component spec under specs/ and implement it one task at a time, using only design tokens from the token file. Mark each task complete in the spec as you go.",
+      "Read .sdd-de/project.yaml for `design_source` and the project configuration " +
+      "(framework, language, token_file, component_dir). Connect to the configured source and " +
+      "build the design system — do NOT ask for a brief; the design source is the input.\n\n" +
+      "For `design_source: figma`, use the Figma MCP to read the file at `figma_file_url` and the " +
+      "variable collection named `figma_token_collection`.\n\n" +
+      "1. Extract every design token and variable from the source into the configured `token_file`.\n" +
+      "2. Generate every component in the design system into `component_dir` as components in the " +
+      "configured framework and language, using ONLY those tokens (build tokens → atoms → molecules " +
+      "→ organisms), and write a component spec (`specs/[component]/[component]-component-spec.md`) " +
+      "for each.\n\n" +
+      "Follow the SDD-DE /enrich-brief and /generate-artifacts skills for the design_source branch.",
     allowedTools: ["Read", "Write", "Edit", "Bash"],
   },
   {

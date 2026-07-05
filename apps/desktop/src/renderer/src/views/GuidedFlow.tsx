@@ -1,5 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
-import type { Flow, Project, StageDef, StageState, StageStatus } from "../../../shared/ipc";
+import type {
+  Flow,
+  Project,
+  ProjectConfig,
+  StageDef,
+  StageState,
+  StageStatus,
+} from "../../../shared/ipc";
 import { api } from "../lib/api";
 import { useAgentRun } from "../lib/useAgentRun";
 import { Button, Card, Spinner } from "../components/ui";
@@ -38,6 +45,7 @@ export function GuidedFlow({
   onBack: () => void;
 }): React.JSX.Element {
   const [flow, setFlow] = useState<Flow | null>(null);
+  const [config, setConfig] = useState<ProjectConfig | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -45,6 +53,7 @@ export function GuidedFlow({
       setFlow(f);
       setSelectedId(f.state.currentStageId);
     });
+    void api.projectConfig(project.path).then(setConfig);
   }, [project.path]);
 
   if (!flow || !selectedId) {
@@ -85,6 +94,7 @@ export function GuidedFlow({
           def={def}
           state={state}
           locked={locked}
+          config={config}
           onFlow={setFlow}
         />
       </section>
@@ -135,12 +145,14 @@ function StageDetail({
   def,
   state,
   locked,
+  config,
   onFlow,
 }: {
   project: Project;
   def: StageDef;
   state: StageState;
   locked: boolean;
+  config: ProjectConfig | null;
   onFlow: (f: Flow) => void;
 }): React.JSX.Element {
   return (
@@ -158,13 +170,72 @@ function StageDetail({
         <Card className="px-4 py-6 text-center text-sm text-vs-text-muted">
           Complete the previous stages first.
         </Card>
-      ) : def.kind === "input" ? (
-        <DesignInputStage project={project} def={def} onFlow={onFlow} done={state.status === "approved"} />
-      ) : def.kind === "intake" ? (
-        <BriefStage project={project} onFlow={onFlow} done={state.status === "approved"} />
+      ) : def.kind === "source" ? (
+        <AgentStage
+          project={project}
+          def={def}
+          state={state}
+          onFlow={onFlow}
+          header={<SourceInfo config={config} />}
+          runLabel="Connect & build design system"
+        />
       ) : (
         <AgentStage project={project} def={def} state={state} onFlow={onFlow} />
       )}
+    </div>
+  );
+}
+
+/** Shows the configured design source + build target for the design-system stage. */
+function SourceInfo({ config }: { config: ProjectConfig | null }): React.JSX.Element {
+  if (!config) {
+    return (
+      <Card className="p-4 text-sm text-vs-text-muted">Reading project configuration…</Card>
+    );
+  }
+  const source =
+    config.designSource === "figma"
+      ? config.figmaFileUrl || "Figma file (URL not set)"
+      : config.designSource === "library"
+        ? `Component library: ${config.componentLibrary ?? "—"}`
+        : config.designSource === "github"
+          ? config.githubRepoUrl || "GitHub repository"
+          : config.designSource === "zip"
+            ? config.zipFilePath || "ZIP archive"
+            : config.designSource === "stitch"
+              ? `Google Stitch (${config.stitchConnection ?? "mcp"})`
+              : "Not configured";
+  return (
+    <Card className="flex flex-col gap-2 p-4">
+      <Row label="Design source" value={`${config.designSource ?? "—"}`} />
+      <Row label="Source" value={source} mono />
+      <Row
+        label="Target"
+        value={`${config.framework ?? "—"} · ${config.language ?? "—"} · ${config.styling ?? "—"}`}
+      />
+      <Row label="Tokens →" value={config.tokenFile ?? "—"} mono />
+      <Row label="Components →" value={config.componentDir ?? "—"} mono />
+      <p className="mt-1 text-xs text-vs-text-muted">
+        No brief needed — the agent reads this source, extracts tokens &amp; variables, and
+        generates every component.
+      </p>
+    </Card>
+  );
+}
+
+function Row({
+  label,
+  value,
+  mono = false,
+}: {
+  label: string;
+  value: string;
+  mono?: boolean;
+}): React.JSX.Element {
+  return (
+    <div className="flex items-baseline gap-2 text-xs">
+      <span className="w-28 shrink-0 text-vs-text-muted">{label}</span>
+      <span className={`truncate text-vs-text-primary ${mono ? "font-mono" : ""}`}>{value}</span>
     </div>
   );
 }
@@ -184,121 +255,22 @@ function StatusBadge({
   );
 }
 
-// ── Stage: design input ──────────────────────────────────────────────
-
-function DesignInputStage({
-  project,
-  def,
-  onFlow,
-  done,
-}: {
-  project: Project;
-  def: StageDef;
-  onFlow: (f: Flow) => void;
-  done: boolean;
-}): React.JSX.Element {
-  const [figma, setFigma] = useState("");
-  const [busy, setBusy] = useState(false);
-
-  async function complete(): Promise<void> {
-    setBusy(true);
-    try {
-      onFlow(await api.completeInput(project.path, def.id));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <Card className="flex flex-col gap-3 p-4">
-      <p className="text-sm text-vs-text-secondary">
-        Provide your design source. Claude Code reaches Figma through your own Figma MCP; ZIP
-        exports and folders are read from the project.
-      </p>
-      <label className="text-xs text-vs-text-muted">Figma link (optional)</label>
-      <input
-        value={figma}
-        onChange={(e) => setFigma(e.target.value)}
-        placeholder="https://www.figma.com/design/…"
-        className="rounded-md border border-vs-border-default bg-vs-bg-primary px-3 py-2 text-sm text-vs-text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-vs-accent-subtle"
-      />
-      <p className="text-xs text-vs-text-muted">
-        Or drop a ZIP export / place an existing folder into the project, then continue.
-      </p>
-      <div className="flex items-center gap-2">
-        <Button variant="primary" disabled={busy || done} onClick={() => void complete()}>
-          {done ? "Provided ✓" : busy ? "Saving…" : "Continue"}
-        </Button>
-        <Button variant="ghost" onClick={() => void api.openFolder(project.path)}>
-          Open folder
-        </Button>
-      </div>
-    </Card>
-  );
-}
-
-// ── Stage: brief ─────────────────────────────────────────────────────
-
-function BriefStage({
-  project,
-  onFlow,
-  done,
-}: {
-  project: Project;
-  onFlow: (f: Flow) => void;
-  done: boolean;
-}): React.JSX.Element {
-  const [brief, setBrief] = useState("");
-  const [busy, setBusy] = useState(false);
-
-  async function save(): Promise<void> {
-    setBusy(true);
-    try {
-      onFlow(await api.saveIntake(project.path, brief));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <Card className="flex flex-col gap-3 p-4">
-      <p className="text-sm text-vs-text-secondary">
-        Describe what to build — a design brief, a Figma frame URL, or a user story. This is
-        saved to <span className="font-mono text-xs">.sdd-de/brief.md</span> and feeds{" "}
-        <span className="font-mono text-xs">/enrich-brief</span>.
-      </p>
-      <textarea
-        rows={6}
-        value={brief}
-        onChange={(e) => setBrief(e.target.value)}
-        placeholder="e.g. A primary Button component with default/hover/disabled/loading states, per the Figma frame https://…"
-        className="resize-y rounded-md border border-vs-border-default bg-vs-bg-primary px-3 py-2 text-sm text-vs-text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-vs-accent-subtle"
-      />
-      <div>
-        <Button
-          variant="primary"
-          disabled={busy || brief.trim().length === 0}
-          onClick={() => void save()}
-        >
-          {done ? "Saved ✓ — re-save" : busy ? "Saving…" : "Save & continue"}
-        </Button>
-      </div>
-    </Card>
-  );
-}
-
-// ── Stage: agent (+ gate) ────────────────────────────────────────────
+// ── Stage: agent / source (+ gate) ───────────────────────────────────
 
 function AgentStage({
   project,
   def,
   state,
   onFlow,
+  header,
+  runLabel,
 }: {
   project: Project;
   def: StageDef;
   state: StageState;
   onFlow: (f: Flow) => void;
+  header?: React.ReactNode;
+  runLabel?: string;
 }): React.JSX.Element {
   const run = useAgentRun();
   const [artifact, setArtifact] = useState<string | null>(null);
@@ -351,6 +323,7 @@ function AgentStage({
 
   return (
     <div className="flex flex-col gap-4">
+      {header}
       <Card className="flex flex-col gap-3 p-4">
         <div className="flex items-center justify-between">
           <p className="text-xs text-vs-text-muted">
@@ -361,7 +334,7 @@ function AgentStage({
               <Button onClick={() => void run.cancel()}>Cancel</Button>
             ) : (
               <Button variant="primary" onClick={() => void start()}>
-                {state.status === "pending" ? "Run step" : "Run again"}
+                {state.status === "pending" ? (runLabel ?? "Run step") : "Run again"}
               </Button>
             )}
           </div>

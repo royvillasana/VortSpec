@@ -174,6 +174,25 @@ export function autoComponentDir(framework: string): string {
   return map[framework] ?? "src/components";
 }
 
+/** The parsed subset of `.sdd-de/project.yaml` the flow reads back. */
+export const projectConfigSchema = z.object({
+  designSource: z.string().optional(),
+  figmaFileUrl: z.string().optional(),
+  figmaTokenCollection: z.string().optional(),
+  componentLibrary: z.string().optional(),
+  githubRepoUrl: z.string().optional(),
+  githubBranch: z.string().optional(),
+  githubComponentDir: z.string().optional(),
+  zipFilePath: z.string().optional(),
+  stitchConnection: z.string().optional(),
+  framework: z.string().optional(),
+  language: z.string().optional(),
+  styling: z.string().optional(),
+  tokenFile: z.string().optional(),
+  componentDir: z.string().optional(),
+});
+export type ProjectConfig = z.infer<typeof projectConfigSchema>;
+
 /** Build `.sdd-de/project.yaml` exactly as the CLI does. */
 export function buildProjectYaml(a: SetupAnswers): string {
   const lines: string[] = [

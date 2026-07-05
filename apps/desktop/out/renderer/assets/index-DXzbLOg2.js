@@ -12908,12 +12908,14 @@ function GuidedFlow({
   onBack
 }) {
   const [flow, setFlow] = reactExports.useState(null);
+  const [config, setConfig] = reactExports.useState(null);
   const [selectedId, setSelectedId] = reactExports.useState(null);
   reactExports.useEffect(() => {
     void api.getFlow(project.path).then((f) => {
       setFlow(f);
       setSelectedId(f.state.currentStageId);
     });
+    void api.projectConfig(project.path).then(setConfig);
   }, [project.path]);
   if (!flow || !selectedId) {
     return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "px-6 py-10 text-sm text-vs-text-secondary", children: "Loading flow…" });
@@ -12952,6 +12954,7 @@ function GuidedFlow({
         def,
         state,
         locked,
+        config,
         onFlow: setFlow
       },
       def.id
@@ -12987,6 +12990,7 @@ function StageDetail({
   def,
   state,
   locked,
+  config,
   onFlow
 }) {
   return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col gap-4", children: [
@@ -12998,7 +13002,47 @@ function StageDetail({
       ] }),
       /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "mt-1 text-sm text-vs-text-secondary", children: def.summary })
     ] }),
-    locked ? /* @__PURE__ */ jsxRuntimeExports.jsx(Card, { className: "px-4 py-6 text-center text-sm text-vs-text-muted", children: "Complete the previous stages first." }) : def.kind === "input" ? /* @__PURE__ */ jsxRuntimeExports.jsx(DesignInputStage, { project, def, onFlow, done: state.status === "approved" }) : def.kind === "intake" ? /* @__PURE__ */ jsxRuntimeExports.jsx(BriefStage, { project, onFlow, done: state.status === "approved" }) : /* @__PURE__ */ jsxRuntimeExports.jsx(AgentStage, { project, def, state, onFlow })
+    locked ? /* @__PURE__ */ jsxRuntimeExports.jsx(Card, { className: "px-4 py-6 text-center text-sm text-vs-text-muted", children: "Complete the previous stages first." }) : def.kind === "source" ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+      AgentStage,
+      {
+        project,
+        def,
+        state,
+        onFlow,
+        header: /* @__PURE__ */ jsxRuntimeExports.jsx(SourceInfo, { config }),
+        runLabel: "Connect & build design system"
+      }
+    ) : /* @__PURE__ */ jsxRuntimeExports.jsx(AgentStage, { project, def, state, onFlow })
+  ] });
+}
+function SourceInfo({ config }) {
+  if (!config) {
+    return /* @__PURE__ */ jsxRuntimeExports.jsx(Card, { className: "p-4 text-sm text-vs-text-muted", children: "Reading project configuration…" });
+  }
+  const source = config.designSource === "figma" ? config.figmaFileUrl || "Figma file (URL not set)" : config.designSource === "library" ? `Component library: ${config.componentLibrary ?? "—"}` : config.designSource === "github" ? config.githubRepoUrl || "GitHub repository" : config.designSource === "zip" ? config.zipFilePath || "ZIP archive" : config.designSource === "stitch" ? `Google Stitch (${config.stitchConnection ?? "mcp"})` : "Not configured";
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs(Card, { className: "flex flex-col gap-2 p-4", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsx(Row, { label: "Design source", value: `${config.designSource ?? "—"}` }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx(Row, { label: "Source", value: source, mono: true }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx(
+      Row,
+      {
+        label: "Target",
+        value: `${config.framework ?? "—"} · ${config.language ?? "—"} · ${config.styling ?? "—"}`
+      }
+    ),
+    /* @__PURE__ */ jsxRuntimeExports.jsx(Row, { label: "Tokens →", value: config.tokenFile ?? "—", mono: true }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx(Row, { label: "Components →", value: config.componentDir ?? "—", mono: true }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "mt-1 text-xs text-vs-text-muted", children: "No brief needed — the agent reads this source, extracts tokens & variables, and generates every component." })
+  ] });
+}
+function Row({
+  label,
+  value,
+  mono = false
+}) {
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-baseline gap-2 text-xs", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "w-28 shrink-0 text-vs-text-muted", children: label }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: `truncate text-vs-text-primary ${mono ? "font-mono" : ""}`, children: value })
   ] });
 }
 function StatusBadge({
@@ -13008,91 +13052,13 @@ function StatusBadge({
   const label = locked ? "locked" : status;
   return /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "rounded-full border border-vs-border-default px-2 py-0.5 text-[10px] uppercase tracking-wide text-vs-text-muted", children: label });
 }
-function DesignInputStage({
-  project,
-  def,
-  onFlow,
-  done
-}) {
-  const [figma, setFigma] = reactExports.useState("");
-  const [busy, setBusy] = reactExports.useState(false);
-  async function complete() {
-    setBusy(true);
-    try {
-      onFlow(await api.completeInput(project.path, def.id));
-    } finally {
-      setBusy(false);
-    }
-  }
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs(Card, { className: "flex flex-col gap-3 p-4", children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-sm text-vs-text-secondary", children: "Provide your design source. Claude Code reaches Figma through your own Figma MCP; ZIP exports and folders are read from the project." }),
-    /* @__PURE__ */ jsxRuntimeExports.jsx("label", { className: "text-xs text-vs-text-muted", children: "Figma link (optional)" }),
-    /* @__PURE__ */ jsxRuntimeExports.jsx(
-      "input",
-      {
-        value: figma,
-        onChange: (e) => setFigma(e.target.value),
-        placeholder: "https://www.figma.com/design/…",
-        className: "rounded-md border border-vs-border-default bg-vs-bg-primary px-3 py-2 text-sm text-vs-text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-vs-accent-subtle"
-      }
-    ),
-    /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-xs text-vs-text-muted", children: "Or drop a ZIP export / place an existing folder into the project, then continue." }),
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "primary", disabled: busy || done, onClick: () => void complete(), children: done ? "Provided ✓" : busy ? "Saving…" : "Continue" }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "ghost", onClick: () => void api.openFolder(project.path), children: "Open folder" })
-    ] })
-  ] });
-}
-function BriefStage({
-  project,
-  onFlow,
-  done
-}) {
-  const [brief, setBrief] = reactExports.useState("");
-  const [busy, setBusy] = reactExports.useState(false);
-  async function save() {
-    setBusy(true);
-    try {
-      onFlow(await api.saveIntake(project.path, brief));
-    } finally {
-      setBusy(false);
-    }
-  }
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs(Card, { className: "flex flex-col gap-3 p-4", children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "text-sm text-vs-text-secondary", children: [
-      "Describe what to build — a design brief, a Figma frame URL, or a user story. This is saved to ",
-      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono text-xs", children: ".sdd-de/brief.md" }),
-      " and feeds",
-      " ",
-      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono text-xs", children: "/enrich-brief" }),
-      "."
-    ] }),
-    /* @__PURE__ */ jsxRuntimeExports.jsx(
-      "textarea",
-      {
-        rows: 6,
-        value: brief,
-        onChange: (e) => setBrief(e.target.value),
-        placeholder: "e.g. A primary Button component with default/hover/disabled/loading states, per the Figma frame https://…",
-        className: "resize-y rounded-md border border-vs-border-default bg-vs-bg-primary px-3 py-2 text-sm text-vs-text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-vs-accent-subtle"
-      }
-    ),
-    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { children: /* @__PURE__ */ jsxRuntimeExports.jsx(
-      Button,
-      {
-        variant: "primary",
-        disabled: busy || brief.trim().length === 0,
-        onClick: () => void save(),
-        children: done ? "Saved ✓ — re-save" : busy ? "Saving…" : "Save & continue"
-      }
-    ) })
-  ] });
-}
 function AgentStage({
   project,
   def,
   state,
-  onFlow
+  onFlow,
+  header,
+  runLabel
 }) {
   const run = useAgentRun();
   const [artifact, setArtifact] = reactExports.useState(null);
@@ -13132,10 +13098,11 @@ ${state.decisionNotes}` : base;
   }
   const approved = state.status === "approved";
   return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col gap-4", children: [
+    header,
     /* @__PURE__ */ jsxRuntimeExports.jsxs(Card, { className: "flex flex-col gap-3 p-4", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-xs text-vs-text-muted", children: state.decisionNotes ? "Re-run addresses your requested changes." : "Runs your own Claude Code." }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex gap-2", children: run.running ? /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { onClick: () => void run.cancel(), children: "Cancel" }) : /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "primary", onClick: () => void start(), children: state.status === "pending" ? "Run step" : "Run again" }) })
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex gap-2", children: run.running ? /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { onClick: () => void run.cancel(), children: "Cancel" }) : /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "primary", onClick: () => void start(), children: state.status === "pending" ? runLabel ?? "Run step" : "Run again" }) })
       ] }),
       /* @__PURE__ */ jsxRuntimeExports.jsx(RunPanel, { model: run.model })
     ] }),
@@ -16925,6 +16892,22 @@ function autoComponentDir(framework) {
   };
   return map[framework] ?? "src/components";
 }
+objectType({
+  designSource: stringType().optional(),
+  figmaFileUrl: stringType().optional(),
+  figmaTokenCollection: stringType().optional(),
+  componentLibrary: stringType().optional(),
+  githubRepoUrl: stringType().optional(),
+  githubBranch: stringType().optional(),
+  githubComponentDir: stringType().optional(),
+  zipFilePath: stringType().optional(),
+  stitchConnection: stringType().optional(),
+  framework: stringType().optional(),
+  language: stringType().optional(),
+  styling: stringType().optional(),
+  tokenFile: stringType().optional(),
+  componentDir: stringType().optional()
+});
 function NewProjectWizard({
   project,
   onCreated,

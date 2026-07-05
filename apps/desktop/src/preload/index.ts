@@ -77,6 +77,7 @@ const api = {
     invoke("artifact:read", { projectPath, relPath }),
   findLatestArtifact: (projectPath: string, suffix: string) =>
     invoke("artifact:findLatest", { projectPath, suffix }),
+  projectConfig: (projectPath: string) => invoke("project:config", projectPath),
 };
 
 export type VortSpecApi = typeof api;

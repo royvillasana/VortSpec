@@ -69,7 +69,7 @@ z.object({
   runId: z.string(),
   line: z.string()
 });
-const stageKindSchema = z.enum(["input", "intake", "agent", "verify"]);
+const stageKindSchema = z.enum(["source", "input", "intake", "agent", "verify"]);
 const stageStatusSchema = z.enum([
   "pending",
   "running",
@@ -109,39 +109,13 @@ const flowSchema = z.object({
 });
 const DEFAULT_FLOW = [
   {
-    id: "brief",
-    title: "Brief",
-    summary: "Provide the design brief, Figma frame URL, or user story that starts this cycle.",
-    kind: "intake",
-    gated: false
-  },
-  {
-    id: "enrich",
-    title: "Enrich",
-    summary: "/enrich-brief — turn the brief into an implementation-ready spec story with acceptance criteria.",
-    kind: "agent",
-    gated: true,
-    artifactGlob: "enriched-story.md",
-    promptTemplate: "/enrich-brief\n\nRead the brief in .sdd-de/brief.md and .sdd-de/project.yaml, then run the enrich-brief skill to produce the enriched spec story.",
-    allowedTools: ["Read", "Write", "Edit"]
-  },
-  {
-    id: "specify",
-    title: "Specify",
-    summary: "/generate-artifacts — generate the component, interaction, and page specs from the enriched story.",
-    kind: "agent",
+    id: "design-system",
+    title: "Design system",
+    summary: "Connect to your configured design source (e.g. the Figma file) and generate design tokens + every component in your framework and language.",
+    kind: "source",
     gated: true,
     artifactGlob: "-component-spec.md",
-    promptTemplate: "/generate-artifacts\n\nRun the generate-artifacts skill to produce the component, interaction, and page/feature specs under specs/ from the approved enriched story.",
-    allowedTools: ["Read", "Write", "Edit"]
-  },
-  {
-    id: "apply",
-    title: "Apply",
-    summary: "Create a feature branch and implement the spec one task at a time, tokens only — no hardcoded values.",
-    kind: "agent",
-    gated: false,
-    promptTemplate: "First create a feature branch (feature/[component]-spec). Then read the component spec under specs/ and implement it one task at a time, using only design tokens from the token file. Mark each task complete in the spec as you go.",
+    promptTemplate: "Read .sdd-de/project.yaml for `design_source` and the project configuration (framework, language, token_file, component_dir). Connect to the configured source and build the design system — do NOT ask for a brief; the design source is the input.\n\nFor `design_source: figma`, use the Figma MCP to read the file at `figma_file_url` and the variable collection named `figma_token_collection`.\n\n1. Extract every design token and variable from the source into the configured `token_file`.\n2. Generate every component in the design system into `component_dir` as components in the configured framework and language, using ONLY those tokens (build tokens → atoms → molecules → organisms), and write a component spec (`specs/[component]/[component]-component-spec.md`) for each.\n\nFollow the SDD-DE /enrich-brief and /generate-artifacts skills for the design_source branch.",
     allowedTools: ["Read", "Write", "Edit", "Bash"]
   },
   {
@@ -231,6 +205,22 @@ const setupAnswersSchema = z.object({
   tokenFile: z.string(),
   componentDir: z.string(),
   testRunner: testRunnerSchema
+});
+const projectConfigSchema = z.object({
+  designSource: z.string().optional(),
+  figmaFileUrl: z.string().optional(),
+  figmaTokenCollection: z.string().optional(),
+  componentLibrary: z.string().optional(),
+  githubRepoUrl: z.string().optional(),
+  githubBranch: z.string().optional(),
+  githubComponentDir: z.string().optional(),
+  zipFilePath: z.string().optional(),
+  stitchConnection: z.string().optional(),
+  framework: z.string().optional(),
+  language: z.string().optional(),
+  styling: z.string().optional(),
+  tokenFile: z.string().optional(),
+  componentDir: z.string().optional()
 });
 function buildProjectYaml(a) {
   const lines = [
@@ -373,6 +363,10 @@ const ipcContract = {
   "artifact:findLatest": {
     request: z.object({ projectPath: z.string(), suffix: z.string() }),
     response: z.object({ path: z.string(), content: z.string() }).nullable()
+  },
+  "project:config": {
+    request: z.string(),
+    response: projectConfigSchema.nullable()
   }
 };
 function execFileSafe(command, args, opts = {}) {
@@ -723,6 +717,54 @@ async function createProject(projectPath, answers) {
     }
   }
   return refreshProject(projectPath);
+}
+const KEY_MAP = {
+  design_source: "designSource",
+  figma_file_url: "figmaFileUrl",
+  figma_token_collection: "figmaTokenCollection",
+  component_library: "componentLibrary",
+  github_repo_url: "githubRepoUrl",
+  github_branch: "githubBranch",
+  github_component_dir: "githubComponentDir",
+  zip_file_path: "zipFilePath",
+  stitch_connection: "stitchConnection",
+  framework: "framework",
+  language: "language",
+  styling: "styling",
+  token_file: "tokenFile",
+  component_dir: "componentDir"
+};
+function parseFlatYaml(text) {
+  const out = {};
+  for (const raw of text.split("\n")) {
+    const line = raw.trim();
+    if (!line || line.startsWith("#")) continue;
+    const idx = line.indexOf(":");
+    if (idx < 0) continue;
+    const key = line.slice(0, idx).trim();
+    let value = line.slice(idx + 1).trim();
+    if (value.startsWith('"') && value.endsWith('"') || value.startsWith("'") && value.endsWith("'")) {
+      value = value.slice(1, -1);
+    }
+    out[key] = value;
+  }
+  return out;
+}
+async function readProjectConfig(projectPath) {
+  let text;
+  try {
+    text = await readFile(join(projectPath, ".sdd-de", "project.yaml"), "utf8");
+  } catch {
+    return null;
+  }
+  const flat = parseFlatYaml(text);
+  const config = {};
+  for (const [yamlKey, value] of Object.entries(flat)) {
+    const mapped = KEY_MAP[yamlKey];
+    if (mapped) config[mapped] = value;
+  }
+  const parsed = projectConfigSchema.safeParse(config);
+  return parsed.success ? parsed.data : null;
 }
 function truncate(s, n = 200) {
   return s.length > n ? `${s.slice(0, n)}…` : s;
@@ -1119,7 +1161,8 @@ const handlers = {
   "flow:saveIntake": ((req) => saveIntake(req.projectPath, req.content)),
   "flow:completeInput": ((req) => completeInput(req.projectPath, req.stageId)),
   "artifact:read": ((req) => readArtifact(req.projectPath, req.relPath)),
-  "artifact:findLatest": ((req) => findLatestArtifact(req.projectPath, req.suffix))
+  "artifact:findLatest": ((req) => findLatestArtifact(req.projectPath, req.suffix)),
+  "project:config": ((projectPath) => readProjectConfig(projectPath))
 };
 function registerIpc() {
   Object.keys(ipcContract).forEach((channel) => {

@@ -1,9 +1,9 @@
 import { z } from "zod";
 import { agentRunOptionsSchema } from "./run-events";
 import { flowSchema, stageStatusSchema } from "./flow";
-import { setupAnswersSchema } from "./setup";
+import { setupAnswersSchema, projectConfigSchema } from "./setup";
 
-export type { SetupAnswers } from "./setup";
+export type { SetupAnswers, ProjectConfig } from "./setup";
 
 // Re-exported so renderer code can import run + IPC types from one module.
 export type {
@@ -156,6 +156,10 @@ export const ipcContract = {
   "artifact:findLatest": {
     request: z.object({ projectPath: z.string(), suffix: z.string() }),
     response: z.object({ path: z.string(), content: z.string() }).nullable(),
+  },
+  "project:config": {
+    request: z.string(),
+    response: projectConfigSchema.nullable(),
   },
 } as const;
 

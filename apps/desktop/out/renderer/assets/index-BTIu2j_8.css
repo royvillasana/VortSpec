@@ -434,6 +434,10 @@
     width: calc(var(--spacing) * 6);
   }
 
+  .w-28 {
+    width: calc(var(--spacing) * 28);
+  }
+
   .w-56 {
     width: calc(var(--spacing) * 56);
   }
@@ -488,6 +492,10 @@
 
   .place-items-center {
     place-items: center;
+  }
+
+  .items-baseline {
+    align-items: baseline;
   }
 
   .items-center {
