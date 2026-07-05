@@ -482,6 +482,10 @@
     margin-bottom: calc(var(--spacing) * 6);
   }
 
+  .block {
+    display: block;
+  }
+
   .flex {
     display: flex;
   }
@@ -538,6 +542,10 @@
     max-height: calc(var(--spacing) * 80);
   }
 
+  .max-h-96 {
+    max-height: calc(var(--spacing) * 96);
+  }
+
   .min-h-screen {
     min-height: 100vh;
   }
@@ -584,6 +592,10 @@
 
   .max-w-4xl {
     max-width: var(--container-4xl);
+  }
+
+  .max-w-\[85\%\] {
+    max-width: 85%;
   }
 
   .max-w-\[280px\] {
@@ -640,6 +652,10 @@
 
   .items-center {
     align-items: center;
+  }
+
+  .items-end {
+    align-items: flex-end;
   }
 
   .items-start {
@@ -816,6 +832,10 @@
 
   .bg-vs-accent-muted {
     background-color: #7c6ff026;
+  }
+
+  .bg-vs-accent-subtle {
+    background-color: #7c6ff040;
   }
 
   .bg-vs-bg-elevated {
@@ -1129,7 +1149,13 @@
     .group-hover\:opacity-100:is(:where(.group):hover *) {
       opacity: 1;
     }
+  }
 
+  .placeholder\:text-vs-text-muted::placeholder {
+    color: #6b7280;
+  }
+
+  @media (hover: hover) {
     .hover\:border-vs-border-strong:hover {
       border-color: #34373d;
     }

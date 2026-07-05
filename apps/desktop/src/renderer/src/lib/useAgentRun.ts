@@ -11,12 +11,23 @@ import { initialRun, reduceRun, type RunModel } from "./run-model";
 export function useAgentRun(): {
   model: RunModel;
   running: boolean;
+  /** True once a session exists and no run is in flight — the Chat tab can reply. */
+  canChat: boolean;
   start: (opts: AgentRunOptions) => Promise<void>;
+  /** Send a chat follow-up: a new run resuming the captured session. */
+  send: (text: string) => Promise<void>;
   cancel: () => Promise<void>;
   reset: () => void;
 } {
   const [model, dispatch] = useReducer(reduceRun, initialRun);
   const runIdRef = useRef<string | null>(null);
+  const baseOptsRef = useRef<AgentRunOptions | null>(null);
+  const sessionIdRef = useRef<string | undefined>(undefined);
+
+  // Mirror the latest session id into a ref so `send` reads it without stale closure.
+  useEffect(() => {
+    sessionIdRef.current = model.sessionId;
+  }, [model.sessionId]);
 
   useEffect(() => {
     const offEvent = api.onAgentEvent(({ runId, event }) => {
@@ -32,8 +43,23 @@ export function useAgentRun(): {
   }, []);
 
   async function start(opts: AgentRunOptions): Promise<void> {
+    baseOptsRef.current = opts;
     dispatch({ type: "start" });
     const { runId } = await api.startRun(opts);
+    runIdRef.current = runId;
+  }
+
+  async function send(text: string): Promise<void> {
+    const base = baseOptsRef.current;
+    const sessionId = sessionIdRef.current;
+    const trimmed = text.trim();
+    if (!base || !sessionId || !trimmed || model.status === "running") return;
+    dispatch({ type: "send", text: trimmed });
+    const { runId } = await api.startRun({
+      ...base,
+      prompt: trimmed,
+      resumeSessionId: sessionId,
+    });
     runIdRef.current = runId;
   }
 
@@ -44,7 +70,9 @@ export function useAgentRun(): {
   return {
     model,
     running: model.status === "running",
+    canChat: model.status !== "running" && Boolean(model.sessionId),
     start,
+    send,
     cancel,
     reset: () => dispatch({ type: "reset" }),
   };

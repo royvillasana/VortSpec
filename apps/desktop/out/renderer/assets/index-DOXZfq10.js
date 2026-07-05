@@ -16369,6 +16369,7 @@ objectType({
 });
 const initialRun = {
   status: "idle",
+  messages: [],
   streamingText: "",
   activity: [],
   files: [],
@@ -16376,17 +16377,36 @@ const initialRun = {
   mcpErrors: []
 };
 let activitySeq = 0;
+let messageSeq = 0;
 function reduceRun(state, action) {
   switch (action.type) {
     case "reset":
       return initialRun;
     case "start":
       return { ...initialRun, status: "running" };
+    case "send":
+      return {
+        ...state,
+        status: "running",
+        streamingText: "",
+        result: void 0,
+        messages: [
+          ...state.messages,
+          { id: `m${messageSeq++}`, role: "user", text: action.text }
+        ]
+      };
     case "raw":
       return { ...state, raw: [...state.raw, action.line] };
     case "event":
       return applyEvent(state, action.event);
   }
+}
+function commitStreaming(state) {
+  if (!state.streamingText.trim()) return state.messages;
+  return [
+    ...state.messages,
+    { id: `m${messageSeq++}`, role: "assistant", text: state.streamingText }
+  ];
 }
 function pushActivity(state, label, tone) {
   return {
@@ -16397,13 +16417,22 @@ function pushActivity(state, label, tone) {
 function applyEvent(state, event) {
   switch (event.kind) {
     case "system-init":
-      return { ...state, model: event.model, mcpErrors: event.mcpErrors };
+      return {
+        ...state,
+        model: event.model,
+        mcpErrors: event.mcpErrors,
+        sessionId: event.sessionId ?? state.sessionId
+      };
     case "text-delta":
       return { ...state, streamingText: state.streamingText + event.text };
     case "assistant-text":
       return {
         ...state,
-        streamingText: state.streamingText + (state.streamingText ? "\n" : "") + event.text
+        messages: [
+          ...state.messages,
+          { id: `m${messageSeq++}`, role: "assistant", text: event.text }
+        ],
+        streamingText: ""
       };
     case "tool-use": {
       const label = event.path ? `${event.name} · ${event.path}` : event.name;
@@ -16424,12 +16453,20 @@ function applyEvent(state, event) {
       return {
         ...state,
         status: event.isError ? "error" : "done",
+        messages: commitStreaming(state),
+        streamingText: "",
+        sessionId: event.sessionId ?? state.sessionId,
         result: { isError: event.isError, text: event.text, costUsd: event.costUsd }
       };
     case "error":
       return pushActivity({ ...state, status: "error" }, event.message, "error");
     case "exit":
-      return state.status === "running" ? { ...state, status: event.code === null ? "canceled" : "done" } : state;
+      return state.status === "running" ? {
+        ...state,
+        status: event.code === null ? "canceled" : "done",
+        messages: commitStreaming(state),
+        streamingText: ""
+      } : state;
   }
 }
 function activityTone(tone) {
@@ -16447,6 +16484,11 @@ function activityTone(tone) {
 function useAgentRun() {
   const [model, dispatch] = reactExports.useReducer(reduceRun, initialRun);
   const runIdRef = reactExports.useRef(null);
+  const baseOptsRef = reactExports.useRef(null);
+  const sessionIdRef = reactExports.useRef(void 0);
+  reactExports.useEffect(() => {
+    sessionIdRef.current = model.sessionId;
+  }, [model.sessionId]);
   reactExports.useEffect(() => {
     const offEvent = api.onAgentEvent(({ runId, event }) => {
       if (runId === runIdRef.current) dispatch({ type: "event", event });
@@ -16460,8 +16502,22 @@ function useAgentRun() {
     };
   }, []);
   async function start(opts) {
+    baseOptsRef.current = opts;
     dispatch({ type: "start" });
     const { runId } = await api.startRun(opts);
+    runIdRef.current = runId;
+  }
+  async function send(text) {
+    const base = baseOptsRef.current;
+    const sessionId = sessionIdRef.current;
+    const trimmed = text.trim();
+    if (!base || !sessionId || !trimmed || model.status === "running") return;
+    dispatch({ type: "send", text: trimmed });
+    const { runId } = await api.startRun({
+      ...base,
+      prompt: trimmed,
+      resumeSessionId: sessionId
+    });
     runIdRef.current = runId;
   }
   async function cancel() {
@@ -16470,29 +16526,44 @@ function useAgentRun() {
   return {
     model,
     running: model.status === "running",
+    canChat: model.status !== "running" && Boolean(model.sessionId),
     start,
+    send,
     cancel,
     reset: () => dispatch({ type: "reset" })
   };
 }
-function RunPanel({ model }) {
-  const [showRaw, setShowRaw] = reactExports.useState(false);
+function RunPanel({
+  model,
+  onSend,
+  canChat = false
+}) {
+  const [tab, setTab] = reactExports.useState("chat");
   const running = model.status === "running";
   return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col gap-3", children: [
     /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx(StatusBar, { model }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx(
-        "button",
-        {
-          onClick: () => setShowRaw((v) => !v),
-          className: "text-xs text-vs-text-secondary hover:text-vs-text-primary",
-          title: "Toggle the raw Claude Code output",
-          children: showRaw ? "Friendly view" : "Terminal"
-        }
-      )
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex gap-0.5 rounded-md border border-vs-border-default bg-vs-bg-primary p-0.5 text-xs", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx(TabButton, { active: tab === "chat", onClick: () => setTab("chat"), children: "Chat" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(TabButton, { active: tab === "backend", onClick: () => setTab("backend"), children: "Backend Work" })
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(StatusBar, { model })
     ] }),
-    showRaw ? /* @__PURE__ */ jsxRuntimeExports.jsx(RawTerminal, { lines: model.raw }) : /* @__PURE__ */ jsxRuntimeExports.jsx(FriendlyView, { model, running })
+    tab === "chat" ? /* @__PURE__ */ jsxRuntimeExports.jsx(ChatView, { model, running, onSend, canChat }) : /* @__PURE__ */ jsxRuntimeExports.jsx(BackendView, { model })
   ] });
+}
+function TabButton({
+  active,
+  onClick,
+  children
+}) {
+  return /* @__PURE__ */ jsxRuntimeExports.jsx(
+    "button",
+    {
+      onClick,
+      className: `rounded px-2.5 py-1 transition-colors ${active ? "bg-vs-bg-elevated text-vs-text-primary" : "text-vs-text-muted hover:text-vs-text-primary"}`,
+      children
+    }
+  );
 }
 function StatusBar({ model }) {
   const label = {
@@ -16522,13 +16593,78 @@ function StatusBar({ model }) {
     ] })
   ] });
 }
-function FriendlyView({
+function ChatView({
   model,
-  running
+  running,
+  onSend,
+  canChat
 }) {
+  const [draft, setDraft] = reactExports.useState("");
+  const endRef = reactExports.useRef(null);
   const idle = model.status === "idle";
-  if (idle) {
-    return /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-xs text-vs-text-muted", children: "Start the step to stream live progress here." });
+  const empty = model.messages.length === 0 && !model.streamingText;
+  reactExports.useEffect(() => {
+    endRef.current?.scrollIntoView({ block: "end" });
+  }, [model.messages.length, model.streamingText]);
+  function submit() {
+    const text = draft.trim();
+    if (!text || !onSend || !canChat) return;
+    onSend(text);
+    setDraft("");
+  }
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col gap-3", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex max-h-96 flex-col gap-3 overflow-auto", children: [
+      empty && /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-xs text-vs-text-muted", children: idle ? "Start the step to stream the assistant’s replies here." : "Waiting for the assistant…" }),
+      model.messages.map((m) => /* @__PURE__ */ jsxRuntimeExports.jsx(Bubble, { role: m.role, text: m.text }, m.id)),
+      running && /* @__PURE__ */ jsxRuntimeExports.jsx(Bubble, { role: "assistant", text: model.streamingText, streaming: true }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { ref: endRef })
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex flex-col gap-1.5", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-end gap-2", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx(
+        "textarea",
+        {
+          rows: 2,
+          value: draft,
+          onChange: (e) => setDraft(e.target.value),
+          onKeyDown: (e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault();
+              submit();
+            }
+          },
+          disabled: !canChat,
+          placeholder: canChat ? "Reply to the assistant… (Enter to send, Shift+Enter for a new line)" : running ? "The assistant is working — you can reply once it pauses." : "Run the step first — replies resume that session.",
+          className: "flex-1 resize-y rounded-md border border-vs-border-default bg-vs-bg-primary px-3 py-2 text-sm text-vs-text-primary placeholder:text-vs-text-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-vs-accent-subtle disabled:opacity-50"
+        }
+      ),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "primary", disabled: !canChat || draft.trim().length === 0, onClick: submit, children: "Send" })
+    ] }) })
+  ] });
+}
+function Bubble({
+  role,
+  text,
+  streaming = false
+}) {
+  const isUser = role === "user";
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: `flex flex-col gap-1 ${isUser ? "items-end" : "items-start"}`, children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[10px] uppercase tracking-wide text-vs-text-muted", children: isUser ? "You" : "Assistant" }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs(
+      "div",
+      {
+        className: `max-w-[85%] whitespace-pre-wrap rounded-md px-3 py-2 text-sm ${isUser ? "bg-vs-accent-subtle text-vs-text-primary" : "border border-vs-border-default bg-vs-bg-surface text-vs-text-primary"}`,
+        children: [
+          text,
+          streaming && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-vs-text-muted", children: " ▍" })
+        ]
+      }
+    )
+  ] });
+}
+function BackendView({ model }) {
+  const [showRaw, setShowRaw] = reactExports.useState(false);
+  if (model.status === "idle") {
+    return /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-xs text-vs-text-muted", children: "Backend activity — tool calls, files touched, and raw output — appears here once the step runs." });
   }
   return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col gap-3", children: [
     model.mcpErrors.length > 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "rounded-md border border-vs-warning-border bg-vs-warning-muted px-3 py-2 text-xs text-vs-warning", children: [
@@ -16539,13 +16675,6 @@ function FriendlyView({
       /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "mb-1 text-xs font-medium text-vs-text-secondary", children: "Files touched" }),
       /* @__PURE__ */ jsxRuntimeExports.jsx("ul", { className: "flex flex-col gap-0.5", children: model.files.map((f) => /* @__PURE__ */ jsxRuntimeExports.jsx("li", { className: "font-mono text-xs text-vs-text-primary", children: f }, f)) })
     ] }),
-    (model.streamingText || running) && /* @__PURE__ */ jsxRuntimeExports.jsxs(Card, { className: "p-3", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "mb-1 text-xs font-medium text-vs-text-secondary", children: "Assistant" }),
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "whitespace-pre-wrap text-sm text-vs-text-primary", children: [
-        model.streamingText,
-        running && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-vs-text-muted", children: " ▍" })
-      ] })
-    ] }),
     model.activity.length > 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs(Card, { className: "p-3", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "mb-1 text-xs font-medium text-vs-text-secondary", children: "Activity" }),
       /* @__PURE__ */ jsxRuntimeExports.jsx("ul", { className: "flex flex-col gap-1", children: model.activity.map((a) => /* @__PURE__ */ jsxRuntimeExports.jsxs("li", { className: "text-xs text-vs-text-secondary", children: [
@@ -16553,7 +16682,20 @@ function FriendlyView({
         " ",
         a.label
       ] }, a.key)) })
-    ] })
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-xs font-medium text-vs-text-secondary", children: "Raw output" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(
+        "button",
+        {
+          onClick: () => setShowRaw((v) => !v),
+          className: "text-xs text-vs-text-secondary hover:text-vs-text-primary",
+          title: "Toggle the raw Claude Code stream-json output",
+          children: showRaw ? "Hide" : "Show"
+        }
+      )
+    ] }),
+    showRaw && /* @__PURE__ */ jsxRuntimeExports.jsx(RawTerminal, { lines: model.raw })
   ] });
 }
 function RawTerminal({ lines }) {
@@ -16767,6 +16909,8 @@ function AgentStage({
   const [artifactPath, setArtifactPath] = reactExports.useState("");
   const [notes, setNotes] = reactExports.useState("");
   const justFinished = run.model.status === "done";
+  const approved = state.status === "approved";
+  const showGate = def.gated && !approved && (justFinished || state.status === "needs-review");
   const prompt = reactExports.useMemo(() => {
     const base = def.promptTemplate ?? "Run this step.";
     return state.decisionNotes ? `${base}
@@ -16786,13 +16930,16 @@ ${state.decisionNotes}` : base;
   }
   reactExports.useEffect(() => {
     if (!justFinished || !def.gated) return;
+    void api.setStageStatus(project.path, def.id, "needs-review").then(onFlow);
+  }, [justFinished]);
+  reactExports.useEffect(() => {
+    if (!showGate) return;
     const resolve = def.artifactGlob ? api.findLatestArtifact(project.path, def.artifactGlob) : def.artifact ? api.readArtifact(project.path, def.artifact).then((c) => c === null ? null : { path: def.artifact, content: c }) : Promise.resolve(null);
     void resolve.then((r) => {
       setArtifact(r?.content ?? null);
       setArtifactPath(r?.path ?? "");
     });
-    void api.setStageStatus(project.path, def.id, "needs-review").then(onFlow);
-  }, [justFinished]);
+  }, [showGate, def.artifactGlob, def.artifact]);
   async function approve() {
     onFlow(await api.approveStage(project.path, def.id));
   }
@@ -16803,7 +16950,6 @@ ${state.decisionNotes}` : base;
   async function completeImplement() {
     onFlow(await api.approveStage(project.path, def.id));
   }
-  const approved = state.status === "approved";
   return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col gap-4", children: [
     header,
     /* @__PURE__ */ jsxRuntimeExports.jsxs(Card, { className: "flex flex-col gap-3 p-4", children: [
@@ -16811,12 +16957,12 @@ ${state.decisionNotes}` : base;
         /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-xs text-vs-text-muted", children: state.decisionNotes ? "Re-run addresses your requested changes." : "Runs autonomously — Figma MCP, file, and shell access are granted for this run." }),
         /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex gap-2", children: run.running ? /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { onClick: () => void run.cancel(), children: "Cancel" }) : /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "primary", onClick: () => void start(), children: state.status === "pending" ? runLabel2 ?? "Run step" : "Run again" }) })
       ] }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx(RunPanel, { model: run.model })
+      /* @__PURE__ */ jsxRuntimeExports.jsx(RunPanel, { model: run.model, onSend: (t) => void run.send(t), canChat: run.canChat })
     ] }),
-    def.gated && artifact !== null && !approved && /* @__PURE__ */ jsxRuntimeExports.jsx(
+    showGate && /* @__PURE__ */ jsxRuntimeExports.jsx(
       ArtifactGate,
       {
-        path: artifactPath,
+        path: artifactPath || void 0,
         content: artifact,
         notes,
         onNotes: setNotes,
@@ -16902,7 +17048,7 @@ function ComponentsStage({
           " components"
         ] })
       ] }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx(RunPanel, { model: run.model })
+      /* @__PURE__ */ jsxRuntimeExports.jsx(RunPanel, { model: run.model, onSend: (t) => void run.send(t), canChat: run.canChat })
     ] }) : /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col gap-3", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsx(Card, { className: "flex flex-col divide-y divide-vs-border-subtle p-0", children: (components ?? []).map((c) => {
         const isBuilt = built.has(c.name);
@@ -16923,7 +17069,7 @@ function ComponentsStage({
           )
         ] }, c.name);
       }) }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx(RunPanel, { model: run.model })
+      /* @__PURE__ */ jsxRuntimeExports.jsx(RunPanel, { model: run.model, onSend: (t) => void run.send(t), canChat: run.canChat })
     ] }),
     canApprove && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between rounded-md border border-vs-border-default bg-vs-bg-surface px-4 py-3", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-sm text-vs-text-secondary", children: mode === "all" ? "All components built." : `All ${total} components built.` }),
@@ -16968,13 +17114,13 @@ function ArtifactGate({
   const [mode, setMode] = reactExports.useState("view");
   return /* @__PURE__ */ jsxRuntimeExports.jsxs(Card, { className: "flex flex-col gap-3 p-4", children: [
     /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "text-xs font-medium text-vs-text-secondary", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-xs font-medium text-vs-text-secondary", children: path ? /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
         "Review artifact · ",
         /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono", children: path })
-      ] }),
+      ] }) : "Review this step, then approve to continue" }),
       /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "rounded-full border border-vs-warning-border px-2 py-0.5 text-[10px] uppercase tracking-wide text-vs-warning", children: "needs review" })
     ] }),
-    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "max-h-80 overflow-auto rounded-md border border-vs-border-default bg-vs-bg-primary p-3", children: /* @__PURE__ */ jsxRuntimeExports.jsx("pre", { className: "whitespace-pre-wrap font-mono text-xs text-vs-text-primary", children: content }) }),
+    content !== null && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "max-h-80 overflow-auto rounded-md border border-vs-border-default bg-vs-bg-primary p-3", children: /* @__PURE__ */ jsxRuntimeExports.jsx("pre", { className: "whitespace-pre-wrap font-mono text-xs text-vs-text-primary", children: content }) }),
     mode === "changes" ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col gap-2", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsx(
         "textarea",

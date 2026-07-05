@@ -154,6 +154,9 @@ const DEFAULT_FLOW = [
     summary: "/visual-verify — compare the implementation to the spec across viewports; a11y audit; list discrepancies.",
     kind: "verify",
     gated: true,
+    // The skill writes specs/<component>/visual-verify-report.md — surface the
+    // newest one in the approval gate so this stage can be reviewed + approved.
+    artifactGlob: "visual-verify-report.md",
     promptTemplate: "/visual-verify\n\nRun the visual-verify skill: compare the live implementation to the spec across 375/768/1440px, check every token, variant, and state, run the accessibility audit, and report discrepancies.",
     allowedTools: ["Read", "Bash"]
   },

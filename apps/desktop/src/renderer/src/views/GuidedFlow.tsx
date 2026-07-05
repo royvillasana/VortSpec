@@ -306,6 +306,12 @@ function AgentStage({
   const [artifactPath, setArtifactPath] = useState("");
   const [notes, setNotes] = useState("");
   const justFinished = run.model.status === "done";
+  const approved = state.status === "approved";
+  // A gated stage is awaiting review once its run finishes, or if it was left in
+  // needs-review from a prior session. Without this, a gated stage with no
+  // artifact (e.g. visual-verify) had no approve control at all and soft-locked.
+  const showGate =
+    def.gated && !approved && (justFinished || state.status === "needs-review");
 
   const prompt = useMemo(() => {
     const base = def.promptTemplate ?? "Run this step.";
@@ -325,8 +331,17 @@ function AgentStage({
     if (def.gated) await onFlow(await api.setStageStatus(project.path, def.id, "running"));
   }
 
+  // Mark the stage needs-review exactly once, when its run finishes.
   useEffect(() => {
     if (!justFinished || !def.gated) return;
+    void api.setStageStatus(project.path, def.id, "needs-review").then(onFlow);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [justFinished]);
+
+  // Resolve the artifact whenever the gate is showing — including reloads where
+  // the stage is already needs-review with no fresh run in memory.
+  useEffect(() => {
+    if (!showGate) return;
     const resolve = def.artifactGlob
       ? api.findLatestArtifact(project.path, def.artifactGlob)
       : def.artifact
@@ -338,9 +353,8 @@ function AgentStage({
       setArtifact(r?.content ?? null);
       setArtifactPath(r?.path ?? "");
     });
-    void api.setStageStatus(project.path, def.id, "needs-review").then(onFlow);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [justFinished]);
+  }, [showGate, def.artifactGlob, def.artifact]);
 
   async function approve(): Promise<void> {
     onFlow(await api.approveStage(project.path, def.id));
@@ -352,8 +366,6 @@ function AgentStage({
   async function completeImplement(): Promise<void> {
     onFlow(await api.approveStage(project.path, def.id));
   }
-
-  const approved = state.status === "approved";
 
   return (
     <div className="flex flex-col gap-4">
@@ -375,12 +387,12 @@ function AgentStage({
             )}
           </div>
         </div>
-        <RunPanel model={run.model} />
+        <RunPanel model={run.model} onSend={(t) => void run.send(t)} canChat={run.canChat} />
       </Card>
 
-      {def.gated && artifact !== null && !approved && (
+      {showGate && (
         <ArtifactGate
-          path={artifactPath}
+          path={artifactPath || undefined}
           content={artifact}
           notes={notes}
           onNotes={setNotes}
@@ -514,7 +526,7 @@ function ComponentsStage({
               </Button>
             )}
           </div>
-          <RunPanel model={run.model} />
+          <RunPanel model={run.model} onSend={(t) => void run.send(t)} canChat={run.canChat} />
         </Card>
       ) : (
         <div className="flex flex-col gap-3">
@@ -549,7 +561,7 @@ function ComponentsStage({
               );
             })}
           </Card>
-          <RunPanel model={run.model} />
+          <RunPanel model={run.model} onSend={(t) => void run.send(t)} canChat={run.canChat} />
         </div>
       )}
 
@@ -609,8 +621,8 @@ function ArtifactGate({
   onApprove,
   onRequestChanges,
 }: {
-  path: string;
-  content: string;
+  path?: string;
+  content: string | null;
   notes: string;
   onNotes: (v: string) => void;
   onApprove: () => void;
@@ -621,15 +633,25 @@ function ArtifactGate({
     <Card className="flex flex-col gap-3 p-4">
       <div className="flex items-center justify-between">
         <p className="text-xs font-medium text-vs-text-secondary">
-          Review artifact · <span className="font-mono">{path}</span>
+          {path ? (
+            <>
+              Review artifact · <span className="font-mono">{path}</span>
+            </>
+          ) : (
+            "Review this step, then approve to continue"
+          )}
         </p>
         <span className="rounded-full border border-vs-warning-border px-2 py-0.5 text-[10px] uppercase tracking-wide text-vs-warning">
           needs review
         </span>
       </div>
-      <div className="max-h-80 overflow-auto rounded-md border border-vs-border-default bg-vs-bg-primary p-3">
-        <pre className="whitespace-pre-wrap font-mono text-xs text-vs-text-primary">{content}</pre>
-      </div>
+      {content !== null && (
+        <div className="max-h-80 overflow-auto rounded-md border border-vs-border-default bg-vs-bg-primary p-3">
+          <pre className="whitespace-pre-wrap font-mono text-xs text-vs-text-primary">
+            {content}
+          </pre>
+        </div>
+      )}
       {mode === "changes" ? (
         <div className="flex flex-col gap-2">
           <textarea
