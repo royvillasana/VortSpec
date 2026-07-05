@@ -102,6 +102,7 @@ export const ipcContract = {
     request: z.object({ create: z.boolean().default(false) }).optional(),
     response: projectSchema.nullable(),
   },
+  "workspace:createFolder": { request: z.void(), response: projectSchema.nullable() },
   "workspace:listProjects": { request: z.void(), response: projectListSchema },
   "workspace:openFolder": { request: z.string(), response: z.void() },
   "workspace:refreshProject": { request: z.string(), response: projectSchema },

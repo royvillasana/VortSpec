@@ -78,8 +78,24 @@ export async function pickFolder(
     buttonLabel: "Use this folder",
   });
   if (result.canceled || result.filePaths.length === 0) return null;
+  return registerPath(result.filePaths[0]!);
+}
 
-  const path = result.filePaths[0]!;
+/** Create a brand-new folder (name + location) and register it as a project. */
+export async function createFolder(): Promise<Project | null> {
+  const result = await dialog.showSaveDialog({
+    title: "Create a new project folder",
+    buttonLabel: "Create folder",
+    nameFieldLabel: "Folder name:",
+    message: "Choose where to create your new project folder",
+  });
+  if (result.canceled || !result.filePath) return null;
+  await mkdir(result.filePath, { recursive: true });
+  return registerPath(result.filePath);
+}
+
+/** Add a path to the registry (deduped) and return the hydrated project. */
+async function registerPath(path: string): Promise<Project> {
   const entries = await readRegistry();
   const existing = entries.find((e) => e.path === path);
   const entry: StoredProject =

@@ -4,7 +4,7 @@ import { electronApp, optimizer, is } from "@electron-toolkit/utils";
 import { z } from "zod";
 import { spawn } from "node:child_process";
 import { join, basename, dirname } from "node:path";
-import { access, readFile, mkdir, writeFile, cp, copyFile, appendFile, readdir, symlink, stat } from "node:fs/promises";
+import { access, mkdir, readFile, writeFile, cp, copyFile, appendFile, readdir, symlink, stat } from "node:fs/promises";
 import { createHash, randomUUID } from "node:crypto";
 import { createRequire } from "node:module";
 import { EventEmitter } from "node:events";
@@ -322,6 +322,7 @@ const ipcContract = {
     request: z.object({ create: z.boolean().default(false) }).optional(),
     response: projectSchema.nullable()
   },
+  "workspace:createFolder": { request: z.void(), response: projectSchema.nullable() },
   "workspace:listProjects": { request: z.void(), response: projectListSchema },
   "workspace:openFolder": { request: z.string(), response: z.void() },
   "workspace:refreshProject": { request: z.string(), response: projectSchema },
@@ -632,7 +633,20 @@ async function pickFolder(opts = { create: false }) {
     buttonLabel: "Use this folder"
   });
   if (result.canceled || result.filePaths.length === 0) return null;
-  const path = result.filePaths[0];
+  return registerPath(result.filePaths[0]);
+}
+async function createFolder() {
+  const result = await dialog.showSaveDialog({
+    title: "Create a new project folder",
+    buttonLabel: "Create folder",
+    nameFieldLabel: "Folder name:",
+    message: "Choose where to create your new project folder"
+  });
+  if (result.canceled || !result.filePath) return null;
+  await mkdir(result.filePath, { recursive: true });
+  return registerPath(result.filePath);
+}
+async function registerPath(path) {
   const entries = await readRegistry();
   const existing = entries.find((e) => e.path === path);
   const entry = existing ?? { id: projectId(path), path, addedAt: (/* @__PURE__ */ new Date()).toISOString() };
@@ -1086,6 +1100,7 @@ const handlers = {
   "env:verifyLogin": () => verifyClaudeLogin(),
   "env:openInstall": ((url) => shell.openExternal(url).then(() => void 0)),
   "workspace:pickFolder": ((req) => pickFolder(req ?? { create: false })),
+  "workspace:createFolder": (() => createFolder()),
   "workspace:listProjects": () => listProjects(),
   "workspace:openFolder": ((path) => openFolder(path)),
   "workspace:refreshProject": ((path) => refreshProject(path)),

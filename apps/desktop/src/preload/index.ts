@@ -45,6 +45,7 @@ const api = {
   openInstall: (url: string) => invoke("env:openInstall", url),
 
   pickFolder: (create = false) => invoke("workspace:pickFolder", { create }),
+  createFolder: () => invoke("workspace:createFolder"),
   listProjects: () => invoke("workspace:listProjects"),
   openFolder: (path: string) => invoke("workspace:openFolder", path),
   refreshProject: (path: string) => invoke("workspace:refreshProject", path),

@@ -22,18 +22,18 @@ export function Dashboard({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function addProject(): Promise<void> {
+  // Pick a project source, register it, and always run setup before the flow.
+  async function startProject(source: "new" | "existing"): Promise<void> {
     setBusy(true);
     setError(null);
     try {
-      const project = await api.pickFolder(false);
+      const project =
+        source === "new" ? await api.createFolder() : await api.pickFolder(false);
       if (!project) return;
       onProjects([project, ...projects.filter((p) => p.path !== project.path)]);
-      // "New project" always runs setup (design source + framework questions)
-      // before the flow — even for a folder that already has .sdd-de.
       onSetup(project);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not add project");
+      setError(e instanceof Error ? e.message : "Could not open project");
     } finally {
       setBusy(false);
     }
@@ -48,9 +48,14 @@ export function Dashboard({
             Choose a project to run the Spec-Driven Design Engineering flow.
           </p>
         </div>
-        <Button variant="primary" disabled={busy} onClick={() => void addProject()}>
-          {busy ? "Opening…" : "New project"}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="default" disabled={busy} onClick={() => void startProject("existing")}>
+            Open folder
+          </Button>
+          <Button variant="primary" disabled={busy} onClick={() => void startProject("new")}>
+            {busy ? "…" : "New folder"}
+          </Button>
+        </div>
       </header>
 
       {error && (
@@ -63,11 +68,17 @@ export function Dashboard({
         <Card className="flex flex-col items-center gap-2 px-6 py-14 text-center">
           <p className="text-sm font-medium text-vs-text-primary">No projects yet</p>
           <p className="max-w-xs text-xs text-vs-text-muted">
-            Add a project folder, answer a few setup questions, and start the guided flow.
+            Create a new folder or open an existing one, answer a few setup questions, and
+            start the guided flow.
           </p>
-          <Button variant="primary" className="mt-2" onClick={() => void addProject()}>
-            Add a project
-          </Button>
+          <div className="mt-2 flex items-center gap-2">
+            <Button variant="default" onClick={() => void startProject("existing")}>
+              Open folder
+            </Button>
+            <Button variant="primary" onClick={() => void startProject("new")}>
+              New folder
+            </Button>
+          </div>
         </Card>
       ) : (
         <ul className="flex flex-col gap-3">

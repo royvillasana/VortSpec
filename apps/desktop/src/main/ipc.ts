@@ -4,6 +4,7 @@ import { checkEnvironment, verifyClaudeLogin } from "./environment/env-manager";
 import {
   listProjects,
   pickFolder,
+  createFolder,
   refreshProject,
   openFolder,
 } from "./workspace/workspace-manager";
@@ -45,6 +46,7 @@ const handlers: Record<IpcChannel, Handler> = {
 
   "workspace:pickFolder": ((req?: { create: boolean }) =>
     pickFolder(req ?? { create: false })) as Handler,
+  "workspace:createFolder": (() => createFolder()) as Handler,
   "workspace:listProjects": () => listProjects(),
   "workspace:openFolder": ((path: string) => openFolder(path)) as Handler,
   "workspace:refreshProject": ((path: string) => refreshProject(path)) as Handler,

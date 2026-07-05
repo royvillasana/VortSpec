@@ -72,6 +72,7 @@ const api = {
   verifyLogin: () => invoke("env:verifyLogin"),
   openInstall: (url) => invoke("env:openInstall", url),
   pickFolder: (create = false) => invoke("workspace:pickFolder", { create }),
+  createFolder: () => invoke("workspace:createFolder"),
   listProjects: () => invoke("workspace:listProjects"),
   openFolder: (path) => invoke("workspace:openFolder", path),
   refreshProject: (path) => invoke("workspace:refreshProject", path),

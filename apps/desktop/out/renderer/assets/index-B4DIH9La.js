@@ -12638,16 +12638,16 @@ function Dashboard({
 }) {
   const [busy, setBusy] = reactExports.useState(false);
   const [error, setError] = reactExports.useState(null);
-  async function addProject() {
+  async function startProject(source) {
     setBusy(true);
     setError(null);
     try {
-      const project = await api.pickFolder(false);
+      const project = source === "new" ? await api.createFolder() : await api.pickFolder(false);
       if (!project) return;
       onProjects([project, ...projects.filter((p) => p.path !== project.path)]);
       onSetup(project);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not add project");
+      setError(e instanceof Error ? e.message : "Could not open project");
     } finally {
       setBusy(false);
     }
@@ -12658,13 +12658,19 @@ function Dashboard({
         /* @__PURE__ */ jsxRuntimeExports.jsx("h2", { className: "text-lg font-semibold text-vs-text-primary", children: "Projects" }),
         /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-sm text-vs-text-secondary", children: "Choose a project to run the Spec-Driven Design Engineering flow." })
       ] }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "primary", disabled: busy, onClick: () => void addProject(), children: busy ? "Opening…" : "New project" })
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "default", disabled: busy, onClick: () => void startProject("existing"), children: "Open folder" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "primary", disabled: busy, onClick: () => void startProject("new"), children: busy ? "…" : "New folder" })
+      ] })
     ] }),
     error && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "rounded-md border border-vs-error/40 bg-vs-error/10 px-4 py-2 text-sm text-vs-error", children: error }),
     projects.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsxs(Card, { className: "flex flex-col items-center gap-2 px-6 py-14 text-center", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-sm font-medium text-vs-text-primary", children: "No projects yet" }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "max-w-xs text-xs text-vs-text-muted", children: "Add a project folder, answer a few setup questions, and start the guided flow." }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "primary", className: "mt-2", onClick: () => void addProject(), children: "Add a project" })
+      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "max-w-xs text-xs text-vs-text-muted", children: "Create a new folder or open an existing one, answer a few setup questions, and start the guided flow." }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "mt-2 flex items-center gap-2", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "default", onClick: () => void startProject("existing"), children: "Open folder" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "primary", onClick: () => void startProject("new"), children: "New folder" })
+      ] })
     ] }) : /* @__PURE__ */ jsxRuntimeExports.jsx("ul", { className: "flex flex-col gap-3", children: projects.map((project) => /* @__PURE__ */ jsxRuntimeExports.jsx("li", { children: /* @__PURE__ */ jsxRuntimeExports.jsxs(Card, { className: "flex items-center gap-4 px-4 py-3", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "min-w-0 flex-1", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "truncate text-sm font-medium text-vs-text-primary", children: project.name }),
