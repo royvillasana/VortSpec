@@ -1,0 +1,180 @@
+@import "tailwindcss";
+/* v1 web-app extras (`tw-animate-css`, `shadcn/tailwind.css`) are re-added
+   when shadcn components are introduced in the guided-flow milestones. */
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  --font-heading: var(--font-geist-sans);
+
+  /* VortSpec design tokens */
+  --color-vs-bg-primary: #0B0C0E;
+  --color-vs-bg-surface: #141518;
+  --color-vs-bg-elevated: #1B1D21;
+  --color-vs-bg-hover: #17181C;
+  --color-vs-border-default: #26282D;
+  --color-vs-border-strong: #34373D;
+  --color-vs-border-subtle: #1B1D21;
+  --color-vs-text-primary: #E7E9EC;
+  --color-vs-text-secondary: #9BA1AB;
+  --color-vs-text-muted: #6B7280;
+  --color-vs-accent: #7C6FF0;
+  --color-vs-accent-muted: rgba(124, 111, 240, 0.15);
+  --color-vs-accent-subtle: rgba(124, 111, 240, 0.25);
+  --color-vs-success: #30A46C;
+  --color-vs-success-muted: rgba(48, 164, 108, 0.08);
+  --color-vs-success-border: rgba(48, 164, 108, 0.35);
+  --color-vs-warning: #FFB224;
+  --color-vs-warning-muted: rgba(255, 178, 36, 0.08);
+  --color-vs-warning-border: rgba(255, 178, 36, 0.35);
+  --color-vs-error: #E5484D;
+  --color-vs-info: #2563EB;
+
+  /* shadcn overrides */
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+:root {
+  --background: #0B0C0E;
+  --foreground: #E7E9EC;
+  --card: #141518;
+  --card-foreground: #E7E9EC;
+  --popover: #1B1D21;
+  --popover-foreground: #E7E9EC;
+  --primary: #7C6FF0;
+  --primary-foreground: #FFFFFF;
+  --secondary: #1B1D21;
+  --secondary-foreground: #E7E9EC;
+  --muted: #1B1D21;
+  --muted-foreground: #6B7280;
+  --accent: #7C6FF0;
+  --accent-foreground: #FFFFFF;
+  --destructive: #E5484D;
+  --border: #26282D;
+  --input: #26282D;
+  --ring: rgba(124, 111, 240, 0.25);
+  --chart-1: #7C6FF0;
+  --chart-2: #30A46C;
+  --chart-3: #FFB224;
+  --chart-4: #2563EB;
+  --chart-5: #E5484D;
+  --radius: 0.5rem;
+  --sidebar: #141518;
+  --sidebar-foreground: #E7E9EC;
+  --sidebar-primary: #7C6FF0;
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent: #1B1D21;
+  --sidebar-accent-foreground: #E7E9EC;
+  --sidebar-border: #26282D;
+  --sidebar-ring: rgba(124, 111, 240, 0.25);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+    box-sizing: border-box;
+  }
+  body {
+    @apply bg-vs-bg-primary text-vs-text-primary;
+    margin: 0;
+    padding: 0;
+  }
+  html {
+    @apply font-sans;
+  }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: #26282D;
+  border-radius: 8px;
+  border: 2px solid #0B0C0E;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Toast animation */
+@keyframes vsToastIn {
+  from { transform: translateY(12px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+/* Panel slide-in */
+@keyframes vsPanelIn {
+  from { transform: translateX(24px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+/* Dialog scale-in */
+@keyframes vsDlgIn {
+  from { transform: scale(0.97); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+/* Spinner */
+@keyframes vsSpin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Fade in */
+@keyframes vsFade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Pulse for skeleton */
+@keyframes vsPulse {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 0.7; }
+}
+
+/* Import progress bar pulse */
+@keyframes vsImportPulse {
+  0%, 100% { width: 34%; }
+  50% { width: 44%; }
+}

@@ -3,7 +3,7 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "outputs": ["dist/**", ".next/**"],
+      "outputs": ["out/**", "dist/**"],
       "inputs": ["src/**", "package.json", "tsconfig.json"]
     },
     "test": {

@@ -1,9 +1,9 @@
 import { defineWorkspace } from "vitest/config";
 
-export default defineWorkspace([
-  "packages/ir/vitest.config.ts",
-  "packages/pipeline/vitest.config.ts",
-  "packages/llm/vitest.config.ts",
-  "packages/adapters/vitest.config.ts",
-  "packages/codegen/vitest.config.ts",
-]);
+/**
+ * Test suites are registered per app/package as they gain tests.
+ * The v1 packages (ir/pipeline/llm/adapters/codegen) were removed in the
+ * desktop pivot. The desktop app's main-process unit tests (Vitest) and the
+ * AgentAdapter transcript-fixture tests land in D1.
+ */
+export default defineWorkspace(["apps/*/vitest.config.ts"]);
