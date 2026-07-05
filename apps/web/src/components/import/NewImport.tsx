@@ -3,6 +3,8 @@
 import { useState, useRef, useCallback } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { startImport } from "@/app/projects/[id]/import/actions";
+import { startFigmaImport } from "@/app/projects/[id]/import/figma-actions";
+import { saveFigmaPAT } from "@/lib/data/figma";
 
 /* ── File chip ─────────────────────────────────────────────────── */
 
@@ -136,6 +138,14 @@ export function NewImport() {
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
 
+  // Figma state
+  const [figmaUrl, setFigmaUrl] = useState("");
+  const [figmaPat, setFigmaPat] = useState("");
+  const [showPatInput, setShowPatInput] = useState(false);
+  const [figmaError, setFigmaError] = useState<string | null>(null);
+  const [figmaImporting, setFigmaImporting] = useState(false);
+
+  const isFigmaUrlValid = /figma\.com\/(design|file)\/[A-Za-z0-9]+/.test(figmaUrl);
   const hasSource = zipFile !== null;
 
   // ZIP file handler
@@ -240,22 +250,87 @@ export function NewImport() {
           {/* Card 2: Figma */}
           <div className="bg-vs-bg-surface border border-vs-border-default rounded-lg p-6">
             <h2 className="text-[14px] font-medium text-vs-text-primary mb-1">
-              Connect Figma
+              Import from Figma
             </h2>
-            <p className="text-[12px] text-vs-text-secondary leading-relaxed mb-4">
-              Import published components and variables from a Figma file.
+            <p className="text-[12px] text-vs-text-secondary leading-relaxed mb-3">
+              Paste a Figma file URL to import components and variables.
             </p>
+
+            <input
+              type="text"
+              value={figmaUrl}
+              onChange={(e) => { setFigmaUrl(e.target.value); setFigmaError(null); }}
+              placeholder="https://figma.com/design/..."
+              className="w-full bg-vs-bg-primary border border-vs-border-default rounded-lg px-3 py-2 text-[12px] text-vs-text-primary placeholder:text-vs-text-muted focus:outline-none focus:border-vs-accent transition-colors mb-3"
+            />
+
+            {/* PAT section */}
+            {!showPatInput ? (
+              <button
+                type="button"
+                onClick={() => setShowPatInput(true)}
+                className="text-[11px] text-vs-accent hover:underline cursor-pointer bg-transparent border-none mb-3 block"
+              >
+                Set Figma access token
+              </button>
+            ) : (
+              <div className="mb-3">
+                <label className="block text-[11px] text-vs-text-muted mb-1">Personal Access Token</label>
+                <div className="flex gap-2">
+                  <input
+                    type="password"
+                    value={figmaPat}
+                    onChange={(e) => setFigmaPat(e.target.value)}
+                    placeholder="figd_..."
+                    className="flex-1 bg-vs-bg-primary border border-vs-border-default rounded px-2 py-1.5 text-[11px] text-vs-text-primary font-mono placeholder:text-vs-text-muted outline-none focus:border-vs-accent"
+                  />
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (figmaPat && projectId !== "new") {
+                        await saveFigmaPAT(projectId, figmaPat);
+                        setShowPatInput(false);
+                        setFigmaPat("");
+                      }
+                    }}
+                    className="text-[11px] bg-vs-accent text-white rounded px-2 py-1.5 cursor-pointer border-none hover:brightness-110"
+                  >
+                    Save
+                  </button>
+                </div>
+                <p className="text-[10px] text-vs-text-muted mt-1">
+                  Get one at <a href="https://www.figma.com/developers/api#access-tokens" target="_blank" rel="noopener" className="text-vs-accent hover:underline">figma.com/developers</a>
+                </p>
+              </div>
+            )}
+
+            {figmaError && (
+              <p className="text-[12px] text-vs-error mb-3">{figmaError}</p>
+            )}
 
             <button
               type="button"
-              className="border border-vs-border-strong bg-vs-bg-elevated rounded-lg px-4 py-2 text-[13px] text-vs-text-primary font-medium cursor-pointer hover:bg-vs-bg-hover transition-colors mb-4"
+              disabled={!isFigmaUrlValid || figmaImporting}
+              onClick={async () => {
+                if (!isFigmaUrlValid) return;
+                setFigmaImporting(true);
+                setFigmaError(null);
+                const result = await startFigmaImport(projectId, figmaUrl);
+                if (result.error) {
+                  setFigmaError(result.error);
+                  setFigmaImporting(false);
+                  return;
+                }
+                router.push(`/projects/${projectId}/import/${result.importId}`);
+              }}
+              className={`w-full rounded-lg px-4 py-2 text-[13px] font-medium transition-all ${
+                isFigmaUrlValid && !figmaImporting
+                  ? "bg-vs-accent text-white cursor-pointer hover:brightness-110"
+                  : "bg-vs-bg-elevated border border-vs-border-default text-vs-text-muted cursor-not-allowed"
+              }`}
             >
-              Connect Figma
+              {figmaImporting ? "Importing…" : "Import from Figma"}
             </button>
-
-            <p className="text-[12px] text-vs-text-muted leading-relaxed">
-              Optional. You can always start with a ZIP and connect Figma later.
-            </p>
           </div>
         </div>
 
