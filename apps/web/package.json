@@ -13,6 +13,7 @@
     "@supabase/server": "^1.3.0",
     "@supabase/ssr": "^0.12.0",
     "@supabase/supabase-js": "^2.110.0",
+    "@vortspec/codegen": "workspace:*",
     "@vortspec/pipeline": "workspace:*",
     "@xyflow/react": "^12.11.1",
     "class-variance-authority": "^0.7.1",

@@ -32,6 +32,9 @@ importers:
       '@supabase/supabase-js':
         specifier: ^2.110.0
         version: 2.110.0
+      '@vortspec/codegen':
+        specifier: workspace:*
+        version: link:../../packages/codegen
       '@vortspec/pipeline':
         specifier: workspace:*
         version: link:../../packages/pipeline
@@ -121,6 +124,31 @@ importers:
       vitest:
         specifier: ^3.2.0
         version: 3.2.6(@types/debug@4.1.13)(@types/node@22.20.0)(jiti@2.7.0)(lightningcss@1.32.0)(yaml@2.9.0)
+
+  packages/codegen:
+    dependencies:
+      '@vortspec/ir':
+        specifier: workspace:*
+        version: link:../ir
+      '@vortspec/llm':
+        specifier: workspace:*
+        version: link:../llm
+      zod:
+        specifier: ^3.25.0
+        version: 3.25.76
+    devDependencies:
+      '@types/node':
+        specifier: ^20.0.0
+        version: 20.19.43
+      tsup:
+        specifier: ^8.5.0
+        version: 8.5.1(@swc/core@1.15.43)(jiti@2.7.0)(postcss@8.5.16)(typescript@5.9.3)(yaml@2.9.0)
+      typescript:
+        specifier: ^5.9.0
+        version: 5.9.3
+      vitest:
+        specifier: ^3.2.0
+        version: 3.2.6(@types/debug@4.1.13)(@types/node@20.19.43)(jiti@2.7.0)(lightningcss@1.32.0)(yaml@2.9.0)
 
   packages/ir:
     dependencies:

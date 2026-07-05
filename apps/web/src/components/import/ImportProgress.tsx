@@ -130,10 +130,10 @@ function CompletionSummary({
 
       <div className="flex justify-center">
         <Link
-          href={`/projects/${projectId}/inspect/tokens`}
+          href={`/projects/${projectId}/configure`}
           className="bg-vs-accent text-white rounded-lg px-5 py-2.5 text-[13px] font-medium hover:opacity-90 transition-opacity no-underline"
         >
-          Open Inspector
+          Configure &amp; Generate
         </Link>
       </div>
     </div>

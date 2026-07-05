@@ -78,9 +78,11 @@ interface NavRailProps {
   projectName?: string;
   tokenCount?: number;
   issueCount?: number;
+  framework?: string;
+  styleLibrary?: string;
 }
 
-export function NavRail({ projectName, tokenCount, issueCount }: NavRailProps) {
+export function NavRail({ projectName, tokenCount, issueCount, framework, styleLibrary }: NavRailProps) {
   const pathname = usePathname();
   const params = useParams<{ id: string }>();
   const projectId = params.id ?? "unknown";
@@ -112,8 +114,13 @@ export function NavRail({ projectName, tokenCount, issueCount }: NavRailProps) {
               {displayName}
             </div>
             <div className="font-mono text-[11px] text-vs-text-muted">
-              {tokenCount != null ? `${tokenCount} tokens` : "loading…"}
+              {tokenCount != null ? `${tokenCount} tokens` : "loading\u2026"}
             </div>
+            {framework && (
+              <div className="font-mono text-[10px] text-vs-accent mt-0.5 truncate">
+                {framework}{styleLibrary ? ` \u00B7 ${styleLibrary}` : ""}
+              </div>
+            )}
           </div>
         </div>
       </Link>

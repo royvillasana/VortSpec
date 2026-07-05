@@ -8,12 +8,13 @@ async function getProjectInfo(projectId: string) {
   const supabase = await createServerSupabaseClient();
 
   const [projectResult, tokenCountResult, issueResult] = await Promise.all([
-    supabase.from("projects").select("name").eq("id", projectId).single(),
+    supabase.from("projects").select("name, framework, style_library").eq("id", projectId).single(),
     supabase.from("tokens").select("*", { count: "exact", head: true }).eq("project_id", projectId),
     supabase.from("components").select("doc").eq("project_id", projectId),
   ]);
 
-  const projectName = projectResult.data?.name ?? "Untitled Project";
+  const projectData = projectResult.data as { name?: string; framework?: string; style_library?: string } | null;
+  const projectName = projectData?.name ?? "Untitled Project";
 
   // Count issues from all component completeness reports
   let issueCount = 0;
@@ -26,10 +27,29 @@ async function getProjectInfo(projectId: string) {
     }
   }
 
+  // Format framework/style labels for display
+  const frameworkLabels: Record<string, string> = {
+    react: "React",
+    nextjs: "Next.js",
+    vue: "Vue",
+    svelte: "Svelte",
+  };
+  const styleLabels: Record<string, string> = {
+    tailwind: "Tailwind",
+    "css-modules": "CSS Modules",
+    "styled-components": "styled-components",
+  };
+
   return {
     projectName,
     tokenCount: tokenCountResult.count ?? 0,
     issueCount,
+    framework: projectData?.framework
+      ? frameworkLabels[projectData.framework] ?? projectData.framework
+      : undefined,
+    styleLibrary: projectData?.style_library
+      ? styleLabels[projectData.style_library] ?? projectData.style_library
+      : undefined,
   };
 }
 
@@ -51,6 +71,8 @@ export default async function InspectLayout({
             projectName={projectInfo.projectName}
             tokenCount={projectInfo.tokenCount}
             issueCount={projectInfo.issueCount}
+            framework={projectInfo.framework}
+            styleLibrary={projectInfo.styleLibrary}
           />
         }
       >
