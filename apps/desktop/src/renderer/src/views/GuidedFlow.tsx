@@ -161,7 +161,7 @@ function StageDetail({
       ) : def.kind === "input" ? (
         <DesignInputStage project={project} def={def} onFlow={onFlow} done={state.status === "approved"} />
       ) : def.kind === "intake" ? (
-        <IntakeStage project={project} onFlow={onFlow} done={state.status === "approved"} />
+        <BriefStage project={project} onFlow={onFlow} done={state.status === "approved"} />
       ) : (
         <AgentStage project={project} def={def} state={state} onFlow={onFlow} />
       )}
@@ -237,16 +237,9 @@ function DesignInputStage({
   );
 }
 
-// ── Stage: intake ────────────────────────────────────────────────────
+// ── Stage: brief ─────────────────────────────────────────────────────
 
-const INTAKE_QUESTIONS = [
-  { id: "product", q: "What are you building?" },
-  { id: "users", q: "Who are the primary users?" },
-  { id: "goals", q: "What does success look like?" },
-  { id: "constraints", q: "Any technical constraints or preferences?" },
-];
-
-function IntakeStage({
+function BriefStage({
   project,
   onFlow,
   done,
@@ -255,38 +248,38 @@ function IntakeStage({
   onFlow: (f: Flow) => void;
   done: boolean;
 }): React.JSX.Element {
-  const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [brief, setBrief] = useState("");
   const [busy, setBusy] = useState(false);
 
   async function save(): Promise<void> {
     setBusy(true);
     try {
-      const content =
-        "# Intake\n\n" +
-        INTAKE_QUESTIONS.map((q) => `## ${q.q}\n\n${answers[q.id]?.trim() ?? ""}\n`).join("\n");
-      onFlow(await api.saveIntake(project.path, content));
+      onFlow(await api.saveIntake(project.path, brief));
     } finally {
       setBusy(false);
     }
   }
 
-  const complete = INTAKE_QUESTIONS.every((q) => (answers[q.id]?.trim().length ?? 0) > 0);
-
   return (
-    <Card className="flex flex-col gap-4 p-4">
-      {INTAKE_QUESTIONS.map((q) => (
-        <div key={q.id} className="flex flex-col gap-1">
-          <label className="text-sm font-medium text-vs-text-primary">{q.q}</label>
-          <textarea
-            rows={2}
-            value={answers[q.id] ?? ""}
-            onChange={(e) => setAnswers((a) => ({ ...a, [q.id]: e.target.value }))}
-            className="resize-y rounded-md border border-vs-border-default bg-vs-bg-primary px-3 py-2 text-sm text-vs-text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-vs-accent-subtle"
-          />
-        </div>
-      ))}
+    <Card className="flex flex-col gap-3 p-4">
+      <p className="text-sm text-vs-text-secondary">
+        Describe what to build — a design brief, a Figma frame URL, or a user story. This is
+        saved to <span className="font-mono text-xs">.sdd-de/brief.md</span> and feeds{" "}
+        <span className="font-mono text-xs">/enrich-brief</span>.
+      </p>
+      <textarea
+        rows={6}
+        value={brief}
+        onChange={(e) => setBrief(e.target.value)}
+        placeholder="e.g. A primary Button component with default/hover/disabled/loading states, per the Figma frame https://…"
+        className="resize-y rounded-md border border-vs-border-default bg-vs-bg-primary px-3 py-2 text-sm text-vs-text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-vs-accent-subtle"
+      />
       <div>
-        <Button variant="primary" disabled={busy || !complete} onClick={() => void save()}>
+        <Button
+          variant="primary"
+          disabled={busy || brief.trim().length === 0}
+          onClick={() => void save()}
+        >
           {done ? "Saved ✓ — re-save" : busy ? "Saving…" : "Save & continue"}
         </Button>
       </div>
@@ -309,6 +302,7 @@ function AgentStage({
 }): React.JSX.Element {
   const run = useAgentRun();
   const [artifact, setArtifact] = useState<string | null>(null);
+  const [artifactPath, setArtifactPath] = useState("");
   const [notes, setNotes] = useState("");
   const justFinished = run.model.status === "done";
 
@@ -326,10 +320,19 @@ function AgentStage({
   }
 
   useEffect(() => {
-    if (justFinished && def.gated && def.artifact) {
-      void api.readArtifact(project.path, def.artifact).then(setArtifact);
-      void api.setStageStatus(project.path, def.id, "needs-review").then(onFlow);
-    }
+    if (!justFinished || !def.gated) return;
+    const resolve = def.artifactGlob
+      ? api.findLatestArtifact(project.path, def.artifactGlob)
+      : def.artifact
+        ? api
+            .readArtifact(project.path, def.artifact)
+            .then((c) => (c === null ? null : { path: def.artifact!, content: c }))
+        : Promise.resolve(null);
+    void resolve.then((r) => {
+      setArtifact(r?.content ?? null);
+      setArtifactPath(r?.path ?? "");
+    });
+    void api.setStageStatus(project.path, def.id, "needs-review").then(onFlow);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [justFinished]);
 
@@ -368,7 +371,7 @@ function AgentStage({
 
       {def.gated && artifact !== null && !approved && (
         <ArtifactGate
-          path={def.artifact ?? ""}
+          path={artifactPath}
           content={artifact}
           notes={notes}
           onNotes={setNotes}

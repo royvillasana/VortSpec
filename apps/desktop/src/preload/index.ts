@@ -66,6 +66,8 @@ const api = {
     invoke("flow:completeInput", { projectPath, stageId }),
   readArtifact: (projectPath: string, relPath: string) =>
     invoke("artifact:read", { projectPath, relPath }),
+  findLatestArtifact: (projectPath: string, suffix: string) =>
+    invoke("artifact:findLatest", { projectPath, suffix }),
 };
 
 export type VortSpecApi = typeof api;

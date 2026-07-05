@@ -26,8 +26,11 @@ export const stageDefSchema = z.object({
   kind: stageKindSchema,
   /** produces an artifact that must be approved before advancing */
   gated: z.boolean().default(false),
-  /** relative path of the artifact this stage produces, if any */
+  /** relative path of the artifact this stage produces, if any (fixed path) */
   artifact: z.string().optional(),
+  /** filename suffix to resolve under specs/ when the path is dynamic
+   *  (SDD-DE writes specs/[feature-name]/…, so the feature name is not known ahead of time) */
+  artifactGlob: z.string().optional(),
   /** prompt handed to Claude Code for agent/verify stages */
   promptTemplate: z.string().optional(),
   allowedTools: z.array(z.string()).optional(),
@@ -56,77 +59,85 @@ export const flowSchema = z.object({
 export type Flow = z.infer<typeof flowSchema>;
 
 /**
- * Default SDD-DE stage set. This mirrors the shape of the CLI's cycle; the exact
- * prompts/skill invocations are refined against the real toolkit (the app never
- * invents methodology — it drives the CLI's steps).
+ * The SDD-DE mandatory cycle (from @royvillasana/sdd-de docs/sdd-mandatory-steps.md).
+ * The app drives these exact steps via the installed skills (`/enrich-brief`,
+ * `/generate-artifacts`, `/visual-verify`, `/sync-tokens`, `/commit`) — it never
+ * invents methodology. Skill invocation works in headless `-p` mode.
  */
 export const DEFAULT_FLOW: StageDef[] = [
   {
-    id: "design-input",
-    title: "Design input",
-    summary: "Provide the design source: a Figma link, a dropped export ZIP, or a folder.",
-    kind: "input",
-    gated: false,
-  },
-  {
-    id: "intake",
-    title: "Intake",
-    summary: "Answer the initial discovery questions so the agent has product context.",
+    id: "brief",
+    title: "Brief",
+    summary:
+      "Provide the design brief, Figma frame URL, or user story that starts this cycle.",
     kind: "intake",
     gated: false,
-    artifact: "intake.md",
   },
   {
-    id: "enrich-brief",
-    title: "Enrich brief",
-    summary: "The agent turns the intake and design into an enriched brief for review.",
+    id: "enrich",
+    title: "Enrich",
+    summary:
+      "/enrich-brief — turn the brief into an implementation-ready spec story with acceptance criteria.",
     kind: "agent",
     gated: true,
-    artifact: "brief.enriched.md",
+    artifactGlob: "enriched-story.md",
     promptTemplate:
-      "Run the SDD-DE enrich-brief step: read the intake answers and design input, and write an enriched brief.",
+      "/enrich-brief\n\nRead the brief in .sdd-de/brief.md and .sdd-de/project.yaml, then run the enrich-brief skill to produce the enriched spec story.",
     allowedTools: ["Read", "Write", "Edit"],
   },
   {
-    id: "spec",
-    title: "Spec",
-    summary: "Generate the component/screen spec from the approved brief.",
+    id: "specify",
+    title: "Specify",
+    summary:
+      "/generate-artifacts — generate the component, interaction, and page specs from the enriched story.",
     kind: "agent",
     gated: true,
-    artifact: "spec.md",
+    artifactGlob: "-component-spec.md",
     promptTemplate:
-      "Run the SDD-DE spec step: from the approved enriched brief, produce a spec.",
+      "/generate-artifacts\n\nRun the generate-artifacts skill to produce the component, interaction, and page/feature specs under specs/ from the approved enriched story.",
     allowedTools: ["Read", "Write", "Edit"],
   },
   {
-    id: "plan",
-    title: "Plan",
-    summary: "Produce an implementation plan from the approved spec.",
-    kind: "agent",
-    gated: true,
-    artifact: "plan.md",
-    promptTemplate:
-      "Run the SDD-DE plan step: from the approved spec, produce an implementation plan.",
-    allowedTools: ["Read", "Write", "Edit"],
-  },
-  {
-    id: "implement",
-    title: "Implement",
-    summary: "Generate the component code into the project from the approved plan.",
+    id: "apply",
+    title: "Apply",
+    summary:
+      "Create a feature branch and implement the spec one task at a time, tokens only — no hardcoded values.",
     kind: "agent",
     gated: false,
     promptTemplate:
-      "Run the SDD-DE implementation step: implement the approved plan as real code in this project.",
+      "First create a feature branch (feature/[component]-spec). Then read the component spec under specs/ and implement it one task at a time, using only design tokens from the token file. Mark each task complete in the spec as you go.",
     allowedTools: ["Read", "Write", "Edit", "Bash"],
   },
   {
-    id: "verify",
-    title: "Verify",
-    summary: "Run visual-verify and adversarial review; approve or send findings back.",
+    id: "visual-verify",
+    title: "Visual verify",
+    summary:
+      "/visual-verify — compare the implementation to the spec across viewports; a11y audit; list discrepancies.",
     kind: "verify",
+    gated: true,
+    promptTemplate:
+      "/visual-verify\n\nRun the visual-verify skill: compare the live implementation to the spec across 375/768/1440px, check every token, variant, and state, run the accessibility audit, and report discrepancies.",
+    allowedTools: ["Read", "Bash"],
+  },
+  {
+    id: "sync",
+    title: "Sync",
+    summary:
+      "/sync-tokens — reconcile design.md and token files with the decisions made during implementation.",
+    kind: "agent",
     gated: false,
     promptTemplate:
-      "Run the SDD-DE verification steps (visual-verify, adversarial review) and report findings.",
+      "/sync-tokens\n\nRun the sync-tokens skill: update design.md and token files so they reflect the implementation. No undocumented deviations.",
+    allowedTools: ["Read", "Write", "Edit"],
+  },
+  {
+    id: "commit",
+    title: "Commit",
+    summary: "/commit — open a PR where the spec is the PR description.",
+    kind: "agent",
+    gated: false,
+    promptTemplate:
+      "/commit\n\nRun the commit skill: commit the changes and open a PR whose description is the component spec, with the Figma link and QA screenshots. No direct pushes to main.",
     allowedTools: ["Read", "Bash"],
   },
 ];

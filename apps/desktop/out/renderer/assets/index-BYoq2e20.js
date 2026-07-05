@@ -12680,8 +12680,9 @@ function Dashboard({
         /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "truncate text-sm font-medium text-vs-text-primary", children: project.name }),
         /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "truncate text-xs text-vs-text-muted", children: project.path }),
         /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "mt-1 text-xs text-vs-text-secondary", children: project.toolkit.present ? /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
-          "SDD-DE toolkit v",
-          project.toolkit.version
+          "SDD-DE toolkit",
+          " ",
+          project.toolkit.version ? `v${project.toolkit.version}` : "installed"
         ] }) : /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-vs-warning", children: "Toolkit not installed" }) })
       ] }),
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex shrink-0 items-center gap-2", children: [
@@ -13002,7 +13003,7 @@ function StageDetail({
       ] }),
       /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "mt-1 text-sm text-vs-text-secondary", children: def.summary })
     ] }),
-    locked ? /* @__PURE__ */ jsxRuntimeExports.jsx(Card, { className: "px-4 py-6 text-center text-sm text-vs-text-muted", children: "Complete the previous stages first." }) : def.kind === "input" ? /* @__PURE__ */ jsxRuntimeExports.jsx(DesignInputStage, { project, def, onFlow, done: state.status === "approved" }) : def.kind === "intake" ? /* @__PURE__ */ jsxRuntimeExports.jsx(IntakeStage, { project, onFlow, done: state.status === "approved" }) : /* @__PURE__ */ jsxRuntimeExports.jsx(AgentStage, { project, def, state, onFlow })
+    locked ? /* @__PURE__ */ jsxRuntimeExports.jsx(Card, { className: "px-4 py-6 text-center text-sm text-vs-text-muted", children: "Complete the previous stages first." }) : def.kind === "input" ? /* @__PURE__ */ jsxRuntimeExports.jsx(DesignInputStage, { project, def, onFlow, done: state.status === "approved" }) : def.kind === "intake" ? /* @__PURE__ */ jsxRuntimeExports.jsx(BriefStage, { project, onFlow, done: state.status === "approved" }) : /* @__PURE__ */ jsxRuntimeExports.jsx(AgentStage, { project, def, state, onFlow })
   ] });
 }
 function StatusBadge({
@@ -13047,46 +13048,49 @@ function DesignInputStage({
     ] })
   ] });
 }
-const INTAKE_QUESTIONS = [
-  { id: "product", q: "What are you building?" },
-  { id: "users", q: "Who are the primary users?" },
-  { id: "goals", q: "What does success look like?" },
-  { id: "constraints", q: "Any technical constraints or preferences?" }
-];
-function IntakeStage({
+function BriefStage({
   project,
   onFlow,
   done
 }) {
-  const [answers, setAnswers] = reactExports.useState({});
+  const [brief, setBrief] = reactExports.useState("");
   const [busy, setBusy] = reactExports.useState(false);
   async function save() {
     setBusy(true);
     try {
-      const content = "# Intake\n\n" + INTAKE_QUESTIONS.map((q) => `## ${q.q}
-
-${answers[q.id]?.trim() ?? ""}
-`).join("\n");
-      onFlow(await api.saveIntake(project.path, content));
+      onFlow(await api.saveIntake(project.path, brief));
     } finally {
       setBusy(false);
     }
   }
-  const complete = INTAKE_QUESTIONS.every((q) => (answers[q.id]?.trim().length ?? 0) > 0);
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs(Card, { className: "flex flex-col gap-4 p-4", children: [
-    INTAKE_QUESTIONS.map((q) => /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col gap-1", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx("label", { className: "text-sm font-medium text-vs-text-primary", children: q.q }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx(
-        "textarea",
-        {
-          rows: 2,
-          value: answers[q.id] ?? "",
-          onChange: (e) => setAnswers((a) => ({ ...a, [q.id]: e.target.value })),
-          className: "resize-y rounded-md border border-vs-border-default bg-vs-bg-primary px-3 py-2 text-sm text-vs-text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-vs-accent-subtle"
-        }
-      )
-    ] }, q.id)),
-    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { children: /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "primary", disabled: busy || !complete, onClick: () => void save(), children: done ? "Saved ✓ — re-save" : busy ? "Saving…" : "Save & continue" }) })
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs(Card, { className: "flex flex-col gap-3 p-4", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "text-sm text-vs-text-secondary", children: [
+      "Describe what to build — a design brief, a Figma frame URL, or a user story. This is saved to ",
+      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono text-xs", children: ".sdd-de/brief.md" }),
+      " and feeds",
+      " ",
+      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono text-xs", children: "/enrich-brief" }),
+      "."
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx(
+      "textarea",
+      {
+        rows: 6,
+        value: brief,
+        onChange: (e) => setBrief(e.target.value),
+        placeholder: "e.g. A primary Button component with default/hover/disabled/loading states, per the Figma frame https://…",
+        className: "resize-y rounded-md border border-vs-border-default bg-vs-bg-primary px-3 py-2 text-sm text-vs-text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-vs-accent-subtle"
+      }
+    ),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+      Button,
+      {
+        variant: "primary",
+        disabled: busy || brief.trim().length === 0,
+        onClick: () => void save(),
+        children: done ? "Saved ✓ — re-save" : busy ? "Saving…" : "Save & continue"
+      }
+    ) })
   ] });
 }
 function AgentStage({
@@ -13097,6 +13101,7 @@ function AgentStage({
 }) {
   const run = useAgentRun();
   const [artifact, setArtifact] = reactExports.useState(null);
+  const [artifactPath, setArtifactPath] = reactExports.useState("");
   const [notes, setNotes] = reactExports.useState("");
   const justFinished = run.model.status === "done";
   const prompt = reactExports.useMemo(() => {
@@ -13112,10 +13117,13 @@ ${state.decisionNotes}` : base;
     if (def.gated) await onFlow(await api.setStageStatus(project.path, def.id, "running"));
   }
   reactExports.useEffect(() => {
-    if (justFinished && def.gated && def.artifact) {
-      void api.readArtifact(project.path, def.artifact).then(setArtifact);
-      void api.setStageStatus(project.path, def.id, "needs-review").then(onFlow);
-    }
+    if (!justFinished || !def.gated) return;
+    const resolve = def.artifactGlob ? api.findLatestArtifact(project.path, def.artifactGlob) : def.artifact ? api.readArtifact(project.path, def.artifact).then((c) => c === null ? null : { path: def.artifact, content: c }) : Promise.resolve(null);
+    void resolve.then((r) => {
+      setArtifact(r?.content ?? null);
+      setArtifactPath(r?.path ?? "");
+    });
+    void api.setStageStatus(project.path, def.id, "needs-review").then(onFlow);
   }, [justFinished]);
   async function approve() {
     onFlow(await api.approveStage(project.path, def.id));
@@ -13139,7 +13147,7 @@ ${state.decisionNotes}` : base;
     def.gated && artifact !== null && !approved && /* @__PURE__ */ jsxRuntimeExports.jsx(
       ArtifactGate,
       {
-        path: def.artifact ?? "",
+        path: artifactPath,
         content: artifact,
         notes,
         onNotes: setNotes,

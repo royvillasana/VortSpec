@@ -145,6 +145,10 @@ export const ipcContract = {
     request: z.object({ projectPath: z.string(), relPath: z.string() }),
     response: z.string().nullable(),
   },
+  "artifact:findLatest": {
+    request: z.object({ projectPath: z.string(), suffix: z.string() }),
+    response: z.object({ path: z.string(), content: z.string() }).nullable(),
+  },
 } as const;
 
 export type IpcContract = typeof ipcContract;

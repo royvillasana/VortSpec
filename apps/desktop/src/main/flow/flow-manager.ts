@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import { readFile, writeFile, mkdir } from "node:fs/promises";
+import { readFile, writeFile, mkdir, readdir, stat } from "node:fs/promises";
 import {
   DEFAULT_FLOW,
   flowStateSchema,
@@ -136,13 +136,52 @@ export async function requestChanges(
   return withFlow(next);
 }
 
-/** Persist intake answers to the project and complete the intake stage. */
+/** Persist the design brief to `.sdd-de/brief.md` and complete the brief stage. */
 export async function saveIntake(
   projectPath: string,
   content: string,
 ): Promise<Flow> {
-  await writeFile(join(projectPath, "intake.md"), content, "utf8");
-  return approveStage(projectPath, "intake");
+  const sddeDir = join(projectPath, ".sdd-de");
+  await mkdir(sddeDir, { recursive: true });
+  await writeFile(join(sddeDir, "brief.md"), content, "utf8");
+  return approveStage(projectPath, "brief");
+}
+
+/**
+ * Resolve a dynamic artifact (SDD-DE writes specs/[feature-name]/…). Scans
+ * `specs/` recursively for files whose name ends with `suffix` and returns the
+ * most recently modified one.
+ */
+export async function findLatestArtifact(
+  projectPath: string,
+  suffix: string,
+): Promise<{ path: string; content: string } | null> {
+  const specsRoot = join(projectPath, "specs");
+  let best: { path: string; mtime: number } | null = null;
+
+  async function walk(dir: string): Promise<void> {
+    let entries;
+    try {
+      entries = await readdir(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      const full = join(dir, entry.name);
+      if (entry.isDirectory()) {
+        await walk(full);
+      } else if (entry.name.endsWith(suffix)) {
+        const { mtimeMs } = await stat(full);
+        if (!best || mtimeMs > best.mtime) best = { path: full, mtime: mtimeMs };
+      }
+    }
+  }
+
+  await walk(specsRoot);
+  if (!best) return null;
+  const chosen: { path: string; mtime: number } = best;
+  const content = await readFile(chosen.path, "utf8");
+  return { path: chosen.path.slice(projectPath.length + 1), content };
 }
 
 /** Mark a non-gated input stage (e.g. design-input) complete and advance. */

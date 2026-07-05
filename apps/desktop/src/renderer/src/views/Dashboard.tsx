@@ -89,7 +89,10 @@ export function Dashboard({
                   <p className="truncate text-xs text-vs-text-muted">{project.path}</p>
                   <p className="mt-1 text-xs text-vs-text-secondary">
                     {project.toolkit.present ? (
-                      <>SDD-DE toolkit v{project.toolkit.version}</>
+                      <>
+                        SDD-DE toolkit{" "}
+                        {project.toolkit.version ? `v${project.toolkit.version}` : "installed"}
+                      </>
                     ) : (
                       <span className="text-vs-warning">Toolkit not installed</span>
                     )}

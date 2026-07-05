@@ -4,7 +4,7 @@ import { electronApp, optimizer, is } from "@electron-toolkit/utils";
 import { z } from "zod";
 import { spawn } from "node:child_process";
 import { join, basename } from "node:path";
-import { readFile, mkdir, writeFile } from "node:fs/promises";
+import { access, readFile, mkdir, writeFile, readdir, stat } from "node:fs/promises";
 import { createHash, randomUUID } from "node:crypto";
 import { EventEmitter } from "node:events";
 import __cjs_mod__ from "node:module";
@@ -83,8 +83,11 @@ const stageDefSchema = z.object({
   kind: stageKindSchema,
   /** produces an artifact that must be approved before advancing */
   gated: z.boolean().default(false),
-  /** relative path of the artifact this stage produces, if any */
+  /** relative path of the artifact this stage produces, if any (fixed path) */
   artifact: z.string().optional(),
+  /** filename suffix to resolve under specs/ when the path is dynamic
+   *  (SDD-DE writes specs/[feature-name]/…, so the feature name is not known ahead of time) */
+  artifactGlob: z.string().optional(),
   /** prompt handed to Claude Code for agent/verify stages */
   promptTemplate: z.string().optional(),
   allowedTools: z.array(z.string()).optional()
@@ -105,66 +108,66 @@ const flowSchema = z.object({
 });
 const DEFAULT_FLOW = [
   {
-    id: "design-input",
-    title: "Design input",
-    summary: "Provide the design source: a Figma link, a dropped export ZIP, or a folder.",
-    kind: "input",
+    id: "brief",
+    title: "Brief",
+    summary: "Provide the design brief, Figma frame URL, or user story that starts this cycle.",
+    kind: "intake",
     gated: false
   },
   {
-    id: "intake",
-    title: "Intake",
-    summary: "Answer the initial discovery questions so the agent has product context.",
-    kind: "intake",
-    gated: false,
-    artifact: "intake.md"
-  },
-  {
-    id: "enrich-brief",
-    title: "Enrich brief",
-    summary: "The agent turns the intake and design into an enriched brief for review.",
+    id: "enrich",
+    title: "Enrich",
+    summary: "/enrich-brief — turn the brief into an implementation-ready spec story with acceptance criteria.",
     kind: "agent",
     gated: true,
-    artifact: "brief.enriched.md",
-    promptTemplate: "Run the SDD-DE enrich-brief step: read the intake answers and design input, and write an enriched brief.",
+    artifactGlob: "enriched-story.md",
+    promptTemplate: "/enrich-brief\n\nRead the brief in .sdd-de/brief.md and .sdd-de/project.yaml, then run the enrich-brief skill to produce the enriched spec story.",
     allowedTools: ["Read", "Write", "Edit"]
   },
   {
-    id: "spec",
-    title: "Spec",
-    summary: "Generate the component/screen spec from the approved brief.",
+    id: "specify",
+    title: "Specify",
+    summary: "/generate-artifacts — generate the component, interaction, and page specs from the enriched story.",
     kind: "agent",
     gated: true,
-    artifact: "spec.md",
-    promptTemplate: "Run the SDD-DE spec step: from the approved enriched brief, produce a spec.",
+    artifactGlob: "-component-spec.md",
+    promptTemplate: "/generate-artifacts\n\nRun the generate-artifacts skill to produce the component, interaction, and page/feature specs under specs/ from the approved enriched story.",
     allowedTools: ["Read", "Write", "Edit"]
   },
   {
-    id: "plan",
-    title: "Plan",
-    summary: "Produce an implementation plan from the approved spec.",
-    kind: "agent",
-    gated: true,
-    artifact: "plan.md",
-    promptTemplate: "Run the SDD-DE plan step: from the approved spec, produce an implementation plan.",
-    allowedTools: ["Read", "Write", "Edit"]
-  },
-  {
-    id: "implement",
-    title: "Implement",
-    summary: "Generate the component code into the project from the approved plan.",
+    id: "apply",
+    title: "Apply",
+    summary: "Create a feature branch and implement the spec one task at a time, tokens only — no hardcoded values.",
     kind: "agent",
     gated: false,
-    promptTemplate: "Run the SDD-DE implementation step: implement the approved plan as real code in this project.",
+    promptTemplate: "First create a feature branch (feature/[component]-spec). Then read the component spec under specs/ and implement it one task at a time, using only design tokens from the token file. Mark each task complete in the spec as you go.",
     allowedTools: ["Read", "Write", "Edit", "Bash"]
   },
   {
-    id: "verify",
-    title: "Verify",
-    summary: "Run visual-verify and adversarial review; approve or send findings back.",
+    id: "visual-verify",
+    title: "Visual verify",
+    summary: "/visual-verify — compare the implementation to the spec across viewports; a11y audit; list discrepancies.",
     kind: "verify",
+    gated: true,
+    promptTemplate: "/visual-verify\n\nRun the visual-verify skill: compare the live implementation to the spec across 375/768/1440px, check every token, variant, and state, run the accessibility audit, and report discrepancies.",
+    allowedTools: ["Read", "Bash"]
+  },
+  {
+    id: "sync",
+    title: "Sync",
+    summary: "/sync-tokens — reconcile design.md and token files with the decisions made during implementation.",
+    kind: "agent",
     gated: false,
-    promptTemplate: "Run the SDD-DE verification steps (visual-verify, adversarial review) and report findings.",
+    promptTemplate: "/sync-tokens\n\nRun the sync-tokens skill: update design.md and token files so they reflect the implementation. No undocumented deviations.",
+    allowedTools: ["Read", "Write", "Edit"]
+  },
+  {
+    id: "commit",
+    title: "Commit",
+    summary: "/commit — open a PR where the spec is the PR description.",
+    kind: "agent",
+    gated: false,
+    promptTemplate: "/commit\n\nRun the commit skill: commit the changes and open a PR whose description is the component spec, with the Figma link and QA screenshots. No direct pushes to main.",
     allowedTools: ["Read", "Bash"]
   }
 ];
@@ -260,6 +263,10 @@ const ipcContract = {
   "artifact:read": {
     request: z.object({ projectPath: z.string(), relPath: z.string() }),
     response: z.string().nullable()
+  },
+  "artifact:findLatest": {
+    request: z.object({ projectPath: z.string(), suffix: z.string() }),
+    response: z.object({ path: z.string(), content: z.string() }).nullable()
   }
 };
 function execFileSafe(command, args, opts = {}) {
@@ -445,35 +452,29 @@ async function checkEnvironment() {
   const ready = checks.every((c) => c.status === "pass");
   return { checks, ready };
 }
-const MANIFEST_REL = join(".sdd-de", "manifest.json");
-async function readInstalledVersion(projectPath) {
+const SDD_DE_INSTALL_CMD = "npx @royvillasana/sdd-de";
+async function exists(path) {
   try {
-    const raw = await readFile(join(projectPath, MANIFEST_REL), "utf8");
-    const parsed = JSON.parse(raw);
-    return typeof parsed.version === "string" ? parsed.version : "unknown";
+    await access(path);
+    return true;
   } catch {
-    return null;
+    return false;
   }
 }
 async function getToolkitStatus(projectPath) {
-  const version = await readInstalledVersion(projectPath);
-  return {
-    present: version !== null,
-    version,
-    // Update detection compares against a known-latest source once the real
-    // toolkit is wired; until then we never claim an update is available.
-    updateAvailable: false
-  };
+  const sdde = join(projectPath, ".sdd-de");
+  const present = await exists(join(sdde, "project.yaml")) || await exists(join(sdde, "ai-specs", "skills"));
+  return { present, version: null, updateAvailable: false };
 }
 async function installToolkit(projectPath) {
-  const configured = process.env.VORTSPEC_TOOLKIT_INSTALL_CMD?.trim();
-  if (!configured) {
+  const override = process.env.VORTSPEC_TOOLKIT_INSTALL_CMD?.trim();
+  if (!override) {
     throw new Error(
-      "SDD-DE toolkit install command is not configured yet. Set VORTSPEC_TOOLKIT_INSTALL_CMD to the verified init command, or install the toolkit manually. (design open question — task 2.6)"
+      `SDD-DE setup is interactive. Run \`${SDD_DE_INSTALL_CMD}\` in a terminal in this project and answer the prompts, then re-check. (In-app terminal install arrives in D5.)`
     );
   }
-  const [cmd, ...args] = configured.split(/\s+/);
-  const r = await execFileSafe(cmd, args, { cwd: projectPath, timeoutMs: 12e4 });
+  const [cmd, ...args] = override.split(/\s+/);
+  const r = await execFileSafe(cmd, args, { cwd: projectPath, timeoutMs: 18e4 });
   if (r.spawnError || r.code !== 0) {
     throw new Error(
       `Toolkit install failed: ${r.spawnError ?? r.stderr.trim() ?? `exit ${r.code}`}`
@@ -872,8 +873,36 @@ async function requestChanges(projectPath, stageId, notes) {
   return withFlow(next);
 }
 async function saveIntake(projectPath, content) {
-  await writeFile(join(projectPath, "intake.md"), content, "utf8");
-  return approveStage(projectPath, "intake");
+  const sddeDir = join(projectPath, ".sdd-de");
+  await mkdir(sddeDir, { recursive: true });
+  await writeFile(join(sddeDir, "brief.md"), content, "utf8");
+  return approveStage(projectPath, "brief");
+}
+async function findLatestArtifact(projectPath, suffix) {
+  const specsRoot = join(projectPath, "specs");
+  let best = null;
+  async function walk(dir) {
+    let entries;
+    try {
+      entries = await readdir(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      const full = join(dir, entry.name);
+      if (entry.isDirectory()) {
+        await walk(full);
+      } else if (entry.name.endsWith(suffix)) {
+        const { mtimeMs } = await stat(full);
+        if (!best || mtimeMs > best.mtime) best = { path: full, mtime: mtimeMs };
+      }
+    }
+  }
+  await walk(specsRoot);
+  if (!best) return null;
+  const chosen = best;
+  const content = await readFile(chosen.path, "utf8");
+  return { path: chosen.path.slice(projectPath.length + 1), content };
 }
 async function completeInput(projectPath, stageId) {
   return approveStage(projectPath, stageId);
@@ -908,7 +937,8 @@ const handlers = {
   "flow:requestChanges": ((req) => requestChanges(req.projectPath, req.stageId, req.notes)),
   "flow:saveIntake": ((req) => saveIntake(req.projectPath, req.content)),
   "flow:completeInput": ((req) => completeInput(req.projectPath, req.stageId)),
-  "artifact:read": ((req) => readArtifact(req.projectPath, req.relPath))
+  "artifact:read": ((req) => readArtifact(req.projectPath, req.relPath)),
+  "artifact:findLatest": ((req) => findLatestArtifact(req.projectPath, req.suffix))
 };
 function registerIpc() {
   Object.keys(ipcContract).forEach((channel) => {

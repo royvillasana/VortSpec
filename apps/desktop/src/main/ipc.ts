@@ -17,6 +17,7 @@ import {
   saveIntake,
   completeInput,
   readArtifact,
+  findLatestArtifact,
 } from "./flow/flow-manager";
 import type { AgentRunOptions } from "../shared/run-events";
 import type { StageStatus } from "../shared/flow";
@@ -75,6 +76,8 @@ const handlers: Record<IpcChannel, Handler> = {
     completeInput(req.projectPath, req.stageId)) as Handler,
   "artifact:read": ((req: { projectPath: string; relPath: string }) =>
     readArtifact(req.projectPath, req.relPath)) as Handler,
+  "artifact:findLatest": ((req: { projectPath: string; suffix: string }) =>
+    findLatestArtifact(req.projectPath, req.suffix)) as Handler,
 };
 
 export function registerIpc(): void {
