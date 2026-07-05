@@ -1,6 +1,7 @@
-import { app, shell, BrowserWindow, ipcMain } from "electron";
+import { app, shell, BrowserWindow } from "electron";
 import { join } from "path";
 import { electronApp, optimizer, is } from "@electron-toolkit/utils";
+import { registerIpc } from "./ipc";
 
 /**
  * VortSpec desktop — main process (electron-vite).
@@ -56,7 +57,7 @@ app.whenReady().then(() => {
     optimizer.watchWindowShortcuts(window);
   });
 
-  registerIpcHandlers();
+  registerIpc();
   createWindow();
 
   app.on("activate", () => {
@@ -69,9 +70,3 @@ app.on("window-all-closed", () => {
     app.quit();
   }
 });
-
-/** IPC surface. Kept intentionally tiny for D0; grows with each milestone. */
-function registerIpcHandlers(): void {
-  ipcMain.handle("vortspec:isElectron", () => true);
-  ipcMain.handle("vortspec:getVersion", () => app.getVersion());
-}

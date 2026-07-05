@@ -21,13 +21,13 @@ Organized by the PRD's D0→D4 milestones. Each milestone ends with its PRD "Don
 ## 2. D0 — Electron skeleton & environment check
 
 - [x] 2.1 Migrate `apps/desktop` build to electron-vite; keep the electron-builder config and `build/` icons; app boots to an empty React + Tailwind renderer using the extracted `globals.css` tokens. → electron-vite + React 19 + Tailwind v4 (`@tailwindcss/vite`); main/preload/renderer restructure; placeholder cockpit `App.tsx` uses the `vs` tokens. Build green; live GUI boot to be confirmed by running `pnpm --filter @vortspec/desktop dev` on a machine with a display.
-- [ ] 2.2 Implement the main-process environment manager: detect Node version, git, Claude Code install, and Claude Code login state.
-- [ ] 2.3 Define the zod-validated IPC contract layer (main↔renderer) and the preload bridge.
-- [ ] 2.4 Build the environment-check screen: one pass/fail row per check with fix actions (install link; "open login" running the login flow in the embedded terminal), re-evaluating on completion (`environment-check`).
-- [ ] 2.5 Implement the workspace manager: project folder selection/creation, confining child processes to that folder (`workspace-toolkit`).
-- [ ] 2.6 Implement SDD-DE toolkit detection, install, and update, reporting the installed version (`workspace-toolkit`).
-- [ ] 2.7 Build the project dashboard listing known projects (name, path, toolkit version, last run status, quick actions), reusing v1 dashboard visual language (`workspace-toolkit`).
-- [ ] 2.8 **D0 acceptance:** a fresh machine reaches a ready project in under 5 minutes, entirely through the UI.
+- [x] 2.2 Implement the main-process environment manager: detect Node version, git, Claude Code install, and Claude Code login state. → `src/main/environment/env-manager.ts`. **Verified against the real machine** (Node/git/Claude Code detected, zod-valid report). Login is a lazy on-demand probe (non-bare `claude -p`) so a routine scan spends no usage; interactive login moves into the embedded terminal in D1.
+- [x] 2.3 Define the zod-validated IPC contract layer (main↔renderer) and the preload bridge. → `src/shared/ipc.ts` (contract), `src/main/ipc.ts` (validated registration), `src/preload/index.ts` (typed bridge). Every request+response is zod-parsed at the boundary.
+- [x] 2.4 Build the environment-check screen: one pass/fail row per check with fix actions (install link; "open login" running the login flow in the embedded terminal), re-evaluating on completion (`environment-check`). → `src/renderer/src/views/EnvironmentCheck.tsx`. Install-link + verify-login fix actions work; embedded-terminal login is deferred to D1 (PTY) with an interim instruction, per the `/login`-is-interactive-only finding.
+- [x] 2.5 Implement the workspace manager: project folder selection/creation, confining child processes to that folder (`workspace-toolkit`). → `src/main/workspace/workspace-manager.ts` (dialog folder pick, JSON registry in userData, disk-derived hydration).
+- [x] 2.6 Implement SDD-DE toolkit detection, install, and update, reporting the installed version (`workspace-toolkit`). → `src/main/workspace/toolkit-manager.ts`. Detection (`.sdd-de/manifest.json` version) + install/update interface implemented. NOTE: the exact init command is a documented seam (`VORTSPEC_TOOLKIT_INSTALL_CMD`) pending confirmation of the real SDD-DE CLI `init` against the toolkit source (design open question) — needs your input.
+- [x] 2.7 Build the project dashboard listing known projects (name, path, toolkit version, last run status, quick actions), reusing v1 dashboard visual language (`workspace-toolkit`). → `src/renderer/src/views/Dashboard.tsx` (cards, empty state, add-project, install-toolkit, open-folder; open-flow disabled until D1).
+- [ ] 2.8 **D0 acceptance:** a fresh machine reaches a ready project in under 5 minutes, entirely through the UI. → Env detection verified real + build/typecheck green. Remaining to close: (a) live GUI boot (run `pnpm --filter @vortspec/desktop dev` on a machine with a display), (b) the real SDD-DE toolkit install command (task 2.6 seam).
 
 ## 3. D1 — First wrapped run (AgentAdapter + run view)
 

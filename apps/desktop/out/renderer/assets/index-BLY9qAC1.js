@@ -12499,26 +12499,297 @@ function requireClient() {
 }
 var clientExports = requireClient();
 const ReactDOM = /* @__PURE__ */ getDefaultExportFromCjs(clientExports);
-function App() {
-  const [version, setVersion] = reactExports.useState("…");
-  reactExports.useEffect(() => {
-    window.vortspec?.getVersion().then(setVersion).catch(() => setVersion("unknown"));
-  }, []);
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex min-h-screen flex-col items-center justify-center gap-6 bg-vs-bg-primary text-vs-text-primary", children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col items-center gap-3", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "grid h-14 w-14 place-items-center rounded-2xl bg-vs-accent-muted text-2xl font-semibold text-vs-accent", children: "V" }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx("h1", { className: "text-2xl font-semibold tracking-tight", children: "VortSpec" }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-sm text-vs-text-secondary", children: "The Spec-Driven Design Engineering desktop cockpit" })
+const api = window.vortspec;
+function Button({
+  variant = "default",
+  className = "",
+  ...props
+}) {
+  const base = "inline-flex items-center justify-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-vs-accent-subtle";
+  const variants = {
+    primary: "bg-vs-accent text-white hover:opacity-90",
+    default: "bg-vs-bg-elevated text-vs-text-primary border border-vs-border-default hover:bg-vs-bg-hover",
+    ghost: "text-vs-text-secondary hover:bg-vs-bg-hover hover:text-vs-text-primary"
+  };
+  return /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: `${base} ${variants[variant]} ${className}`, ...props });
+}
+function Card({
+  children,
+  className = ""
+}) {
+  return /* @__PURE__ */ jsxRuntimeExports.jsx(
+    "div",
+    {
+      className: `rounded-lg border border-vs-border-default bg-vs-bg-surface ${className}`,
+      children
+    }
+  );
+}
+function Spinner() {
+  return /* @__PURE__ */ jsxRuntimeExports.jsx(
+    "span",
+    {
+      className: "inline-block h-3.5 w-3.5 rounded-full border-2 border-vs-border-strong border-t-vs-accent",
+      style: { animation: "vsSpin 0.7s linear infinite" }
+    }
+  );
+}
+const statusStyles = {
+  pass: { dot: "bg-vs-success", label: "text-vs-success" },
+  fail: { dot: "bg-vs-error", label: "text-vs-error" },
+  unknown: { dot: "bg-vs-text-muted", label: "text-vs-text-muted" },
+  checking: { dot: "bg-vs-warning", label: "text-vs-warning" }
+};
+function StatusDot({ status }) {
+  if (status === "checking") return /* @__PURE__ */ jsxRuntimeExports.jsx(Spinner, {});
+  return /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: `inline-block h-2.5 w-2.5 rounded-full ${statusStyles[status].dot}` });
+}
+function statusLabelClass(status) {
+  return statusStyles[status].label;
+}
+function EnvironmentCheck({
+  report,
+  onReport,
+  onContinue,
+  coreReady
+}) {
+  const [busy, setBusy] = reactExports.useState(null);
+  async function recheck() {
+    setBusy("recheck");
+    try {
+      onReport(await api.checkEnvironment());
+    } finally {
+      setBusy(null);
+    }
+  }
+  async function verifyLogin() {
+    setBusy("claude-login");
+    onReport(patchCheck(report, "claude-login", { status: "checking" }));
+    try {
+      const login = await api.verifyLogin();
+      onReport(patchCheck(report, "claude-login", login));
+    } finally {
+      setBusy(null);
+    }
+  }
+  async function runFix(check) {
+    if (!check.fix) return;
+    if (check.fix.kind === "install-link" && check.fix.url) {
+      await api.openInstall(check.fix.url);
+      return;
+    }
+    if (check.fix.kind === "verify" || check.fix.kind === "open-login") {
+      await verifyLogin();
+    }
+  }
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "mx-auto flex w-full max-w-xl flex-col gap-6 px-6 py-12", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("header", { className: "flex flex-col gap-1", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("h2", { className: "text-lg font-semibold text-vs-text-primary", children: "Environment check" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-sm text-vs-text-secondary", children: "VortSpec drives your own Claude Code. Let’s make sure everything it needs is present." })
     ] }),
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "rounded-lg border border-vs-border-default bg-vs-bg-surface px-5 py-4 text-center", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-xs uppercase tracking-wide text-vs-text-muted", children: "D0 skeleton" }),
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "mt-1 text-sm text-vs-text-secondary", children: [
-        "electron-vite renderer online · v",
-        version
-      ] })
+    /* @__PURE__ */ jsxRuntimeExports.jsx(Card, { children: /* @__PURE__ */ jsxRuntimeExports.jsx("ul", { className: "divide-y divide-vs-border-subtle", children: report.checks.map((check) => /* @__PURE__ */ jsxRuntimeExports.jsxs("li", { className: "flex items-center gap-3 px-4 py-3", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx(StatusDot, { status: check.status }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "min-w-0 flex-1", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-sm font-medium text-vs-text-primary", children: check.label }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: `truncate text-xs ${statusLabelClass(check.status)}`, children: check.detail })
+      ] }),
+      check.fix && /* @__PURE__ */ jsxRuntimeExports.jsx(
+        Button,
+        {
+          variant: check.status === "fail" ? "primary" : "default",
+          disabled: busy === check.id,
+          onClick: () => void runFix(check),
+          children: busy === check.id ? "Checking…" : check.fix.label
+        }
+      )
+    ] }, check.id)) }) }),
+    report.checks.find((c) => c.id === "claude-login")?.status === "fail" && /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "text-xs text-vs-text-muted", children: [
+      "Log in with Claude Code (run ",
+      /* @__PURE__ */ jsxRuntimeExports.jsx("code", { className: "text-vs-text-secondary", children: "claude" }),
+      " ",
+      "in a terminal and use ",
+      /* @__PURE__ */ jsxRuntimeExports.jsx("code", { className: "text-vs-text-secondary", children: "/login" }),
+      "), then verify. An embedded login terminal arrives in the next milestone."
     ] }),
-    /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "max-w-sm text-center text-xs text-vs-text-muted", children: "Next: onboarding & environment check (Node, git, Claude Code, login)." })
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "ghost", disabled: busy === "recheck", onClick: () => void recheck(), children: busy === "recheck" ? "Re-checking…" : "Re-check" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(
+        Button,
+        {
+          variant: "primary",
+          disabled: !coreReady,
+          title: coreReady ? void 0 : "Install the required tools first",
+          onClick: onContinue,
+          children: "Continue"
+        }
+      )
+    ] })
   ] });
+}
+function patchCheck(report, id, patch) {
+  const checks = report.checks.map((c) => c.id === id ? { ...c, ...patch } : c);
+  return { checks, ready: checks.every((c) => c.status === "pass") };
+}
+function Dashboard({
+  projects,
+  onProjects
+}) {
+  const [busy, setBusy] = reactExports.useState(false);
+  const [error, setError] = reactExports.useState(null);
+  async function addProject() {
+    setBusy(true);
+    setError(null);
+    try {
+      const project = await api.pickFolder(false);
+      if (!project) return;
+      const next = [project, ...projects.filter((p) => p.path !== project.path)];
+      onProjects(next);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not add project");
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function installToolkit(project) {
+    setError(null);
+    try {
+      const toolkit = await api.installToolkit(project.path);
+      onProjects(
+        projects.map((p) => p.path === project.path ? { ...p, toolkit } : p)
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Toolkit install failed");
+    }
+  }
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "mx-auto flex w-full max-w-3xl flex-col gap-6 px-6 py-10", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("header", { className: "flex items-center justify-between", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("h2", { className: "text-lg font-semibold text-vs-text-primary", children: "Projects" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-sm text-vs-text-secondary", children: "Choose a project to run the Spec-Driven Design Engineering flow." })
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "primary", disabled: busy, onClick: () => void addProject(), children: busy ? "Opening…" : "New project" })
+    ] }),
+    error && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "rounded-md border border-vs-error/40 bg-vs-error/10 px-4 py-2 text-sm text-vs-error", children: error }),
+    projects.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsxs(Card, { className: "flex flex-col items-center gap-2 px-6 py-14 text-center", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-sm font-medium text-vs-text-primary", children: "No projects yet" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "max-w-xs text-xs text-vs-text-muted", children: "Add a project folder to install the SDD-DE toolkit and start the guided flow." }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "primary", className: "mt-2", onClick: () => void addProject(), children: "Add a project" })
+    ] }) : /* @__PURE__ */ jsxRuntimeExports.jsx("ul", { className: "flex flex-col gap-3", children: projects.map((project) => /* @__PURE__ */ jsxRuntimeExports.jsx("li", { children: /* @__PURE__ */ jsxRuntimeExports.jsxs(Card, { className: "flex items-center gap-4 px-4 py-3", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "min-w-0 flex-1", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "truncate text-sm font-medium text-vs-text-primary", children: project.name }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "truncate text-xs text-vs-text-muted", children: project.path }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "mt-1 text-xs text-vs-text-secondary", children: project.toolkit.present ? /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+          "SDD-DE toolkit v",
+          project.toolkit.version
+        ] }) : /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-vs-warning", children: "Toolkit not installed" }) })
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex shrink-0 items-center gap-2", children: [
+        !project.toolkit.present && /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { onClick: () => void installToolkit(project), children: "Install toolkit" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "ghost", onClick: () => void api.openFolder(project.path), children: "Open folder" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "default", disabled: true, title: "Guided flow arrives in D1", children: "Open flow" })
+      ] })
+    ] }) }, project.id)) })
+  ] });
+}
+const CORE_IDS = ["node", "git", "claude-install"];
+function isCoreReady(report) {
+  if (!report) return false;
+  return CORE_IDS.every(
+    (id) => report.checks.find((c) => c.id === id)?.status === "pass"
+  );
+}
+function App() {
+  const [report, setReport] = reactExports.useState(null);
+  const [projects, setProjects] = reactExports.useState([]);
+  const [view, setView] = reactExports.useState("env");
+  const [loading, setLoading] = reactExports.useState(true);
+  reactExports.useEffect(() => {
+    void (async () => {
+      const [envReport, projectList] = await Promise.all([
+        api.checkEnvironment(),
+        api.listProjects()
+      ]);
+      setReport(envReport);
+      setProjects(projectList);
+      setView(envReport.ready ? "dashboard" : "env");
+      setLoading(false);
+    })();
+  }, []);
+  const coreReady = isCoreReady(report);
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex min-h-screen flex-col bg-vs-bg-primary text-vs-text-primary", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsx(
+      TopBar,
+      {
+        view,
+        coreReady,
+        onNavigate: (v) => setView(v)
+      }
+    ),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("main", { className: "flex-1", children: loading || !report ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex h-full items-center justify-center gap-2 py-24 text-vs-text-secondary", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx(Spinner, {}),
+      " Checking your environment…"
+    ] }) : view === "env" ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+      EnvironmentCheck,
+      {
+        report,
+        onReport: setReport,
+        coreReady,
+        onContinue: () => setView("dashboard")
+      }
+    ) : /* @__PURE__ */ jsxRuntimeExports.jsx(Dashboard, { projects, onProjects: setProjects }) })
+  ] });
+}
+function TopBar({
+  view,
+  coreReady,
+  onNavigate
+}) {
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs(
+    "header",
+    {
+      className: "flex h-12 shrink-0 items-center justify-between border-b border-vs-border-default bg-vs-bg-surface px-4",
+      style: { WebkitAppRegion: "drag" },
+      children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2 pl-16", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "grid h-6 w-6 place-items-center rounded-md bg-vs-accent-muted text-xs font-semibold text-vs-accent", children: "V" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-sm font-semibold", children: "VortSpec" })
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs(
+          "nav",
+          {
+            className: "flex items-center gap-1 text-xs",
+            style: { WebkitAppRegion: "no-drag" },
+            children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsxs(NavButton, { active: view === "env", onClick: () => onNavigate("env"), children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "span",
+                  {
+                    className: `mr-1.5 inline-block h-1.5 w-1.5 rounded-full ${coreReady ? "bg-vs-success" : "bg-vs-warning"}`
+                  }
+                ),
+                "Environment"
+              ] }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx(NavButton, { active: view === "dashboard", onClick: () => onNavigate("dashboard"), children: "Projects" })
+            ]
+          }
+        )
+      ]
+    }
+  );
+}
+function NavButton({
+  active,
+  onClick,
+  children
+}) {
+  return /* @__PURE__ */ jsxRuntimeExports.jsx(
+    "button",
+    {
+      onClick,
+      className: `flex items-center rounded-md px-2.5 py-1 transition-colors ${active ? "bg-vs-bg-elevated text-vs-text-primary" : "text-vs-text-secondary hover:text-vs-text-primary"}`,
+      children
+    }
+  );
 }
 ReactDOM.createRoot(document.getElementById("root")).render(
   /* @__PURE__ */ jsxRuntimeExports.jsx(React.StrictMode, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(App, {}) })
