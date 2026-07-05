@@ -3,6 +3,7 @@ import { llmJSON } from "@vortspec/llm";
 import { SYSTEM_PROMPT } from "./prompts/system";
 import { buildReactTailwindPrompt } from "./prompts/react-tailwind";
 import { generateTokenCSS } from "./token-css";
+import { generateViaClaude } from "./claude-cli";
 
 // ─── Public types ────────────────────────────────────────────
 
@@ -126,11 +127,23 @@ export async function generateComponentCode(
     config.styleLibrary === "tailwind";
 
   if (!isReactTailwind) {
-    // Return deterministic fallback for unsupported framework/style combos
     return buildFallback(ir, tokens);
   }
 
-  // Build the prompt
+  // Strategy 1: Try Claude Code CLI (local Electron mode)
+  if (process.env.VORTSPEC_USE_CLAUDE_CLI === "true") {
+    try {
+      const cliResult = await generateViaClaude(ir, tokens, config);
+      if (cliResult) {
+        console.log(`[codegen] Generated ${ir.name} via Claude Code CLI`);
+        return cliResult;
+      }
+    } catch {
+      console.warn("[codegen] Claude CLI failed, trying OpenRouter...");
+    }
+  }
+
+  // Strategy 2: Try OpenRouter LLM API
   const tokensAsRecords = tokens.map((t) => {
     if (typeof t === "object" && t !== null) return t as Record<string, unknown>;
     return {} as Record<string, unknown>;

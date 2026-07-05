@@ -33,7 +33,7 @@ export class ProcessManager {
       cwd,
       stdio: ["pipe", "pipe", "pipe"],
       shell: true,
-      env: { ...process.env, FORCE_COLOR: "1" },
+      env: { ...process.env, FORCE_COLOR: "1", VORTSPEC_USE_CLAUDE_CLI: "true" },
     });
 
     const info: ProcessInfo = { name, process: proc, port, running: true };

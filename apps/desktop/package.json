@@ -24,10 +24,12 @@
     "productName": "VortSpec",
     "mac": {
       "category": "public.app-category.developer-tools",
+      "icon": "build/icon.icns",
       "target": ["dmg"]
     },
     "files": [
-      "dist/**/*"
+      "dist/**/*",
+      "build/**/*"
     ],
     "directories": {
       "output": "release"

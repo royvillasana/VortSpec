@@ -300,7 +300,10 @@ export function ProjectsDashboard({ initialProjects }: { initialProjects?: Proje
     <div className="min-h-screen bg-vs-bg-primary">
       {/* Top bar */}
       <header className="flex items-center justify-between px-6 h-12 border-b border-vs-border-default bg-vs-bg-primary">
-        <span className="text-[15px] font-semibold tracking-tight text-vs-text-primary">VortSpec</span>
+        <span className="flex items-center gap-2 text-[15px] font-semibold tracking-tight text-vs-text-primary">
+          <img src="/favicon.png" alt="" width={20} height={20} className="flex-none" />
+          VortSpec
+        </span>
         <button type="button" className="w-7 h-7 rounded-full bg-vs-bg-elevated border border-vs-border-strong flex items-center justify-center cursor-pointer">
           <span className="text-[11px] text-vs-text-secondary leading-none">RV</span>
         </button>

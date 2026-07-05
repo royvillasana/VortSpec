@@ -19,6 +19,7 @@ function createWindow() {
     minWidth: 1024,
     minHeight: 720,
     title: "VortSpec",
+    icon: path.join(__dirname, "..", "build", "icon.png"),
     titleBarStyle: "hiddenInset",
     backgroundColor: "#0B0C0E",
     webPreferences: {
@@ -41,10 +42,9 @@ function createWindow() {
 }
 
 function createTray() {
-  // Simple tray icon (16x16 placeholder)
-  const icon = nativeImage.createEmpty();
-  tray = new Tray(icon);
-  tray.setTitle("VS");
+  const trayIconPath = path.join(__dirname, "..", "build", "tray-icon.png");
+  const icon = nativeImage.createFromPath(trayIconPath);
+  tray = new Tray(icon.resize({ width: 18, height: 18 }));
   tray.setToolTip("VortSpec");
 
   const contextMenu = Menu.buildFromTemplate([

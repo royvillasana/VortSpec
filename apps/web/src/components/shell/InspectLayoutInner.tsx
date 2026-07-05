@@ -11,7 +11,8 @@ import { Terminal } from "@/components/shell/Terminal";
 function TopBar() {
   return (
     <header className="flex items-center justify-between px-6 h-12 border-b border-vs-border-default bg-vs-bg-primary flex-none">
-      <Link href="/projects" className="text-[15px] font-semibold tracking-tight text-vs-text-primary no-underline hover:opacity-80 transition-opacity">
+      <Link href="/projects" className="flex items-center gap-2 text-[15px] font-semibold tracking-tight text-vs-text-primary no-underline hover:opacity-80 transition-opacity">
+        <img src="/favicon.png" alt="" width={20} height={20} className="flex-none" />
         VortSpec
       </Link>
       <button
