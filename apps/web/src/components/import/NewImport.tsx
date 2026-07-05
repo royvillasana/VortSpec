@@ -305,16 +305,7 @@ export function NewImport() {
                       setPatSaving(true);
                       setFigmaError(null);
                       try {
-                        let pid = projectId;
-                        // If project is "new", create one first
-                        if (pid === "new") {
-                          const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-                          // Can't create project from client — show error
-                          setFigmaError("Create a project first (upload a ZIP), then add the Figma token from the project's import page.");
-                          setPatSaving(false);
-                          return;
-                        }
-                        await saveFigmaPAT(pid, figmaPat);
+                        await saveFigmaPAT(figmaPat);
                         setPatSaved(true);
                         setShowPatInput(false);
                         setFigmaPat("");
@@ -351,7 +342,8 @@ export function NewImport() {
                   setFigmaImporting(false);
                   return;
                 }
-                router.push(`/projects/${projectId}/import/${result.importId}`);
+                const pid = result.projectId || projectId;
+                router.push(`/projects/${pid}/import/${result.importId}`);
               }}
               className={`w-full rounded-lg px-4 py-2 text-[13px] font-medium transition-all ${
                 isFigmaUrlValid && !figmaImporting
