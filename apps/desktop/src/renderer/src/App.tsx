@@ -18,6 +18,42 @@ type View = "env" | "dashboard";
 
 const CORE_IDS = ["node", "git", "claude-install"] as const;
 
+/** Reject if `promise` doesn't settle within `ms` — used to bound startup probes. */
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error("startup probe timed out")), ms);
+    promise.then(
+      (v) => {
+        clearTimeout(timer);
+        resolve(v);
+      },
+      (e) => {
+        clearTimeout(timer);
+        reject(e);
+      },
+    );
+  });
+}
+
+/**
+ * Shown when the startup probe times out/fails, so the env screen can explain it.
+ * Uses an install-link fix (usage-free); the screen's top-level "Re-check" button
+ * re-runs the full environment check once the user resolves the issue.
+ */
+const STARTUP_FAILED_REPORT: EnvReport = {
+  ready: false,
+  checks: [
+    {
+      id: "claude-install",
+      label: "Claude Code",
+      status: "unknown",
+      detail:
+        "Couldn't verify your environment on launch — the check timed out. Make sure Claude Code is installed and on your PATH, then press Re-check.",
+      fix: { kind: "install-link", label: "Install Claude Code", url: "https://code.claude.com/docs/en/overview" },
+    },
+  ],
+};
+
 function isCoreReady(report: EnvReport | null): boolean {
   if (!report) return false;
   return CORE_IDS.every(
@@ -44,20 +80,37 @@ export default function App(): React.JSX.Element {
   }
 
   useEffect(() => {
+    let cancelled = false;
     void (async () => {
-      const [envReport, projectList] = await Promise.all([
-        api.checkEnvironment(),
-        api.listProjects(),
-      ]);
-      setReport(envReport);
-      setProjects(projectList);
-      // Go straight to the projects screen when the installable deps (Node, git,
-      // Claude Code) are present. Login is NOT probed here (that would spend the
-      // user's Claude usage on every launch) — it's verified on the first real
-      // run, where an auth error surfaces as a fix-it card.
-      setView(isCoreReady(envReport) ? "dashboard" : "env");
-      setLoading(false);
+      try {
+        // Bound the startup probe so a hung `claude` (or any stuck IPC) can never
+        // trap the splash — degrade to the environment screen instead. The
+        // main-process checks are individually timed out too; this is the net.
+        const [envReport, projectList] = await Promise.all([
+          withTimeout(api.checkEnvironment(), 15000),
+          withTimeout(api.listProjects(), 15000).catch(() => [] as Project[]),
+        ]);
+        if (cancelled) return;
+        setReport(envReport);
+        setProjects(projectList);
+        // Go straight to the projects screen when the installable deps (Node,
+        // git, Claude Code) are present. Login is NOT probed here (that would
+        // spend the user's Claude usage on every launch) — it's verified on the
+        // first real run, where an auth error surfaces as a fix-it card.
+        setView(isCoreReady(envReport) ? "dashboard" : "env");
+      } catch {
+        if (cancelled) return;
+        // Startup verification timed out or failed — show the environment screen
+        // with a clear, actionable state rather than an endless splash.
+        setReport(STARTUP_FAILED_REPORT);
+        setView("env");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
     })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // Startup splash while the background environment scan runs.

@@ -29,11 +29,25 @@ export function execFileSafe(
     let stdout = "";
     let stderr = "";
     let timedOut = false;
+    let settled = false;
+
+    // Resolve at most once. On timeout we resolve immediately rather than
+    // waiting for `close`: killing the child does not guarantee a `close` event
+    // if a grandchild (a CLI shim / version-manager launched by `command`) keeps
+    // the stdio pipe open — that would hang the caller (and the startup splash)
+    // forever. We SIGKILL best-effort and move on.
+    const settle = (result: ExecResult): void => {
+      if (settled) return;
+      settled = true;
+      if (timer) clearTimeout(timer);
+      resolve(result);
+    };
 
     const timer = opts.timeoutMs
       ? setTimeout(() => {
           timedOut = true;
           child.kill("SIGKILL");
+          settle({ code: null, stdout, stderr, timedOut: true });
         }, opts.timeoutMs)
       : null;
 
@@ -44,12 +58,10 @@ export function execFileSafe(
       stderr += d.toString();
     });
     child.on("error", (err: Error) => {
-      if (timer) clearTimeout(timer);
-      resolve({ code: null, stdout, stderr, timedOut, spawnError: err.message });
+      settle({ code: null, stdout, stderr, timedOut, spawnError: err.message });
     });
     child.on("close", (code: number | null) => {
-      if (timer) clearTimeout(timer);
-      resolve({ code, stdout, stderr, timedOut });
+      settle({ code, stdout, stderr, timedOut });
     });
 
     if (opts.input !== undefined) {
