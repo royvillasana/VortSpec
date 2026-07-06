@@ -16,6 +16,8 @@
   --color-vs-bg-surface: #141518;
   --color-vs-bg-elevated: #1B1D21;
   --color-vs-bg-hover: #17181C;
+  /* code / terminal surface (design: #08090B, one step below primary) */
+  --color-vs-bg-code: #08090B;
   --color-vs-border-default: #26282D;
   --color-vs-border-strong: #34373D;
   --color-vs-border-subtle: #1B1D21;

@@ -38,8 +38,8 @@
 
 ## 6. Background / visual alignment
 
-- [ ] 6.1 Audit screens against the design's exact values (`#0B0C0E` main, `#141518` panels, `#08090B` code, `#26282D` borders) and fix mismatches
-- [ ] 6.2 Fix the Playground/Storybook white surround so the VortSpec frame uses `vs-bg-primary` (keep the Storybook canvas itself white)
+- [x] 6.1 Audit screens against the design's exact values (`#0B0C0E` main, `#141518` panels, `#08090B` code, `#26282D` borders) and fix mismatches
+- [x] 6.2 Fix the Playground/Storybook white surround so the VortSpec frame uses `vs-bg-primary` (keep the Storybook canvas itself white)
 
 ## 7. Tests & verification
 

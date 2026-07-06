@@ -347,7 +347,7 @@ function EditPane({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         spellCheck={false}
-        className="min-h-[420px] w-full rounded-lg border border-vs-border-default bg-[#08090B] p-4 font-mono text-[12px] leading-relaxed text-vs-text-secondary focus:outline-none focus-visible:border-vs-accent"
+        className="min-h-[420px] w-full rounded-lg border border-vs-border-default bg-vs-bg-code p-4 font-mono text-[12px] leading-relaxed text-vs-text-secondary focus:outline-none focus-visible:border-vs-accent"
       />
       <div className="flex items-center gap-3">
         <span className="flex-1 text-[11px] text-vs-text-muted">
@@ -399,7 +399,7 @@ function MarkdownSource({
             Download
           </button>
         </div>
-        <div ref={scrollRef} className="overflow-x-auto bg-[#08090B] py-3">
+        <div ref={scrollRef} className="overflow-x-auto bg-vs-bg-code py-3">
           {lines.map((text, i) => (
             <div key={i} className="flex gap-3.5 px-4 hover:bg-white/[0.02]">
               <span className="w-7 flex-none select-none text-right font-mono text-[12px] leading-[1.8] text-vs-text-muted/60">
