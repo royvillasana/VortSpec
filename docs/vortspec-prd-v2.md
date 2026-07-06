@@ -78,6 +78,8 @@ Electron app
 │   ├── Artifact review (briefs/specs rendered with approve/request-changes)
 │   ├── Run view (live agent progress, tool events, embedded terminal toggle)
 │   ├── Dev preview (embedded webview of the local dev server)
+│   ├── Design System Inspector (tokens + components browser and a live
+│   │     component playground/validator, all over the project's own files)
 │   └── History (runs, artifacts, decisions)
 └── IPC: typed contracts between main and renderer (zod-validated)
 ```
@@ -111,6 +113,15 @@ Electron app
 ### 8.6 History
 - **US-11:** Every run is recorded locally (stage, timestamps, artifacts produced, approval decisions, outcome) and browsable as a timeline reusing the v1 history design. Storage is plain files inside the project (e.g. `.vortspec/runs/`), git-ignorable by user choice.
 
+### 8.7 Design System Inspector & Playground
+
+Once the flow has produced tokens and components, VortSpec offers an **Inspector** to browse and validate the whole design system in-app, adopting the visual language of the `vortspec-design-inspector/` design bundle re-based onto v2's file model (no IR store; everything is derived from the project's files).
+
+- **US-12 (tokens & components browser):** The Inspector shows every design token (parsed from the project `token_file`, and the authoritative Figma variables when the Desktop Bridge is connected) grouped by type with swatches, resolved mono values, a file-derived source badge (figma-variable / from-code / hand-edited), search/filter, and a "where used" cross-reference; and every component (from `.sdd-de/components.json` + generated source) with its variants, states, props, consumed tokens, and links to its spec and visual-verify report.
+- **US-13 (playground / render harness):** A Storybook-like Playground renders the **real** generated components live across variants/states by launching the project's browsable surface in a managed PTY and embedding it (reusing the Dev preview, §8.5). When no browsable surface exists — the current visual-verify blocker — VortSpec offers to have Claude Code generate a framework-correct harness (gallery route or stories); VortSpec writes no renderer code itself. This doubles as the render harness the visual-verify step needs.
+- **US-14 (validate & gated-modify):** The Inspector surfaces issues from the visual-verify / adversarial-review reports and lets the user request fixes. Every modification is gated: token value edits are written to the token file on explicit confirm; component/code changes route through Claude Code and are applied only after the user approves the diff. Nothing mutates silently.
+- AC: no IR store or normalization pipeline; everything derived from project files; spec-first gates before any mutation; the raw file/terminal is always one click away; works regardless of the project's framework.
+
 ## 9. Non-functional requirements
 
 - **Platforms:** macOS first (the founder's environment and the majority of the early audience), Windows and Linux after D3. node-pty and process handling are the main portability risks; isolate them.
@@ -133,6 +144,7 @@ Electron app
 - **D1, First wrapped run:** AgentAdapter runs one real SDD-DE step headless against a project, stream parsed, run view renders live progress, embedded terminal toggle works, cancel works. *Done when: the intake + enrich-brief step completes end to end from the UI.*
 - **D2, Full guided flow:** the complete SDD-DE cycle as the stepper with intake forms and artifact approval gates. *Done when: ZIP design in, approved specs, generated component code in the local folder, entirely through the UI.*
 - **D3, Dev preview + history:** managed dev server with embedded preview; run history timeline. *Done when: the generated component is visible running locally inside the app.*
+- **D3.5, Design System Inspector & Playground (§8.7):** in-app tokens + components browser over project files, and a live component playground that reuses the managed dev-server/webview (and generates a harness via Claude Code when none exists, closing the visual-verify render gap); gated validate-and-modify loop. *Done when: on a real generated project, the user can browse every token and component and render a component live in the app, and a requested fix lands through the spec-first gate.*
 - **D4, Distribution:** packaged builds for macOS, auto-update, onboarding polish. Windows/Linux builds begin here.
 
 ## 12. Migration and deletion plan (for Claude Code, execute at D0 start)
@@ -149,4 +161,4 @@ Electron app
 - **CLI interface drift:** Claude Code flags and stream formats evolve. Mitigation: the AgentAdapter, recorded-transcript fixtures, and a version check with a compatibility notice in the UI.
 - **Interactive moments in headless mode:** some steps may require interaction that streaming mode does not surface cleanly; the PTY fallback exists for this, but the seams must be designed, not improvised.
 - **Windows:** node-pty, path handling and process signals are the classic pain; defer, do not ignore.
-- **Scope temptation:** the v1 Inspector and graph view were compelling; they return, if ever, as viewers over artifact files, only after D4, and only if real usage asks for them.
+- **Scope temptation:** the v1 Inspector was compelling. Real usage has now asked for it, so the tokens/components browser and the component playground are committed as **§8.7 / D3.5** — but strictly as *viewers and gated validators over the project's files*, never a revived IR/normalization store. The remaining v1 surfaces (Graph, Assistant, Issues, History-as-timeline beyond §8.6) stay deferred: they return only as file-derived viewers, after D4, and only if usage asks.
