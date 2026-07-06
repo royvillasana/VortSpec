@@ -1,0 +1,366 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>VortSpec — Spec-driven design-to-code, without the terminal</title>
+    <meta
+      name="description"
+      content="VortSpec is a desktop cockpit over your local Claude Code. Run a professional spec-driven design-to-code workflow — extract tokens, build components, preview in Storybook, and generate a design manifest — all as clear screens. Your own Claude. Local-first."
+    />
+    <link rel="icon" type="image/png" href="./favicon.png" />
+    <meta property="og:title" content="VortSpec — Spec-driven design-to-code" />
+    <meta
+      property="og:description"
+      content="A desktop cockpit over your local Claude Code. Anyone who can use Figma can run a professional spec-driven design-to-code workflow."
+    />
+    <meta property="og:image" content="./vortspec-logo.png" />
+    <meta property="og:type" content="website" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --bg: #0b0c0e;
+        --surface: #141518;
+        --elevated: #1b1d21;
+        --border: #26282d;
+        --border-strong: #34373d;
+        --text: #e7e9ec;
+        --text-2: #9ba1ab;
+        --text-3: #6b7280;
+        --accent: #7c6ff0;
+        --success: #30a46c;
+        --warning: #ffb224;
+      }
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      html { scroll-behavior: smooth; }
+      body {
+        background: var(--bg);
+        color: var(--text);
+        font-family: "Geist", system-ui, -apple-system, sans-serif;
+        font-size: 16px;
+        line-height: 1.6;
+        -webkit-font-smoothing: antialiased;
+        overflow-x: hidden;
+      }
+      a { color: inherit; text-decoration: none; }
+      code, .mono { font-family: "Geist Mono", ui-monospace, monospace; }
+      .wrap { width: 100%; max-width: 1080px; margin: 0 auto; padding: 0 24px; }
+
+      /* glow backdrop */
+      .glow {
+        position: fixed; inset: 0; z-index: 0; pointer-events: none;
+        background:
+          radial-gradient(600px 400px at 50% -8%, rgba(124, 111, 240, 0.16), transparent 70%),
+          radial-gradient(700px 500px at 90% 10%, rgba(124, 111, 240, 0.06), transparent 60%);
+      }
+      main { position: relative; z-index: 1; }
+
+      /* nav */
+      nav {
+        position: sticky; top: 0; z-index: 20;
+        backdrop-filter: blur(10px);
+        background: rgba(11, 12, 14, 0.72);
+        border-bottom: 1px solid var(--border);
+      }
+      nav .row { display: flex; align-items: center; gap: 14px; height: 60px; }
+      nav .brand { display: flex; align-items: center; gap: 10px; font-weight: 600; }
+      nav .brand img { width: 26px; height: 26px; }
+      nav .spacer { flex: 1; }
+      nav .links { display: flex; align-items: center; gap: 22px; color: var(--text-2); font-size: 14px; }
+      nav .links a:hover { color: var(--text); }
+      @media (max-width: 720px) { nav .links { display: none; } }
+
+      .btn {
+        display: inline-flex; align-items: center; justify-content: center; gap: 9px;
+        border-radius: 10px; font-weight: 500; font-size: 15px; line-height: 1;
+        padding: 12px 20px; cursor: pointer; border: 1px solid transparent;
+        transition: filter 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+      }
+      .btn-primary { background: var(--accent); color: #fff; }
+      .btn-primary:hover { filter: brightness(1.12); }
+      .btn-ghost { background: transparent; color: var(--text); border-color: var(--border-strong); }
+      .btn-ghost:hover { border-color: var(--accent); }
+      .btn-sm { padding: 9px 15px; font-size: 14px; border-radius: 8px; }
+
+      /* hero */
+      .hero { text-align: center; padding: 92px 0 72px; }
+      .hero .mark { width: 108px; height: 108px; margin: 0 auto 26px; filter: drop-shadow(0 12px 40px rgba(124,111,240,0.35)); animation: rise 0.6s ease both; }
+      .pill {
+        display: inline-flex; align-items: center; gap: 8px; margin-bottom: 22px;
+        border: 1px solid var(--border); background: var(--surface); color: var(--text-2);
+        border-radius: 999px; padding: 5px 13px; font-size: 12.5px;
+      }
+      .pill .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--success); }
+      h1 {
+        font-size: clamp(34px, 6vw, 58px); font-weight: 600; letter-spacing: -0.03em;
+        line-height: 1.05; max-width: 16ch; margin: 0 auto 20px;
+      }
+      h1 .grad { background: linear-gradient(120deg, #a99bff, #7c6ff0 60%, #5c8df0); -webkit-background-clip: text; background-clip: text; color: transparent; }
+      .sub { font-size: clamp(16px, 2.3vw, 19px); color: var(--text-2); max-width: 60ch; margin: 0 auto 34px; }
+      .cta { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+      .cta .os-note { display: block; margin-top: 14px; font-size: 12.5px; color: var(--text-3); }
+      .apple { width: 16px; height: 16px; }
+
+      @keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+
+      /* app screenshot / window mock */
+      .shot {
+        margin: 8px auto 0; max-width: 940px;
+        border: 1px solid var(--border); border-radius: 14px; overflow: hidden;
+        background: var(--surface); box-shadow: 0 30px 80px rgba(0,0,0,0.55);
+      }
+      .shot .bar { display: flex; align-items: center; gap: 8px; padding: 11px 14px; border-bottom: 1px solid var(--border); background: #101114; }
+      .shot .bar i { width: 11px; height: 11px; border-radius: 50%; display: inline-block; }
+      .shot .bar .t { margin-left: 10px; font-size: 12px; color: var(--text-3); }
+      .shot .body { display: grid; grid-template-columns: 150px 1fr; min-height: 300px; }
+      .shot .rail { border-right: 1px solid var(--border); padding: 14px 10px; display: flex; flex-direction: column; gap: 4px; }
+      .shot .rail .item { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--text-2); padding: 6px 8px; border-radius: 6px; }
+      .shot .rail .item.on { background: var(--elevated); color: var(--accent); font-weight: 500; }
+      .shot .rail .item .g { width: 6px; height: 6px; border-radius: 2px; background: currentColor; opacity: 0.5; }
+      .shot .canvas { padding: 22px; }
+      .shot .h { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
+      .shot .hsub { font-size: 12.5px; color: var(--text-3); margin-bottom: 16px; }
+      .shot .comp { display: flex; align-items: center; gap: 12px; border-top: 1px solid var(--border); padding: 10px 2px; font-size: 13px; }
+      .shot .comp:first-of-type { border-top: 0; }
+      .shot .comp .nm { flex: 1; }
+      .shot .comp .st { font-family: "Geist Mono", monospace; font-size: 10px; }
+      .st.ok { color: var(--success); } .st.mid { color: var(--text-2); } .st.new { color: var(--text-3); }
+      .shot .comp .cdot { width: 6px; height: 6px; border-radius: 50%; }
+      @media (max-width: 640px) { .shot .body { grid-template-columns: 1fr; } .shot .rail { display: none; } }
+
+      /* section */
+      section { padding: 76px 0; }
+      .eyebrow { color: var(--accent); font-size: 12.5px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 12px; }
+      h2 { font-size: clamp(26px, 4vw, 36px); font-weight: 600; letter-spacing: -0.02em; margin-bottom: 14px; }
+      .lead { color: var(--text-2); max-width: 62ch; font-size: 17px; }
+
+      /* feature grid */
+      .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 44px; }
+      @media (max-width: 860px) { .grid { grid-template-columns: 1fr 1fr; } }
+      @media (max-width: 560px) { .grid { grid-template-columns: 1fr; } }
+      .card { border: 1px solid var(--border); background: var(--surface); border-radius: 14px; padding: 24px; transition: border-color 0.15s ease, transform 0.15s ease; }
+      .card:hover { border-color: var(--border-strong); transform: translateY(-2px); }
+      .card .ic { width: 38px; height: 38px; border-radius: 10px; display: grid; place-items: center; background: rgba(124,111,240,0.12); border: 1px solid rgba(124,111,240,0.3); margin-bottom: 16px; }
+      .card .ic svg { width: 19px; height: 19px; stroke: var(--accent); fill: none; stroke-width: 1.5; }
+      .card h3 { font-size: 16px; font-weight: 600; margin-bottom: 7px; }
+      .card p { font-size: 14px; color: var(--text-2); line-height: 1.55; }
+
+      /* steps */
+      .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 44px; }
+      @media (max-width: 760px) { .steps { grid-template-columns: 1fr; } }
+      .step { border: 1px solid var(--border); background: var(--surface); border-radius: 14px; padding: 26px; position: relative; }
+      .step .n { font-family: "Geist Mono", monospace; font-size: 12px; color: var(--accent); border: 1px solid rgba(124,111,240,0.4); background: rgba(124,111,240,0.08); border-radius: 999px; padding: 2px 9px; }
+      .step h3 { font-size: 16.5px; font-weight: 600; margin: 16px 0 8px; }
+      .step p { font-size: 14px; color: var(--text-2); }
+
+      /* principles */
+      .principles { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px 40px; margin-top: 40px; }
+      @media (max-width: 720px) { .principles { grid-template-columns: 1fr; } }
+      .pr { display: flex; gap: 13px; align-items: flex-start; }
+      .pr .chk { flex: none; width: 22px; height: 22px; border-radius: 6px; display: grid; place-items: center; background: rgba(48,164,108,0.12); border: 1px solid rgba(48,164,108,0.35); color: var(--success); font-size: 12px; margin-top: 2px; }
+      .pr b { font-weight: 600; }
+      .pr span { color: var(--text-2); font-size: 14.5px; }
+      .pr b + span { display: block; }
+
+      /* download band */
+      .band { border: 1px solid var(--border); border-radius: 18px; background: linear-gradient(160deg, #17151f, #121317); padding: 54px 32px; text-align: center; overflow: hidden; position: relative; }
+      .band::after { content: ""; position: absolute; inset: 0; background: radial-gradient(500px 260px at 50% -20%, rgba(124,111,240,0.22), transparent 70%); pointer-events: none; }
+      .band h2 { position: relative; }
+      .band p { position: relative; color: var(--text-2); max-width: 48ch; margin: 12px auto 28px; }
+      .band .cta { position: relative; }
+
+      /* footer */
+      footer { border-top: 1px solid var(--border); padding: 40px 0 56px; margin-top: 40px; }
+      footer .row { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; color: var(--text-3); font-size: 13.5px; }
+      footer .brand { display: flex; align-items: center; gap: 9px; color: var(--text); font-weight: 600; }
+      footer .brand img { width: 22px; height: 22px; }
+      footer .spacer { flex: 1; }
+      footer a { color: var(--text-2); }
+      footer a:hover { color: var(--text); }
+    </style>
+  </head>
+  <body>
+    <div class="glow"></div>
+    <main>
+      <nav>
+        <div class="wrap row">
+          <a class="brand" href="#top"><img src="./vortspec-logo.png" alt="VortSpec" />VortSpec</a>
+          <div class="spacer"></div>
+          <div class="links">
+            <a href="#features">Features</a>
+            <a href="#how">How it works</a>
+            <a href="#principles">Principles</a>
+            <a href="https://github.com/royvillasana/VortSpec" target="_blank" rel="noopener">GitHub</a>
+          </div>
+          <a class="btn btn-primary btn-sm" href="https://github.com/royvillasana/VortSpec/releases/latest" target="_blank" rel="noopener">Download</a>
+        </div>
+      </nav>
+
+      <!-- HERO -->
+      <header id="top" class="hero">
+        <div class="wrap">
+          <img class="mark" src="./vortspec-logo.png" alt="VortSpec logo" />
+          <div class="pill"><span class="dot"></span> Spec-Driven Design Engineering, for everyone</div>
+          <h1>Design-to-code with AI, <span class="grad">without the terminal</span></h1>
+          <p class="sub">
+            VortSpec is a desktop cockpit over your <b>own local Claude Code</b>. Anyone who can use
+            Figma can run a professional spec-driven workflow — extract tokens, build components,
+            preview them live in Storybook, and generate an AI hand-off manifest. Real code, in your
+            real project.
+          </p>
+          <div class="cta">
+            <a class="btn btn-primary" href="https://github.com/royvillasana/VortSpec/releases/latest" target="_blank" rel="noopener">
+              <svg class="apple" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M11.18 8.46c-.02-1.6 1.31-2.37 1.37-2.41-.75-1.1-1.91-1.25-2.32-1.26-.99-.1-1.93.58-2.43.58-.5 0-1.28-.57-2.1-.55-1.08.02-2.08.63-2.63 1.6-1.12 1.95-.29 4.83.8 6.41.54.77 1.17 1.64 2 1.6.8-.03 1.11-.52 2.08-.52.97 0 1.24.52 2.09.5.86-.01 1.41-.78 1.94-1.56.61-.9.86-1.76.87-1.8-.02-.01-1.67-.64-1.68-2.55zM9.62 3.9c.44-.53.74-1.27.66-2.01-.63.03-1.4.42-1.86.95-.41.47-.77 1.22-.67 1.94.71.06 1.42-.36 1.87-.88z"/></svg>
+              Download for macOS
+            </a>
+            <a class="btn btn-ghost" href="https://github.com/royvillasana/VortSpec" target="_blank" rel="noopener">View on GitHub</a>
+          </div>
+          <span class="os-note">macOS · Apple Silicon &amp; Intel · Uses your own Claude Code login — no account, no keys.</span>
+        </div>
+      </header>
+
+      <!-- WINDOW MOCK -->
+      <div class="wrap">
+        <div class="shot" aria-hidden="true">
+          <div class="bar">
+            <i style="background:#ff5f57"></i><i style="background:#febc2e"></i><i style="background:#28c840"></i>
+            <span class="t">VortSpec — Design system</span>
+          </div>
+          <div class="body">
+            <div class="rail">
+              <div class="item on"><span class="g"></span> Flow</div>
+              <div class="item"><span class="g"></span> Run</div>
+              <div class="item"><span class="g"></span> Playground</div>
+              <div class="item"><span class="g"></span> Tokens</div>
+              <div class="item"><span class="g"></span> Manifest</div>
+              <div class="item"><span class="g"></span> History</div>
+            </div>
+            <div class="canvas">
+              <div class="h">Design system</div>
+              <div class="hsub">Foundation ready · 8/11 built · 5 verified</div>
+              <div class="comp"><span class="cdot" style="background:#30a46c"></span><span class="nm">Button</span><span class="st ok">verified</span></div>
+              <div class="comp"><span class="cdot" style="background:#30a46c"></span><span class="nm">Input</span><span class="st ok">verified</span></div>
+              <div class="comp"><span class="cdot" style="background:#9ba1ab"></span><span class="nm">Card</span><span class="st mid">built</span></div>
+              <div class="comp"><span class="cdot" style="background:#9ba1ab"></span><span class="nm">Badge</span><span class="st mid">built</span></div>
+              <div class="comp"><span class="cdot" style="background:#6b7280"></span><span class="nm">Modal</span><span class="st new">detected</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- FEATURES -->
+      <section id="features">
+        <div class="wrap">
+          <div class="eyebrow">What's inside</div>
+          <h2>The whole SDD-DE cycle, as clear screens</h2>
+          <p class="lead">Every step of the methodology becomes a screen with status. VortSpec makes the terminal invisible without hiding what the agent does.</p>
+          <div class="grid">
+            <div class="card">
+              <div class="ic"><svg viewBox="0 0 24 24"><path d="M12 3v18M6 9l6-6 6 6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+              <h3>Design System workspace</h3>
+              <p>Extract tokens and detect components from Figma, a ZIP, or a repo — then build one component or all at once, and keep adding. It's a living workspace, never a finished checklist.</p>
+            </div>
+            <div class="card">
+              <div class="ic"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18"/></svg></div>
+              <h3>Live Storybook Playground</h3>
+              <p>VortSpec stands up a real Storybook for your components and embeds it — docs, interactive controls, and every variant. Ask the built-in assistant to change a component and watch it reload live.</p>
+            </div>
+            <div class="card">
+              <div class="ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3" fill="currentColor" stroke="none"/></svg></div>
+              <h3>Design token Inspector</h3>
+              <p>Browse every token grouped by type with swatches and mono values, see where each is used, and reconcile against your authoritative Figma variables — flagging drift.</p>
+            </div>
+            <div class="card">
+              <div class="ic"><svg viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></svg></div>
+              <h3>Design manifest (DESIGN.md)</h3>
+              <p>Generate the AI hand-off file — tokens, component contracts, and conventions in one place — so any coding agent can build on-brand screens without re-deriving your system.</p>
+            </div>
+            <div class="card">
+              <div class="ic"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg></div>
+              <h3>Spec-first gates</h3>
+              <p>Briefs, specs, and the manifest are readable, approvable documents. Nothing advances to code without your explicit approval — the app enforces the gates the CLI could only recommend.</p>
+            </div>
+            <div class="card">
+              <div class="ic"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M7 9l3 2-3 2M13 14h4"/></svg></div>
+              <h3>Transparent runs</h3>
+              <p>Watch live agent progress — tool calls, file edits, completion — as friendly activity, with the raw stream-json terminal always one click away. A lens, not a cage.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- HOW -->
+      <section id="how">
+        <div class="wrap">
+          <div class="eyebrow">How it works</div>
+          <h2>From a design source to real components</h2>
+          <div class="steps">
+            <div class="step">
+              <span class="n">01</span>
+              <h3>Connect a design source</h3>
+              <p>Point VortSpec at a Figma file, a ZIP export, or a repo. Claude Code reads it, extracts your design tokens, and detects every component — no brief needed.</p>
+            </div>
+            <div class="step">
+              <span class="n">02</span>
+              <h3>Build &amp; verify components</h3>
+              <p>Generate one component or all of them in your framework using only the extracted tokens. Preview each live in Storybook and run visual + accessibility verification.</p>
+            </div>
+            <div class="step">
+              <span class="n">03</span>
+              <h3>Hand off &amp; publish</h3>
+              <p>Approve the design manifest, then optionally publish to GitHub with your own git — ready to build on-brand screens for your product.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- PRINCIPLES -->
+      <section id="principles">
+        <div class="wrap">
+          <div class="eyebrow">Built on trust</div>
+          <h2>Your Claude. Your files. Your rules.</h2>
+          <p class="lead">VortSpec is a cockpit, not a middleman. It configures, launches, observes, and gates Claude Code — it never re-implements the agent or takes over your account.</p>
+          <div class="principles">
+            <div class="pr"><span class="chk">✓</span><span><b>The user's own Claude.</b> Authentication, plan, and usage belong to your Claude Code install. VortSpec stores no provider keys and proxies no model traffic.</span></div>
+            <div class="pr"><span class="chk">✓</span><span><b>Local-first &amp; transparent.</b> Everything lives in your project folder as plain files. The raw terminal is always one click away.</span></div>
+            <div class="pr"><span class="chk">✓</span><span><b>Claude Code is the engine.</b> The app follows the SDD-DE methodology exactly — same steps as the CLI, never a divergent process.</span></div>
+            <div class="pr"><span class="chk">✓</span><span><b>No account, no telemetry.</b> No sign-up to use it. Nothing is sent anywhere without your opt-in.</span></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- DOWNLOAD BAND -->
+      <section>
+        <div class="wrap">
+          <div class="band">
+            <img class="mark" src="./vortspec-logo.png" alt="" style="width:64px;height:64px;margin:0 auto 20px;position:relative;" />
+            <h2>Run spec-driven design-to-code today</h2>
+            <p>Free and open. Bring your own Claude Code. Ships as a signed macOS app.</p>
+            <div class="cta">
+              <a class="btn btn-primary" href="https://github.com/royvillasana/VortSpec/releases/latest" target="_blank" rel="noopener">
+                <svg class="apple" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M11.18 8.46c-.02-1.6 1.31-2.37 1.37-2.41-.75-1.1-1.91-1.25-2.32-1.26-.99-.1-1.93.58-2.43.58-.5 0-1.28-.57-2.1-.55-1.08.02-2.08.63-2.63 1.6-1.12 1.95-.29 4.83.8 6.41.54.77 1.17 1.64 2 1.6.8-.03 1.11-.52 2.08-.52.97 0 1.24.52 2.09.5.86-.01 1.41-.78 1.94-1.56.61-.9.86-1.76.87-1.8-.02-.01-1.67-.64-1.68-2.55zM9.62 3.9c.44-.53.74-1.27.66-2.01-.63.03-1.4.42-1.86.95-.41.47-.77 1.22-.67 1.94.71.06 1.42-.36 1.87-.88z"/></svg>
+                Download for macOS
+              </a>
+              <a class="btn btn-ghost" href="https://github.com/royvillasana/VortSpec" target="_blank" rel="noopener">Star on GitHub</a>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <footer>
+        <div class="wrap row">
+          <span class="brand"><img src="./vortspec-logo.png" alt="" />VortSpec</span>
+          <span class="spacer"></span>
+          <a href="https://github.com/royvillasana/VortSpec" target="_blank" rel="noopener">GitHub</a>
+          <a href="https://github.com/royvillasana/VortSpec/releases/latest" target="_blank" rel="noopener">Download</a>
+          <span>· Spec-Driven Design Engineering</span>
+        </div>
+      </footer>
+    </main>
+  </body>
+</html>
