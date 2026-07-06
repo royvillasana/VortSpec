@@ -43,7 +43,7 @@
 - [x] 7.1 Playground surface: embed the live preview, variant/state controls that drive the real component, virtualized for large sets
 - [x] 7.2 "Generate a harness" flow for projects with no renderable surface (invokes task 4.4), then launch + embed — closing the `visual-verify` render-harness gap
 - [x] 7.3 Validation panel: show issues from the verify reports alongside the preview
-- [ ] 7.4 Gated modify loop: request a fix → scoped Claude Code run / resumable chat → approvable diff → written only on approval (reuse the artifact-gate + tabbed run panel)
+- [x] 7.4 Gated modify loop: request a fix → scoped Claude Code run / resumable chat → approvable diff → written only on approval (reuse the artifact-gate + tabbed run panel)
 
 ## 8. Shell & entry points
 

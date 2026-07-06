@@ -5,6 +5,7 @@ import type {
   IpcResponse,
   StageStatus,
   SetupAnswers,
+  FileSnapshot,
 } from "../shared/ipc";
 import {
   AGENT_EVENT_CHANNEL,
@@ -93,6 +94,10 @@ const api = {
   setTokenValue: (projectPath: string, name: string, value: string) =>
     invoke("inspector:setTokenValue", { projectPath, name, value }),
   getVerification: (projectPath: string) => invoke("inspector:getVerification", projectPath),
+  snapshotComponent: (projectPath: string, file: string) =>
+    invoke("inspector:snapshotComponent", { projectPath, file }),
+  restoreFiles: (projectPath: string, files: FileSnapshot[]) =>
+    invoke("inspector:restoreFiles", { projectPath, files }),
 };
 
 export type VortSpecApi = typeof api;

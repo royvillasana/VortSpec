@@ -131,7 +131,9 @@ const api = {
   inspectorTokens: (projectPath) => invoke("inspector:getTokens", projectPath),
   inspectorComponents: (projectPath) => invoke("inspector:getComponents", projectPath),
   setTokenValue: (projectPath, name, value) => invoke("inspector:setTokenValue", { projectPath, name, value }),
-  getVerification: (projectPath) => invoke("inspector:getVerification", projectPath)
+  getVerification: (projectPath) => invoke("inspector:getVerification", projectPath),
+  snapshotComponent: (projectPath, file) => invoke("inspector:snapshotComponent", { projectPath, file }),
+  restoreFiles: (projectPath, files) => invoke("inspector:restoreFiles", { projectPath, files })
 };
 if (process.contextIsolated) {
   try {

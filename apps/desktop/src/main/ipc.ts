@@ -12,7 +12,12 @@ import { getToolkitStatus, installToolkit } from "./workspace/toolkit-manager";
 import { createProject } from "./workspace/setup-manager";
 import { readProjectConfig } from "./workspace/config-manager";
 import { getInspectorTokens, setInspectorTokenValue } from "./inspector/token-parser";
-import { getInspectorComponents } from "./inspector/component-reader";
+import {
+  getInspectorComponents,
+  snapshotComponent,
+  restoreFiles,
+} from "./inspector/component-reader";
+import type { FileSnapshot } from "../shared/ipc";
 import { getVerification } from "./inspector/verification-reader";
 import type { SetupAnswers } from "../shared/setup";
 import { startRun, cancelRun } from "./agent/run-manager";
@@ -113,6 +118,10 @@ const handlers: Record<IpcChannel, Handler> = {
   "inspector:setTokenValue": ((req: { projectPath: string; name: string; value: string }) =>
     setInspectorTokenValue(req.projectPath, req.name, req.value)) as Handler,
   "inspector:getVerification": ((projectPath: string) => getVerification(projectPath)) as Handler,
+  "inspector:snapshotComponent": ((req: { projectPath: string; file: string }) =>
+    snapshotComponent(req.projectPath, req.file)) as Handler,
+  "inspector:restoreFiles": ((req: { projectPath: string; files: FileSnapshot[] }) =>
+    restoreFiles(req.projectPath, req.files).then(() => undefined)) as Handler,
 };
 
 export function registerIpc(): void {

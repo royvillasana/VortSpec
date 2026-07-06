@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type {
   DevServerStatus,
+  FileSnapshot,
   InspectorComponent,
   PropControl,
   Project,
@@ -32,6 +33,17 @@ const HARNESS_PROMPT = [
   "",
   "When done, the dev server should render the component gallery at its root URL.",
 ].join("\n");
+
+function modifyPrompt(name: string, file: string | null, request: string): string {
+  return [
+    `Modify the "${name}" component${file ? ` (source: ${file}, and its .variants.ts sibling if present)` : ""} per this request.`,
+    "Edit ONLY that component's source under the component directory — do not touch other components or the token file.",
+    "Keep every value token-referenced (no hardcoded hex or px). Match the surrounding code style.",
+    "",
+    "Request:",
+    request,
+  ].join("\n");
+}
 
 type Values = Record<string, string | boolean>;
 type Bg = "app" | "white" | "dark";
@@ -97,6 +109,44 @@ export function DevPreview({
   }, [project.path]);
 
   const harness = useAgentRun();
+  const modify = useAgentRun();
+  const [snapshot, setSnapshot] = useState<FileSnapshot[] | null>(null);
+  const [modifyReview, setModifyReview] = useState(false);
+
+  async function requestModify(request: string): Promise<void> {
+    if (!selName) return;
+    const file = components?.find((c) => c.name === selName)?.file ?? null;
+    setModifyReview(false);
+    if (file) setSnapshot(await api.snapshotComponent(project.path, file));
+    await modify.start({
+      prompt: modifyPrompt(selName, file, request),
+      cwd: project.path,
+      allowedTools: ["Read", "Edit", "Write"],
+      bypassPermissions: true,
+    });
+  }
+
+  // When the modify run finishes, re-read the components (props/tokens may have
+  // changed) and enter review — the change is applied but revertable.
+  useEffect(() => {
+    if (modify.model.status !== "done") return;
+    void api.inspectorComponents(project.path).then((r) => setComponents(r.components));
+    setModifyReview(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [modify.model.status]);
+
+  async function revertModify(): Promise<void> {
+    if (snapshot) await api.restoreFiles(project.path, snapshot);
+    await api.inspectorComponents(project.path).then((r) => setComponents(r.components));
+    setSnapshot(null);
+    setModifyReview(false);
+    modify.reset();
+  }
+  function keepModify(): void {
+    setSnapshot(null);
+    setModifyReview(false);
+    modify.reset();
+  }
 
   async function startPreview(): Promise<void> {
     setDev(await api.startDevServer(project.path));
@@ -271,36 +321,48 @@ export function DevPreview({
         </header>
 
         <div className="min-h-0 flex-1 overflow-y-auto transition-colors" style={{ background: BG[bg] }}>
-          {harness.running || (harness.model.status === "done" && !dev.url) ? (
+          {modify.running ? (
+            <RunOverlay title="Applying your change with Claude Code…" run={modify} />
+          ) : harness.running || (harness.model.status === "done" && !dev.url) ? (
+            <RunOverlay
+              title={
+                harness.running
+                  ? "Generating a preview harness with Claude Code…"
+                  : "Harness generated — starting the preview…"
+              }
+              run={harness}
+              done={!harness.running}
+            />
+          ) : embedUrl ? (
+            <div className="relative h-full min-h-[340px]">
+              <iframe
+                ref={iframeRef}
+                title="preview"
+                src={embedUrl}
+                onLoad={() => setIframeReady(false)}
+                className="h-full min-h-[340px] w-full border-0 bg-white"
+              />
+              {modifyReview && (
+                <KeepRevertBar onKeep={keepModify} onRevert={() => void revertModify()} />
+              )}
+            </div>
+          ) : modifyReview ? (
             <div className="flex min-h-[340px] items-start justify-center p-6">
               <div className="w-full max-w-2xl rounded-xl border border-vs-border-default bg-vs-bg-surface p-4">
                 <div className="mb-3 flex items-center gap-2 text-sm text-vs-text-primary">
-                  {harness.running ? (
-                    <>
-                      <Spinner /> Generating a preview harness with Claude Code…
-                    </>
-                  ) : (
-                    <>
-                      <span className="text-vs-success">✓</span> Harness generated — starting the
-                      preview…
-                    </>
-                  )}
+                  <span className="text-vs-success">✓</span> Change applied — start the preview to see
+                  it live.
                 </div>
                 <RunPanel
-                  model={harness.model}
-                  onSend={(t) => void harness.send(t)}
-                  canChat={harness.canChat}
+                  model={modify.model}
+                  onSend={(t) => void modify.send(t)}
+                  canChat={modify.canChat}
                 />
+                <div className="mt-3">
+                  <KeepRevertBar onKeep={keepModify} onRevert={() => void revertModify()} inline />
+                </div>
               </div>
             </div>
-          ) : embedUrl ? (
-            <iframe
-              ref={iframeRef}
-              title="preview"
-              src={embedUrl}
-              onLoad={() => setIframeReady(false)}
-              className="h-full min-h-[340px] w-full border-0 bg-white"
-            />
           ) : (
             <div className="flex min-h-[340px] items-center justify-center p-12">
               <div className="flex max-w-md flex-col items-center gap-3 rounded-xl border border-black/10 bg-white/80 p-6 text-center">
@@ -362,11 +424,68 @@ export function DevPreview({
           <div className="flex-1" />
         </div>
         {selected ? (
-          <ControlsPanel key={selected.name} component={selected} onValues={setPreviewProps} />
+          <ControlsPanel
+            key={selected.name}
+            component={selected}
+            onValues={setPreviewProps}
+            onModify={(req) => void requestModify(req)}
+            modifyBusy={modify.running}
+          />
         ) : (
           <p className="p-4 text-xs text-vs-text-muted">Select a component.</p>
         )}
       </aside>
+    </div>
+  );
+}
+
+function RunOverlay({
+  title,
+  run,
+  done,
+}: {
+  title: string;
+  run: ReturnType<typeof useAgentRun>;
+  done?: boolean;
+}): React.JSX.Element {
+  return (
+    <div className="flex min-h-[340px] items-start justify-center p-6">
+      <div className="w-full max-w-2xl rounded-xl border border-vs-border-default bg-vs-bg-surface p-4">
+        <div className="mb-3 flex items-center gap-2 text-sm text-vs-text-primary">
+          {done ? <span className="text-vs-success">✓</span> : <Spinner />} {title}
+        </div>
+        <RunPanel model={run.model} onSend={(t) => void run.send(t)} canChat={run.canChat} />
+      </div>
+    </div>
+  );
+}
+
+function KeepRevertBar({
+  onKeep,
+  onRevert,
+  inline,
+}: {
+  onKeep: () => void;
+  onRevert: () => void;
+  inline?: boolean;
+}): React.JSX.Element {
+  return (
+    <div
+      className={
+        inline
+          ? "flex items-center gap-2"
+          : "absolute inset-x-0 bottom-0 flex items-center gap-2 border-t border-vs-border-default bg-vs-bg-surface px-4 py-2.5"
+      }
+    >
+      <span className="flex-1 text-xs text-vs-text-secondary">
+        Change applied to the component source — keep it, or revert to the previous version.
+      </span>
+      <Button variant="ghost" onClick={onRevert}>
+        Revert
+      </Button>
+      <Button variant="primary" onClick={onKeep}>
+        Keep
+      </Button>
     </div>
   );
 }
@@ -465,11 +584,16 @@ function initialValues(props: PropControl[]): Values {
 function ControlsPanel({
   component,
   onValues,
+  onModify,
+  modifyBusy,
 }: {
   component: InspectorComponent;
   onValues: (v: Values) => void;
+  onModify: (request: string) => void;
+  modifyBusy: boolean;
 }): React.JSX.Element {
   const [values, setValues] = useState<Values>(() => initialValues(component.props));
+  const [modifyDraft, setModifyDraft] = useState("");
   const set = (k: string, v: string | boolean): void => setValues((s) => ({ ...s, [k]: v }));
   const reset = (): void => setValues(initialValues(component.props));
 
@@ -542,6 +666,31 @@ function ControlsPanel({
       <Section title="Code">
         <div className="whitespace-pre-wrap break-words rounded-md border border-vs-border-default bg-black/40 p-3 font-mono text-[11px] leading-relaxed text-vs-text-secondary">
           {snippet(component.name, component.props, values)}
+        </div>
+      </Section>
+
+      <Section title="Modify with Claude">
+        <textarea
+          rows={2}
+          value={modifyDraft}
+          onChange={(e) => setModifyDraft(e.target.value)}
+          placeholder="Describe a change — e.g. add a loading state, tighten the padding…"
+          className="w-full resize-none rounded-md border border-vs-border-default bg-vs-bg-primary px-2.5 py-2 text-xs text-vs-text-primary placeholder:text-vs-text-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-vs-accent-subtle"
+        />
+        <div className="mt-2 flex items-center gap-2">
+          <span className="flex-1 text-[11px] text-vs-text-muted">
+            Applied by Claude Code, then reviewable — keep or revert.
+          </span>
+          <Button
+            variant="primary"
+            disabled={modifyBusy || modifyDraft.trim().length === 0}
+            onClick={() => {
+              onModify(modifyDraft.trim());
+              setModifyDraft("");
+            }}
+          >
+            {modifyBusy ? "Applying…" : "Apply"}
+          </Button>
         </div>
       </Section>
     </div>

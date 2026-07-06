@@ -10,6 +10,7 @@ import {
   inspectorTokensResultSchema,
   inspectorComponentsResultSchema,
   verificationResultSchema,
+  fileSnapshotListSchema,
 } from "./inspector";
 
 export type { SetupAnswers, ProjectConfig } from "./setup";
@@ -31,6 +32,7 @@ export type {
   VerificationResult,
   FindingSeverity,
 } from "./inspector";
+export type { FileSnapshot } from "./inspector";
 
 // Re-exported so renderer code can import run + IPC types from one module.
 export type {
@@ -220,6 +222,14 @@ export const ipcContract = {
   "inspector:getVerification": {
     request: z.string(),
     response: verificationResultSchema,
+  },
+  "inspector:snapshotComponent": {
+    request: z.object({ projectPath: z.string(), file: z.string() }),
+    response: fileSnapshotListSchema,
+  },
+  "inspector:restoreFiles": {
+    request: z.object({ projectPath: z.string(), files: fileSnapshotListSchema }),
+    response: z.void(),
   },
 } as const;
 

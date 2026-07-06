@@ -17981,6 +17981,16 @@ const HARNESS_PROMPT = [
   "",
   "When done, the dev server should render the component gallery at its root URL."
 ].join("\n");
+function modifyPrompt(name, file, request) {
+  return [
+    `Modify the "${name}" component${file ? ` (source: ${file}, and its .variants.ts sibling if present)` : ""} per this request.`,
+    "Edit ONLY that component's source under the component directory — do not touch other components or the token file.",
+    "Keep every value token-referenced (no hardcoded hex or px). Match the surrounding code style.",
+    "",
+    "Request:",
+    request
+  ].join("\n");
+}
 const BG = { app: "#EFEFF1", white: "#FFFFFF", dark: "#0F0F10" };
 const LEVEL_ORDER = ["atom", "molecule", "organism", "other"];
 const LEVEL_LABEL = {
@@ -18025,6 +18035,38 @@ function DevPreview({
     });
   }, [project.path]);
   const harness = useAgentRun();
+  const modify = useAgentRun();
+  const [snapshot, setSnapshot] = reactExports.useState(null);
+  const [modifyReview, setModifyReview] = reactExports.useState(false);
+  async function requestModify(request) {
+    if (!selName) return;
+    const file = components?.find((c) => c.name === selName)?.file ?? null;
+    setModifyReview(false);
+    if (file) setSnapshot(await api.snapshotComponent(project.path, file));
+    await modify.start({
+      prompt: modifyPrompt(selName, file, request),
+      cwd: project.path,
+      allowedTools: ["Read", "Edit", "Write"],
+      bypassPermissions: true
+    });
+  }
+  reactExports.useEffect(() => {
+    if (modify.model.status !== "done") return;
+    void api.inspectorComponents(project.path).then((r) => setComponents(r.components));
+    setModifyReview(true);
+  }, [modify.model.status]);
+  async function revertModify() {
+    if (snapshot) await api.restoreFiles(project.path, snapshot);
+    await api.inspectorComponents(project.path).then((r) => setComponents(r.components));
+    setSnapshot(null);
+    setModifyReview(false);
+    modify.reset();
+  }
+  function keepModify() {
+    setSnapshot(null);
+    setModifyReview(false);
+    modify.reset();
+  }
   async function startPreview() {
     setDev(await api.startDevServer(project.path));
   }
@@ -18183,32 +18225,40 @@ function DevPreview({
           }
         )
       ] }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "min-h-0 flex-1 overflow-y-auto transition-colors", style: { background: BG[bg] }, children: harness.running || harness.model.status === "done" && !dev.url ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex min-h-[340px] items-start justify-center p-6", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "w-full max-w-2xl rounded-xl border border-vs-border-default bg-vs-bg-surface p-4", children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "mb-3 flex items-center gap-2 text-sm text-vs-text-primary", children: harness.running ? /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsx(Spinner, {}),
-          " Generating a preview harness with Claude Code…"
-        ] }) : /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "min-h-0 flex-1 overflow-y-auto transition-colors", style: { background: BG[bg] }, children: modify.running ? /* @__PURE__ */ jsxRuntimeExports.jsx(RunOverlay, { title: "Applying your change with Claude Code…", run: modify }) : harness.running || harness.model.status === "done" && !dev.url ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+        RunOverlay,
+        {
+          title: harness.running ? "Generating a preview harness with Claude Code…" : "Harness generated — starting the preview…",
+          run: harness,
+          done: !harness.running
+        }
+      ) : embedUrl ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "relative h-full min-h-[340px]", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "iframe",
+          {
+            ref: iframeRef,
+            title: "preview",
+            src: embedUrl,
+            onLoad: () => setIframeReady(false),
+            className: "h-full min-h-[340px] w-full border-0 bg-white"
+          }
+        ),
+        modifyReview && /* @__PURE__ */ jsxRuntimeExports.jsx(KeepRevertBar, { onKeep: keepModify, onRevert: () => void revertModify() })
+      ] }) : modifyReview ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex min-h-[340px] items-start justify-center p-6", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "w-full max-w-2xl rounded-xl border border-vs-border-default bg-vs-bg-surface p-4", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "mb-3 flex items-center gap-2 text-sm text-vs-text-primary", children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-vs-success", children: "✓" }),
-          " Harness generated — starting the preview…"
-        ] }) }),
+          " Change applied — start the preview to see it live."
+        ] }),
         /* @__PURE__ */ jsxRuntimeExports.jsx(
           RunPanel,
           {
-            model: harness.model,
-            onSend: (t) => void harness.send(t),
-            canChat: harness.canChat
+            model: modify.model,
+            onSend: (t) => void modify.send(t),
+            canChat: modify.canChat
           }
-        )
-      ] }) }) : embedUrl ? /* @__PURE__ */ jsxRuntimeExports.jsx(
-        "iframe",
-        {
-          ref: iframeRef,
-          title: "preview",
-          src: embedUrl,
-          onLoad: () => setIframeReady(false),
-          className: "h-full min-h-[340px] w-full border-0 bg-white"
-        }
-      ) : /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex min-h-[340px] items-center justify-center p-12", children: /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex max-w-md flex-col items-center gap-3 rounded-xl border border-black/10 bg-white/80 p-6 text-center", children: dev.state === "starting" ? /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "mt-3", children: /* @__PURE__ */ jsxRuntimeExports.jsx(KeepRevertBar, { onKeep: keepModify, onRevert: () => void revertModify(), inline: true }) })
+      ] }) }) : /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex min-h-[340px] items-center justify-center p-12", children: /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex max-w-md flex-col items-center gap-3 rounded-xl border border-black/10 bg-white/80 p-6 text-center", children: dev.state === "starting" ? /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx(Spinner, {}),
         /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "text-sm font-medium text-zinc-700", children: [
           "Starting the dev server",
@@ -18242,9 +18292,49 @@ function DevPreview({
         /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-sm font-semibold", children: "Controls" }),
         /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex-1" })
       ] }),
-      selected ? /* @__PURE__ */ jsxRuntimeExports.jsx(ControlsPanel, { component: selected, onValues: setPreviewProps }, selected.name) : /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "p-4 text-xs text-vs-text-muted", children: "Select a component." })
+      selected ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+        ControlsPanel,
+        {
+          component: selected,
+          onValues: setPreviewProps,
+          onModify: (req) => void requestModify(req),
+          modifyBusy: modify.running
+        },
+        selected.name
+      ) : /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "p-4 text-xs text-vs-text-muted", children: "Select a component." })
     ] })
   ] });
+}
+function RunOverlay({
+  title,
+  run,
+  done
+}) {
+  return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex min-h-[340px] items-start justify-center p-6", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "w-full max-w-2xl rounded-xl border border-vs-border-default bg-vs-bg-surface p-4", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "mb-3 flex items-center gap-2 text-sm text-vs-text-primary", children: [
+      done ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-vs-success", children: "✓" }) : /* @__PURE__ */ jsxRuntimeExports.jsx(Spinner, {}),
+      " ",
+      title
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx(RunPanel, { model: run.model, onSend: (t) => void run.send(t), canChat: run.canChat })
+  ] }) });
+}
+function KeepRevertBar({
+  onKeep,
+  onRevert,
+  inline: inline2
+}) {
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs(
+    "div",
+    {
+      className: inline2 ? "flex items-center gap-2" : "absolute inset-x-0 bottom-0 flex items-center gap-2 border-t border-vs-border-default bg-vs-bg-surface px-4 py-2.5",
+      children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "flex-1 text-xs text-vs-text-secondary", children: "Change applied to the component source — keep it, or revert to the previous version." }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "ghost", onClick: onRevert, children: "Revert" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "primary", onClick: onKeep, children: "Keep" })
+      ]
+    }
+  );
 }
 function DevServerControl({
   status,
@@ -18329,9 +18419,12 @@ function initialValues(props) {
 }
 function ControlsPanel({
   component,
-  onValues
+  onValues,
+  onModify,
+  modifyBusy
 }) {
   const [values, setValues] = reactExports.useState(() => initialValues(component.props));
+  const [modifyDraft, setModifyDraft] = reactExports.useState("");
   const set = (k, v) => setValues((s) => ({ ...s, [k]: v }));
   const reset = () => setValues(initialValues(component.props));
   reactExports.useEffect(() => {
@@ -18375,7 +18468,34 @@ function ControlsPanel({
       t
     )) }) }),
     /* @__PURE__ */ jsxRuntimeExports.jsx(Section$1, { title: "Accessibility", children: component.status === "verified" ? /* @__PURE__ */ jsxRuntimeExports.jsx(Check, { icon: "✓", color: "text-vs-success", label: "visual-verify passed" }) : component.status === "has-issues" ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex flex-col gap-1.5", children: component.issues.map((i) => /* @__PURE__ */ jsxRuntimeExports.jsx(Check, { icon: "!", color: "text-vs-warning", label: i }, i)) }) : /* @__PURE__ */ jsxRuntimeExports.jsx(Check, { icon: "—", color: "text-vs-text-muted", label: "Run /visual-verify to populate checks" }) }),
-    /* @__PURE__ */ jsxRuntimeExports.jsx(Section$1, { title: "Code", children: /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "whitespace-pre-wrap break-words rounded-md border border-vs-border-default bg-black/40 p-3 font-mono text-[11px] leading-relaxed text-vs-text-secondary", children: snippet(component.name, component.props, values) }) })
+    /* @__PURE__ */ jsxRuntimeExports.jsx(Section$1, { title: "Code", children: /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "whitespace-pre-wrap break-words rounded-md border border-vs-border-default bg-black/40 p-3 font-mono text-[11px] leading-relaxed text-vs-text-secondary", children: snippet(component.name, component.props, values) }) }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs(Section$1, { title: "Modify with Claude", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx(
+        "textarea",
+        {
+          rows: 2,
+          value: modifyDraft,
+          onChange: (e) => setModifyDraft(e.target.value),
+          placeholder: "Describe a change — e.g. add a loading state, tighten the padding…",
+          className: "w-full resize-none rounded-md border border-vs-border-default bg-vs-bg-primary px-2.5 py-2 text-xs text-vs-text-primary placeholder:text-vs-text-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-vs-accent-subtle"
+        }
+      ),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "mt-2 flex items-center gap-2", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "flex-1 text-[11px] text-vs-text-muted", children: "Applied by Claude Code, then reviewable — keep or revert." }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          Button,
+          {
+            variant: "primary",
+            disabled: modifyBusy || modifyDraft.trim().length === 0,
+            onClick: () => {
+              onModify(modifyDraft.trim());
+              setModifyDraft("");
+            },
+            children: modifyBusy ? "Applying…" : "Apply"
+          }
+        )
+      ] })
+    ] })
   ] });
 }
 function PropInput({

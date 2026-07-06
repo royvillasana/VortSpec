@@ -403,6 +403,8 @@ const inspectorComponentsResultSchema = z.object({
   previewUrl: z.string().nullable(),
   components: z.array(inspectorComponentSchema)
 });
+const fileSnapshotSchema = z.object({ path: z.string(), content: z.string() });
+const fileSnapshotListSchema = z.array(fileSnapshotSchema);
 const findingSeveritySchema = z.enum(["error", "warning", "info"]);
 const verificationFindingSchema = z.object({
   /** Stable id: `<component>:<raw id>` (e.g. `callout:D2`). */
@@ -558,6 +560,14 @@ const ipcContract = {
   "inspector:getVerification": {
     request: z.string(),
     response: verificationResultSchema
+  },
+  "inspector:snapshotComponent": {
+    request: z.object({ projectPath: z.string(), file: z.string() }),
+    response: fileSnapshotListSchema
+  },
+  "inspector:restoreFiles": {
+    request: z.object({ projectPath: z.string(), files: fileSnapshotListSchema }),
+    response: z.void()
   }
 };
 function execFileSafe(command, args, opts = {}) {
@@ -1197,6 +1207,15 @@ function parseProps(src) {
   }
   return props;
 }
+async function variantsSibling(projectPath, file) {
+  const dir = dirname(file);
+  const stem = basename(file).replace(/\.(tsx|jsx|ts)$/, "").toLowerCase();
+  const entries = await readdir(join(projectPath, dir)).catch(() => []);
+  const hit = entries.find(
+    (n) => n.endsWith(".variants.ts") && n.slice(0, -".variants.ts".length).toLowerCase() === stem
+  );
+  return hit ? join(dir, hit) : null;
+}
 async function findSourceFile(dir, name) {
   let entries;
   try {
@@ -1255,10 +1274,10 @@ async function getInspectorComponents(projectPath) {
     const file = abs ? abs.slice(projectPath.length + 1) : null;
     let props = [];
     let tokens = [];
-    if (abs) {
+    if (abs && file) {
       const src = await readFile(abs, "utf8").catch(() => "");
-      const variantsPath = abs.replace(/\.(tsx|jsx|ts)$/, ".variants.ts");
-      const variantsSrc = variantsPath !== abs ? await readFile(variantsPath, "utf8").catch(() => "") : "";
+      const vrel = await variantsSibling(projectPath, file);
+      const variantsSrc = vrel ? await readFile(join(projectPath, vrel), "utf8").catch(() => "") : "";
       props = parseProps(variantsSrc || src);
       tokens = scanTokens(src, variantsSrc);
     }
@@ -1275,6 +1294,21 @@ async function getInspectorComponents(projectPath) {
     });
   }
   return { componentDir, previewUrl: null, components };
+}
+async function snapshotComponent(projectPath, file) {
+  const vrel = await variantsSibling(projectPath, file);
+  const candidates = [file, ...vrel ? [vrel] : []];
+  const snaps = [];
+  for (const rel of candidates) {
+    const content = await readFile(join(projectPath, rel), "utf8").catch(() => null);
+    if (content !== null) snaps.push({ path: rel, content });
+  }
+  return snaps;
+}
+async function restoreFiles(projectPath, files) {
+  for (const f of files) {
+    await writeFile(join(projectPath, f.path), f.content, "utf8").catch(() => void 0);
+  }
 }
 const BACKTICK = String.fromCharCode(96);
 const CODE_SPAN = new RegExp(BACKTICK, "g");
@@ -2008,7 +2042,9 @@ const handlers = {
   "inspector:getTokens": ((projectPath) => getInspectorTokens(projectPath)),
   "inspector:getComponents": ((projectPath) => getInspectorComponents(projectPath)),
   "inspector:setTokenValue": ((req) => setInspectorTokenValue(req.projectPath, req.name, req.value)),
-  "inspector:getVerification": ((projectPath) => getVerification(projectPath))
+  "inspector:getVerification": ((projectPath) => getVerification(projectPath)),
+  "inspector:snapshotComponent": ((req) => snapshotComponent(req.projectPath, req.file)),
+  "inspector:restoreFiles": ((req) => restoreFiles(req.projectPath, req.files).then(() => void 0))
 };
 function registerIpc() {
   Object.keys(ipcContract).forEach((channel) => {

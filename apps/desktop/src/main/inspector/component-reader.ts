@@ -1,9 +1,10 @@
-import { join } from "node:path";
-import { readFile, readdir } from "node:fs/promises";
+import { join, dirname, basename } from "node:path";
+import { readFile, readdir, writeFile } from "node:fs/promises";
 import { readProjectConfig } from "../workspace/config-manager";
 import { detectedComponentsSchema, type DetectedComponent } from "../../shared/flow";
 import type {
   ComponentStatus,
+  FileSnapshot,
   InspectorComponent,
   InspectorComponentsResult,
   PropControl,
@@ -85,6 +86,22 @@ export function parseProps(src: string): PropControl[] {
   return props;
 }
 
+/**
+ * Locate the `<stem>.variants.ts` sibling for a component file, matching the stem
+ * case-insensitively (Button.tsx ↔ button.variants.ts). Returns a project-relative path.
+ */
+async function variantsSibling(projectPath: string, file: string): Promise<string | null> {
+  const dir = dirname(file);
+  const stem = basename(file)
+    .replace(/\.(tsx|jsx|ts)$/, "")
+    .toLowerCase();
+  const entries = await readdir(join(projectPath, dir)).catch(() => [] as string[]);
+  const hit = entries.find(
+    (n) => n.endsWith(".variants.ts") && n.slice(0, -".variants.ts".length).toLowerCase() === stem,
+  );
+  return hit ? join(dir, hit) : null;
+}
+
 async function findSourceFile(dir: string, name: string): Promise<string | null> {
   let entries;
   try {
@@ -154,12 +171,11 @@ export async function getInspectorComponents(
     const file = abs ? abs.slice(projectPath.length + 1) : null;
     let props: PropControl[] = [];
     let tokens: string[] = [];
-    if (abs) {
+    if (abs && file) {
       const src = await readFile(abs, "utf8").catch(() => "");
       // CVA variants usually live in a sibling `<name>.variants.ts`.
-      const variantsPath = abs.replace(/\.(tsx|jsx|ts)$/, ".variants.ts");
-      const variantsSrc =
-        variantsPath !== abs ? await readFile(variantsPath, "utf8").catch(() => "") : "";
+      const vrel = await variantsSibling(projectPath, file);
+      const variantsSrc = vrel ? await readFile(join(projectPath, vrel), "utf8").catch(() => "") : "";
       props = parseProps(variantsSrc || src);
       tokens = scanTokens(src, variantsSrc);
     }
@@ -177,4 +193,29 @@ export async function getInspectorComponents(
   }
 
   return { componentDir, previewUrl: null, components };
+}
+
+/**
+ * Capture a component's source (its file + a `.variants.ts` sibling) before a
+ * gated modify run, so the change can be reverted if the user rejects it.
+ */
+export async function snapshotComponent(
+  projectPath: string,
+  file: string,
+): Promise<FileSnapshot[]> {
+  const vrel = await variantsSibling(projectPath, file);
+  const candidates = [file, ...(vrel ? [vrel] : [])];
+  const snaps: FileSnapshot[] = [];
+  for (const rel of candidates) {
+    const content = await readFile(join(projectPath, rel), "utf8").catch(() => null);
+    if (content !== null) snaps.push({ path: rel, content });
+  }
+  return snaps;
+}
+
+/** Restore captured files verbatim (revert a rejected modify run). */
+export async function restoreFiles(projectPath: string, files: FileSnapshot[]): Promise<void> {
+  for (const f of files) {
+    await writeFile(join(projectPath, f.path), f.content, "utf8").catch(() => undefined);
+  }
 }

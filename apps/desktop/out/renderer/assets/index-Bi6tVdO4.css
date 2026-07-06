@@ -497,6 +497,10 @@
     inset: calc(var(--spacing) * 4);
   }
 
+  .inset-x-0 {
+    inset-inline: 0;
+  }
+
   .top-0 {
     top: 0;
   }
@@ -507,6 +511,10 @@
 
   .right-0 {
     right: 0;
+  }
+
+  .bottom-0 {
+    bottom: 0;
   }
 
   .bottom-6 {

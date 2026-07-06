@@ -95,6 +95,11 @@ export const inspectorComponentsResultSchema = z.object({
 });
 export type InspectorComponentsResult = z.infer<typeof inspectorComponentsResultSchema>;
 
+/** A captured file (project-relative path + content), for gated revert of a modify run. */
+export const fileSnapshotSchema = z.object({ path: z.string(), content: z.string() });
+export type FileSnapshot = z.infer<typeof fileSnapshotSchema>;
+export const fileSnapshotListSchema = z.array(fileSnapshotSchema);
+
 // ── Verification (visual-verify + adversarial-review findings) ────────
 
 export const findingSeveritySchema = z.enum(["error", "warning", "info"]);
