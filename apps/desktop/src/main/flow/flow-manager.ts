@@ -60,6 +60,7 @@ function reconcile(state: FlowState): FlowState {
   return {
     currentStageId: currentValid ? state.currentStageId : DEFAULT_FLOW[0]!.id,
     stages,
+    publishRepoUrl: state.publishRepoUrl,
   };
 }
 
@@ -103,6 +104,24 @@ export async function setStageStatus(
   status: StageStatus,
 ): Promise<Flow> {
   const next = patchStage(await readState(projectPath), stageId, { status });
+  await writeState(projectPath, next);
+  return withFlow(next);
+}
+
+/**
+ * Persist the opt-in GitHub publish target (a repo URL) for this project. Only
+ * the URL is stored — the actual push runs through the user's own git/gh in the
+ * commit stage. Passing an empty string clears it.
+ */
+export async function setPublishTarget(
+  projectPath: string,
+  repoUrl: string,
+): Promise<Flow> {
+  const state = await readState(projectPath);
+  const next: FlowState = {
+    ...state,
+    publishRepoUrl: repoUrl.trim() || undefined,
+  };
   await writeState(projectPath, next);
   return withFlow(next);
 }

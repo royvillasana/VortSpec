@@ -99,6 +99,9 @@ const stageDefSchema = z.object({
   kind: stageKindSchema,
   /** produces an artifact that must be approved before advancing */
   gated: z.boolean().default(false),
+  /** not required for the flow to be considered complete (e.g. publishing to
+   *  GitHub). Optional stages can be run/skipped freely and never block. */
+  optional: z.boolean().optional(),
   /** relative path of the artifact this stage produces, if any (fixed path) */
   artifact: z.string().optional(),
   /** filename suffix to resolve under specs/ when the path is dynamic
@@ -123,7 +126,10 @@ z.array(detectedComponentSchema);
 const COMPONENTS_MANIFEST = ".sdd-de/components.json";
 const flowStateSchema = z.object({
   currentStageId: z.string(),
-  stages: z.array(stageStateSchema)
+  stages: z.array(stageStateSchema),
+  /** Opt-in GitHub publish target (a repo URL). Only the URL is stored — never
+   *  credentials; the push runs through the user's own git/gh in the commit stage. */
+  publishRepoUrl: z.string().optional()
 });
 const flowSchema = z.object({
   definitions: z.array(stageDefSchema),
@@ -171,10 +177,11 @@ const DEFAULT_FLOW = [
   },
   {
     id: "commit",
-    title: "Commit",
-    summary: "/commit — open a PR where the spec is the PR description.",
+    title: "Commit & publish",
+    summary: "Optional — keep everything local, or connect a GitHub repo and publish from here using your own git/gh.",
     kind: "agent",
     gated: false,
+    optional: true,
     promptTemplate: "/commit\n\nRun the commit skill: commit the changes and open a PR whose description is the component spec, with the Figma link and QA screenshots. No direct pushes to main.",
     allowedTools: ["Read", "Bash"]
   }
@@ -387,6 +394,10 @@ const ipcContract = {
   },
   "flow:completeInput": {
     request: z.object({ projectPath: z.string(), stageId: z.string() }),
+    response: flowSchema
+  },
+  "flow:setPublishTarget": {
+    request: z.object({ projectPath: z.string(), repoUrl: z.string() }),
     response: flowSchema
   },
   "artifact:read": {
@@ -1080,7 +1091,8 @@ function reconcile(state) {
   const currentValid = DEFAULT_FLOW.some((d) => d.id === state.currentStageId);
   return {
     currentStageId: currentValid ? state.currentStageId : DEFAULT_FLOW[0].id,
-    stages
+    stages,
+    publishRepoUrl: state.publishRepoUrl
   };
 }
 async function writeState(projectPath, state) {
@@ -1108,6 +1120,15 @@ async function getFlow(projectPath) {
 }
 async function setStageStatus(projectPath, stageId, status) {
   const next = patchStage(await readState(projectPath), stageId, { status });
+  await writeState(projectPath, next);
+  return withFlow(next);
+}
+async function setPublishTarget(projectPath, repoUrl) {
+  const state = await readState(projectPath);
+  const next = {
+    ...state,
+    publishRepoUrl: repoUrl.trim() || void 0
+  };
   await writeState(projectPath, next);
   return withFlow(next);
 }
@@ -1196,6 +1217,7 @@ const handlers = {
   "flow:requestChanges": ((req) => requestChanges(req.projectPath, req.stageId, req.notes)),
   "flow:saveIntake": ((req) => saveIntake(req.projectPath, req.content)),
   "flow:completeInput": ((req) => completeInput(req.projectPath, req.stageId)),
+  "flow:setPublishTarget": ((req) => setPublishTarget(req.projectPath, req.repoUrl)),
   "artifact:read": ((req) => readArtifact(req.projectPath, req.relPath)),
   "artifact:findLatest": ((req) => findLatestArtifact(req.projectPath, req.suffix)),
   "project:config": ((projectPath) => readProjectConfig(projectPath))

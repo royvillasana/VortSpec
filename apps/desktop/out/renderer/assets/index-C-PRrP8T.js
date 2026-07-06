@@ -16337,6 +16337,9 @@ const stageDefSchema = objectType({
   kind: stageKindSchema,
   /** produces an artifact that must be approved before advancing */
   gated: booleanType().default(false),
+  /** not required for the flow to be considered complete (e.g. publishing to
+   *  GitHub). Optional stages can be run/skipped freely and never block. */
+  optional: booleanType().optional(),
   /** relative path of the artifact this stage produces, if any (fixed path) */
   artifact: stringType().optional(),
   /** filename suffix to resolve under specs/ when the path is dynamic
@@ -16361,7 +16364,10 @@ const detectedComponentsSchema = arrayType(detectedComponentSchema);
 const COMPONENTS_MANIFEST = ".sdd-de/components.json";
 const flowStateSchema = objectType({
   currentStageId: stringType(),
-  stages: arrayType(stageStateSchema)
+  stages: arrayType(stageStateSchema),
+  /** Opt-in GitHub publish target (a repo URL). Only the URL is stored — never
+   *  credentials; the push runs through the user's own git/gh in the commit stage. */
+  publishRepoUrl: stringType().optional()
 });
 objectType({
   definitions: arrayType(stageDefSchema),
@@ -16746,6 +16752,8 @@ function GuidedFlow({
   const currentIndex = flow.definitions.findIndex((d) => d.id === flow.state.currentStageId);
   const selectedIndex = flow.definitions.findIndex((d) => d.id === selectedId);
   const locked = selectedIndex > currentIndex;
+  const flowComplete = flow.definitions.filter((d) => !d.optional).every((d) => flow.state.stages.find((s) => s.id === d.id)?.status === "approved");
+  const commitStage = flow.definitions.find((d) => d.optional);
   return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "mx-auto flex w-full max-w-4xl gap-6 px-6 py-8", children: [
     /* @__PURE__ */ jsxRuntimeExports.jsxs("aside", { className: "w-56 shrink-0", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsx(
@@ -16768,18 +16776,31 @@ function GuidedFlow({
         }
       )
     ] }),
-    /* @__PURE__ */ jsxRuntimeExports.jsx("section", { className: "min-w-0 flex-1", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
-      StageDetail,
-      {
-        project,
-        def,
-        state,
-        locked,
-        config,
-        onFlow: setFlow
-      },
-      def.id
-    ) })
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: "flex min-w-0 flex-1 flex-col gap-4", children: [
+      flowComplete && /* @__PURE__ */ jsxRuntimeExports.jsx(
+        CompletionBanner,
+        {
+          project,
+          published: flow.state.publishRepoUrl,
+          canPublish: Boolean(commitStage),
+          onPublish: () => commitStage && setSelectedId(commitStage.id),
+          onBack
+        }
+      ),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(
+        StageDetail,
+        {
+          project,
+          def,
+          state,
+          locked,
+          config,
+          publishRepoUrl: flow.state.publishRepoUrl,
+          onFlow: setFlow
+        },
+        def.id
+      )
+    ] })
   ] });
 }
 function Stepper({
@@ -16789,8 +16810,12 @@ function Stepper({
   onSelect
 }) {
   const total = flow.definitions.length;
-  const done = flow.state.stages.filter((s) => s.status === "approved").length;
-  const pct = total ? Math.round(done / total * 100) : 0;
+  const requiredDefs = flow.definitions.filter((d) => !d.optional);
+  const requiredDone = requiredDefs.filter(
+    (d) => flow.state.stages.find((s) => s.id === d.id)?.status === "approved"
+  ).length;
+  const pct = requiredDefs.length ? Math.round(requiredDone / requiredDefs.length * 100) : 0;
+  const complete = pct === 100;
   return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col gap-4", children: [
     /* @__PURE__ */ jsxRuntimeExports.jsx("ol", { className: "flex flex-col gap-1.5", children: flow.definitions.map((def, i) => {
       const state = flow.state.stages.find((s) => s.id === def.id);
@@ -16807,6 +16832,7 @@ function Stepper({
           children: [
             /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "w-4 shrink-0 font-mono text-[11px] text-vs-text-muted", children: i + 1 }),
             /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "flex-1 truncate", children: def.title }),
+            def.optional && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "shrink-0 rounded-full border border-vs-border-default px-1.5 text-[9px] uppercase tracking-wide text-vs-text-muted", children: "opt" }),
             /* @__PURE__ */ jsxRuntimeExports.jsx(StageDot, { status: state.status, locked })
           ]
         }
@@ -16816,16 +16842,11 @@ function Stepper({
       /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "h-1 overflow-hidden rounded-full bg-vs-border-default", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
         "div",
         {
-          className: "h-full rounded-full bg-vs-accent transition-all",
+          className: `h-full rounded-full transition-all ${complete ? "bg-vs-success" : "bg-vs-accent"}`,
           style: { width: `${pct}%` }
         }
       ) }),
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "font-mono text-[11px] text-vs-text-muted", children: [
-        "Stage ",
-        Math.min(currentIndex + 1, total),
-        " of ",
-        total
-      ] })
+      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono text-[11px] text-vs-text-muted", children: complete ? "Complete · commit optional" : `Stage ${Math.min(currentIndex + 1, total)} of ${total}` })
     ] })
   ] });
 }
@@ -16835,6 +16856,7 @@ function StageDetail({
   state,
   locked,
   config,
+  publishRepoUrl,
   onFlow
 }) {
   return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col gap-4", children: [
@@ -16856,7 +16878,16 @@ function StageDetail({
         header: /* @__PURE__ */ jsxRuntimeExports.jsx(SourceInfo, { config }),
         runLabel: "Connect & extract tokens + detect components"
       }
-    ) : def.kind === "components" ? /* @__PURE__ */ jsxRuntimeExports.jsx(ComponentsStage, { project, def, state, onFlow }) : /* @__PURE__ */ jsxRuntimeExports.jsx(AgentStage, { project, def, state, onFlow })
+    ) : def.kind === "components" ? /* @__PURE__ */ jsxRuntimeExports.jsx(ComponentsStage, { project, def, state, onFlow }) : def.optional ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+      PublishStage,
+      {
+        project,
+        def,
+        state,
+        publishRepoUrl,
+        onFlow
+      }
+    ) : /* @__PURE__ */ jsxRuntimeExports.jsx(AgentStage, { project, def, state, onFlow })
   ] });
 }
 function SourceInfo({ config }) {
@@ -17102,6 +17133,112 @@ function parseComponents(raw) {
   } catch {
     return null;
   }
+}
+function CompletionBanner({
+  project,
+  published,
+  canPublish,
+  onPublish,
+  onBack
+}) {
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs(Card, { className: "flex flex-col gap-3 border-vs-success-border bg-vs-success-muted p-4", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-sm font-semibold text-vs-success", children: "Design system complete 🎉" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "mt-1 text-xs text-vs-text-secondary", children: "Every required step is done — everything lives in your project folder. Publishing to GitHub is optional; you can keep working entirely locally." }),
+      published && /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "mt-1 text-xs text-vs-text-muted", children: [
+        "Publish target: ",
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono", children: published })
+      ] })
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-wrap gap-2", children: [
+      canPublish && /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "primary", onClick: onPublish, children: published ? "Publish to GitHub" : "Connect GitHub & publish…" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "default", onClick: () => void api.openFolder(project.path), children: "Open project folder" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "ghost", onClick: onBack, children: "Back to projects" })
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "text-[11px] text-vs-text-muted", children: [
+      "Want true pixel & axe QA? Run ",
+      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono", children: "/storybook" }),
+      " in the project to make the components browsable, then screenshot against the Figma frames."
+    ] })
+  ] });
+}
+function PublishStage({
+  project,
+  def,
+  state,
+  publishRepoUrl,
+  onFlow
+}) {
+  const run = useAgentRun();
+  const [url, setUrl] = reactExports.useState(publishRepoUrl ?? "");
+  const approved = state.status === "approved";
+  const justFinished = run.model.status === "done";
+  async function publish() {
+    const target = url.trim();
+    if (!target) return;
+    onFlow(await api.setPublishTarget(project.path, target));
+    const prompt = (def.promptTemplate ?? "/commit") + `
+
+Publish target: ${target}
+Ensure this project is a git repository (run \`git init\` if it is not yet). If no \`origin\` remote exists, add the publish target as \`origin\` (never overwrite an existing origin). Stage and commit all changes with a clear message, push the current branch, and open a pull request whose description is the component spec. Use the user's existing git and gh credentials — never ask for or store tokens. If git or gh is not authenticated, stop and tell the user exactly what to run (e.g. \`gh auth login\`).`;
+    await run.start({
+      prompt,
+      cwd: project.path,
+      allowedTools: def.allowedTools,
+      bypassPermissions: true
+    });
+  }
+  async function markDone() {
+    onFlow(await api.approveStage(project.path, def.id));
+  }
+  if (approved) {
+    return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "rounded-md border border-vs-success-border bg-vs-success-muted px-4 py-2 text-sm text-vs-success", children: [
+      "Commit & publish resolved.",
+      " ",
+      publishRepoUrl ? `Published to ${publishRepoUrl}.` : "Kept local — nothing pushed."
+    ] });
+  }
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col gap-4", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs(Card, { className: "flex flex-col gap-3 p-4", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "text-xs text-vs-text-muted", children: [
+        "Optional. Your work is already saved locally. To publish, connect a GitHub repo — VortSpec uses your own ",
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono", children: "git" }),
+        "/",
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono", children: "gh" }),
+        " ",
+        "and stores only the URL, never credentials."
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "flex flex-col gap-1 text-xs text-vs-text-secondary", children: [
+        "GitHub repository URL",
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "input",
+          {
+            value: url,
+            onChange: (e) => setUrl(e.target.value),
+            placeholder: "https://github.com/you/your-repo",
+            className: "rounded-md border border-vs-border-default bg-vs-bg-primary px-3 py-2 text-sm text-vs-text-primary placeholder:text-vs-text-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-vs-accent-subtle"
+          }
+        )
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex gap-2", children: [
+        run.running ? /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { onClick: () => void run.cancel(), children: "Cancel" }) : /* @__PURE__ */ jsxRuntimeExports.jsx(
+          Button,
+          {
+            variant: "primary",
+            disabled: url.trim().length === 0,
+            onClick: () => void publish(),
+            children: "Publish to GitHub"
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "ghost", onClick: () => void markDone(), children: "Skip — keep it local" })
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(RunPanel, { model: run.model, onSend: (t) => void run.send(t), canChat: run.canChat })
+    ] }),
+    justFinished && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between rounded-md border border-vs-border-default bg-vs-bg-surface px-4 py-3", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-sm text-vs-text-secondary", children: "Publish run complete." }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "primary", onClick: () => void markDone(), children: "Mark done" })
+    ] })
+  ] });
 }
 function ArtifactGate({
   path,

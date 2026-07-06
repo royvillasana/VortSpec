@@ -71,6 +71,13 @@ export function GuidedFlow({
   const selectedIndex = flow.definitions.findIndex((d) => d.id === selectedId);
   const locked = selectedIndex > currentIndex;
 
+  // The flow is "done" once every REQUIRED (non-optional) stage is approved —
+  // so a project can be finished entirely locally, with commit/publish optional.
+  const flowComplete = flow.definitions
+    .filter((d) => !d.optional)
+    .every((d) => flow.state.stages.find((s) => s.id === d.id)?.status === "approved");
+  const commitStage = flow.definitions.find((d) => d.optional);
+
   return (
     <div className="mx-auto flex w-full max-w-4xl gap-6 px-6 py-8">
       <aside className="w-56 shrink-0">
@@ -92,7 +99,16 @@ export function GuidedFlow({
         />
       </aside>
 
-      <section className="min-w-0 flex-1">
+      <section className="flex min-w-0 flex-1 flex-col gap-4">
+        {flowComplete && (
+          <CompletionBanner
+            project={project}
+            published={flow.state.publishRepoUrl}
+            canPublish={Boolean(commitStage)}
+            onPublish={() => commitStage && setSelectedId(commitStage.id)}
+            onBack={onBack}
+          />
+        )}
         <StageDetail
           key={def.id}
           project={project}
@@ -100,6 +116,7 @@ export function GuidedFlow({
           state={state}
           locked={locked}
           config={config}
+          publishRepoUrl={flow.state.publishRepoUrl}
           onFlow={setFlow}
         />
       </section>
@@ -119,8 +136,14 @@ function Stepper({
   onSelect: (id: string) => void;
 }): React.JSX.Element {
   const total = flow.definitions.length;
-  const done = flow.state.stages.filter((s) => s.status === "approved").length;
-  const pct = total ? Math.round((done / total) * 100) : 0;
+  // Progress is measured over required stages, so it reaches 100% when the
+  // project is done locally — optional stages (commit/publish) don't hold it back.
+  const requiredDefs = flow.definitions.filter((d) => !d.optional);
+  const requiredDone = requiredDefs.filter(
+    (d) => flow.state.stages.find((s) => s.id === d.id)?.status === "approved",
+  ).length;
+  const pct = requiredDefs.length ? Math.round((requiredDone / requiredDefs.length) * 100) : 0;
+  const complete = pct === 100;
 
   return (
     <div className="flex flex-col gap-4">
@@ -146,6 +169,11 @@ function Stepper({
                   {i + 1}
                 </span>
                 <span className="flex-1 truncate">{def.title}</span>
+                {def.optional && (
+                  <span className="shrink-0 rounded-full border border-vs-border-default px-1.5 text-[9px] uppercase tracking-wide text-vs-text-muted">
+                    opt
+                  </span>
+                )}
                 <StageDot status={state.status} locked={locked} />
               </button>
             </li>
@@ -155,12 +183,12 @@ function Stepper({
       <div className="flex flex-col gap-1.5 px-1">
         <div className="h-1 overflow-hidden rounded-full bg-vs-border-default">
           <div
-            className="h-full rounded-full bg-vs-accent transition-all"
+            className={`h-full rounded-full transition-all ${complete ? "bg-vs-success" : "bg-vs-accent"}`}
             style={{ width: `${pct}%` }}
           />
         </div>
         <span className="font-mono text-[11px] text-vs-text-muted">
-          Stage {Math.min(currentIndex + 1, total)} of {total}
+          {complete ? "Complete · commit optional" : `Stage ${Math.min(currentIndex + 1, total)} of ${total}`}
         </span>
       </div>
     </div>
@@ -173,6 +201,7 @@ function StageDetail({
   state,
   locked,
   config,
+  publishRepoUrl,
   onFlow,
 }: {
   project: Project;
@@ -180,6 +209,7 @@ function StageDetail({
   state: StageState;
   locked: boolean;
   config: ProjectConfig | null;
+  publishRepoUrl?: string;
   onFlow: (f: Flow) => void;
 }): React.JSX.Element {
   return (
@@ -208,6 +238,14 @@ function StageDetail({
         />
       ) : def.kind === "components" ? (
         <ComponentsStage project={project} def={def} state={state} onFlow={onFlow} />
+      ) : def.optional ? (
+        <PublishStage
+          project={project}
+          def={def}
+          state={state}
+          publishRepoUrl={publishRepoUrl}
+          onFlow={onFlow}
+        />
       ) : (
         <AgentStage project={project} def={def} state={state} onFlow={onFlow} />
       )}
@@ -611,6 +649,162 @@ function parseComponents(raw: string | null): DetectedComponent[] | null {
   } catch {
     return null;
   }
+}
+
+// ── Flow completion + optional publish ───────────────────────────────
+
+/** Shown once every required stage is approved: the project is done locally. */
+function CompletionBanner({
+  project,
+  published,
+  canPublish,
+  onPublish,
+  onBack,
+}: {
+  project: Project;
+  published?: string;
+  canPublish: boolean;
+  onPublish: () => void;
+  onBack: () => void;
+}): React.JSX.Element {
+  return (
+    <Card className="flex flex-col gap-3 border-vs-success-border bg-vs-success-muted p-4">
+      <div>
+        <p className="text-sm font-semibold text-vs-success">Design system complete 🎉</p>
+        <p className="mt-1 text-xs text-vs-text-secondary">
+          Every required step is done — everything lives in your project folder. Publishing to
+          GitHub is optional; you can keep working entirely locally.
+        </p>
+        {published && (
+          <p className="mt-1 text-xs text-vs-text-muted">
+            Publish target: <span className="font-mono">{published}</span>
+          </p>
+        )}
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {canPublish && (
+          <Button variant="primary" onClick={onPublish}>
+            {published ? "Publish to GitHub" : "Connect GitHub & publish…"}
+          </Button>
+        )}
+        <Button variant="default" onClick={() => void api.openFolder(project.path)}>
+          Open project folder
+        </Button>
+        <Button variant="ghost" onClick={onBack}>
+          Back to projects
+        </Button>
+      </div>
+      <p className="text-[11px] text-vs-text-muted">
+        Want true pixel &amp; axe QA? Run <span className="font-mono">/storybook</span> in the
+        project to make the components browsable, then screenshot against the Figma frames.
+      </p>
+    </Card>
+  );
+}
+
+/**
+ * The optional commit/publish stage. Local-first: the work is already saved on
+ * disk. Publishing is opt-in — the user pastes a GitHub repo URL (stored, not
+ * credentials) and the push runs through their own git/gh via the /commit agent.
+ */
+function PublishStage({
+  project,
+  def,
+  state,
+  publishRepoUrl,
+  onFlow,
+}: {
+  project: Project;
+  def: StageDef;
+  state: StageState;
+  publishRepoUrl?: string;
+  onFlow: (f: Flow) => void;
+}): React.JSX.Element {
+  const run = useAgentRun();
+  const [url, setUrl] = useState(publishRepoUrl ?? "");
+  const approved = state.status === "approved";
+  const justFinished = run.model.status === "done";
+
+  async function publish(): Promise<void> {
+    const target = url.trim();
+    if (!target) return;
+    onFlow(await api.setPublishTarget(project.path, target));
+    const prompt =
+      (def.promptTemplate ?? "/commit") +
+      `\n\nPublish target: ${target}\n` +
+      "Ensure this project is a git repository (run `git init` if it is not yet). " +
+      "If no `origin` remote exists, add the publish target as `origin` (never overwrite an " +
+      "existing origin). Stage and commit all changes with a clear message, push the current " +
+      "branch, and open a pull request whose description is the component spec. Use the user's " +
+      "existing git and gh credentials — never ask for or store tokens. If git or gh is not " +
+      "authenticated, stop and tell the user exactly what to run (e.g. `gh auth login`).";
+    await run.start({
+      prompt,
+      cwd: project.path,
+      allowedTools: def.allowedTools,
+      bypassPermissions: true,
+    });
+  }
+
+  async function markDone(): Promise<void> {
+    onFlow(await api.approveStage(project.path, def.id));
+  }
+
+  if (approved) {
+    return (
+      <div className="rounded-md border border-vs-success-border bg-vs-success-muted px-4 py-2 text-sm text-vs-success">
+        Commit &amp; publish resolved.{" "}
+        {publishRepoUrl ? `Published to ${publishRepoUrl}.` : "Kept local — nothing pushed."}
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      <Card className="flex flex-col gap-3 p-4">
+        <p className="text-xs text-vs-text-muted">
+          Optional. Your work is already saved locally. To publish, connect a GitHub repo — VortSpec
+          uses your own <span className="font-mono">git</span>/<span className="font-mono">gh</span>{" "}
+          and stores only the URL, never credentials.
+        </p>
+        <label className="flex flex-col gap-1 text-xs text-vs-text-secondary">
+          GitHub repository URL
+          <input
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            placeholder="https://github.com/you/your-repo"
+            className="rounded-md border border-vs-border-default bg-vs-bg-primary px-3 py-2 text-sm text-vs-text-primary placeholder:text-vs-text-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-vs-accent-subtle"
+          />
+        </label>
+        <div className="flex gap-2">
+          {run.running ? (
+            <Button onClick={() => void run.cancel()}>Cancel</Button>
+          ) : (
+            <Button
+              variant="primary"
+              disabled={url.trim().length === 0}
+              onClick={() => void publish()}
+            >
+              Publish to GitHub
+            </Button>
+          )}
+          <Button variant="ghost" onClick={() => void markDone()}>
+            Skip — keep it local
+          </Button>
+        </div>
+        <RunPanel model={run.model} onSend={(t) => void run.send(t)} canChat={run.canChat} />
+      </Card>
+
+      {justFinished && (
+        <div className="flex items-center justify-between rounded-md border border-vs-border-default bg-vs-bg-surface px-4 py-3">
+          <p className="text-sm text-vs-text-secondary">Publish run complete.</p>
+          <Button variant="primary" onClick={() => void markDone()}>
+            Mark done
+          </Button>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function ArtifactGate({

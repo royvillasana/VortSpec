@@ -20,6 +20,7 @@ import {
   requestChanges,
   saveIntake,
   completeInput,
+  setPublishTarget,
   readArtifact,
   findLatestArtifact,
 } from "./flow/flow-manager";
@@ -81,6 +82,8 @@ const handlers: Record<IpcChannel, Handler> = {
     saveIntake(req.projectPath, req.content)) as Handler,
   "flow:completeInput": ((req: { projectPath: string; stageId: string }) =>
     completeInput(req.projectPath, req.stageId)) as Handler,
+  "flow:setPublishTarget": ((req: { projectPath: string; repoUrl: string }) =>
+    setPublishTarget(req.projectPath, req.repoUrl)) as Handler,
   "artifact:read": ((req: { projectPath: string; relPath: string }) =>
     readArtifact(req.projectPath, req.relPath)) as Handler,
   "artifact:findLatest": ((req: { projectPath: string; suffix: string }) =>

@@ -33,6 +33,9 @@ export const stageDefSchema = z.object({
   kind: stageKindSchema,
   /** produces an artifact that must be approved before advancing */
   gated: z.boolean().default(false),
+  /** not required for the flow to be considered complete (e.g. publishing to
+   *  GitHub). Optional stages can be run/skipped freely and never block. */
+  optional: z.boolean().optional(),
   /** relative path of the artifact this stage produces, if any (fixed path) */
   artifact: z.string().optional(),
   /** filename suffix to resolve under specs/ when the path is dynamic
@@ -66,6 +69,9 @@ export const COMPONENTS_MANIFEST = ".sdd-de/components.json";
 export const flowStateSchema = z.object({
   currentStageId: z.string(),
   stages: z.array(stageStateSchema),
+  /** Opt-in GitHub publish target (a repo URL). Only the URL is stored — never
+   *  credentials; the push runs through the user's own git/gh in the commit stage. */
+  publishRepoUrl: z.string().optional(),
 });
 export type FlowState = z.infer<typeof flowStateSchema>;
 
@@ -140,10 +146,12 @@ export const DEFAULT_FLOW: StageDef[] = [
   },
   {
     id: "commit",
-    title: "Commit",
-    summary: "/commit — open a PR where the spec is the PR description.",
+    title: "Commit & publish",
+    summary:
+      "Optional — keep everything local, or connect a GitHub repo and publish from here using your own git/gh.",
     kind: "agent",
     gated: false,
+    optional: true,
     promptTemplate:
       "/commit\n\nRun the commit skill: commit the changes and open a PR whose description is the component spec, with the Figma link and QA screenshots. No direct pushes to main.",
     allowedTools: ["Read", "Bash"],

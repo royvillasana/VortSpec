@@ -149,6 +149,10 @@ export const ipcContract = {
     request: z.object({ projectPath: z.string(), stageId: z.string() }),
     response: flowSchema,
   },
+  "flow:setPublishTarget": {
+    request: z.object({ projectPath: z.string(), repoUrl: z.string() }),
+    response: flowSchema,
+  },
   "artifact:read": {
     request: z.object({ projectPath: z.string(), relPath: z.string() }),
     response: z.string().nullable(),
