@@ -6,7 +6,9 @@ import { Button, Spinner } from "../components/ui";
 /**
  * Project dashboard (US-03, design: "Projects Dashboard.dc.html") — a two-column
  * card grid with each project's last-run status and quick actions. "New project"
- * / "Open folder" both run the setup wizard before the flow.
+ * creates the workspace folder, then routes into the design-source screen
+ * (Design Input) where the source — ZIP, Figma, or an existing folder/repo — is
+ * chosen. There's no separate "Open folder" entry; the folder source lives there.
  */
 export function Dashboard({
   projects,
@@ -22,17 +24,18 @@ export function Dashboard({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function startProject(source: "new" | "existing"): Promise<void> {
+  async function startProject(): Promise<void> {
     setBusy(true);
     setError(null);
     try {
-      const project =
-        source === "new" ? await api.createFolder() : await api.pickFolder(false);
+      // Create the project's workspace folder, then hand off to the design-source
+      // screen. The design source (incl. an existing folder/repo) is chosen there.
+      const project = await api.createFolder();
       if (!project) return;
       onProjects([project, ...projects.filter((p) => p.path !== project.path)]);
       onSetup(project);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not open project");
+      setError(e instanceof Error ? e.message : "Could not create project");
     } finally {
       setBusy(false);
     }
@@ -44,10 +47,7 @@ export function Dashboard({
         <h1 className="text-[20px] font-semibold tracking-[-0.01em]">Projects</h1>
         <span className="font-mono text-xs text-vs-text-muted">{projects.length} local</span>
         <div className="flex-1" />
-        <Button variant="default" disabled={busy} onClick={() => void startProject("existing")}>
-          Open folder
-        </Button>
-        <Button variant="primary" disabled={busy} onClick={() => void startProject("new")}>
+        <Button variant="primary" disabled={busy} onClick={() => void startProject()}>
           {busy ? "…" : "New project"}
         </Button>
       </div>
@@ -59,7 +59,7 @@ export function Dashboard({
       )}
 
       {projects.length === 0 ? (
-        <EmptyState onNew={() => void startProject("new")} />
+        <EmptyState onNew={() => void startProject()} />
       ) : (
         <div className="grid grid-cols-2 gap-4">
           {projects.map((project) => (
@@ -199,7 +199,8 @@ function EmptyState({ onNew }: { onNew: () => void }): React.JSX.Element {
       </svg>
       <div className="text-[15px] font-semibold text-vs-text-primary">No projects yet</div>
       <div className="max-w-xs text-sm text-vs-text-secondary">
-        Point VortSpec at a folder and import a design to start a run.
+        Create a project, then pick your design source — a ZIP, a Figma link, or an existing
+        folder — to start a run.
       </div>
       <Button variant="primary" className="mt-1" onClick={onNew}>
         New project
