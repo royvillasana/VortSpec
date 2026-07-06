@@ -565,6 +565,10 @@ const ipcContract = {
     request: z.object({ projectPath: z.string(), file: z.string() }),
     response: fileSnapshotListSchema
   },
+  "inspector:snapshotTokenScope": {
+    request: z.string(),
+    response: fileSnapshotListSchema
+  },
   "inspector:restoreFiles": {
     request: z.object({ projectPath: z.string(), files: fileSnapshotListSchema }),
     response: z.void()
@@ -1100,19 +1104,48 @@ async function collectSources(dir) {
   await walk(dir);
   return out;
 }
+function deriveProperty(text, at) {
+  const before = text.slice(Math.max(0, at - 48), at);
+  const tw = before.match(/([a-z][a-z-]*)-\[(?:var\()?$/);
+  if (tw) return tw[1];
+  const css = before.match(/([a-zA-Z-]+)\s*:\s*(?:var\()?$/);
+  if (css) return css[1];
+  return void 0;
+}
 function buildUsage(tokenNames, sources) {
   const usage = {};
   const names = new Set(tokenNames);
   for (const { component, text } of sources) {
     const seen = /* @__PURE__ */ new Set();
-    for (const m of text.matchAll(/var\(\s*--([\w-]+)/g)) {
+    for (const m of text.matchAll(/--([\w-]+)(?![\w-])/g)) {
       const name = m[1];
       if (!names.has(name) || seen.has(name)) continue;
       seen.add(name);
-      (usage[name] ??= []).push({ component });
+      const property = deriveProperty(text, m.index ?? 0);
+      (usage[name] ??= []).push(property ? { component, property } : { component });
     }
   }
   return usage;
+}
+const OVERRIDES_PATH = ".vortspec/token-overrides.json";
+async function readOverrides(projectPath) {
+  try {
+    const raw = await readFile(join(projectPath, OVERRIDES_PATH), "utf8");
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) return new Set(parsed.filter((x) => typeof x === "string"));
+  } catch {
+  }
+  return /* @__PURE__ */ new Set();
+}
+async function markOverridden(projectPath, name) {
+  const set = await readOverrides(projectPath);
+  set.add(name);
+  const path = join(projectPath, OVERRIDES_PATH);
+  await mkdir(dirname(path), { recursive: true }).catch(() => void 0);
+  await writeFile(path, `${JSON.stringify([...set].sort(), null, 2)}
+`, "utf8").catch(
+    () => void 0
+  );
 }
 async function getInspectorTokens(projectPath) {
   const config = await readProjectConfig(projectPath);
@@ -1130,9 +1163,10 @@ async function getInspectorTokens(projectPath) {
     parsed.map((t) => t.name),
     sources
   );
+  const edited = await readOverrides(projectPath);
   const tokens = parsed.map((t) => ({
     ...t,
-    source: "generated-code",
+    source: edited.has(t.name) ? "hand-edited" : "generated-code",
     uses: usage[t.name]?.length ?? 0
   }));
   return { tokenFile, tokens, usage };
@@ -1147,10 +1181,41 @@ async function setInspectorTokenValue(projectPath, name, value) {
       const re = new RegExp(`(--${name}\\s*:\\s*)([^;]*)(;)`);
       if (re.test(css)) {
         await writeFile(path, css.replace(re, `$1${value.trim()}$3`), "utf8");
+        await markOverridden(projectPath, name);
       }
     }
   }
   return getInspectorTokens(projectPath);
+}
+async function snapshotTokenScope(projectPath) {
+  const config = await readProjectConfig(projectPath);
+  const snaps = [];
+  const seen = /* @__PURE__ */ new Set();
+  async function capture(rel) {
+    if (seen.has(rel)) return;
+    seen.add(rel);
+    const content = await readFile(join(projectPath, rel), "utf8").catch(() => null);
+    if (content !== null) snaps.push({ path: rel, content });
+  }
+  if (config?.tokenFile) await capture(config.tokenFile);
+  if (config?.componentDir) {
+    const root = join(projectPath, config.componentDir);
+    async function walk(d) {
+      let entries;
+      try {
+        entries = await readdir(d, { withFileTypes: true });
+      } catch {
+        return;
+      }
+      for (const entry of entries) {
+        const full = join(d, entry.name);
+        if (entry.isDirectory()) await walk(full);
+        else if (SOURCE_EXTS$1.has(extname(entry.name))) await capture(full.slice(projectPath.length + 1));
+      }
+    }
+    await walk(root);
+  }
+  return snaps;
 }
 const SOURCE_EXTS = [".tsx", ".jsx", ".vue", ".svelte", ".ts"];
 function balanced(src, from) {
@@ -2044,6 +2109,7 @@ const handlers = {
   "inspector:setTokenValue": ((req) => setInspectorTokenValue(req.projectPath, req.name, req.value)),
   "inspector:getVerification": ((projectPath) => getVerification(projectPath)),
   "inspector:snapshotComponent": ((req) => snapshotComponent(req.projectPath, req.file)),
+  "inspector:snapshotTokenScope": ((projectPath) => snapshotTokenScope(projectPath)),
   "inspector:restoreFiles": ((req) => restoreFiles(req.projectPath, req.files).then(() => void 0))
 };
 function registerIpc() {

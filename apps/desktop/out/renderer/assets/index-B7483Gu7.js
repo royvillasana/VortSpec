@@ -17527,6 +17527,23 @@ function ArtifactGate({
     ] })
   ] });
 }
+function renamePrompt(oldName, newName) {
+  return [
+    `Rename the design token \`--${oldName}\` to \`--${newName}\` across this project.`,
+    `1. In the token file, rename the \`--${oldName}\` custom-property declaration to \`--${newName}\`, keeping its value and any comment.`,
+    `2. Update EVERY reference under the component directory — \`var(--${oldName})\`, Tailwind arbitrary values (\`bg-[--${oldName}]\`, \`text-[var(--${oldName})]\`), and any other \`--${oldName}\` mention — to \`--${newName}\`.`,
+    `3. Change nothing else: no values, no other tokens. Preserve formatting.`
+  ].join("\n");
+}
+function deletePrompt(name) {
+  return [
+    `Delete the design token \`--${name}\` from this project safely.`,
+    `1. Find every reference to \`--${name}\` in the component sources under the component directory.`,
+    `2. Replace each with the closest EXISTING token by name/role so nothing hardcodes a raw value; if truly none fits, leave a clear TODO comment instead of a literal.`,
+    `3. Once no references remain, remove the \`--${name}\` declaration from the token file.`,
+    `4. Touch nothing else. Preserve formatting.`
+  ].join("\n");
+}
 const TYPE_ORDER = ["color", "typography", "spacing", "radius", "shadow", "other"];
 const TYPE_LABEL = {
   color: "Color",
@@ -17571,16 +17588,62 @@ function Inspector({
   const [codeOnly, setCodeOnly] = reactExports.useState(false);
   const [selected, setSelected] = reactExports.useState(null);
   const [toast, setToast] = reactExports.useState("");
+  const tokenMod = useAgentRun();
+  const [snapshot, setSnapshot] = reactExports.useState(null);
+  const [modReview, setModReview] = reactExports.useState(false);
+  const [modLabel, setModLabel] = reactExports.useState("");
+  async function reloadTokens() {
+    const r = await api.inspectorTokens(project.path);
+    setTokens(r.tokens);
+    setUsage(r.usage);
+    setTokenFile(r.tokenFile);
+  }
   reactExports.useEffect(() => {
-    void api.inspectorTokens(project.path).then((r) => {
-      setTokens(r.tokens);
-      setUsage(r.usage);
-      setTokenFile(r.tokenFile);
-    });
+    void reloadTokens();
   }, [project.path]);
   function flash(msg) {
     setToast(msg);
     window.setTimeout(() => setToast(""), 2600);
+  }
+  async function runTokenMod(label, prompt) {
+    setModReview(false);
+    setModLabel(label);
+    setSnapshot(await api.snapshotTokenScope(project.path));
+    await tokenMod.start({
+      prompt,
+      cwd: project.path,
+      allowedTools: ["Read", "Edit", "Write"],
+      bypassPermissions: true
+    });
+  }
+  function requestRename(name, newName) {
+    const next = newName.trim().replace(/^--/, "");
+    if (!next || next === name) return;
+    void runTokenMod(`Rename --${name} → --${next}`, renamePrompt(name, next));
+  }
+  function requestDelete(name) {
+    void runTokenMod(`Delete --${name}`, deletePrompt(name));
+  }
+  reactExports.useEffect(() => {
+    if (tokenMod.model.status !== "done") return;
+    void reloadTokens();
+    setModReview(true);
+  }, [tokenMod.model.status]);
+  async function revertTokenMod() {
+    if (snapshot) await api.restoreFiles(project.path, snapshot);
+    await reloadTokens();
+    setSnapshot(null);
+    setModReview(false);
+    setSelected(null);
+    tokenMod.reset();
+    flash("Reverted — token file and components restored");
+  }
+  function keepTokenMod() {
+    setSnapshot(null);
+    setModReview(false);
+    setSelected(null);
+    tokenMod.reset();
+    flash(modLabel + " · kept");
   }
   const groups = reactExports.useMemo(() => {
     if (!tokens) return [];
@@ -17708,11 +17771,40 @@ function Inspector({
         token: selectedToken,
         usage: usage[selectedToken.name] ?? [],
         tokenFile,
+        busy: tokenMod.running,
         onClose: () => setSelected(null),
-        onSave: saveValue
+        onSave: saveValue,
+        onRename: requestRename,
+        onDelete: requestDelete
       },
       selectedToken.name
     ),
+    (tokenMod.running || modReview) && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-6", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex max-h-[80vh] w-[560px] flex-col gap-3 rounded-xl border border-vs-border-strong bg-vs-bg-surface p-4 shadow-2xl", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-sm font-semibold text-vs-text-primary", children: modLabel }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono text-[11px] text-vs-text-muted", children: "Claude Code · gated" })
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "min-h-0 flex-1 overflow-y-auto", children: /* @__PURE__ */ jsxRuntimeExports.jsx(RunPanel, { model: tokenMod.model, onSend: tokenMod.send, canChat: tokenMod.canChat }) }),
+      modReview && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-3 border-t border-vs-border-default pt-3", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "flex-1 text-[11px] text-vs-text-muted", children: "Review the change, then keep or revert. Revert restores the token file and every component source." }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "button",
+          {
+            onClick: () => void revertTokenMod(),
+            className: "rounded-lg border border-vs-border-strong px-3.5 py-2 text-xs text-vs-text-secondary hover:bg-vs-bg-elevated hover:text-vs-text-primary",
+            children: "Revert"
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "button",
+          {
+            onClick: keepTokenMod,
+            className: "rounded-lg bg-vs-accent px-4 py-2 text-xs font-medium text-white hover:brightness-110",
+            children: "Keep change"
+          }
+        )
+      ] })
+    ] }) }),
     toast && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "fixed bottom-6 left-1/2 z-[60] flex -translate-x-1/2 items-center gap-2 rounded-lg border border-vs-border-strong bg-vs-bg-elevated px-4 py-2.5 text-xs text-vs-text-primary shadow-lg", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-vs-success", children: "✓" }),
       /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono", children: toast })
@@ -17819,11 +17911,17 @@ function TokenDrawer({
   token,
   usage,
   tokenFile,
+  busy,
   onClose,
-  onSave
+  onSave,
+  onRename,
+  onDelete
 }) {
   const [value, setValue] = reactExports.useState(token.rawValue);
   const [saving, setSaving] = reactExports.useState(false);
+  const [renaming, setRenaming] = reactExports.useState(false);
+  const [newName, setNewName] = reactExports.useState(token.name);
+  const [confirmDelete, setConfirmDelete] = reactExports.useState(false);
   const src = SOURCE[token.source];
   const isColor = token.type === "color";
   const dirty = value.trim() !== token.rawValue.trim();
@@ -17909,6 +18007,89 @@ function TokenDrawer({
               },
               `${u.component}-${i}`
             ))
+          ] }),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col gap-2.5 border-t border-vs-border-default pt-4", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-[11px] font-semibold uppercase tracking-wide text-vs-text-muted", children: [
+              "Refactor ",
+              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-vs-border-strong", children: "· via Claude Code" })
+            ] }),
+            renaming ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2", children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono text-xs text-vs-text-muted", children: "--" }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx(
+                "input",
+                {
+                  autoFocus: true,
+                  value: newName,
+                  onChange: (e) => setNewName(e.target.value.replace(/[^\w-]/g, "")),
+                  className: "flex-1 rounded-md border border-vs-border-default bg-vs-bg-elevated px-2.5 py-1.5 font-mono text-xs text-vs-text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-vs-accent-subtle"
+                }
+              ),
+              /* @__PURE__ */ jsxRuntimeExports.jsx(
+                "button",
+                {
+                  disabled: busy || !newName.trim() || newName.trim() === token.name,
+                  onClick: () => onRename(token.name, newName),
+                  className: `rounded-md px-3 py-1.5 text-xs font-medium ${busy || !newName.trim() || newName.trim() === token.name ? "cursor-not-allowed bg-vs-bg-elevated text-vs-text-muted" : "bg-vs-accent text-white hover:brightness-110"}`,
+                  children: "Rename"
+                }
+              ),
+              /* @__PURE__ */ jsxRuntimeExports.jsx(
+                "button",
+                {
+                  onClick: () => {
+                    setRenaming(false);
+                    setNewName(token.name);
+                  },
+                  className: "rounded-md px-2 py-1.5 text-xs text-vs-text-muted hover:text-vs-text-primary",
+                  children: "Cancel"
+                }
+              )
+            ] }) : confirmDelete ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2", children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "flex-1 text-[11px] text-vs-text-secondary", children: [
+                "Re-point ",
+                token.uses,
+                " ",
+                token.uses === 1 ? "use" : "uses",
+                " and remove the declaration?"
+              ] }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx(
+                "button",
+                {
+                  disabled: busy,
+                  onClick: () => onDelete(token.name),
+                  className: "rounded-md bg-vs-error px-3 py-1.5 text-xs font-medium text-white hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60",
+                  children: "Delete"
+                }
+              ),
+              /* @__PURE__ */ jsxRuntimeExports.jsx(
+                "button",
+                {
+                  onClick: () => setConfirmDelete(false),
+                  className: "rounded-md px-2 py-1.5 text-xs text-vs-text-muted hover:text-vs-text-primary",
+                  children: "Cancel"
+                }
+              )
+            ] }) : /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2", children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx(
+                "button",
+                {
+                  disabled: busy,
+                  onClick: () => setRenaming(true),
+                  className: "rounded-md border border-vs-border-default px-3 py-1.5 text-xs text-vs-text-secondary hover:border-vs-border-strong hover:text-vs-text-primary disabled:cursor-not-allowed disabled:opacity-60",
+                  children: "Rename…"
+                }
+              ),
+              /* @__PURE__ */ jsxRuntimeExports.jsx(
+                "button",
+                {
+                  disabled: busy,
+                  onClick: () => setConfirmDelete(true),
+                  className: "rounded-md border border-vs-border-default px-3 py-1.5 text-xs text-vs-text-secondary hover:border-vs-error hover:text-vs-error disabled:cursor-not-allowed disabled:opacity-60",
+                  children: "Delete"
+                }
+              ),
+              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "flex-1 text-right text-[11px] text-vs-text-muted", children: "gated · revertable" })
+            ] })
           ] })
         ] }),
         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "mt-auto flex items-center gap-3 border-t border-vs-border-default px-4 py-3.5", children: [

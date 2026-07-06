@@ -59,4 +59,28 @@ describe("token-parser — usage index + gated value write", () => {
     const css = await readFile(join(dir, "tokens.css"), "utf8");
     expect(css).toContain("--color-primary: #2563EB;");
   });
+
+  it("marks an edited token as hand-edited provenance, persisted across reload", async () => {
+    // Before any edit, provenance is the generated code.
+    let r = await getInspectorTokens(dir);
+    expect(r.tokens.find((t) => t.name === "color-primary")?.source).toBe("generated-code");
+
+    await setInspectorTokenValue(dir, "color-primary", "#FF0000");
+
+    r = await getInspectorTokens(dir);
+    expect(r.tokens.find((t) => t.name === "color-primary")?.source).toBe("hand-edited");
+    // Untouched tokens keep their generated-code provenance.
+    expect(r.tokens.find((t) => t.name === "radius-md")?.source).toBe("generated-code");
+    // Persisted to a plain project file (local-first).
+    const overrides = JSON.parse(
+      await readFile(join(dir, ".vortspec/token-overrides.json"), "utf8"),
+    );
+    expect(overrides).toContain("color-primary");
+  });
+
+  it("does not mark a token hand-edited when the write is a no-op", async () => {
+    await setInspectorTokenValue(dir, "does-not-exist", "#000");
+    const r = await getInspectorTokens(dir);
+    expect(r.tokens.every((t) => t.source === "generated-code")).toBe(true);
+  });
 });

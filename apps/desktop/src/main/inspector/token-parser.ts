@@ -1,7 +1,8 @@
-import { join, basename, extname } from "node:path";
-import { readFile, readdir, writeFile } from "node:fs/promises";
+import { join, basename, dirname, extname } from "node:path";
+import { readFile, readdir, writeFile, mkdir } from "node:fs/promises";
 import { readProjectConfig } from "../workspace/config-manager";
 import type {
+  FileSnapshot,
   InspectorToken,
   InspectorTokensResult,
   TokenType,
@@ -101,8 +102,33 @@ async function collectSources(dir: string): Promise<{ component: string; text: s
   return out;
 }
 
-/** Build a token → usage map by scanning component sources for `var(--name)`. */
-function buildUsage(
+/**
+ * Best-effort recovery of the CSS property or Tailwind utility a token reference
+ * sits on, by looking at the text just before it. Covers:
+ *   - `color: var(--x)`      → "color"            (CSS declaration)
+ *   - `background: var(--x)`  → "background"
+ *   - `bg-[--x]` / `bg-[var(--x)]` → "bg"          (Tailwind arbitrary value)
+ * Returns undefined when no clear context is found.
+ */
+function deriveProperty(text: string, at: number): string | undefined {
+  const before = text.slice(Math.max(0, at - 48), at);
+  // Tailwind arbitrary value: `bg-[` or `text-[var(`
+  const tw = before.match(/([a-z][a-z-]*)-\[(?:var\()?$/);
+  if (tw) return tw[1];
+  // CSS declaration: `color: ` or `border-color: var(`
+  const css = before.match(/([a-zA-Z-]+)\s*:\s*(?:var\()?$/);
+  if (css) return css[1];
+  return undefined;
+}
+
+/**
+ * Build a token → usage map by scanning component sources for any reference to a
+ * token — `var(--name)`, Tailwind arbitrary values (`bg-[--name]`,
+ * `text-[var(--name)]`), `@apply`, or `theme(--name)` — not just `var()`. Each
+ * component is listed once per token, with the property/utility it sits on when
+ * recoverable (for the detail drawer's "where used").
+ */
+export function buildUsage(
   tokenNames: string[],
   sources: { component: string; text: string }[],
 ): Record<string, TokenUsage[]> {
@@ -110,14 +136,44 @@ function buildUsage(
   const names = new Set(tokenNames);
   for (const { component, text } of sources) {
     const seen = new Set<string>();
-    for (const m of text.matchAll(/var\(\s*--([\w-]+)/g)) {
+    // Any `--name` mention (word-boundary at the end so `--x` ≠ `--x-hover`).
+    for (const m of text.matchAll(/--([\w-]+)(?![\w-])/g)) {
       const name = m[1];
       if (!names.has(name) || seen.has(name)) continue;
       seen.add(name);
-      (usage[name] ??= []).push({ component });
+      const property = deriveProperty(text, m.index ?? 0);
+      (usage[name] ??= []).push(property ? { component, property } : { component });
     }
   }
   return usage;
+}
+
+/**
+ * Names of tokens the user has hand-edited in the Inspector, persisted per
+ * project so their provenance survives reload (local-first, plain file). Reading
+ * is forgiving — a missing or malformed file just means "nothing hand-edited".
+ */
+const OVERRIDES_PATH = ".vortspec/token-overrides.json";
+
+async function readOverrides(projectPath: string): Promise<Set<string>> {
+  try {
+    const raw = await readFile(join(projectPath, OVERRIDES_PATH), "utf8");
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) return new Set(parsed.filter((x) => typeof x === "string"));
+  } catch {
+    /* no overrides yet */
+  }
+  return new Set();
+}
+
+async function markOverridden(projectPath: string, name: string): Promise<void> {
+  const set = await readOverrides(projectPath);
+  set.add(name);
+  const path = join(projectPath, OVERRIDES_PATH);
+  await mkdir(dirname(path), { recursive: true }).catch(() => undefined);
+  await writeFile(path, `${JSON.stringify([...set].sort(), null, 2)}\n`, "utf8").catch(
+    () => undefined,
+  );
 }
 
 export async function getInspectorTokens(
@@ -140,9 +196,10 @@ export async function getInspectorTokens(
     parsed.map((t) => t.name),
     sources,
   );
+  const edited = await readOverrides(projectPath);
   const tokens: InspectorToken[] = parsed.map((t) => ({
     ...t,
-    source: "generated-code",
+    source: edited.has(t.name) ? "hand-edited" : "generated-code",
     uses: usage[t.name]?.length ?? 0,
   }));
   return { tokenFile, tokens, usage };
@@ -169,8 +226,46 @@ export async function setInspectorTokenValue(
       const re = new RegExp(`(--${name}\\s*:\\s*)([^;]*)(;)`);
       if (re.test(css)) {
         await writeFile(path, css.replace(re, `$1${value.trim()}$3`), "utf8");
+        // Record the hand-edit so its provenance shows as "hand-edited" on reload.
+        await markOverridden(projectPath, name);
       }
     }
   }
   return getInspectorTokens(projectPath);
+}
+
+/**
+ * Capture the files a token rename/delete would touch — the token file plus every
+ * component source under `component_dir` — before a gated Claude Code modify run,
+ * so the change can be reverted verbatim if the user rejects it.
+ */
+export async function snapshotTokenScope(projectPath: string): Promise<FileSnapshot[]> {
+  const config = await readProjectConfig(projectPath);
+  const snaps: FileSnapshot[] = [];
+  const seen = new Set<string>();
+  async function capture(rel: string): Promise<void> {
+    if (seen.has(rel)) return;
+    seen.add(rel);
+    const content = await readFile(join(projectPath, rel), "utf8").catch(() => null);
+    if (content !== null) snaps.push({ path: rel, content });
+  }
+  if (config?.tokenFile) await capture(config.tokenFile);
+  if (config?.componentDir) {
+    const root = join(projectPath, config.componentDir);
+    async function walk(d: string): Promise<void> {
+      let entries;
+      try {
+        entries = await readdir(d, { withFileTypes: true });
+      } catch {
+        return;
+      }
+      for (const entry of entries) {
+        const full = join(d, entry.name);
+        if (entry.isDirectory()) await walk(full);
+        else if (SOURCE_EXTS.has(extname(entry.name))) await capture(full.slice(projectPath.length + 1));
+      }
+    }
+    await walk(root);
+  }
+  return snaps;
 }

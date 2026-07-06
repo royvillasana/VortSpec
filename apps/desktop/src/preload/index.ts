@@ -96,6 +96,8 @@ const api = {
   getVerification: (projectPath: string) => invoke("inspector:getVerification", projectPath),
   snapshotComponent: (projectPath: string, file: string) =>
     invoke("inspector:snapshotComponent", { projectPath, file }),
+  snapshotTokenScope: (projectPath: string) =>
+    invoke("inspector:snapshotTokenScope", projectPath),
   restoreFiles: (projectPath: string, files: FileSnapshot[]) =>
     invoke("inspector:restoreFiles", { projectPath, files }),
 };

@@ -227,6 +227,10 @@ export const ipcContract = {
     request: z.object({ projectPath: z.string(), file: z.string() }),
     response: fileSnapshotListSchema,
   },
+  "inspector:snapshotTokenScope": {
+    request: z.string(),
+    response: fileSnapshotListSchema,
+  },
   "inspector:restoreFiles": {
     request: z.object({ projectPath: z.string(), files: fileSnapshotListSchema }),
     response: z.void(),
