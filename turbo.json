@@ -10,6 +10,10 @@
       "dependsOn": ["^build"],
       "inputs": ["src/**", "package.json"]
     },
+    "test:ct": {
+      "inputs": ["src/renderer/**", "tests/ct/**", "playwright/**", "playwright-ct.config.ts", "package.json"],
+      "outputs": []
+    },
     "lint": {
       "inputs": ["src/**", "package.json"]
     },

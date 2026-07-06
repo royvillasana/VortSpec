@@ -24,3 +24,9 @@ coverage
 
 # pnpm
 pnpm-debug.log
+
+# Playwright (component tests)
+test-results
+playwright-report
+blob-report
+**/playwright/.cache/

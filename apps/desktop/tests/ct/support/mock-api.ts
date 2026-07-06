@@ -1,0 +1,125 @@
+/**
+ * A browser-side stub of `window.vortspec` for component tests. It returns
+ * fixture data for the read methods the views call on mount and replays a
+ * recorded agent-event transcript when a run is started, so the Tokens /
+ * Components / Playground views can be driven deterministically without Electron
+ * or the real main process. Test-only: loose typing is intentional here.
+ */
+import type { RunEvent } from "../../../src/shared/run-events";
+import type {
+  InspectorTokensResult,
+  InspectorComponentsResult,
+  EnvCheck,
+  DevServerStatus,
+} from "../../../src/shared/ipc";
+
+export interface MockConfig {
+  tokens?: InspectorTokensResult;
+  components?: InspectorComponentsResult;
+  figmaMcp?: EnvCheck;
+  /** Initial dev-server status returned by devServerStatus(). */
+  devStatus?: DevServerStatus;
+  /** Status returned by startDevServer() — defaults to a running server with a URL. */
+  devStartStatus?: DevServerStatus;
+  /** Replayed to onAgentEvent subscribers (with the started run's id) on startRun. */
+  runScript?: RunEvent[];
+}
+
+const EMPTY_TOKENS: InspectorTokensResult = {
+  tokenFile: null,
+  tokens: [],
+  usage: {},
+  figmaOnly: [],
+  figmaSynced: false,
+};
+const EMPTY_COMPONENTS: InspectorComponentsResult = {
+  componentDir: null,
+  previewUrl: null,
+  components: [],
+};
+const STOPPED: DevServerStatus = { state: "stopped", url: null, script: null, message: null };
+const RUNNING: DevServerStatus = {
+  state: "running",
+  url: "http://localhost:5199",
+  script: "dev",
+  message: null,
+};
+
+export function installMockVortspec(cfg: MockConfig = {}): void {
+  const eventSubs = new Set<(e: { runId: string; event: RunEvent }) => void>();
+  const rawSubs = new Set<(e: { runId: string; line: string }) => void>();
+  const devSubs = new Set<(e: { projectPath: string; status: DevServerStatus }) => void>();
+  let runSeq = 0;
+
+  const startRun = async (): Promise<{ runId: string }> => {
+    const runId = `run-${runSeq++}`;
+    // Replay AFTER useAgentRun stores runIdRef (a microtask after this resolves),
+    // so its `runId === runIdRef.current` filter passes — hence a macrotask.
+    setTimeout(() => {
+      for (const event of cfg.runScript ?? []) {
+        for (const sub of eventSubs) sub({ runId, event });
+      }
+    }, 0);
+    return { runId };
+  };
+
+  const api = {
+    isElectron: async () => true,
+    getVersion: async () => "test",
+    checkEnvironment: async () => ({ checks: [], ready: true }),
+    verifyLogin: async () => ({ id: "claude-login", label: "Claude", status: "pass" }),
+    verifyFigmaMcp: async () =>
+      cfg.figmaMcp ?? { id: "figma-mcp", label: "Figma MCP", status: "unknown", detail: "" },
+    openInstall: async () => undefined,
+
+    pickFolder: async () => null,
+    createFolder: async () => null,
+    listProjects: async () => [],
+    openFolder: async () => undefined,
+    revealPath: async () => undefined,
+    refreshProject: async (path: string) => ({ id: "p", name: "p", path }),
+    createProject: async () => null,
+    toolkitStatus: async () => ({ present: true, version: "1.0.0", updateAvailable: false }),
+    installToolkit: async () => ({ present: true, version: "1.0.0", updateAvailable: false }),
+
+    startRun,
+    cancelRun: async () => undefined,
+    onAgentEvent: (cb: (e: { runId: string; event: RunEvent }) => void) => {
+      eventSubs.add(cb);
+      return () => eventSubs.delete(cb);
+    },
+    onAgentRaw: (cb: (e: { runId: string; line: string }) => void) => {
+      rawSubs.add(cb);
+      return () => rawSubs.delete(cb);
+    },
+
+    getFlow: async () => null,
+    setStageStatus: async () => null,
+    approveStage: async () => null,
+    requestChanges: async () => null,
+    saveIntake: async () => null,
+    completeInput: async () => null,
+    getHistory: async () => ({ runs: [] }),
+    startDevServer: async () => cfg.devStartStatus ?? RUNNING,
+    stopDevServer: async () => undefined,
+    devServerStatus: async () => cfg.devStatus ?? STOPPED,
+    onDevServerUpdate: (cb: (e: { projectPath: string; status: DevServerStatus }) => void) => {
+      devSubs.add(cb);
+      return () => devSubs.delete(cb);
+    },
+    setPublishTarget: async () => null,
+    readArtifact: async () => null,
+    findLatestArtifact: async () => null,
+    projectConfig: async () => null,
+
+    inspectorTokens: async () => cfg.tokens ?? EMPTY_TOKENS,
+    inspectorComponents: async () => cfg.components ?? EMPTY_COMPONENTS,
+    setTokenValue: async () => cfg.tokens ?? EMPTY_TOKENS,
+    getVerification: async () => ({ findings: [] }),
+    snapshotComponent: async () => [],
+    snapshotTokenScope: async () => [],
+    restoreFiles: async () => undefined,
+  };
+
+  (window as unknown as { vortspec: unknown }).vortspec = api;
+}
