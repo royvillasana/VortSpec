@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { EnvReport, Project } from "../../shared/ipc";
+import type { EnvReport, Project, SetupAnswers } from "../../shared/ipc";
 import { api } from "./lib/api";
 import { EnvironmentCheck } from "./views/EnvironmentCheck";
 import { Dashboard } from "./views/Dashboard";
@@ -9,6 +9,7 @@ import { DevPreview } from "./views/DevPreview";
 import { RunView } from "./views/RunView";
 import { ArtifactReview } from "./views/ArtifactReview";
 import { Verification } from "./views/Verification";
+import { DesignInput } from "./views/DesignInput";
 import { NewProjectWizard } from "./views/NewProjectWizard";
 
 type View = "env" | "dashboard";
@@ -28,6 +29,8 @@ export default function App(): React.JSX.Element {
   const [view, setView] = useState<View>("env");
   const [activeProject, setActiveProject] = useState<Project | null>(null);
   const [setupProject, setSetupProject] = useState<Project | null>(null);
+  const [sourceProject, setSourceProject] = useState<Project | null>(null);
+  const [pendingSource, setPendingSource] = useState<Partial<SetupAnswers> | undefined>(undefined);
   const [projectView, setProjectView] = useState<
     "flow" | "inspector" | "preview" | "run" | "review" | "verify"
   >("flow");
@@ -64,12 +67,14 @@ export default function App(): React.JSX.Element {
       <TopBar
         view={view}
         coreReady={coreReady}
-        breadcrumb={setupProject?.name ?? activeProject?.name ?? null}
+        breadcrumb={sourceProject?.name ?? setupProject?.name ?? activeProject?.name ?? null}
         onNavigate={(v) => {
           setView(v);
           if (v === "dashboard") {
             setActiveProject(null);
             setSetupProject(null);
+            setSourceProject(null);
+            setPendingSource(undefined);
             setProjectView("flow");
           }
         }}
@@ -82,13 +87,28 @@ export default function App(): React.JSX.Element {
             coreReady={coreReady}
             onContinue={() => setView("dashboard")}
           />
+        ) : sourceProject ? (
+          <DesignInput
+            project={sourceProject}
+            onBack={() => setSourceProject(null)}
+            onContinue={(source) => {
+              setPendingSource(source);
+              setSetupProject(sourceProject);
+              setSourceProject(null);
+            }}
+          />
         ) : setupProject ? (
           <NewProjectWizard
             project={setupProject}
-            onCancel={() => setSetupProject(null)}
+            initialSource={pendingSource}
+            onCancel={() => {
+              setSetupProject(null);
+              setPendingSource(undefined);
+            }}
             onCreated={(project) => {
               mergeProject(project);
               setSetupProject(null);
+              setPendingSource(undefined);
               setActiveProject(project);
             }}
           />
@@ -144,7 +164,7 @@ export default function App(): React.JSX.Element {
             projects={projects}
             onProjects={setProjects}
             onOpenProject={setActiveProject}
-            onSetup={setSetupProject}
+            onSetup={setSourceProject}
           />
         )}
       </main>

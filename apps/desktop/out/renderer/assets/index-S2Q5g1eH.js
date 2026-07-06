@@ -12749,7 +12749,7 @@ function ProjectCard({
     ),
     /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-0.5 border-t border-vs-border-default p-1.5", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsx(ActionButton, { onClick: onOpen, icon: /* @__PURE__ */ jsxRuntimeExports.jsx(PlayIcon, {}), children: ready ? "Open flow" : "Set up" }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx(ActionButton, { onClick: () => void api.openFolder(project.path), icon: /* @__PURE__ */ jsxRuntimeExports.jsx(FolderIcon, {}), children: "Folder" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(ActionButton, { onClick: () => void api.openFolder(project.path), icon: /* @__PURE__ */ jsxRuntimeExports.jsx(FolderIcon$1, {}), children: "Folder" }),
       /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "flex-1" }),
       /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "pr-2 text-[11px] text-vs-text-muted", children: relativeTime(project.addedAt) })
     ] })
@@ -12817,7 +12817,7 @@ function EmptyState({ onNew }) {
 function PlayIcon() {
   return /* @__PURE__ */ jsxRuntimeExports.jsx("svg", { width: "13", height: "13", viewBox: "0 0 14 14", "aria-hidden": true, children: /* @__PURE__ */ jsxRuntimeExports.jsx("path", { d: "M4 3 L10 7 L4 11 Z", fill: "currentColor" }) });
 }
-function FolderIcon() {
+function FolderIcon$1() {
   return /* @__PURE__ */ jsxRuntimeExports.jsx("svg", { width: "13", height: "13", viewBox: "0 0 14 14", "aria-hidden": true, children: /* @__PURE__ */ jsxRuntimeExports.jsx(
     "path",
     {
@@ -18831,6 +18831,227 @@ function FindingCard({
     }
   );
 }
+function DesignInput({
+  project,
+  onBack,
+  onContinue
+}) {
+  const [tab, setTab] = reactExports.useState("zip");
+  const [zipPath, setZipPath] = reactExports.useState("");
+  const [figmaUrl, setFigmaUrl] = reactExports.useState("");
+  const [folderPath, setFolderPath] = reactExports.useState("");
+  const [mcp, setMcp] = reactExports.useState("checking");
+  const [mcpDetail, setMcpDetail] = reactExports.useState("");
+  const [dsOpen, setDsOpen] = reactExports.useState(false);
+  const [drag, setDrag] = reactExports.useState(false);
+  reactExports.useEffect(() => {
+    void api.verifyFigmaMcp().then((c) => {
+      setMcp(c.status === "pass" ? "ok" : c.status === "fail" ? "unauth" : "unknown");
+      setMcpDetail(c.detail);
+    });
+  }, []);
+  async function pickFolder() {
+    const picked = await api.pickFolder(false);
+    if (picked) setFolderPath(picked.path);
+  }
+  const figmaValid = /figma\.com\//.test(figmaUrl);
+  const canStart = tab === "zip" && zipPath.trim().endsWith(".zip") || tab === "figma" && figmaValid || tab === "folder" && folderPath.trim().length > 0;
+  function submit() {
+    if (!canStart) return;
+    if (tab === "zip") onContinue({ designSource: "zip", zipFilePath: zipPath.trim() });
+    else if (tab === "figma") onContinue({ designSource: "figma", figmaFileUrl: figmaUrl.trim() });
+    else onContinue({ designSource: "github", githubRepoUrl: folderPath.trim() });
+  }
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs(
+    "div",
+    {
+      className: "min-h-[calc(100vh-3rem)] bg-vs-bg-primary text-vs-text-primary",
+      onDragEnter: (e) => {
+        e.preventDefault();
+        setDrag(true);
+      },
+      children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "mx-auto flex w-full max-w-[680px] flex-col gap-5 px-6 pb-16 pt-10", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col gap-1.5", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2 text-xs text-vs-text-muted", children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx("button", { onClick: onBack, className: "hover:text-vs-text-primary", children: project.name }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "/" }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "New source" })
+            ] }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("h1", { className: "text-[20px] font-semibold tracking-[-0.01em]", children: "Add a design source" }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-[13px] leading-relaxed text-vs-text-secondary", children: "Claude Code reads the design exactly as the SDD-DE CLI does. Pick a source — it’s placed at the project’s expected input path." })
+          ] }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex gap-0.5 self-start rounded-lg border border-vs-border-default bg-vs-bg-surface p-0.5", children: [
+            ["zip", "ZIP export"],
+            ["figma", "Figma link"],
+            ["folder", "Folder / repo"]
+          ].map(([id, label]) => /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "button",
+            {
+              onClick: () => setTab(id),
+              className: `rounded-md px-3.5 py-1.5 text-xs font-medium transition-colors ${tab === id ? "bg-vs-bg-elevated text-vs-text-primary" : "text-vs-text-secondary hover:text-vs-text-primary"}`,
+              children: label
+            },
+            id
+          )) }),
+          tab === "zip" && /* @__PURE__ */ jsxRuntimeExports.jsx(Panel, { title: "Upload a ZIP export", desc: "Google Stitch, Claude Design, or any HTML/CSS export — it lands at .sdd-de/input/.", children: zipPath.trim().endsWith(".zip") ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex h-[132px] items-center justify-center rounded-lg border border-dashed border-vs-border-strong", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "inline-flex items-center gap-2 rounded-md border border-vs-border-strong bg-vs-bg-elevated px-2.5 py-1.5", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono text-[11px] text-vs-text-primary", children: zipPath.split("/").pop() }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              "button",
+              {
+                onClick: () => setZipPath(""),
+                className: "rounded px-1 leading-none text-vs-text-muted hover:bg-vs-border-default hover:text-vs-error",
+                children: "×"
+              }
+            )
+          ] }) }) : /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "flex h-[132px] cursor-text flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-vs-border-strong px-4 text-center text-xs text-vs-text-secondary hover:border-vs-accent", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx(UploadIcon, {}),
+            "Drop your .zip here, or paste its path below.",
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              "input",
+              {
+                value: zipPath,
+                onChange: (e) => setZipPath(e.target.value),
+                placeholder: "/path/to/export.zip",
+                className: "mt-1 w-64 rounded-md border border-vs-border-default bg-vs-bg-primary px-2.5 py-1.5 text-center font-mono text-[11px] text-vs-text-primary placeholder:text-vs-text-muted focus:outline-none focus-visible:border-vs-accent"
+              }
+            )
+          ] }) }),
+          tab === "figma" && /* @__PURE__ */ jsxRuntimeExports.jsxs(Panel, { title: "Paste a Figma link", desc: "Claude Code reads it through your configured Figma MCP. VortSpec never touches the Figma API itself.", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              "input",
+              {
+                value: figmaUrl,
+                onChange: (e) => setFigmaUrl(e.target.value),
+                placeholder: "https://www.figma.com/design/…",
+                className: "h-[38px] rounded-md border border-vs-border-default bg-vs-bg-primary px-3 font-mono text-xs text-vs-text-primary placeholder:text-vs-text-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-vs-accent-subtle"
+              }
+            ),
+            mcp === "ok" ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2 text-xs text-vs-success", children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "✓" }),
+              " Figma MCP connected"
+            ] }) : mcp === "checking" ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-xs text-vs-text-muted", children: "Checking Figma MCP…" }) : /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex gap-3 rounded-lg border border-vs-error/40 bg-vs-error/[0.06] p-3.5", children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-sm leading-tight text-vs-error", children: "⚠" }),
+              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-1 flex-col gap-2", children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-[13px] font-medium text-vs-text-primary", children: "Figma MCP isn’t connected" }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-xs leading-relaxed text-vs-text-secondary", children: mcpDetail || "Reconnect it in Claude Code before importing from Figma." }),
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "mt-0.5 flex gap-2", children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    Button,
+                    {
+                      variant: "default",
+                      onClick: () => void api.openInstall("https://claude.ai/customize/connectors"),
+                      children: "Connect Figma"
+                    }
+                  ),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    Button,
+                    {
+                      variant: "ghost",
+                      onClick: () => void api.openInstall("https://code.claude.com/docs/en/mcp"),
+                      children: "MCP docs ↗"
+                    }
+                  )
+                ] })
+              ] })
+            ] })
+          ] }),
+          tab === "folder" && /* @__PURE__ */ jsxRuntimeExports.jsx(Panel, { title: "Use an existing folder or repo", desc: "Point at HTML/CSS on disk, or a repo you're iterating on. Nothing is copied — Claude Code reads it in place.", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-3", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex h-[38px] min-w-0 flex-1 items-center gap-2 rounded-md border border-vs-border-default bg-vs-bg-primary px-3", children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx(FolderIcon, {}),
+              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "truncate font-mono text-xs text-vs-text-primary", children: folderPath || "No folder selected" })
+            ] }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "default", onClick: () => void pickFolder(), children: folderPath ? "Change" : "Choose folder…" })
+          ] }) }),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "overflow-hidden rounded-lg border border-vs-border-default bg-vs-bg-surface", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsxs(
+              "button",
+              {
+                onClick: () => setDsOpen((v) => !v),
+                className: "flex w-full items-center gap-2 px-4 py-3.5 text-left text-[13px] font-medium text-vs-text-primary hover:bg-vs-bg-hover",
+                children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    "span",
+                    {
+                      className: "text-[10px] text-vs-text-muted transition-transform",
+                      style: { transform: dsOpen ? "rotate(90deg)" : "rotate(0deg)" },
+                      children: "▶"
+                    }
+                  ),
+                  "Attach a design system ",
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-normal text-vs-text-muted", children: "(optional)" })
+                ]
+              }
+            ),
+            dsOpen && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col gap-2.5 px-4 pb-4", children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex h-16 items-center justify-center rounded-lg border border-dashed border-vs-border-strong text-xs text-vs-text-secondary", children: "tokens.json, CSS variables, or a second ZIP (configure in setup)" }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-xs leading-relaxed text-vs-text-muted", children: "Claude Code matches extracted values against your official tokens and flags conflicts during verification." })
+            ] })
+          ] }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex justify-end", children: /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "primary", disabled: !canStart, onClick: submit, children: "Continue to setup →" }) })
+        ] }),
+        drag && /* @__PURE__ */ jsxRuntimeExports.jsxs(
+          "div",
+          {
+            onDragOver: (e) => e.preventDefault(),
+            onDragLeave: () => setDrag(false),
+            onDrop: (e) => {
+              e.preventDefault();
+              setDrag(false);
+              const f = e.dataTransfer.files[0];
+              const path = f?.path;
+              if (path?.endsWith(".zip")) {
+                setTab("zip");
+                setZipPath(path);
+              }
+            },
+            className: "fixed inset-0 z-50 flex items-center justify-center bg-vs-bg-primary/90 p-6",
+            children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "pointer-events-none absolute inset-4 rounded-lg border-2 border-dashed border-vs-accent" }),
+              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "pointer-events-none flex flex-col items-center gap-2", children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-[20px] font-semibold tracking-[-0.01em]", children: [
+                  "Drop to import into ",
+                  project.name
+                ] }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono text-xs text-vs-text-secondary", children: ".zip → .sdd-de/input/" })
+              ] })
+            ]
+          }
+        )
+      ]
+    }
+  );
+}
+function Panel({
+  title,
+  desc,
+  children
+}) {
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col gap-3.5 rounded-lg border border-vs-border-default bg-vs-bg-surface p-6", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-[15px] font-semibold", children: title }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "mt-1 text-xs leading-relaxed text-vs-text-secondary", children: desc })
+    ] }),
+    children
+  ] });
+}
+function UploadIcon() {
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("svg", { width: "26", height: "26", viewBox: "0 0 24 24", "aria-hidden": true, children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsx("path", { d: "M12 16 V5 M8 9 L12 5 L16 9", fill: "none", stroke: "currentColor", strokeWidth: "1.5", strokeLinecap: "round", strokeLinejoin: "round" }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("path", { d: "M5 15 V18 A1 1 0 0 0 6 19 H18 A1 1 0 0 0 19 18 V15", fill: "none", stroke: "currentColor", strokeWidth: "1.5", strokeLinecap: "round" })
+  ] });
+}
+function FolderIcon() {
+  return /* @__PURE__ */ jsxRuntimeExports.jsx("svg", { width: "14", height: "14", viewBox: "0 0 14 14", className: "flex-none", "aria-hidden": true, children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+    "path",
+    {
+      d: "M1.5 3.5 A1 1 0 0 1 2.5 2.5 H5.5 L7 4 H11.5 A1 1 0 0 1 12.5 5 V10.5 A1 1 0 0 1 11.5 11.5 H2.5 A1 1 0 0 1 1.5 10.5 Z",
+      fill: "none",
+      stroke: "#7C6FF0",
+      strokeWidth: "1.3"
+    }
+  ) });
+}
 const frameworkSchema = enumType([
   "react",
   "next",
@@ -18997,10 +19218,11 @@ objectType({
 });
 function NewProjectWizard({
   project,
+  initialSource,
   onCreated,
   onCancel
 }) {
-  const [a, setA] = reactExports.useState(() => defaults());
+  const [a, setA] = reactExports.useState(() => ({ ...defaults(), ...initialSource }));
   const [busy, setBusy] = reactExports.useState(false);
   const [error, setError] = reactExports.useState(null);
   function setFramework(framework) {
@@ -19321,6 +19543,8 @@ function App() {
   const [view, setView] = reactExports.useState("env");
   const [activeProject, setActiveProject] = reactExports.useState(null);
   const [setupProject, setSetupProject] = reactExports.useState(null);
+  const [sourceProject, setSourceProject] = reactExports.useState(null);
+  const [pendingSource, setPendingSource] = reactExports.useState(void 0);
   const [projectView, setProjectView] = reactExports.useState("flow");
   const [loading, setLoading] = reactExports.useState(true);
   function mergeProject(project) {
@@ -19346,12 +19570,14 @@ function App() {
       {
         view,
         coreReady,
-        breadcrumb: setupProject?.name ?? activeProject?.name ?? null,
+        breadcrumb: sourceProject?.name ?? setupProject?.name ?? activeProject?.name ?? null,
         onNavigate: (v) => {
           setView(v);
           if (v === "dashboard") {
             setActiveProject(null);
             setSetupProject(null);
+            setSourceProject(null);
+            setPendingSource(void 0);
             setProjectView("flow");
           }
         }
@@ -19365,14 +19591,30 @@ function App() {
         coreReady,
         onContinue: () => setView("dashboard")
       }
+    ) : sourceProject ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+      DesignInput,
+      {
+        project: sourceProject,
+        onBack: () => setSourceProject(null),
+        onContinue: (source) => {
+          setPendingSource(source);
+          setSetupProject(sourceProject);
+          setSourceProject(null);
+        }
+      }
     ) : setupProject ? /* @__PURE__ */ jsxRuntimeExports.jsx(
       NewProjectWizard,
       {
         project: setupProject,
-        onCancel: () => setSetupProject(null),
+        initialSource: pendingSource,
+        onCancel: () => {
+          setSetupProject(null);
+          setPendingSource(void 0);
+        },
         onCreated: (project) => {
           mergeProject(project);
           setSetupProject(null);
+          setPendingSource(void 0);
           setActiveProject(project);
         }
       }
@@ -19435,7 +19677,7 @@ function App() {
         projects,
         onProjects: setProjects,
         onOpenProject: setActiveProject,
-        onSetup: setSetupProject
+        onSetup: setSourceProject
       }
     ) })
   ] });

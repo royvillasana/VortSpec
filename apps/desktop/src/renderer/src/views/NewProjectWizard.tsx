@@ -20,14 +20,16 @@ import { Button, Card } from "../components/ui";
  */
 export function NewProjectWizard({
   project,
+  initialSource,
   onCreated,
   onCancel,
 }: {
   project: Project;
+  initialSource?: Partial<SetupAnswers>;
   onCreated: (p: Project) => void;
   onCancel: () => void;
 }): React.JSX.Element {
-  const [a, setA] = useState<SetupAnswers>(() => defaults());
+  const [a, setA] = useState<SetupAnswers>(() => ({ ...defaults(), ...initialSource }));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
