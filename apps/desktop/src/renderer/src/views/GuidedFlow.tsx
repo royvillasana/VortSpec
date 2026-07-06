@@ -16,7 +16,7 @@ import { api } from "../lib/api";
 import { useAgentRun } from "../lib/useAgentRun";
 import { Button, Card, Spinner } from "../components/ui";
 import { RunPanel } from "../components/RunPanel";
-import { ProjectRail, ReviewBadge } from "../components/ProjectRail";
+import { ProjectRail, ReviewBadge, projectRailItems } from "../components/ProjectRail";
 
 /**
  * The guided SDD-DE flow (US-05..US-09), design "Guided Flow.dc.html" adapted to
@@ -83,13 +83,18 @@ export function GuidedFlow({
       <ProjectRail
         project={project}
         onHeaderClick={onBack}
-        items={[
-          { label: "Flow", active: true, badge: reviewStage ? <ReviewBadge /> : undefined },
-          { label: "Run", onClick: onOpenRun },
-          { label: "Playground", onClick: onOpenPreview },
-          { label: "Tokens", onClick: onOpenInspector },
-          { label: "History", onClick: onOpenHistory },
-        ]}
+        items={projectRailItems(
+          "flow",
+          {
+            onFlow: () => undefined,
+            onRun: onOpenRun,
+            onPlayground: onOpenPreview,
+            onTokens: onOpenInspector,
+            onManifest: onOpenManifest,
+            onHistory: onOpenHistory,
+          },
+          { flow: reviewStage ? <ReviewBadge /> : undefined },
+        )}
       />
       <main className="flex min-w-0 flex-1 flex-col bg-vs-bg-primary">
         <header className="flex flex-none items-center gap-3.5 border-b border-vs-border-default px-8 pb-4 pt-5">

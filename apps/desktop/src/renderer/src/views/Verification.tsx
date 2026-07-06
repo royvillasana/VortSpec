@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { Flow, FindingSeverity, Project, VerificationFinding } from "../../../shared/ipc";
 import { api } from "../lib/api";
 import { Button, Spinner } from "../components/ui";
-import { ProjectRail, ReviewBadge } from "../components/ProjectRail";
+import { ProjectRail, ReviewBadge, projectRailItems } from "../components/ProjectRail";
 
 type Sev = FindingSeverity | "all";
 const SEV_COLOR: Record<FindingSeverity, string> = {
@@ -24,12 +24,16 @@ export function Verification({
   onOpenRun,
   onOpenPreview,
   onOpenInspector,
+  onOpenHistory,
+  onOpenManifest,
 }: {
   project: Project;
   onBack: () => void;
   onOpenRun: () => void;
   onOpenPreview: () => void;
   onOpenInspector: () => void;
+  onOpenHistory: () => void;
+  onOpenManifest: () => void;
 }): React.JSX.Element {
   const [findings, setFindings] = useState<VerificationFinding[] | null>(null);
   const [verifyStageId, setVerifyStageId] = useState<string | null>(null);
@@ -90,12 +94,18 @@ export function Verification({
       <ProjectRail
         project={project}
         onHeaderClick={onBack}
-        items={[
-          { label: "Flow", active: true, onClick: onBack, badge: openTotal ? <ReviewBadge /> : undefined },
-          { label: "Run", onClick: onOpenRun },
-          { label: "Playground", onClick: onOpenPreview },
-          { label: "Tokens", onClick: onOpenInspector },
-        ]}
+        items={projectRailItems(
+          "flow",
+          {
+            onFlow: onBack,
+            onRun: onOpenRun,
+            onPlayground: onOpenPreview,
+            onTokens: onOpenInspector,
+            onManifest: onOpenManifest,
+            onHistory: onOpenHistory,
+          },
+          { flow: openTotal ? <ReviewBadge /> : undefined },
+        )}
       />
 
       <main className="flex min-w-0 flex-1 flex-col bg-vs-bg-primary">

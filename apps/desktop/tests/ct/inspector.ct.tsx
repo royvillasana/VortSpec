@@ -22,6 +22,7 @@ const props = {
   onOpenPreview: noop,
   onOpenRun: noop,
   onOpenHistory: noop,
+  onOpenManifest: noop,
 };
 
 test("renders tokens grouped by type with resolved values", async ({ mount }) => {

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import type { Project, RunStageSummary, RunSummary } from "../../../shared/ipc";
 import { api } from "../lib/api";
 import { Spinner } from "../components/ui";
-import { ProjectRail } from "../components/ProjectRail";
+import { ProjectRail, projectRailItems } from "../components/ProjectRail";
 
 const OUTCOME: Record<RunSummary["outcome"], { label: string; color: string; border: string; bg: string }> = {
   passed: { label: "passed", color: "#30A46C", border: "rgba(48,164,108,0.35)", bg: "rgba(48,164,108,0.08)" },
@@ -24,12 +24,14 @@ export function History({
   onOpenRun,
   onOpenPreview,
   onOpenInspector,
+  onOpenManifest,
 }: {
   project: Project;
   onBack: () => void;
   onOpenRun: () => void;
   onOpenPreview: () => void;
   onOpenInspector: () => void;
+  onOpenManifest: () => void;
 }): React.JSX.Element {
   const [runs, setRuns] = useState<RunSummary[] | null>(null);
   const [open, setOpen] = useState<Set<string>>(new Set(["current"]));
@@ -51,13 +53,14 @@ export function History({
       <ProjectRail
         project={project}
         onHeaderClick={onBack}
-        items={[
-          { label: "Flow", onClick: onBack },
-          { label: "Run", onClick: onOpenRun },
-          { label: "Playground", onClick: onOpenPreview },
-          { label: "Tokens", onClick: onOpenInspector },
-          { label: "History", active: true },
-        ]}
+        items={projectRailItems("history", {
+          onFlow: onBack,
+          onRun: onOpenRun,
+          onPlayground: onOpenPreview,
+          onTokens: onOpenInspector,
+          onManifest: onOpenManifest,
+          onHistory: () => undefined,
+        })}
       />
 
       <main className="flex min-w-0 flex-1 flex-col bg-vs-bg-primary">

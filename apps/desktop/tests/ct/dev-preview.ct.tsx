@@ -14,7 +14,18 @@ const props = {
   onOpenRun: noop,
   onOpenInspector: noop,
   onOpenHistory: noop,
+  onOpenManifest: noop,
 };
+
+test("rail includes the Manifest destination", async ({ mount }) => {
+  const c = await mount(<DevPreview {...props} />, {
+    hooksConfig: { mock: { components: COMPONENTS, devStatus: RUNNING, previewInfo: HAS_SB } },
+  });
+  // The canonical rail: Flow · Run · Playground · Tokens · Manifest · History.
+  for (const label of ["Flow", "Run", "Playground", "Tokens", "Manifest", "History"]) {
+    await expect(c.getByRole("button", { name: label, exact: true })).toBeVisible();
+  }
+});
 
 test("embeds Storybook at its root with no VortSpec component sidebar", async ({ mount }) => {
   const c = await mount(<DevPreview {...props} />, {

@@ -3,7 +3,7 @@ import type { Project } from "../../../shared/ipc";
 import type { Activity, RunModel, RunStatus } from "../lib/run-model";
 import { useLatestRun } from "../lib/useAgentRun";
 import { Button, Spinner } from "../components/ui";
-import { ProjectRail } from "../components/ProjectRail";
+import { ProjectRail, projectRailItems } from "../components/ProjectRail";
 
 /**
  * Run View (design: "Run View.dc.html", adapted to v2) — a full-screen live
@@ -17,12 +17,14 @@ export function RunView({
   onOpenPreview,
   onOpenInspector,
   onOpenHistory,
+  onOpenManifest,
 }: {
   project: Project;
   onBack: () => void;
   onOpenPreview: () => void;
   onOpenInspector: () => void;
   onOpenHistory: () => void;
+  onOpenManifest: () => void;
 }): React.JSX.Element {
   const { model, running, hasRun, cancel } = useLatestRun();
   const [term, setTerm] = useState(false);
@@ -33,17 +35,18 @@ export function RunView({
       <ProjectRail
         project={project}
         onHeaderClick={onBack}
-        items={[
-          { label: "Flow", onClick: onBack },
+        items={projectRailItems(
+          "run",
           {
-            label: "Run",
-            active: true,
-            badge: running ? <span className="h-1.5 w-1.5 rounded-full bg-vs-accent" /> : undefined,
+            onFlow: onBack,
+            onRun: () => undefined,
+            onPlayground: onOpenPreview,
+            onTokens: onOpenInspector,
+            onManifest: onOpenManifest,
+            onHistory: onOpenHistory,
           },
-          { label: "Playground", onClick: onOpenPreview },
-          { label: "Tokens", onClick: onOpenInspector },
-          { label: "History", onClick: onOpenHistory },
-        ]}
+          { run: running ? <span className="h-1.5 w-1.5 rounded-full bg-vs-accent" /> : undefined },
+        )}
       />
 
       {/* Main */}

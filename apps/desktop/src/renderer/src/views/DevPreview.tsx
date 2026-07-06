@@ -4,7 +4,7 @@ import { api } from "../lib/api";
 import { useAgentRun } from "../lib/useAgentRun";
 import { Button, Spinner } from "../components/ui";
 import { RunPanel } from "../components/RunPanel";
-import { ProjectRail } from "../components/ProjectRail";
+import { ProjectRail, projectRailItems } from "../components/ProjectRail";
 
 const STORYBOOK_PROMPT = [
   "Set up Storybook for this project so VortSpec can embed real component docs, controls, and variants.",
@@ -44,12 +44,14 @@ export function DevPreview({
   onOpenRun,
   onOpenInspector,
   onOpenHistory,
+  onOpenManifest,
 }: {
   project: Project;
   onBack: () => void;
   onOpenRun: () => void;
   onOpenInspector: () => void;
   onOpenHistory: () => void;
+  onOpenManifest: () => void;
 }): React.JSX.Element {
   const [devUrl, setDevUrl] = useState("");
   const [dev, setDev] = useState<DevServerStatus>({
@@ -125,13 +127,14 @@ export function DevPreview({
       <ProjectRail
         project={project}
         onHeaderClick={onBack}
-        items={[
-          { label: "Flow", onClick: onBack },
-          { label: "Run", onClick: onOpenRun },
-          { label: "Playground", active: true },
-          { label: "Tokens", onClick: onOpenInspector },
-          { label: "History", onClick: onOpenHistory },
-        ]}
+        items={projectRailItems("playground", {
+          onFlow: onBack,
+          onRun: onOpenRun,
+          onPlayground: () => undefined,
+          onTokens: onOpenInspector,
+          onManifest: onOpenManifest,
+          onHistory: onOpenHistory,
+        })}
       />
 
       {/* Canvas */}

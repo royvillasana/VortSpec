@@ -13,7 +13,7 @@ import { api } from "../lib/api";
 import { useAgentRun } from "../lib/useAgentRun";
 import { Spinner } from "../components/ui";
 import { RunPanel } from "../components/RunPanel";
-import { ProjectRail } from "../components/ProjectRail";
+import { ProjectRail, projectRailItems } from "../components/ProjectRail";
 
 /** Export Figma variables to a cache file so the cockpit can reconcile locally. Read-only w.r.t. code. */
 const FIGMA_SYNC_PROMPT = [
@@ -94,12 +94,14 @@ export function Inspector({
   onOpenPreview,
   onOpenRun,
   onOpenHistory,
+  onOpenManifest,
 }: {
   project: Project;
   onBack: () => void;
   onOpenPreview: () => void;
   onOpenRun: () => void;
   onOpenHistory: () => void;
+  onOpenManifest: () => void;
 }): React.JSX.Element {
   const [tokens, setTokens] = useState<InspectorToken[] | null>(null);
   const [usage, setUsage] = useState<Record<string, TokenUsage[]>>({});
@@ -234,17 +236,18 @@ export function Inspector({
       <ProjectRail
         project={project}
         onHeaderClick={onBack}
-        items={[
-          { label: "Flow", onClick: onBack },
-          { label: "Run", onClick: onOpenRun },
-          { label: "Playground", onClick: onOpenPreview },
+        items={projectRailItems(
+          "tokens",
           {
-            label: "Tokens",
-            active: true,
-            badge: <span className="font-mono text-[11px] text-vs-text-muted">{total}</span>,
+            onFlow: onBack,
+            onRun: onOpenRun,
+            onPlayground: onOpenPreview,
+            onTokens: () => undefined,
+            onManifest: onOpenManifest,
+            onHistory: onOpenHistory,
           },
-          { label: "History", onClick: onOpenHistory },
-        ]}
+          { tokens: <span className="font-mono text-[11px] text-vs-text-muted">{total}</span> },
+        )}
       />
 
       {/* Main */}

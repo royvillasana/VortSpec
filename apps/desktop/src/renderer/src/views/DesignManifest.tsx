@@ -5,7 +5,7 @@ import { useAgentRun } from "../lib/useAgentRun";
 import { Button, Spinner } from "../components/ui";
 import { RunPanel } from "../components/RunPanel";
 import { Markdown } from "../components/Markdown";
-import { ProjectRail } from "../components/ProjectRail";
+import { ProjectRail, projectRailItems } from "../components/ProjectRail";
 
 const STAGE_ID = "design-manifest";
 const GENERATE_PROMPT = [
@@ -30,12 +30,14 @@ export function DesignManifest({
   onBack,
   onOpenRun,
   onOpenPreview,
+  onOpenInspector,
   onOpenHistory,
 }: {
   project: Project;
   onBack: () => void;
   onOpenRun: () => void;
   onOpenPreview: () => void;
+  onOpenInspector: () => void;
   onOpenHistory: () => void;
 }): React.JSX.Element {
   const [manifest, setManifest] = useState<ManifestResult | null>(null);
@@ -155,13 +157,14 @@ export function DesignManifest({
       <ProjectRail
         project={project}
         onHeaderClick={onBack}
-        items={[
-          { label: "Flow", onClick: onBack },
-          { label: "Run", onClick: onOpenRun },
-          { label: "Playground", onClick: onOpenPreview },
-          { label: "Manifest", active: true },
-          { label: "History", onClick: onOpenHistory },
-        ]}
+        items={projectRailItems("manifest", {
+          onFlow: onBack,
+          onRun: onOpenRun,
+          onPlayground: onOpenPreview,
+          onTokens: onOpenInspector,
+          onManifest: () => undefined,
+          onHistory: onOpenHistory,
+        })}
       />
 
       <main className="flex min-w-0 flex-1 flex-col bg-vs-bg-primary">

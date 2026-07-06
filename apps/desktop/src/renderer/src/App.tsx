@@ -208,6 +208,7 @@ export default function App(): React.JSX.Element {
             onOpenPreview={() => setProjectView("preview")}
             onOpenRun={() => setProjectView("run")}
             onOpenHistory={() => setProjectView("history")}
+            onOpenManifest={() => setProjectView("manifest")}
           />
         ) : activeProject && projectView === "preview" ? (
           <DevPreview
@@ -216,6 +217,7 @@ export default function App(): React.JSX.Element {
             onOpenRun={() => setProjectView("run")}
             onOpenInspector={() => setProjectView("inspector")}
             onOpenHistory={() => setProjectView("history")}
+            onOpenManifest={() => setProjectView("manifest")}
           />
         ) : activeProject && projectView === "run" ? (
           <RunView
@@ -224,6 +226,7 @@ export default function App(): React.JSX.Element {
             onOpenPreview={() => setProjectView("preview")}
             onOpenInspector={() => setProjectView("inspector")}
             onOpenHistory={() => setProjectView("history")}
+            onOpenManifest={() => setProjectView("manifest")}
           />
         ) : activeProject && projectView === "review" ? (
           <ArtifactReview
@@ -232,6 +235,8 @@ export default function App(): React.JSX.Element {
             onOpenRun={() => setProjectView("run")}
             onOpenPreview={() => setProjectView("preview")}
             onOpenInspector={() => setProjectView("inspector")}
+            onOpenHistory={() => setProjectView("history")}
+            onOpenManifest={() => setProjectView("manifest")}
           />
         ) : activeProject && projectView === "verify" ? (
           <Verification
@@ -240,6 +245,8 @@ export default function App(): React.JSX.Element {
             onOpenRun={() => setProjectView("run")}
             onOpenPreview={() => setProjectView("preview")}
             onOpenInspector={() => setProjectView("inspector")}
+            onOpenHistory={() => setProjectView("history")}
+            onOpenManifest={() => setProjectView("manifest")}
           />
         ) : activeProject && projectView === "history" ? (
           <History
@@ -248,6 +255,7 @@ export default function App(): React.JSX.Element {
             onOpenRun={() => setProjectView("run")}
             onOpenPreview={() => setProjectView("preview")}
             onOpenInspector={() => setProjectView("inspector")}
+            onOpenManifest={() => setProjectView("manifest")}
           />
         ) : activeProject && projectView === "manifest" ? (
           <DesignManifest
@@ -255,6 +263,7 @@ export default function App(): React.JSX.Element {
             onBack={() => setProjectView("flow")}
             onOpenRun={() => setProjectView("run")}
             onOpenPreview={() => setProjectView("preview")}
+            onOpenInspector={() => setProjectView("inspector")}
             onOpenHistory={() => setProjectView("history")}
           />
         ) : activeProject ? (
