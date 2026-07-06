@@ -12540,7 +12540,7 @@ const statusStyles = {
   unknown: { dot: "bg-vs-text-muted", label: "text-vs-text-muted" },
   checking: { dot: "bg-vs-warning", label: "text-vs-warning" }
 };
-function StatusDot({ status }) {
+function StatusDot$1({ status }) {
   if (status === "checking") return /* @__PURE__ */ jsxRuntimeExports.jsx(Spinner, {});
   return /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: `inline-block h-2.5 w-2.5 rounded-full ${statusStyles[status].dot}` });
 }
@@ -12588,7 +12588,7 @@ function EnvironmentCheck({
       /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-sm text-vs-text-secondary", children: "VortSpec drives your own Claude Code. Let’s make sure everything it needs is present." })
     ] }),
     /* @__PURE__ */ jsxRuntimeExports.jsx(Card, { children: /* @__PURE__ */ jsxRuntimeExports.jsx("ul", { className: "divide-y divide-vs-border-subtle", children: report.checks.map((check) => /* @__PURE__ */ jsxRuntimeExports.jsxs("li", { className: "flex items-center gap-3 px-4 py-3", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx(StatusDot, { status: check.status }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(StatusDot$1, { status: check.status }),
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "min-w-0 flex-1", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-sm font-medium text-vs-text-primary", children: check.label }),
         /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: `truncate text-xs ${statusLabelClass(check.status)}`, children: check.detail })
@@ -17317,7 +17317,8 @@ const TYPE_LABEL = {
 };
 function Inspector({
   project,
-  onBack
+  onBack,
+  onOpenPreview
 }) {
   const [tokens, setTokens] = reactExports.useState(null);
   const [tokenFile, setTokenFile] = reactExports.useState(null);
@@ -17366,8 +17367,22 @@ function Inspector({
             total
           ] })
         ] }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "px-2.5 py-1 text-vs-text-muted", title: "Coming in the next slice", children: "Components" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "px-2.5 py-1 text-vs-text-muted", title: "Coming in the next slice", children: "Playground" })
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "button",
+          {
+            onClick: onOpenPreview,
+            className: "rounded px-2.5 py-1 text-vs-text-muted hover:text-vs-text-primary",
+            children: "Components"
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "button",
+          {
+            onClick: onOpenPreview,
+            className: "rounded px-2.5 py-1 text-vs-text-muted hover:text-vs-text-primary",
+            children: "Playground"
+          }
+        )
       ] })
     ] }),
     /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-wrap items-center gap-2", children: [
@@ -17462,6 +17477,323 @@ function isCssColor(v) {
   return /^#|^(rgb|rgba|hsl|hsla|oklch)\(|^(white|black|transparent|currentcolor)$/i.test(
     v.trim()
   );
+}
+const BG = { app: "#EFEFF1", white: "#FFFFFF", dark: "#0F0F10" };
+const LEVEL_ORDER = ["atom", "molecule", "organism", "other"];
+const LEVEL_LABEL = {
+  atom: "Atoms",
+  molecule: "Molecules",
+  organism: "Organisms",
+  other: "Components"
+};
+function DevPreview({
+  project,
+  onBack
+}) {
+  const [components, setComponents] = reactExports.useState(null);
+  const [previewUrl, setPreviewUrl] = reactExports.useState(null);
+  const [selName, setSelName] = reactExports.useState(null);
+  const [query, setQuery] = reactExports.useState("");
+  const [bg, setBg] = reactExports.useState("app");
+  const [devUrl, setDevUrl] = reactExports.useState("");
+  reactExports.useEffect(() => {
+    void api.inspectorComponents(project.path).then((r) => {
+      setComponents(r.components);
+      setPreviewUrl(r.previewUrl);
+      setSelName((cur) => cur ?? r.components[0]?.name ?? null);
+    });
+  }, [project.path]);
+  const groups = reactExports.useMemo(() => {
+    if (!components) return [];
+    const q = query.trim().toLowerCase();
+    const filtered = components.filter((c) => q === "" || c.name.toLowerCase().includes(q));
+    return LEVEL_ORDER.map((level) => ({
+      level,
+      items: filtered.filter((c) => (c.level ?? "other") === level)
+    })).filter((g) => g.items.length > 0);
+  }, [components, query]);
+  const selected = components?.find((c) => c.name === selName) ?? null;
+  const embedUrl = devUrl.trim() || previewUrl || "";
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex h-[calc(100vh-3rem)] w-full overflow-hidden bg-vs-bg-primary text-[13px] text-vs-text-primary", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("nav", { className: "flex w-52 shrink-0 flex-col border-r border-vs-border-default bg-vs-bg-surface p-3", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs(
+        "button",
+        {
+          onClick: onBack,
+          className: "mb-3 flex items-center gap-2 border-b border-vs-border-default px-2 pb-3 text-left hover:opacity-85",
+          children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "grid h-5 w-5 place-items-center rounded-md bg-vs-accent font-mono text-[11px] font-medium text-vs-bg-primary", children: project.name.charAt(0).toUpperCase() }),
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "min-w-0", children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "block truncate text-[13px] font-semibold", children: project.name }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "block truncate font-mono text-[11px] text-vs-text-muted", children: project.path })
+            ] })
+          ]
+        }
+      ),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(RailItem, { label: "Flow", onClick: onBack }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(RailItem, { label: "Preview", active: true })
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex w-52 shrink-0 flex-col border-r border-vs-border-default bg-vs-bg-surface", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "border-b border-vs-border-default p-3", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "mb-2 text-[11px] font-semibold uppercase tracking-wide text-vs-text-muted", children: [
+          "Components ",
+          components && /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-vs-text-muted", children: [
+            "· ",
+            components.length
+          ] })
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "input",
+          {
+            value: query,
+            onChange: (e) => setQuery(e.target.value),
+            placeholder: "Search",
+            className: "h-[30px] w-full rounded-md border border-vs-border-default bg-vs-bg-primary px-2.5 text-xs text-vs-text-primary placeholder:text-vs-text-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-vs-accent-subtle"
+          }
+        )
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex-1 overflow-y-auto p-2", children: components === null ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2 p-3 text-xs text-vs-text-secondary", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx(Spinner, {}),
+        " Reading…"
+      ] }) : groups.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "p-3 text-xs text-vs-text-muted", children: "No components detected." }) : groups.map((g) => /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "mb-3", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-vs-text-muted", children: [
+          LEVEL_LABEL[g.level],
+          " ",
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-vs-border-strong", children: g.items.length })
+        ] }),
+        g.items.map((c) => {
+          const active = c.name === selName;
+          return /* @__PURE__ */ jsxRuntimeExports.jsxs(
+            "button",
+            {
+              onClick: () => setSelName(c.name),
+              className: `flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left ${active ? "bg-vs-bg-elevated" : "hover:bg-vs-bg-elevated"}`,
+              children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "span",
+                  {
+                    className: `h-3 w-3 shrink-0 rounded-sm border ${active ? "border-vs-accent" : "border-vs-text-muted"}`
+                  }
+                ),
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "span",
+                  {
+                    className: `flex-1 truncate text-[13px] ${active ? "font-medium text-vs-text-primary" : "text-vs-text-secondary"}`,
+                    children: c.name
+                  }
+                ),
+                /* @__PURE__ */ jsxRuntimeExports.jsx(StatusDot, { status: c.status })
+              ]
+            },
+            c.name
+          );
+        })
+      ] }, g.level)) })
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("main", { className: "flex min-w-0 flex-1 flex-col bg-vs-bg-primary", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("header", { className: "flex flex-none items-center gap-3 border-b border-vs-border-default px-5 py-3", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[15px] font-semibold", children: selected?.name ?? "—" }),
+        selected?.file && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "rounded border border-vs-border-default px-1.5 py-px font-mono text-[11px] text-vs-text-secondary", children: selected.file }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex-1" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex gap-0.5 rounded-lg border border-vs-border-default bg-vs-bg-surface p-0.5", children: Object.keys(BG).map((b) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
+          "button",
+          {
+            onClick: () => setBg(b),
+            className: `flex items-center gap-1.5 rounded-md px-2.5 py-1 ${bg === b ? "bg-vs-bg-elevated" : "hover:opacity-85"}`,
+            children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx(
+                "span",
+                {
+                  className: "inline-block h-3 w-3 rounded-[3px] border border-vs-border-strong",
+                  style: { background: BG[b] }
+                }
+              ),
+              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: `text-[11px] ${bg === b ? "text-vs-text-primary" : "text-vs-text-secondary"}`, children: b === "app" ? "App" : b === "white" ? "White" : "Dark" })
+            ]
+          },
+          b
+        )) }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "input",
+          {
+            value: devUrl,
+            onChange: (e) => setDevUrl(e.target.value),
+            placeholder: "http://localhost:5173",
+            className: "w-44 rounded-lg border border-vs-border-default bg-vs-bg-surface px-2.5 py-1.5 font-mono text-[11px] text-vs-text-secondary placeholder:text-vs-text-muted focus:outline-none focus-visible:border-vs-accent"
+          }
+        )
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "min-h-0 flex-1 overflow-y-auto transition-colors", style: { background: BG[bg] }, children: embedUrl ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+        "iframe",
+        {
+          title: "preview",
+          src: embedUrl,
+          className: "h-full min-h-[340px] w-full border-0 bg-white"
+        }
+      ) : /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex min-h-[340px] items-center justify-center p-12", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "max-w-md rounded-xl border border-black/10 bg-white/70 p-6 text-center", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-sm font-semibold text-zinc-800", children: "No live preview yet" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "mt-1 text-xs text-zinc-500", children: "Rendering the real component needs a running dev server or a generated harness. Start your project's dev server (or Storybook) and paste its URL above to embed it, or wait for the managed-preview slice that launches and generates a harness for you." })
+      ] }) }) })
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("aside", { className: "flex w-[300px] shrink-0 flex-col border-l border-vs-border-default bg-vs-bg-surface", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-none items-center gap-2 border-b border-vs-border-default px-4 py-3", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-sm font-semibold", children: "Controls" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex-1" })
+      ] }),
+      selected ? /* @__PURE__ */ jsxRuntimeExports.jsx(ControlsPanel, { component: selected }, selected.name) : /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "p-4 text-xs text-vs-text-muted", children: "Select a component." })
+    ] })
+  ] });
+}
+function RailItem({
+  label,
+  active,
+  onClick
+}) {
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs(
+    "button",
+    {
+      onClick,
+      className: `flex items-center gap-2.5 rounded-md px-2 py-1.5 text-left text-[13px] ${active ? "bg-vs-bg-elevated font-medium text-vs-accent" : "text-vs-text-secondary hover:bg-vs-bg-elevated hover:text-vs-text-primary"}`,
+      children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "flex-1", children: label }),
+        active && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "h-1.5 w-1.5 rounded-full bg-vs-success" })
+      ]
+    }
+  );
+}
+function StatusDot({ status }) {
+  const color = status === "verified" ? "bg-vs-success" : status === "has-issues" ? "bg-vs-warning" : status === "built" ? "bg-vs-text-muted" : "bg-vs-border-strong";
+  return /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: `h-1.5 w-1.5 shrink-0 rounded-full ${color}`, title: status });
+}
+function initialValues(props) {
+  const v = {};
+  for (const p of props) {
+    if (p.kind === "boolean") v[p.key] = p.defaultValue === "true";
+    else v[p.key] = p.defaultValue ?? p.options[0] ?? "";
+  }
+  return v;
+}
+function ControlsPanel({ component }) {
+  const [values, setValues] = reactExports.useState(() => initialValues(component.props));
+  const set = (k, v) => setValues((s) => ({ ...s, [k]: v }));
+  const reset = () => setValues(initialValues(component.props));
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex-1 overflow-y-auto px-4 pb-4", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center py-2", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-[11px] text-vs-text-muted", children: [
+        component.props.length,
+        " prop",
+        component.props.length === 1 ? "" : "s",
+        " · from source"
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex-1" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(
+        "button",
+        {
+          onClick: reset,
+          className: "rounded-md border border-vs-border-strong px-2.5 py-1 text-[11px] text-vs-text-secondary hover:border-vs-accent hover:text-vs-text-primary",
+          children: "Reset"
+        }
+      )
+    ] }),
+    component.props.length === 0 && /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "py-2 text-xs text-vs-text-muted", children: "No source-declared variant props found." }),
+    component.props.map((p) => /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col gap-1.5 border-b border-vs-border-subtle py-3", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono text-xs text-vs-text-primary", children: p.key }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono text-[10px] text-vs-text-muted", children: p.kind })
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(PropInput, { prop: p, value: values[p.key], onChange: (v) => set(p.key, v) })
+    ] }, p.key)),
+    /* @__PURE__ */ jsxRuntimeExports.jsx(Section$1, { title: "Tokens consumed", children: component.tokens.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs text-vs-text-muted", children: "— (uses token utilities; var() scan found none)" }) : /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex flex-wrap gap-1.5", children: component.tokens.map((t) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
+      "span",
+      {
+        className: "rounded border border-vs-border-default bg-vs-bg-primary px-1.5 py-0.5 font-mono text-[11px] text-vs-text-secondary",
+        children: [
+          "--",
+          t
+        ]
+      },
+      t
+    )) }) }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx(Section$1, { title: "Accessibility", children: component.status === "verified" ? /* @__PURE__ */ jsxRuntimeExports.jsx(Check, { icon: "✓", color: "text-vs-success", label: "visual-verify passed" }) : component.status === "has-issues" ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex flex-col gap-1.5", children: component.issues.map((i) => /* @__PURE__ */ jsxRuntimeExports.jsx(Check, { icon: "!", color: "text-vs-warning", label: i }, i)) }) : /* @__PURE__ */ jsxRuntimeExports.jsx(Check, { icon: "—", color: "text-vs-text-muted", label: "Run /visual-verify to populate checks" }) }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx(Section$1, { title: "Code", children: /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "whitespace-pre-wrap break-words rounded-md border border-vs-border-default bg-black/40 p-3 font-mono text-[11px] leading-relaxed text-vs-text-secondary", children: snippet(component.name, component.props, values) }) })
+  ] });
+}
+function PropInput({
+  prop,
+  value,
+  onChange
+}) {
+  if (prop.kind === "boolean") {
+    const on = value === true;
+    return /* @__PURE__ */ jsxRuntimeExports.jsx(
+      "button",
+      {
+        onClick: () => onChange(!on),
+        className: `flex h-[19px] w-[34px] rounded-full border border-vs-border-strong p-px hover:border-vs-accent ${on ? "justify-end bg-vs-accent" : "justify-start bg-vs-border-default"}`,
+        children: /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "block h-[15px] w-[15px] rounded-full bg-vs-text-primary" })
+      }
+    );
+  }
+  if (prop.kind === "enum" && prop.options.length <= 4) {
+    return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex flex-wrap gap-0.5 rounded-md border border-vs-border-default bg-vs-bg-primary p-0.5", children: prop.options.map((o) => /* @__PURE__ */ jsxRuntimeExports.jsx(
+      "button",
+      {
+        onClick: () => onChange(o),
+        className: `min-w-[44px] flex-1 rounded px-2 py-1 font-mono text-[11px] ${value === o ? "bg-vs-bg-elevated text-vs-accent" : "text-vs-text-muted hover:text-vs-text-primary"}`,
+        children: o
+      },
+      o
+    )) });
+  }
+  if (prop.kind === "enum") {
+    return /* @__PURE__ */ jsxRuntimeExports.jsx(
+      "select",
+      {
+        value: String(value),
+        onChange: (e) => onChange(e.target.value),
+        className: "h-8 rounded-md border border-vs-border-default bg-vs-bg-primary px-2.5 text-xs text-vs-text-primary focus:outline-none focus-visible:border-vs-accent",
+        children: prop.options.map((o) => /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: o, children: o }, o))
+      }
+    );
+  }
+  return /* @__PURE__ */ jsxRuntimeExports.jsx(
+    "input",
+    {
+      value: String(value),
+      onChange: (e) => onChange(e.target.value),
+      className: "h-8 rounded-md border border-vs-border-default bg-vs-bg-primary px-2.5 text-xs text-vs-text-primary focus:outline-none focus-visible:border-vs-accent"
+    }
+  );
+}
+function Section$1({
+  title,
+  children
+}) {
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "border-b border-vs-border-subtle py-3.5", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "mb-2.5 text-[10px] font-semibold uppercase tracking-wide text-vs-text-muted", children: title }),
+    children
+  ] });
+}
+function Check({
+  icon,
+  color,
+  label
+}) {
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: `w-3.5 text-center text-xs ${color}`, children: icon }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "flex-1 text-xs text-vs-text-primary", children: label })
+  ] });
+}
+function snippet(name, props, values) {
+  const attrs = props.map((p) => {
+    const v = values[p.key];
+    if (p.kind === "boolean") return v ? `
+  ${p.key}` : "";
+    return `
+  ${p.key}="${String(v)}"`;
+  }).filter(Boolean).join("");
+  return attrs ? `<${name}${attrs}
+/>` : `<${name} />`;
 }
 const frameworkSchema = enumType([
   "react",
@@ -17953,7 +18285,7 @@ function App() {
   const [view, setView] = reactExports.useState("env");
   const [activeProject, setActiveProject] = reactExports.useState(null);
   const [setupProject, setSetupProject] = reactExports.useState(null);
-  const [inspecting, setInspecting] = reactExports.useState(false);
+  const [projectView, setProjectView] = reactExports.useState("flow");
   const [loading, setLoading] = reactExports.useState(true);
   function mergeProject(project) {
     setProjects((prev) => [project, ...prev.filter((p) => p.path !== project.path)]);
@@ -17983,7 +18315,7 @@ function App() {
           if (v === "dashboard") {
             setActiveProject(null);
             setSetupProject(null);
-            setInspecting(false);
+            setProjectView("flow");
           }
         }
       }
@@ -18010,12 +18342,19 @@ function App() {
           setActiveProject(project);
         }
       }
-    ) : activeProject && inspecting ? /* @__PURE__ */ jsxRuntimeExports.jsx(Inspector, { project: activeProject, onBack: () => setInspecting(false) }) : activeProject ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+    ) : activeProject && projectView === "inspector" ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+      Inspector,
+      {
+        project: activeProject,
+        onBack: () => setProjectView("flow"),
+        onOpenPreview: () => setProjectView("preview")
+      }
+    ) : activeProject && projectView === "preview" ? /* @__PURE__ */ jsxRuntimeExports.jsx(DevPreview, { project: activeProject, onBack: () => setProjectView("flow") }) : activeProject ? /* @__PURE__ */ jsxRuntimeExports.jsx(
       GuidedFlow,
       {
         project: activeProject,
         onBack: () => setActiveProject(null),
-        onOpenInspector: () => setInspecting(true)
+        onOpenInspector: () => setProjectView("inspector")
       }
     ) : /* @__PURE__ */ jsxRuntimeExports.jsx(
       Dashboard,

@@ -122,7 +122,7 @@ const detectedComponentSchema = z.object({
   level: z.enum(["atom", "molecule", "organism"]).optional(),
   description: z.string().optional()
 });
-z.array(detectedComponentSchema);
+const detectedComponentsSchema = z.array(detectedComponentSchema);
 const COMPONENTS_MANIFEST = ".sdd-de/components.json";
 const flowStateSchema = z.object({
   currentStageId: z.string(),
@@ -330,6 +330,34 @@ const inspectorTokensResultSchema = z.object({
   tokenFile: z.string().nullable(),
   tokens: z.array(inspectorTokenSchema)
 });
+const propControlSchema = z.object({
+  key: z.string(),
+  kind: z.enum(["enum", "boolean", "text"]),
+  /** Options for an enum control. */
+  options: z.array(z.string()).default([]),
+  /** Default value from the component's defaultVariants, if any. */
+  defaultValue: z.string().optional()
+});
+const componentStatusSchema = z.enum(["verified", "has-issues", "built", "unknown"]);
+const inspectorComponentSchema = z.object({
+  name: z.string(),
+  level: z.enum(["atom", "molecule", "organism"]).optional(),
+  description: z.string().optional(),
+  /** Project-relative path of the component's source file, or null if not found. */
+  file: z.string().nullable(),
+  props: z.array(propControlSchema),
+  /** Token names the component references (best-effort scan of its source). */
+  tokens: z.array(z.string()),
+  status: componentStatusSchema,
+  /** Open issues from the visual-verify report, if any. */
+  issues: z.array(z.string())
+});
+const inspectorComponentsResultSchema = z.object({
+  componentDir: z.string().nullable(),
+  /** The dev-server URL to embed for live preview, if one is configured/known. */
+  previewUrl: z.string().nullable(),
+  components: z.array(inspectorComponentSchema)
+});
 const checkStatusSchema = z.enum(["pass", "fail", "unknown", "checking"]);
 const fixActionSchema = z.object({
   /** install-link → open an external URL; open-login → run login in the PTY; verify → re-run the check */
@@ -443,6 +471,10 @@ const ipcContract = {
   "inspector:getTokens": {
     request: z.string(),
     response: inspectorTokensResultSchema
+  },
+  "inspector:getComponents": {
+    request: z.string(),
+    response: inspectorComponentsResultSchema
   }
 };
 function execFileSafe(command, args, opts = {}) {
@@ -908,6 +940,140 @@ async function getInspectorTokens(projectPath) {
   }));
   return { tokenFile, tokens };
 }
+const SOURCE_EXTS = [".tsx", ".jsx", ".vue", ".svelte", ".ts"];
+function balanced(src, from) {
+  const open = src.indexOf("{", from);
+  if (open < 0) return null;
+  let depth = 0;
+  for (let i = open; i < src.length; i++) {
+    if (src[i] === "{") depth++;
+    else if (src[i] === "}") {
+      depth--;
+      if (depth === 0) return { body: src.slice(open + 1, i), end: i };
+    }
+  }
+  return null;
+}
+function stripStrings(s) {
+  return s.replace(/'(?:[^'\\]|\\.)*'/g, "''").replace(/"(?:[^"\\]|\\.)*"/g, '""').replace(/`(?:[^`\\]|\\.)*`/g, "``");
+}
+function parseProps(src) {
+  const vIdx = src.search(/\bvariants\s*:/);
+  if (vIdx < 0) return [];
+  const vb = balanced(src, vIdx);
+  if (!vb) return [];
+  const defaults = /* @__PURE__ */ new Map();
+  const dIdx = src.search(/\bdefaultVariants\s*:/);
+  if (dIdx >= 0) {
+    const db = balanced(src, dIdx);
+    if (db) {
+      for (const m of stripStrings(db.body).matchAll(/([A-Za-z_$][\w$]*)\s*:/g)) {
+        const valMatch = db.body.match(
+          new RegExp(`${m[1]}\\s*:\\s*['"]([^'"]+)['"]`)
+        );
+        if (valMatch) defaults.set(m[1], valMatch[1]);
+      }
+    }
+  }
+  const props = [];
+  for (const m of vb.body.matchAll(/([A-Za-z_$][\w$]*)\s*:\s*\{([^{}]*)\}/g)) {
+    const key = m[1];
+    const options = [];
+    for (const om of stripStrings(m[2]).matchAll(
+      /(['"]?)([A-Za-z_$][\w$-]*|true|false)\1\s*:/g
+    )) {
+      options.push(om[2]);
+    }
+    if (options.length === 0) continue;
+    const isBool = options.every((o) => o === "true" || o === "false");
+    props.push({
+      key,
+      kind: isBool ? "boolean" : "enum",
+      options,
+      defaultValue: defaults.get(key)
+    });
+  }
+  return props;
+}
+async function findSourceFile(dir, name) {
+  let entries;
+  try {
+    entries = await readdir(dir, { withFileTypes: true });
+  } catch {
+    return null;
+  }
+  for (const entry of entries) {
+    const full = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      const found = await findSourceFile(full, name);
+      if (found) return found;
+    } else if (SOURCE_EXTS.some((ext) => entry.name === `${name}${ext}`)) {
+      return full;
+    }
+  }
+  return null;
+}
+function scanTokens(...sources) {
+  const found = /* @__PURE__ */ new Set();
+  for (const src of sources) {
+    for (const m of src.matchAll(/var\(\s*--([\w-]+)/g)) found.add(m[1]);
+  }
+  return [...found].sort();
+}
+async function componentStatus(projectPath, name, hasFile) {
+  if (!hasFile) return { status: "unknown", issues: [] };
+  const slug = name.toLowerCase();
+  let report;
+  try {
+    report = await readFile(join(projectPath, "specs", slug, "visual-verify-report.md"), "utf8");
+  } catch {
+    return { status: "built", issues: [] };
+  }
+  const hasOpen = /status:\s*open/i.test(report) || /open (discrepanc|source-level)/i.test(report);
+  if (hasOpen) {
+    const issues = [...report.matchAll(/^###\s+(D\d[^\n]*)/gm)].map((m) => m[1].trim());
+    return { status: "has-issues", issues };
+  }
+  return { status: "verified", issues: [] };
+}
+async function getInspectorComponents(projectPath) {
+  const config = await readProjectConfig(projectPath);
+  const componentDir = config?.componentDir ?? null;
+  let manifest = [];
+  try {
+    const raw = await readFile(join(projectPath, ".sdd-de/components.json"), "utf8");
+    const parsed = detectedComponentsSchema.safeParse(JSON.parse(raw));
+    if (parsed.success) manifest = parsed.data;
+  } catch {
+  }
+  const root = componentDir ? join(projectPath, componentDir) : projectPath;
+  const components = [];
+  for (const entry of manifest) {
+    const abs = await findSourceFile(root, entry.name);
+    const file = abs ? abs.slice(projectPath.length + 1) : null;
+    let props = [];
+    let tokens = [];
+    if (abs) {
+      const src = await readFile(abs, "utf8").catch(() => "");
+      const variantsPath = abs.replace(/\.(tsx|jsx|ts)$/, ".variants.ts");
+      const variantsSrc = variantsPath !== abs ? await readFile(variantsPath, "utf8").catch(() => "") : "";
+      props = parseProps(variantsSrc || src);
+      tokens = scanTokens(src, variantsSrc);
+    }
+    const { status, issues } = await componentStatus(projectPath, entry.name, Boolean(abs));
+    components.push({
+      name: entry.name,
+      level: entry.level,
+      description: entry.description,
+      file,
+      props,
+      tokens,
+      status,
+      issues
+    });
+  }
+  return { componentDir, previewUrl: null, components };
+}
 function truncate(s, n = 200) {
   return s.length > n ? `${s.slice(0, n)}…` : s;
 }
@@ -1319,7 +1485,8 @@ const handlers = {
   "artifact:read": ((req) => readArtifact(req.projectPath, req.relPath)),
   "artifact:findLatest": ((req) => findLatestArtifact(req.projectPath, req.suffix)),
   "project:config": ((projectPath) => readProjectConfig(projectPath)),
-  "inspector:getTokens": ((projectPath) => getInspectorTokens(projectPath))
+  "inspector:getTokens": ((projectPath) => getInspectorTokens(projectPath)),
+  "inspector:getComponents": ((projectPath) => getInspectorComponents(projectPath))
 };
 function registerIpc() {
   Object.keys(ipcContract).forEach((channel) => {

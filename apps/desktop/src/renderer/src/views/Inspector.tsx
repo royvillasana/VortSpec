@@ -28,9 +28,11 @@ const TYPE_LABEL: Record<TokenType, string> = {
 export function Inspector({
   project,
   onBack,
+  onOpenPreview,
 }: {
   project: Project;
   onBack: () => void;
+  onOpenPreview: () => void;
 }): React.JSX.Element {
   const [tokens, setTokens] = useState<InspectorToken[] | null>(null);
   const [tokenFile, setTokenFile] = useState<string | null>(null);
@@ -79,12 +81,18 @@ export function Inspector({
           <span className="rounded bg-vs-bg-elevated px-2.5 py-1 text-vs-text-primary">
             Tokens {total > 0 && <span className="text-vs-text-muted">· {total}</span>}
           </span>
-          <span className="px-2.5 py-1 text-vs-text-muted" title="Coming in the next slice">
+          <button
+            onClick={onOpenPreview}
+            className="rounded px-2.5 py-1 text-vs-text-muted hover:text-vs-text-primary"
+          >
             Components
-          </span>
-          <span className="px-2.5 py-1 text-vs-text-muted" title="Coming in the next slice">
+          </button>
+          <button
+            onClick={onOpenPreview}
+            className="rounded px-2.5 py-1 text-vs-text-muted hover:text-vs-text-primary"
+          >
             Playground
-          </span>
+          </button>
         </div>
       </header>
 

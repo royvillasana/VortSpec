@@ -43,3 +43,43 @@ export const inspectorTokensResultSchema = z.object({
   tokens: z.array(inspectorTokenSchema),
 });
 export type InspectorTokensResult = z.infer<typeof inspectorTokensResultSchema>;
+
+// ── Components + Playground (Dev Preview screen) ─────────────────────
+
+/** A prop control derived from the component's source (CVA variants / prop types). */
+export const propControlSchema = z.object({
+  key: z.string(),
+  kind: z.enum(["enum", "boolean", "text"]),
+  /** Options for an enum control. */
+  options: z.array(z.string()).default([]),
+  /** Default value from the component's defaultVariants, if any. */
+  defaultValue: z.string().optional(),
+});
+export type PropControl = z.infer<typeof propControlSchema>;
+
+/** Validation status derived from the component's visual-verify report. */
+export const componentStatusSchema = z.enum(["verified", "has-issues", "built", "unknown"]);
+export type ComponentStatus = z.infer<typeof componentStatusSchema>;
+
+export const inspectorComponentSchema = z.object({
+  name: z.string(),
+  level: z.enum(["atom", "molecule", "organism"]).optional(),
+  description: z.string().optional(),
+  /** Project-relative path of the component's source file, or null if not found. */
+  file: z.string().nullable(),
+  props: z.array(propControlSchema),
+  /** Token names the component references (best-effort scan of its source). */
+  tokens: z.array(z.string()),
+  status: componentStatusSchema,
+  /** Open issues from the visual-verify report, if any. */
+  issues: z.array(z.string()),
+});
+export type InspectorComponent = z.infer<typeof inspectorComponentSchema>;
+
+export const inspectorComponentsResultSchema = z.object({
+  componentDir: z.string().nullable(),
+  /** The dev-server URL to embed for live preview, if one is configured/known. */
+  previewUrl: z.string().nullable(),
+  components: z.array(inspectorComponentSchema),
+});
+export type InspectorComponentsResult = z.infer<typeof inspectorComponentsResultSchema>;

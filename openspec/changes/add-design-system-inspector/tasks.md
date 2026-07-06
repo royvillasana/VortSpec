@@ -9,7 +9,7 @@
 - [x] 2.1 Token-file parser: read the configured `token_file` (CSS custom properties first; SCSS/JS variants per `styling`) into a typed token list (name, type, resolved value), zod-validated at the boundary
 - [ ] 2.2 Figma-authoritative reconciliation: when the Desktop Bridge is connected, pull resolved values via `figma_get_variables` and reconcile with the token file, flagging drift
 - [ ] 2.3 Source model: classify each token as `figma-variable` / `generated-code` / `hand-edited` from where its value lives
-- [ ] 2.4 Component reader: parse `.sdd-de/components.json` (reuse `detectedComponentsSchema`) and read generated source under `component_dir` for variants, states, and source-declared props
+- [x] 2.4 Component reader: parse `.sdd-de/components.json` (reuse `detectedComponentsSchema`) and read generated source under `component_dir` for variants, states, and source-declared props
 - [ ] 2.5 Where-used index: scan component source for token references (`var(--token)` / token utilities) to build the token→usage map
 - [ ] 2.6 Verify-report reader: parse `specs/*/visual-verify-report.md` (+ adversarial-review) into per-component status (built / verified / has-issues) and issue lists
 
@@ -34,15 +34,15 @@
 
 ## 6. Renderer — Components view + detail
 
-- [ ] 6.1 Components grid: cards from `components.json` + source (name, level, preview, status from verify reports)
+- [x] 6.1 Components grid: cards from `components.json` + source (name, level, preview, status from verify reports)
 - [ ] 6.2 Component detail: variants/states/props (from source), tokens consumed, links to spec + visual-verify report; preview delegated to the Playground
-- [ ] 6.3 Prop controls generated from source-declared props (variant/enum → select, boolean → toggle, string → text)
+- [x] 6.3 Prop controls generated from source-declared props (variant/enum → select, boolean → toggle, string → text)
 
 ## 7. Renderer — Playground (render harness + validate/modify)
 
 - [ ] 7.1 Playground surface: embed the live preview, variant/state controls that drive the real component, virtualized for large sets
 - [ ] 7.2 "Generate a harness" flow for projects with no renderable surface (invokes task 4.4), then launch + embed — closing the `visual-verify` render-harness gap
-- [ ] 7.3 Validation panel: show issues from the verify reports alongside the preview
+- [x] 7.3 Validation panel: show issues from the verify reports alongside the preview
 - [ ] 7.4 Gated modify loop: request a fix → scoped Claude Code run / resumable chat → approvable diff → written only on approval (reuse the artifact-gate + tabbed run panel)
 
 ## 8. Shell & entry points
