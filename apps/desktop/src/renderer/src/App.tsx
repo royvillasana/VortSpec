@@ -7,6 +7,7 @@ import { GuidedFlow } from "./views/GuidedFlow";
 import { Inspector } from "./views/Inspector";
 import { DevPreview } from "./views/DevPreview";
 import { RunView } from "./views/RunView";
+import { ArtifactReview } from "./views/ArtifactReview";
 import { NewProjectWizard } from "./views/NewProjectWizard";
 import { Spinner } from "./components/ui";
 
@@ -27,7 +28,9 @@ export default function App(): React.JSX.Element {
   const [view, setView] = useState<View>("env");
   const [activeProject, setActiveProject] = useState<Project | null>(null);
   const [setupProject, setSetupProject] = useState<Project | null>(null);
-  const [projectView, setProjectView] = useState<"flow" | "inspector" | "preview" | "run">("flow");
+  const [projectView, setProjectView] = useState<
+    "flow" | "inspector" | "preview" | "run" | "review"
+  >("flow");
   const [loading, setLoading] = useState(true);
 
   function mergeProject(project: Project): void {
@@ -107,6 +110,14 @@ export default function App(): React.JSX.Element {
             onOpenPreview={() => setProjectView("preview")}
             onOpenInspector={() => setProjectView("inspector")}
           />
+        ) : activeProject && projectView === "review" ? (
+          <ArtifactReview
+            project={activeProject}
+            onBack={() => setProjectView("flow")}
+            onOpenRun={() => setProjectView("run")}
+            onOpenPreview={() => setProjectView("preview")}
+            onOpenInspector={() => setProjectView("inspector")}
+          />
         ) : activeProject ? (
           <GuidedFlow
             project={activeProject}
@@ -114,6 +125,7 @@ export default function App(): React.JSX.Element {
             onOpenInspector={() => setProjectView("inspector")}
             onOpenPreview={() => setProjectView("preview")}
             onOpenRun={() => setProjectView("run")}
+            onOpenReview={() => setProjectView("review")}
           />
         ) : (
           <Dashboard

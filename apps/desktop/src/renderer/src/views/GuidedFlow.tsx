@@ -29,12 +29,14 @@ export function GuidedFlow({
   onOpenInspector,
   onOpenPreview,
   onOpenRun,
+  onOpenReview,
 }: {
   project: Project;
   onBack: () => void;
   onOpenInspector: () => void;
   onOpenPreview: () => void;
   onOpenRun: () => void;
+  onOpenReview: () => void;
 }): React.JSX.Element {
   const [flow, setFlow] = useState<Flow | null>(null);
   const [config, setConfig] = useState<ProjectConfig | null>(null);
@@ -125,6 +127,7 @@ export function GuidedFlow({
                     config={config}
                     publishRepoUrl={flow.state.publishRepoUrl}
                     onSelect={() => setSelectedId(def.id)}
+                    onReview={onOpenReview}
                     onFlow={setFlow}
                   />
                 );
@@ -247,6 +250,7 @@ function TimelineStage({
   config,
   publishRepoUrl,
   onSelect,
+  onReview,
   onFlow,
 }: {
   project: Project;
@@ -259,6 +263,7 @@ function TimelineStage({
   config: ProjectConfig | null;
   publishRepoUrl?: string;
   onSelect: () => void;
+  onReview: () => void;
   onFlow: (f: Flow) => void;
 }): React.JSX.Element {
   const review = state.status === "needs-review";
@@ -320,7 +325,7 @@ function TimelineStage({
               <span className="flex-1 text-xs text-vs-warning">
                 Flow paused — this artifact needs your approval before implementation.
               </span>
-              <Button variant="primary" onClick={onSelect}>
+              <Button variant="primary" onClick={onReview}>
                 Review →
               </Button>
             </div>

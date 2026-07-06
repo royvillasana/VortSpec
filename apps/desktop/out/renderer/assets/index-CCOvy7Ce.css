@@ -166,6 +166,8 @@
     --text-lg--line-height: calc(1.75 / 1.125);
     --text-xl: 1.25rem;
     --text-xl--line-height: calc(1.75 / 1.25);
+    --text-2xl: 1.5rem;
+    --text-2xl--line-height: calc(2 / 1.5);
     --font-weight-medium: 500;
     --font-weight-semibold: 600;
     --tracking-wide: .025em;
@@ -829,6 +831,10 @@
     max-width: 640px;
   }
 
+  .max-w-\[720px\] {
+    max-width: 720px;
+  }
+
   .max-w-\[1120px\] {
     max-width: 1120px;
   }
@@ -865,6 +871,10 @@
     flex-shrink: 0;
   }
 
+  .border-collapse {
+    border-collapse: collapse;
+  }
+
   .-translate-x-1\/2 {
     --tw-translate-x: calc(calc(1 / 2 * 100%) * -1);
     translate: var(--tw-translate-x) var(--tw-translate-y);
@@ -890,8 +900,20 @@
     cursor: pointer;
   }
 
+  .resize-none {
+    resize: none;
+  }
+
   .resize-y {
     resize: vertical;
+  }
+
+  .list-decimal {
+    list-style-type: decimal;
+  }
+
+  .list-disc {
+    list-style-type: disc;
   }
 
   .grid-cols-2 {
@@ -1010,6 +1032,10 @@
 
   .overflow-hidden {
     overflow: hidden;
+  }
+
+  .overflow-x-auto {
+    overflow-x: auto;
   }
 
   .overflow-x-hidden {
@@ -1378,6 +1404,10 @@
     padding-block: calc(var(--spacing) * 8);
   }
 
+  .py-9 {
+    padding-block: calc(var(--spacing) * 9);
+  }
+
   .py-10 {
     padding-block: calc(var(--spacing) * 10);
   }
@@ -1446,6 +1476,10 @@
     padding-bottom: calc(var(--spacing) * 16);
   }
 
+  .pl-5 {
+    padding-left: calc(var(--spacing) * 5);
+  }
+
   .pl-16 {
     padding-left: calc(var(--spacing) * 16);
   }
@@ -1466,8 +1500,17 @@
     vertical-align: -2px;
   }
 
+  .align-top {
+    vertical-align: top;
+  }
+
   .font-mono {
     font-family: var(--font-geist-mono);
+  }
+
+  .text-2xl {
+    font-size: var(--text-2xl);
+    line-height: var(--tw-leading, var(--text-2xl--line-height));
   }
 
   .text-lg {
@@ -1500,6 +1543,10 @@
 
   .text-\[11px\] {
     font-size: 11px;
+  }
+
+  .text-\[12px\] {
+    font-size: 12px;
   }
 
   .text-\[13px\] {
@@ -1537,6 +1584,11 @@
   .tracking-\[-0\.01em\] {
     --tw-tracking: -.01em;
     letter-spacing: -.01em;
+  }
+
+  .tracking-\[-0\.02em\] {
+    --tw-tracking: -.02em;
+    letter-spacing: -.02em;
   }
 
   .tracking-wide {
@@ -1666,6 +1718,11 @@
 
   .placeholder\:text-vs-text-muted::placeholder {
     color: #6b7280;
+  }
+
+  .last\:border-0:last-child {
+    border-style: var(--tw-border-style);
+    border-width: 0;
   }
 
   @media (hover: hover) {
