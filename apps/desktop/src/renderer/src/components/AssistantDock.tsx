@@ -5,22 +5,28 @@ import { Spinner } from "./ui";
 
 /**
  * A persistent, project-scoped assistant chat. It talks to the user's own Claude
- * Code with the active project as cwd, using a read-oriented toolset (Read /
- * Grep / Glob) so it advises without mutating — spec-first gates own all writes.
- * The session starts only on the first user message (no usage on mount) and is
- * reset when the active project changes.
+ * Code with the active project as cwd. By default it uses a read-oriented toolset
+ * (Read / Grep / Glob) so it advises without mutating — spec-first gates own all
+ * writes. With `allowModify`, it may also edit files (Write / Edit / Bash) so the
+ * user can request component changes (Storybook reloads live). The session starts
+ * only on the first user message (no usage on mount) and resets on project change.
  */
-const ASSISTANT_TOOLS = ["Read", "Grep", "Glob"];
+const READ_TOOLS = ["Read", "Grep", "Glob"];
+const MODIFY_TOOLS = ["Read", "Grep", "Glob", "Write", "Edit", "Bash"];
 
 export function AssistantDock({
   project,
   seedContext,
+  allowModify = false,
   onClose,
 }: {
   project: Project;
   /** Optional one-line context the dock mentions to Claude on the first message. */
   seedContext?: string;
-  onClose: () => void;
+  /** When true, the assistant may edit files (component changes), not just read. */
+  allowModify?: boolean;
+  /** When provided, a close button is shown; omit for a permanent panel. */
+  onClose?: () => void;
 }): React.JSX.Element {
   const run = useAgentRun();
   const [draft, setDraft] = useState("");
@@ -52,7 +58,7 @@ export function AssistantDock({
       void run.start({
         prompt,
         cwd: project.path,
-        allowedTools: ASSISTANT_TOOLS,
+        allowedTools: allowModify ? MODIFY_TOOLS : READ_TOOLS,
         bypassPermissions: true,
       });
     } else {
@@ -63,25 +69,30 @@ export function AssistantDock({
   return (
     <aside className="flex w-[360px] shrink-0 flex-col border-l border-vs-border-default bg-vs-bg-surface">
       <div className="flex flex-none items-center gap-2 border-b border-vs-border-default px-4 py-3">
-        <span className="text-sm font-semibold">Assistant</span>
+        <span className="text-sm font-semibold">{allowModify ? "Modify with Claude" : "Assistant"}</span>
         <span className="font-mono text-[10px] text-vs-text-muted">· {project.name}</span>
         <div className="flex-1" />
-        <button
-          onClick={onClose}
-          title="Close assistant"
-          className="rounded px-1.5 py-1 leading-none text-vs-text-muted hover:bg-vs-bg-elevated hover:text-vs-text-primary"
-        >
-          ×
-        </button>
+        {onClose && (
+          <button
+            onClick={onClose}
+            title="Close assistant"
+            className="rounded px-1.5 py-1 leading-none text-vs-text-muted hover:bg-vs-bg-elevated hover:text-vs-text-primary"
+          >
+            ×
+          </button>
+        )}
       </div>
 
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4">
         {!started ? (
           <div className="flex h-full flex-col items-center justify-center gap-2 text-center">
-            <p className="text-sm font-medium text-vs-text-secondary">Ask about this project</p>
+            <p className="text-sm font-medium text-vs-text-secondary">
+              {allowModify ? "Change a component" : "Ask about this project"}
+            </p>
             <p className="max-w-[240px] text-xs leading-relaxed text-vs-text-muted">
-              Claude Code reads your project (read-only) to answer. It spends no usage until you
-              send a message.
+              {allowModify
+                ? "Describe a change to a component you see in Storybook — Claude Code edits it and Storybook reloads live. No usage until you send."
+                : "Claude Code reads your project (read-only) to answer. It spends no usage until you send a message."}
             </p>
           </div>
         ) : (
@@ -116,7 +127,13 @@ export function AssistantDock({
             }
           }}
           rows={2}
-          placeholder={run.running ? "Claude is replying…" : "Ask about tokens, components, the spec…"}
+          placeholder={
+            run.running
+              ? "Claude is working…"
+              : allowModify
+                ? "e.g. tighten Button's padding, add a loading state…"
+                : "Ask about tokens, components, the spec…"
+          }
           disabled={run.running}
           className="w-full resize-none rounded-md border border-vs-border-default bg-vs-bg-primary px-3 py-2 text-xs text-vs-text-primary placeholder:text-vs-text-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-vs-accent-subtle disabled:opacity-60"
         />
