@@ -30,3 +30,6 @@ test-results
 playwright-report
 blob-report
 **/playwright/.cache/
+
+# electron-builder output (dmg/app — published as GitHub releases, never committed)
+apps/desktop/release/
