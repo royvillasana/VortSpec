@@ -31,6 +31,8 @@ export interface MockConfig {
   runScript?: RunEvent[];
   /** Manifest returned by getManifest(). */
   manifest?: ManifestResult;
+  /** Manifest returned by getManifest() after a run transcript completes (design-doc wrote it). */
+  manifestAfterGenerate?: ManifestResult;
   /** Versions returned by listManifestVersions(). */
   manifestVersions?: ManifestVersion[];
   /** Flow returned by getFlow() — used by the manifest screen to read approval. */
@@ -62,6 +64,9 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
   const rawSubs = new Set<(e: { runId: string; line: string }) => void>();
   const devSubs = new Set<(e: { projectPath: string; status: DevServerStatus }) => void>();
   let runSeq = 0;
+  // Flips true once a run's transcript has been replayed — lets getManifest
+  // return the post-generation manifest (mirrors design-doc writing DESIGN.md).
+  let generated = false;
 
   const startRun = async (): Promise<{ runId: string }> => {
     const runId = `run-${runSeq++}`;
@@ -71,6 +76,7 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
       for (const event of cfg.runScript ?? []) {
         for (const sub of eventSubs) sub({ runId, event });
       }
+      generated = true;
     }, 0);
     return { runId };
   };
@@ -107,7 +113,8 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
 
     getFlow: async () => cfg.flow ?? null,
     getManifest: async () =>
-      cfg.manifest ?? { path: "DESIGN.md", content: "", exists: false },
+      (generated && cfg.manifestAfterGenerate) ||
+      cfg.manifest || { path: "DESIGN.md", content: "", exists: false },
     saveManifest: async (_p: string, content: string) => ({
       path: "DESIGN.md",
       content,

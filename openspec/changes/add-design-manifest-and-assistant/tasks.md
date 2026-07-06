@@ -45,5 +45,5 @@
 
 - [x] 7.1 Main-process unit tests: manifest-reader path resolution, gated save, version snapshot/list/restore (Vitest, fixture project)
 - [x] 7.2 Renderer component tests (Playwright CT): rendered/markdown toggle, copy, edit-save, version restore, approve gate; assistant dock toggle + first-send starts a session
-- [ ] 7.3 Recorded-transcript test for the `design-doc` generation → read → render path
+- [x] 7.3 Recorded-transcript test for the `design-doc` generation → read → render path
 - [ ] 7.4 End-to-end through the UI on the real generated project: generate `DESIGN.md`, view both modes, edit + restore a version, approve; `pnpm build && pnpm test && pnpm lint` green

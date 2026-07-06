@@ -1,6 +1,23 @@
 import { test, expect } from "@playwright/experimental-ct-react";
 import { DesignManifest } from "../../src/renderer/src/views/DesignManifest";
 import { PROJECT } from "./support/fixtures";
+import type { RunEvent } from "../../src/shared/run-events";
+
+// A recorded design-doc run: init → write DESIGN.md → prose → done.
+const DESIGN_DOC_RUN: RunEvent[] = [
+  {
+    kind: "system-init",
+    model: "claude-opus-4-8",
+    sessionId: "sess-dd",
+    tools: ["Read", "Write", "Edit", "Bash"],
+    mcpServers: [],
+    mcpErrors: [],
+  },
+  { kind: "tool-use", id: "t1", name: "Bash", path: undefined },
+  { kind: "tool-use", id: "t2", name: "Write", path: "DESIGN.md" },
+  { kind: "assistant-text", text: "Generated and validated DESIGN.md." },
+  { kind: "result", isError: false, text: "done", sessionId: "sess-dd" },
+];
 
 const MD = [
   "# Meridian — Design Context",
@@ -90,6 +107,27 @@ test("opens the version drawer and lists versions", async ({ mount }) => {
   await expect(c.getByText("Version history")).toBeVisible();
   await expect(c.getByText("approved")).toBeVisible();
   await expect(c.getByRole("button", { name: "Restore" })).toBeVisible();
+});
+
+test("generates from a recorded transcript, then renders the produced manifest", async ({
+  mount,
+}) => {
+  const c = await mount(<DesignManifest {...props} />, {
+    hooksConfig: {
+      mock: {
+        manifest: EMPTY,
+        flow: FLOW_REVIEW,
+        runScript: DESIGN_DOC_RUN,
+        manifestAfterGenerate: MANIFEST,
+      },
+    },
+  });
+  // Empty → click Generate → the recorded design-doc run drives the write, and on
+  // completion the produced manifest is read from disk and rendered.
+  await c.getByRole("button", { name: "Generate DESIGN.md" }).click();
+  await expect(c.getByText("Meridian — Design Context")).toBeVisible();
+  await expect(c.getByText("color/primary/500 #2563EB")).toBeVisible();
+  await expect(c.getByRole("button", { name: "Approve manifest" })).toBeVisible();
 });
 
 test("enters edit mode with the raw source in a textarea", async ({ mount }) => {
