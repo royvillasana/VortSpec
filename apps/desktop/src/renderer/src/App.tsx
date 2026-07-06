@@ -283,7 +283,7 @@ export default function App(): React.JSX.Element {
         // open/close) while the wrapper animates 0↔360px, so flexbox smoothly
         // reflows <main> — pushing content left on open and back on close.
         <div
-          className={`flex h-full shrink-0 justify-end overflow-hidden transition-[width] duration-200 ease-out ${
+          className={`flex h-[calc(100vh-3rem)] shrink-0 justify-end overflow-hidden transition-[width] duration-200 ease-out ${
             chatOpen ? "w-[360px]" : "w-0"
           }`}
         >

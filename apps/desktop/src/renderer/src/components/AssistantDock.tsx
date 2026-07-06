@@ -67,7 +67,7 @@ export function AssistantDock({
   }
 
   return (
-    <aside className="flex w-[360px] shrink-0 flex-col border-l border-vs-border-default bg-vs-bg-surface">
+    <aside className="flex h-full w-[360px] shrink-0 flex-col border-l border-vs-border-default bg-vs-bg-surface">
       <div className="flex flex-none items-center gap-2 border-b border-vs-border-default px-4 py-3">
         <span className="text-sm font-semibold">{allowModify ? "Modify with Claude" : "Assistant"}</span>
         <span className="font-mono text-[10px] text-vs-text-muted">· {project.name}</span>
@@ -83,7 +83,7 @@ export function AssistantDock({
         )}
       </div>
 
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4">
+      <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
         {!started ? (
           <div className="flex h-full flex-col items-center justify-center gap-2 text-center">
             <p className="text-sm font-medium text-vs-text-secondary">
