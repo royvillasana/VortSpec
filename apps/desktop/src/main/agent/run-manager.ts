@@ -8,6 +8,7 @@ import {
   type AgentRunOptions,
   type RunEvent,
 } from "../../shared/run-events";
+import { newAccumulator, recordRun } from "./run-recorder";
 
 /**
  * Owns the set of active agent runs and forwards their events to the renderer.
@@ -23,17 +24,24 @@ export function startRun(
   const runId = randomUUID();
   const adapter = new AgentAdapter();
   runs.set(runId, adapter);
+  const acc = newAccumulator();
 
   adapter.on("event", (raw: RunEvent) => {
     const parsed = runEventSchema.safeParse(raw);
     const event: RunEvent = parsed.success
       ? parsed.data
       : { kind: "error", message: "Invalid run event dropped at the boundary" };
+
+    // Accumulate what happened, for the run-history record.
+    if (event.kind === "tool-use" && event.path) acc.files.add(event.path);
+    if ((event.kind === "result" && event.isError) || event.kind === "error") acc.isError = true;
+
     if (!sender.isDestroyed()) {
       sender.send(AGENT_EVENT_CHANNEL, { runId, event });
     }
     if (event.kind === "exit") {
       runs.delete(runId);
+      void recordRun(opts, acc, event.code);
     }
   });
 

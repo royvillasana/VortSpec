@@ -1577,19 +1577,66 @@ class AgentAdapter extends EventEmitter {
     this.emit("event", event);
   }
 }
+function newAccumulator() {
+  return { files: /* @__PURE__ */ new Set(), isError: false };
+}
+function runTitle(prompt) {
+  const first = prompt.split("\n").find((l) => l.trim()) ?? "Run";
+  const cmd = first.trim().match(/^\/([\w-]+)/);
+  if (cmd) return cmd[1].replace(/-/g, " ").replace(/^\w/, (c) => c.toUpperCase());
+  return first.trim().slice(0, 60);
+}
+async function recordRun(opts, acc, exitCode) {
+  const dir = join(opts.cwd, ".vortspec", "runs");
+  try {
+    await mkdir(dir, { recursive: true });
+  } catch {
+    return;
+  }
+  let seq = 1;
+  try {
+    seq = (await readdir(dir)).filter((n) => n.endsWith(".json")).length + 1;
+  } catch {
+  }
+  const cancelled = exitCode === null;
+  const failed = !cancelled && (acc.isError || exitCode !== 0);
+  const title = runTitle(opts.prompt);
+  const summary = {
+    id: `run-${Date.now()}-${seq}`,
+    label: `#${seq}`,
+    title,
+    outcome: cancelled ? "cancelled" : failed ? "failed" : "passed",
+    updatedAt: (/* @__PURE__ */ new Date()).toISOString(),
+    stages: [
+      {
+        name: title,
+        decision: cancelled ? "cancelled" : failed ? "failed" : "completed",
+        status: cancelled ? "cancelled" : failed ? "cancelled" : "done"
+      }
+    ],
+    artifacts: [...acc.files].map((f) => basename(f))
+  };
+  await writeFile(join(dir, `${summary.id}.json`), JSON.stringify(summary, null, 2), "utf8").catch(
+    () => void 0
+  );
+}
 const runs = /* @__PURE__ */ new Map();
 function startRun(sender, opts) {
   const runId = randomUUID();
   const adapter = new AgentAdapter();
   runs.set(runId, adapter);
+  const acc = newAccumulator();
   adapter.on("event", (raw) => {
     const parsed = runEventSchema.safeParse(raw);
     const event = parsed.success ? parsed.data : { kind: "error", message: "Invalid run event dropped at the boundary" };
+    if (event.kind === "tool-use" && event.path) acc.files.add(event.path);
+    if (event.kind === "result" && event.isError || event.kind === "error") acc.isError = true;
     if (!sender.isDestroyed()) {
       sender.send(AGENT_EVENT_CHANNEL, { runId, event });
     }
     if (event.kind === "exit") {
       runs.delete(runId);
+      void recordRun(opts, acc, event.code);
     }
   });
   adapter.on("raw", (line) => {
