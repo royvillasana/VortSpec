@@ -28,6 +28,11 @@ import {
   findLatestArtifact,
 } from "./flow/flow-manager";
 import { getRunHistory } from "./flow/history-reader";
+import {
+  startDevServer,
+  stopDevServer,
+  getDevServerStatus,
+} from "./workspace/dev-server";
 import type { AgentRunOptions } from "../shared/run-events";
 import type { StageStatus } from "../shared/flow";
 
@@ -88,6 +93,13 @@ const handlers: Record<IpcChannel, Handler> = {
   "flow:completeInput": ((req: { projectPath: string; stageId: string }) =>
     completeInput(req.projectPath, req.stageId)) as Handler,
   "flow:getHistory": ((projectPath: string) => getRunHistory(projectPath)) as Handler,
+  "devserver:start": ((projectPath: string, sender: WebContents) =>
+    startDevServer(sender, projectPath)) as Handler,
+  "devserver:stop": ((projectPath: string) => {
+    stopDevServer(projectPath);
+    return undefined;
+  }) as Handler,
+  "devserver:status": ((projectPath: string) => getDevServerStatus(projectPath)) as Handler,
   "flow:setPublishTarget": ((req: { projectPath: string; repoUrl: string }) =>
     setPublishTarget(req.projectPath, req.repoUrl)) as Handler,
   "artifact:read": ((req: { projectPath: string; relPath: string }) =>

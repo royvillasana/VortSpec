@@ -13,6 +13,7 @@ import {
   type AgentRawEnvelope,
   type AgentRunOptions,
 } from "../shared/run-events";
+import { DEV_SERVER_UPDATE_CHANNEL, type DevServerUpdate } from "../shared/dev-server";
 
 /**
  * The safe bridge between the sandboxed renderer and the main process.
@@ -75,6 +76,11 @@ const api = {
   completeInput: (projectPath: string, stageId: string) =>
     invoke("flow:completeInput", { projectPath, stageId }),
   getHistory: (projectPath: string) => invoke("flow:getHistory", projectPath),
+  startDevServer: (projectPath: string) => invoke("devserver:start", projectPath),
+  stopDevServer: (projectPath: string) => invoke("devserver:stop", projectPath),
+  devServerStatus: (projectPath: string) => invoke("devserver:status", projectPath),
+  onDevServerUpdate: (callback: (payload: DevServerUpdate) => void) =>
+    subscribe(DEV_SERVER_UPDATE_CHANNEL, callback),
   setPublishTarget: (projectPath: string, repoUrl: string) =>
     invoke("flow:setPublishTarget", { projectPath, repoUrl }),
   readArtifact: (projectPath: string, relPath: string) =>

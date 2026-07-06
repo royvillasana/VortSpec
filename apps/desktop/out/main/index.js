@@ -8,6 +8,7 @@ import { access, mkdir, readFile, writeFile, cp, copyFile, appendFile, readdir, 
 import { createHash, randomUUID } from "node:crypto";
 import { createRequire } from "node:module";
 import { EventEmitter } from "node:events";
+import { existsSync } from "node:fs";
 import __cjs_mod__ from "node:module";
 const __filename = import.meta.filename;
 const __dirname = import.meta.dirname;
@@ -201,6 +202,27 @@ const DEFAULT_FLOW = [
     allowedTools: ["Read", "Bash"]
   }
 ];
+const devServerStateSchema = z.enum([
+  "stopped",
+  "starting",
+  "running",
+  "error",
+  "no-script"
+]);
+const devServerStatusSchema = z.object({
+  state: devServerStateSchema,
+  /** The detected local URL once the server is up. */
+  url: z.string().nullable(),
+  /** The package.json script being run (e.g. "dev", "storybook"). */
+  script: z.string().nullable(),
+  /** A human message for error / no-script states. */
+  message: z.string().nullable()
+});
+const DEV_SERVER_UPDATE_CHANNEL = "devserver:update";
+z.object({
+  projectPath: z.string(),
+  status: devServerStatusSchema
+});
 const frameworkSchema = z.enum([
   "react",
   "next",
@@ -498,6 +520,9 @@ const ipcContract = {
     response: flowSchema
   },
   "flow:getHistory": { request: z.string(), response: runHistoryResultSchema },
+  "devserver:start": { request: z.string(), response: devServerStatusSchema },
+  "devserver:stop": { request: z.string(), response: z.void() },
+  "devserver:status": { request: z.string(), response: devServerStatusSchema },
   "flow:setPublishTarget": {
     request: z.object({ projectPath: z.string(), repoUrl: z.string() }),
     response: flowSchema
@@ -1292,7 +1317,7 @@ function nextHeader(md, from) {
 }
 function parseFindings(md, group, component, reportPath) {
   const findings = [];
-  const push = (rawId, title, detail, severity, block) => {
+  const push2 = (rawId, title, detail, severity, block) => {
     const status = /resolved|passed/i.test(block) ? "resolved" : "open";
     findings.push({
       id: component + ":" + rawId,
@@ -1314,10 +1339,10 @@ function parseFindings(md, group, component, reportPath) {
     const start = m.index ?? 0;
     const end = i + 1 < dMatches.length ? dMatches[i + 1].index ?? md.length : nextHeader(md, start);
     const block = md.slice(start, end);
-    push(m[1], m[2] || "Discrepancy", cleanDetail(md.slice(start + m[0].length, end)), "error", block);
+    push2(m[1], m[2] || "Discrepancy", cleanDetail(md.slice(start + m[0].length, end)), "error", block);
   }
   for (const m of md.matchAll(/^-\s+\*\*(O[\w-]*)\b[ \t]*[—:-]?[ \t]*([^*]+?)\*\*[ \t]*(.*)$/gm)) {
-    push(m[1], m[2], (m[3] || "").replace(CODE_SPAN, "").slice(0, 260).trim(), "info", m[0]);
+    push2(m[1], m[2], (m[3] || "").replace(CODE_SPAN, "").slice(0, 260).trim(), "info", m[0]);
   }
   return findings;
 }
@@ -1789,6 +1814,113 @@ async function getRunHistory(projectPath) {
   ]);
   return { runs: [current, ...recorded] };
 }
+const servers = /* @__PURE__ */ new Map();
+async function detectScript(projectPath) {
+  const pkg = await readFile(join(projectPath, "package.json"), "utf8").catch(() => null);
+  if (!pkg) return null;
+  let scripts = {};
+  try {
+    scripts = JSON.parse(pkg).scripts ?? {};
+  } catch {
+    return null;
+  }
+  for (const name of ["dev", "storybook", "start", "preview"]) {
+    if (typeof scripts[name] === "string") return name;
+  }
+  return null;
+}
+function detectPackageManager(projectPath) {
+  if (existsSync(join(projectPath, "pnpm-lock.yaml"))) return "pnpm";
+  if (existsSync(join(projectPath, "yarn.lock"))) return "yarn";
+  if (existsSync(join(projectPath, "bun.lockb"))) return "bun";
+  return "npm";
+}
+function urlFrom(text) {
+  const m = text.match(
+    /(https?:\/\/(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\]):\d+[^\s)'"]*)/i
+  );
+  if (!m) return null;
+  return m[1].replace("0.0.0.0", "localhost").replace(/\/+$/, "") + "/";
+}
+function push(server, projectPath) {
+  if (!server.sender.isDestroyed()) {
+    server.sender.send(DEV_SERVER_UPDATE_CHANNEL, { projectPath, status: server.status });
+  }
+}
+async function startDevServer(sender, projectPath) {
+  const existing = servers.get(projectPath);
+  if (existing && (existing.status.state === "starting" || existing.status.state === "running")) {
+    existing.sender = sender;
+    return existing.status;
+  }
+  const script = await detectScript(projectPath);
+  if (!script) {
+    return {
+      state: "no-script",
+      url: null,
+      script: null,
+      message: "No dev / storybook / start script found in package.json."
+    };
+  }
+  const pm = detectPackageManager(projectPath);
+  const child = spawn(pm, ["run", script], {
+    cwd: projectPath,
+    shell: false,
+    env: { ...process.env, FORCE_COLOR: "0", BROWSER: "none", CI: "1" }
+  });
+  const server = {
+    child,
+    status: { state: "starting", url: null, script, message: null },
+    sender
+  };
+  servers.set(projectPath, server);
+  const onData = (buf) => {
+    if (server.status.state !== "starting") return;
+    const url = urlFrom(buf.toString());
+    if (url) {
+      server.status = { state: "running", url, script, message: null };
+      push(server, projectPath);
+    }
+  };
+  child.stdout?.on("data", onData);
+  child.stderr?.on("data", onData);
+  child.on("error", (err) => {
+    server.status = { state: "error", url: null, script, message: err.message };
+    push(server, projectPath);
+  });
+  child.on("exit", (code) => {
+    const clean = server.status.state === "running" && code === null;
+    server.status = {
+      state: clean ? "stopped" : code && code !== 0 ? "error" : "stopped",
+      url: null,
+      script,
+      message: clean ? null : code ? `Preview process exited with code ${code}.` : null
+    };
+    push(server, projectPath);
+  });
+  push(server, projectPath);
+  return server.status;
+}
+function stopDevServer(projectPath) {
+  const server = servers.get(projectPath);
+  if (!server) return;
+  server.child.kill("SIGTERM");
+  const child = server.child;
+  setTimeout(() => {
+    if (!child.killed) child.kill("SIGKILL");
+  }, 4e3);
+}
+function getDevServerStatus(projectPath) {
+  return servers.get(projectPath)?.status ?? {
+    state: "stopped",
+    url: null,
+    script: null,
+    message: null
+  };
+}
+function stopAllDevServers() {
+  for (const server of servers.values()) server.child.kill("SIGTERM");
+}
 const handlers = {
   "system:isElectron": () => true,
   "system:getVersion": () => app.getVersion(),
@@ -1816,6 +1948,12 @@ const handlers = {
   "flow:saveIntake": ((req) => saveIntake(req.projectPath, req.content)),
   "flow:completeInput": ((req) => completeInput(req.projectPath, req.stageId)),
   "flow:getHistory": ((projectPath) => getRunHistory(projectPath)),
+  "devserver:start": ((projectPath, sender) => startDevServer(sender, projectPath)),
+  "devserver:stop": ((projectPath) => {
+    stopDevServer(projectPath);
+    return void 0;
+  }),
+  "devserver:status": ((projectPath) => getDevServerStatus(projectPath)),
   "flow:setPublishTarget": ((req) => setPublishTarget(req.projectPath, req.repoUrl)),
   "artifact:read": ((req) => readArtifact(req.projectPath, req.relPath)),
   "artifact:findLatest": ((req) => findLatestArtifact(req.projectPath, req.suffix)),
@@ -1878,7 +2016,11 @@ app.whenReady().then(() => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
 });
+app.on("before-quit", () => {
+  stopAllDevServers();
+});
 app.on("window-all-closed", () => {
+  stopAllDevServers();
   if (process.platform !== "darwin") {
     app.quit();
   }

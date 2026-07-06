@@ -65,6 +65,27 @@ z.object({
   runId: z.string(),
   line: z.string()
 });
+const devServerStateSchema = z.enum([
+  "stopped",
+  "starting",
+  "running",
+  "error",
+  "no-script"
+]);
+const devServerStatusSchema = z.object({
+  state: devServerStateSchema,
+  /** The detected local URL once the server is up. */
+  url: z.string().nullable(),
+  /** The package.json script being run (e.g. "dev", "storybook"). */
+  script: z.string().nullable(),
+  /** A human message for error / no-script states. */
+  message: z.string().nullable()
+});
+const DEV_SERVER_UPDATE_CHANNEL = "devserver:update";
+z.object({
+  projectPath: z.string(),
+  status: devServerStatusSchema
+});
 function invoke(channel, request) {
   return ipcRenderer.invoke(channel, request);
 }
@@ -99,6 +120,10 @@ const api = {
   saveIntake: (projectPath, content) => invoke("flow:saveIntake", { projectPath, content }),
   completeInput: (projectPath, stageId) => invoke("flow:completeInput", { projectPath, stageId }),
   getHistory: (projectPath) => invoke("flow:getHistory", projectPath),
+  startDevServer: (projectPath) => invoke("devserver:start", projectPath),
+  stopDevServer: (projectPath) => invoke("devserver:stop", projectPath),
+  devServerStatus: (projectPath) => invoke("devserver:status", projectPath),
+  onDevServerUpdate: (callback) => subscribe(DEV_SERVER_UPDATE_CHANNEL, callback),
   setPublishTarget: (projectPath, repoUrl) => invoke("flow:setPublishTarget", { projectPath, repoUrl }),
   readArtifact: (projectPath, relPath) => invoke("artifact:read", { projectPath, relPath }),
   findLatestArtifact: (projectPath, suffix) => invoke("artifact:findLatest", { projectPath, suffix }),

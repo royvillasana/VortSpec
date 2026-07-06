@@ -1,6 +1,10 @@
 import { z } from "zod";
 import { agentRunOptionsSchema } from "./run-events";
 import { flowSchema, stageStatusSchema, runHistoryResultSchema } from "./flow";
+import { devServerStatusSchema } from "./dev-server";
+
+export type { DevServerStatus, DevServerState, DevServerUpdate } from "./dev-server";
+export { DEV_SERVER_UPDATE_CHANNEL, devServerUpdateSchema } from "./dev-server";
 import { setupAnswersSchema, projectConfigSchema } from "./setup";
 import {
   inspectorTokensResultSchema,
@@ -178,6 +182,9 @@ export const ipcContract = {
     response: flowSchema,
   },
   "flow:getHistory": { request: z.string(), response: runHistoryResultSchema },
+  "devserver:start": { request: z.string(), response: devServerStatusSchema },
+  "devserver:stop": { request: z.string(), response: z.void() },
+  "devserver:status": { request: z.string(), response: devServerStatusSchema },
   "flow:setPublishTarget": {
     request: z.object({ projectPath: z.string(), repoUrl: z.string() }),
     response: flowSchema,
