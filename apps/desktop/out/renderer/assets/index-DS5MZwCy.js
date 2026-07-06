@@ -12655,17 +12655,20 @@ function Dashboard({
   return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "mx-auto w-full max-w-[1120px] px-6 pb-16 pt-8", children: [
     /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "mb-6 flex items-center gap-3", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsx("h1", { className: "text-[20px] font-semibold tracking-[-0.01em]", children: "Projects" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "font-mono text-xs text-vs-text-muted", children: [
+        projects.length,
+        " local"
+      ] }),
       /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex-1" }),
       /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "default", disabled: busy, onClick: () => void startProject("existing"), children: "Open folder" }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "primary", disabled: busy, onClick: () => void startProject("new"), children: busy ? "…" : "New folder" })
+      /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "primary", disabled: busy, onClick: () => void startProject("new"), children: busy ? "…" : "New project" })
     ] }),
     error && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "mb-4 rounded-md border border-vs-error/40 bg-vs-error/10 px-4 py-2 text-sm text-vs-error", children: error }),
-    projects.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsx(EmptyState, { onNew: () => void startProject("new"), onOpen: () => void startProject("existing") }) : /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "grid grid-cols-3 gap-4", children: projects.map((project) => /* @__PURE__ */ jsxRuntimeExports.jsx(
+    projects.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsx(EmptyState, { onNew: () => void startProject("new") }) : /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "grid grid-cols-2 gap-4", children: projects.map((project) => /* @__PURE__ */ jsxRuntimeExports.jsx(
       ProjectCard,
       {
         project,
-        onOpen: () => onOpenProject(project),
-        onSetup: () => onSetup(project)
+        onOpen: () => project.toolkit.present ? onOpenProject(project) : onSetup(project)
       },
       project.id
     )) })
@@ -12673,66 +12676,110 @@ function Dashboard({
 }
 function ProjectCard({
   project,
-  onOpen,
-  onSetup
+  onOpen
 }) {
   const ready = project.toolkit.present;
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col overflow-hidden rounded-lg border border-vs-border-default bg-vs-bg-surface transition-colors hover:border-vs-border-strong", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs(
+      "button",
+      {
+        onClick: onOpen,
+        className: "flex flex-col gap-3.5 px-5 pb-4 pt-5 text-left hover:shadow-[inset_2px_0_0_#7C6FF0]",
+        children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col gap-1.5", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2.5", children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[15px] font-semibold text-vs-text-primary", children: project.name }),
+              ready ? /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "rounded border border-vs-border-default bg-vs-bg-primary px-1.5 py-0.5 font-mono text-[10px] text-vs-text-secondary", children: [
+                "SDD-DE",
+                project.toolkit.version ? ` ${project.toolkit.version}` : ""
+              ] }) : /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "rounded border border-vs-warning-border bg-vs-warning-muted px-1.5 py-0.5 font-mono text-[10px] text-vs-warning", children: "not set up" })
+            ] }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "truncate font-mono text-[11px] text-vs-text-muted", children: project.path })
+          ] }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(StatusRow, { status: project.lastRunStatus, ready })
+        ]
+      }
+    ),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-0.5 border-t border-vs-border-default p-1.5", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx(ActionButton, { onClick: onOpen, icon: /* @__PURE__ */ jsxRuntimeExports.jsx(PlayIcon, {}), children: ready ? "Open flow" : "Set up" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(ActionButton, { onClick: () => void api.openFolder(project.path), icon: /* @__PURE__ */ jsxRuntimeExports.jsx(FolderIcon, {}), children: "Folder" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "flex-1" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "pr-2 text-[11px] text-vs-text-muted", children: relativeTime(project.addedAt) })
+    ] })
+  ] });
+}
+function StatusRow({
+  status,
+  ready
+}) {
+  if (!ready) {
+    return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "h-2 w-2 rounded-full bg-vs-warning" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs text-vs-warning", children: "Setup needed before the first run" })
+    ] });
+  }
+  if (status === "running") {
+    return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col gap-2", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx(Spinner, {}),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs text-vs-accent", children: "Run in progress" })
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "h-1 overflow-hidden rounded-full bg-vs-border-default", children: /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "h-full w-1/3 rounded-full bg-vs-accent animate-[vsSlide_1.2s_ease-in-out_infinite]" }) })
+    ] });
+  }
+  const map = {
+    "needs-review": { dot: "bg-vs-warning", text: "text-vs-warning", label: "Needs review", icon: null },
+    approved: { dot: "bg-vs-success", text: "text-vs-text-secondary", label: "Passed verification", icon: "✓" },
+    failed: { dot: "bg-vs-error", text: "text-vs-error", label: "Last run failed", icon: "✕" },
+    none: { dot: "bg-vs-text-muted", text: "text-vs-text-muted", label: "No runs yet", icon: null }
+  };
+  const m = map[status];
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2", children: [
+    m.icon ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: `text-xs ${status === "approved" ? "text-vs-success" : "text-vs-error"}`, children: m.icon }) : /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: `h-2 w-2 rounded-full ${m.dot}` }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: `text-xs ${m.text}`, children: m.label })
+  ] });
+}
+function ActionButton({
+  onClick,
+  icon,
+  children
+}) {
   return /* @__PURE__ */ jsxRuntimeExports.jsxs(
     "button",
     {
-      onClick: ready ? onOpen : onSetup,
-      className: "group flex flex-col gap-3.5 rounded-lg border border-vs-border-default bg-vs-bg-surface p-5 text-left transition-all hover:border-vs-border-strong hover:shadow-[inset_2px_0_0_#7C6FF0]",
+      onClick,
+      className: "flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs text-vs-text-secondary hover:bg-vs-bg-elevated hover:text-vs-text-primary",
       children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col gap-2", children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[15px] font-semibold text-vs-text-primary", children: project.name }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex gap-1.5", children: ready ? /* @__PURE__ */ jsxRuntimeExports.jsx(Chip, { children: "SDD-DE" }) : /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "rounded border border-vs-warning-border bg-vs-warning-muted px-1.5 py-0.5 font-mono text-[10px] text-vs-warning", children: "not set up" }) })
-        ] }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "truncate font-mono text-[11px] text-vs-text-muted", children: project.path }),
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "mt-0.5 flex items-center justify-between", children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs text-vs-text-secondary", children: runLabel(project.lastRunStatus) }),
-          /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-xs text-vs-text-muted", children: [
-            "Added ",
-            relativeTime(project.addedAt)
-          ] })
-        ] }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs font-medium text-vs-accent opacity-0 transition-opacity group-hover:opacity-100", children: ready ? "Open flow →" : "Set up →" })
+        icon,
+        children
       ]
     }
   );
 }
-function EmptyState({
-  onNew,
-  onOpen
-}) {
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "mt-16 flex flex-col items-center gap-3 rounded-lg border border-vs-border-default bg-vs-bg-surface px-6 py-14 text-center", children: [
+function EmptyState({ onNew }) {
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "mt-14 flex flex-col items-center gap-3 rounded-lg border border-vs-border-default bg-vs-bg-surface px-6 py-14 text-center", children: [
     /* @__PURE__ */ jsxRuntimeExports.jsxs("svg", { width: "48", height: "48", viewBox: "0 0 48 48", "aria-hidden": true, children: [
       /* @__PURE__ */ jsxRuntimeExports.jsx("rect", { x: "10", y: "14", width: "22", height: "22", rx: "4", fill: "none", stroke: "#34373D", strokeWidth: "2" }),
       /* @__PURE__ */ jsxRuntimeExports.jsx("rect", { x: "18", y: "10", width: "22", height: "22", rx: "4", fill: "none", stroke: "#7C6FF0", strokeWidth: "2", strokeDasharray: "5 4" })
     ] }),
     /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-[15px] font-semibold text-vs-text-primary", children: "No projects yet" }),
-    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "max-w-xs text-sm text-vs-text-secondary", children: "Create a new folder or open an existing one, answer a few setup questions, and start building your design system." }),
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "mt-2 flex items-center gap-2", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "default", onClick: onOpen, children: "Open folder" }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "primary", onClick: onNew, children: "New folder" })
-    ] })
+    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "max-w-xs text-sm text-vs-text-secondary", children: "Point VortSpec at a folder and import a design to start a run." }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "primary", className: "mt-1", onClick: onNew, children: "New project" })
   ] });
 }
-function Chip({ children }) {
-  return /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "rounded border border-vs-border-default bg-vs-bg-primary px-1.5 py-0.5 font-mono text-[10px] text-vs-text-secondary", children });
+function PlayIcon() {
+  return /* @__PURE__ */ jsxRuntimeExports.jsx("svg", { width: "13", height: "13", viewBox: "0 0 14 14", "aria-hidden": true, children: /* @__PURE__ */ jsxRuntimeExports.jsx("path", { d: "M4 3 L10 7 L4 11 Z", fill: "currentColor" }) });
 }
-function runLabel(status) {
-  switch (status) {
-    case "running":
-      return "Run in progress";
-    case "needs-review":
-      return "Needs review";
-    case "approved":
-      return "Approved";
-    case "failed":
-      return "Last run failed";
-    default:
-      return "No runs yet";
-  }
+function FolderIcon() {
+  return /* @__PURE__ */ jsxRuntimeExports.jsx("svg", { width: "13", height: "13", viewBox: "0 0 14 14", "aria-hidden": true, children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+    "path",
+    {
+      d: "M1.5 4 A1 1 0 0 1 2.5 3 H5 L6.3 4.3 H11.5 A1 1 0 0 1 12.5 5.3 V10.5 A1 1 0 0 1 11.5 11.5 H2.5 A1 1 0 0 1 1.5 10.5 Z",
+      fill: "none",
+      stroke: "currentColor",
+      strokeWidth: "1.2"
+    }
+  ) });
 }
 function relativeTime(iso) {
   const then = new Date(iso).getTime();
@@ -17060,7 +17107,7 @@ function AgentStage({
   state,
   onFlow,
   header,
-  runLabel: runLabel2
+  runLabel
 }) {
   const run = useAgentRun();
   const [artifact, setArtifact] = reactExports.useState(null);
@@ -17113,7 +17160,7 @@ ${state.decisionNotes}` : base;
     /* @__PURE__ */ jsxRuntimeExports.jsxs(Card, { className: "flex flex-col gap-3 p-4", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-xs text-vs-text-muted", children: state.decisionNotes ? "Re-run addresses your requested changes." : "Runs autonomously — Figma MCP, file, and shell access are granted for this run." }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex gap-2", children: run.running ? /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { onClick: () => void run.cancel(), children: "Cancel" }) : /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "primary", onClick: () => void start(), children: state.status === "pending" ? runLabel2 ?? "Run step" : "Run again" }) })
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex gap-2", children: run.running ? /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { onClick: () => void run.cancel(), children: "Cancel" }) : /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "primary", onClick: () => void start(), children: state.status === "pending" ? runLabel ?? "Run step" : "Run again" }) })
       ] }),
       /* @__PURE__ */ jsxRuntimeExports.jsx(RunPanel, { model: run.model, onSend: (t) => void run.send(t), canChat: run.canChat })
     ] }),
