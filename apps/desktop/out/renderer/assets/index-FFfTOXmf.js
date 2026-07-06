@@ -12534,19 +12534,6 @@ function Spinner() {
     }
   );
 }
-const statusStyles = {
-  pass: { dot: "bg-vs-success", label: "text-vs-success" },
-  fail: { dot: "bg-vs-error", label: "text-vs-error" },
-  unknown: { dot: "bg-vs-text-muted", label: "text-vs-text-muted" },
-  checking: { dot: "bg-vs-warning", label: "text-vs-warning" }
-};
-function StatusDot$1({ status }) {
-  if (status === "checking") return /* @__PURE__ */ jsxRuntimeExports.jsx(Spinner, {});
-  return /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: `inline-block h-2.5 w-2.5 rounded-full ${statusStyles[status].dot}` });
-}
-function statusLabelClass(status) {
-  return statusStyles[status].label;
-}
 function EnvironmentCheck({
   report,
   onReport,
@@ -12598,44 +12585,63 @@ function EnvironmentCheck({
       await verifyLogin();
     }
   }
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "mx-auto flex w-full max-w-xl flex-col gap-6 px-6 py-12", children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("header", { className: "flex flex-col gap-1", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx("h2", { className: "text-lg font-semibold text-vs-text-primary", children: "Environment check" }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-sm text-vs-text-secondary", children: "VortSpec drives your own Claude Code. Let’s make sure everything it needs is present." })
+  const total = report.checks.length;
+  const passing = report.checks.filter((c) => c.status === "pass").length;
+  const failing = report.checks.filter((c) => c.status === "fail").length;
+  const summary = failing > 0 ? `${passing} / ${total} · ${failing} need${failing === 1 ? "s" : ""} attention` : `${passing} / ${total} passing`;
+  const summaryColor = failing > 0 ? "text-vs-warning" : passing === total ? "text-vs-success" : "text-vs-text-secondary";
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "mx-auto flex w-full max-w-[600px] flex-col gap-7 px-6 pb-16 pt-11", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col gap-1.5", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("h1", { className: "text-[22px] font-semibold tracking-[-0.015em] text-vs-text-primary", children: "Set up VortSpec" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-[13px] leading-relaxed text-vs-text-secondary", children: "VortSpec is a cockpit for Claude Code running the Spec-Driven Design Engineering workflow on your machine. Let’s confirm your environment is ready." })
     ] }),
-    /* @__PURE__ */ jsxRuntimeExports.jsx(Card, { children: /* @__PURE__ */ jsxRuntimeExports.jsx("ul", { className: "divide-y divide-vs-border-subtle", children: report.checks.map((check) => /* @__PURE__ */ jsxRuntimeExports.jsxs("li", { className: "flex items-center gap-3 px-4 py-3", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx(StatusDot$1, { status: check.status }),
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "min-w-0 flex-1", children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-sm font-medium text-vs-text-primary", children: check.label }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: `truncate text-xs ${statusLabelClass(check.status)}`, children: check.detail })
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col gap-2.5", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-baseline gap-2", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[11px] font-semibold uppercase tracking-wide text-vs-text-muted", children: "Environment" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: `font-mono text-[11px] ${summaryColor}`, children: summary })
       ] }),
-      check.fix && /* @__PURE__ */ jsxRuntimeExports.jsx(
-        Button,
+      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "overflow-hidden rounded-lg border border-vs-border-default bg-vs-bg-surface", children: report.checks.map((check, i) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
+        "div",
         {
-          variant: check.status === "fail" ? "primary" : "default",
-          disabled: busy === check.id,
-          onClick: () => void runFix(check),
-          children: busy === check.id ? "Checking…" : check.fix.label
-        }
-      )
-    ] }, check.id)) }) }),
-    report.checks.find((c) => c.id === "claude-login")?.status === "fail" && /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "text-xs text-vs-text-muted", children: [
-      "Log in with Claude Code (run ",
-      /* @__PURE__ */ jsxRuntimeExports.jsx("code", { className: "text-vs-text-secondary", children: "claude" }),
-      " ",
-      "in a terminal and use ",
-      /* @__PURE__ */ jsxRuntimeExports.jsx("code", { className: "text-vs-text-secondary", children: "/login" }),
-      "), then verify. An embedded login terminal arrives in the next milestone."
+          className: `flex items-center gap-3.5 px-4 py-3.5 ${i < total - 1 ? "border-b border-vs-border-default" : ""}`,
+          style: { boxShadow: rowEdge(check.status) },
+          children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "flex w-5 flex-none items-center justify-center", children: /* @__PURE__ */ jsxRuntimeExports.jsx(RowIcon, { status: check.status }) }),
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "min-w-0 flex-1", children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-[13px] font-medium text-vs-text-primary", children: check.label }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: `mt-0.5 truncate font-mono text-xs ${detailColor(check.status)}`, children: check.detail })
+            ] }),
+            check.fix && /* @__PURE__ */ jsxRuntimeExports.jsx(
+              Button,
+              {
+                variant: "default",
+                disabled: busy === check.id,
+                onClick: () => void runFix(check),
+                children: busy === check.id ? "Checking…" : check.fix.label
+              }
+            )
+          ]
+        },
+        check.id
+      )) }),
+      report.checks.find((c) => c.id === "claude-login")?.status === "fail" && /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "text-xs text-vs-text-muted", children: [
+        "Log in with Claude Code (run ",
+        /* @__PURE__ */ jsxRuntimeExports.jsx("code", { className: "text-vs-text-secondary", children: "claude" }),
+        " in a terminal and use ",
+        /* @__PURE__ */ jsxRuntimeExports.jsx("code", { className: "text-vs-text-secondary", children: "/login" }),
+        "), then verify. An embedded login terminal arrives in a later milestone."
+      ] }),
+      report.checks.find((c) => c.id === "figma-mcp")?.status === "fail" && /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "text-xs text-vs-text-muted", children: [
+        "Figma designs are read through your Claude Code’s Figma MCP. Connect it at",
+        " ",
+        /* @__PURE__ */ jsxRuntimeExports.jsx("code", { className: "text-vs-text-secondary", children: "claude.ai/customize/connectors" }),
+        " (or add one with ",
+        /* @__PURE__ */ jsxRuntimeExports.jsx("code", { className: "text-vs-text-secondary", children: "claude mcp add" }),
+        "), then re-check. Only needed for Figma design sources."
+      ] })
     ] }),
-    report.checks.find((c) => c.id === "figma-mcp")?.status === "fail" && /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "text-xs text-vs-text-muted", children: [
-      "Figma designs are read through your Claude Code’s Figma MCP. Connect it at",
-      " ",
-      /* @__PURE__ */ jsxRuntimeExports.jsx("code", { className: "text-vs-text-secondary", children: "claude.ai/customize/connectors" }),
-      " (or add one with ",
-      /* @__PURE__ */ jsxRuntimeExports.jsx("code", { className: "text-vs-text-secondary", children: "claude mcp add" }),
-      "), then re-check. Only needed for Figma design sources."
-    ] }),
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-4 border-t border-vs-border-default pt-5", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "flex-1 text-[11px] leading-relaxed text-vs-text-muted", children: "No VortSpec account. No telemetry without opt-in. No provider keys, ever — authentication and usage belong to your Claude Code install." }),
       /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "ghost", disabled: busy === "recheck", onClick: () => void recheck(), children: busy === "recheck" ? "Re-checking…" : "Re-check" }),
       /* @__PURE__ */ jsxRuntimeExports.jsx(
         Button,
@@ -12644,11 +12650,28 @@ function EnvironmentCheck({
           disabled: !coreReady,
           title: coreReady ? void 0 : "Install the required tools first",
           onClick: onContinue,
-          children: "Continue"
+          children: "Continue →"
         }
       )
     ] })
   ] });
+}
+function RowIcon({ status }) {
+  if (status === "pass") return /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-sm text-vs-success", children: "✓" });
+  if (status === "fail") return /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-sm text-vs-error", children: "✕" });
+  if (status === "checking") return /* @__PURE__ */ jsxRuntimeExports.jsx(Spinner, {});
+  return /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "h-2 w-2 rounded-full bg-vs-warning" });
+}
+function rowEdge(status) {
+  if (status === "fail") return "inset 2px 0 0 #E5484D";
+  if (status === "checking") return "inset 2px 0 0 #7C6FF0";
+  return "none";
+}
+function detailColor(status) {
+  if (status === "fail") return "text-vs-error";
+  if (status === "checking") return "text-vs-text-primary";
+  if (status === "pass") return "text-vs-text-secondary";
+  return "text-vs-text-muted";
 }
 function patchCheck(report, id, patch) {
   const checks = report.checks.map((c) => c.id === id ? { ...c, ...patch } : c);

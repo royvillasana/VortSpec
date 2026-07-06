@@ -156,7 +156,6 @@
     --spacing: .25rem;
     --container-xs: 20rem;
     --container-md: 28rem;
-    --container-xl: 36rem;
     --container-2xl: 42rem;
     --text-xs: .75rem;
     --text-xs--line-height: calc(1 / .75);
@@ -839,6 +838,10 @@
     max-width: 280px;
   }
 
+  .max-w-\[600px\] {
+    max-width: 600px;
+  }
+
   .max-w-\[640px\] {
     max-width: 640px;
   }
@@ -853,10 +856,6 @@
 
   .max-w-md {
     max-width: var(--container-md);
-  }
-
-  .max-w-xl {
-    max-width: var(--container-xl);
   }
 
   .max-w-xs {
@@ -1014,6 +1013,10 @@
 
   .gap-6 {
     gap: calc(var(--spacing) * 6);
+  }
+
+  .gap-7 {
+    gap: calc(var(--spacing) * 7);
   }
 
   :where(.divide-y > :not(:last-child)) {
@@ -1472,6 +1475,10 @@
     padding-top: calc(var(--spacing) * 8);
   }
 
+  .pt-11 {
+    padding-top: calc(var(--spacing) * 11);
+  }
+
   .pr-2 {
     padding-right: calc(var(--spacing) * 2);
   }
@@ -1589,6 +1596,10 @@
     font-size: 20px;
   }
 
+  .text-\[22px\] {
+    font-size: 22px;
+  }
+
   .leading-none {
     --tw-leading: 1;
     line-height: 1;
@@ -1617,6 +1628,11 @@
   .tracking-\[-0\.02em\] {
     --tw-tracking: -.02em;
     letter-spacing: -.02em;
+  }
+
+  .tracking-\[-0\.015em\] {
+    --tw-tracking: -.015em;
+    letter-spacing: -.015em;
   }
 
   .tracking-wide {

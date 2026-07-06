@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import type { EnvCheck, EnvReport } from "../../../shared/ipc";
+import type { CheckStatus, EnvCheck, EnvReport } from "../../../shared/ipc";
 import { api } from "../lib/api";
-import { Button, Card, StatusDot, statusLabelClass } from "../components/ui";
+import { Button, Spinner } from "../components/ui";
 
 /**
  * The onboarding environment gate (US-01). Renders each check as a pass/fail
@@ -74,63 +74,89 @@ export function EnvironmentCheck({
     }
   }
 
-  return (
-    <div className="mx-auto flex w-full max-w-xl flex-col gap-6 px-6 py-12">
-      <header className="flex flex-col gap-1">
-        <h2 className="text-lg font-semibold text-vs-text-primary">
-          Environment check
-        </h2>
-        <p className="text-sm text-vs-text-secondary">
-          VortSpec drives your own Claude Code. Let&rsquo;s make sure everything
-          it needs is present.
-        </p>
-      </header>
+  const total = report.checks.length;
+  const passing = report.checks.filter((c) => c.status === "pass").length;
+  const failing = report.checks.filter((c) => c.status === "fail").length;
+  const summary =
+    failing > 0
+      ? `${passing} / ${total} · ${failing} need${failing === 1 ? "s" : ""} attention`
+      : `${passing} / ${total} passing`;
+  const summaryColor =
+    failing > 0 ? "text-vs-warning" : passing === total ? "text-vs-success" : "text-vs-text-secondary";
 
-      <Card>
-        <ul className="divide-y divide-vs-border-subtle">
-          {report.checks.map((check) => (
-            <li key={check.id} className="flex items-center gap-3 px-4 py-3">
-              <StatusDot status={check.status} />
+  return (
+    <div className="mx-auto flex w-full max-w-[600px] flex-col gap-7 px-6 pb-16 pt-11">
+      <div className="flex flex-col gap-1.5">
+        <h1 className="text-[22px] font-semibold tracking-[-0.015em] text-vs-text-primary">
+          Set up VortSpec
+        </h1>
+        <p className="text-[13px] leading-relaxed text-vs-text-secondary">
+          VortSpec is a cockpit for Claude Code running the Spec-Driven Design Engineering workflow
+          on your machine. Let&rsquo;s confirm your environment is ready.
+        </p>
+      </div>
+
+      <div className="flex flex-col gap-2.5">
+        <div className="flex items-baseline gap-2">
+          <span className="text-[11px] font-semibold uppercase tracking-wide text-vs-text-muted">
+            Environment
+          </span>
+          <span className={`font-mono text-[11px] ${summaryColor}`}>{summary}</span>
+        </div>
+
+        <div className="overflow-hidden rounded-lg border border-vs-border-default bg-vs-bg-surface">
+          {report.checks.map((check, i) => (
+            <div
+              key={check.id}
+              className={`flex items-center gap-3.5 px-4 py-3.5 ${
+                i < total - 1 ? "border-b border-vs-border-default" : ""
+              }`}
+              style={{ boxShadow: rowEdge(check.status) }}
+            >
+              <span className="flex w-5 flex-none items-center justify-center">
+                <RowIcon status={check.status} />
+              </span>
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium text-vs-text-primary">
-                  {check.label}
-                </p>
-                <p className={`truncate text-xs ${statusLabelClass(check.status)}`}>
+                <div className="text-[13px] font-medium text-vs-text-primary">{check.label}</div>
+                <div className={`mt-0.5 truncate font-mono text-xs ${detailColor(check.status)}`}>
                   {check.detail}
-                </p>
+                </div>
               </div>
               {check.fix && (
                 <Button
-                  variant={check.status === "fail" ? "primary" : "default"}
+                  variant="default"
                   disabled={busy === check.id}
                   onClick={() => void runFix(check)}
                 >
                   {busy === check.id ? "Checking…" : check.fix.label}
                 </Button>
               )}
-            </li>
+            </div>
           ))}
-        </ul>
-      </Card>
+        </div>
 
-      {report.checks.find((c) => c.id === "claude-login")?.status === "fail" && (
-        <p className="text-xs text-vs-text-muted">
-          Log in with Claude Code (run <code className="text-vs-text-secondary">claude</code>{" "}
-          in a terminal and use <code className="text-vs-text-secondary">/login</code>), then
-          verify. An embedded login terminal arrives in the next milestone.
-        </p>
-      )}
+        {report.checks.find((c) => c.id === "claude-login")?.status === "fail" && (
+          <p className="text-xs text-vs-text-muted">
+            Log in with Claude Code (run <code className="text-vs-text-secondary">claude</code> in a
+            terminal and use <code className="text-vs-text-secondary">/login</code>), then verify. An
+            embedded login terminal arrives in a later milestone.
+          </p>
+        )}
+        {report.checks.find((c) => c.id === "figma-mcp")?.status === "fail" && (
+          <p className="text-xs text-vs-text-muted">
+            Figma designs are read through your Claude Code&rsquo;s Figma MCP. Connect it at{" "}
+            <code className="text-vs-text-secondary">claude.ai/customize/connectors</code> (or add one
+            with <code className="text-vs-text-secondary">claude mcp add</code>), then re-check. Only
+            needed for Figma design sources.
+          </p>
+        )}
+      </div>
 
-      {report.checks.find((c) => c.id === "figma-mcp")?.status === "fail" && (
-        <p className="text-xs text-vs-text-muted">
-          Figma designs are read through your Claude Code&rsquo;s Figma MCP. Connect it at{" "}
-          <code className="text-vs-text-secondary">claude.ai/customize/connectors</code> (or add one
-          with <code className="text-vs-text-secondary">claude mcp add</code>), then re-check. Only
-          needed for Figma design sources.
-        </p>
-      )}
-
-      <div className="flex items-center justify-between">
+      <div className="flex items-center gap-4 border-t border-vs-border-default pt-5">
+        <span className="flex-1 text-[11px] leading-relaxed text-vs-text-muted">
+          No VortSpec account. No telemetry without opt-in. No provider keys, ever — authentication
+          and usage belong to your Claude Code install.
+        </span>
         <Button variant="ghost" disabled={busy === "recheck"} onClick={() => void recheck()}>
           {busy === "recheck" ? "Re-checking…" : "Re-check"}
         </Button>
@@ -140,11 +166,31 @@ export function EnvironmentCheck({
           title={coreReady ? undefined : "Install the required tools first"}
           onClick={onContinue}
         >
-          Continue
+          Continue →
         </Button>
       </div>
     </div>
   );
+}
+
+function RowIcon({ status }: { status: CheckStatus }): React.JSX.Element {
+  if (status === "pass") return <span className="text-sm text-vs-success">✓</span>;
+  if (status === "fail") return <span className="text-sm text-vs-error">✕</span>;
+  if (status === "checking") return <Spinner />;
+  return <span className="h-2 w-2 rounded-full bg-vs-warning" />;
+}
+
+function rowEdge(status: CheckStatus): string {
+  if (status === "fail") return "inset 2px 0 0 #E5484D";
+  if (status === "checking") return "inset 2px 0 0 #7C6FF0";
+  return "none";
+}
+
+function detailColor(status: CheckStatus): string {
+  if (status === "fail") return "text-vs-error";
+  if (status === "checking") return "text-vs-text-primary";
+  if (status === "pass") return "text-vs-text-secondary";
+  return "text-vs-text-muted";
 }
 
 function patchCheck(
