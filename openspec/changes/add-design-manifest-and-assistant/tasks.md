@@ -31,10 +31,10 @@
 
 ## 5. Assistant dock (renderer + shell)
 
-- [ ] 5.1 Shared `AssistantDock` component: right-side collapsible panel reusing `useAgentRun`/`RunPanel` chat; project-scoped cwd; session starts on first send only (no usage on mount)
-- [ ] 5.2 Top-bar chat toggle in `App.tsx`; dock overlays every project screen; open/closed persists for the session
-- [ ] 5.3 Reset the assistant session when the active project changes
-- [ ] 5.4 Manifest screen entry point that opens the dock pre-scoped to refining `DESIGN.md`
+- [x] 5.1 Shared `AssistantDock` component: right-side collapsible panel reusing `useAgentRun`/`RunPanel` chat; project-scoped cwd; session starts on first send only (no usage on mount)
+- [x] 5.2 Top-bar chat toggle in `App.tsx`; dock overlays every project screen; open/closed persists for the session
+- [x] 5.3 Reset the assistant session when the active project changes
+- [x] 5.4 Manifest screen entry point that opens the dock pre-scoped to refining `DESIGN.md`
 
 ## 6. Background / visual alignment
 
@@ -44,6 +44,6 @@
 ## 7. Tests & verification
 
 - [x] 7.1 Main-process unit tests: manifest-reader path resolution, gated save, version snapshot/list/restore (Vitest, fixture project)
-- [ ] 7.2 Renderer component tests (Playwright CT): rendered/markdown toggle, copy, edit-save, version restore, approve gate; assistant dock toggle + first-send starts a session
+- [x] 7.2 Renderer component tests (Playwright CT): rendered/markdown toggle, copy, edit-save, version restore, approve gate; assistant dock toggle + first-send starts a session
 - [ ] 7.3 Recorded-transcript test for the `design-doc` generation → read → render path
 - [ ] 7.4 End-to-end through the UI on the real generated project: generate `DESIGN.md`, view both modes, edit + restore a version, approve; `pnpm build && pnpm test && pnpm lint` green
