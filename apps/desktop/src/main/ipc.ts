@@ -7,6 +7,7 @@ import {
   createFolder,
   refreshProject,
   openFolder,
+  revealPath,
 } from "./workspace/workspace-manager";
 import { getToolkitStatus, installToolkit } from "./workspace/toolkit-manager";
 import { createProject } from "./workspace/setup-manager";
@@ -70,6 +71,10 @@ const handlers: Record<IpcChannel, Handler> = {
   "workspace:createFolder": (() => createFolder()) as Handler,
   "workspace:listProjects": () => listProjects(),
   "workspace:openFolder": ((path: string) => openFolder(path)) as Handler,
+  "workspace:revealPath": ((req: { projectPath: string; relPath: string }) => {
+    revealPath(req.projectPath, req.relPath);
+    return undefined;
+  }) as Handler,
   "workspace:refreshProject": ((path: string) => refreshProject(path)) as Handler,
   "workspace:createProject": ((req: { path: string; answers: SetupAnswers }) =>
     createProject(req.path, req.answers)) as Handler,

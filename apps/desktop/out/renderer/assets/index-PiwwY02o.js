@@ -18477,6 +18477,7 @@ function DevPreview({
         ControlsPanel,
         {
           component: selected,
+          projectPath: project.path,
           onValues: setPreviewProps,
           onModify: (req) => void requestModify(req),
           modifyBusy: modify.running
@@ -18600,6 +18601,7 @@ function initialValues(props) {
 }
 function ControlsPanel({
   component,
+  projectPath,
   onValues,
   onModify,
   modifyBusy
@@ -18649,6 +18651,18 @@ function ControlsPanel({
       t
     )) }) }),
     /* @__PURE__ */ jsxRuntimeExports.jsx(Section$1, { title: "Accessibility", children: component.status === "verified" ? /* @__PURE__ */ jsxRuntimeExports.jsx(Check, { icon: "✓", color: "text-vs-success", label: "visual-verify passed" }) : component.status === "has-issues" ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex flex-col gap-1.5", children: component.issues.map((i) => /* @__PURE__ */ jsxRuntimeExports.jsx(Check, { icon: "!", color: "text-vs-warning", label: i }, i)) }) : /* @__PURE__ */ jsxRuntimeExports.jsx(Check, { icon: "—", color: "text-vs-text-muted", label: "Run /visual-verify to populate checks" }) }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx(Section$1, { title: "Source & spec", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col gap-1", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx(FileLink, { projectPath, path: component.file, label: "Component source" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(FileLink, { projectPath, path: component.specPath, label: "Spec" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(
+        FileLink,
+        {
+          projectPath,
+          path: component.reportPath,
+          label: "Visual-verify report"
+        }
+      )
+    ] }) }),
     /* @__PURE__ */ jsxRuntimeExports.jsx(Section$1, { title: "Code", children: /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "whitespace-pre-wrap break-words rounded-md border border-vs-border-default bg-black/40 p-3 font-mono text-[11px] leading-relaxed text-vs-text-secondary", children: snippet(component.name, component.props, values) }) }),
     /* @__PURE__ */ jsxRuntimeExports.jsxs(Section$1, { title: "Modify with Claude", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsx(
@@ -18734,6 +18748,32 @@ function Section$1({
     /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "mb-2.5 text-[10px] font-semibold uppercase tracking-wide text-vs-text-muted", children: title }),
     children
   ] });
+}
+function FileLink({
+  projectPath,
+  path,
+  label
+}) {
+  if (!path) {
+    return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2 text-xs text-vs-text-muted", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "w-3.5 text-center", children: "—" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "flex-1", children: label }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[10px]", children: "not created yet" })
+    ] });
+  }
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs(
+    "button",
+    {
+      onClick: () => void api.revealPath(projectPath, path),
+      title: `Reveal ${path} in Finder`,
+      className: "group flex items-center gap-2 text-left text-xs text-vs-text-secondary hover:text-vs-text-primary",
+      children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "w-3.5 text-center text-vs-accent", children: "↗" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "flex-1", children: label }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "max-w-[150px] truncate font-mono text-[10px] text-vs-text-muted group-hover:text-vs-text-secondary", children: path })
+      ]
+    }
+  );
 }
 function Check({
   icon,

@@ -84,6 +84,10 @@ export const inspectorComponentSchema = z.object({
   status: componentStatusSchema,
   /** Open issues from the visual-verify report, if any. */
   issues: z.array(z.string()),
+  /** Project-relative path of the component's spec dir/file, if one exists. */
+  specPath: z.string().nullable(),
+  /** Project-relative path of the visual-verify report, if one exists. */
+  reportPath: z.string().nullable(),
 });
 export type InspectorComponent = z.infer<typeof inspectorComponentSchema>;
 

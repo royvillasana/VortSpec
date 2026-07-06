@@ -925,6 +925,10 @@
     max-width: 85%;
   }
 
+  .max-w-\[150px\] {
+    max-width: 150px;
+  }
+
   .max-w-\[280px\] {
     max-width: 280px;
   }
@@ -1955,6 +1959,12 @@
     transition-property: transform, translate, scale, rotate;
     transition-timing-function: var(--tw-ease, var(--default-transition-timing-function));
     transition-duration: var(--tw-duration, var(--default-transition-duration));
+  }
+
+  @media (hover: hover) {
+    .group-hover\:text-vs-text-secondary:is(:where(.group):hover *) {
+      color: #9ba1ab;
+    }
   }
 
   .placeholder\:text-vs-text-muted::placeholder {

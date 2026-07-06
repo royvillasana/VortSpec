@@ -3,7 +3,7 @@ import { join as join$1 } from "path";
 import { electronApp, optimizer, is } from "@electron-toolkit/utils";
 import { z } from "zod";
 import { spawn } from "node:child_process";
-import { join, basename, dirname, extname } from "node:path";
+import { join, resolve as resolve$1, sep, basename, dirname, extname } from "node:path";
 import { access, mkdir, readFile, writeFile, cp, copyFile, appendFile, readdir, symlink, stat } from "node:fs/promises";
 import { createHash, randomUUID } from "node:crypto";
 import { createRequire } from "node:module";
@@ -395,7 +395,11 @@ const inspectorComponentSchema = z.object({
   tokens: z.array(z.string()),
   status: componentStatusSchema,
   /** Open issues from the visual-verify report, if any. */
-  issues: z.array(z.string())
+  issues: z.array(z.string()),
+  /** Project-relative path of the component's spec dir/file, if one exists. */
+  specPath: z.string().nullable(),
+  /** Project-relative path of the visual-verify report, if one exists. */
+  reportPath: z.string().nullable()
 });
 const inspectorComponentsResultSchema = z.object({
   componentDir: z.string().nullable(),
@@ -480,6 +484,10 @@ const ipcContract = {
   "workspace:createFolder": { request: z.void(), response: projectSchema.nullable() },
   "workspace:listProjects": { request: z.void(), response: projectListSchema },
   "workspace:openFolder": { request: z.string(), response: z.void() },
+  "workspace:revealPath": {
+    request: z.object({ projectPath: z.string(), relPath: z.string() }),
+    response: z.void()
+  },
   "workspace:refreshProject": { request: z.string(), response: projectSchema },
   "workspace:createProject": {
     request: z.object({ path: z.string(), answers: setupAnswersSchema }),
@@ -924,6 +932,12 @@ async function refreshProject(path) {
 async function openFolder(path) {
   await shell.openPath(path);
 }
+function revealPath(projectPath, relPath) {
+  const target = resolve$1(projectPath, relPath);
+  const root = resolve$1(projectPath);
+  if (target !== root && !target.startsWith(root + sep)) return;
+  shell.showItemInFolder(target);
+}
 const require$1 = createRequire(import.meta.url);
 function packageDir() {
   return dirname(require$1.resolve("@royvillasana/sdd-de/package.json"));
@@ -1306,21 +1320,40 @@ function scanTokens(...sources) {
   }
   return [...found].sort();
 }
+async function firstExisting(projectPath, rels) {
+  for (const rel of rels) {
+    try {
+      await readFile(join(projectPath, rel), "utf8");
+      return rel;
+    } catch {
+    }
+  }
+  return null;
+}
 async function componentStatus(projectPath, name, hasFile) {
-  if (!hasFile) return { status: "unknown", issues: [] };
   const slug = name.toLowerCase();
+  const specPath = await firstExisting(projectPath, [
+    join("specs", slug, "spec.md"),
+    join("specs", slug, `${slug}.md`),
+    join("specs", slug, "README.md")
+  ]);
+  const reportPath = await firstExisting(projectPath, [
+    join("specs", slug, "visual-verify-report.md")
+  ]);
+  if (!hasFile) return { status: "unknown", issues: [], specPath, reportPath };
   let report;
   try {
-    report = await readFile(join(projectPath, "specs", slug, "visual-verify-report.md"), "utf8");
+    report = reportPath ? await readFile(join(projectPath, reportPath), "utf8") : "";
+    if (!reportPath) return { status: "built", issues: [], specPath, reportPath };
   } catch {
-    return { status: "built", issues: [] };
+    return { status: "built", issues: [], specPath, reportPath };
   }
   const hasOpen = /status:\s*open/i.test(report) || /open (discrepanc|source-level)/i.test(report);
   if (hasOpen) {
     const issues = [...report.matchAll(/^###\s+(D\d[^\n]*)/gm)].map((m) => m[1].trim());
-    return { status: "has-issues", issues };
+    return { status: "has-issues", issues, specPath, reportPath };
   }
-  return { status: "verified", issues: [] };
+  return { status: "verified", issues: [], specPath, reportPath };
 }
 async function getInspectorComponents(projectPath) {
   const config = await readProjectConfig(projectPath);
@@ -1346,7 +1379,11 @@ async function getInspectorComponents(projectPath) {
       props = parseProps(variantsSrc || src);
       tokens = scanTokens(src, variantsSrc);
     }
-    const { status, issues } = await componentStatus(projectPath, entry.name, Boolean(abs));
+    const { status, issues, specPath, reportPath } = await componentStatus(
+      projectPath,
+      entry.name,
+      Boolean(abs)
+    );
     components.push({
       name: entry.name,
       level: entry.level,
@@ -1355,7 +1392,9 @@ async function getInspectorComponents(projectPath) {
       props,
       tokens,
       status,
-      issues
+      issues,
+      specPath,
+      reportPath
     });
   }
   return { componentDir, previewUrl: null, components };
@@ -2078,6 +2117,10 @@ const handlers = {
   "workspace:createFolder": (() => createFolder()),
   "workspace:listProjects": () => listProjects(),
   "workspace:openFolder": ((path) => openFolder(path)),
+  "workspace:revealPath": ((req) => {
+    revealPath(req.projectPath, req.relPath);
+    return void 0;
+  }),
   "workspace:refreshProject": ((path) => refreshProject(path)),
   "workspace:createProject": ((req) => createProject(req.path, req.answers)),
   "toolkit:status": ((path) => getToolkitStatus(path)),

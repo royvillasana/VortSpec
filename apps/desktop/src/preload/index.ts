@@ -51,6 +51,8 @@ const api = {
   createFolder: () => invoke("workspace:createFolder"),
   listProjects: () => invoke("workspace:listProjects"),
   openFolder: (path: string) => invoke("workspace:openFolder", path),
+  revealPath: (projectPath: string, relPath: string) =>
+    invoke("workspace:revealPath", { projectPath, relPath }),
   refreshProject: (path: string) => invoke("workspace:refreshProject", path),
   createProject: (path: string, answers: SetupAnswers) =>
     invoke("workspace:createProject", { path, answers }),

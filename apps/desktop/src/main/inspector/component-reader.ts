@@ -129,25 +129,47 @@ function scanTokens(...sources: string[]): string[] {
   return [...found].sort();
 }
 
+/** First existing path among candidates (project-relative), or null. */
+async function firstExisting(projectPath: string, rels: string[]): Promise<string | null> {
+  for (const rel of rels) {
+    try {
+      await readFile(join(projectPath, rel), "utf8");
+      return rel;
+    } catch {
+      /* try next */
+    }
+  }
+  return null;
+}
+
 async function componentStatus(
   projectPath: string,
   name: string,
   hasFile: boolean,
-): Promise<{ status: ComponentStatus; issues: string[] }> {
-  if (!hasFile) return { status: "unknown", issues: [] };
+): Promise<{ status: ComponentStatus; issues: string[]; specPath: string | null; reportPath: string | null }> {
   const slug = name.toLowerCase();
+  const specPath = await firstExisting(projectPath, [
+    join("specs", slug, "spec.md"),
+    join("specs", slug, `${slug}.md`),
+    join("specs", slug, "README.md"),
+  ]);
+  const reportPath = await firstExisting(projectPath, [
+    join("specs", slug, "visual-verify-report.md"),
+  ]);
+  if (!hasFile) return { status: "unknown", issues: [], specPath, reportPath };
   let report: string;
   try {
-    report = await readFile(join(projectPath, "specs", slug, "visual-verify-report.md"), "utf8");
+    report = reportPath ? await readFile(join(projectPath, reportPath), "utf8") : "";
+    if (!reportPath) return { status: "built", issues: [], specPath, reportPath };
   } catch {
-    return { status: "built", issues: [] };
+    return { status: "built", issues: [], specPath, reportPath };
   }
   const hasOpen = /status:\s*open/i.test(report) || /open (discrepanc|source-level)/i.test(report);
   if (hasOpen) {
     const issues = [...report.matchAll(/^###\s+(D\d[^\n]*)/gm)].map((m) => m[1].trim());
-    return { status: "has-issues", issues };
+    return { status: "has-issues", issues, specPath, reportPath };
   }
-  return { status: "verified", issues: [] };
+  return { status: "verified", issues: [], specPath, reportPath };
 }
 
 export async function getInspectorComponents(
@@ -179,7 +201,11 @@ export async function getInspectorComponents(
       props = parseProps(variantsSrc || src);
       tokens = scanTokens(src, variantsSrc);
     }
-    const { status, issues } = await componentStatus(projectPath, entry.name, Boolean(abs));
+    const { status, issues, specPath, reportPath } = await componentStatus(
+      projectPath,
+      entry.name,
+      Boolean(abs),
+    );
     components.push({
       name: entry.name,
       level: entry.level,
@@ -189,6 +215,8 @@ export async function getInspectorComponents(
       tokens,
       status,
       issues,
+      specPath,
+      reportPath,
     });
   }
 

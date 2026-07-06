@@ -139,6 +139,10 @@ export const ipcContract = {
   "workspace:createFolder": { request: z.void(), response: projectSchema.nullable() },
   "workspace:listProjects": { request: z.void(), response: projectListSchema },
   "workspace:openFolder": { request: z.string(), response: z.void() },
+  "workspace:revealPath": {
+    request: z.object({ projectPath: z.string(), relPath: z.string() }),
+    response: z.void(),
+  },
   "workspace:refreshProject": { request: z.string(), response: projectSchema },
   "workspace:createProject": {
     request: z.object({ path: z.string(), answers: setupAnswersSchema }),

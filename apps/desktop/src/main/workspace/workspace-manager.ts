@@ -1,5 +1,5 @@
 import { app, dialog, shell } from "electron";
-import { join, basename } from "node:path";
+import { join, basename, resolve, sep } from "node:path";
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import type { Project } from "../../shared/ipc";
@@ -117,4 +117,16 @@ export async function refreshProject(path: string): Promise<Project> {
 
 export async function openFolder(path: string): Promise<void> {
   await shell.openPath(path);
+}
+
+/**
+ * Reveal a project file in the OS file manager (Finder). `relPath` is resolved
+ * against the project root and confined to it — a path that escapes the project
+ * is refused, so the renderer can never point this at an arbitrary location.
+ */
+export function revealPath(projectPath: string, relPath: string): void {
+  const target = resolve(projectPath, relPath);
+  const root = resolve(projectPath);
+  if (target !== root && !target.startsWith(root + sep)) return;
+  shell.showItemInFolder(target);
 }

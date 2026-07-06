@@ -427,6 +427,7 @@ export function DevPreview({
           <ControlsPanel
             key={selected.name}
             component={selected}
+            projectPath={project.path}
             onValues={setPreviewProps}
             onModify={(req) => void requestModify(req)}
             modifyBusy={modify.running}
@@ -583,11 +584,13 @@ function initialValues(props: PropControl[]): Values {
 
 function ControlsPanel({
   component,
+  projectPath,
   onValues,
   onModify,
   modifyBusy,
 }: {
   component: InspectorComponent;
+  projectPath: string;
   onValues: (v: Values) => void;
   onModify: (request: string) => void;
   modifyBusy: boolean;
@@ -661,6 +664,18 @@ function ControlsPanel({
         ) : (
           <Check icon="—" color="text-vs-text-muted" label="Run /visual-verify to populate checks" />
         )}
+      </Section>
+
+      <Section title="Source & spec">
+        <div className="flex flex-col gap-1">
+          <FileLink projectPath={projectPath} path={component.file} label="Component source" />
+          <FileLink projectPath={projectPath} path={component.specPath} label="Spec" />
+          <FileLink
+            projectPath={projectPath}
+            path={component.reportPath}
+            label="Visual-verify report"
+          />
+        </div>
       </Section>
 
       <Section title="Code">
@@ -774,6 +789,40 @@ function Section({
       </p>
       {children}
     </div>
+  );
+}
+
+/** A row that reveals a project file in Finder, or shows it's absent (dimmed). */
+function FileLink({
+  projectPath,
+  path,
+  label,
+}: {
+  projectPath: string;
+  path: string | null;
+  label: string;
+}): React.JSX.Element {
+  if (!path) {
+    return (
+      <div className="flex items-center gap-2 text-xs text-vs-text-muted">
+        <span className="w-3.5 text-center">—</span>
+        <span className="flex-1">{label}</span>
+        <span className="text-[10px]">not created yet</span>
+      </div>
+    );
+  }
+  return (
+    <button
+      onClick={() => void api.revealPath(projectPath, path)}
+      title={`Reveal ${path} in Finder`}
+      className="group flex items-center gap-2 text-left text-xs text-vs-text-secondary hover:text-vs-text-primary"
+    >
+      <span className="w-3.5 text-center text-vs-accent">↗</span>
+      <span className="flex-1">{label}</span>
+      <span className="max-w-[150px] truncate font-mono text-[10px] text-vs-text-muted group-hover:text-vs-text-secondary">
+        {path}
+      </span>
+    </button>
   );
 }
 

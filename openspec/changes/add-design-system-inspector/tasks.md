@@ -35,7 +35,7 @@
 ## 6. Renderer — Components view + detail
 
 - [x] 6.1 Components grid: cards from `components.json` + source (name, level, preview, status from verify reports)
-- [ ] 6.2 Component detail: variants/states/props (from source), tokens consumed, links to spec + visual-verify report; preview delegated to the Playground
+- [x] 6.2 Component detail: variants/states/props (from source), tokens consumed, links to spec + visual-verify report; preview delegated to the Playground
 - [x] 6.3 Prop controls generated from source-declared props (variant/enum → select, boolean → toggle, string → text)
 
 ## 7. Renderer — Playground (render harness + validate/modify)
