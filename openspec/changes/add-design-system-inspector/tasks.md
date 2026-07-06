@@ -7,7 +7,7 @@
 ## 2. Data sourcing (main process, files → typed models)
 
 - [x] 2.1 Token-file parser: read the configured `token_file` (CSS custom properties first; SCSS/JS variants per `styling`) into a typed token list (name, type, resolved value), zod-validated at the boundary
-- [ ] 2.2 Figma-authoritative reconciliation: when the Desktop Bridge is connected, pull resolved values via `figma_get_variables` and reconcile with the token file, flagging drift
+- [x] 2.2 Figma-authoritative reconciliation: when the Desktop Bridge is connected, pull resolved values via `figma_get_variables` and reconcile with the token file, flagging drift
 - [x] 2.3 Source model: classify each token as `figma-variable` / `generated-code` / `hand-edited` from where its value lives
 - [x] 2.4 Component reader: parse `.sdd-de/components.json` (reuse `detectedComponentsSchema`) and read generated source under `component_dir` for variants, states, and source-declared props
 - [x] 2.5 Where-used index: scan component source for token references (`var(--token)` / token utilities) to build the token→usage map

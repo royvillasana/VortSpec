@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type {
+  EnvCheck,
+  FigmaVariable,
   FileSnapshot,
   InspectorToken,
   Project,
@@ -12,6 +14,22 @@ import { useAgentRun } from "../lib/useAgentRun";
 import { Spinner } from "../components/ui";
 import { RunPanel } from "../components/RunPanel";
 import { ProjectRail } from "../components/ProjectRail";
+
+/** Export Figma variables to a cache file so the cockpit can reconcile locally. Read-only w.r.t. code. */
+const FIGMA_SYNC_PROMPT = [
+  "Export this design system's Figma variables so VortSpec can reconcile them with the token file.",
+  "",
+  "1. Using the connected Figma MCP (Desktop Bridge), fetch ALL design variables with values resolved",
+  "   for the default/primary mode. Prefer a bulk call (e.g. figma_get_variables / get_variable_defs);",
+  "   page through collections if the file is large.",
+  "2. Resolve each variable to a CONCRETE value (hex for colors, px/number for dimensions) — never an",
+  "   alias to another variable.",
+  "3. Write the result to `.vortspec/figma-variables.json` as a JSON array of objects:",
+  '   { "name": "<variable name, e.g. color/primary>", "resolvedValue": "<concrete value>",',
+  '     "type": "color|spacing|radius|typography|shadow|other", "collection": "<optional>" }.',
+  "4. Write ONLY `.vortspec/figma-variables.json`. Do not modify the token file, component sources, or",
+  "   any other file, and do not change anything in Figma.",
+].join("\n");
 
 /** Rename a token across the token file + every component reference (var(), Tailwind arbitrary, plain). */
 function renamePrompt(oldName: string, newName: string): string {
@@ -91,6 +109,9 @@ export function Inspector({
   const [codeOnly, setCodeOnly] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
   const [toast, setToast] = useState("");
+  const [figmaOnly, setFigmaOnly] = useState<FigmaVariable[]>([]);
+  const [figmaSynced, setFigmaSynced] = useState(false);
+  const [figmaEnv, setFigmaEnv] = useState<EnvCheck | null>(null);
 
   // Gated rename/delete via a scoped Claude Code run (touches the token file +
   // component sources); snapshotted before the run so it can be reverted.
@@ -99,17 +120,34 @@ export function Inspector({
   const [modReview, setModReview] = useState(false);
   const [modLabel, setModLabel] = useState("");
 
+  // Figma sync: a scoped Claude Code run exports variables → the cockpit
+  // reconciles locally on the next read. VortSpec never talks to Figma directly.
+  const figmaSync = useAgentRun();
+
   async function reloadTokens(): Promise<void> {
     const r = await api.inspectorTokens(project.path);
     setTokens(r.tokens);
     setUsage(r.usage);
     setTokenFile(r.tokenFile);
+    setFigmaOnly(r.figmaOnly);
+    setFigmaSynced(r.figmaSynced);
   }
 
   useEffect(() => {
     void reloadTokens();
+    void api.verifyFigmaMcp().then(setFigmaEnv);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project.path]);
+
+  async function syncFigma(): Promise<void> {
+    await figmaSync.start({ prompt: FIGMA_SYNC_PROMPT, cwd: project.path, bypassPermissions: true });
+  }
+  // When the export run finishes, re-read tokens (now reconciled against Figma).
+  useEffect(() => {
+    if (figmaSync.model.status !== "done") return;
+    void reloadTokens().then(() => flash("Reconciled with Figma variables"));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [figmaSync.model.status]);
 
   function flash(msg: string): void {
     setToast(msg);
@@ -180,6 +218,9 @@ export function Inspector({
   const total = tokens?.length ?? 0;
   const resultCount = groups.reduce((a, g) => a + g.items.length, 0);
   const selectedToken = tokens?.find((t) => t.name === selected) ?? null;
+  const driftCount = tokens?.filter((t) => t.drift === "drifted").length ?? 0;
+  const inSyncCount = tokens?.filter((t) => t.drift === "in-sync").length ?? 0;
+  const figmaConnected = figmaEnv?.status === "pass";
 
   async function saveValue(name: string, value: string): Promise<void> {
     const r = await api.setTokenValue(project.path, name, value);
@@ -215,7 +256,43 @@ export function Inspector({
               {total} tokens
               {tokenFile && <span> · {tokenFile}</span>}
             </span>
+            <div className="flex-1" />
+            <FigmaSyncButton
+              connected={figmaConnected}
+              running={figmaSync.running}
+              synced={figmaSynced}
+              onSync={() => void syncFigma()}
+              onConnect={() => figmaEnv?.fix?.url && void api.openInstall(figmaEnv.fix.url)}
+            />
           </div>
+          {figmaSynced && (total > 0) && (
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-md border border-vs-border-default bg-vs-bg-surface px-3 py-2 text-[11px]">
+              <span className="font-semibold uppercase tracking-wide text-vs-text-muted">
+                Figma reconciliation
+              </span>
+              <span className="flex items-center gap-1.5 text-vs-text-secondary">
+                <span className="inline-block h-1.5 w-1.5 rounded-full bg-vs-success" />
+                {inSyncCount} in sync
+              </span>
+              <span className="flex items-center gap-1.5 text-vs-text-secondary">
+                <span className="inline-block h-1.5 w-1.5 rounded-full bg-vs-warning" />
+                {driftCount} drifted
+              </span>
+              <span className="flex items-center gap-1.5 text-vs-text-secondary">
+                <span className="inline-block h-1.5 w-1.5 rounded-full bg-vs-accent" />
+                {figmaOnly.length} Figma-only
+              </span>
+              {figmaOnly.length > 0 && (
+                <span className="text-vs-text-muted">
+                  · missing in code:{" "}
+                  <span className="font-mono text-vs-text-secondary">
+                    {figmaOnly.slice(0, 4).map((v) => v.name).join(", ")}
+                    {figmaOnly.length > 4 ? ` +${figmaOnly.length - 4}` : ""}
+                  </span>
+                </span>
+              )}
+            </div>
+          )}
           <div className="flex flex-wrap items-center gap-3">
             <div className="flex gap-0.5 rounded-lg border border-vs-border-default bg-vs-bg-surface p-0.5">
               <Segment active={segment === "all"} onClick={() => setSegment("all")}>
@@ -346,6 +423,33 @@ export function Inspector({
         </div>
       )}
 
+      {/* Figma export run — progress only (read-only w.r.t. code, so no gate) */}
+      {(figmaSync.running || figmaSync.model.status === "error") && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-6">
+          <div className="flex max-h-[80vh] w-[560px] flex-col gap-3 rounded-xl border border-vs-border-strong bg-vs-bg-surface p-4 shadow-2xl">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-semibold text-vs-text-primary">
+                Syncing Figma variables
+              </span>
+              <span className="font-mono text-[11px] text-vs-text-muted">Claude Code · Figma MCP</span>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              <RunPanel model={figmaSync.model} />
+            </div>
+            {figmaSync.model.status === "error" && (
+              <div className="flex items-center justify-end border-t border-vs-border-default pt-3">
+                <button
+                  onClick={() => figmaSync.reset()}
+                  className="rounded-lg border border-vs-border-strong px-3.5 py-2 text-xs text-vs-text-secondary hover:bg-vs-bg-elevated hover:text-vs-text-primary"
+                >
+                  Close
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {toast && (
         <div className="fixed bottom-6 left-1/2 z-[60] flex -translate-x-1/2 items-center gap-2 rounded-lg border border-vs-border-strong bg-vs-bg-elevated px-4 py-2.5 text-xs text-vs-text-primary shadow-lg">
           <span className="text-vs-success">✓</span>
@@ -353,6 +457,44 @@ export function Inspector({
         </div>
       )}
     </div>
+  );
+}
+
+/** Sync-from-Figma action, gated on the Desktop Bridge being connected. */
+function FigmaSyncButton({
+  connected,
+  running,
+  synced,
+  onSync,
+  onConnect,
+}: {
+  connected: boolean;
+  running: boolean;
+  synced: boolean;
+  onSync: () => void;
+  onConnect: () => void;
+}): React.JSX.Element {
+  if (!connected) {
+    return (
+      <button
+        onClick={onConnect}
+        title="Figma MCP is not connected — reconciliation needs the Desktop Bridge"
+        className="flex items-center gap-1.5 rounded-full border border-vs-border-default bg-vs-bg-surface px-3 py-1 text-xs text-vs-text-muted hover:border-vs-border-strong hover:text-vs-text-secondary"
+      >
+        <span className="inline-block h-1.5 w-1.5 rounded-full bg-vs-text-muted" />
+        Connect Figma to reconcile
+      </button>
+    );
+  }
+  return (
+    <button
+      onClick={onSync}
+      disabled={running}
+      className="flex items-center gap-1.5 rounded-full border border-vs-accent bg-vs-bg-elevated px-3 py-1 text-xs text-vs-text-primary hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
+    >
+      <span className="inline-block h-1.5 w-1.5 rounded-full bg-vs-success" />
+      {running ? "Syncing…" : synced ? "Re-sync from Figma" : "Sync from Figma"}
+    </button>
   );
 }
 
@@ -418,6 +560,18 @@ function TokenRow({
         <span className="text-xs text-vs-text-secondary">{src.label}</span>
       </span>
       <span className="flex-1" />
+      {token.drift === "drifted" ? (
+        <span
+          title={`Figma: ${token.figmaValue}`}
+          className="rounded-full border border-vs-warning-border bg-vs-warning-muted px-1.5 py-0.5 text-[10px] font-medium text-vs-warning"
+        >
+          ≠ Figma
+        </span>
+      ) : token.drift === "in-sync" ? (
+        <span title="Matches the Figma variable" className="text-[10px] text-vs-success">
+          ✓ Figma
+        </span>
+      ) : null}
       <span className="font-mono text-xs text-vs-text-muted">
         {token.uses} {token.uses === 1 ? "use" : "uses"}
       </span>
@@ -567,6 +721,42 @@ function TokenDrawer({
           <span className="inline-block h-2 w-2 rounded-full" style={{ background: src.dot }} />
           <span className="text-xs text-vs-text-secondary">{src.line}</span>
         </div>
+
+        {/* figma reconciliation */}
+        {token.figmaValue !== undefined && (
+          <div className="flex flex-col gap-2 rounded-lg border border-vs-border-default bg-vs-bg-primary p-3">
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] font-semibold uppercase tracking-wide text-vs-text-muted">
+                Figma variable
+              </span>
+              {token.drift === "drifted" ? (
+                <span className="rounded-full border border-vs-warning-border bg-vs-warning-muted px-1.5 py-0.5 text-[10px] font-medium text-vs-warning">
+                  drifted
+                </span>
+              ) : (
+                <span className="text-[10px] text-vs-success">in sync</span>
+              )}
+            </div>
+            <div className="flex items-center justify-between font-mono text-[11px]">
+              <span className="text-vs-text-muted">Figma</span>
+              <span className="text-vs-text-primary">{token.figmaValue}</span>
+            </div>
+            <div className="flex items-center justify-between font-mono text-[11px]">
+              <span className="text-vs-text-muted">Code</span>
+              <span className={token.drift === "drifted" ? "text-vs-warning" : "text-vs-text-primary"}>
+                {token.resolvedValue}
+              </span>
+            </div>
+            {token.drift === "drifted" && (
+              <button
+                onClick={() => setValue(token.figmaValue ?? value)}
+                className="mt-0.5 self-start rounded-md border border-vs-border-strong px-2.5 py-1 text-[11px] text-vs-text-secondary hover:border-vs-accent hover:text-vs-text-primary"
+              >
+                Use Figma value
+              </button>
+            )}
+          </div>
+        )}
 
         {/* where used */}
         <div className="flex flex-col gap-2 border-t border-vs-border-default pt-4">

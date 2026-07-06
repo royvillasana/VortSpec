@@ -20,6 +20,8 @@ export type {
   TokenType,
   TokenSource,
   TokenUsage,
+  TokenDrift,
+  FigmaVariable,
 } from "./inspector";
 export type {
   InspectorComponent,

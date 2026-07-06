@@ -1,6 +1,7 @@
 import { join, basename, dirname, extname } from "node:path";
 import { readFile, readdir, writeFile, mkdir } from "node:fs/promises";
 import { readProjectConfig } from "../workspace/config-manager";
+import { readFigmaVariables, reconcile, normName } from "./figma-reconcile";
 import type {
   FileSnapshot,
   InspectorToken,
@@ -181,12 +182,12 @@ export async function getInspectorTokens(
 ): Promise<InspectorTokensResult> {
   const config = await readProjectConfig(projectPath);
   const tokenFile = config?.tokenFile ?? null;
-  if (!tokenFile) return { tokenFile: null, tokens: [], usage: {} };
+  if (!tokenFile) return { tokenFile: null, tokens: [], usage: {}, figmaOnly: [], figmaSynced: false };
   let css: string;
   try {
     css = await readFile(join(projectPath, tokenFile), "utf8");
   } catch {
-    return { tokenFile, tokens: [], usage: {} };
+    return { tokenFile, tokens: [], usage: {}, figmaOnly: [], figmaSynced: false };
   }
   const parsed = parseTokensFromCss(css);
   const sources = config?.componentDir
@@ -197,12 +198,30 @@ export async function getInspectorTokens(
     sources,
   );
   const edited = await readOverrides(projectPath);
-  const tokens: InspectorToken[] = parsed.map((t) => ({
-    ...t,
-    source: edited.has(t.name) ? "hand-edited" : "generated-code",
-    uses: usage[t.name]?.length ?? 0,
-  }));
-  return { tokenFile, tokens, usage };
+  // Figma-authoritative overlay: match by normalized name, flag drift. Absent
+  // export → figmaVars is null and every token stays generated-code/hand-edited.
+  const figmaVars = await readFigmaVariables(projectPath);
+  const recon = figmaVars ? reconcile(parsed, figmaVars) : null;
+  const tokens: InspectorToken[] = parsed.map((t) => {
+    const match = recon?.byName.get(normName(t.name));
+    // Provenance: a local hand-edit is what the user did last, so it wins the
+    // badge; otherwise a Figma match is the authoritative origin.
+    const source = edited.has(t.name) ? "hand-edited" : match ? "figma-variable" : "generated-code";
+    return {
+      ...t,
+      source,
+      uses: usage[t.name]?.length ?? 0,
+      figmaValue: match?.figmaValue,
+      drift: match?.drift,
+    };
+  });
+  return {
+    tokenFile,
+    tokens,
+    usage,
+    figmaOnly: recon?.figmaOnly ?? [],
+    figmaSynced: figmaVars !== null,
+  };
 }
 
 /**

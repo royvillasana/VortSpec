@@ -25,6 +25,10 @@ export const tokenSourceSchema = z.enum([
 ]);
 export type TokenSource = z.infer<typeof tokenSourceSchema>;
 
+/** Whether a code token is in sync with its authoritative Figma variable. */
+export const tokenDriftSchema = z.enum(["in-sync", "drifted"]);
+export type TokenDrift = z.infer<typeof tokenDriftSchema>;
+
 export const inspectorTokenSchema = z.object({
   /** CSS custom-property name without the leading `--` (e.g. `color-primary`). */
   name: z.string(),
@@ -36,8 +40,21 @@ export const inspectorTokenSchema = z.object({
   source: tokenSourceSchema,
   /** How many component source references this token (best-effort var() scan). */
   uses: z.number(),
+  /** The matched Figma variable's resolved value, when a Figma export is present. */
+  figmaValue: z.string().optional(),
+  /** In-sync/drifted vs the matched Figma variable; absent when unmatched/no export. */
+  drift: tokenDriftSchema.optional(),
 });
 export type InspectorToken = z.infer<typeof inspectorTokenSchema>;
+
+/** A design variable exported from Figma (via a scoped Claude Code run), the authoritative source. */
+export const figmaVariableSchema = z.object({
+  name: z.string(),
+  resolvedValue: z.string(),
+  type: tokenTypeSchema.optional(),
+  collection: z.string().optional(),
+});
+export type FigmaVariable = z.infer<typeof figmaVariableSchema>;
 
 /** One "where used" entry for the token detail drawer. */
 export const tokenUsageSchema = z.object({
@@ -52,6 +69,10 @@ export const inspectorTokensResultSchema = z.object({
   tokens: z.array(inspectorTokenSchema),
   /** token name → components/props that reference it (for the detail drawer). */
   usage: z.record(z.string(), z.array(tokenUsageSchema)),
+  /** Figma variables with no matching code token (present only after a Figma sync). */
+  figmaOnly: z.array(figmaVariableSchema).default([]),
+  /** Whether a `.vortspec/figma-variables.json` export was found and reconciled. */
+  figmaSynced: z.boolean().default(false),
 });
 export type InspectorTokensResult = z.infer<typeof inspectorTokensResultSchema>;
 

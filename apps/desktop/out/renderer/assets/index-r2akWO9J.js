@@ -17527,6 +17527,20 @@ function ArtifactGate({
     ] })
   ] });
 }
+const FIGMA_SYNC_PROMPT = [
+  "Export this design system's Figma variables so VortSpec can reconcile them with the token file.",
+  "",
+  "1. Using the connected Figma MCP (Desktop Bridge), fetch ALL design variables with values resolved",
+  "   for the default/primary mode. Prefer a bulk call (e.g. figma_get_variables / get_variable_defs);",
+  "   page through collections if the file is large.",
+  "2. Resolve each variable to a CONCRETE value (hex for colors, px/number for dimensions) — never an",
+  "   alias to another variable.",
+  "3. Write the result to `.vortspec/figma-variables.json` as a JSON array of objects:",
+  '   { "name": "<variable name, e.g. color/primary>", "resolvedValue": "<concrete value>",',
+  '     "type": "color|spacing|radius|typography|shadow|other", "collection": "<optional>" }.',
+  "4. Write ONLY `.vortspec/figma-variables.json`. Do not modify the token file, component sources, or",
+  "   any other file, and do not change anything in Figma."
+].join("\n");
 function renamePrompt(oldName, newName) {
   return [
     `Rename the design token \`--${oldName}\` to \`--${newName}\` across this project.`,
@@ -17588,19 +17602,33 @@ function Inspector({
   const [codeOnly, setCodeOnly] = reactExports.useState(false);
   const [selected, setSelected] = reactExports.useState(null);
   const [toast, setToast] = reactExports.useState("");
+  const [figmaOnly, setFigmaOnly] = reactExports.useState([]);
+  const [figmaSynced, setFigmaSynced] = reactExports.useState(false);
+  const [figmaEnv, setFigmaEnv] = reactExports.useState(null);
   const tokenMod = useAgentRun();
   const [snapshot, setSnapshot] = reactExports.useState(null);
   const [modReview, setModReview] = reactExports.useState(false);
   const [modLabel, setModLabel] = reactExports.useState("");
+  const figmaSync = useAgentRun();
   async function reloadTokens() {
     const r = await api.inspectorTokens(project.path);
     setTokens(r.tokens);
     setUsage(r.usage);
     setTokenFile(r.tokenFile);
+    setFigmaOnly(r.figmaOnly);
+    setFigmaSynced(r.figmaSynced);
   }
   reactExports.useEffect(() => {
     void reloadTokens();
+    void api.verifyFigmaMcp().then(setFigmaEnv);
   }, [project.path]);
+  async function syncFigma() {
+    await figmaSync.start({ prompt: FIGMA_SYNC_PROMPT, cwd: project.path, bypassPermissions: true });
+  }
+  reactExports.useEffect(() => {
+    if (figmaSync.model.status !== "done") return;
+    void reloadTokens().then(() => flash("Reconciled with Figma variables"));
+  }, [figmaSync.model.status]);
   function flash(msg) {
     setToast(msg);
     window.setTimeout(() => setToast(""), 2600);
@@ -17659,6 +17687,9 @@ function Inspector({
   const total = tokens?.length ?? 0;
   const resultCount = groups.reduce((a, g) => a + g.items.length, 0);
   const selectedToken = tokens?.find((t) => t.name === selected) ?? null;
+  const driftCount = tokens?.filter((t) => t.drift === "drifted").length ?? 0;
+  const inSyncCount = tokens?.filter((t) => t.drift === "in-sync").length ?? 0;
+  const figmaConnected = figmaEnv?.status === "pass";
   async function saveValue(name, value) {
     const r = await api.setTokenValue(project.path, name, value);
     setTokens(r.tokens);
@@ -17694,6 +17725,43 @@ function Inspector({
             tokenFile && /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { children: [
               " · ",
               tokenFile
+            ] })
+          ] }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex-1" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            FigmaSyncButton,
+            {
+              connected: figmaConnected,
+              running: figmaSync.running,
+              synced: figmaSynced,
+              onSync: () => void syncFigma(),
+              onConnect: () => figmaEnv?.fix?.url && void api.openInstall(figmaEnv.fix.url)
+            }
+          )
+        ] }),
+        figmaSynced && total > 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-wrap items-center gap-x-4 gap-y-1 rounded-md border border-vs-border-default bg-vs-bg-surface px-3 py-2 text-[11px]", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-semibold uppercase tracking-wide text-vs-text-muted", children: "Figma reconciliation" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "flex items-center gap-1.5 text-vs-text-secondary", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "inline-block h-1.5 w-1.5 rounded-full bg-vs-success" }),
+            inSyncCount,
+            " in sync"
+          ] }),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "flex items-center gap-1.5 text-vs-text-secondary", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "inline-block h-1.5 w-1.5 rounded-full bg-vs-warning" }),
+            driftCount,
+            " drifted"
+          ] }),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "flex items-center gap-1.5 text-vs-text-secondary", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "inline-block h-1.5 w-1.5 rounded-full bg-vs-accent" }),
+            figmaOnly.length,
+            " Figma-only"
+          ] }),
+          figmaOnly.length > 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-vs-text-muted", children: [
+            "· missing in code:",
+            " ",
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "font-mono text-vs-text-secondary", children: [
+              figmaOnly.slice(0, 4).map((v) => v.name).join(", "),
+              figmaOnly.length > 4 ? ` +${figmaOnly.length - 4}` : ""
             ] })
           ] })
         ] }),
@@ -17805,11 +17873,60 @@ function Inspector({
         )
       ] })
     ] }) }),
+    (figmaSync.running || figmaSync.model.status === "error") && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-6", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex max-h-[80vh] w-[560px] flex-col gap-3 rounded-xl border border-vs-border-strong bg-vs-bg-surface p-4 shadow-2xl", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-sm font-semibold text-vs-text-primary", children: "Syncing Figma variables" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono text-[11px] text-vs-text-muted", children: "Claude Code · Figma MCP" })
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "min-h-0 flex-1 overflow-y-auto", children: /* @__PURE__ */ jsxRuntimeExports.jsx(RunPanel, { model: figmaSync.model }) }),
+      figmaSync.model.status === "error" && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex items-center justify-end border-t border-vs-border-default pt-3", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+        "button",
+        {
+          onClick: () => figmaSync.reset(),
+          className: "rounded-lg border border-vs-border-strong px-3.5 py-2 text-xs text-vs-text-secondary hover:bg-vs-bg-elevated hover:text-vs-text-primary",
+          children: "Close"
+        }
+      ) })
+    ] }) }),
     toast && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "fixed bottom-6 left-1/2 z-[60] flex -translate-x-1/2 items-center gap-2 rounded-lg border border-vs-border-strong bg-vs-bg-elevated px-4 py-2.5 text-xs text-vs-text-primary shadow-lg", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-vs-success", children: "✓" }),
       /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono", children: toast })
     ] })
   ] });
+}
+function FigmaSyncButton({
+  connected,
+  running,
+  synced,
+  onSync,
+  onConnect
+}) {
+  if (!connected) {
+    return /* @__PURE__ */ jsxRuntimeExports.jsxs(
+      "button",
+      {
+        onClick: onConnect,
+        title: "Figma MCP is not connected — reconciliation needs the Desktop Bridge",
+        className: "flex items-center gap-1.5 rounded-full border border-vs-border-default bg-vs-bg-surface px-3 py-1 text-xs text-vs-text-muted hover:border-vs-border-strong hover:text-vs-text-secondary",
+        children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "inline-block h-1.5 w-1.5 rounded-full bg-vs-text-muted" }),
+          "Connect Figma to reconcile"
+        ]
+      }
+    );
+  }
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs(
+    "button",
+    {
+      onClick: onSync,
+      disabled: running,
+      className: "flex items-center gap-1.5 rounded-full border border-vs-accent bg-vs-bg-elevated px-3 py-1 text-xs text-vs-text-primary hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60",
+      children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "inline-block h-1.5 w-1.5 rounded-full bg-vs-success" }),
+        running ? "Syncing…" : synced ? "Re-sync from Figma" : "Sync from Figma"
+      ]
+    }
+  );
 }
 function Segment({
   active,
@@ -17851,6 +17968,14 @@ function TokenRow({
           /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs text-vs-text-secondary", children: src.label })
         ] }),
         /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "flex-1" }),
+        token.drift === "drifted" ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "span",
+          {
+            title: `Figma: ${token.figmaValue}`,
+            className: "rounded-full border border-vs-warning-border bg-vs-warning-muted px-1.5 py-0.5 text-[10px] font-medium text-vs-warning",
+            children: "≠ Figma"
+          }
+        ) : token.drift === "in-sync" ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { title: "Matches the Figma variable", className: "text-[10px] text-vs-success", children: "✓ Figma" }) : null,
         /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "font-mono text-xs text-vs-text-muted", children: [
           token.uses,
           " ",
@@ -17987,6 +18112,28 @@ function TokenDrawer({
           /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2 border-t border-vs-border-default pt-4", children: [
             /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "inline-block h-2 w-2 rounded-full", style: { background: src.dot } }),
             /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs text-vs-text-secondary", children: src.line })
+          ] }),
+          token.figmaValue !== void 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col gap-2 rounded-lg border border-vs-border-default bg-vs-bg-primary p-3", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2", children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[11px] font-semibold uppercase tracking-wide text-vs-text-muted", children: "Figma variable" }),
+              token.drift === "drifted" ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "rounded-full border border-vs-warning-border bg-vs-warning-muted px-1.5 py-0.5 text-[10px] font-medium text-vs-warning", children: "drifted" }) : /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[10px] text-vs-success", children: "in sync" })
+            ] }),
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between font-mono text-[11px]", children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-vs-text-muted", children: "Figma" }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-vs-text-primary", children: token.figmaValue })
+            ] }),
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between font-mono text-[11px]", children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-vs-text-muted", children: "Code" }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: token.drift === "drifted" ? "text-vs-warning" : "text-vs-text-primary", children: token.resolvedValue })
+            ] }),
+            token.drift === "drifted" && /* @__PURE__ */ jsxRuntimeExports.jsx(
+              "button",
+              {
+                onClick: () => setValue(token.figmaValue ?? value),
+                className: "mt-0.5 self-start rounded-md border border-vs-border-strong px-2.5 py-1 text-[11px] text-vs-text-secondary hover:border-vs-accent hover:text-vs-text-primary",
+                children: "Use Figma value"
+              }
+            )
           ] }),
           /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col gap-2 border-t border-vs-border-default pt-4", children: [
             /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-[11px] font-semibold uppercase tracking-wide text-vs-text-muted", children: [

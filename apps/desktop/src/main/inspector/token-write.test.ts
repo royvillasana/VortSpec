@@ -83,4 +83,54 @@ describe("token-parser — usage index + gated value write", () => {
     const r = await getInspectorTokens(dir);
     expect(r.tokens.every((t) => t.source === "generated-code")).toBe(true);
   });
+
+  it("overlays Figma reconciliation when an export is present", async () => {
+    // color-primary matches Figma (case-differs) → figma-variable, in-sync.
+    // radius-md differs → drifted. accent has no code token → figma-only.
+    await mkdir(join(dir, ".vortspec"), { recursive: true });
+    await writeFile(
+      join(dir, ".vortspec/figma-variables.json"),
+      JSON.stringify([
+        { name: "color/primary", resolvedValue: "#2563eb", type: "color" },
+        { name: "radius/md", resolvedValue: "12px", type: "radius" },
+        { name: "color/accent", resolvedValue: "#7C6FF0", type: "color" },
+      ]),
+      "utf8",
+    );
+    const r = await getInspectorTokens(dir);
+    expect(r.figmaSynced).toBe(true);
+
+    const primary = r.tokens.find((t) => t.name === "color-primary");
+    expect(primary?.source).toBe("figma-variable");
+    expect(primary?.drift).toBe("in-sync");
+
+    const radius = r.tokens.find((t) => t.name === "radius-md");
+    expect(radius?.drift).toBe("drifted");
+    expect(radius?.figmaValue).toBe("12px");
+
+    expect(r.figmaOnly.map((v) => v.name)).toEqual(["color/accent"]);
+  });
+
+  it("keeps hand-edited provenance even when a token also matches Figma", async () => {
+    await setInspectorTokenValue(dir, "color-primary", "#FF0000");
+    await mkdir(join(dir, ".vortspec"), { recursive: true });
+    await writeFile(
+      join(dir, ".vortspec/figma-variables.json"),
+      JSON.stringify([{ name: "color/primary", resolvedValue: "#2563eb" }]),
+      "utf8",
+    );
+    const r = await getInspectorTokens(dir);
+    const primary = r.tokens.find((t) => t.name === "color-primary");
+    // The local edit is what the user did last → provenance shows hand-edited…
+    expect(primary?.source).toBe("hand-edited");
+    // …and drift still flags the divergence from Figma.
+    expect(primary?.drift).toBe("drifted");
+  });
+
+  it("reports figmaSynced=false when no export file exists", async () => {
+    const r = await getInspectorTokens(dir);
+    expect(r.figmaSynced).toBe(false);
+    expect(r.figmaOnly).toEqual([]);
+    expect(r.tokens.every((t) => t.drift === undefined)).toBe(true);
+  });
 });

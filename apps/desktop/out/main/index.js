@@ -352,6 +352,7 @@ const tokenSourceSchema = z.enum([
   "generated-code",
   "hand-edited"
 ]);
+const tokenDriftSchema = z.enum(["in-sync", "drifted"]);
 const inspectorTokenSchema = z.object({
   /** CSS custom-property name without the leading `--` (e.g. `color-primary`). */
   name: z.string(),
@@ -362,7 +363,17 @@ const inspectorTokenSchema = z.object({
   resolvedValue: z.string(),
   source: tokenSourceSchema,
   /** How many component source references this token (best-effort var() scan). */
-  uses: z.number()
+  uses: z.number(),
+  /** The matched Figma variable's resolved value, when a Figma export is present. */
+  figmaValue: z.string().optional(),
+  /** In-sync/drifted vs the matched Figma variable; absent when unmatched/no export. */
+  drift: tokenDriftSchema.optional()
+});
+const figmaVariableSchema = z.object({
+  name: z.string(),
+  resolvedValue: z.string(),
+  type: tokenTypeSchema.optional(),
+  collection: z.string().optional()
 });
 const tokenUsageSchema = z.object({
   component: z.string(),
@@ -373,7 +384,11 @@ const inspectorTokensResultSchema = z.object({
   tokenFile: z.string().nullable(),
   tokens: z.array(inspectorTokenSchema),
   /** token name → components/props that reference it (for the detail drawer). */
-  usage: z.record(z.string(), z.array(tokenUsageSchema))
+  usage: z.record(z.string(), z.array(tokenUsageSchema)),
+  /** Figma variables with no matching code token (present only after a Figma sync). */
+  figmaOnly: z.array(figmaVariableSchema).default([]),
+  /** Whether a `.vortspec/figma-variables.json` export was found and reconciled. */
+  figmaSynced: z.boolean().default(false)
 });
 const propControlSchema = z.object({
   key: z.string(),
@@ -1046,6 +1061,74 @@ async function readProjectConfig(projectPath) {
   const parsed = projectConfigSchema.safeParse(config);
   return parsed.success ? parsed.data : null;
 }
+const FIGMA_VARS_PATH = ".vortspec/figma-variables.json";
+function normName(name) {
+  return name.replace(/^--/, "").trim().toLowerCase().replace(/[\s/._]+/g, "-").replace(/-+/g, "-");
+}
+function normValue(value) {
+  let s = value.trim().toLowerCase().replace(/\s+/g, " ");
+  const hex = s.match(/^#([0-9a-f]{3,8})$/);
+  if (hex) {
+    let h = hex[1];
+    if (h.length === 3 || h.length === 4) h = h.split("").map((c) => c + c).join("");
+    if (h.length === 8 && h.endsWith("ff")) h = h.slice(0, 6);
+    s = `#${h}`;
+  }
+  return s;
+}
+async function readFigmaVariables(projectPath) {
+  let raw;
+  try {
+    raw = await readFile(join(projectPath, FIGMA_VARS_PATH), "utf8");
+  } catch {
+    return null;
+  }
+  let data;
+  try {
+    data = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+  const rows = Array.isArray(data) ? data : data && typeof data === "object" ? Object.entries(data).map(([name, value]) => ({ name, value })) : [];
+  const vars = [];
+  for (const row of rows) {
+    if (!row || typeof row !== "object") continue;
+    const r = row;
+    const name = typeof r.name === "string" ? r.name : null;
+    const value = r.resolvedValue ?? r.value ?? r.resolved ?? r.val;
+    if (!name || value == null) continue;
+    const parsed = figmaVariableSchema.safeParse({
+      name,
+      resolvedValue: String(value),
+      type: r.type,
+      collection: r.collection
+    });
+    if (parsed.success) vars.push(parsed.data);
+  }
+  return vars;
+}
+function reconcile$1(tokens, figmaVars) {
+  const codeByNorm = /* @__PURE__ */ new Map();
+  for (const t of tokens) codeByNorm.set(normName(t.name), t.resolvedValue);
+  const byName = /* @__PURE__ */ new Map();
+  const figmaOnly = [];
+  const seen = /* @__PURE__ */ new Set();
+  for (const v of figmaVars) {
+    const key = normName(v.name);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const codeValue = codeByNorm.get(key);
+    if (codeValue === void 0) {
+      figmaOnly.push(v);
+      continue;
+    }
+    byName.set(key, {
+      figmaValue: v.resolvedValue,
+      drift: normValue(codeValue) === normValue(v.resolvedValue) ? "in-sync" : "drifted"
+    });
+  }
+  return { byName, figmaOnly };
+}
 const CSS_VAR = /--([\w-]+)\s*:\s*([^;]+);/g;
 const HEX = /^#(?:[0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/;
 const COLOR_FN = /^(?:rgb|rgba|hsl|hsla|oklch|color)\(/i;
@@ -1164,12 +1247,12 @@ async function markOverridden(projectPath, name) {
 async function getInspectorTokens(projectPath) {
   const config = await readProjectConfig(projectPath);
   const tokenFile = config?.tokenFile ?? null;
-  if (!tokenFile) return { tokenFile: null, tokens: [], usage: {} };
+  if (!tokenFile) return { tokenFile: null, tokens: [], usage: {}, figmaOnly: [], figmaSynced: false };
   let css;
   try {
     css = await readFile(join(projectPath, tokenFile), "utf8");
   } catch {
-    return { tokenFile, tokens: [], usage: {} };
+    return { tokenFile, tokens: [], usage: {}, figmaOnly: [], figmaSynced: false };
   }
   const parsed = parseTokensFromCss(css);
   const sources = config?.componentDir ? await collectSources(join(projectPath, config.componentDir)) : [];
@@ -1178,12 +1261,26 @@ async function getInspectorTokens(projectPath) {
     sources
   );
   const edited = await readOverrides(projectPath);
-  const tokens = parsed.map((t) => ({
-    ...t,
-    source: edited.has(t.name) ? "hand-edited" : "generated-code",
-    uses: usage[t.name]?.length ?? 0
-  }));
-  return { tokenFile, tokens, usage };
+  const figmaVars = await readFigmaVariables(projectPath);
+  const recon = figmaVars ? reconcile$1(parsed, figmaVars) : null;
+  const tokens = parsed.map((t) => {
+    const match = recon?.byName.get(normName(t.name));
+    const source = edited.has(t.name) ? "hand-edited" : match ? "figma-variable" : "generated-code";
+    return {
+      ...t,
+      source,
+      uses: usage[t.name]?.length ?? 0,
+      figmaValue: match?.figmaValue,
+      drift: match?.drift
+    };
+  });
+  return {
+    tokenFile,
+    tokens,
+    usage,
+    figmaOnly: recon?.figmaOnly ?? [],
+    figmaSynced: figmaVars !== null
+  };
 }
 async function setInspectorTokenValue(projectPath, name, value) {
   const config = await readProjectConfig(projectPath);
