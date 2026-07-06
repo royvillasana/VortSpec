@@ -3,8 +3,8 @@ import type {
   DevServerStatus,
   FileSnapshot,
   InspectorComponent,
-  PropControl,
   Project,
+  StorybookEntry,
 } from "../../../shared/ipc";
 import { api } from "../lib/api";
 import { useAgentRun } from "../lib/useAgentRun";
@@ -12,29 +12,29 @@ import { Button, Spinner } from "../components/ui";
 import { RunPanel } from "../components/RunPanel";
 import { ProjectRail } from "../components/ProjectRail";
 
-const HARNESS_PROMPT = [
-  "Set up a live component preview so this project's dev server renders every component.",
+const STORYBOOK_PROMPT = [
+  "Set up Storybook for this project so VortSpec can embed real component docs, controls, and variants.",
   "",
   "1. Read `.sdd-de/project.yaml` (framework, language, styling, component_dir) and",
   "   `.sdd-de/components.json` (the component inventory).",
-  "2. Create a preview harness for that framework: a mount entry + a gallery page that imports",
-  "   and renders EVERY component from components.json across its main variants/states, using the",
-  "   project's design tokens. If the project already uses Storybook, generate stories instead.",
-  "3. Ensure a working dev script serves the harness at the root (e.g. for a Vite React app, add",
-  "   src/main.tsx + index.html and a `dev` script). Install any missing dev deps with the",
-  "   project's package manager.",
-  "4. Keep it minimal and self-contained. Do NOT modify the components themselves; make the",
-  "   harness git-ignorable where practical.",
-  "5. Implement a live-control protocol so the VortSpec preview can drive it:",
-  "   - On load, post to window.parent: { source: 'vortspec-preview', type: 'ready' }.",
-  "   - Listen for messages { source: 'vortspec-preview', type: 'render', component: string,",
-  "     props: object } and render just that component with those props (map props to its",
-  "     props/variants). Before any message arrives, render the full gallery as the default.",
-  "   - Only forward props the target component actually declares. Do NOT spread unknown keys",
-  "     onto components/DOM elements (that triggers React attribute warnings) — pick the known",
-  "     props explicitly and ignore the rest.",
+  "2. Install and initialize Storybook for this framework with the project's package manager",
+  "   (for React + Vite + TypeScript, use `@storybook/react-vite` with the essentials addon).",
+  "   Add `.storybook/main.ts` (a stories glob covering the component dir, the framework, and",
+  "   `docs: { autodocs: true }`) and `.storybook/preview.ts` that imports the project's global",
+  "   styles / design-token CSS so components render themed, with `parameters.layout = 'centered'`.",
+  "3. For EVERY component in components.json, write a `<Component>.stories.tsx` beside it under the",
+  "   component dir with:",
+  "   - `title: '<ComponentName>'` (exactly the component name, no folder prefix), `tags: ['autodocs']`,",
+  "     and `component: <Component>`.",
+  "   - `argTypes` for the component's real props/variants (variant enum → select control, boolean →",
+  "     boolean control) with short descriptions.",
+  "   - A `Default` story with representative args PLUS a named story for each meaningful variant/state",
+  "     (every `variant`, every `size`, disabled, etc.) so the autodocs page shows the full matrix.",
+  "4. Add scripts to package.json: `\"storybook\": \"storybook dev -p 6006 --no-open\"` and",
+  "   `\"build-storybook\": \"storybook build\"`. Install any missing deps.",
+  "5. Do NOT modify the components themselves. Leave everything else untouched.",
   "",
-  "When done, the dev server should render the component gallery at its root URL.",
+  "When done, `storybook dev` should serve at http://localhost:6006 with an autodocs page per component.",
 ].join("\n");
 
 function modifyPrompt(name: string, file: string | null, request: string): string {
@@ -48,9 +48,6 @@ function modifyPrompt(name: string, file: string | null, request: string): strin
   ].join("\n");
 }
 
-type Values = Record<string, string | boolean>;
-type Bg = "app" | "white" | "dark";
-const BG: Record<Bg, string> = { app: "#EFEFF1", white: "#FFFFFF", dark: "#0F0F10" };
 const LEVEL_ORDER = ["atom", "molecule", "organism", "other"] as const;
 const LEVEL_LABEL: Record<string, string> = {
   atom: "Atoms",
@@ -59,12 +56,24 @@ const LEVEL_LABEL: Record<string, string> = {
   other: "Components",
 };
 
+/** Match a component name to its Storybook autodocs entry (title first, then import path). */
+function docsIdFor(entries: StorybookEntry[], name: string): string | null {
+  const lower = name.toLowerCase();
+  const docs = entries.filter((e) => e.type === "docs");
+  const hit =
+    docs.find((e) => e.title.toLowerCase() === lower) ??
+    docs.find((e) => e.title.toLowerCase().endsWith(`/${lower}`)) ??
+    docs.find((e) => (e.importPath ?? "").toLowerCase().includes(`/${lower}.`));
+  return hit?.id ?? null;
+}
+
 /**
- * Dev Preview — the component Playground (design: "Dev Preview.dc.html", adapted
- * to v2). Component picker (from the project's components.json) → live canvas
- * (embedded dev-server webview when available) → controls derived from the
- * component's real CVA props, tokens it consumes, a11y from its verify report,
- * and a generated code snippet. Everything is file-derived; no IR store.
+ * Component Playground — generates and embeds a real Storybook for the project.
+ * VortSpec's sidebar drives which component you see; the canvas is genuine
+ * Storybook autodocs (description, Primary, interactive Controls, every variant
+ * story) for that component. The cockpit panel adds tokens, verify findings,
+ * source links, and gated Modify-with-Claude. Claude Code is the engine — VortSpec
+ * doesn't re-implement Storybook, it stands one up and embeds it.
  */
 export function DevPreview({
   project,
@@ -80,10 +89,8 @@ export function DevPreview({
   onOpenHistory: () => void;
 }): React.JSX.Element {
   const [components, setComponents] = useState<InspectorComponent[] | null>(null);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [selName, setSelName] = useState<string | null>(null);
   const [query, setQuery] = useState("");
-  const [bg, setBg] = useState<Bg>("app");
   const [devUrl, setDevUrl] = useState("");
   const [dev, setDev] = useState<DevServerStatus>({
     state: "stopped",
@@ -91,14 +98,12 @@ export function DevPreview({
     script: null,
     message: null,
   });
-  const iframeRef = useRef<HTMLIFrameElement | null>(null);
-  const [iframeReady, setIframeReady] = useState(false);
-  const [previewProps, setPreviewProps] = useState<Record<string, string | boolean>>({});
+  const [sbEntries, setSbEntries] = useState<StorybookEntry[]>([]);
+  const [frameLoading, setFrameLoading] = useState(true);
 
   useEffect(() => {
     void api.inspectorComponents(project.path).then((r) => {
       setComponents(r.components);
-      setPreviewUrl(r.previewUrl);
       setSelName((cur) => cur ?? r.components[0]?.name ?? null);
     });
   }, [project.path]);
@@ -111,18 +116,22 @@ export function DevPreview({
     });
   }, [project.path]);
 
-  const harness = useAgentRun();
+  const storybook = useAgentRun();
   const modify = useAgentRun();
   const [snapshot, setSnapshot] = useState<FileSnapshot[] | null>(null);
   const [modifyReview, setModifyReview] = useState(false);
-  // Auto-orchestration guards: the Playground brings the preview up by itself —
-  // start the dev server (or, if it never renders our gallery, generate the
-  // harness once) without the user clicking anything.
   const autoRef = useRef(false);
-  const harnessTriedRef = useRef(false);
 
   const selected = components?.find((c) => c.name === selName) ?? null;
-  const embedUrl = devUrl.trim() || dev.url || previewUrl || "";
+  const base = (devUrl.trim() || dev.url || "").replace(/\/+$/, "");
+  const docsId = selName ? docsIdFor(sbEntries, selName) : null;
+  // Embed Storybook's autodocs canvas directly (no manager chrome): description,
+  // Primary, interactive Controls, and every variant story for this component.
+  const embedUrl = base
+    ? docsId
+      ? `${base}/iframe.html?viewMode=docs&id=${docsId}`
+      : base
+    : "";
 
   async function requestModify(request: string): Promise<void> {
     if (!selName) return;
@@ -137,8 +146,7 @@ export function DevPreview({
     });
   }
 
-  // When the modify run finishes, re-read the components (props/tokens may have
-  // changed) and enter review — the change is applied but revertable.
+  // When the modify run finishes, re-read the components and enter review.
   useEffect(() => {
     if (modify.model.status !== "done") return;
     void api.inspectorComponents(project.path).then((r) => setComponents(r.components));
@@ -165,36 +173,35 @@ export function DevPreview({
   function stopPreview(): void {
     void api.stopDevServer(project.path);
   }
-  async function generateHarness(): Promise<void> {
-    await harness.start({
-      prompt: HARNESS_PROMPT,
+  async function generateStorybook(): Promise<void> {
+    await storybook.start({
+      prompt: STORYBOOK_PROMPT,
       cwd: project.path,
       allowedTools: ["Read", "Write", "Edit", "Bash"],
       bypassPermissions: true,
     });
   }
 
-  // Once Claude Code has written the harness, launch the dev server automatically.
+  // Once Storybook is written, launch it automatically.
   useEffect(() => {
-    if (harness.model.status === "done") void startPreview();
+    if (storybook.model.status === "done") void startPreview();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [harness.model.status]);
+  }, [storybook.model.status]);
 
-  // Auto-bring-up: as soon as the Playground opens and we know the component set,
-  // stand the preview up in the background. If a dev server is already running we
-  // embed it instantly; if a dev script exists we start it; if there's no script
-  // at all we generate the harness (which adds one) — no clicks required.
+  // Auto bring-up: on entering, embed a running Storybook instantly; if Storybook
+  // is set up, launch it; otherwise generate it (then it launches) — no clicks.
   async function autoPreview(): Promise<void> {
     const status = await api.devServerStatus(project.path);
     if (status.url) {
       setDev(status);
       return;
     }
-    if (status.state === "no-script") {
-      if (!harness.running) void generateHarness();
+    const info = await api.previewInfo(project.path);
+    if (info.hasStorybook) {
+      await startPreview();
       return;
     }
-    await startPreview();
+    if (!storybook.running) void generateStorybook();
   }
 
   useEffect(() => {
@@ -204,54 +211,30 @@ export function DevPreview({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [components]);
 
-  // The dev server is up but our harness never announced itself (the project's
-  // own app doesn't speak the preview protocol) → generate the harness once so
-  // the gallery renders. After a real harness exists it signals ready, so this
-  // never fires again.
+  // Once Storybook is serving, pull its story index (it builds a moment after the
+  // URL appears, so poll until entries land) to deep-link the right autodocs page.
   useEffect(() => {
-    if (!embedUrl || iframeReady || harness.running || modify.running) return;
-    if (harnessTriedRef.current) return;
-    const t = window.setTimeout(() => {
-      if (!harnessTriedRef.current) {
-        harnessTriedRef.current = true;
-        void generateHarness();
-      }
-    }, 6000);
-    return () => window.clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [embedUrl, iframeReady, harness.running, modify.running]);
-
-  // Live-control protocol with the embedded harness (postMessage).
-  useEffect(() => {
-    function onMessage(e: MessageEvent): void {
-      const d = e.data as { source?: string; type?: string } | null;
-      if (d?.source === "vortspec-preview" && d.type === "ready") setIframeReady(true);
+    if (!dev.url) {
+      setSbEntries([]);
+      return;
     }
-    window.addEventListener("message", onMessage);
-    return () => window.removeEventListener("message", onMessage);
-  }, []);
+    let cancelled = false;
+    let timer = 0;
+    const poll = async (): Promise<void> => {
+      const entries = await api.storybookIndex(dev.url!).catch(() => [] as StorybookEntry[]);
+      if (cancelled) return;
+      if (entries.length) setSbEntries(entries);
+      else timer = window.setTimeout(() => void poll(), 2000);
+    };
+    void poll();
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [dev.url]);
 
-  // Push the selected component + current prop values to the harness. A dev
-  // server that doesn't speak the protocol simply never signals ready, so this
-  // is a no-op there and the gallery renders as-is (graceful degradation).
-  //
-  // Scope the props to the selected component's OWN declared props: on a
-  // component switch, `previewProps` can still hold the previous component's
-  // values for a tick, and sending e.g. Button's `outline`/`iconOnly` to Logo
-  // makes the harness forward unknown attributes onto DOM nodes (React warnings).
-  useEffect(() => {
-    if (!iframeReady || !selName) return;
-    const declared = new Set(
-      (components?.find((c) => c.name === selName)?.props ?? []).map((p) => p.key),
-    );
-    const scoped = Object.fromEntries(
-      Object.entries(previewProps).filter(([key]) => declared.has(key)),
-    );
-    iframeRef.current?.contentWindow?.postMessage(
-      { source: "vortspec-preview", type: "render", component: selName, props: scoped },
-      "*",
-    );
-  }, [iframeReady, selName, previewProps, components]);
+  // Reset the loading veil whenever the embedded story changes.
+  useEffect(() => setFrameLoading(true), [embedUrl]);
 
   const groups = useMemo(() => {
     if (!components) return [];
@@ -262,6 +245,8 @@ export function DevPreview({
       items: filtered.filter((c) => (c.level ?? "other") === level),
     })).filter((g) => g.items.length > 0);
   }, [components, query]);
+
+  const building = storybook.running || (storybook.model.status === "done" && !dev.url);
 
   return (
     <div className="flex h-[calc(100vh-3rem)] w-full overflow-hidden bg-vs-bg-primary text-[13px] text-vs-text-primary">
@@ -339,38 +324,17 @@ export function DevPreview({
       <main className="flex min-w-0 flex-1 flex-col bg-vs-bg-primary">
         <header className="flex flex-none items-center gap-3 border-b border-vs-border-default px-5 py-3">
           <span className="text-[15px] font-semibold">{selected?.name ?? "—"}</span>
-          {selected?.file && (
-            <span className="rounded border border-vs-border-default px-1.5 py-px font-mono text-[11px] text-vs-text-secondary">
-              {selected.file}
-            </span>
-          )}
+          <span className="rounded border border-vs-border-default px-1.5 py-px text-[10px] uppercase tracking-wide text-vs-text-muted">
+            Storybook
+          </span>
           <div className="flex-1" />
-          <div className="flex gap-0.5 rounded-lg border border-vs-border-default bg-vs-bg-surface p-0.5">
-            {(Object.keys(BG) as Bg[]).map((b) => (
-              <button
-                key={b}
-                onClick={() => setBg(b)}
-                className={`flex items-center gap-1.5 rounded-md px-2.5 py-1 ${
-                  bg === b ? "bg-vs-bg-elevated" : "hover:opacity-85"
-                }`}
-              >
-                <span
-                  className="inline-block h-3 w-3 rounded-[3px] border border-vs-border-strong"
-                  style={{ background: BG[b] }}
-                />
-                <span className={`text-[11px] ${bg === b ? "text-vs-text-primary" : "text-vs-text-secondary"}`}>
-                  {b === "app" ? "App" : b === "white" ? "White" : "Dark"}
-                </span>
-              </button>
-            ))}
-          </div>
           <Button
             variant="ghost"
-            disabled={harness.running}
-            onClick={() => void generateHarness()}
-            title="Have Claude Code write a preview harness for this project"
+            disabled={storybook.running}
+            onClick={() => void generateStorybook()}
+            title="Have Claude Code (re)generate Storybook stories for this project"
           >
-            {harness.running ? "Generating…" : "Generate harness"}
+            {storybook.running ? "Setting up…" : "Regenerate Storybook"}
           </Button>
           <DevServerControl
             status={dev}
@@ -380,76 +344,60 @@ export function DevPreview({
           />
         </header>
 
-        <div className="min-h-0 flex-1 overflow-y-auto transition-colors" style={{ background: BG[bg] }}>
+        <div className="min-h-0 flex-1 overflow-y-auto bg-white">
           {modify.running ? (
             <RunOverlay title="Applying your change with Claude Code…" run={modify} />
+          ) : building ? (
+            <RunOverlay
+              title={
+                storybook.running
+                  ? "Setting up Storybook — installing + writing stories (first time only)…"
+                  : "Storybook ready — starting it up…"
+              }
+              run={storybook}
+              done={!storybook.running}
+            />
           ) : embedUrl ? (
-            // A URL is available → embed immediately. A subtle overlay covers the
-            // frame until the harness announces itself (or, for a plain app that
-            // never does, until the auto-harness kicks in).
             <div className="relative h-full min-h-[340px]">
               <iframe
-                ref={iframeRef}
-                title="preview"
+                key={embedUrl}
+                title="storybook"
                 src={embedUrl}
-                onLoad={() => setIframeReady(false)}
+                onLoad={() => setFrameLoading(false)}
                 className="h-full min-h-[340px] w-full border-0 bg-white"
               />
-              {!iframeReady && <LoadingVeil label="Loading preview…" />}
+              {frameLoading && <LoadingVeil label="Loading Storybook…" />}
               {modifyReview && (
                 <KeepRevertBar onKeep={keepModify} onRevert={() => void revertModify()} />
               )}
             </div>
-          ) : harness.running || (harness.model.status === "done" && !dev.url) ? (
-            <RunOverlay
-              title={
-                harness.running
-                  ? "Setting up the live preview — generating a harness (first time only)…"
-                  : "Harness ready — starting the preview…"
-              }
-              run={harness}
-              done={!harness.running}
-            />
           ) : dev.state === "error" ? (
             <div className="flex min-h-[340px] items-center justify-center p-12">
               <div className="flex max-w-md flex-col items-center gap-3 rounded-xl border border-black/10 bg-white/80 p-6 text-center">
-                <p className="text-sm font-semibold text-red-600">Preview failed to start</p>
+                <p className="text-sm font-semibold text-red-600">Storybook failed to start</p>
                 <p className="text-xs text-zinc-500">{dev.message}</p>
-                <Button variant="default" onClick={() => void startPreview()}>
-                  Try again
-                </Button>
+                <div className="flex gap-2">
+                  <Button variant="default" onClick={() => void startPreview()}>
+                    Try again
+                  </Button>
+                  <Button variant="primary" onClick={() => void generateStorybook()}>
+                    Regenerate Storybook
+                  </Button>
+                </div>
                 <UrlOverride value={devUrl} onChange={setDevUrl} />
               </div>
             </div>
-          ) : modifyReview ? (
-            <div className="flex min-h-[340px] items-start justify-center p-6">
-              <div className="w-full max-w-2xl rounded-xl border border-vs-border-default bg-vs-bg-surface p-4">
-                <div className="mb-3 flex items-center gap-2 text-sm text-vs-text-primary">
-                  <span className="text-vs-success">✓</span> Change applied — bringing the preview
-                  back up…
-                </div>
-                <RunPanel
-                  model={modify.model}
-                  onSend={(t) => void modify.send(t)}
-                  canChat={modify.canChat}
-                />
-                <div className="mt-3">
-                  <KeepRevertBar onKeep={keepModify} onRevert={() => void revertModify()} inline />
-                </div>
-              </div>
-            </div>
           ) : (
-            // Auto bring-up in flight (or just entered) — no buttons to click.
             <div className="flex min-h-[340px] items-center justify-center p-12">
               <div className="flex max-w-md flex-col items-center gap-3 rounded-xl border border-black/10 bg-white/80 p-6 text-center">
                 <Spinner />
                 <p className="text-sm font-medium text-zinc-700">
                   {dev.state === "starting"
-                    ? `Starting the preview${dev.script ? ` (${dev.script})` : ""}…`
-                    : "Preparing live preview…"}
+                    ? "Starting Storybook — the first boot can take a moment…"
+                    : "Preparing the Storybook playground…"}
                 </p>
                 <p className="text-xs text-zinc-500">
-                  VortSpec is bringing up the component preview for you.
+                  VortSpec is standing up Storybook for you — no setup needed.
                 </p>
                 <UrlOverride value={devUrl} onChange={setDevUrl} />
               </div>
@@ -458,18 +406,16 @@ export function DevPreview({
         </div>
       </main>
 
-      {/* Controls panel */}
+      {/* Cockpit panel */}
       <aside className="flex w-[300px] shrink-0 flex-col border-l border-vs-border-default bg-vs-bg-surface">
         <div className="flex flex-none items-center gap-2 border-b border-vs-border-default px-4 py-3">
-          <span className="text-sm font-semibold">Controls</span>
-          <div className="flex-1" />
+          <span className="text-sm font-semibold">Component</span>
         </div>
         {selected ? (
-          <ControlsPanel
+          <CockpitPanel
             key={selected.name}
             component={selected}
             projectPath={project.path}
-            onValues={setPreviewProps}
             onModify={(req) => void requestModify(req)}
             modifyBusy={modify.running}
           />
@@ -481,7 +427,7 @@ export function DevPreview({
   );
 }
 
-/** A translucent veil over the preview iframe while it loads / before the harness responds. */
+/** A translucent veil over the Storybook iframe while it loads. */
 function LoadingVeil({ label }: { label: string }): React.JSX.Element {
   return (
     <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-white/70 backdrop-blur-[1px]">
@@ -589,9 +535,9 @@ function DevServerControl({
       variant="default"
       disabled={disabled}
       onClick={onStart}
-      title={disabled ? "No dev/storybook script in package.json" : undefined}
+      title={disabled ? "No storybook/dev script in package.json" : undefined}
     >
-      Start preview
+      Start Storybook
     </Button>
   );
 }
@@ -607,7 +553,7 @@ function UrlOverride({
     <input
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      placeholder="http://localhost:5173"
+      placeholder="http://localhost:6006"
       className="mt-1 w-56 rounded-md border border-zinc-300 bg-white px-2.5 py-1.5 text-center font-mono text-[11px] text-zinc-700 placeholder:text-zinc-400 focus:outline-none"
     />
   );
@@ -625,65 +571,37 @@ function StatusDot({ status }: { status: InspectorComponent["status"] }): React.
   return <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${color}`} title={status} />;
 }
 
-function initialValues(props: PropControl[]): Values {
-  const v: Values = {};
-  for (const p of props) {
-    if (p.kind === "boolean") v[p.key] = p.defaultValue === "true";
-    else v[p.key] = p.defaultValue ?? p.options[0] ?? "";
-  }
-  return v;
-}
-
-function ControlsPanel({
+/** The cockpit side panel: component identity + tokens, a11y, source links, and gated modify. */
+function CockpitPanel({
   component,
   projectPath,
-  onValues,
   onModify,
   modifyBusy,
 }: {
   component: InspectorComponent;
   projectPath: string;
-  onValues: (v: Values) => void;
   onModify: (request: string) => void;
   modifyBusy: boolean;
 }): React.JSX.Element {
-  const [values, setValues] = useState<Values>(() => initialValues(component.props));
   const [modifyDraft, setModifyDraft] = useState("");
-  const set = (k: string, v: string | boolean): void => setValues((s) => ({ ...s, [k]: v }));
-  const reset = (): void => setValues(initialValues(component.props));
-
-  // Report current values so the parent can drive the live preview.
-  useEffect(() => {
-    onValues(values);
-  }, [values, onValues]);
 
   return (
     <div className="flex-1 overflow-y-auto px-4 pb-4">
-      <div className="flex items-center py-2">
-        <span className="text-[11px] text-vs-text-muted">
-          {component.props.length} prop{component.props.length === 1 ? "" : "s"} · from source
-        </span>
-        <div className="flex-1" />
-        <button
-          onClick={reset}
-          className="rounded-md border border-vs-border-strong px-2.5 py-1 text-[11px] text-vs-text-secondary hover:border-vs-accent hover:text-vs-text-primary"
-        >
-          Reset
-        </button>
+      <div className="flex items-center gap-2 py-3">
+        <span className="text-[15px] font-semibold">{component.name}</span>
+        {component.level && (
+          <span className="rounded border border-vs-border-default px-1.5 py-px text-[10px] uppercase tracking-wide text-vs-text-muted">
+            {component.level}
+          </span>
+        )}
       </div>
-
-      {component.props.length === 0 && (
-        <p className="py-2 text-xs text-vs-text-muted">No source-declared variant props found.</p>
+      {component.description && (
+        <p className="pb-2 text-xs leading-relaxed text-vs-text-secondary">{component.description}</p>
       )}
-      {component.props.map((p) => (
-        <div key={p.key} className="flex flex-col gap-1.5 border-b border-vs-border-subtle py-3">
-          <div className="flex items-center gap-2">
-            <span className="font-mono text-xs text-vs-text-primary">{p.key}</span>
-            <span className="font-mono text-[10px] text-vs-text-muted">{p.kind}</span>
-          </div>
-          <PropInput prop={p} value={values[p.key]} onChange={(v) => set(p.key, v)} />
-        </div>
-      ))}
+      <p className="pb-1 text-[11px] text-vs-text-muted">
+        {component.props.length} prop{component.props.length === 1 ? "" : "s"} · edit controls live in
+        Storybook
+      </p>
 
       <Section title="Tokens consumed">
         {component.tokens.length === 0 ? (
@@ -730,12 +648,6 @@ function ControlsPanel({
         </div>
       </Section>
 
-      <Section title="Code">
-        <div className="whitespace-pre-wrap break-words rounded-md border border-vs-border-default bg-black/40 p-3 font-mono text-[11px] leading-relaxed text-vs-text-secondary">
-          {snippet(component.name, component.props, values)}
-        </div>
-      </Section>
-
       <Section title="Modify with Claude">
         <textarea
           rows={2}
@@ -761,69 +673,6 @@ function ControlsPanel({
         </div>
       </Section>
     </div>
-  );
-}
-
-function PropInput({
-  prop,
-  value,
-  onChange,
-}: {
-  prop: PropControl;
-  value: string | boolean;
-  onChange: (v: string | boolean) => void;
-}): React.JSX.Element {
-  if (prop.kind === "boolean") {
-    const on = value === true;
-    return (
-      <button
-        onClick={() => onChange(!on)}
-        className={`flex h-[19px] w-[34px] rounded-full border border-vs-border-strong p-px hover:border-vs-accent ${
-          on ? "justify-end bg-vs-accent" : "justify-start bg-vs-border-default"
-        }`}
-      >
-        <span className="block h-[15px] w-[15px] rounded-full bg-vs-text-primary" />
-      </button>
-    );
-  }
-  if (prop.kind === "enum" && prop.options.length <= 4) {
-    return (
-      <div className="flex flex-wrap gap-0.5 rounded-md border border-vs-border-default bg-vs-bg-primary p-0.5">
-        {prop.options.map((o) => (
-          <button
-            key={o}
-            onClick={() => onChange(o)}
-            className={`min-w-[44px] flex-1 rounded px-2 py-1 font-mono text-[11px] ${
-              value === o ? "bg-vs-bg-elevated text-vs-accent" : "text-vs-text-muted hover:text-vs-text-primary"
-            }`}
-          >
-            {o}
-          </button>
-        ))}
-      </div>
-    );
-  }
-  if (prop.kind === "enum") {
-    return (
-      <select
-        value={String(value)}
-        onChange={(e) => onChange(e.target.value)}
-        className="h-8 rounded-md border border-vs-border-default bg-vs-bg-primary px-2.5 text-xs text-vs-text-primary focus:outline-none focus-visible:border-vs-accent"
-      >
-        {prop.options.map((o) => (
-          <option key={o} value={o}>
-            {o}
-          </option>
-        ))}
-      </select>
-    );
-  }
-  return (
-    <input
-      value={String(value)}
-      onChange={(e) => onChange(e.target.value)}
-      className="h-8 rounded-md border border-vs-border-default bg-vs-bg-primary px-2.5 text-xs text-vs-text-primary focus:outline-none focus-visible:border-vs-accent"
-    />
   );
 }
 
@@ -893,16 +742,4 @@ function Check({
       <span className="flex-1 text-xs text-vs-text-primary">{label}</span>
     </div>
   );
-}
-
-function snippet(name: string, props: PropControl[], values: Values): string {
-  const attrs = props
-    .map((p) => {
-      const v = values[p.key];
-      if (p.kind === "boolean") return v ? `\n  ${p.key}` : "";
-      return `\n  ${p.key}="${String(v)}"`;
-    })
-    .filter(Boolean)
-    .join("");
-  return attrs ? `<${name}${attrs}\n/>` : `<${name} />`;
 }
