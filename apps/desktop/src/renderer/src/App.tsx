@@ -273,7 +273,6 @@ export default function App(): React.JSX.Element {
             onOpenInspector={() => setProjectView("inspector")}
             onOpenPreview={() => setProjectView("preview")}
             onOpenRun={() => setProjectView("run")}
-            onOpenReview={() => setProjectView("review")}
             onOpenVerify={() => setProjectView("verify")}
             onOpenHistory={() => setProjectView("history")}
             onOpenManifest={() => setProjectView("manifest")}
