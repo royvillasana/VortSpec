@@ -1,4 +1,5 @@
 import type { Project } from "../../../shared/ipc";
+import { Logo } from "./Logo";
 
 /**
  * The shared app-shell left rail (project header + Flow/Run/Preview/Tokens nav),
@@ -29,9 +30,7 @@ export function ProjectRail({
         title="All projects"
         className="mb-3 flex items-center gap-2 border-b border-vs-border-default px-2 pb-3 text-left hover:opacity-85"
       >
-        <span className="grid h-5 w-5 place-items-center rounded-md bg-vs-accent font-mono text-[11px] font-medium text-vs-bg-primary">
-          {project.name.charAt(0).toUpperCase()}
-        </span>
+        <Logo size={20} className="shrink-0" />
         <span className="min-w-0">
           <span className="block truncate text-[13px] font-semibold">{project.name}</span>
           <span className="block truncate font-mono text-[11px] text-vs-text-muted">
