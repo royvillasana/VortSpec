@@ -84,7 +84,7 @@ export function GuidedFlow({
         items={[
           { label: "Flow", active: true, badge: reviewStage ? <ReviewBadge /> : undefined },
           { label: "Run", onClick: onOpenRun },
-          { label: "Preview", onClick: onOpenPreview },
+          { label: "Playground", onClick: onOpenPreview },
           { label: "Tokens", onClick: onOpenInspector },
           { label: "History", onClick: onOpenHistory },
         ]}

@@ -93,7 +93,7 @@ export function Verification({
         items={[
           { label: "Flow", active: true, onClick: onBack, badge: openTotal ? <ReviewBadge /> : undefined },
           { label: "Run", onClick: onOpenRun },
-          { label: "Preview", onClick: onOpenPreview },
+          { label: "Playground", onClick: onOpenPreview },
           { label: "Tokens", onClick: onOpenInspector },
         ]}
       />

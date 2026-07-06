@@ -112,6 +112,14 @@ export function DevPreview({
   const modify = useAgentRun();
   const [snapshot, setSnapshot] = useState<FileSnapshot[] | null>(null);
   const [modifyReview, setModifyReview] = useState(false);
+  // Auto-orchestration guards: the Playground brings the preview up by itself —
+  // start the dev server (or, if it never renders our gallery, generate the
+  // harness once) without the user clicking anything.
+  const autoRef = useRef(false);
+  const harnessTriedRef = useRef(false);
+
+  const selected = components?.find((c) => c.name === selName) ?? null;
+  const embedUrl = devUrl.trim() || dev.url || previewUrl || "";
 
   async function requestModify(request: string): Promise<void> {
     if (!selName) return;
@@ -169,6 +177,47 @@ export function DevPreview({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [harness.model.status]);
 
+  // Auto-bring-up: as soon as the Playground opens and we know the component set,
+  // stand the preview up in the background. If a dev server is already running we
+  // embed it instantly; if a dev script exists we start it; if there's no script
+  // at all we generate the harness (which adds one) — no clicks required.
+  async function autoPreview(): Promise<void> {
+    const status = await api.devServerStatus(project.path);
+    if (status.url) {
+      setDev(status);
+      return;
+    }
+    if (status.state === "no-script") {
+      if (!harness.running) void generateHarness();
+      return;
+    }
+    await startPreview();
+  }
+
+  useEffect(() => {
+    if (components === null || autoRef.current) return;
+    autoRef.current = true;
+    void autoPreview();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [components]);
+
+  // The dev server is up but our harness never announced itself (the project's
+  // own app doesn't speak the preview protocol) → generate the harness once so
+  // the gallery renders. After a real harness exists it signals ready, so this
+  // never fires again.
+  useEffect(() => {
+    if (!embedUrl || iframeReady || harness.running || modify.running) return;
+    if (harnessTriedRef.current) return;
+    const t = window.setTimeout(() => {
+      if (!harnessTriedRef.current) {
+        harnessTriedRef.current = true;
+        void generateHarness();
+      }
+    }, 6000);
+    return () => window.clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [embedUrl, iframeReady, harness.running, modify.running]);
+
   // Live-control protocol with the embedded harness (postMessage).
   useEffect(() => {
     function onMessage(e: MessageEvent): void {
@@ -200,9 +249,6 @@ export function DevPreview({
     })).filter((g) => g.items.length > 0);
   }, [components, query]);
 
-  const selected = components?.find((c) => c.name === selName) ?? null;
-  const embedUrl = devUrl.trim() || dev.url || previewUrl || "";
-
   return (
     <div className="flex h-[calc(100vh-3rem)] w-full overflow-hidden bg-vs-bg-primary text-[13px] text-vs-text-primary">
       <ProjectRail
@@ -211,7 +257,7 @@ export function DevPreview({
         items={[
           { label: "Flow", onClick: onBack },
           { label: "Run", onClick: onOpenRun },
-          { label: "Preview", active: true },
+          { label: "Playground", active: true },
           { label: "Tokens", onClick: onOpenInspector },
           { label: "History", onClick: onOpenHistory },
         ]}
@@ -323,17 +369,10 @@ export function DevPreview({
         <div className="min-h-0 flex-1 overflow-y-auto transition-colors" style={{ background: BG[bg] }}>
           {modify.running ? (
             <RunOverlay title="Applying your change with Claude Code…" run={modify} />
-          ) : harness.running || (harness.model.status === "done" && !dev.url) ? (
-            <RunOverlay
-              title={
-                harness.running
-                  ? "Generating a preview harness with Claude Code…"
-                  : "Harness generated — starting the preview…"
-              }
-              run={harness}
-              done={!harness.running}
-            />
           ) : embedUrl ? (
+            // A URL is available → embed immediately. A subtle overlay covers the
+            // frame until the harness announces itself (or, for a plain app that
+            // never does, until the auto-harness kicks in).
             <div className="relative h-full min-h-[340px]">
               <iframe
                 ref={iframeRef}
@@ -342,16 +381,38 @@ export function DevPreview({
                 onLoad={() => setIframeReady(false)}
                 className="h-full min-h-[340px] w-full border-0 bg-white"
               />
+              {!iframeReady && <LoadingVeil label="Loading preview…" />}
               {modifyReview && (
                 <KeepRevertBar onKeep={keepModify} onRevert={() => void revertModify()} />
               )}
+            </div>
+          ) : harness.running || (harness.model.status === "done" && !dev.url) ? (
+            <RunOverlay
+              title={
+                harness.running
+                  ? "Setting up the live preview — generating a harness (first time only)…"
+                  : "Harness ready — starting the preview…"
+              }
+              run={harness}
+              done={!harness.running}
+            />
+          ) : dev.state === "error" ? (
+            <div className="flex min-h-[340px] items-center justify-center p-12">
+              <div className="flex max-w-md flex-col items-center gap-3 rounded-xl border border-black/10 bg-white/80 p-6 text-center">
+                <p className="text-sm font-semibold text-red-600">Preview failed to start</p>
+                <p className="text-xs text-zinc-500">{dev.message}</p>
+                <Button variant="default" onClick={() => void startPreview()}>
+                  Try again
+                </Button>
+                <UrlOverride value={devUrl} onChange={setDevUrl} />
+              </div>
             </div>
           ) : modifyReview ? (
             <div className="flex min-h-[340px] items-start justify-center p-6">
               <div className="w-full max-w-2xl rounded-xl border border-vs-border-default bg-vs-bg-surface p-4">
                 <div className="mb-3 flex items-center gap-2 text-sm text-vs-text-primary">
-                  <span className="text-vs-success">✓</span> Change applied — start the preview to see
-                  it live.
+                  <span className="text-vs-success">✓</span> Change applied — bringing the preview
+                  back up…
                 </div>
                 <RunPanel
                   model={modify.model}
@@ -364,53 +425,19 @@ export function DevPreview({
               </div>
             </div>
           ) : (
+            // Auto bring-up in flight (or just entered) — no buttons to click.
             <div className="flex min-h-[340px] items-center justify-center p-12">
               <div className="flex max-w-md flex-col items-center gap-3 rounded-xl border border-black/10 bg-white/80 p-6 text-center">
-                {dev.state === "starting" ? (
-                  <>
-                    <Spinner />
-                    <p className="text-sm font-medium text-zinc-700">
-                      Starting the dev server{dev.script ? ` (${dev.script})` : ""}…
-                    </p>
-                  </>
-                ) : dev.state === "no-script" ? (
-                  <>
-                    <p className="text-sm font-semibold text-zinc-800">No preview surface yet</p>
-                    <p className="text-xs text-zinc-500">
-                      {dev.message} Claude Code can generate a gallery/Storybook harness so the dev
-                      server renders every component.
-                    </p>
-                    <Button variant="primary" onClick={() => void generateHarness()}>
-                      Generate preview harness
-                    </Button>
-                    <UrlOverride value={devUrl} onChange={setDevUrl} />
-                  </>
-                ) : dev.state === "error" ? (
-                  <>
-                    <p className="text-sm font-semibold text-red-600">Preview failed to start</p>
-                    <p className="text-xs text-zinc-500">{dev.message}</p>
-                    <Button variant="default" onClick={() => void startPreview()}>
-                      Try again
-                    </Button>
-                  </>
-                ) : (
-                  <>
-                    <p className="text-sm font-semibold text-zinc-800">No live preview yet</p>
-                    <p className="text-xs text-zinc-500">
-                      Start the project&rsquo;s dev server to render components live. If it renders
-                      nothing, have Claude Code generate a preview harness.
-                    </p>
-                    <div className="flex gap-2">
-                      <Button variant="primary" onClick={() => void startPreview()}>
-                        Start preview
-                      </Button>
-                      <Button variant="default" onClick={() => void generateHarness()}>
-                        Generate harness
-                      </Button>
-                    </div>
-                    <UrlOverride value={devUrl} onChange={setDevUrl} />
-                  </>
-                )}
+                <Spinner />
+                <p className="text-sm font-medium text-zinc-700">
+                  {dev.state === "starting"
+                    ? `Starting the preview${dev.script ? ` (${dev.script})` : ""}…`
+                    : "Preparing live preview…"}
+                </p>
+                <p className="text-xs text-zinc-500">
+                  VortSpec is bringing up the component preview for you.
+                </p>
+                <UrlOverride value={devUrl} onChange={setDevUrl} />
               </div>
             </div>
           )}
@@ -436,6 +463,17 @@ export function DevPreview({
           <p className="p-4 text-xs text-vs-text-muted">Select a component.</p>
         )}
       </aside>
+    </div>
+  );
+}
+
+/** A translucent veil over the preview iframe while it loads / before the harness responds. */
+function LoadingVeil({ label }: { label: string }): React.JSX.Element {
+  return (
+    <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-white/70 backdrop-blur-[1px]">
+      <div className="flex items-center gap-2 rounded-full border border-black/10 bg-white px-3 py-1.5 text-xs font-medium text-zinc-600 shadow-sm">
+        <Spinner /> {label}
+      </div>
     </div>
   );
 }

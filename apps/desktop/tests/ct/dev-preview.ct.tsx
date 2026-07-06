@@ -4,6 +4,7 @@ import { PROJECT, COMPONENTS, HARNESS_TRANSCRIPT } from "./support/fixtures";
 
 const STOPPED = { state: "stopped", url: null, script: null, message: null };
 const RUNNING = { state: "running", url: "http://localhost:5199", script: "dev", message: null };
+const NO_SCRIPT = { state: "no-script", url: null, script: null, message: "No dev script found." };
 
 const noop = (): void => {};
 const props = {
@@ -49,33 +50,25 @@ test("dims spec/report links that don't exist yet", async ({ mount }) => {
   await expect(c.getByText("not created yet").first()).toBeVisible();
 });
 
-test("streams a recorded harness transcript into the run panel", async ({ mount }) => {
+test("auto-generates a harness (no clicks) when there is no preview surface", async ({ mount }) => {
   // Drop the terminal `result` so the run stays in-flight and the overlay
   // (with the streamed prose) remains mounted for a deterministic assertion.
   const streaming = HARNESS_TRANSCRIPT.slice(0, -1);
   const c = await mount(<DevPreview {...props} />, {
-    hooksConfig: { mock: { components: COMPONENTS, devStatus: STOPPED, runScript: streaming } },
+    hooksConfig: { mock: { components: COMPONENTS, devStatus: NO_SCRIPT, runScript: streaming } },
   });
-  await c.getByRole("button", { name: "Generate harness" }).first().click();
-
-  // The recorded assistant message renders as its own bubble in the run panel.
+  // No interaction: the Playground detects there's no dev script and generates
+  // the harness itself, streaming progress.
   await expect(
     c.getByText("Created a preview harness that renders every component."),
   ).toBeVisible();
 });
 
-test("embeds the live preview after harness generation completes", async ({ mount }) => {
+test("auto-embeds the live preview when a dev server is available (no clicks)", async ({ mount }) => {
   const c = await mount(<DevPreview {...props} />, {
-    hooksConfig: {
-      mock: { components: COMPONENTS, devStatus: STOPPED, runScript: HARNESS_TRANSCRIPT },
-    },
+    hooksConfig: { mock: { components: COMPONENTS, devStatus: STOPPED } },
   });
-  // No renderable surface yet → the generate-harness CTA is offered (also in the
-  // dev-server toolbar); either triggers the same scoped run.
-  await c.getByRole("button", { name: "Generate harness" }).first().click();
-
-  // On the transcript's terminal `result`, DevPreview auto-starts the dev server
-  // (mock returns RUNNING), so the live preview iframe is embedded at its URL.
+  // No interaction: the Playground auto-starts the dev server and embeds it.
   const frame = c.locator("iframe");
   await expect(frame).toBeVisible();
   await expect(frame).toHaveAttribute("src", RUNNING.url);
