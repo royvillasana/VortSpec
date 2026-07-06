@@ -10,6 +10,7 @@ import { RunView } from "./views/RunView";
 import { ArtifactReview } from "./views/ArtifactReview";
 import { Verification } from "./views/Verification";
 import { History } from "./views/History";
+import { DesignManifest } from "./views/DesignManifest";
 import { DesignInput } from "./views/DesignInput";
 import { Intake } from "./views/Intake";
 import { NewProjectWizard } from "./views/NewProjectWizard";
@@ -72,7 +73,7 @@ export default function App(): React.JSX.Element {
   const [intakeProject, setIntakeProject] = useState<Project | null>(null);
   const [pendingSource, setPendingSource] = useState<Partial<SetupAnswers> | undefined>(undefined);
   const [projectView, setProjectView] = useState<
-    "flow" | "inspector" | "preview" | "run" | "review" | "verify" | "history"
+    "flow" | "inspector" | "preview" | "run" | "review" | "verify" | "history" | "manifest"
   >("flow");
   const [loading, setLoading] = useState(true);
 
@@ -236,6 +237,14 @@ export default function App(): React.JSX.Element {
             onOpenPreview={() => setProjectView("preview")}
             onOpenInspector={() => setProjectView("inspector")}
           />
+        ) : activeProject && projectView === "manifest" ? (
+          <DesignManifest
+            project={activeProject}
+            onBack={() => setProjectView("flow")}
+            onOpenRun={() => setProjectView("run")}
+            onOpenPreview={() => setProjectView("preview")}
+            onOpenHistory={() => setProjectView("history")}
+          />
         ) : activeProject ? (
           <GuidedFlow
             project={activeProject}
@@ -246,6 +255,7 @@ export default function App(): React.JSX.Element {
             onOpenReview={() => setProjectView("review")}
             onOpenVerify={() => setProjectView("verify")}
             onOpenHistory={() => setProjectView("history")}
+            onOpenManifest={() => setProjectView("manifest")}
           />
         ) : (
           <Dashboard

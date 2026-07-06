@@ -1,8 +1,8 @@
 ## 1. Flow stage
 
 - [x] 1.1 Add a `design-manifest` stage to `DEFAULT_FLOW` in `shared/flow.ts` (after verification, before publish): gated, `artifactGlob` for the manifest, kind that runs the `design-doc` skill
-- [ ] 1.2 Render the new stage in `GuidedFlow.tsx` (timeline entry, artifact chip `DESIGN.md`, gate CTA → open manifest), matching the flow mockup
-- [ ] 1.3 Wire the stage's approval into existing flow-manager gate/approval so Publish is unlocked only after manifest approval
+- [x] 1.2 Render the new stage in `GuidedFlow.tsx` (timeline entry, artifact chip `DESIGN.md`, gate CTA → open manifest), matching the flow mockup
+- [x] 1.3 Wire the stage's approval into existing flow-manager gate/approval so Publish is unlocked only after manifest approval
 
 ## 2. Manifest data layer (main)
 
@@ -14,20 +14,20 @@
 
 ## 3. Manifest generation (engine)
 
-- [ ] 3.1 `design-doc` run wrapper: start Claude Code with the skill invocation, cwd-confined, `bypassPermissions`; observe completion via the run model
-- [ ] 3.2 On completion, snapshot + re-read the manifest; on error surface the run output as a fix-it (no hang), reusing the Storybook auto-run/timeout patterns
+- [x] 3.1 `design-doc` run wrapper: start Claude Code with the skill invocation, cwd-confined, `bypassPermissions`; observe completion via the run model
+- [x] 3.2 On completion, snapshot + re-read the manifest; on error surface the run output as a fix-it (no hang), reusing the Storybook auto-run/timeout patterns
 
 ## 4. Design Manifest screen (renderer)
 
-- [ ] 4.1 `DesignManifest.tsx` scaffold from `Design Manifest.dc.html`: ProjectRail + header (path chip, Rendered/Markdown toggle) + scrollable body + sticky action bar
-- [ ] 4.2 Rendered view: parse the manifest markdown with the existing Markdown renderer (headings, tables, lists, code); frontmatter → compact metadata strip
-- [ ] 4.3 Markdown view: line-numbered raw source with the file bar (Copy, Download)
-- [ ] 4.4 Copy-to-clipboard + Download; toast confirmations (design's toast pattern)
-- [ ] 4.5 Inline Edit: editable source textarea → gated save (snapshot-first)
-- [ ] 4.6 Version panel: list versions, view a version (read-only), restore (gated)
-- [ ] 4.7 Sticky action bar states: review (Regenerate / Copy / Approve), regenerating (spinner + run), approved (✓ + Publish link)
-- [ ] 4.8 Empty state when no manifest yet → Generate CTA
-- [ ] 4.9 Add the manifest destination to the shell (App.tsx projectView union) + ProjectRail/flow links
+- [x] 4.1 `DesignManifest.tsx` scaffold from `Design Manifest.dc.html`: ProjectRail + header (path chip, Rendered/Markdown toggle) + scrollable body + sticky action bar
+- [x] 4.2 Rendered view: parse the manifest markdown with the existing Markdown renderer (headings, tables, lists, code); frontmatter → compact metadata strip
+- [x] 4.3 Markdown view: line-numbered raw source with the file bar (Copy, Download)
+- [x] 4.4 Copy-to-clipboard + Download; toast confirmations (design's toast pattern)
+- [x] 4.5 Inline Edit: editable source textarea → gated save (snapshot-first)
+- [x] 4.6 Version panel: list versions, view a version (read-only), restore (gated)
+- [x] 4.7 Sticky action bar states: review (Regenerate / Copy / Approve), regenerating (spinner + run), approved (✓ + Publish link)
+- [x] 4.8 Empty state when no manifest yet → Generate CTA
+- [x] 4.9 Add the manifest destination to the shell (App.tsx projectView union) + ProjectRail/flow links
 
 ## 5. Assistant dock (renderer + shell)
 

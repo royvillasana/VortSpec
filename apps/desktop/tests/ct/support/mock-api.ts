@@ -11,6 +11,8 @@ import type {
   InspectorComponentsResult,
   EnvCheck,
   DevServerStatus,
+  ManifestResult,
+  ManifestVersion,
 } from "../../../src/shared/ipc";
 
 export interface MockConfig {
@@ -27,6 +29,12 @@ export interface MockConfig {
   storybookIndex?: { id: string; title: string; name: string; type: "docs" | "story" }[];
   /** Replayed to onAgentEvent subscribers (with the started run's id) on startRun. */
   runScript?: RunEvent[];
+  /** Manifest returned by getManifest(). */
+  manifest?: ManifestResult;
+  /** Versions returned by listManifestVersions(). */
+  manifestVersions?: ManifestVersion[];
+  /** Flow returned by getFlow() — used by the manifest screen to read approval. */
+  flow?: { state: { currentStageId: string; stages: { id: string; status: string }[] } } | null;
 }
 
 const EMPTY_TOKENS: InspectorTokensResult = {
@@ -97,7 +105,20 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
       return () => rawSubs.delete(cb);
     },
 
-    getFlow: async () => null,
+    getFlow: async () => cfg.flow ?? null,
+    getManifest: async () =>
+      cfg.manifest ?? { path: "DESIGN.md", content: "", exists: false },
+    saveManifest: async (_p: string, content: string) => ({
+      path: "DESIGN.md",
+      content,
+      exists: true,
+    }),
+    listManifestVersions: async () => ({ versions: cfg.manifestVersions ?? [] }),
+    readManifestVersion: async () => null,
+    restoreManifestVersion: async () =>
+      cfg.manifest ?? { path: "DESIGN.md", content: "", exists: false },
+    snapshotManifest: async () =>
+      cfg.manifest ?? { path: "DESIGN.md", content: "", exists: false },
     setStageStatus: async () => null,
     approveStage: async () => null,
     requestChanges: async () => null,

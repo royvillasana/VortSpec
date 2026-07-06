@@ -33,6 +33,7 @@ export function GuidedFlow({
   onOpenReview,
   onOpenVerify,
   onOpenHistory,
+  onOpenManifest,
 }: {
   project: Project;
   onBack: () => void;
@@ -42,6 +43,7 @@ export function GuidedFlow({
   onOpenReview: () => void;
   onOpenVerify: () => void;
   onOpenHistory: () => void;
+  onOpenManifest: () => void;
 }): React.JSX.Element {
   const [flow, setFlow] = useState<Flow | null>(null);
   const [config, setConfig] = useState<ProjectConfig | null>(null);
@@ -135,7 +137,14 @@ export function GuidedFlow({
                     config={config}
                     publishRepoUrl={flow.state.publishRepoUrl}
                     onSelect={() => setSelectedId(def.id)}
-                    onReview={def.kind === "verify" ? onOpenVerify : onOpenReview}
+                    onReview={
+                      def.kind === "verify"
+                        ? onOpenVerify
+                        : def.kind === "manifest"
+                          ? onOpenManifest
+                          : onOpenReview
+                    }
+                    onOpenManifest={onOpenManifest}
                     onFlow={setFlow}
                   />
                 );
@@ -198,6 +207,7 @@ function TimelineStage({
   publishRepoUrl,
   onSelect,
   onReview,
+  onOpenManifest,
   onFlow,
 }: {
   project: Project;
@@ -211,6 +221,7 @@ function TimelineStage({
   publishRepoUrl?: string;
   onSelect: () => void;
   onReview: () => void;
+  onOpenManifest: () => void;
   onFlow: (f: Flow) => void;
 }): React.JSX.Element {
   const review = state.status === "needs-review";
@@ -287,6 +298,7 @@ function TimelineStage({
               state={state}
               config={config}
               publishRepoUrl={publishRepoUrl}
+              onOpenManifest={onOpenManifest}
               onFlow={onFlow}
             />
           </div>
@@ -303,6 +315,7 @@ function StageBody({
   state,
   config,
   publishRepoUrl,
+  onOpenManifest,
   onFlow,
 }: {
   project: Project;
@@ -310,8 +323,20 @@ function StageBody({
   state: StageState;
   config: ProjectConfig | null;
   publishRepoUrl?: string;
+  onOpenManifest: () => void;
   onFlow: (f: Flow) => void;
 }): React.JSX.Element {
+  if (def.kind === "manifest")
+    return (
+      <Card className="flex items-center gap-3 p-4">
+        <span className="flex-1 text-xs leading-relaxed text-vs-text-secondary">
+          Generate, review, edit, and approve <span className="font-mono text-vs-text-primary">DESIGN.md</span> — the AI hand-off manifest — on its own screen.
+        </span>
+        <Button variant="primary" onClick={onOpenManifest}>
+          Open design manifest →
+        </Button>
+      </Card>
+    );
   if (def.kind === "source")
     return (
       <AgentStage
