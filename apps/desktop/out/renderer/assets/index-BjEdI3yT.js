@@ -17973,6 +17973,11 @@ const HARNESS_PROMPT = [
   "   project's package manager.",
   "4. Keep it minimal and self-contained. Do NOT modify the components themselves; make the",
   "   harness git-ignorable where practical.",
+  "5. Implement a live-control protocol so the VortSpec preview can drive it:",
+  "   - On load, post to window.parent: { source: 'vortspec-preview', type: 'ready' }.",
+  "   - Listen for messages { source: 'vortspec-preview', type: 'render', component: string,",
+  "     props: object } and render just that component with those props (map props to its",
+  "     props/variants). Before any message arrives, render the full gallery as the default.",
   "",
   "When done, the dev server should render the component gallery at its root URL."
 ].join("\n");
@@ -18003,6 +18008,9 @@ function DevPreview({
     script: null,
     message: null
   });
+  const iframeRef = reactExports.useRef(null);
+  const [iframeReady, setIframeReady] = reactExports.useState(false);
+  const [previewProps, setPreviewProps] = reactExports.useState({});
   reactExports.useEffect(() => {
     void api.inspectorComponents(project.path).then((r) => {
       setComponents(r.components);
@@ -18034,6 +18042,21 @@ function DevPreview({
   reactExports.useEffect(() => {
     if (harness.model.status === "done") void startPreview();
   }, [harness.model.status]);
+  reactExports.useEffect(() => {
+    function onMessage(e) {
+      const d = e.data;
+      if (d?.source === "vortspec-preview" && d.type === "ready") setIframeReady(true);
+    }
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, []);
+  reactExports.useEffect(() => {
+    if (!iframeReady || !selName) return;
+    iframeRef.current?.contentWindow?.postMessage(
+      { source: "vortspec-preview", type: "render", component: selName, props: previewProps },
+      "*"
+    );
+  }, [iframeReady, selName, previewProps]);
   const groups = reactExports.useMemo(() => {
     if (!components) return [];
     const q = query.trim().toLowerCase();
@@ -18179,8 +18202,10 @@ function DevPreview({
       ] }) }) : embedUrl ? /* @__PURE__ */ jsxRuntimeExports.jsx(
         "iframe",
         {
+          ref: iframeRef,
           title: "preview",
           src: embedUrl,
+          onLoad: () => setIframeReady(false),
           className: "h-full min-h-[340px] w-full border-0 bg-white"
         }
       ) : /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex min-h-[340px] items-center justify-center p-12", children: /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex max-w-md flex-col items-center gap-3 rounded-xl border border-black/10 bg-white/80 p-6 text-center", children: dev.state === "starting" ? /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
@@ -18217,7 +18242,7 @@ function DevPreview({
         /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-sm font-semibold", children: "Controls" }),
         /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex-1" })
       ] }),
-      selected ? /* @__PURE__ */ jsxRuntimeExports.jsx(ControlsPanel, { component: selected }, selected.name) : /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "p-4 text-xs text-vs-text-muted", children: "Select a component." })
+      selected ? /* @__PURE__ */ jsxRuntimeExports.jsx(ControlsPanel, { component: selected, onValues: setPreviewProps }, selected.name) : /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "p-4 text-xs text-vs-text-muted", children: "Select a component." })
     ] })
   ] });
 }
@@ -18302,10 +18327,16 @@ function initialValues(props) {
   }
   return v;
 }
-function ControlsPanel({ component }) {
+function ControlsPanel({
+  component,
+  onValues
+}) {
   const [values, setValues] = reactExports.useState(() => initialValues(component.props));
   const set = (k, v) => setValues((s) => ({ ...s, [k]: v }));
   const reset = () => setValues(initialValues(component.props));
+  reactExports.useEffect(() => {
+    onValues(values);
+  }, [values, onValues]);
   return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex-1 overflow-y-auto px-4 pb-4", children: [
     /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center py-2", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-[11px] text-vs-text-muted", children: [

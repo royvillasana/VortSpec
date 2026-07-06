@@ -24,6 +24,11 @@ const HARNESS_PROMPT = [
   "   project's package manager.",
   "4. Keep it minimal and self-contained. Do NOT modify the components themselves; make the",
   "   harness git-ignorable where practical.",
+  "5. Implement a live-control protocol so the VortSpec preview can drive it:",
+  "   - On load, post to window.parent: { source: 'vortspec-preview', type: 'ready' }.",
+  "   - Listen for messages { source: 'vortspec-preview', type: 'render', component: string,",
+  "     props: object } and render just that component with those props (map props to its",
+  "     props/variants). Before any message arrives, render the full gallery as the default.",
   "",
   "When done, the dev server should render the component gallery at its root URL.",
 ].join("\n");
@@ -71,6 +76,9 @@ export function DevPreview({
     script: null,
     message: null,
   });
+  const iframeRef = useRef<HTMLIFrameElement | null>(null);
+  const [iframeReady, setIframeReady] = useState(false);
+  const [previewProps, setPreviewProps] = useState<Record<string, string | boolean>>({});
 
   useEffect(() => {
     void api.inspectorComponents(project.path).then((r) => {
@@ -110,6 +118,27 @@ export function DevPreview({
     if (harness.model.status === "done") void startPreview();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [harness.model.status]);
+
+  // Live-control protocol with the embedded harness (postMessage).
+  useEffect(() => {
+    function onMessage(e: MessageEvent): void {
+      const d = e.data as { source?: string; type?: string } | null;
+      if (d?.source === "vortspec-preview" && d.type === "ready") setIframeReady(true);
+    }
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, []);
+
+  // Push the selected component + current prop values to the harness. A dev
+  // server that doesn't speak the protocol simply never signals ready, so this
+  // is a no-op there and the gallery renders as-is (graceful degradation).
+  useEffect(() => {
+    if (!iframeReady || !selName) return;
+    iframeRef.current?.contentWindow?.postMessage(
+      { source: "vortspec-preview", type: "render", component: selName, props: previewProps },
+      "*",
+    );
+  }, [iframeReady, selName, previewProps]);
 
   const groups = useMemo(() => {
     if (!components) return [];
@@ -266,8 +295,10 @@ export function DevPreview({
             </div>
           ) : embedUrl ? (
             <iframe
+              ref={iframeRef}
               title="preview"
               src={embedUrl}
+              onLoad={() => setIframeReady(false)}
               className="h-full min-h-[340px] w-full border-0 bg-white"
             />
           ) : (
@@ -331,7 +362,7 @@ export function DevPreview({
           <div className="flex-1" />
         </div>
         {selected ? (
-          <ControlsPanel key={selected.name} component={selected} />
+          <ControlsPanel key={selected.name} component={selected} onValues={setPreviewProps} />
         ) : (
           <p className="p-4 text-xs text-vs-text-muted">Select a component.</p>
         )}
@@ -431,10 +462,21 @@ function initialValues(props: PropControl[]): Values {
   return v;
 }
 
-function ControlsPanel({ component }: { component: InspectorComponent }): React.JSX.Element {
+function ControlsPanel({
+  component,
+  onValues,
+}: {
+  component: InspectorComponent;
+  onValues: (v: Values) => void;
+}): React.JSX.Element {
   const [values, setValues] = useState<Values>(() => initialValues(component.props));
   const set = (k: string, v: string | boolean): void => setValues((s) => ({ ...s, [k]: v }));
   const reset = (): void => setValues(initialValues(component.props));
+
+  // Report current values so the parent can drive the live preview.
+  useEffect(() => {
+    onValues(values);
+  }, [values, onValues]);
 
   return (
     <div className="flex-1 overflow-y-auto px-4 pb-4">
