@@ -28,7 +28,7 @@ function renderBlocks(text: string): React.JSX.Element[] {
       out.push(
         <pre
           key={key++}
-          className="overflow-x-auto rounded-md border border-vs-border-default bg-black/40 p-3 font-mono text-[12px] leading-relaxed text-vs-text-secondary"
+          className="overflow-x-auto rounded-md border border-vs-border-default bg-vs-bg-code p-3 font-mono text-[12px] leading-relaxed text-vs-text-secondary"
         >
           {body.join("\n")}
         </pre>,

@@ -11,6 +11,8 @@ import type {
   InspectorComponentsResult,
   EnvCheck,
   DevServerStatus,
+  ManifestResult,
+  ManifestVersion,
 } from "../../../src/shared/ipc";
 
 export interface MockConfig {
@@ -27,6 +29,14 @@ export interface MockConfig {
   storybookIndex?: { id: string; title: string; name: string; type: "docs" | "story" }[];
   /** Replayed to onAgentEvent subscribers (with the started run's id) on startRun. */
   runScript?: RunEvent[];
+  /** Manifest returned by getManifest(). */
+  manifest?: ManifestResult;
+  /** Manifest returned by getManifest() after a run transcript completes (design-doc wrote it). */
+  manifestAfterGenerate?: ManifestResult;
+  /** Versions returned by listManifestVersions(). */
+  manifestVersions?: ManifestVersion[];
+  /** Flow returned by getFlow() — used by the manifest screen to read approval. */
+  flow?: { state: { currentStageId: string; stages: { id: string; status: string }[] } } | null;
 }
 
 const EMPTY_TOKENS: InspectorTokensResult = {
@@ -54,6 +64,9 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
   const rawSubs = new Set<(e: { runId: string; line: string }) => void>();
   const devSubs = new Set<(e: { projectPath: string; status: DevServerStatus }) => void>();
   let runSeq = 0;
+  // Flips true once a run's transcript has been replayed — lets getManifest
+  // return the post-generation manifest (mirrors design-doc writing DESIGN.md).
+  let generated = false;
 
   const startRun = async (): Promise<{ runId: string }> => {
     const runId = `run-${runSeq++}`;
@@ -63,6 +76,7 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
       for (const event of cfg.runScript ?? []) {
         for (const sub of eventSubs) sub({ runId, event });
       }
+      generated = true;
     }, 0);
     return { runId };
   };
@@ -97,7 +111,21 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
       return () => rawSubs.delete(cb);
     },
 
-    getFlow: async () => null,
+    getFlow: async () => cfg.flow ?? null,
+    getManifest: async () =>
+      (generated && cfg.manifestAfterGenerate) ||
+      cfg.manifest || { path: "DESIGN.md", content: "", exists: false },
+    saveManifest: async (_p: string, content: string) => ({
+      path: "DESIGN.md",
+      content,
+      exists: true,
+    }),
+    listManifestVersions: async () => ({ versions: cfg.manifestVersions ?? [] }),
+    readManifestVersion: async () => null,
+    restoreManifestVersion: async () =>
+      cfg.manifest ?? { path: "DESIGN.md", content: "", exists: false },
+    snapshotManifest: async () =>
+      cfg.manifest ?? { path: "DESIGN.md", content: "", exists: false },
     setStageStatus: async () => null,
     approveStage: async () => null,
     requestChanges: async () => null,

@@ -14,6 +14,7 @@ export const stageKindSchema = z.enum([
   "intake",
   "agent",
   "verify",
+  "manifest",
 ]);
 export type StageKind = z.infer<typeof stageKindSchema>;
 
@@ -166,6 +167,20 @@ export const DEFAULT_FLOW: StageDef[] = [
     promptTemplate:
       "/sync-tokens\n\nRun the sync-tokens skill: update design.md and token files so they reflect the implementation. No undocumented deviations.",
     allowedTools: ["Read", "Write", "Edit"],
+  },
+  {
+    id: "design-manifest",
+    title: "Design manifest",
+    summary:
+      "/design-doc — generate DESIGN.md: the tokens, component contracts, and conventions any AI coding agent reads to build on-brand screens. Review and approve before publishing.",
+    kind: "manifest",
+    gated: true,
+    // The design-doc skill writes DESIGN.md at the project root (reader also
+    // tolerates .sdd-de/design.md). Surface it for the approval gate.
+    artifact: "DESIGN.md",
+    promptTemplate:
+      "/design-doc\n\nRun the design-doc skill: generate and validate DESIGN.md with @google/design.md, capturing every design token, component contract (props, states, tokens consumed), and convention as the AI hand-off file. Install @google/design.md if it is missing. Do not modify the components themselves.",
+    allowedTools: ["Read", "Write", "Edit", "Bash"],
   },
   {
     id: "commit",

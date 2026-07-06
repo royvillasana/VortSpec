@@ -228,7 +228,7 @@ function RawTerminal({ lines, running }: { lines: string[]; running: boolean }):
     endRef.current?.scrollIntoView();
   }, [lines.length]);
   return (
-    <div className="min-w-0 flex-1 overflow-y-auto bg-black/60 p-5 font-mono text-xs leading-relaxed">
+    <div className="min-w-0 flex-1 overflow-y-auto bg-vs-bg-code p-5 font-mono text-xs leading-relaxed">
       {lines.length === 0 ? (
         <span className="text-vs-text-muted">Raw stream-json output will appear here…</span>
       ) : (

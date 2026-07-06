@@ -10,10 +10,12 @@ import { RunView } from "./views/RunView";
 import { ArtifactReview } from "./views/ArtifactReview";
 import { Verification } from "./views/Verification";
 import { History } from "./views/History";
+import { DesignManifest } from "./views/DesignManifest";
 import { DesignInput } from "./views/DesignInput";
 import { Intake } from "./views/Intake";
 import { NewProjectWizard } from "./views/NewProjectWizard";
 import { Logo } from "./components/Logo";
+import { AssistantDock } from "./components/AssistantDock";
 
 type View = "env" | "dashboard";
 
@@ -72,9 +74,10 @@ export default function App(): React.JSX.Element {
   const [intakeProject, setIntakeProject] = useState<Project | null>(null);
   const [pendingSource, setPendingSource] = useState<Partial<SetupAnswers> | undefined>(undefined);
   const [projectView, setProjectView] = useState<
-    "flow" | "inspector" | "preview" | "run" | "review" | "verify" | "history"
+    "flow" | "inspector" | "preview" | "run" | "review" | "verify" | "history" | "manifest"
   >("flow");
   const [loading, setLoading] = useState(true);
+  const [chatOpen, setChatOpen] = useState(false);
 
   function mergeProject(project: Project): void {
     setProjects((prev) => [project, ...prev.filter((p) => p.path !== project.path)]);
@@ -124,6 +127,9 @@ export default function App(): React.JSX.Element {
       <TopBar
         view={view}
         coreReady={coreReady}
+        chatAvailable={Boolean(activeProject)}
+        chatOpen={chatOpen}
+        onToggleChat={() => setChatOpen((v) => !v)}
         breadcrumb={
           sourceProject?.name ??
           setupProject?.name ??
@@ -143,7 +149,8 @@ export default function App(): React.JSX.Element {
           }
         }}
       />
-      <main className="flex-1">
+      <div className="flex min-h-0 flex-1">
+      <main className="min-w-0 flex-1">
         {view === "env" ? (
           <EnvironmentCheck
             report={report}
@@ -236,6 +243,14 @@ export default function App(): React.JSX.Element {
             onOpenPreview={() => setProjectView("preview")}
             onOpenInspector={() => setProjectView("inspector")}
           />
+        ) : activeProject && projectView === "manifest" ? (
+          <DesignManifest
+            project={activeProject}
+            onBack={() => setProjectView("flow")}
+            onOpenRun={() => setProjectView("run")}
+            onOpenPreview={() => setProjectView("preview")}
+            onOpenHistory={() => setProjectView("history")}
+          />
         ) : activeProject ? (
           <GuidedFlow
             project={activeProject}
@@ -246,6 +261,7 @@ export default function App(): React.JSX.Element {
             onOpenReview={() => setProjectView("review")}
             onOpenVerify={() => setProjectView("verify")}
             onOpenHistory={() => setProjectView("history")}
+            onOpenManifest={() => setProjectView("manifest")}
           />
         ) : (
           <Dashboard
@@ -256,6 +272,19 @@ export default function App(): React.JSX.Element {
           />
         )}
       </main>
+      {activeProject && chatOpen && (
+        <AssistantDock
+          key={activeProject.path}
+          project={activeProject}
+          seedContext={
+            projectView === "manifest"
+              ? "Context: the user is on the Design Manifest screen (DESIGN.md). Help them refine or reason about the manifest."
+              : undefined
+          }
+          onClose={() => setChatOpen(false)}
+        />
+      )}
+      </div>
     </div>
   );
 }
@@ -286,11 +315,17 @@ function TopBar({
   coreReady,
   onNavigate,
   breadcrumb,
+  chatAvailable,
+  chatOpen,
+  onToggleChat,
 }: {
   view: View;
   coreReady: boolean;
   onNavigate: (v: View) => void;
   breadcrumb?: string | null;
+  chatAvailable: boolean;
+  chatOpen: boolean;
+  onToggleChat: () => void;
 }): React.JSX.Element {
   return (
     <header
@@ -329,6 +364,29 @@ function TopBar({
           />
           {view === "env" ? "Environment" : "Ready"}
         </button>
+        {chatAvailable && (
+          <button
+            onClick={onToggleChat}
+            title="Assistant"
+            aria-pressed={chatOpen}
+            className={`flex items-center gap-1.5 rounded-md border px-2 py-1 transition-colors ${
+              chatOpen
+                ? "border-vs-accent bg-vs-bg-elevated text-vs-text-primary"
+                : "border-transparent text-vs-text-secondary hover:text-vs-text-primary"
+            }`}
+          >
+            <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden>
+              <path
+                d="M2 3.5 A1.5 1.5 0 0 1 3.5 2 H10.5 A1.5 1.5 0 0 1 12 3.5 V8.5 A1.5 1.5 0 0 1 10.5 10 H5.5 L3 12 V10 H3.5 A1.5 1.5 0 0 1 2 8.5 Z"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.2"
+                strokeLinejoin="round"
+              />
+            </svg>
+            Chat
+          </button>
+        )}
         <span className="grid h-7 w-7 place-items-center rounded-full border border-vs-border-strong bg-vs-bg-elevated text-[11px] font-medium text-vs-text-secondary">
           You
         </span>

@@ -266,7 +266,7 @@ function RawTerminal({ lines }: { lines: string[] }): React.JSX.Element {
     endRef.current?.scrollIntoView();
   }, [lines.length]);
   return (
-    <div className="h-80 overflow-auto rounded-md border border-vs-border-default bg-black/40 p-3">
+    <div className="h-80 overflow-auto rounded-md border border-vs-border-default bg-vs-bg-code p-3">
       <pre className="font-mono text-[11px] leading-relaxed text-vs-text-secondary">
         {lines.length === 0 ? "Raw Claude Code output will appear here…" : lines.join("\n")}
       </pre>

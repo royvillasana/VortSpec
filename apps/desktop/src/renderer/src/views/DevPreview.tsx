@@ -344,7 +344,7 @@ export function DevPreview({
           />
         </header>
 
-        <div className="min-h-0 flex-1 overflow-y-auto bg-white">
+        <div className="min-h-0 flex-1 overflow-y-auto bg-vs-bg-primary">
           {modify.running ? (
             <RunOverlay title="Applying your change with Claude Code…" run={modify} />
           ) : building ? (
@@ -373,9 +373,9 @@ export function DevPreview({
             </div>
           ) : dev.state === "error" ? (
             <div className="flex min-h-[340px] items-center justify-center p-12">
-              <div className="flex max-w-md flex-col items-center gap-3 rounded-xl border border-black/10 bg-white/80 p-6 text-center">
-                <p className="text-sm font-semibold text-red-600">Storybook failed to start</p>
-                <p className="text-xs text-zinc-500">{dev.message}</p>
+              <div className="flex max-w-md flex-col items-center gap-3 rounded-xl border border-vs-border-default bg-vs-bg-surface p-6 text-center">
+                <p className="text-sm font-semibold text-vs-error">Storybook failed to start</p>
+                <p className="text-xs text-vs-text-muted">{dev.message}</p>
                 <div className="flex gap-2">
                   <Button variant="default" onClick={() => void startPreview()}>
                     Try again
@@ -389,14 +389,14 @@ export function DevPreview({
             </div>
           ) : (
             <div className="flex min-h-[340px] items-center justify-center p-12">
-              <div className="flex max-w-md flex-col items-center gap-3 rounded-xl border border-black/10 bg-white/80 p-6 text-center">
+              <div className="flex max-w-md flex-col items-center gap-3 rounded-xl border border-vs-border-default bg-vs-bg-surface p-6 text-center">
                 <Spinner />
-                <p className="text-sm font-medium text-zinc-700">
+                <p className="text-sm font-medium text-vs-text-secondary">
                   {dev.state === "starting"
                     ? "Starting Storybook — the first boot can take a moment…"
                     : "Preparing the Storybook playground…"}
                 </p>
-                <p className="text-xs text-zinc-500">
+                <p className="text-xs text-vs-text-muted">
                   VortSpec is standing up Storybook for you — no setup needed.
                 </p>
                 <UrlOverride value={devUrl} onChange={setDevUrl} />
@@ -554,7 +554,7 @@ function UrlOverride({
       value={value}
       onChange={(e) => onChange(e.target.value)}
       placeholder="http://localhost:6006"
-      className="mt-1 w-56 rounded-md border border-zinc-300 bg-white px-2.5 py-1.5 text-center font-mono text-[11px] text-zinc-700 placeholder:text-zinc-400 focus:outline-none"
+      className="mt-1 w-56 rounded-md border border-vs-border-strong bg-vs-bg-primary px-2.5 py-1.5 text-center font-mono text-[11px] text-vs-text-secondary placeholder:text-vs-text-muted focus:outline-none focus-visible:border-vs-accent"
     />
   );
 }
