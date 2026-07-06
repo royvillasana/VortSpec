@@ -16744,6 +16744,44 @@ function RawTerminal$1({ lines }) {
     /* @__PURE__ */ jsxRuntimeExports.jsx("div", { ref: endRef })
   ] });
 }
+function ProjectRail({
+  project,
+  onHeaderClick,
+  items
+}) {
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("nav", { className: "flex w-52 shrink-0 flex-col border-r border-vs-border-default bg-vs-bg-surface p-3", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs(
+      "button",
+      {
+        onClick: onHeaderClick,
+        title: "All projects",
+        className: "mb-3 flex items-center gap-2 border-b border-vs-border-default px-2 pb-3 text-left hover:opacity-85",
+        children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "grid h-5 w-5 place-items-center rounded-md bg-vs-accent font-mono text-[11px] font-medium text-vs-bg-primary", children: project.name.charAt(0).toUpperCase() }),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "min-w-0", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "block truncate text-[13px] font-semibold", children: project.name }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "block truncate font-mono text-[11px] text-vs-text-muted", children: project.path })
+          ] })
+        ]
+      }
+    ),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex flex-col gap-0.5", children: items.map((it) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
+      "button",
+      {
+        onClick: it.onClick,
+        className: `flex items-center gap-2.5 rounded-md px-2 py-1.5 text-left text-[13px] ${it.active ? "bg-vs-bg-elevated font-medium text-vs-accent" : "text-vs-text-secondary hover:bg-vs-bg-elevated hover:text-vs-text-primary"}`,
+        children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "flex-1", children: it.label }),
+          it.badge
+        ]
+      },
+      it.label
+    )) })
+  ] });
+}
+function ReviewBadge() {
+  return /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "rounded-full border border-vs-warning-border px-1.5 font-mono text-[10px] text-vs-warning", children: "review" });
+}
 function GuidedFlow({
   project,
   onBack,
@@ -16775,14 +16813,16 @@ function GuidedFlow({
   const progressLabel = !flow ? "" : flowComplete ? "Complete · commit optional" : `${requiredDone} of ${requiredDefs.length} approved${reviewStage ? ` · paused at ${reviewStage.title}` : ""}`;
   return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex h-[calc(100vh-3rem)] w-full overflow-hidden bg-vs-bg-primary text-[13px] text-vs-text-primary", children: [
     /* @__PURE__ */ jsxRuntimeExports.jsx(
-      FlowRail,
+      ProjectRail,
       {
         project,
-        paused: Boolean(reviewStage),
-        onBack,
-        onOpenRun,
-        onOpenPreview,
-        onOpenInspector
+        onHeaderClick: onBack,
+        items: [
+          { label: "Flow", active: true, badge: reviewStage ? /* @__PURE__ */ jsxRuntimeExports.jsx(ReviewBadge, {}) : void 0 },
+          { label: "Run", onClick: onOpenRun },
+          { label: "Preview", onClick: onOpenPreview },
+          { label: "Tokens", onClick: onOpenInspector }
+        ]
       }
     ),
     /* @__PURE__ */ jsxRuntimeExports.jsxs("main", { className: "flex min-w-0 flex-1 flex-col bg-vs-bg-primary", children: [
@@ -16833,51 +16873,6 @@ function GuidedFlow({
       ] }) })
     ] })
   ] });
-}
-function FlowRail({
-  project,
-  paused,
-  onBack,
-  onOpenRun,
-  onOpenPreview,
-  onOpenInspector
-}) {
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs("nav", { className: "flex w-52 shrink-0 flex-col border-r border-vs-border-default bg-vs-bg-surface p-3", children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsxs(
-      "button",
-      {
-        onClick: onBack,
-        title: "All projects",
-        className: "mb-3 flex items-center gap-2 border-b border-vs-border-default px-2 pb-3 text-left hover:opacity-85",
-        children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "grid h-5 w-5 place-items-center rounded-md bg-vs-accent font-mono text-[11px] font-medium text-vs-bg-primary", children: project.name.charAt(0).toUpperCase() }),
-          /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "min-w-0", children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "block truncate text-[13px] font-semibold", children: project.name }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "block truncate font-mono text-[11px] text-vs-text-muted", children: project.path })
-          ] })
-        ]
-      }
-    ),
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col gap-0.5", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2.5 rounded-md bg-vs-bg-elevated px-2 py-1.5 text-[13px] font-medium text-vs-accent", children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "flex-1", children: "Flow" }),
-        paused && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "rounded-full border border-vs-warning-border px-1.5 font-mono text-[10px] text-vs-warning", children: "review" })
-      ] }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx(RailLink, { label: "Run", onClick: onOpenRun }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx(RailLink, { label: "Preview", onClick: onOpenPreview }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx(RailLink, { label: "Tokens", onClick: onOpenInspector })
-    ] })
-  ] });
-}
-function RailLink({ label, onClick }) {
-  return /* @__PURE__ */ jsxRuntimeExports.jsx(
-    "button",
-    {
-      onClick,
-      className: "flex items-center gap-2.5 rounded-md px-2 py-1.5 text-left text-[13px] text-vs-text-secondary hover:bg-vs-bg-elevated hover:text-vs-text-primary",
-      children: /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "flex-1", children: label })
-    }
-  );
 }
 function StageRing({
   status,
@@ -17495,26 +17490,23 @@ function Inspector({
     flash(`Saved --${name} to ${tokenFile ?? "token file"}`);
   }
   return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex h-[calc(100vh-3rem)] w-full overflow-hidden bg-vs-bg-primary text-[13px] text-vs-text-primary", children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("nav", { className: "flex w-52 shrink-0 flex-col border-r border-vs-border-default bg-vs-bg-surface p-3", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsxs(
-        "button",
-        {
-          onClick: onBack,
-          className: "mb-3 flex items-center gap-2 border-b border-vs-border-default px-2 pb-3 text-left hover:opacity-85",
-          children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "grid h-5 w-5 place-items-center rounded-md bg-vs-accent font-mono text-[11px] font-medium text-vs-bg-primary", children: project.name.charAt(0).toUpperCase() }),
-            /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "min-w-0", children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "block truncate text-[13px] font-semibold", children: project.name }),
-              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "block truncate font-mono text-[11px] text-vs-text-muted", children: project.path })
-            ] })
-          ]
-        }
-      ),
-      /* @__PURE__ */ jsxRuntimeExports.jsx(RailItem$1, { label: "Flow", onClick: onBack }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx(RailItem$1, { label: "Run", onClick: onOpenRun }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx(RailItem$1, { label: "Preview", onClick: onOpenPreview }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx(RailItem$1, { label: "Tokens", active: true, count: total })
-    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx(
+      ProjectRail,
+      {
+        project,
+        onHeaderClick: onBack,
+        items: [
+          { label: "Flow", onClick: onBack },
+          { label: "Run", onClick: onOpenRun },
+          { label: "Preview", onClick: onOpenPreview },
+          {
+            label: "Tokens",
+            active: true,
+            badge: /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono text-[11px] text-vs-text-muted", children: total })
+          }
+        ]
+      }
+    ),
     /* @__PURE__ */ jsxRuntimeExports.jsxs("main", { className: "flex min-w-0 flex-1 flex-col bg-vs-bg-primary", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsxs("header", { className: "flex flex-none flex-col gap-3.5 border-b border-vs-border-default px-6 pb-3 pt-5", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-3", children: [
@@ -17612,24 +17604,6 @@ function Inspector({
       /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono", children: toast })
     ] })
   ] });
-}
-function RailItem$1({
-  label,
-  active,
-  count,
-  onClick
-}) {
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs(
-    "button",
-    {
-      onClick,
-      className: `flex items-center gap-2.5 rounded-md px-2 py-1.5 text-left text-[13px] ${active ? "bg-vs-bg-elevated font-medium text-vs-accent" : "text-vs-text-secondary hover:bg-vs-bg-elevated hover:text-vs-text-primary"}`,
-      children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "flex-1", children: label }),
-        count !== void 0 && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono text-[11px] text-vs-text-muted", children: count })
-      ]
-    }
-  );
 }
 function Segment({
   active,
@@ -17883,7 +17857,8 @@ const LEVEL_LABEL = {
 function DevPreview({
   project,
   onBack,
-  onOpenRun
+  onOpenRun,
+  onOpenInspector
 }) {
   const [components, setComponents] = reactExports.useState(null);
   const [previewUrl, setPreviewUrl] = reactExports.useState(null);
@@ -17910,25 +17885,19 @@ function DevPreview({
   const selected = components?.find((c) => c.name === selName) ?? null;
   const embedUrl = devUrl.trim() || previewUrl || "";
   return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex h-[calc(100vh-3rem)] w-full overflow-hidden bg-vs-bg-primary text-[13px] text-vs-text-primary", children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("nav", { className: "flex w-52 shrink-0 flex-col border-r border-vs-border-default bg-vs-bg-surface p-3", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsxs(
-        "button",
-        {
-          onClick: onBack,
-          className: "mb-3 flex items-center gap-2 border-b border-vs-border-default px-2 pb-3 text-left hover:opacity-85",
-          children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "grid h-5 w-5 place-items-center rounded-md bg-vs-accent font-mono text-[11px] font-medium text-vs-bg-primary", children: project.name.charAt(0).toUpperCase() }),
-            /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "min-w-0", children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "block truncate text-[13px] font-semibold", children: project.name }),
-              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "block truncate font-mono text-[11px] text-vs-text-muted", children: project.path })
-            ] })
-          ]
-        }
-      ),
-      /* @__PURE__ */ jsxRuntimeExports.jsx(RailItem, { label: "Flow", onClick: onBack }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx(RailItem, { label: "Run", onClick: onOpenRun }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx(RailItem, { label: "Preview", active: true })
-    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx(
+      ProjectRail,
+      {
+        project,
+        onHeaderClick: onBack,
+        items: [
+          { label: "Flow", onClick: onBack },
+          { label: "Run", onClick: onOpenRun },
+          { label: "Preview", active: true },
+          { label: "Tokens", onClick: onOpenInspector }
+        ]
+      }
+    ),
     /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex w-52 shrink-0 flex-col border-r border-vs-border-default bg-vs-bg-surface", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "border-b border-vs-border-default p-3", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "mb-2 text-[11px] font-semibold uppercase tracking-wide text-vs-text-muted", children: [
@@ -18039,23 +18008,6 @@ function DevPreview({
       selected ? /* @__PURE__ */ jsxRuntimeExports.jsx(ControlsPanel, { component: selected }, selected.name) : /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "p-4 text-xs text-vs-text-muted", children: "Select a component." })
     ] })
   ] });
-}
-function RailItem({
-  label,
-  active,
-  onClick
-}) {
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs(
-    "button",
-    {
-      onClick,
-      className: `flex items-center gap-2.5 rounded-md px-2 py-1.5 text-left text-[13px] ${active ? "bg-vs-bg-elevated font-medium text-vs-accent" : "text-vs-text-secondary hover:bg-vs-bg-elevated hover:text-vs-text-primary"}`,
-      children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "flex-1", children: label }),
-        active && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "h-1.5 w-1.5 rounded-full bg-vs-success" })
-      ]
-    }
-  );
 }
 function StatusDot({ status }) {
   const color = status === "verified" ? "bg-vs-success" : status === "has-issues" ? "bg-vs-warning" : status === "built" ? "bg-vs-text-muted" : "bg-vs-border-strong";
@@ -18201,29 +18153,23 @@ function RunView({
   const [term, setTerm] = reactExports.useState(false);
   const badge = STATUS_BADGE$1[model.status];
   return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex h-[calc(100vh-3rem)] w-full overflow-hidden bg-vs-bg-primary text-[13px] text-vs-text-primary", children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("nav", { className: "flex w-52 shrink-0 flex-col border-r border-vs-border-default bg-vs-bg-surface p-3", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsxs(
-        "button",
-        {
-          onClick: onBack,
-          className: "mb-3 flex items-center gap-2 border-b border-vs-border-default px-2 pb-3 text-left hover:opacity-85",
-          children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "grid h-5 w-5 place-items-center rounded-md bg-vs-accent font-mono text-[11px] font-medium text-vs-bg-primary", children: project.name.charAt(0).toUpperCase() }),
-            /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "min-w-0", children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "block truncate text-[13px] font-semibold", children: project.name }),
-              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "block truncate font-mono text-[11px] text-vs-text-muted", children: project.path })
-            ] })
-          ]
-        }
-      ),
-      /* @__PURE__ */ jsxRuntimeExports.jsx(Rail$1, { label: "Flow", onClick: onBack }),
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2.5 rounded-md bg-vs-bg-elevated px-2 py-1.5 text-[13px] font-medium text-vs-accent", children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "flex-1", children: "Run" }),
-        running && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "h-1.5 w-1.5 rounded-full bg-vs-accent" })
-      ] }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx(Rail$1, { label: "Preview", onClick: onOpenPreview }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx(Rail$1, { label: "Tokens", onClick: onOpenInspector })
-    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx(
+      ProjectRail,
+      {
+        project,
+        onHeaderClick: onBack,
+        items: [
+          { label: "Flow", onClick: onBack },
+          {
+            label: "Run",
+            active: true,
+            badge: running ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "h-1.5 w-1.5 rounded-full bg-vs-accent" }) : void 0
+          },
+          { label: "Preview", onClick: onOpenPreview },
+          { label: "Tokens", onClick: onOpenInspector }
+        ]
+      }
+    ),
     /* @__PURE__ */ jsxRuntimeExports.jsxs("main", { className: "flex min-w-0 flex-1 flex-col bg-vs-bg-primary", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsxs("header", { className: "flex flex-none items-center gap-3 border-b border-vs-border-default px-6 py-4", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col gap-0.5", children: [
@@ -18366,16 +18312,6 @@ function tagInfo(a) {
   };
   const hit = map[name];
   return { tag: name.slice(0, 6) || "tool", color: hit?.[0] ?? "#9BA1AB", border: hit?.[1] ?? "#26282D" };
-}
-function Rail$1({ label, onClick }) {
-  return /* @__PURE__ */ jsxRuntimeExports.jsx(
-    "button",
-    {
-      onClick,
-      className: "flex items-center gap-2.5 rounded-md px-2 py-1.5 text-left text-[13px] text-vs-text-secondary hover:bg-vs-bg-elevated hover:text-vs-text-primary",
-      children: /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "flex-1", children: label })
-    }
-  );
 }
 function Markdown({ text }) {
   return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex flex-col gap-4", children: renderBlocks(text) });
@@ -18524,29 +18460,24 @@ function ArtifactReview({
   const approved = mode === "approved" || state?.status === "approved";
   const badge = STATUS_BADGE[approved ? "approved" : state?.status ?? "needs-review"];
   return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex h-[calc(100vh-3rem)] w-full overflow-hidden bg-vs-bg-primary text-[13px] text-vs-text-primary", children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("nav", { className: "flex w-52 shrink-0 flex-col border-r border-vs-border-default bg-vs-bg-surface p-3", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsxs(
-        "button",
-        {
-          onClick: onBack,
-          className: "mb-3 flex items-center gap-2 border-b border-vs-border-default px-2 pb-3 text-left hover:opacity-85",
-          children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "grid h-5 w-5 place-items-center rounded-md bg-vs-accent font-mono text-[11px] font-medium text-vs-bg-primary", children: project.name.charAt(0).toUpperCase() }),
-            /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "min-w-0", children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "block truncate text-[13px] font-semibold", children: project.name }),
-              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "block truncate font-mono text-[11px] text-vs-text-muted", children: project.path })
-            ] })
-          ]
-        }
-      ),
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2.5 rounded-md bg-vs-bg-elevated px-2 py-1.5 text-[13px] font-medium text-vs-accent", children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "flex-1", children: "Flow" }),
-        !approved && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "rounded-full border border-vs-warning-border px-1.5 font-mono text-[10px] text-vs-warning", children: "review" })
-      ] }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx(Rail, { label: "Run", onClick: onOpenRun }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx(Rail, { label: "Preview", onClick: onOpenPreview }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx(Rail, { label: "Tokens", onClick: onOpenInspector })
-    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx(
+      ProjectRail,
+      {
+        project,
+        onHeaderClick: onBack,
+        items: [
+          {
+            label: "Flow",
+            active: true,
+            onClick: onBack,
+            badge: approved ? void 0 : /* @__PURE__ */ jsxRuntimeExports.jsx(ReviewBadge, {})
+          },
+          { label: "Run", onClick: onOpenRun },
+          { label: "Preview", onClick: onOpenPreview },
+          { label: "Tokens", onClick: onOpenInspector }
+        ]
+      }
+    ),
     /* @__PURE__ */ jsxRuntimeExports.jsxs("main", { className: "flex min-w-0 flex-1 flex-col bg-vs-bg-primary", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsxs("header", { className: "flex flex-none items-center gap-3 border-b border-vs-border-default px-8 py-4", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx("button", { onClick: onBack, className: "text-[13px] text-vs-text-muted hover:text-vs-text-primary", children: "Flow" }),
@@ -18616,16 +18547,6 @@ function pickReviewStage(flow) {
   const target = review ?? flow.definitions.find((d) => d.id === flow.state.currentStageId);
   if (!target) return null;
   return { def: target, state: byId(target.id) };
-}
-function Rail({ label, onClick }) {
-  return /* @__PURE__ */ jsxRuntimeExports.jsx(
-    "button",
-    {
-      onClick,
-      className: "flex items-center gap-2.5 rounded-md px-2 py-1.5 text-left text-[13px] text-vs-text-secondary hover:bg-vs-bg-elevated hover:text-vs-text-primary",
-      children: /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "flex-1", children: label })
-    }
-  );
 }
 const frameworkSchema = enumType([
   "react",
@@ -19187,7 +19108,8 @@ function App() {
       {
         project: activeProject,
         onBack: () => setProjectView("flow"),
-        onOpenRun: () => setProjectView("run")
+        onOpenRun: () => setProjectView("run"),
+        onOpenInspector: () => setProjectView("inspector")
       }
     ) : activeProject && projectView === "run" ? /* @__PURE__ */ jsxRuntimeExports.jsx(
       RunView,

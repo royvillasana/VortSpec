@@ -102,6 +102,7 @@ export default function App(): React.JSX.Element {
             project={activeProject}
             onBack={() => setProjectView("flow")}
             onOpenRun={() => setProjectView("run")}
+            onOpenInspector={() => setProjectView("inspector")}
           />
         ) : activeProject && projectView === "run" ? (
           <RunView

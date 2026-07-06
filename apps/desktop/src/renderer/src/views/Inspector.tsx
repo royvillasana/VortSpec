@@ -8,6 +8,7 @@ import type {
 } from "../../../shared/ipc";
 import { api } from "../lib/api";
 import { Spinner } from "../components/ui";
+import { ProjectRail } from "../components/ProjectRail";
 
 const TYPE_ORDER: TokenType[] = ["color", "typography", "spacing", "radius", "shadow", "other"];
 const TYPE_LABEL: Record<TokenType, string> = {
@@ -106,27 +107,20 @@ export function Inspector({
 
   return (
     <div className="flex h-[calc(100vh-3rem)] w-full overflow-hidden bg-vs-bg-primary text-[13px] text-vs-text-primary">
-      {/* Left rail */}
-      <nav className="flex w-52 shrink-0 flex-col border-r border-vs-border-default bg-vs-bg-surface p-3">
-        <button
-          onClick={onBack}
-          className="mb-3 flex items-center gap-2 border-b border-vs-border-default px-2 pb-3 text-left hover:opacity-85"
-        >
-          <span className="grid h-5 w-5 place-items-center rounded-md bg-vs-accent font-mono text-[11px] font-medium text-vs-bg-primary">
-            {project.name.charAt(0).toUpperCase()}
-          </span>
-          <span className="min-w-0">
-            <span className="block truncate text-[13px] font-semibold">{project.name}</span>
-            <span className="block truncate font-mono text-[11px] text-vs-text-muted">
-              {project.path}
-            </span>
-          </span>
-        </button>
-        <RailItem label="Flow" onClick={onBack} />
-        <RailItem label="Run" onClick={onOpenRun} />
-        <RailItem label="Preview" onClick={onOpenPreview} />
-        <RailItem label="Tokens" active count={total} />
-      </nav>
+      <ProjectRail
+        project={project}
+        onHeaderClick={onBack}
+        items={[
+          { label: "Flow", onClick: onBack },
+          { label: "Run", onClick: onOpenRun },
+          { label: "Preview", onClick: onOpenPreview },
+          {
+            label: "Tokens",
+            active: true,
+            badge: <span className="font-mono text-[11px] text-vs-text-muted">{total}</span>,
+          },
+        ]}
+      />
 
       {/* Main */}
       <main className="flex min-w-0 flex-1 flex-col bg-vs-bg-primary">
@@ -237,32 +231,6 @@ export function Inspector({
         </div>
       )}
     </div>
-  );
-}
-
-function RailItem({
-  label,
-  active,
-  count,
-  onClick,
-}: {
-  label: string;
-  active?: boolean;
-  count?: number;
-  onClick?: () => void;
-}): React.JSX.Element {
-  return (
-    <button
-      onClick={onClick}
-      className={`flex items-center gap-2.5 rounded-md px-2 py-1.5 text-left text-[13px] ${
-        active
-          ? "bg-vs-bg-elevated font-medium text-vs-accent"
-          : "text-vs-text-secondary hover:bg-vs-bg-elevated hover:text-vs-text-primary"
-      }`}
-    >
-      <span className="flex-1">{label}</span>
-      {count !== undefined && <span className="font-mono text-[11px] text-vs-text-muted">{count}</span>}
-    </button>
   );
 }
 

@@ -3,6 +3,7 @@ import type { Project } from "../../../shared/ipc";
 import type { Activity, RunModel, RunStatus } from "../lib/run-model";
 import { useLatestRun } from "../lib/useAgentRun";
 import { Button, Spinner } from "../components/ui";
+import { ProjectRail } from "../components/ProjectRail";
 
 /**
  * Run View (design: "Run View.dc.html", adapted to v2) — a full-screen live
@@ -27,30 +28,20 @@ export function RunView({
 
   return (
     <div className="flex h-[calc(100vh-3rem)] w-full overflow-hidden bg-vs-bg-primary text-[13px] text-vs-text-primary">
-      {/* Left rail */}
-      <nav className="flex w-52 shrink-0 flex-col border-r border-vs-border-default bg-vs-bg-surface p-3">
-        <button
-          onClick={onBack}
-          className="mb-3 flex items-center gap-2 border-b border-vs-border-default px-2 pb-3 text-left hover:opacity-85"
-        >
-          <span className="grid h-5 w-5 place-items-center rounded-md bg-vs-accent font-mono text-[11px] font-medium text-vs-bg-primary">
-            {project.name.charAt(0).toUpperCase()}
-          </span>
-          <span className="min-w-0">
-            <span className="block truncate text-[13px] font-semibold">{project.name}</span>
-            <span className="block truncate font-mono text-[11px] text-vs-text-muted">
-              {project.path}
-            </span>
-          </span>
-        </button>
-        <Rail label="Flow" onClick={onBack} />
-        <div className="flex items-center gap-2.5 rounded-md bg-vs-bg-elevated px-2 py-1.5 text-[13px] font-medium text-vs-accent">
-          <span className="flex-1">Run</span>
-          {running && <span className="h-1.5 w-1.5 rounded-full bg-vs-accent" />}
-        </div>
-        <Rail label="Preview" onClick={onOpenPreview} />
-        <Rail label="Tokens" onClick={onOpenInspector} />
-      </nav>
+      <ProjectRail
+        project={project}
+        onHeaderClick={onBack}
+        items={[
+          { label: "Flow", onClick: onBack },
+          {
+            label: "Run",
+            active: true,
+            badge: running ? <span className="h-1.5 w-1.5 rounded-full bg-vs-accent" /> : undefined,
+          },
+          { label: "Preview", onClick: onOpenPreview },
+          { label: "Tokens", onClick: onOpenInspector },
+        ]}
+      />
 
       {/* Main */}
       <main className="flex min-w-0 flex-1 flex-col bg-vs-bg-primary">
@@ -269,13 +260,3 @@ function tagInfo(a: Activity): { tag: string; color: string; border: string } {
   return { tag: name.slice(0, 6) || "tool", color: hit?.[0] ?? "#9BA1AB", border: hit?.[1] ?? "#26282D" };
 }
 
-function Rail({ label, onClick }: { label: string; onClick: () => void }): React.JSX.Element {
-  return (
-    <button
-      onClick={onClick}
-      className="flex items-center gap-2.5 rounded-md px-2 py-1.5 text-left text-[13px] text-vs-text-secondary hover:bg-vs-bg-elevated hover:text-vs-text-primary"
-    >
-      <span className="flex-1">{label}</span>
-    </button>
-  );
-}

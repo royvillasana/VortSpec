@@ -16,6 +16,7 @@ import { api } from "../lib/api";
 import { useAgentRun } from "../lib/useAgentRun";
 import { Button, Card, Spinner } from "../components/ui";
 import { RunPanel } from "../components/RunPanel";
+import { ProjectRail, ReviewBadge } from "../components/ProjectRail";
 
 /**
  * The guided SDD-DE flow (US-05..US-09), design "Guided Flow.dc.html" adapted to
@@ -73,13 +74,15 @@ export function GuidedFlow({
 
   return (
     <div className="flex h-[calc(100vh-3rem)] w-full overflow-hidden bg-vs-bg-primary text-[13px] text-vs-text-primary">
-      <FlowRail
+      <ProjectRail
         project={project}
-        paused={Boolean(reviewStage)}
-        onBack={onBack}
-        onOpenRun={onOpenRun}
-        onOpenPreview={onOpenPreview}
-        onOpenInspector={onOpenInspector}
+        onHeaderClick={onBack}
+        items={[
+          { label: "Flow", active: true, badge: reviewStage ? <ReviewBadge /> : undefined },
+          { label: "Run", onClick: onOpenRun },
+          { label: "Preview", onClick: onOpenPreview },
+          { label: "Tokens", onClick: onOpenInspector },
+        ]}
       />
       <main className="flex min-w-0 flex-1 flex-col bg-vs-bg-primary">
         <header className="flex flex-none items-center gap-3.5 border-b border-vs-border-default px-8 pb-4 pt-5">
@@ -137,67 +140,6 @@ export function GuidedFlow({
         </div>
       </main>
     </div>
-  );
-}
-
-/** The shared app-shell left rail (Flow active). */
-function FlowRail({
-  project,
-  paused,
-  onBack,
-  onOpenRun,
-  onOpenPreview,
-  onOpenInspector,
-}: {
-  project: Project;
-  paused: boolean;
-  onBack: () => void;
-  onOpenRun: () => void;
-  onOpenPreview: () => void;
-  onOpenInspector: () => void;
-}): React.JSX.Element {
-  return (
-    <nav className="flex w-52 shrink-0 flex-col border-r border-vs-border-default bg-vs-bg-surface p-3">
-      <button
-        onClick={onBack}
-        title="All projects"
-        className="mb-3 flex items-center gap-2 border-b border-vs-border-default px-2 pb-3 text-left hover:opacity-85"
-      >
-        <span className="grid h-5 w-5 place-items-center rounded-md bg-vs-accent font-mono text-[11px] font-medium text-vs-bg-primary">
-          {project.name.charAt(0).toUpperCase()}
-        </span>
-        <span className="min-w-0">
-          <span className="block truncate text-[13px] font-semibold">{project.name}</span>
-          <span className="block truncate font-mono text-[11px] text-vs-text-muted">
-            {project.path}
-          </span>
-        </span>
-      </button>
-      <div className="flex flex-col gap-0.5">
-        <div className="flex items-center gap-2.5 rounded-md bg-vs-bg-elevated px-2 py-1.5 text-[13px] font-medium text-vs-accent">
-          <span className="flex-1">Flow</span>
-          {paused && (
-            <span className="rounded-full border border-vs-warning-border px-1.5 font-mono text-[10px] text-vs-warning">
-              review
-            </span>
-          )}
-        </div>
-        <RailLink label="Run" onClick={onOpenRun} />
-        <RailLink label="Preview" onClick={onOpenPreview} />
-        <RailLink label="Tokens" onClick={onOpenInspector} />
-      </div>
-    </nav>
-  );
-}
-
-function RailLink({ label, onClick }: { label: string; onClick: () => void }): React.JSX.Element {
-  return (
-    <button
-      onClick={onClick}
-      className="flex items-center gap-2.5 rounded-md px-2 py-1.5 text-left text-[13px] text-vs-text-secondary hover:bg-vs-bg-elevated hover:text-vs-text-primary"
-    >
-      <span className="flex-1">{label}</span>
-    </button>
   );
 }
 
