@@ -276,10 +276,13 @@ export default function App(): React.JSX.Element {
         <AssistantDock
           key={activeProject.path}
           project={activeProject}
+          allowModify={projectView === "preview"}
           seedContext={
-            projectView === "manifest"
-              ? "Context: the user is on the Design Manifest screen (DESIGN.md). Help them refine or reason about the manifest."
-              : undefined
+            projectView === "preview"
+              ? "Context: the user is viewing this project's components in Storybook (Playground). When they ask for a change, edit only the relevant component's source under the component directory, keep values token-referenced (no hardcoded hex/px), and match the surrounding code style. Storybook hot-reloads, so the change appears live. Do not touch unrelated components or the token file."
+              : projectView === "manifest"
+                ? "Context: the user is on the Design Manifest screen (DESIGN.md). Help them refine or reason about the manifest."
+                : undefined
           }
           onClose={() => setChatOpen(false)}
         />

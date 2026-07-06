@@ -51,3 +51,21 @@ test("close button fires onClose", async ({ mount }) => {
   await c.getByTitle("Close assistant").click();
   expect(closed).toBe(true);
 });
+
+test("modify mode relabels the dock and adapts the empty state", async ({ mount }) => {
+  const c = await mount(
+    <AssistantDock project={PROJECT} allowModify onClose={() => undefined} />,
+    { hooksConfig: { mock: {} } },
+  );
+  await expect(c.getByText("Modify with Claude")).toBeVisible();
+  await expect(c.getByText("Change a component")).toBeVisible();
+  await expect(c.getByText(/Storybook reloads live/)).toBeVisible();
+});
+
+test("read-only mode is the default labelling", async ({ mount }) => {
+  const c = await mount(<AssistantDock project={PROJECT} onClose={() => undefined} />, {
+    hooksConfig: { mock: {} },
+  });
+  await expect(c.getByText("Assistant")).toBeVisible();
+  await expect(c.getByText("Ask about this project")).toBeVisible();
+});

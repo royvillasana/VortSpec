@@ -16,7 +16,7 @@ const props = {
   onOpenHistory: noop,
 };
 
-test("embeds Storybook at its root and shows the modify chat panel", async ({ mount }) => {
+test("embeds Storybook at its root with no VortSpec component sidebar", async ({ mount }) => {
   const c = await mount(<DevPreview {...props} />, {
     hooksConfig: { mock: { components: COMPONENTS, devStatus: RUNNING, previewInfo: HAS_SB } },
   });
@@ -25,9 +25,8 @@ test("embeds Storybook at its root and shows the modify chat panel", async ({ mo
   // The embedded Storybook loads at its root URL.
   const frame = c.locator("iframe");
   await expect(frame).toHaveAttribute("src", `${RUNNING.url}/`);
-  // The right panel is the modify-with-Claude chat (replaces component detail).
-  await expect(c.getByText("Modify with Claude")).toBeVisible();
-  await expect(c.getByText("Change a component")).toBeVisible();
+  // No embedded chat panel in the view — the assistant is the global top-bar dock.
+  await expect(c.getByText("Modify with Claude")).toHaveCount(0);
 });
 
 test("auto-generates Storybook (no clicks) when the project has none", async ({ mount }) => {
@@ -60,11 +59,11 @@ test("auto-embeds Storybook when it is already set up (no clicks)", async ({ mou
   await expect(frame).toHaveAttribute("src", `${RUNNING.url}/`);
 });
 
-test("the modify chat spends no usage until the first message", async ({ mount }) => {
+test("offers Regenerate Storybook from the header", async ({ mount }) => {
   const c = await mount(<DevPreview {...props} />, {
     hooksConfig: { mock: { components: COMPONENTS, devStatus: RUNNING, previewInfo: HAS_SB } },
   });
-  // Empty chat state + disabled Send (no run started, no usage spent).
-  await expect(c.getByText(/Storybook hot-reloads|reloads live/)).toBeVisible();
-  await expect(c.getByRole("button", { name: "Send" })).toBeDisabled();
+  await expect(c.getByRole("button", { name: "Regenerate Storybook" })).toBeVisible();
+  // The dev-server control shows the running port.
+  await expect(c.getByText(":6006")).toBeVisible();
 });

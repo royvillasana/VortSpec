@@ -5,7 +5,6 @@ import { useAgentRun } from "../lib/useAgentRun";
 import { Button, Spinner } from "../components/ui";
 import { RunPanel } from "../components/RunPanel";
 import { ProjectRail } from "../components/ProjectRail";
-import { AssistantDock } from "../components/AssistantDock";
 
 const STORYBOOK_PROMPT = [
   "Set up Storybook for this project so VortSpec can embed real component docs, controls, and variants.",
@@ -32,17 +31,11 @@ const STORYBOOK_PROMPT = [
   "When done, `storybook dev` should serve at http://localhost:6006 with an autodocs page per component.",
 ].join("\n");
 
-const MODIFY_SEED =
-  "Context: the user is viewing this project's components in Storybook. When they ask for a change, " +
-  "edit only the relevant component's source under the component directory, keep values token-referenced " +
-  "(no hardcoded hex/px), and match the surrounding code style. Storybook hot-reloads, so the change " +
-  "appears live. Do not touch unrelated components or the token file.";
-
 /**
  * Component Playground — generates and embeds a real Storybook for the project.
  * Storybook's own sidebar drives which component/story you see; VortSpec just
- * stands the server up and embeds it. The right panel is a modify-capable Claude
- * Code chat so the user can request component changes (Storybook reloads live).
+ * stands the server up and embeds it. Component changes go through the global
+ * assistant dock (top-bar Chat), which is modify-capable on this screen.
  * Claude Code is the engine — VortSpec doesn't re-implement Storybook.
  */
 export function DevPreview({
@@ -222,9 +215,6 @@ export function DevPreview({
           )}
         </div>
       </main>
-
-      {/* Modify-with-Claude chat (replaces the old component-detail panel) */}
-      <AssistantDock key={project.path} project={project} allowModify seedContext={MODIFY_SEED} />
     </div>
   );
 }
