@@ -2,6 +2,15 @@ import { test, expect } from "@playwright/experimental-ct-react";
 import { GuidedFlow } from "../../src/renderer/src/views/GuidedFlow";
 import { PROJECT } from "./support/fixtures";
 import type { InspectorComponentsResult, InspectorTokensResult } from "../../src/shared/ipc";
+import type { RunEvent } from "../../src/shared/run-events";
+
+// A recorded build run: init → generate-artifacts + implement → done.
+const BUILD_RUN: RunEvent[] = [
+  { kind: "system-init", model: "claude-opus-4-8", sessionId: "sess-b", tools: ["Read", "Write", "Edit", "Bash"], mcpServers: [], mcpErrors: [] },
+  { kind: "tool-use", id: "t1", name: "Write", path: "src/components/Modal.tsx" },
+  { kind: "assistant-text", text: "Implemented the Modal component." },
+  { kind: "result", isError: false, text: "done", sessionId: "sess-b" },
+];
 
 const noop = (): void => {};
 const props = {
@@ -81,6 +90,30 @@ test("opens the new-component form", async ({ mount }) => {
   await c.getByRole("button", { name: "+ New component" }).click();
   await expect(c.getByPlaceholder(/Component name/)).toBeVisible();
   await expect(c.getByRole("button", { name: "Create component" })).toBeVisible();
+});
+
+test("build-one runs a transcript, then the roster reflects it from files", async ({ mount }) => {
+  // Modal starts detected; after the recorded build run, the roster (re-read from
+  // files) shows Modal built, so its row switches from Build to Verify/Open.
+  const AFTER: InspectorComponentsResult = {
+    componentDir: "src/components",
+    previewUrl: null,
+    components: ROSTER.components.map((c) =>
+      c.name === "Modal"
+        ? { ...c, file: "src/components/Modal.tsx", status: "built" as const }
+        : c,
+    ),
+  };
+  const c = await mount(<GuidedFlow {...props} />, {
+    hooksConfig: {
+      mock: { tokens: TOKENS, components: ROSTER, manifest: MANIFEST, runScript: BUILD_RUN, componentsAfterRun: AFTER },
+    },
+  });
+  // Modal is the only detected component → its row shows Build.
+  await c.getByRole("button", { name: "Build", exact: true }).click();
+  // After the run completes, the roster re-reads and no detected row remains.
+  await expect(c.getByText("detected", { exact: true })).toHaveCount(0);
+  await expect(c.getByText(/Foundation ready · 3\/3 built/)).toBeVisible();
 });
 
 test("surfaces outputs: manifest + optional publish, no completion gate", async ({ mount }) => {

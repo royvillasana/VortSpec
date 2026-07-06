@@ -30,13 +30,13 @@
 
 ## 6. Flow model + shell
 
-- [ ] 6.1 Simplify `DEFAULT_FLOW`/`shared/flow.ts` + `flow-manager` to stop encoding a terminal "complete"; keep the manifest approval record + publish target; report progress as counts
-- [ ] 6.2 Legacy `flow.json` migration: reconcile forward, deriving foundation status from files so in-progress projects open sensibly
+- [x] 6.1 Simplify `DEFAULT_FLOW`/`shared/flow.ts` + `flow-manager` to stop encoding a terminal "complete"; keep the manifest approval record + publish target; report progress as counts
+- [x] 6.2 Legacy `flow.json` migration: reconcile forward, deriving foundation status from files so in-progress projects open sensibly
 - [x] 6.3 Rewrite `GuidedFlow.tsx` into the workspace (foundation header + roster + add-menu + outputs); retire the linear timeline + completion banner. "Flow" rail destination opens the workspace
 
 ## 7. Tests & verification
 
-- [ ] 7.1 Main-process unit tests: roster status derivation (built/verified/has-issues/detected), new-component append to components.json, flow-manager forward migration (no terminal complete)
+- [x] 7.1 Main-process unit tests: roster status derivation (built/verified/has-issues/detected), new-component append to components.json, flow-manager forward migration (no terminal complete)
 - [x] 7.2 Renderer component tests (Playwright CT): foundation collapsed vs setup, roster statuses render, add-components menu (all/selected/new), per-row build/verify actions present, outputs section (manifest staleness, optional publish), no "complete" banner
-- [ ] 7.3 Recorded-transcript test: build-one and new-component → roster updates to built from files
+- [x] 7.3 Recorded-transcript test: build-one and new-component → roster updates to built from files
 - [ ] 7.4 End-to-end through the UI on the real generated project: open the workspace, build a remaining component, add a brand-new component, verify one, regenerate the manifest — all without a "complete" dead-end; `pnpm build && pnpm test && pnpm lint` green

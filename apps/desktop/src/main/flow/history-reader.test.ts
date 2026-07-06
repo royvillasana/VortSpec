@@ -23,6 +23,36 @@ describe("history-reader", () => {
     expect(current.stages.every((s) => s.status === "pending")).toBe(true);
   });
 
+  it("reports file-derived living status and never a terminal 'passed'", async () => {
+    // Scaffold: 1 token, 2 components (one built, one detected-only), no manifest.
+    await mkdir(join(dir, ".sdd-de"), { recursive: true });
+    await mkdir(join(dir, "src", "components"), { recursive: true });
+    await writeFile(
+      join(dir, ".sdd-de/project.yaml"),
+      "token_file: src/tokens.css\ncomponent_dir: src/components\n",
+      "utf8",
+    );
+    await writeFile(join(dir, "src/tokens.css"), ":root {\n  --color-primary: #7C6FF0;\n}\n", "utf8");
+    await writeFile(
+      join(dir, ".sdd-de/components.json"),
+      JSON.stringify([
+        { name: "Button", level: "atom" },
+        { name: "Modal", level: "organism" },
+      ]),
+      "utf8",
+    );
+    // Only Button has a source file → built; Modal stays detected.
+    await writeFile(join(dir, "src/components/Button.tsx"), "export const Button = () => null;\n", "utf8");
+
+    const { runs } = await getRunHistory(dir);
+    const current = runs[0];
+    expect(current.outcome).toBe("in-progress"); // never "passed"
+    const components = current.stages.find((s) => s.name === "Components");
+    expect(components?.decision).toBe("1/2 built");
+    const foundation = current.stages.find((s) => s.name === "Foundation");
+    expect(foundation?.status).toBe("done");
+  });
+
   it("includes valid recorded runs from .vortspec/runs and skips malformed ones", async () => {
     await mkdir(join(dir, ".vortspec", "runs"), { recursive: true });
     await writeFile(
