@@ -32,6 +32,7 @@ export function GuidedFlow({
   onOpenRun,
   onOpenReview,
   onOpenVerify,
+  onOpenHistory,
 }: {
   project: Project;
   onBack: () => void;
@@ -40,6 +41,7 @@ export function GuidedFlow({
   onOpenRun: () => void;
   onOpenReview: () => void;
   onOpenVerify: () => void;
+  onOpenHistory: () => void;
 }): React.JSX.Element {
   const [flow, setFlow] = useState<Flow | null>(null);
   const [config, setConfig] = useState<ProjectConfig | null>(null);
@@ -84,6 +86,7 @@ export function GuidedFlow({
           { label: "Run", onClick: onOpenRun },
           { label: "Preview", onClick: onOpenPreview },
           { label: "Tokens", onClick: onOpenInspector },
+          { label: "History", onClick: onOpenHistory },
         ]}
       />
       <main className="flex min-w-0 flex-1 flex-col bg-vs-bg-primary">

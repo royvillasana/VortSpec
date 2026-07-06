@@ -98,6 +98,7 @@ const api = {
   requestChanges: (projectPath, stageId, notes) => invoke("flow:requestChanges", { projectPath, stageId, notes }),
   saveIntake: (projectPath, content) => invoke("flow:saveIntake", { projectPath, content }),
   completeInput: (projectPath, stageId) => invoke("flow:completeInput", { projectPath, stageId }),
+  getHistory: (projectPath) => invoke("flow:getHistory", projectPath),
   setPublishTarget: (projectPath, repoUrl) => invoke("flow:setPublishTarget", { projectPath, repoUrl }),
   readArtifact: (projectPath, relPath) => invoke("artifact:read", { projectPath, relPath }),
   findLatestArtifact: (projectPath, suffix) => invoke("artifact:findLatest", { projectPath, suffix }),

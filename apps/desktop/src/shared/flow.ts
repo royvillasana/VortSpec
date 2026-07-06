@@ -82,6 +82,29 @@ export const flowSchema = z.object({
 });
 export type Flow = z.infer<typeof flowSchema>;
 
+// ── Run history (US-11) ──────────────────────────────────────────────
+
+export const runStageSummarySchema = z.object({
+  name: z.string(),
+  decision: z.string(),
+  status: z.enum(["done", "review", "cancelled", "pending"]),
+});
+export type RunStageSummary = z.infer<typeof runStageSummarySchema>;
+
+export const runSummarySchema = z.object({
+  id: z.string(),
+  label: z.string(),
+  title: z.string(),
+  outcome: z.enum(["running", "in-review", "passed", "cancelled", "failed", "in-progress"]),
+  updatedAt: z.string(),
+  stages: z.array(runStageSummarySchema),
+  artifacts: z.array(z.string()),
+});
+export type RunSummary = z.infer<typeof runSummarySchema>;
+
+export const runHistoryResultSchema = z.object({ runs: z.array(runSummarySchema) });
+export type RunHistoryResult = z.infer<typeof runHistoryResultSchema>;
+
 /**
  * The SDD-DE mandatory cycle (from @royvillasana/sdd-de docs/sdd-mandatory-steps.md).
  * The app drives these exact steps via the installed skills (`/enrich-brief`,

@@ -135,6 +135,21 @@ const flowSchema = z.object({
   definitions: z.array(stageDefSchema),
   state: flowStateSchema
 });
+const runStageSummarySchema = z.object({
+  name: z.string(),
+  decision: z.string(),
+  status: z.enum(["done", "review", "cancelled", "pending"])
+});
+const runSummarySchema = z.object({
+  id: z.string(),
+  label: z.string(),
+  title: z.string(),
+  outcome: z.enum(["running", "in-review", "passed", "cancelled", "failed", "in-progress"]),
+  updatedAt: z.string(),
+  stages: z.array(runStageSummarySchema),
+  artifacts: z.array(z.string())
+});
+const runHistoryResultSchema = z.object({ runs: z.array(runSummarySchema) });
 const DEFAULT_FLOW = [
   {
     id: "design-system",
@@ -482,6 +497,7 @@ const ipcContract = {
     request: z.object({ projectPath: z.string(), stageId: z.string() }),
     response: flowSchema
   },
+  "flow:getHistory": { request: z.string(), response: runHistoryResultSchema },
   "flow:setPublishTarget": {
     request: z.object({ projectPath: z.string(), repoUrl: z.string() }),
     response: flowSchema
@@ -1701,6 +1717,78 @@ async function readArtifact(projectPath, relPath) {
     return null;
   }
 }
+function stageStatus(s) {
+  if (s === "approved") return "done";
+  if (s === "needs-review") return "review";
+  if (s === "failed") return "cancelled";
+  return "pending";
+}
+function decisionText(status, notes) {
+  if (notes) return "changes requested";
+  return {
+    approved: "approved",
+    "needs-review": "awaiting approval",
+    running: "running",
+    failed: "failed",
+    pending: "not started"
+  }[status];
+}
+async function currentFlowRun(projectPath) {
+  const flow = await getFlow(projectPath);
+  const stageOf = (id) => flow.state.stages.find((s) => s.id === id);
+  const statuses = flow.state.stages.map((s) => s.status);
+  const requiredDone = flow.definitions.filter((d) => !d.optional).every((d) => stageOf(d.id)?.status === "approved");
+  const outcome = statuses.includes("running") ? "running" : statuses.includes("failed") ? "failed" : statuses.includes("needs-review") ? "in-review" : requiredDone ? "passed" : "in-progress";
+  const updatedAt = flow.state.stages.map((s) => s.updatedAt).sort().pop() ?? (/* @__PURE__ */ new Date(0)).toISOString();
+  const artifacts = [
+    ...new Set(
+      flow.definitions.map((d) => d.artifact ?? d.artifactGlob).filter((a) => Boolean(a)).map((a) => a.split("/").pop())
+    )
+  ];
+  return {
+    id: "current",
+    label: "Current",
+    title: "Design system flow",
+    outcome,
+    updatedAt,
+    stages: flow.definitions.map((d) => {
+      const st = stageOf(d.id);
+      return {
+        name: d.title,
+        decision: st ? decisionText(st.status, st.decisionNotes) : "not started",
+        status: st ? stageStatus(st.status) : "pending"
+      };
+    }),
+    artifacts
+  };
+}
+async function recordedRuns(projectPath) {
+  const dir = join(projectPath, ".vortspec", "runs");
+  let entries;
+  try {
+    entries = await readdir(dir);
+  } catch {
+    return [];
+  }
+  const runs2 = [];
+  for (const name of entries.filter((n) => n.endsWith(".json"))) {
+    const raw = await readFile(join(dir, name), "utf8").catch(() => null);
+    if (!raw) continue;
+    try {
+      const parsed = runSummarySchema.safeParse(JSON.parse(raw));
+      if (parsed.success) runs2.push(parsed.data);
+    } catch {
+    }
+  }
+  return runs2.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+}
+async function getRunHistory(projectPath) {
+  const [current, recorded] = await Promise.all([
+    currentFlowRun(projectPath),
+    recordedRuns(projectPath)
+  ]);
+  return { runs: [current, ...recorded] };
+}
 const handlers = {
   "system:isElectron": () => true,
   "system:getVersion": () => app.getVersion(),
@@ -1727,6 +1815,7 @@ const handlers = {
   "flow:requestChanges": ((req) => requestChanges(req.projectPath, req.stageId, req.notes)),
   "flow:saveIntake": ((req) => saveIntake(req.projectPath, req.content)),
   "flow:completeInput": ((req) => completeInput(req.projectPath, req.stageId)),
+  "flow:getHistory": ((projectPath) => getRunHistory(projectPath)),
   "flow:setPublishTarget": ((req) => setPublishTarget(req.projectPath, req.repoUrl)),
   "artifact:read": ((req) => readArtifact(req.projectPath, req.relPath)),
   "artifact:findLatest": ((req) => findLatestArtifact(req.projectPath, req.suffix)),

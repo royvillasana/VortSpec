@@ -12751,7 +12751,7 @@ function ProjectCard({
       /* @__PURE__ */ jsxRuntimeExports.jsx(ActionButton, { onClick: onOpen, icon: /* @__PURE__ */ jsxRuntimeExports.jsx(PlayIcon, {}), children: ready ? "Open flow" : "Set up" }),
       /* @__PURE__ */ jsxRuntimeExports.jsx(ActionButton, { onClick: () => void api.openFolder(project.path), icon: /* @__PURE__ */ jsxRuntimeExports.jsx(FolderIcon$1, {}), children: "Folder" }),
       /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "flex-1" }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "pr-2 text-[11px] text-vs-text-muted", children: relativeTime(project.addedAt) })
+      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "pr-2 text-[11px] text-vs-text-muted", children: relativeTime$1(project.addedAt) })
     ] })
   ] });
 }
@@ -12828,7 +12828,7 @@ function FolderIcon$1() {
     }
   ) });
 }
-function relativeTime(iso) {
+function relativeTime$1(iso) {
   const then = new Date(iso).getTime();
   if (Number.isNaN(then)) return "recently";
   const mins = Math.floor((Date.now() - then) / 6e4);
@@ -16467,6 +16467,21 @@ objectType({
   definitions: arrayType(stageDefSchema),
   state: flowStateSchema
 });
+const runStageSummarySchema = objectType({
+  name: stringType(),
+  decision: stringType(),
+  status: enumType(["done", "review", "cancelled", "pending"])
+});
+const runSummarySchema = objectType({
+  id: stringType(),
+  label: stringType(),
+  title: stringType(),
+  outcome: enumType(["running", "in-review", "passed", "cancelled", "failed", "in-progress"]),
+  updatedAt: stringType(),
+  stages: arrayType(runStageSummarySchema),
+  artifacts: arrayType(stringType())
+});
+objectType({ runs: arrayType(runSummarySchema) });
 const initialRun = {
   status: "idle",
   messages: [],
@@ -16883,7 +16898,8 @@ function GuidedFlow({
   onOpenPreview,
   onOpenRun,
   onOpenReview,
-  onOpenVerify
+  onOpenVerify,
+  onOpenHistory
 }) {
   const [flow, setFlow] = reactExports.useState(null);
   const [config, setConfig] = reactExports.useState(null);
@@ -16916,7 +16932,8 @@ function GuidedFlow({
           { label: "Flow", active: true, badge: reviewStage ? /* @__PURE__ */ jsxRuntimeExports.jsx(ReviewBadge, {}) : void 0 },
           { label: "Run", onClick: onOpenRun },
           { label: "Preview", onClick: onOpenPreview },
-          { label: "Tokens", onClick: onOpenInspector }
+          { label: "Tokens", onClick: onOpenInspector },
+          { label: "History", onClick: onOpenHistory }
         ]
       }
     ),
@@ -17543,7 +17560,8 @@ function Inspector({
   project,
   onBack,
   onOpenPreview,
-  onOpenRun
+  onOpenRun,
+  onOpenHistory
 }) {
   const [tokens, setTokens] = reactExports.useState(null);
   const [usage, setUsage] = reactExports.useState({});
@@ -17598,7 +17616,8 @@ function Inspector({
             label: "Tokens",
             active: true,
             badge: /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono text-[11px] text-vs-text-muted", children: total })
-          }
+          },
+          { label: "History", onClick: onOpenHistory }
         ]
       }
     ),
@@ -17953,7 +17972,8 @@ function DevPreview({
   project,
   onBack,
   onOpenRun,
-  onOpenInspector
+  onOpenInspector,
+  onOpenHistory
 }) {
   const [components, setComponents] = reactExports.useState(null);
   const [previewUrl, setPreviewUrl] = reactExports.useState(null);
@@ -17989,7 +18009,8 @@ function DevPreview({
           { label: "Flow", onClick: onBack },
           { label: "Run", onClick: onOpenRun },
           { label: "Preview", active: true },
-          { label: "Tokens", onClick: onOpenInspector }
+          { label: "Tokens", onClick: onOpenInspector },
+          { label: "History", onClick: onOpenHistory }
         ]
       }
     ),
@@ -18242,7 +18263,8 @@ function RunView({
   project,
   onBack,
   onOpenPreview,
-  onOpenInspector
+  onOpenInspector,
+  onOpenHistory
 }) {
   const { model, running, hasRun, cancel } = useLatestRun();
   const [term, setTerm] = reactExports.useState(false);
@@ -18261,7 +18283,8 @@ function RunView({
             badge: running ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "h-1.5 w-1.5 rounded-full bg-vs-accent" }) : void 0
           },
           { label: "Preview", onClick: onOpenPreview },
-          { label: "Tokens", onClick: onOpenInspector }
+          { label: "Tokens", onClick: onOpenInspector },
+          { label: "History", onClick: onOpenHistory }
         ]
       }
     ),
@@ -18830,6 +18853,187 @@ function FindingCard({
       ]
     }
   );
+}
+const OUTCOME = {
+  passed: { label: "passed", color: "#30A46C", border: "rgba(48,164,108,0.35)", bg: "rgba(48,164,108,0.08)" },
+  "in-review": { label: "in review", color: "#FFB224", border: "rgba(255,178,36,0.4)", bg: "rgba(255,178,36,0.08)" },
+  running: { label: "running", color: "#7C6FF0", border: "rgba(124,111,240,0.4)", bg: "rgba(124,111,240,0.08)" },
+  cancelled: { label: "cancelled", color: "#E5484D", border: "rgba(229,72,77,0.4)", bg: "rgba(229,72,77,0.06)" },
+  failed: { label: "failed", color: "#E5484D", border: "rgba(229,72,77,0.4)", bg: "rgba(229,72,77,0.06)" },
+  "in-progress": { label: "in progress", color: "#6B7280", border: "#26282D", bg: "#0B0C0E" }
+};
+function History({
+  project,
+  onBack,
+  onOpenRun,
+  onOpenPreview,
+  onOpenInspector
+}) {
+  const [runs, setRuns] = reactExports.useState(null);
+  const [open, setOpen] = reactExports.useState(/* @__PURE__ */ new Set(["current"]));
+  reactExports.useEffect(() => {
+    void api.getHistory(project.path).then((r) => setRuns(r.runs));
+  }, [project.path]);
+  function toggle(id) {
+    setOpen((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex h-[calc(100vh-3rem)] w-full overflow-hidden bg-vs-bg-primary text-[13px] text-vs-text-primary", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsx(
+      ProjectRail,
+      {
+        project,
+        onHeaderClick: onBack,
+        items: [
+          { label: "Flow", onClick: onBack },
+          { label: "Run", onClick: onOpenRun },
+          { label: "Preview", onClick: onOpenPreview },
+          { label: "Tokens", onClick: onOpenInspector },
+          { label: "History", active: true }
+        ]
+      }
+    ),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("main", { className: "flex min-w-0 flex-1 flex-col bg-vs-bg-primary", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("header", { className: "flex flex-none items-center gap-3 border-b border-vs-border-default px-7 pb-3.5 pt-5", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("h1", { className: "text-xl font-semibold tracking-[-0.01em]", children: "History" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "font-mono text-xs text-vs-text-muted", children: [
+          runs ? `${runs.length} run${runs.length === 1 ? "" : "s"}` : "",
+          " · .vortspec/runs/"
+        ] })
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex-1 overflow-y-auto px-7 pb-12 pt-6", children: runs === null ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2 text-sm text-vs-text-secondary", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx(Spinner, {}),
+        " Reading history…"
+      ] }) : /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex max-w-[680px] flex-col", children: [
+        runs.map((run, i) => /* @__PURE__ */ jsxRuntimeExports.jsx(
+          RunRow,
+          {
+            run,
+            isLast: i === runs.length - 1,
+            open: open.has(run.id),
+            onToggle: () => toggle(run.id)
+          },
+          run.id
+        )),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "mt-4 pl-7 text-xs text-vs-text-muted", children: [
+          "Past runs are recorded to ",
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono", children: ".vortspec/runs/" }),
+          " and will appear here as separate entries."
+        ] })
+      ] }) })
+    ] })
+  ] });
+}
+function RunRow({
+  run,
+  isLast,
+  open,
+  onToggle
+}) {
+  const o = OUTCOME[run.outcome];
+  const review = run.outcome === "in-review";
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex gap-4", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex w-3 flex-none flex-col items-center", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx(
+        "span",
+        {
+          className: "mt-4 h-[9px] w-[9px] flex-none rounded-full border-2 border-vs-bg-primary",
+          style: { background: o.color, boxShadow: `0 0 0 1px ${o.color}` }
+        }
+      ),
+      !isLast && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "w-px flex-1 bg-vs-border-default" })
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "min-w-0 flex-1 pb-3", children: /* @__PURE__ */ jsxRuntimeExports.jsxs(
+      "div",
+      {
+        className: "overflow-hidden rounded-lg border bg-vs-bg-surface",
+        style: {
+          borderColor: review ? "#34373D" : "#26282D",
+          boxShadow: review ? "inset 2px 0 0 #FFB224" : "none"
+        },
+        children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsxs(
+            "button",
+            {
+              onClick: onToggle,
+              className: "flex w-full items-center gap-2.5 px-3.5 py-3 text-left hover:bg-vs-bg-hover",
+              children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "flex w-3.5 flex-none items-center justify-center", children: /* @__PURE__ */ jsxRuntimeExports.jsx(OutcomeIcon, { outcome: run.outcome }) }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "flex-none font-mono text-[11px] text-vs-text-muted", children: run.label }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "min-w-0 flex-1 truncate text-[13px] font-medium text-vs-text-primary", children: run.title }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "span",
+                  {
+                    className: "flex-none rounded-full border px-2 py-px font-mono text-[10px]",
+                    style: { color: o.color, borderColor: o.border, background: o.bg },
+                    children: o.label
+                  }
+                ),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "w-[74px] flex-none text-right text-[11px] text-vs-text-muted", children: relativeTime(run.updatedAt) }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "span",
+                  {
+                    className: "flex-none text-[9px] text-vs-text-muted transition-transform",
+                    style: { transform: open ? "rotate(90deg)" : "rotate(0deg)" },
+                    children: "▶"
+                  }
+                )
+              ]
+            }
+          ),
+          open && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col gap-0.5 border-t border-vs-border-default py-3 pl-10 pr-3.5", children: [
+            run.stages.map((s, i) => /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2.5 py-1 text-xs", children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx(StageIcon, { status: s.status }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "w-[150px] flex-none text-vs-text-primary", children: s.name }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "min-w-0 flex-1 truncate text-vs-text-secondary", children: s.decision })
+            ] }, i)),
+            run.artifacts.length > 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "mt-2 flex flex-wrap items-center gap-1.5 border-t border-vs-border-default pt-2.5", children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "mr-0.5 text-[11px] text-vs-text-muted", children: "artifacts" }),
+              run.artifacts.map((a) => /* @__PURE__ */ jsxRuntimeExports.jsx(
+                "span",
+                {
+                  className: "rounded border border-vs-border-default bg-vs-bg-primary px-1.5 py-px font-mono text-[11px] text-vs-text-secondary",
+                  children: a
+                },
+                a
+              ))
+            ] })
+          ] })
+        ]
+      }
+    ) })
+  ] });
+}
+function OutcomeIcon({ outcome }) {
+  if (outcome === "running") return /* @__PURE__ */ jsxRuntimeExports.jsx(Spinner, {});
+  if (outcome === "passed") return /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs text-vs-success", children: "✓" });
+  if (outcome === "cancelled" || outcome === "failed")
+    return /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs text-vs-error", children: "✕" });
+  if (outcome === "in-review") return /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "h-[7px] w-[7px] rounded-full bg-vs-warning" });
+  return /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "h-[7px] w-[7px] rounded-full bg-vs-text-muted" });
+}
+function StageIcon({ status }) {
+  const map = {
+    done: { icon: "✓", cls: "text-vs-success" },
+    review: { icon: "◆", cls: "text-vs-warning" },
+    cancelled: { icon: "✕", cls: "text-vs-error" },
+    pending: { icon: "·", cls: "text-vs-text-muted" }
+  };
+  const m = map[status];
+  return /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: `w-3.5 flex-none text-center ${m.cls}`, children: m.icon });
+}
+function relativeTime(iso) {
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then) || then === 0) return "—";
+  const mins = Math.floor((Date.now() - then) / 6e4);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.floor(hours / 24)}d ago`;
 }
 function DesignInput({
   project,
@@ -19830,7 +20034,8 @@ function App() {
         project: activeProject,
         onBack: () => setProjectView("flow"),
         onOpenPreview: () => setProjectView("preview"),
-        onOpenRun: () => setProjectView("run")
+        onOpenRun: () => setProjectView("run"),
+        onOpenHistory: () => setProjectView("history")
       }
     ) : activeProject && projectView === "preview" ? /* @__PURE__ */ jsxRuntimeExports.jsx(
       DevPreview,
@@ -19838,7 +20043,8 @@ function App() {
         project: activeProject,
         onBack: () => setProjectView("flow"),
         onOpenRun: () => setProjectView("run"),
-        onOpenInspector: () => setProjectView("inspector")
+        onOpenInspector: () => setProjectView("inspector"),
+        onOpenHistory: () => setProjectView("history")
       }
     ) : activeProject && projectView === "run" ? /* @__PURE__ */ jsxRuntimeExports.jsx(
       RunView,
@@ -19846,7 +20052,8 @@ function App() {
         project: activeProject,
         onBack: () => setProjectView("flow"),
         onOpenPreview: () => setProjectView("preview"),
-        onOpenInspector: () => setProjectView("inspector")
+        onOpenInspector: () => setProjectView("inspector"),
+        onOpenHistory: () => setProjectView("history")
       }
     ) : activeProject && projectView === "review" ? /* @__PURE__ */ jsxRuntimeExports.jsx(
       ArtifactReview,
@@ -19866,6 +20073,15 @@ function App() {
         onOpenPreview: () => setProjectView("preview"),
         onOpenInspector: () => setProjectView("inspector")
       }
+    ) : activeProject && projectView === "history" ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+      History,
+      {
+        project: activeProject,
+        onBack: () => setProjectView("flow"),
+        onOpenRun: () => setProjectView("run"),
+        onOpenPreview: () => setProjectView("preview"),
+        onOpenInspector: () => setProjectView("inspector")
+      }
     ) : activeProject ? /* @__PURE__ */ jsxRuntimeExports.jsx(
       GuidedFlow,
       {
@@ -19875,7 +20091,8 @@ function App() {
         onOpenPreview: () => setProjectView("preview"),
         onOpenRun: () => setProjectView("run"),
         onOpenReview: () => setProjectView("review"),
-        onOpenVerify: () => setProjectView("verify")
+        onOpenVerify: () => setProjectView("verify"),
+        onOpenHistory: () => setProjectView("history")
       }
     ) : /* @__PURE__ */ jsxRuntimeExports.jsx(
       Dashboard,

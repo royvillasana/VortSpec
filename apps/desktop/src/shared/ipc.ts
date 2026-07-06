@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { agentRunOptionsSchema } from "./run-events";
-import { flowSchema, stageStatusSchema } from "./flow";
+import { flowSchema, stageStatusSchema, runHistoryResultSchema } from "./flow";
 import { setupAnswersSchema, projectConfigSchema } from "./setup";
 import {
   inspectorTokensResultSchema,
@@ -41,6 +41,9 @@ export type {
   StageState,
   StageStatus,
   StageKind,
+  RunSummary,
+  RunStageSummary,
+  RunHistoryResult,
 } from "./flow";
 
 /**
@@ -174,6 +177,7 @@ export const ipcContract = {
     request: z.object({ projectPath: z.string(), stageId: z.string() }),
     response: flowSchema,
   },
+  "flow:getHistory": { request: z.string(), response: runHistoryResultSchema },
   "flow:setPublishTarget": {
     request: z.object({ projectPath: z.string(), repoUrl: z.string() }),
     response: flowSchema,

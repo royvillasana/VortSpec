@@ -74,6 +74,7 @@ const api = {
     invoke("flow:saveIntake", { projectPath, content }),
   completeInput: (projectPath: string, stageId: string) =>
     invoke("flow:completeInput", { projectPath, stageId }),
+  getHistory: (projectPath: string) => invoke("flow:getHistory", projectPath),
   setPublishTarget: (projectPath: string, repoUrl: string) =>
     invoke("flow:setPublishTarget", { projectPath, repoUrl }),
   readArtifact: (projectPath: string, relPath: string) =>

@@ -27,6 +27,7 @@ import {
   readArtifact,
   findLatestArtifact,
 } from "./flow/flow-manager";
+import { getRunHistory } from "./flow/history-reader";
 import type { AgentRunOptions } from "../shared/run-events";
 import type { StageStatus } from "../shared/flow";
 
@@ -86,6 +87,7 @@ const handlers: Record<IpcChannel, Handler> = {
     saveIntake(req.projectPath, req.content)) as Handler,
   "flow:completeInput": ((req: { projectPath: string; stageId: string }) =>
     completeInput(req.projectPath, req.stageId)) as Handler,
+  "flow:getHistory": ((projectPath: string) => getRunHistory(projectPath)) as Handler,
   "flow:setPublishTarget": ((req: { projectPath: string; repoUrl: string }) =>
     setPublishTarget(req.projectPath, req.repoUrl)) as Handler,
   "artifact:read": ((req: { projectPath: string; relPath: string }) =>

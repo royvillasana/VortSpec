@@ -51,11 +51,13 @@ export function Inspector({
   onBack,
   onOpenPreview,
   onOpenRun,
+  onOpenHistory,
 }: {
   project: Project;
   onBack: () => void;
   onOpenPreview: () => void;
   onOpenRun: () => void;
+  onOpenHistory: () => void;
 }): React.JSX.Element {
   const [tokens, setTokens] = useState<InspectorToken[] | null>(null);
   const [usage, setUsage] = useState<Record<string, TokenUsage[]>>({});
@@ -119,6 +121,7 @@ export function Inspector({
             active: true,
             badge: <span className="font-mono text-[11px] text-vs-text-muted">{total}</span>,
           },
+          { label: "History", onClick: onOpenHistory },
         ]}
       />
 

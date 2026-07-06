@@ -27,11 +27,13 @@ export function DevPreview({
   onBack,
   onOpenRun,
   onOpenInspector,
+  onOpenHistory,
 }: {
   project: Project;
   onBack: () => void;
   onOpenRun: () => void;
   onOpenInspector: () => void;
+  onOpenHistory: () => void;
 }): React.JSX.Element {
   const [components, setComponents] = useState<InspectorComponent[] | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -71,6 +73,7 @@ export function DevPreview({
           { label: "Run", onClick: onOpenRun },
           { label: "Preview", active: true },
           { label: "Tokens", onClick: onOpenInspector },
+          { label: "History", onClick: onOpenHistory },
         ]}
       />
 

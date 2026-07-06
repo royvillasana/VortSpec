@@ -16,11 +16,13 @@ export function RunView({
   onBack,
   onOpenPreview,
   onOpenInspector,
+  onOpenHistory,
 }: {
   project: Project;
   onBack: () => void;
   onOpenPreview: () => void;
   onOpenInspector: () => void;
+  onOpenHistory: () => void;
 }): React.JSX.Element {
   const { model, running, hasRun, cancel } = useLatestRun();
   const [term, setTerm] = useState(false);
@@ -40,6 +42,7 @@ export function RunView({
           },
           { label: "Preview", onClick: onOpenPreview },
           { label: "Tokens", onClick: onOpenInspector },
+          { label: "History", onClick: onOpenHistory },
         ]}
       />
 

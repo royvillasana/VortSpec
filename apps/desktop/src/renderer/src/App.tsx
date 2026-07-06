@@ -9,6 +9,7 @@ import { DevPreview } from "./views/DevPreview";
 import { RunView } from "./views/RunView";
 import { ArtifactReview } from "./views/ArtifactReview";
 import { Verification } from "./views/Verification";
+import { History } from "./views/History";
 import { DesignInput } from "./views/DesignInput";
 import { Intake } from "./views/Intake";
 import { NewProjectWizard } from "./views/NewProjectWizard";
@@ -34,7 +35,7 @@ export default function App(): React.JSX.Element {
   const [intakeProject, setIntakeProject] = useState<Project | null>(null);
   const [pendingSource, setPendingSource] = useState<Partial<SetupAnswers> | undefined>(undefined);
   const [projectView, setProjectView] = useState<
-    "flow" | "inspector" | "preview" | "run" | "review" | "verify"
+    "flow" | "inspector" | "preview" | "run" | "review" | "verify" | "history"
   >("flow");
   const [loading, setLoading] = useState(true);
 
@@ -139,6 +140,7 @@ export default function App(): React.JSX.Element {
             onBack={() => setProjectView("flow")}
             onOpenPreview={() => setProjectView("preview")}
             onOpenRun={() => setProjectView("run")}
+            onOpenHistory={() => setProjectView("history")}
           />
         ) : activeProject && projectView === "preview" ? (
           <DevPreview
@@ -146,6 +148,7 @@ export default function App(): React.JSX.Element {
             onBack={() => setProjectView("flow")}
             onOpenRun={() => setProjectView("run")}
             onOpenInspector={() => setProjectView("inspector")}
+            onOpenHistory={() => setProjectView("history")}
           />
         ) : activeProject && projectView === "run" ? (
           <RunView
@@ -153,6 +156,7 @@ export default function App(): React.JSX.Element {
             onBack={() => setProjectView("flow")}
             onOpenPreview={() => setProjectView("preview")}
             onOpenInspector={() => setProjectView("inspector")}
+            onOpenHistory={() => setProjectView("history")}
           />
         ) : activeProject && projectView === "review" ? (
           <ArtifactReview
@@ -170,6 +174,14 @@ export default function App(): React.JSX.Element {
             onOpenPreview={() => setProjectView("preview")}
             onOpenInspector={() => setProjectView("inspector")}
           />
+        ) : activeProject && projectView === "history" ? (
+          <History
+            project={activeProject}
+            onBack={() => setProjectView("flow")}
+            onOpenRun={() => setProjectView("run")}
+            onOpenPreview={() => setProjectView("preview")}
+            onOpenInspector={() => setProjectView("inspector")}
+          />
         ) : activeProject ? (
           <GuidedFlow
             project={activeProject}
@@ -179,6 +191,7 @@ export default function App(): React.JSX.Element {
             onOpenRun={() => setProjectView("run")}
             onOpenReview={() => setProjectView("review")}
             onOpenVerify={() => setProjectView("verify")}
+            onOpenHistory={() => setProjectView("history")}
           />
         ) : (
           <Dashboard

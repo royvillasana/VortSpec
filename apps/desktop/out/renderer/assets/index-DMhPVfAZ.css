@@ -561,12 +561,20 @@
     margin-top: calc(var(--spacing) * 3);
   }
 
+  .mt-4 {
+    margin-top: calc(var(--spacing) * 4);
+  }
+
   .mt-14 {
     margin-top: calc(var(--spacing) * 14);
   }
 
   .mt-auto {
     margin-top: auto;
+  }
+
+  .mr-0\.5 {
+    margin-right: calc(var(--spacing) * .5);
   }
 
   .mb-1 {
@@ -699,6 +707,10 @@
 
   .h-\[7px\] {
     height: 7px;
+  }
+
+  .h-\[9px\] {
+    height: 9px;
   }
 
   .h-\[15px\] {
@@ -837,6 +849,10 @@
     width: 7px;
   }
 
+  .w-\[9px\] {
+    width: 9px;
+  }
+
   .w-\[15px\] {
     width: 15px;
   }
@@ -847,6 +863,14 @@
 
   .w-\[34px\] {
     width: 34px;
+  }
+
+  .w-\[74px\] {
+    width: 74px;
+  }
+
+  .w-\[150px\] {
+    width: 150px;
   }
 
   .w-\[210px\] {
@@ -863,6 +887,10 @@
 
   .w-full {
     width: 100%;
+  }
+
+  .w-px {
+    width: 1px;
   }
 
   .max-w-2xl {
@@ -1233,6 +1261,10 @@
     border-color: #7c6ff0;
   }
 
+  .border-vs-bg-primary {
+    border-color: #0b0c0e;
+  }
+
   .border-vs-border-default {
     border-color: #26282d;
   }
@@ -1539,12 +1571,20 @@
     padding-top: calc(var(--spacing) * 1.5);
   }
 
+  .pt-2\.5 {
+    padding-top: calc(var(--spacing) * 2.5);
+  }
+
   .pt-4 {
     padding-top: calc(var(--spacing) * 4);
   }
 
   .pt-5 {
     padding-top: calc(var(--spacing) * 5);
+  }
+
+  .pt-6 {
+    padding-top: calc(var(--spacing) * 6);
   }
 
   .pt-7 {
@@ -1565,6 +1605,10 @@
 
   .pr-2 {
     padding-right: calc(var(--spacing) * 2);
+  }
+
+  .pr-3\.5 {
+    padding-right: calc(var(--spacing) * 3.5);
   }
 
   .pr-5 {
@@ -1591,12 +1635,24 @@
     padding-bottom: calc(var(--spacing) * 4);
   }
 
+  .pb-12 {
+    padding-bottom: calc(var(--spacing) * 12);
+  }
+
   .pb-16 {
     padding-bottom: calc(var(--spacing) * 16);
   }
 
   .pl-5 {
     padding-left: calc(var(--spacing) * 5);
+  }
+
+  .pl-7 {
+    padding-left: calc(var(--spacing) * 7);
+  }
+
+  .pl-10 {
+    padding-left: calc(var(--spacing) * 10);
   }
 
   .pl-16 {
@@ -1613,6 +1669,10 @@
 
   .text-left {
     text-align: left;
+  }
+
+  .text-right {
+    text-align: right;
   }
 
   .align-\[-2px\] {
