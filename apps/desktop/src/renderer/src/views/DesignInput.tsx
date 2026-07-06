@@ -64,19 +64,26 @@ export function DesignInput({
       }}
     >
       <div className="mx-auto flex w-full max-w-[680px] flex-col gap-5 px-6 pb-16 pt-10">
-        <div className="flex flex-col gap-1.5">
-          <div className="flex items-center gap-2 text-xs text-vs-text-muted">
-            <button onClick={onBack} className="hover:text-vs-text-primary">
-              {project.name}
-            </button>
-            <span>/</span>
-            <span>New source</span>
+        <div className="flex items-start gap-3">
+          <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+            <div className="flex items-center gap-2 text-xs text-vs-text-muted">
+              <button onClick={onBack} className="hover:text-vs-text-primary">
+                Projects
+              </button>
+              <span>/</span>
+              <span className="truncate">{project.name}</span>
+              <span>/</span>
+              <span>New source</span>
+            </div>
+            <h1 className="text-[20px] font-semibold tracking-[-0.01em]">Add a design source</h1>
+            <p className="text-[13px] leading-relaxed text-vs-text-secondary">
+              Claude Code reads the design exactly as the SDD-DE CLI does. Pick a source — it&rsquo;s
+              placed at the project&rsquo;s expected input path.
+            </p>
           </div>
-          <h1 className="text-[20px] font-semibold tracking-[-0.01em]">Add a design source</h1>
-          <p className="text-[13px] leading-relaxed text-vs-text-secondary">
-            Claude Code reads the design exactly as the SDD-DE CLI does. Pick a source — it&rsquo;s
-            placed at the project&rsquo;s expected input path.
-          </p>
+          <Button variant="ghost" className="flex-none" onClick={onBack}>
+            Cancel
+          </Button>
         </div>
 
         <div className="flex gap-0.5 self-start rounded-lg border border-vs-border-default bg-vs-bg-surface p-0.5">
@@ -216,7 +223,10 @@ export function DesignInput({
           )}
         </div>
 
-        <div className="flex justify-end">
+        <div className="flex items-center justify-between border-t border-vs-border-default pt-5">
+          <Button variant="ghost" onClick={onBack}>
+            ← Cancel
+          </Button>
           <Button variant="primary" disabled={!canStart} onClick={submit}>
             Continue to setup →
           </Button>
