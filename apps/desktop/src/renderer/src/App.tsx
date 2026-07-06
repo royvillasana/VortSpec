@@ -6,6 +6,7 @@ import { Dashboard } from "./views/Dashboard";
 import { GuidedFlow } from "./views/GuidedFlow";
 import { Inspector } from "./views/Inspector";
 import { DevPreview } from "./views/DevPreview";
+import { RunView } from "./views/RunView";
 import { NewProjectWizard } from "./views/NewProjectWizard";
 import { Spinner } from "./components/ui";
 
@@ -26,7 +27,7 @@ export default function App(): React.JSX.Element {
   const [view, setView] = useState<View>("env");
   const [activeProject, setActiveProject] = useState<Project | null>(null);
   const [setupProject, setSetupProject] = useState<Project | null>(null);
-  const [projectView, setProjectView] = useState<"flow" | "inspector" | "preview">("flow");
+  const [projectView, setProjectView] = useState<"flow" | "inspector" | "preview" | "run">("flow");
   const [loading, setLoading] = useState(true);
 
   function mergeProject(project: Project): void {
@@ -91,15 +92,28 @@ export default function App(): React.JSX.Element {
             project={activeProject}
             onBack={() => setProjectView("flow")}
             onOpenPreview={() => setProjectView("preview")}
+            onOpenRun={() => setProjectView("run")}
           />
         ) : activeProject && projectView === "preview" ? (
-          <DevPreview project={activeProject} onBack={() => setProjectView("flow")} />
+          <DevPreview
+            project={activeProject}
+            onBack={() => setProjectView("flow")}
+            onOpenRun={() => setProjectView("run")}
+          />
+        ) : activeProject && projectView === "run" ? (
+          <RunView
+            project={activeProject}
+            onBack={() => setProjectView("flow")}
+            onOpenPreview={() => setProjectView("preview")}
+            onOpenInspector={() => setProjectView("inspector")}
+          />
         ) : activeProject ? (
           <GuidedFlow
             project={activeProject}
             onBack={() => setActiveProject(null)}
             onOpenInspector={() => setProjectView("inspector")}
             onOpenPreview={() => setProjectView("preview")}
+            onOpenRun={() => setProjectView("run")}
           />
         ) : (
           <Dashboard

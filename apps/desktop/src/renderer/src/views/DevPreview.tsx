@@ -24,9 +24,11 @@ const LEVEL_LABEL: Record<string, string> = {
 export function DevPreview({
   project,
   onBack,
+  onOpenRun,
 }: {
   project: Project;
   onBack: () => void;
+  onOpenRun: () => void;
 }): React.JSX.Element {
   const [components, setComponents] = useState<InspectorComponent[] | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -75,6 +77,7 @@ export function DevPreview({
           </span>
         </button>
         <RailItem label="Flow" onClick={onBack} />
+        <RailItem label="Run" onClick={onOpenRun} />
         <RailItem label="Preview" active />
       </nav>
 

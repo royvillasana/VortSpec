@@ -49,10 +49,12 @@ export function Inspector({
   project,
   onBack,
   onOpenPreview,
+  onOpenRun,
 }: {
   project: Project;
   onBack: () => void;
   onOpenPreview: () => void;
+  onOpenRun: () => void;
 }): React.JSX.Element {
   const [tokens, setTokens] = useState<InspectorToken[] | null>(null);
   const [usage, setUsage] = useState<Record<string, TokenUsage[]>>({});
@@ -121,6 +123,7 @@ export function Inspector({
           </span>
         </button>
         <RailItem label="Flow" onClick={onBack} />
+        <RailItem label="Run" onClick={onOpenRun} />
         <RailItem label="Preview" onClick={onOpenPreview} />
         <RailItem label="Tokens" active count={total} />
       </nav>

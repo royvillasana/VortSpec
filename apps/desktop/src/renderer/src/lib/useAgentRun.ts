@@ -77,3 +77,47 @@ export function useAgentRun(): {
     reset: () => dispatch({ type: "reset" }),
   };
 }
+
+/**
+ * A read-only observer that follows whichever run is currently active — it
+ * adopts the run id of each new run (on `system-init`) and mirrors its events.
+ * Used by the full-screen Run View, which isn't the one that started the run.
+ */
+export function useLatestRun(): {
+  model: RunModel;
+  running: boolean;
+  hasRun: boolean;
+  cancel: () => Promise<void>;
+} {
+  const [model, dispatch] = useReducer(reduceRun, initialRun);
+  const runIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    const offEvent = api.onAgentEvent(({ runId, event }) => {
+      // A new run starts: adopt its id and reset the mirror.
+      if (event.kind === "system-init" && runId !== runIdRef.current) {
+        runIdRef.current = runId;
+        dispatch({ type: "reset" });
+      } else if (runIdRef.current === null) {
+        runIdRef.current = runId;
+      }
+      if (runId === runIdRef.current) dispatch({ type: "event", event });
+    });
+    const offRaw = api.onAgentRaw(({ runId, line }) => {
+      if (runId === runIdRef.current) dispatch({ type: "raw", line });
+    });
+    return () => {
+      offEvent();
+      offRaw();
+    };
+  }, []);
+
+  return {
+    model,
+    running: model.status === "running",
+    hasRun: runIdRef.current !== null,
+    cancel: async () => {
+      if (runIdRef.current) await api.cancelRun(runIdRef.current);
+    },
+  };
+}

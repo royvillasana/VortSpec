@@ -16539,6 +16539,36 @@ function useAgentRun() {
     reset: () => dispatch({ type: "reset" })
   };
 }
+function useLatestRun() {
+  const [model, dispatch] = reactExports.useReducer(reduceRun, initialRun);
+  const runIdRef = reactExports.useRef(null);
+  reactExports.useEffect(() => {
+    const offEvent = api.onAgentEvent(({ runId, event }) => {
+      if (event.kind === "system-init" && runId !== runIdRef.current) {
+        runIdRef.current = runId;
+        dispatch({ type: "reset" });
+      } else if (runIdRef.current === null) {
+        runIdRef.current = runId;
+      }
+      if (runId === runIdRef.current) dispatch({ type: "event", event });
+    });
+    const offRaw = api.onAgentRaw(({ runId, line }) => {
+      if (runId === runIdRef.current) dispatch({ type: "raw", line });
+    });
+    return () => {
+      offEvent();
+      offRaw();
+    };
+  }, []);
+  return {
+    model,
+    running: model.status === "running",
+    hasRun: runIdRef.current !== null,
+    cancel: async () => {
+      if (runIdRef.current) await api.cancelRun(runIdRef.current);
+    }
+  };
+}
 function RunPanel({
   model,
   onSend,
@@ -16701,10 +16731,10 @@ function BackendView({ model }) {
         }
       )
     ] }),
-    showRaw && /* @__PURE__ */ jsxRuntimeExports.jsx(RawTerminal, { lines: model.raw })
+    showRaw && /* @__PURE__ */ jsxRuntimeExports.jsx(RawTerminal$1, { lines: model.raw })
   ] });
 }
-function RawTerminal({ lines }) {
+function RawTerminal$1({ lines }) {
   const endRef = reactExports.useRef(null);
   reactExports.useEffect(() => {
     endRef.current?.scrollIntoView();
@@ -16718,7 +16748,8 @@ function GuidedFlow({
   project,
   onBack,
   onOpenInspector,
-  onOpenPreview
+  onOpenPreview,
+  onOpenRun
 }) {
   const [flow, setFlow] = reactExports.useState(null);
   const [config, setConfig] = reactExports.useState(null);
@@ -16748,6 +16779,7 @@ function GuidedFlow({
         project,
         paused: Boolean(reviewStage),
         onBack,
+        onOpenRun,
         onOpenPreview,
         onOpenInspector
       }
@@ -16804,6 +16836,7 @@ function FlowRail({
   project,
   paused,
   onBack,
+  onOpenRun,
   onOpenPreview,
   onOpenInspector
 }) {
@@ -16828,6 +16861,7 @@ function FlowRail({
         /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "flex-1", children: "Flow" }),
         paused && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "rounded-full border border-vs-warning-border px-1.5 font-mono text-[10px] text-vs-warning", children: "review" })
       ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(RailLink, { label: "Run", onClick: onOpenRun }),
       /* @__PURE__ */ jsxRuntimeExports.jsx(RailLink, { label: "Preview", onClick: onOpenPreview }),
       /* @__PURE__ */ jsxRuntimeExports.jsx(RailLink, { label: "Tokens", onClick: onOpenInspector })
     ] })
@@ -17415,7 +17449,8 @@ const SOURCE = {
 function Inspector({
   project,
   onBack,
-  onOpenPreview
+  onOpenPreview,
+  onOpenRun
 }) {
   const [tokens, setTokens] = reactExports.useState(null);
   const [usage, setUsage] = reactExports.useState({});
@@ -17473,6 +17508,7 @@ function Inspector({
         }
       ),
       /* @__PURE__ */ jsxRuntimeExports.jsx(RailItem$1, { label: "Flow", onClick: onBack }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(RailItem$1, { label: "Run", onClick: onOpenRun }),
       /* @__PURE__ */ jsxRuntimeExports.jsx(RailItem$1, { label: "Preview", onClick: onOpenPreview }),
       /* @__PURE__ */ jsxRuntimeExports.jsx(RailItem$1, { label: "Tokens", active: true, count: total })
     ] }),
@@ -17843,7 +17879,8 @@ const LEVEL_LABEL = {
 };
 function DevPreview({
   project,
-  onBack
+  onBack,
+  onOpenRun
 }) {
   const [components, setComponents] = reactExports.useState(null);
   const [previewUrl, setPreviewUrl] = reactExports.useState(null);
@@ -17886,6 +17923,7 @@ function DevPreview({
         }
       ),
       /* @__PURE__ */ jsxRuntimeExports.jsx(RailItem, { label: "Flow", onClick: onBack }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(RailItem, { label: "Run", onClick: onOpenRun }),
       /* @__PURE__ */ jsxRuntimeExports.jsx(RailItem, { label: "Preview", active: true })
     ] }),
     /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex w-52 shrink-0 flex-col border-r border-vs-border-default bg-vs-bg-surface", children: [
@@ -18149,6 +18187,192 @@ function snippet(name, props, values) {
   }).filter(Boolean).join("");
   return attrs ? `<${name}${attrs}
 />` : `<${name} />`;
+}
+function RunView({
+  project,
+  onBack,
+  onOpenPreview,
+  onOpenInspector
+}) {
+  const { model, running, hasRun, cancel } = useLatestRun();
+  const [term, setTerm] = reactExports.useState(false);
+  const badge = STATUS_BADGE[model.status];
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex h-[calc(100vh-3rem)] w-full overflow-hidden bg-vs-bg-primary text-[13px] text-vs-text-primary", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("nav", { className: "flex w-52 shrink-0 flex-col border-r border-vs-border-default bg-vs-bg-surface p-3", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs(
+        "button",
+        {
+          onClick: onBack,
+          className: "mb-3 flex items-center gap-2 border-b border-vs-border-default px-2 pb-3 text-left hover:opacity-85",
+          children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "grid h-5 w-5 place-items-center rounded-md bg-vs-accent font-mono text-[11px] font-medium text-vs-bg-primary", children: project.name.charAt(0).toUpperCase() }),
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "min-w-0", children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "block truncate text-[13px] font-semibold", children: project.name }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "block truncate font-mono text-[11px] text-vs-text-muted", children: project.path })
+            ] })
+          ]
+        }
+      ),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(Rail, { label: "Flow", onClick: onBack }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2.5 rounded-md bg-vs-bg-elevated px-2 py-1.5 text-[13px] font-medium text-vs-accent", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "flex-1", children: "Run" }),
+        running && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "h-1.5 w-1.5 rounded-full bg-vs-accent" })
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(Rail, { label: "Preview", onClick: onOpenPreview }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(Rail, { label: "Tokens", onClick: onOpenInspector })
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("main", { className: "flex min-w-0 flex-1 flex-col bg-vs-bg-primary", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("header", { className: "flex flex-none items-center gap-3 border-b border-vs-border-default px-6 py-4", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col gap-0.5", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2.5", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx("h1", { className: "text-lg font-semibold tracking-[-0.01em]", children: "Run" }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              "span",
+              {
+                className: "rounded-full border px-2 py-px font-mono text-[11px]",
+                style: { color: badge.color, borderColor: badge.border, background: badge.bg },
+                children: badge.label
+              }
+            )
+          ] }),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "font-mono text-[11px] text-vs-text-muted", children: [
+            "claude -p --output-format stream-json",
+            model.model ? ` · ${model.model}` : ""
+          ] })
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex-1" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "button",
+          {
+            onClick: () => setTerm((v) => !v),
+            className: `flex items-center gap-2 rounded-lg border border-vs-border-strong px-3.5 py-2 text-xs font-medium hover:border-vs-accent ${term ? "bg-vs-bg-elevated text-vs-text-primary" : "text-vs-text-secondary"}`,
+            children: term ? "Friendly view" : "Show terminal"
+          }
+        ),
+        running && /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { onClick: () => void cancel(), className: "!border-vs-error/40 !text-vs-error", children: "Cancel run" })
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-none items-center gap-4 border-b border-vs-border-default px-6 py-3.5", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-1 flex-col gap-2", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2", children: [
+            running ? /* @__PURE__ */ jsxRuntimeExports.jsx(Spinner, {}) : model.status === "done" ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs text-vs-success", children: "✓" }) : model.status === "error" || model.status === "canceled" ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs text-vs-error", children: "✕" }) : null,
+            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[13px] text-vs-text-primary", children: currentLabel(model) })
+          ] }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(ProgressBar, { status: model.status })
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "font-mono text-xs text-vs-text-secondary", children: [
+          model.files.length,
+          " files · ",
+          model.activity.length,
+          " actions"
+        ] })
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex min-h-0 flex-1", children: !hasRun ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex flex-1 items-center justify-center p-12 text-center text-sm text-vs-text-muted", children: "No active run. Start a step in the Flow and it will stream here live." }) : term ? /* @__PURE__ */ jsxRuntimeExports.jsx(RawTerminal, { lines: model.raw, running }) : /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "w-64 shrink-0 overflow-y-auto border-r border-vs-border-default p-4", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "px-1 pb-2.5 text-[11px] font-semibold uppercase tracking-wide text-vs-text-muted", children: "Files touched" }),
+          model.files.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "px-1 text-xs text-vs-text-muted", children: "No files yet." }) : /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex flex-col gap-0.5", children: model.files.map((f) => /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2 rounded-md px-1.5 py-1.5", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs text-vs-success", children: "✓" }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "truncate font-mono text-[11px] text-vs-text-secondary", title: f, children: f })
+          ] }, f)) })
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(ActivityStream, { model, running })
+      ] }) })
+    ] })
+  ] });
+}
+const STATUS_BADGE = {
+  idle: { label: "idle", color: "#6B7280", border: "#26282D", bg: "#0B0C0E" },
+  running: { label: "running", color: "#7C6FF0", border: "rgba(124,111,240,0.4)", bg: "rgba(124,111,240,0.08)" },
+  done: { label: "complete", color: "#30A46C", border: "rgba(48,164,108,0.35)", bg: "rgba(48,164,108,0.08)" },
+  error: { label: "failed", color: "#E5484D", border: "rgba(229,72,77,0.4)", bg: "rgba(229,72,77,0.06)" },
+  canceled: { label: "canceled", color: "#E5484D", border: "rgba(229,72,77,0.4)", bg: "rgba(229,72,77,0.06)" }
+};
+function currentLabel(model) {
+  if (model.status === "running") {
+    const last = model.activity[model.activity.length - 1];
+    return last ? last.label : "Working…";
+  }
+  if (model.status === "done") return "Run complete";
+  if (model.status === "canceled") return "Run canceled — child process killed cleanly";
+  if (model.status === "error") return model.result?.text?.slice(0, 90) ?? "Run failed";
+  return "Ready";
+}
+function ProgressBar({ status }) {
+  if (status === "running") {
+    return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "h-1 overflow-hidden rounded-full bg-vs-border-default", children: /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "h-full w-1/3 rounded-full bg-vs-accent animate-[vsSlide_1.2s_ease-in-out_infinite]" }) });
+  }
+  const color = status === "done" ? "bg-vs-success" : status === "error" || status === "canceled" ? "bg-vs-error" : "bg-vs-border-default";
+  const width = status === "idle" ? "0%" : "100%";
+  return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "h-1 overflow-hidden rounded-full bg-vs-border-default", children: /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: `h-full rounded-full ${color}`, style: { width } }) });
+}
+function ActivityStream({ model, running }) {
+  const endRef = reactExports.useRef(null);
+  reactExports.useEffect(() => {
+    endRef.current?.scrollIntoView({ block: "end" });
+  }, [model.activity.length, model.streamingText]);
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "min-w-0 flex-1 overflow-y-auto p-5", children: [
+    model.mcpErrors.length > 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "mb-3 rounded-md border border-vs-warning-border bg-vs-warning-muted px-3 py-2 text-xs text-vs-warning", children: [
+      "MCP issue: ",
+      model.mcpErrors.join("; ")
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col gap-0.5", children: [
+      model.activity.map((a) => {
+        const t = tagInfo(a);
+        return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-start gap-2.5 py-1", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "span",
+            {
+              className: "w-14 shrink-0 rounded border py-px text-center font-mono text-[10px]",
+              style: { color: t.color, borderColor: t.border },
+              children: t.tag
+            }
+          ),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "min-w-0 flex-1 text-xs leading-relaxed text-vs-text-secondary", children: a.label })
+        ] }, a.key);
+      }),
+      running && model.streamingText && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-start gap-2.5 py-1", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "w-14 shrink-0 rounded border border-vs-border-default py-px text-center font-mono text-[10px] text-vs-text-muted", children: "think" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "min-w-0 flex-1 whitespace-pre-wrap text-xs leading-relaxed text-vs-text-muted", children: model.streamingText })
+      ] }),
+      running && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "ml-[62px] mt-1 inline-block h-3 w-1.5 bg-vs-accent animate-[vsBlink_1s_step-end_infinite]" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { ref: endRef })
+    ] })
+  ] });
+}
+function RawTerminal({ lines, running }) {
+  const endRef = reactExports.useRef(null);
+  reactExports.useEffect(() => {
+    endRef.current?.scrollIntoView();
+  }, [lines.length]);
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "min-w-0 flex-1 overflow-y-auto bg-black/60 p-5 font-mono text-xs leading-relaxed", children: [
+    lines.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-vs-text-muted", children: "Raw stream-json output will appear here…" }) : lines.map((l, i) => /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "whitespace-pre-wrap text-vs-text-secondary", children: l }, i)),
+    running && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "inline-block h-3.5 w-[7px] align-[-2px] bg-vs-accent animate-[vsBlink_1s_step-end_infinite]" }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { ref: endRef })
+  ] });
+}
+function tagInfo(a) {
+  if (a.tone === "error") return { tag: "error", color: "#E5484D", border: "rgba(229,72,77,0.4)" };
+  if (a.tone === "retry") return { tag: "retry", color: "#FFB224", border: "rgba(255,178,36,0.4)" };
+  if (a.tone === "notice") return { tag: "note", color: "#6B7280", border: "#26282D" };
+  const name = a.label.split(/[\s·]/)[0].toLowerCase();
+  const map = {
+    write: ["#30A46C", "rgba(48,164,108,0.35)"],
+    edit: ["#7C6FF0", "rgba(124,111,240,0.4)"],
+    read: ["#9BA1AB", "#26282D"],
+    bash: ["#FFB224", "rgba(255,178,36,0.4)"],
+    multiedit: ["#7C6FF0", "rgba(124,111,240,0.4)"]
+  };
+  const hit = map[name];
+  return { tag: name.slice(0, 6) || "tool", color: hit?.[0] ?? "#9BA1AB", border: hit?.[1] ?? "#26282D" };
+}
+function Rail({ label, onClick }) {
+  return /* @__PURE__ */ jsxRuntimeExports.jsx(
+    "button",
+    {
+      onClick,
+      className: "flex items-center gap-2.5 rounded-md px-2 py-1.5 text-left text-[13px] text-vs-text-secondary hover:bg-vs-bg-elevated hover:text-vs-text-primary",
+      children: /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "flex-1", children: label })
+    }
+  );
 }
 const frameworkSchema = enumType([
   "react",
@@ -18702,15 +18926,32 @@ function App() {
       {
         project: activeProject,
         onBack: () => setProjectView("flow"),
-        onOpenPreview: () => setProjectView("preview")
+        onOpenPreview: () => setProjectView("preview"),
+        onOpenRun: () => setProjectView("run")
       }
-    ) : activeProject && projectView === "preview" ? /* @__PURE__ */ jsxRuntimeExports.jsx(DevPreview, { project: activeProject, onBack: () => setProjectView("flow") }) : activeProject ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+    ) : activeProject && projectView === "preview" ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+      DevPreview,
+      {
+        project: activeProject,
+        onBack: () => setProjectView("flow"),
+        onOpenRun: () => setProjectView("run")
+      }
+    ) : activeProject && projectView === "run" ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+      RunView,
+      {
+        project: activeProject,
+        onBack: () => setProjectView("flow"),
+        onOpenPreview: () => setProjectView("preview"),
+        onOpenInspector: () => setProjectView("inspector")
+      }
+    ) : activeProject ? /* @__PURE__ */ jsxRuntimeExports.jsx(
       GuidedFlow,
       {
         project: activeProject,
         onBack: () => setActiveProject(null),
         onOpenInspector: () => setProjectView("inspector"),
-        onOpenPreview: () => setProjectView("preview")
+        onOpenPreview: () => setProjectView("preview"),
+        onOpenRun: () => setProjectView("run")
       }
     ) : /* @__PURE__ */ jsxRuntimeExports.jsx(
       Dashboard,

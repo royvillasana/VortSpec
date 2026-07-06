@@ -28,11 +28,13 @@ export function GuidedFlow({
   onBack,
   onOpenInspector,
   onOpenPreview,
+  onOpenRun,
 }: {
   project: Project;
   onBack: () => void;
   onOpenInspector: () => void;
   onOpenPreview: () => void;
+  onOpenRun: () => void;
 }): React.JSX.Element {
   const [flow, setFlow] = useState<Flow | null>(null);
   const [config, setConfig] = useState<ProjectConfig | null>(null);
@@ -73,6 +75,7 @@ export function GuidedFlow({
         project={project}
         paused={Boolean(reviewStage)}
         onBack={onBack}
+        onOpenRun={onOpenRun}
         onOpenPreview={onOpenPreview}
         onOpenInspector={onOpenInspector}
       />
@@ -139,12 +142,14 @@ function FlowRail({
   project,
   paused,
   onBack,
+  onOpenRun,
   onOpenPreview,
   onOpenInspector,
 }: {
   project: Project;
   paused: boolean;
   onBack: () => void;
+  onOpenRun: () => void;
   onOpenPreview: () => void;
   onOpenInspector: () => void;
 }): React.JSX.Element {
@@ -174,6 +179,7 @@ function FlowRail({
             </span>
           )}
         </div>
+        <RailLink label="Run" onClick={onOpenRun} />
         <RailLink label="Preview" onClick={onOpenPreview} />
         <RailLink label="Tokens" onClick={onOpenInspector} />
       </div>
