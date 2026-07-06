@@ -44,7 +44,12 @@ function detectPackageManager(projectPath: string): string {
 
 /** First localhost/loopback http(s) URL in a chunk of server output. */
 export function urlFrom(text: string): string | null {
-  const m = text.match(
+  // Dev servers colorize output — vite/picocolors emit ANSI codes even under
+  // CI/FORCE_COLOR, and they land INSIDE the URL (http://localhost:‹ESC›5173‹ESC›/),
+  // which would break `:\d+`. Strip escape sequences before matching.
+  const ansi = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*[A-Za-z]`, "g");
+  const clean = text.replace(ansi, "");
+  const m = clean.match(
     /(https?:\/\/(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\]):\d+[^\s)'"]*)/i,
   );
   if (!m) return null;
@@ -81,7 +86,9 @@ export async function startDevServer(
   const child = spawn(pm, ["run", script], {
     cwd: projectPath,
     shell: false,
-    env: { ...process.env, FORCE_COLOR: "0", BROWSER: "none", CI: "1" },
+    // NO_COLOR asks tools (picocolors/vite) not to emit ANSI; urlFrom still
+    // strips any that slip through. CI keeps them non-interactive.
+    env: { ...process.env, NO_COLOR: "1", FORCE_COLOR: "0", BROWSER: "none", CI: "1" },
   });
   const server: Server = {
     child,
