@@ -115,7 +115,7 @@ Electron app
 
 ### 8.7 Design System Inspector & Playground
 
-Once the flow has produced tokens and components, VortSpec offers an **Inspector** to browse and validate the whole design system in-app, adopting the visual language of the `vortspec-design-inspector/` design bundle re-based onto v2's file model (no IR store; everything is derived from the project's files).
+Once the flow has produced tokens and components, VortSpec offers an **Inspector** to browse and validate the whole design system in-app, adopting the visual language of the `docs/design/` design bundle re-based onto v2's file model (no IR store; everything is derived from the project's files).
 
 - **US-12 (tokens & components browser):** The Inspector shows every design token (parsed from the project `token_file`, and the authoritative Figma variables when the Desktop Bridge is connected) grouped by type with swatches, resolved mono values, a file-derived source badge (figma-variable / from-code / hand-edited), search/filter, and a "where used" cross-reference; and every component (from `.sdd-de/components.json` + generated source) with its variants, states, props, consumed tokens, and links to its spec and visual-verify report.
 - **US-13 (playground / render harness):** A Storybook-like Playground renders the **real** generated components live across variants/states by launching the project's browsable surface in a managed PTY and embedding it (reusing the Dev preview, §8.5). When no browsable surface exists — the current visual-verify blocker — VortSpec offers to have Claude Code generate a framework-correct harness (gallery route or stories); VortSpec writes no renderer code itself. This doubles as the render harness the visual-verify step needs.

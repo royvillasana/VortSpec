@@ -1,6 +1,6 @@
 ## Context
 
-The `vortspec-design-inspector/` Claude Design bundle specifies a Figma-grade Inspector (Tokens, Component Detail, Graph, Issues, History, Assistant). It was authored for **v1**, whose architecture — an IR normalization pipeline that "infers" tokens and assigns provenance/completeness from a canonical store — was **deleted in the pivot** (`archive/web-app-v1`). In v2, Claude Code is the engine and the design system is just **files in the user's project**: a token file (`tokens.css` / Figma variables), `.sdd-de/components.json`, generated component source under `component_dir`, and `specs/*/…` reports. The existing `openspec/specs/inspector-tokens` and `inspector-components` still encode the IR model and must be re-based.
+The `docs/design/` Claude Design bundle specifies a Figma-grade Inspector (Tokens, Component Detail, Graph, Issues, History, Assistant). It was authored for **v1**, whose architecture — an IR normalization pipeline that "infers" tokens and assigns provenance/completeness from a canonical store — was **deleted in the pivot** (`archive/web-app-v1`). In v2, Claude Code is the engine and the design system is just **files in the user's project**: a token file (`tokens.css` / Figma variables), `.sdd-de/components.json`, generated component source under `component_dir`, and `specs/*/…` reports. The existing `openspec/specs/inspector-tokens` and `inspector-components` still encode the IR model and must be re-based.
 
 Two facts drive the design: (1) there is **no render harness** in generated projects today — `visual-verify` cannot render because there's no `src/main.tsx`, no stories, no browser driver; (2) VortSpec must not re-implement agent logic or a normalization pipeline (invariant #1). The deferred `PTY service` (PRD §7) and Dev preview (US-10, embedded webview of the local dev server) are the substrate the Playground builds on.
 
@@ -55,7 +55,7 @@ Add an **Inspector** destination in the app shell, reachable once `components.js
 - Additive; no breaking changes to the guided flow. Ship behind the existing project/flow navigation.
 - Update `docs/vortspec-prd-v2.md`: add §8.7 (user stories) and a milestone entry; supersede the line-152 deferral.
 - Re-base `inspector-tokens` and `inspector-components` specs to the v2 file model; add `inspector-playground`.
-- Archive `vortspec-design-inspector/` as the design source of record + zip-html adapter fixture.
+- Archive `docs/design/` as the design source of record + zip-html adapter fixture.
 - Rollback: the Inspector is a viewer; disabling its nav entry removes it with no effect on flow state or project files.
 
 ## Open Questions

@@ -2,7 +2,7 @@
 
 - [x] 1.1 Add §8.7 "Design System Inspector & Playground" to `docs/vortspec-prd-v2.md` with user stories (browse tokens, browse components, live playground/render harness, validate & gated-modify)
 - [x] 1.2 Add/adjust a milestone entry for the Inspector & Playground and supersede the line-152 "inspector returns after D4 if usage asks" deferral note
-- [ ] 1.3 Archive `vortspec-design-inspector/` as the design source of record and note it as the zip-html adapter's first golden fixture
+- [x] 1.3 Archive the bundle at `docs/design/` as the design source of record (with `README.md` explaining its dual role) and note it as the zip-html adapter's first golden fixture
 
 ## 2. Data sourcing (main process, files → typed models)
 
