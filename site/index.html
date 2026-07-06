@@ -89,7 +89,7 @@
 
       /* hero */
       .hero { text-align: center; padding: 92px 0 72px; }
-      .hero .mark { width: 108px; height: 108px; margin: 0 auto 26px; filter: drop-shadow(0 12px 40px rgba(124,111,240,0.35)); animation: rise 0.6s ease both; }
+      .hero .mark { display: block; width: 108px; height: 108px; margin: 0 auto 26px; filter: drop-shadow(0 12px 40px rgba(124,111,240,0.35)); animation: rise 0.6s ease both; }
       .pill {
         display: inline-flex; align-items: center; gap: 8px; margin-bottom: 22px;
         border: 1px solid var(--border); background: var(--surface); color: var(--text-2);
@@ -102,8 +102,8 @@
       }
       h1 .grad { background: linear-gradient(120deg, #a99bff, #7c6ff0 60%, #5c8df0); -webkit-background-clip: text; background-clip: text; color: transparent; }
       .sub { font-size: clamp(16px, 2.3vw, 19px); color: var(--text-2); max-width: 60ch; margin: 0 auto 34px; }
-      .cta { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
-      .cta .os-note { display: block; margin-top: 14px; font-size: 12.5px; color: var(--text-3); }
+      .cta { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; margin-top: 8px; }
+      .os-note { display: block; margin-top: 30px; font-size: 12.5px; color: var(--text-3); }
       .apple { width: 16px; height: 16px; }
 
       @keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
