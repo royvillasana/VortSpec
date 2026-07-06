@@ -10,6 +10,7 @@ import { RunView } from "./views/RunView";
 import { ArtifactReview } from "./views/ArtifactReview";
 import { Verification } from "./views/Verification";
 import { DesignInput } from "./views/DesignInput";
+import { Intake } from "./views/Intake";
 import { NewProjectWizard } from "./views/NewProjectWizard";
 
 type View = "env" | "dashboard";
@@ -30,6 +31,7 @@ export default function App(): React.JSX.Element {
   const [activeProject, setActiveProject] = useState<Project | null>(null);
   const [setupProject, setSetupProject] = useState<Project | null>(null);
   const [sourceProject, setSourceProject] = useState<Project | null>(null);
+  const [intakeProject, setIntakeProject] = useState<Project | null>(null);
   const [pendingSource, setPendingSource] = useState<Partial<SetupAnswers> | undefined>(undefined);
   const [projectView, setProjectView] = useState<
     "flow" | "inspector" | "preview" | "run" | "review" | "verify"
@@ -67,13 +69,20 @@ export default function App(): React.JSX.Element {
       <TopBar
         view={view}
         coreReady={coreReady}
-        breadcrumb={sourceProject?.name ?? setupProject?.name ?? activeProject?.name ?? null}
+        breadcrumb={
+          sourceProject?.name ??
+          setupProject?.name ??
+          intakeProject?.name ??
+          activeProject?.name ??
+          null
+        }
         onNavigate={(v) => {
           setView(v);
           if (v === "dashboard") {
             setActiveProject(null);
             setSetupProject(null);
             setSourceProject(null);
+            setIntakeProject(null);
             setPendingSource(undefined);
             setProjectView("flow");
           }
@@ -109,7 +118,19 @@ export default function App(): React.JSX.Element {
               mergeProject(project);
               setSetupProject(null);
               setPendingSource(undefined);
-              setActiveProject(project);
+              setIntakeProject(project);
+            }}
+          />
+        ) : intakeProject ? (
+          <Intake
+            project={intakeProject}
+            onSkip={() => {
+              setActiveProject(intakeProject);
+              setIntakeProject(null);
+            }}
+            onDone={() => {
+              setActiveProject(intakeProject);
+              setIntakeProject(null);
             }}
           />
         ) : activeProject && projectView === "inspector" ? (

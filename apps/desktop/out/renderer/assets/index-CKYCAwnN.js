@@ -19052,6 +19052,197 @@ function FolderIcon() {
     }
   ) });
 }
+const STEPS = [
+  {
+    label: "Product",
+    title: "What are you building?",
+    blurb: "The same opening questions the CLI asks — in your words. Claude Code writes these to intake.json.",
+    fields: [
+      { key: "building", kind: "area", label: "What are you building?", placeholder: "One or two sentences on the feature or product." },
+      { key: "audience", kind: "area", label: "Who is it for?", placeholder: "The primary user and their context." }
+    ]
+  },
+  {
+    label: "Scope",
+    title: "Scope & goal",
+    blurb: "Draw the boundary so the agent builds the right thing and stops there.",
+    fields: [
+      { key: "goal", kind: "text", label: "Primary user goal", placeholder: "What must the user be able to accomplish?" },
+      { key: "inScope", kind: "area", label: "In scope for this run", placeholder: "Bullet the surfaces to generate.", optional: true }
+    ]
+  },
+  {
+    label: "Stack",
+    title: "Tech stack",
+    blurb: "What the generated code should target. VortSpec detects defaults from package.json where it can.",
+    fields: [
+      { key: "framework", kind: "chips", label: "Framework", options: ["React", "Vue", "Svelte", "SolidJS"] },
+      { key: "styling", kind: "chips", label: "Styling", options: ["Tailwind", "CSS Modules", "styled-components", "vanilla CSS"] },
+      { key: "pkg", kind: "chips", label: "Package manager", options: ["pnpm", "npm", "yarn", "bun"] }
+    ]
+  },
+  {
+    label: "Constraints",
+    title: "Constraints",
+    blurb: "Non-negotiables the spec and verification steps will enforce.",
+    fields: [
+      { key: "a11y", kind: "chips", label: "Accessibility target", options: ["WCAG 2.2 AA", "WCAG 2.1 AA", "No specific target"] },
+      { key: "browsers", kind: "text", label: "Browser support", placeholder: "e.g. evergreen + iOS Safari 16" },
+      { key: "perf", kind: "text", label: "Performance budget", placeholder: "e.g. LCP < 2.5s on 4G", optional: true }
+    ]
+  }
+];
+function Intake({
+  project,
+  onSkip,
+  onDone
+}) {
+  const [step, setStep] = reactExports.useState(0);
+  const [vals, setVals] = reactExports.useState({});
+  const [busy, setBusy] = reactExports.useState(false);
+  const set = (key, v) => setVals((s) => ({ ...s, [key]: v }));
+  const def = STEPS[step];
+  const isLast = step === STEPS.length - 1;
+  async function finish() {
+    setBusy(true);
+    try {
+      await api.saveIntake(project.path, serialize(vals));
+      onDone();
+    } finally {
+      setBusy(false);
+    }
+  }
+  return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "min-h-[calc(100vh-3rem)] bg-vs-bg-primary text-vs-text-primary", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "mx-auto flex w-full max-w-[820px] gap-9 px-6 pb-16 pt-10", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex w-44 flex-none flex-col gap-0.5 pt-1.5", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "px-2 pb-2.5 text-[11px] font-semibold uppercase tracking-wide text-vs-text-muted", children: "Intake" }),
+      STEPS.map((s, i) => {
+        const done = i < step;
+        const active = i === step;
+        return /* @__PURE__ */ jsxRuntimeExports.jsxs(
+          "button",
+          {
+            onClick: () => setStep(i),
+            className: `flex items-center gap-2.5 rounded-md p-2 text-left text-[13px] ${active ? "bg-vs-bg-elevated" : "hover:bg-vs-bg-elevated"}`,
+            children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx(
+                "span",
+                {
+                  className: "flex h-[18px] w-[18px] flex-none items-center justify-center rounded-full border-[1.5px] font-mono text-[10px]",
+                  style: {
+                    borderColor: done ? "#30A46C" : active ? "#7C6FF0" : "#34373D",
+                    background: done ? "#30A46C" : "transparent",
+                    color: done ? "#0B0C0E" : active ? "#7C6FF0" : "#6B7280"
+                  },
+                  children: done ? "✓" : i + 1
+                }
+              ),
+              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: active ? "text-vs-text-primary" : "text-vs-text-secondary", children: s.label })
+            ]
+          },
+          s.label
+        );
+      })
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex min-w-0 flex-1 flex-col gap-6", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col gap-1.5", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2.5", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("h1", { className: "text-[20px] font-semibold tracking-[-0.01em]", children: def.title }),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "font-mono text-[11px] text-vs-text-muted", children: [
+            "step ",
+            step + 1,
+            " / ",
+            STEPS.length
+          ] })
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-[13px] leading-relaxed text-vs-text-secondary", children: def.blurb })
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex flex-col gap-5", children: def.fields.map((f) => /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col gap-2", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "text-[13px] font-medium text-vs-text-primary", children: [
+          f.label,
+          " ",
+          f.optional && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-normal text-vs-text-muted", children: "(optional)" })
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(FieldInput, { field: f, value: vals[f.key] ?? "", onChange: (v) => set(f.key, v) })
+      ] }, f.key)) }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-3 border-t border-vs-border-default pt-5", children: [
+        step > 0 && /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "default", onClick: () => setStep((s) => s - 1), children: "← Back" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "flex-1" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[11px] text-vs-text-muted", children: isLast ? "Written to .sdd-de/intake.json" : "Autosaved" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "ghost", onClick: onSkip, children: "Skip" }),
+        isLast ? /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "primary", disabled: busy, onClick: () => void finish(), children: busy ? "Saving…" : "Save & run intake →" }) : /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "primary", onClick: () => setStep((s) => s + 1), children: "Next →" })
+      ] })
+    ] })
+  ] }) });
+}
+function FieldInput({
+  field,
+  value,
+  onChange
+}) {
+  if (field.kind === "chips") {
+    return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex flex-wrap gap-2", children: field.options?.map((o) => {
+      const active = value === o;
+      return /* @__PURE__ */ jsxRuntimeExports.jsx(
+        "button",
+        {
+          onClick: () => onChange(o),
+          className: "rounded-full border px-3.5 py-1.5 text-xs hover:border-vs-accent",
+          style: {
+            borderColor: active ? "#7C6FF0" : "#34373D",
+            background: active ? "rgba(124,111,240,0.12)" : "transparent",
+            color: active ? "#E7E9EC" : "#9BA1AB"
+          },
+          children: o
+        },
+        o
+      );
+    }) });
+  }
+  if (field.kind === "area") {
+    return /* @__PURE__ */ jsxRuntimeExports.jsx(
+      "textarea",
+      {
+        rows: 3,
+        value,
+        onChange: (e) => onChange(e.target.value),
+        placeholder: field.placeholder,
+        className: "resize-none rounded-md border border-vs-border-default bg-vs-bg-surface px-3 py-2.5 text-[13px] leading-relaxed text-vs-text-primary placeholder:text-vs-text-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-vs-accent-subtle"
+      }
+    );
+  }
+  return /* @__PURE__ */ jsxRuntimeExports.jsx(
+    "input",
+    {
+      value,
+      onChange: (e) => onChange(e.target.value),
+      placeholder: field.placeholder,
+      className: "h-[38px] rounded-md border border-vs-border-default bg-vs-bg-surface px-3 text-[13px] text-vs-text-primary placeholder:text-vs-text-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-vs-accent-subtle"
+    }
+  );
+}
+function serialize(vals) {
+  const line = (label, key) => vals[key] ? `**${label}**
+${vals[key]}
+` : "";
+  return [
+    "# Intake",
+    "",
+    "## Product",
+    line("What are you building?", "building"),
+    line("Who is it for?", "audience"),
+    "## Scope",
+    line("Primary user goal", "goal"),
+    line("In scope", "inScope"),
+    "## Stack",
+    line("Framework", "framework"),
+    line("Styling", "styling"),
+    line("Package manager", "pkg"),
+    "## Constraints",
+    line("Accessibility", "a11y"),
+    line("Browser support", "browsers"),
+    line("Performance budget", "perf")
+  ].filter((l) => l !== "").join("\n");
+}
 const frameworkSchema = enumType([
   "react",
   "next",
@@ -19544,6 +19735,7 @@ function App() {
   const [activeProject, setActiveProject] = reactExports.useState(null);
   const [setupProject, setSetupProject] = reactExports.useState(null);
   const [sourceProject, setSourceProject] = reactExports.useState(null);
+  const [intakeProject, setIntakeProject] = reactExports.useState(null);
   const [pendingSource, setPendingSource] = reactExports.useState(void 0);
   const [projectView, setProjectView] = reactExports.useState("flow");
   const [loading, setLoading] = reactExports.useState(true);
@@ -19570,13 +19762,14 @@ function App() {
       {
         view,
         coreReady,
-        breadcrumb: sourceProject?.name ?? setupProject?.name ?? activeProject?.name ?? null,
+        breadcrumb: sourceProject?.name ?? setupProject?.name ?? intakeProject?.name ?? activeProject?.name ?? null,
         onNavigate: (v) => {
           setView(v);
           if (v === "dashboard") {
             setActiveProject(null);
             setSetupProject(null);
             setSourceProject(null);
+            setIntakeProject(null);
             setPendingSource(void 0);
             setProjectView("flow");
           }
@@ -19615,7 +19808,20 @@ function App() {
           mergeProject(project);
           setSetupProject(null);
           setPendingSource(void 0);
-          setActiveProject(project);
+          setIntakeProject(project);
+        }
+      }
+    ) : intakeProject ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+      Intake,
+      {
+        project: intakeProject,
+        onSkip: () => {
+          setActiveProject(intakeProject);
+          setIntakeProject(null);
+        },
+        onDone: () => {
+          setActiveProject(intakeProject);
+          setIntakeProject(null);
         }
       }
     ) : activeProject && projectView === "inspector" ? /* @__PURE__ */ jsxRuntimeExports.jsx(
