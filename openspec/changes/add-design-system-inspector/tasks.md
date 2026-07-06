@@ -21,10 +21,10 @@
 
 ## 4. Managed preview substrate (Playground infra)
 
-- [ ] 4.1 Implement the managed PTY dev-server launcher behind an adapter (isolate node-pty; reuse Dev preview / US-10 pattern), detecting the project's dev/storybook script
-- [ ] 4.2 Embedded webview panel that renders the local dev-server/Storybook URL with an "open in browser" escape hatch and terminal/log access
-- [ ] 4.3 Harness detection: determine whether the project already exposes a browsable surface (Storybook or a gallery route)
-- [ ] 4.4 Harness generation via Claude Code: a scoped run that writes framework-correct harness files (gallery route or stories), shown to the user and written transparently (git-ignorable) — VortSpec writes no renderer code itself
+- [x] 4.1 Implement the managed PTY dev-server launcher behind an adapter (isolate node-pty; reuse Dev preview / US-10 pattern), detecting the project's dev/storybook script
+- [x] 4.2 Embedded webview panel that renders the local dev-server/Storybook URL with an "open in browser" escape hatch and terminal/log access
+- [x] 4.3 Harness detection: determine whether the project already exposes a browsable surface (Storybook or a gallery route)
+- [x] 4.4 Harness generation via Claude Code: a scoped run that writes framework-correct harness files (gallery route or stories), shown to the user and written transparently (git-ignorable) — VortSpec writes no renderer code itself
 
 ## 5. Renderer — Tokens view
 
@@ -40,8 +40,8 @@
 
 ## 7. Renderer — Playground (render harness + validate/modify)
 
-- [ ] 7.1 Playground surface: embed the live preview, variant/state controls that drive the real component, virtualized for large sets
-- [ ] 7.2 "Generate a harness" flow for projects with no renderable surface (invokes task 4.4), then launch + embed — closing the `visual-verify` render-harness gap
+- [x] 7.1 Playground surface: embed the live preview, variant/state controls that drive the real component, virtualized for large sets
+- [x] 7.2 "Generate a harness" flow for projects with no renderable surface (invokes task 4.4), then launch + embed — closing the `visual-verify` render-harness gap
 - [x] 7.3 Validation panel: show issues from the verify reports alongside the preview
 - [ ] 7.4 Gated modify loop: request a fix → scoped Claude Code run / resumable chat → approvable diff → written only on approval (reuse the artifact-gate + tabbed run panel)
 
