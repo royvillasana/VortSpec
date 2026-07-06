@@ -3,6 +3,7 @@ import { join } from "path";
 import { electronApp, optimizer, is } from "@electron-toolkit/utils";
 import { registerIpc } from "./ipc";
 import { stopAllDevServers } from "./workspace/dev-server";
+import { fixGuiPath } from "./util/fix-path";
 
 /**
  * VortSpec desktop — main process (electron-vite).
@@ -53,12 +54,17 @@ function createWindow(): void {
   }
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   electronApp.setAppUserModelId("com.vortspec.desktop");
 
   app.on("browser-window-created", (_, window) => {
     optimizer.watchWindowShortcuts(window);
   });
+
+  // Recover the user's real shell PATH before anything spawns, so the env check
+  // and Claude Code runs find node/claude when launched from Finder/Dock (a GUI
+  // launch otherwise only has a minimal PATH). Best-effort; never blocks quit.
+  await fixGuiPath();
 
   registerIpc();
   createWindow();
