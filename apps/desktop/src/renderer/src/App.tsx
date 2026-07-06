@@ -13,6 +13,7 @@ import { History } from "./views/History";
 import { DesignInput } from "./views/DesignInput";
 import { Intake } from "./views/Intake";
 import { NewProjectWizard } from "./views/NewProjectWizard";
+import { Logo } from "./components/Logo";
 
 type View = "env" | "dashboard";
 
@@ -268,9 +269,7 @@ function Splash(): React.JSX.Element {
       style={{ WebkitAppRegion: "drag" } as React.CSSProperties}
     >
       <div className="flex flex-col items-center gap-3">
-        <span className="grid h-14 w-14 place-items-center rounded-2xl bg-vs-accent font-mono text-2xl font-semibold text-vs-bg-primary">
-          V
-        </span>
+        <Logo size={72} />
         <span className="text-lg font-semibold tracking-[-0.01em] text-vs-text-primary">
           VortSpec
         </span>
@@ -302,9 +301,7 @@ function TopBar({
         className="flex items-center gap-2 pl-16 text-[13px]"
         style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
       >
-        <span className="grid h-[18px] w-[18px] place-items-center rounded-[5px] bg-vs-accent font-mono text-[10px] font-medium text-vs-bg-primary">
-          V
-        </span>
+        <Logo size={20} />
         <button
           onClick={() => onNavigate("dashboard")}
           className="font-semibold tracking-[-0.01em] text-vs-text-primary hover:underline"
