@@ -35,8 +35,15 @@ describe("flow-manager — publish target + optional stages", () => {
     const flow = await getFlow(dir);
     const optional = flow.definitions.filter((d) => d.optional).map((d) => d.id);
     expect(optional).toEqual(["commit"]);
-    // The last required stage before commit is sync — approving it completes the flow.
+    // The last required stage before commit is the design manifest — approving it
+    // completes the flow locally (only publish/commit remains, and it's optional).
     const required = flow.definitions.filter((d) => !d.optional).map((d) => d.id);
-    expect(required).toEqual(["design-system", "components", "visual-verify", "sync"]);
+    expect(required).toEqual([
+      "design-system",
+      "components",
+      "visual-verify",
+      "sync",
+      "design-manifest",
+    ]);
   });
 });

@@ -2,6 +2,7 @@ import { z } from "zod";
 import { agentRunOptionsSchema } from "./run-events";
 import { flowSchema, stageStatusSchema, runHistoryResultSchema } from "./flow";
 import { devServerStatusSchema } from "./dev-server";
+import { manifestResultSchema, manifestVersionsResultSchema } from "./manifest";
 
 export type { DevServerStatus, DevServerState, DevServerUpdate } from "./dev-server";
 export { DEV_SERVER_UPDATE_CHANNEL, devServerUpdateSchema } from "./dev-server";
@@ -35,6 +36,12 @@ export type {
   FindingSeverity,
 } from "./inspector";
 export type { FileSnapshot } from "./inspector";
+export type {
+  ManifestResult,
+  ManifestVersion,
+  ManifestVersionsResult,
+  SnapshotReason,
+} from "./manifest";
 
 // Re-exported so renderer code can import run + IPC types from one module.
 export type {
@@ -210,6 +217,28 @@ export const ipcContract = {
   "devserver:storybookIndex": {
     request: z.string(),
     response: z.array(storybookEntrySchema),
+  },
+  "manifest:get": { request: z.string(), response: manifestResultSchema },
+  "manifest:save": {
+    request: z.object({ projectPath: z.string(), content: z.string() }),
+    response: manifestResultSchema,
+  },
+  "manifest:listVersions": { request: z.string(), response: manifestVersionsResultSchema },
+  "manifest:readVersion": {
+    request: z.object({ projectPath: z.string(), id: z.string() }),
+    response: z.string().nullable(),
+  },
+  "manifest:restoreVersion": {
+    request: z.object({ projectPath: z.string(), id: z.string() }),
+    response: manifestResultSchema,
+  },
+  "manifest:snapshot": {
+    request: z.object({
+      projectPath: z.string(),
+      reason: z.enum(["generate", "edit", "approve", "restore"]),
+      runId: z.string().optional(),
+    }),
+    response: manifestResultSchema,
   },
   "flow:setPublishTarget": {
     request: z.object({ projectPath: z.string(), repoUrl: z.string() }),

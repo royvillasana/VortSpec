@@ -39,6 +39,15 @@ import {
 } from "./flow/flow-manager";
 import { getRunHistory } from "./flow/history-reader";
 import {
+  getManifest,
+  saveManifest,
+  listManifestVersions,
+  readManifestVersion,
+  restoreManifestVersion,
+  snapshotManifest,
+} from "./manifest/manifest-reader";
+import type { SnapshotReason } from "../shared/manifest";
+import {
   startDevServer,
   stopDevServer,
   getDevServerStatus,
@@ -109,6 +118,25 @@ const handlers: Record<IpcChannel, Handler> = {
   "flow:completeInput": ((req: { projectPath: string; stageId: string }) =>
     completeInput(req.projectPath, req.stageId)) as Handler,
   "flow:getHistory": ((projectPath: string) => getRunHistory(projectPath)) as Handler,
+  "manifest:get": ((projectPath: string) => getManifest(projectPath)) as Handler,
+  "manifest:save": ((req: { projectPath: string; content: string }) =>
+    saveManifest(req.projectPath, req.content, new Date().toISOString())) as Handler,
+  "manifest:listVersions": ((projectPath: string) =>
+    listManifestVersions(projectPath)) as Handler,
+  "manifest:readVersion": ((req: { projectPath: string; id: string }) =>
+    readManifestVersion(req.projectPath, req.id)) as Handler,
+  "manifest:restoreVersion": ((req: { projectPath: string; id: string }) =>
+    restoreManifestVersion(req.projectPath, req.id, new Date().toISOString())) as Handler,
+  "manifest:snapshot": ((req: {
+    projectPath: string;
+    reason: SnapshotReason;
+    runId?: string;
+  }) =>
+    snapshotManifest(req.projectPath, {
+      reason: req.reason,
+      runId: req.runId,
+      timestamp: new Date().toISOString(),
+    }).then(() => getManifest(req.projectPath))) as Handler,
   "devserver:start": ((projectPath: string, sender: WebContents) =>
     startDevServer(sender, projectPath)) as Handler,
   "devserver:stop": ((projectPath: string) => {

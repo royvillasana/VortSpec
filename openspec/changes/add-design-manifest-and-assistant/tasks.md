@@ -1,16 +1,16 @@
 ## 1. Flow stage
 
-- [ ] 1.1 Add a `design-manifest` stage to `DEFAULT_FLOW` in `shared/flow.ts` (after verification, before publish): gated, `artifactGlob` for the manifest, kind that runs the `design-doc` skill
+- [x] 1.1 Add a `design-manifest` stage to `DEFAULT_FLOW` in `shared/flow.ts` (after verification, before publish): gated, `artifactGlob` for the manifest, kind that runs the `design-doc` skill
 - [ ] 1.2 Render the new stage in `GuidedFlow.tsx` (timeline entry, artifact chip `DESIGN.md`, gate CTA → open manifest), matching the flow mockup
 - [ ] 1.3 Wire the stage's approval into existing flow-manager gate/approval so Publish is unlocked only after manifest approval
 
 ## 2. Manifest data layer (main)
 
-- [ ] 2.1 `manifest-reader.ts`: resolve the manifest path (`DESIGN.md` → `.sdd-de/design.md` → `design.md`), read content, return `{ path, content, exists }`
-- [ ] 2.2 Gated write: save edited manifest content back to the resolved path
-- [ ] 2.3 Version store under `.vortspec/manifests/`: snapshot on generate/edit/approve; `index.json` with `{ timestamp, runId?, approved }`; list/read/restore
-- [ ] 2.4 IPC contracts + handlers + preload + renderer api: `manifest:get`, `manifest:save`, `manifest:listVersions`, `manifest:readVersion`, `manifest:restoreVersion`, `manifest:snapshot`
-- [ ] 2.5 Zod schemas at the boundary for the manifest result + version list
+- [x] 2.1 `manifest-reader.ts`: resolve the manifest path (`DESIGN.md` → `.sdd-de/design.md` → `design.md`), read content, return `{ path, content, exists }`
+- [x] 2.2 Gated write: save edited manifest content back to the resolved path
+- [x] 2.3 Version store under `.vortspec/manifests/`: snapshot on generate/edit/approve; `index.json` with `{ timestamp, runId?, approved }`; list/read/restore
+- [x] 2.4 IPC contracts + handlers + preload + renderer api: `manifest:get`, `manifest:save`, `manifest:listVersions`, `manifest:readVersion`, `manifest:restoreVersion`, `manifest:snapshot`
+- [x] 2.5 Zod schemas at the boundary for the manifest result + version list
 
 ## 3. Manifest generation (engine)
 
@@ -43,7 +43,7 @@
 
 ## 7. Tests & verification
 
-- [ ] 7.1 Main-process unit tests: manifest-reader path resolution, gated save, version snapshot/list/restore (Vitest, fixture project)
+- [x] 7.1 Main-process unit tests: manifest-reader path resolution, gated save, version snapshot/list/restore (Vitest, fixture project)
 - [ ] 7.2 Renderer component tests (Playwright CT): rendered/markdown toggle, copy, edit-save, version restore, approve gate; assistant dock toggle + first-send starts a session
 - [ ] 7.3 Recorded-transcript test for the `design-doc` generation → read → render path
 - [ ] 7.4 End-to-end through the UI on the real generated project: generate `DESIGN.md`, view both modes, edit + restore a version, approve; `pnpm build && pnpm test && pnpm lint` green

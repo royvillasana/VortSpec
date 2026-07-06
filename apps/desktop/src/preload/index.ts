@@ -79,6 +79,17 @@ const api = {
   completeInput: (projectPath: string, stageId: string) =>
     invoke("flow:completeInput", { projectPath, stageId }),
   getHistory: (projectPath: string) => invoke("flow:getHistory", projectPath),
+  getManifest: (projectPath: string) => invoke("manifest:get", projectPath),
+  saveManifest: (projectPath: string, content: string) =>
+    invoke("manifest:save", { projectPath, content }),
+  listManifestVersions: (projectPath: string) =>
+    invoke("manifest:listVersions", projectPath),
+  readManifestVersion: (projectPath: string, id: string) =>
+    invoke("manifest:readVersion", { projectPath, id }),
+  restoreManifestVersion: (projectPath: string, id: string) =>
+    invoke("manifest:restoreVersion", { projectPath, id }),
+  snapshotManifest: (projectPath: string, reason: "generate" | "edit" | "approve" | "restore", runId?: string) =>
+    invoke("manifest:snapshot", { projectPath, reason, runId }),
   startDevServer: (projectPath: string) => invoke("devserver:start", projectPath),
   stopDevServer: (projectPath: string) => invoke("devserver:stop", projectPath),
   devServerStatus: (projectPath: string) => invoke("devserver:status", projectPath),
