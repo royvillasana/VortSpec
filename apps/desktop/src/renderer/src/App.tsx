@@ -99,6 +99,7 @@ export default function App(): React.JSX.Element {
             project={activeProject}
             onBack={() => setActiveProject(null)}
             onOpenInspector={() => setProjectView("inspector")}
+            onOpenPreview={() => setProjectView("preview")}
           />
         ) : (
           <Dashboard

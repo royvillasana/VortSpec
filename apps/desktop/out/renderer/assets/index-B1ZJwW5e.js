@@ -16714,26 +16714,11 @@ function RawTerminal({ lines }) {
     /* @__PURE__ */ jsxRuntimeExports.jsx("div", { ref: endRef })
   ] });
 }
-function StageDot({
-  status,
-  locked
-}) {
-  if (locked) {
-    return /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "inline-block h-2.5 w-2.5 rounded-full bg-vs-border-strong" });
-  }
-  if (status === "running") return /* @__PURE__ */ jsxRuntimeExports.jsx(Spinner, {});
-  const color = {
-    pending: "bg-vs-text-muted",
-    "needs-review": "bg-vs-warning",
-    approved: "bg-vs-success",
-    failed: "bg-vs-error"
-  };
-  return /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: `inline-block h-2.5 w-2.5 rounded-full ${color[status]}` });
-}
 function GuidedFlow({
   project,
   onBack,
-  onOpenInspector
+  onOpenInspector,
+  onOpenPreview
 }) {
   const [flow, setFlow] = reactExports.useState(null);
   const [config, setConfig] = reactExports.useState(null);
@@ -16745,140 +16730,221 @@ function GuidedFlow({
     });
     void api.projectConfig(project.path).then(setConfig);
   }, [project.path]);
-  if (!flow || !selectedId) {
-    return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "px-6 py-10 text-sm text-vs-text-secondary", children: "Loading flow…" });
-  }
-  const def = flow.definitions.find((d) => d.id === selectedId);
-  const state = flow.state.stages.find((s) => s.id === selectedId);
-  const currentIndex = flow.definitions.findIndex((d) => d.id === flow.state.currentStageId);
-  const selectedIndex = flow.definitions.findIndex((d) => d.id === selectedId);
-  const locked = selectedIndex > currentIndex;
-  const flowComplete = flow.definitions.filter((d) => !d.optional).every((d) => flow.state.stages.find((s) => s.id === d.id)?.status === "approved");
-  const commitStage = flow.definitions.find((d) => d.optional);
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "mx-auto flex w-full max-w-4xl gap-6 px-6 py-8", children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("aside", { className: "w-56 shrink-0", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx(
-        "button",
+  const currentIndex = flow ? flow.definitions.findIndex((d) => d.id === flow.state.currentStageId) : 0;
+  const requiredDefs = flow?.definitions.filter((d) => !d.optional) ?? [];
+  const requiredDone = flow ? requiredDefs.filter(
+    (d) => flow.state.stages.find((s) => s.id === d.id)?.status === "approved"
+  ).length : 0;
+  const flowComplete = flow ? requiredDone === requiredDefs.length : false;
+  const commitStage = flow?.definitions.find((d) => d.optional);
+  const reviewStage = flow?.definitions.find(
+    (d) => flow.state.stages.find((s) => s.id === d.id)?.status === "needs-review"
+  );
+  const progressLabel = !flow ? "" : flowComplete ? "Complete · commit optional" : `${requiredDone} of ${requiredDefs.length} approved${reviewStage ? ` · paused at ${reviewStage.title}` : ""}`;
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex h-[calc(100vh-3rem)] w-full overflow-hidden bg-vs-bg-primary text-[13px] text-vs-text-primary", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsx(
+      FlowRail,
+      {
+        project,
+        paused: Boolean(reviewStage),
+        onBack,
+        onOpenPreview,
+        onOpenInspector
+      }
+    ),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("main", { className: "flex min-w-0 flex-1 flex-col bg-vs-bg-primary", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("header", { className: "flex flex-none items-center gap-3.5 border-b border-vs-border-default px-8 pb-4 pt-5", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col gap-0.5", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("h1", { className: "text-xl font-semibold tracking-[-0.01em]", children: "Guided flow" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs text-vs-text-secondary", children: "The SDD-DE cycle, driven through Claude Code" })
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex-1" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono text-xs text-vs-warning", children: progressLabel })
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex-1 overflow-y-auto px-8 pb-16 pt-7", children: !flow ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2 text-sm text-vs-text-secondary", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx(Spinner, {}),
+        " Loading flow…"
+      ] }) : /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "mx-auto flex max-w-[640px] flex-col", children: [
+        flowComplete && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "mb-4", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+          CompletionBanner,
+          {
+            project,
+            published: flow.state.publishRepoUrl,
+            canPublish: Boolean(commitStage),
+            onPublish: () => commitStage && setSelectedId(commitStage.id),
+            onOpenInspector,
+            onBack
+          }
+        ) }),
+        flow.definitions.map((def, i) => {
+          const state = flow.state.stages.find((s) => s.id === def.id);
+          return /* @__PURE__ */ jsxRuntimeExports.jsx(
+            TimelineStage,
+            {
+              project,
+              def,
+              state,
+              index: i,
+              isLast: i === flow.definitions.length - 1,
+              locked: i > currentIndex,
+              selected: def.id === selectedId,
+              config,
+              publishRepoUrl: flow.state.publishRepoUrl,
+              onSelect: () => setSelectedId(def.id),
+              onFlow: setFlow
+            },
+            def.id
+          );
+        })
+      ] }) })
+    ] })
+  ] });
+}
+function FlowRail({
+  project,
+  paused,
+  onBack,
+  onOpenPreview,
+  onOpenInspector
+}) {
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("nav", { className: "flex w-52 shrink-0 flex-col border-r border-vs-border-default bg-vs-bg-surface p-3", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs(
+      "button",
+      {
+        onClick: onBack,
+        title: "All projects",
+        className: "mb-3 flex items-center gap-2 border-b border-vs-border-default px-2 pb-3 text-left hover:opacity-85",
+        children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "grid h-5 w-5 place-items-center rounded-md bg-vs-accent font-mono text-[11px] font-medium text-vs-bg-primary", children: project.name.charAt(0).toUpperCase() }),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "min-w-0", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "block truncate text-[13px] font-semibold", children: project.name }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "block truncate font-mono text-[11px] text-vs-text-muted", children: project.path })
+          ] })
+        ]
+      }
+    ),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col gap-0.5", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2.5 rounded-md bg-vs-bg-elevated px-2 py-1.5 text-[13px] font-medium text-vs-accent", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "flex-1", children: "Flow" }),
+        paused && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "rounded-full border border-vs-warning-border px-1.5 font-mono text-[10px] text-vs-warning", children: "review" })
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(RailLink, { label: "Preview", onClick: onOpenPreview }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(RailLink, { label: "Tokens", onClick: onOpenInspector })
+    ] })
+  ] });
+}
+function RailLink({ label, onClick }) {
+  return /* @__PURE__ */ jsxRuntimeExports.jsx(
+    "button",
+    {
+      onClick,
+      className: "flex items-center gap-2.5 rounded-md px-2 py-1.5 text-left text-[13px] text-vs-text-secondary hover:bg-vs-bg-elevated hover:text-vs-text-primary",
+      children: /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "flex-1", children: label })
+    }
+  );
+}
+function StageRing({
+  status,
+  locked,
+  n
+}) {
+  const ringColor = locked ? "#34373D" : status === "approved" ? "#30A46C" : status === "running" ? "#7C6FF0" : status === "needs-review" ? "#FFB224" : "#34373D";
+  return /* @__PURE__ */ jsxRuntimeExports.jsx(
+    "span",
+    {
+      className: "mt-0.5 flex h-6 w-6 flex-none items-center justify-center rounded-full border-[1.5px]",
+      style: { borderColor: ringColor, background: status === "approved" ? "#30A46C" : "transparent" },
+      children: status === "approved" ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs font-semibold text-vs-bg-primary", children: "✓" }) : status === "running" ? /* @__PURE__ */ jsxRuntimeExports.jsx(Spinner, {}) : status === "needs-review" ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "h-[7px] w-[7px] rounded-full bg-vs-warning" }) : /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono text-[11px] text-vs-text-muted", children: n })
+    }
+  );
+}
+function TimelineStage({
+  project,
+  def,
+  state,
+  index,
+  isLast,
+  locked,
+  selected,
+  config,
+  publishRepoUrl,
+  onSelect,
+  onFlow
+}) {
+  const review = state.status === "needs-review";
+  const artifact = def.artifact ?? def.artifactGlob;
+  const edge = review && !selected ? "inset 2px 0 0 #FFB224" : state.status === "running" ? "inset 2px 0 0 #7C6FF0" : "none";
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex gap-4", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex w-6 flex-none flex-col items-center", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx(StageRing, { status: state.status, locked, n: index + 1 }),
+      !isLast && /* @__PURE__ */ jsxRuntimeExports.jsx(
+        "span",
         {
-          onClick: onBack,
-          className: "mb-3 text-xs text-vs-text-secondary hover:text-vs-text-primary",
-          children: "← Projects"
-        }
-      ),
-      /* @__PURE__ */ jsxRuntimeExports.jsx("h2", { className: "mb-1 truncate text-sm font-semibold text-vs-text-primary", children: project.name }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "mb-4 text-xs text-vs-text-muted", children: "Guided SDD flow" }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx(
-        Stepper,
-        {
-          flow,
-          selectedId,
-          currentIndex,
-          onSelect: setSelectedId
-        }
-      ),
-      /* @__PURE__ */ jsxRuntimeExports.jsx(
-        "button",
-        {
-          onClick: onOpenInspector,
-          className: "mt-4 w-full rounded-md border border-vs-border-default px-2.5 py-2 text-left text-[13px] text-vs-text-secondary transition-colors hover:bg-vs-bg-hover hover:text-vs-text-primary",
-          children: "Design Inspector →"
+          className: "my-1 w-[1.5px] flex-1",
+          style: { background: state.status === "approved" ? "rgba(48,164,108,0.4)" : "#26282D" }
         }
       )
     ] }),
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: "flex min-w-0 flex-1 flex-col gap-4", children: [
-      flowComplete && /* @__PURE__ */ jsxRuntimeExports.jsx(
-        CompletionBanner,
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "min-w-0 flex-1 pb-3.5", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs(
+        "div",
         {
-          project,
-          published: flow.state.publishRepoUrl,
-          canPublish: Boolean(commitStage),
-          onPublish: () => commitStage && setSelectedId(commitStage.id),
-          onOpenInspector,
-          onBack
+          className: "overflow-hidden rounded-lg border border-vs-border-default bg-vs-bg-surface",
+          style: { boxShadow: edge },
+          children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsxs(
+              "button",
+              {
+                onClick: locked ? void 0 : onSelect,
+                className: `flex w-full flex-col items-start gap-1.5 px-4 py-3.5 text-left ${locked ? "cursor-default opacity-50" : "hover:bg-vs-bg-hover"}`,
+                children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex w-full items-center gap-2.5", children: [
+                    /* @__PURE__ */ jsxRuntimeExports.jsx(
+                      "span",
+                      {
+                        className: `text-sm font-semibold ${state.status === "pending" || locked ? "text-vs-text-secondary" : "text-vs-text-primary"}`,
+                        children: def.title
+                      }
+                    ),
+                    /* @__PURE__ */ jsxRuntimeExports.jsx(StatusBadge, { status: state.status, locked }),
+                    def.optional && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "rounded-full border border-vs-border-default px-1.5 font-mono text-[9px] uppercase tracking-wide text-vs-text-muted", children: "opt" })
+                  ] }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-xs leading-relaxed text-vs-text-secondary", children: def.summary }),
+                  artifact && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "mt-0.5 rounded border border-vs-border-default bg-vs-bg-primary px-2 py-0.5 font-mono text-[11px] text-vs-text-secondary", children: artifact.split("/").pop() })
+                ]
+              }
+            ),
+            review && !selected && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-3 border-t border-vs-border-default bg-vs-warning-muted px-4 py-3", children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "flex-1 text-xs text-vs-warning", children: "Flow paused — this artifact needs your approval before implementation." }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "primary", onClick: onSelect, children: "Review →" })
+            ] })
+          ]
         }
       ),
-      /* @__PURE__ */ jsxRuntimeExports.jsx(
-        StageDetail,
+      selected && !locked && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "mt-3", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+        StageBody,
         {
           project,
           def,
           state,
-          locked,
           config,
-          publishRepoUrl: flow.state.publishRepoUrl,
-          onFlow: setFlow
-        },
-        def.id
-      )
+          publishRepoUrl,
+          onFlow
+        }
+      ) })
     ] })
   ] });
 }
-function Stepper({
-  flow,
-  selectedId,
-  currentIndex,
-  onSelect
-}) {
-  const total = flow.definitions.length;
-  const requiredDefs = flow.definitions.filter((d) => !d.optional);
-  const requiredDone = requiredDefs.filter(
-    (d) => flow.state.stages.find((s) => s.id === d.id)?.status === "approved"
-  ).length;
-  const pct = requiredDefs.length ? Math.round(requiredDone / requiredDefs.length * 100) : 0;
-  const complete = pct === 100;
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col gap-4", children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsx("ol", { className: "flex flex-col gap-1.5", children: flow.definitions.map((def, i) => {
-      const state = flow.state.stages.find((s) => s.id === def.id);
-      const locked = i > currentIndex;
-      const selected = def.id === selectedId;
-      const running = state.status === "running";
-      return /* @__PURE__ */ jsxRuntimeExports.jsx("li", { children: /* @__PURE__ */ jsxRuntimeExports.jsxs(
-        "button",
-        {
-          disabled: locked,
-          onClick: () => onSelect(def.id),
-          style: running ? { boxShadow: "inset 2px 0 0 #7C6FF0" } : void 0,
-          className: `flex w-full items-center gap-2.5 rounded-md border px-2.5 py-2 text-left text-[13px] transition-colors ${selected ? "border-vs-border-strong bg-vs-bg-elevated text-vs-text-primary" : "border-transparent text-vs-text-secondary hover:bg-vs-bg-hover"} ${locked ? "opacity-40" : ""}`,
-          children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "w-4 shrink-0 font-mono text-[11px] text-vs-text-muted", children: i + 1 }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "flex-1 truncate", children: def.title }),
-            def.optional && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "shrink-0 rounded-full border border-vs-border-default px-1.5 text-[9px] uppercase tracking-wide text-vs-text-muted", children: "opt" }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx(StageDot, { status: state.status, locked })
-          ]
-        }
-      ) }, def.id);
-    }) }),
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col gap-1.5 px-1", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "h-1 overflow-hidden rounded-full bg-vs-border-default", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
-        "div",
-        {
-          className: `h-full rounded-full transition-all ${complete ? "bg-vs-success" : "bg-vs-accent"}`,
-          style: { width: `${pct}%` }
-        }
-      ) }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono text-[11px] text-vs-text-muted", children: complete ? "Complete · commit optional" : `Stage ${Math.min(currentIndex + 1, total)} of ${total}` })
-    ] })
-  ] });
-}
-function StageDetail({
+function StageBody({
   project,
   def,
   state,
-  locked,
   config,
   publishRepoUrl,
   onFlow
 }) {
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col gap-4", children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("header", { children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2", children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx(StageDot, { status: state.status, locked }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("h3", { className: "text-base font-semibold text-vs-text-primary", children: def.title }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx(StatusBadge, { status: state.status, locked })
-      ] }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "mt-1 text-sm text-vs-text-secondary", children: def.summary })
-    ] }),
-    locked ? /* @__PURE__ */ jsxRuntimeExports.jsx(Card, { className: "px-4 py-6 text-center text-sm text-vs-text-muted", children: "Complete the previous stages first." }) : def.kind === "source" ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+  if (def.kind === "source")
+    return /* @__PURE__ */ jsxRuntimeExports.jsx(
       AgentStage,
       {
         project,
@@ -16888,7 +16954,11 @@ function StageDetail({
         header: /* @__PURE__ */ jsxRuntimeExports.jsx(SourceInfo, { config }),
         runLabel: "Connect & extract tokens + detect components"
       }
-    ) : def.kind === "components" ? /* @__PURE__ */ jsxRuntimeExports.jsx(ComponentsStage, { project, def, state, onFlow }) : def.optional ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+    );
+  if (def.kind === "components")
+    return /* @__PURE__ */ jsxRuntimeExports.jsx(ComponentsStage, { project, def, state, onFlow });
+  if (def.optional)
+    return /* @__PURE__ */ jsxRuntimeExports.jsx(
       PublishStage,
       {
         project,
@@ -16897,8 +16967,8 @@ function StageDetail({
         publishRepoUrl,
         onFlow
       }
-    ) : /* @__PURE__ */ jsxRuntimeExports.jsx(AgentStage, { project, def, state, onFlow })
-  ] });
+    );
+  return /* @__PURE__ */ jsxRuntimeExports.jsx(AgentStage, { project, def, state, onFlow });
 }
 function SourceInfo({ config }) {
   if (!config) {
@@ -16934,8 +17004,22 @@ function StatusBadge({
   status,
   locked
 }) {
-  const label = locked ? "locked" : status;
-  return /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "rounded-full border border-vs-border-default px-2 py-0.5 text-[10px] uppercase tracking-wide text-vs-text-muted", children: label });
+  const map = {
+    approved: { label: "approved", color: "#30A46C", border: "rgba(48,164,108,0.35)", bg: "rgba(48,164,108,0.08)" },
+    running: { label: "running", color: "#7C6FF0", border: "rgba(124,111,240,0.4)", bg: "rgba(124,111,240,0.08)" },
+    "needs-review": { label: "needs review", color: "#FFB224", border: "rgba(255,178,36,0.4)", bg: "rgba(255,178,36,0.08)" },
+    pending: { label: "pending", color: "#6B7280", border: "#26282D", bg: "#0B0C0E" },
+    failed: { label: "failed", color: "#E5484D", border: "rgba(229,72,77,0.4)", bg: "rgba(229,72,77,0.08)" }
+  };
+  const m = locked ? { label: "locked", color: "#6B7280", border: "#26282D", bg: "#0B0C0E" } : map[status];
+  return /* @__PURE__ */ jsxRuntimeExports.jsx(
+    "span",
+    {
+      className: "rounded-full border px-2 py-0.5 font-mono text-[10px]",
+      style: { color: m.color, borderColor: m.border, background: m.bg },
+      children: m.label
+    }
+  );
 }
 function AgentStage({
   project,
@@ -18625,7 +18709,8 @@ function App() {
       {
         project: activeProject,
         onBack: () => setActiveProject(null),
-        onOpenInspector: () => setProjectView("inspector")
+        onOpenInspector: () => setProjectView("inspector"),
+        onOpenPreview: () => setProjectView("preview")
       }
     ) : /* @__PURE__ */ jsxRuntimeExports.jsx(
       Dashboard,

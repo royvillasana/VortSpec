@@ -17,39 +17,22 @@ import { useAgentRun } from "../lib/useAgentRun";
 import { Button, Card, Spinner } from "../components/ui";
 import { RunPanel } from "../components/RunPanel";
 
-function StageDot({
-  status,
-  locked,
-}: {
-  status: StageStatus;
-  locked: boolean;
-}): React.JSX.Element {
-  if (locked) {
-    return <span className="inline-block h-2.5 w-2.5 rounded-full bg-vs-border-strong" />;
-  }
-  if (status === "running") return <Spinner />;
-  const color: Record<Exclude<StageStatus, "running">, string> = {
-    pending: "bg-vs-text-muted",
-    "needs-review": "bg-vs-warning",
-    approved: "bg-vs-success",
-    failed: "bg-vs-error",
-  };
-  return <span className={`inline-block h-2.5 w-2.5 rounded-full ${color[status]}`} />;
-}
-
 /**
- * The guided SDD-DE flow (US-05..US-09): the CLI's steps rendered as a stepper
- * with intake forms, agent runs, and artifact approval gates. Only the current
- * stage is actionable; nothing advances without an explicit approval.
+ * The guided SDD-DE flow (US-05..US-09), design "Guided Flow.dc.html" adapted to
+ * v2: the CLI's steps as a vertical timeline of stage cards inside the shared
+ * left-rail shell. The current stage expands inline (run, gate); nothing advances
+ * without an explicit approval.
  */
 export function GuidedFlow({
   project,
   onBack,
   onOpenInspector,
+  onOpenPreview,
 }: {
   project: Project;
   onBack: () => void;
   onOpenInspector: () => void;
+  onOpenPreview: () => void;
 }): React.JSX.Element {
   const [flow, setFlow] = useState<Flow | null>(null);
   const [config, setConfig] = useState<ProjectConfig | null>(null);
@@ -63,152 +46,303 @@ export function GuidedFlow({
     void api.projectConfig(project.path).then(setConfig);
   }, [project.path]);
 
-  if (!flow || !selectedId) {
-    return <div className="px-6 py-10 text-sm text-vs-text-secondary">Loading flow…</div>;
-  }
+  const currentIndex = flow
+    ? flow.definitions.findIndex((d) => d.id === flow.state.currentStageId)
+    : 0;
 
-  const def = flow.definitions.find((d) => d.id === selectedId)!;
-  const state = flow.state.stages.find((s) => s.id === selectedId)!;
-  const currentIndex = flow.definitions.findIndex((d) => d.id === flow.state.currentStageId);
-  const selectedIndex = flow.definitions.findIndex((d) => d.id === selectedId);
-  const locked = selectedIndex > currentIndex;
-
-  // The flow is "done" once every REQUIRED (non-optional) stage is approved —
-  // so a project can be finished entirely locally, with commit/publish optional.
-  const flowComplete = flow.definitions
-    .filter((d) => !d.optional)
-    .every((d) => flow.state.stages.find((s) => s.id === d.id)?.status === "approved");
-  const commitStage = flow.definitions.find((d) => d.optional);
+  const requiredDefs = flow?.definitions.filter((d) => !d.optional) ?? [];
+  const requiredDone = flow
+    ? requiredDefs.filter(
+        (d) => flow.state.stages.find((s) => s.id === d.id)?.status === "approved",
+      ).length
+    : 0;
+  const flowComplete = flow ? requiredDone === requiredDefs.length : false;
+  const commitStage = flow?.definitions.find((d) => d.optional);
+  const reviewStage = flow?.definitions.find(
+    (d) => flow.state.stages.find((s) => s.id === d.id)?.status === "needs-review",
+  );
+  const progressLabel = !flow
+    ? ""
+    : flowComplete
+      ? "Complete · commit optional"
+      : `${requiredDone} of ${requiredDefs.length} approved${reviewStage ? ` · paused at ${reviewStage.title}` : ""}`;
 
   return (
-    <div className="mx-auto flex w-full max-w-4xl gap-6 px-6 py-8">
-      <aside className="w-56 shrink-0">
-        <button
-          onClick={onBack}
-          className="mb-3 text-xs text-vs-text-secondary hover:text-vs-text-primary"
-        >
-          ← Projects
-        </button>
-        <h2 className="mb-1 truncate text-sm font-semibold text-vs-text-primary">
-          {project.name}
-        </h2>
-        <p className="mb-4 text-xs text-vs-text-muted">Guided SDD flow</p>
-        <Stepper
-          flow={flow}
-          selectedId={selectedId}
-          currentIndex={currentIndex}
-          onSelect={setSelectedId}
-        />
-        <button
-          onClick={onOpenInspector}
-          className="mt-4 w-full rounded-md border border-vs-border-default px-2.5 py-2 text-left text-[13px] text-vs-text-secondary transition-colors hover:bg-vs-bg-hover hover:text-vs-text-primary"
-        >
-          Design Inspector →
-        </button>
-      </aside>
+    <div className="flex h-[calc(100vh-3rem)] w-full overflow-hidden bg-vs-bg-primary text-[13px] text-vs-text-primary">
+      <FlowRail
+        project={project}
+        paused={Boolean(reviewStage)}
+        onBack={onBack}
+        onOpenPreview={onOpenPreview}
+        onOpenInspector={onOpenInspector}
+      />
+      <main className="flex min-w-0 flex-1 flex-col bg-vs-bg-primary">
+        <header className="flex flex-none items-center gap-3.5 border-b border-vs-border-default px-8 pb-4 pt-5">
+          <div className="flex flex-col gap-0.5">
+            <h1 className="text-xl font-semibold tracking-[-0.01em]">Guided flow</h1>
+            <span className="text-xs text-vs-text-secondary">
+              The SDD-DE cycle, driven through Claude Code
+            </span>
+          </div>
+          <div className="flex-1" />
+          <span className="font-mono text-xs text-vs-warning">{progressLabel}</span>
+        </header>
 
-      <section className="flex min-w-0 flex-1 flex-col gap-4">
-        {flowComplete && (
-          <CompletionBanner
-            project={project}
-            published={flow.state.publishRepoUrl}
-            canPublish={Boolean(commitStage)}
-            onPublish={() => commitStage && setSelectedId(commitStage.id)}
-            onOpenInspector={onOpenInspector}
-            onBack={onBack}
-          />
-        )}
-        <StageDetail
-          key={def.id}
-          project={project}
-          def={def}
-          state={state}
-          locked={locked}
-          config={config}
-          publishRepoUrl={flow.state.publishRepoUrl}
-          onFlow={setFlow}
-        />
-      </section>
+        <div className="flex-1 overflow-y-auto px-8 pb-16 pt-7">
+          {!flow ? (
+            <div className="flex items-center gap-2 text-sm text-vs-text-secondary">
+              <Spinner /> Loading flow…
+            </div>
+          ) : (
+            <div className="mx-auto flex max-w-[640px] flex-col">
+              {flowComplete && (
+                <div className="mb-4">
+                  <CompletionBanner
+                    project={project}
+                    published={flow.state.publishRepoUrl}
+                    canPublish={Boolean(commitStage)}
+                    onPublish={() => commitStage && setSelectedId(commitStage.id)}
+                    onOpenInspector={onOpenInspector}
+                    onBack={onBack}
+                  />
+                </div>
+              )}
+              {flow.definitions.map((def, i) => {
+                const state = flow.state.stages.find((s) => s.id === def.id)!;
+                return (
+                  <TimelineStage
+                    key={def.id}
+                    project={project}
+                    def={def}
+                    state={state}
+                    index={i}
+                    isLast={i === flow.definitions.length - 1}
+                    locked={i > currentIndex}
+                    selected={def.id === selectedId}
+                    config={config}
+                    publishRepoUrl={flow.state.publishRepoUrl}
+                    onSelect={() => setSelectedId(def.id)}
+                    onFlow={setFlow}
+                  />
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </main>
     </div>
   );
 }
 
-function Stepper({
-  flow,
-  selectedId,
-  currentIndex,
-  onSelect,
+/** The shared app-shell left rail (Flow active). */
+function FlowRail({
+  project,
+  paused,
+  onBack,
+  onOpenPreview,
+  onOpenInspector,
 }: {
-  flow: Flow;
-  selectedId: string;
-  currentIndex: number;
-  onSelect: (id: string) => void;
+  project: Project;
+  paused: boolean;
+  onBack: () => void;
+  onOpenPreview: () => void;
+  onOpenInspector: () => void;
 }): React.JSX.Element {
-  const total = flow.definitions.length;
-  // Progress is measured over required stages, so it reaches 100% when the
-  // project is done locally — optional stages (commit/publish) don't hold it back.
-  const requiredDefs = flow.definitions.filter((d) => !d.optional);
-  const requiredDone = requiredDefs.filter(
-    (d) => flow.state.stages.find((s) => s.id === d.id)?.status === "approved",
-  ).length;
-  const pct = requiredDefs.length ? Math.round((requiredDone / requiredDefs.length) * 100) : 0;
-  const complete = pct === 100;
-
   return (
-    <div className="flex flex-col gap-4">
-      <ol className="flex flex-col gap-1.5">
-        {flow.definitions.map((def, i) => {
-          const state = flow.state.stages.find((s) => s.id === def.id)!;
-          const locked = i > currentIndex;
-          const selected = def.id === selectedId;
-          const running = state.status === "running";
-          return (
-            <li key={def.id}>
-              <button
-                disabled={locked}
-                onClick={() => onSelect(def.id)}
-                style={running ? { boxShadow: "inset 2px 0 0 #7C6FF0" } : undefined}
-                className={`flex w-full items-center gap-2.5 rounded-md border px-2.5 py-2 text-left text-[13px] transition-colors ${
-                  selected
-                    ? "border-vs-border-strong bg-vs-bg-elevated text-vs-text-primary"
-                    : "border-transparent text-vs-text-secondary hover:bg-vs-bg-hover"
-                } ${locked ? "opacity-40" : ""}`}
-              >
-                <span className="w-4 shrink-0 font-mono text-[11px] text-vs-text-muted">
-                  {i + 1}
-                </span>
-                <span className="flex-1 truncate">{def.title}</span>
-                {def.optional && (
-                  <span className="shrink-0 rounded-full border border-vs-border-default px-1.5 text-[9px] uppercase tracking-wide text-vs-text-muted">
-                    opt
-                  </span>
-                )}
-                <StageDot status={state.status} locked={locked} />
-              </button>
-            </li>
-          );
-        })}
-      </ol>
-      <div className="flex flex-col gap-1.5 px-1">
-        <div className="h-1 overflow-hidden rounded-full bg-vs-border-default">
-          <div
-            className={`h-full rounded-full transition-all ${complete ? "bg-vs-success" : "bg-vs-accent"}`}
-            style={{ width: `${pct}%` }}
-          />
-        </div>
-        <span className="font-mono text-[11px] text-vs-text-muted">
-          {complete ? "Complete · commit optional" : `Stage ${Math.min(currentIndex + 1, total)} of ${total}`}
+    <nav className="flex w-52 shrink-0 flex-col border-r border-vs-border-default bg-vs-bg-surface p-3">
+      <button
+        onClick={onBack}
+        title="All projects"
+        className="mb-3 flex items-center gap-2 border-b border-vs-border-default px-2 pb-3 text-left hover:opacity-85"
+      >
+        <span className="grid h-5 w-5 place-items-center rounded-md bg-vs-accent font-mono text-[11px] font-medium text-vs-bg-primary">
+          {project.name.charAt(0).toUpperCase()}
         </span>
+        <span className="min-w-0">
+          <span className="block truncate text-[13px] font-semibold">{project.name}</span>
+          <span className="block truncate font-mono text-[11px] text-vs-text-muted">
+            {project.path}
+          </span>
+        </span>
+      </button>
+      <div className="flex flex-col gap-0.5">
+        <div className="flex items-center gap-2.5 rounded-md bg-vs-bg-elevated px-2 py-1.5 text-[13px] font-medium text-vs-accent">
+          <span className="flex-1">Flow</span>
+          {paused && (
+            <span className="rounded-full border border-vs-warning-border px-1.5 font-mono text-[10px] text-vs-warning">
+              review
+            </span>
+          )}
+        </div>
+        <RailLink label="Preview" onClick={onOpenPreview} />
+        <RailLink label="Tokens" onClick={onOpenInspector} />
+      </div>
+    </nav>
+  );
+}
+
+function RailLink({ label, onClick }: { label: string; onClick: () => void }): React.JSX.Element {
+  return (
+    <button
+      onClick={onClick}
+      className="flex items-center gap-2.5 rounded-md px-2 py-1.5 text-left text-[13px] text-vs-text-secondary hover:bg-vs-bg-elevated hover:text-vs-text-primary"
+    >
+      <span className="flex-1">{label}</span>
+    </button>
+  );
+}
+
+/** The gutter status ring for a timeline stage. */
+function StageRing({
+  status,
+  locked,
+  n,
+}: {
+  status: StageStatus;
+  locked: boolean;
+  n: number;
+}): React.JSX.Element {
+  const ringColor = locked
+    ? "#34373D"
+    : status === "approved"
+      ? "#30A46C"
+      : status === "running"
+        ? "#7C6FF0"
+        : status === "needs-review"
+          ? "#FFB224"
+          : "#34373D";
+  return (
+    <span
+      className="mt-0.5 flex h-6 w-6 flex-none items-center justify-center rounded-full border-[1.5px]"
+      style={{ borderColor: ringColor, background: status === "approved" ? "#30A46C" : "transparent" }}
+    >
+      {status === "approved" ? (
+        <span className="text-xs font-semibold text-vs-bg-primary">✓</span>
+      ) : status === "running" ? (
+        <Spinner />
+      ) : status === "needs-review" ? (
+        <span className="h-[7px] w-[7px] rounded-full bg-vs-warning" />
+      ) : (
+        <span className="font-mono text-[11px] text-vs-text-muted">{n}</span>
+      )}
+    </span>
+  );
+}
+
+/** One stage in the vertical timeline: ring + card; expands to its body when selected. */
+function TimelineStage({
+  project,
+  def,
+  state,
+  index,
+  isLast,
+  locked,
+  selected,
+  config,
+  publishRepoUrl,
+  onSelect,
+  onFlow,
+}: {
+  project: Project;
+  def: StageDef;
+  state: StageState;
+  index: number;
+  isLast: boolean;
+  locked: boolean;
+  selected: boolean;
+  config: ProjectConfig | null;
+  publishRepoUrl?: string;
+  onSelect: () => void;
+  onFlow: (f: Flow) => void;
+}): React.JSX.Element {
+  const review = state.status === "needs-review";
+  const artifact = def.artifact ?? def.artifactGlob;
+  const edge =
+    review && !selected
+      ? "inset 2px 0 0 #FFB224"
+      : state.status === "running"
+        ? "inset 2px 0 0 #7C6FF0"
+        : "none";
+  return (
+    <div className="flex gap-4">
+      <div className="flex w-6 flex-none flex-col items-center">
+        <StageRing status={state.status} locked={locked} n={index + 1} />
+        {!isLast && (
+          <span
+            className="my-1 w-[1.5px] flex-1"
+            style={{ background: state.status === "approved" ? "rgba(48,164,108,0.4)" : "#26282D" }}
+          />
+        )}
+      </div>
+
+      <div className="min-w-0 flex-1 pb-3.5">
+        <div
+          className="overflow-hidden rounded-lg border border-vs-border-default bg-vs-bg-surface"
+          style={{ boxShadow: edge }}
+        >
+          <button
+            onClick={locked ? undefined : onSelect}
+            className={`flex w-full flex-col items-start gap-1.5 px-4 py-3.5 text-left ${
+              locked ? "cursor-default opacity-50" : "hover:bg-vs-bg-hover"
+            }`}
+          >
+            <div className="flex w-full items-center gap-2.5">
+              <span
+                className={`text-sm font-semibold ${
+                  state.status === "pending" || locked ? "text-vs-text-secondary" : "text-vs-text-primary"
+                }`}
+              >
+                {def.title}
+              </span>
+              <StatusBadge status={state.status} locked={locked} />
+              {def.optional && (
+                <span className="rounded-full border border-vs-border-default px-1.5 font-mono text-[9px] uppercase tracking-wide text-vs-text-muted">
+                  opt
+                </span>
+              )}
+            </div>
+            <p className="text-xs leading-relaxed text-vs-text-secondary">{def.summary}</p>
+            {artifact && (
+              <span className="mt-0.5 rounded border border-vs-border-default bg-vs-bg-primary px-2 py-0.5 font-mono text-[11px] text-vs-text-secondary">
+                {artifact.split("/").pop()}
+              </span>
+            )}
+          </button>
+
+          {review && !selected && (
+            <div className="flex items-center gap-3 border-t border-vs-border-default bg-vs-warning-muted px-4 py-3">
+              <span className="flex-1 text-xs text-vs-warning">
+                Flow paused — this artifact needs your approval before implementation.
+              </span>
+              <Button variant="primary" onClick={onSelect}>
+                Review →
+              </Button>
+            </div>
+          )}
+        </div>
+
+        {selected && !locked && (
+          <div className="mt-3">
+            <StageBody
+              project={project}
+              def={def}
+              state={state}
+              config={config}
+              publishRepoUrl={publishRepoUrl}
+              onFlow={onFlow}
+            />
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
-function StageDetail({
+/** The interactive body of the selected stage (run, gate, publish). */
+function StageBody({
   project,
   def,
   state,
-  locked,
   config,
   publishRepoUrl,
   onFlow,
@@ -216,50 +350,34 @@ function StageDetail({
   project: Project;
   def: StageDef;
   state: StageState;
-  locked: boolean;
   config: ProjectConfig | null;
   publishRepoUrl?: string;
   onFlow: (f: Flow) => void;
 }): React.JSX.Element {
-  return (
-    <div className="flex flex-col gap-4">
-      <header>
-        <div className="flex items-center gap-2">
-          <StageDot status={state.status} locked={locked} />
-          <h3 className="text-base font-semibold text-vs-text-primary">{def.title}</h3>
-          <StatusBadge status={state.status} locked={locked} />
-        </div>
-        <p className="mt-1 text-sm text-vs-text-secondary">{def.summary}</p>
-      </header>
-
-      {locked ? (
-        <Card className="px-4 py-6 text-center text-sm text-vs-text-muted">
-          Complete the previous stages first.
-        </Card>
-      ) : def.kind === "source" ? (
-        <AgentStage
-          project={project}
-          def={def}
-          state={state}
-          onFlow={onFlow}
-          header={<SourceInfo config={config} />}
-          runLabel="Connect & extract tokens + detect components"
-        />
-      ) : def.kind === "components" ? (
-        <ComponentsStage project={project} def={def} state={state} onFlow={onFlow} />
-      ) : def.optional ? (
-        <PublishStage
-          project={project}
-          def={def}
-          state={state}
-          publishRepoUrl={publishRepoUrl}
-          onFlow={onFlow}
-        />
-      ) : (
-        <AgentStage project={project} def={def} state={state} onFlow={onFlow} />
-      )}
-    </div>
-  );
+  if (def.kind === "source")
+    return (
+      <AgentStage
+        project={project}
+        def={def}
+        state={state}
+        onFlow={onFlow}
+        header={<SourceInfo config={config} />}
+        runLabel="Connect & extract tokens + detect components"
+      />
+    );
+  if (def.kind === "components")
+    return <ComponentsStage project={project} def={def} state={state} onFlow={onFlow} />;
+  if (def.optional)
+    return (
+      <PublishStage
+        project={project}
+        def={def}
+        state={state}
+        publishRepoUrl={publishRepoUrl}
+        onFlow={onFlow}
+      />
+    );
+  return <AgentStage project={project} def={def} state={state} onFlow={onFlow} />;
 }
 
 /** Shows the configured design source + build target for the design-system stage. */
@@ -323,10 +441,20 @@ function StatusBadge({
   status: StageStatus;
   locked: boolean;
 }): React.JSX.Element {
-  const label = locked ? "locked" : status;
+  const map: Record<StageStatus, { label: string; color: string; border: string; bg: string }> = {
+    approved: { label: "approved", color: "#30A46C", border: "rgba(48,164,108,0.35)", bg: "rgba(48,164,108,0.08)" },
+    running: { label: "running", color: "#7C6FF0", border: "rgba(124,111,240,0.4)", bg: "rgba(124,111,240,0.08)" },
+    "needs-review": { label: "needs review", color: "#FFB224", border: "rgba(255,178,36,0.4)", bg: "rgba(255,178,36,0.08)" },
+    pending: { label: "pending", color: "#6B7280", border: "#26282D", bg: "#0B0C0E" },
+    failed: { label: "failed", color: "#E5484D", border: "rgba(229,72,77,0.4)", bg: "rgba(229,72,77,0.08)" },
+  };
+  const m = locked ? { label: "locked", color: "#6B7280", border: "#26282D", bg: "#0B0C0E" } : map[status];
   return (
-    <span className="rounded-full border border-vs-border-default px-2 py-0.5 text-[10px] uppercase tracking-wide text-vs-text-muted">
-      {label}
+    <span
+      className="rounded-full border px-2 py-0.5 font-mono text-[10px]"
+      style={{ color: m.color, borderColor: m.border, background: m.bg }}
+    >
+      {m.label}
     </span>
   );
 }
