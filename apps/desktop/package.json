@@ -1,6 +1,6 @@
 {
   "name": "@vortspec/desktop",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": true,
   "type": "module",
   "main": "./out/main/index.js",
@@ -46,6 +46,9 @@
   "build": {
     "appId": "com.vortspec.desktop",
     "productName": "VortSpec",
+    "asarUnpack": [
+      "**/node_modules/@royvillasana/sdd-de/**"
+    ],
     "mac": {
       "category": "public.app-category.developer-tools",
       "icon": "build/icon.icns",

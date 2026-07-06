@@ -1,5 +1,5 @@
 import { createRequire } from "node:module";
-import { dirname, join } from "node:path";
+import { dirname, join, sep } from "node:path";
 import {
   cp,
   mkdir,
@@ -28,8 +28,20 @@ import type { Project } from "../../shared/ipc";
 
 const require = createRequire(import.meta.url);
 
+/**
+ * In the packaged app the bundled toolkit lives inside `app.asar`, but Electron's
+ * asar layer does NOT patch `fs.cp`/`fs.opendir`, so copying from an `app.asar`
+ * path throws `ENOTDIR`. electron-builder is configured to unpack the toolkit
+ * (`asarUnpack`), so the real files sit under `app.asar.unpacked`. Map the
+ * resolved module path to that unpacked twin. No-op in dev (no asar in the path).
+ */
+export function toUnpacked(p: string): string {
+  if (p.includes(`app.asar.unpacked${sep}`)) return p;
+  return p.replace(`app.asar${sep}`, `app.asar.unpacked${sep}`);
+}
+
 function packageDir(): string {
-  return dirname(require.resolve("@royvillasana/sdd-de/package.json"));
+  return toUnpacked(dirname(require.resolve("@royvillasana/sdd-de/package.json")));
 }
 
 async function exists(path: string): Promise<boolean> {
