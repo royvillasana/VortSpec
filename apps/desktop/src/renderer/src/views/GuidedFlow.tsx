@@ -31,6 +31,7 @@ export function GuidedFlow({
   onOpenPreview,
   onOpenRun,
   onOpenReview,
+  onOpenVerify,
 }: {
   project: Project;
   onBack: () => void;
@@ -38,6 +39,7 @@ export function GuidedFlow({
   onOpenPreview: () => void;
   onOpenRun: () => void;
   onOpenReview: () => void;
+  onOpenVerify: () => void;
 }): React.JSX.Element {
   const [flow, setFlow] = useState<Flow | null>(null);
   const [config, setConfig] = useState<ProjectConfig | null>(null);
@@ -130,7 +132,7 @@ export function GuidedFlow({
                     config={config}
                     publishRepoUrl={flow.state.publishRepoUrl}
                     onSelect={() => setSelectedId(def.id)}
-                    onReview={onOpenReview}
+                    onReview={def.kind === "verify" ? onOpenVerify : onOpenReview}
                     onFlow={setFlow}
                   />
                 );

@@ -94,3 +94,31 @@ export const inspectorComponentsResultSchema = z.object({
   components: z.array(inspectorComponentSchema),
 });
 export type InspectorComponentsResult = z.infer<typeof inspectorComponentsResultSchema>;
+
+// ── Verification (visual-verify + adversarial-review findings) ────────
+
+export const findingSeveritySchema = z.enum(["error", "warning", "info"]);
+export type FindingSeverity = z.infer<typeof findingSeveritySchema>;
+
+export const verificationFindingSchema = z.object({
+  /** Stable id: `<component>:<raw id>` (e.g. `callout:D2`). */
+  id: z.string(),
+  /** Short raw id from the report (e.g. `D2`, `O-A`). */
+  rawId: z.string(),
+  component: z.string(),
+  group: z.enum(["visual", "adversarial"]),
+  severity: findingSeveritySchema,
+  title: z.string(),
+  detail: z.string(),
+  /** A referenced file/token from the finding, if one was found. */
+  ref: z.string().optional(),
+  status: z.enum(["open", "resolved"]),
+  /** Project-relative path of the report the finding came from. */
+  reportPath: z.string(),
+});
+export type VerificationFinding = z.infer<typeof verificationFindingSchema>;
+
+export const verificationResultSchema = z.object({
+  findings: z.array(verificationFindingSchema),
+});
+export type VerificationResult = z.infer<typeof verificationResultSchema>;

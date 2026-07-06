@@ -2,7 +2,11 @@ import { z } from "zod";
 import { agentRunOptionsSchema } from "./run-events";
 import { flowSchema, stageStatusSchema } from "./flow";
 import { setupAnswersSchema, projectConfigSchema } from "./setup";
-import { inspectorTokensResultSchema, inspectorComponentsResultSchema } from "./inspector";
+import {
+  inspectorTokensResultSchema,
+  inspectorComponentsResultSchema,
+  verificationResultSchema,
+} from "./inspector";
 
 export type { SetupAnswers, ProjectConfig } from "./setup";
 export type {
@@ -17,6 +21,11 @@ export type {
   InspectorComponentsResult,
   PropControl,
   ComponentStatus,
+} from "./inspector";
+export type {
+  VerificationFinding,
+  VerificationResult,
+  FindingSeverity,
 } from "./inspector";
 
 // Re-exported so renderer code can import run + IPC types from one module.
@@ -194,6 +203,10 @@ export const ipcContract = {
       value: z.string(),
     }),
     response: inspectorTokensResultSchema,
+  },
+  "inspector:getVerification": {
+    request: z.string(),
+    response: verificationResultSchema,
   },
 } as const;
 

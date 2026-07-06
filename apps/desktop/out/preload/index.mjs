@@ -103,7 +103,8 @@ const api = {
   projectConfig: (projectPath) => invoke("project:config", projectPath),
   inspectorTokens: (projectPath) => invoke("inspector:getTokens", projectPath),
   inspectorComponents: (projectPath) => invoke("inspector:getComponents", projectPath),
-  setTokenValue: (projectPath, name, value) => invoke("inspector:setTokenValue", { projectPath, name, value })
+  setTokenValue: (projectPath, name, value) => invoke("inspector:setTokenValue", { projectPath, name, value }),
+  getVerification: (projectPath) => invoke("inspector:getVerification", projectPath)
 };
 if (process.contextIsolated) {
   try {

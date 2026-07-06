@@ -16788,7 +16788,8 @@ function GuidedFlow({
   onOpenInspector,
   onOpenPreview,
   onOpenRun,
-  onOpenReview
+  onOpenReview,
+  onOpenVerify
 }) {
   const [flow, setFlow] = reactExports.useState(null);
   const [config, setConfig] = reactExports.useState(null);
@@ -16864,7 +16865,7 @@ function GuidedFlow({
               config,
               publishRepoUrl: flow.state.publishRepoUrl,
               onSelect: () => setSelectedId(def.id),
-              onReview: onOpenReview,
+              onReview: def.kind === "verify" ? onOpenVerify : onOpenReview,
               onFlow: setFlow
             },
             def.id
@@ -18548,6 +18549,194 @@ function pickReviewStage(flow) {
   if (!target) return null;
   return { def: target, state: byId(target.id) };
 }
+const SEV_COLOR = {
+  error: "#E5484D",
+  warning: "#FFB224",
+  info: "#6B7280"
+};
+const GROUP_TITLE = { visual: "Visual verify", adversarial: "Adversarial review" };
+function Verification({
+  project,
+  onBack,
+  onOpenRun,
+  onOpenPreview,
+  onOpenInspector
+}) {
+  const [findings, setFindings] = reactExports.useState(null);
+  const [verifyStageId, setVerifyStageId] = reactExports.useState(null);
+  const [sev, setSev] = reactExports.useState("all");
+  const [sent, setSent] = reactExports.useState(/* @__PURE__ */ new Set());
+  const [toast, setToast] = reactExports.useState("");
+  reactExports.useEffect(() => {
+    void api.getVerification(project.path).then((r) => setFindings(r.findings));
+    void api.getFlow(project.path).then((f) => {
+      setVerifyStageId(f.definitions.find((d) => d.kind === "verify")?.id ?? null);
+    });
+  }, [project.path]);
+  function flash(msg) {
+    setToast(msg);
+    window.setTimeout(() => setToast(""), 2600);
+  }
+  async function sendBack(f) {
+    if (verifyStageId) {
+      await api.requestChanges(project.path, verifyStageId, `Fix ${f.rawId} (${f.component}): ${f.title}`);
+    }
+    setSent((prev) => new Set(prev).add(f.id));
+    flash(`${f.rawId} sent back to the agent`);
+  }
+  const effective = (f) => sent.has(f.id) ? "sent" : f.status;
+  const openErrors = reactExports.useMemo(
+    () => (findings ?? []).filter((f) => f.severity === "error" && effective(f) === "open").length,
+    [findings, sent]
+  );
+  const openTotal = reactExports.useMemo(
+    () => (findings ?? []).filter((f) => effective(f) === "open").length,
+    [findings, sent]
+  );
+  const groups = reactExports.useMemo(() => {
+    if (!findings) return [];
+    const shown = findings.filter((f) => sev === "all" || f.severity === sev);
+    return ["visual", "adversarial"].map((g) => {
+      const all = findings.filter((f) => f.group === g);
+      return {
+        group: g,
+        items: shown.filter((f) => f.group === g),
+        open: all.filter((f) => effective(f) === "open").length,
+        total: all.length
+      };
+    }).filter((g) => g.items.length > 0);
+  }, [findings, sev, sent]);
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex h-[calc(100vh-3rem)] w-full overflow-hidden bg-vs-bg-primary text-[13px] text-vs-text-primary", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsx(
+      ProjectRail,
+      {
+        project,
+        onHeaderClick: onBack,
+        items: [
+          { label: "Flow", active: true, onClick: onBack, badge: openTotal ? /* @__PURE__ */ jsxRuntimeExports.jsx(ReviewBadge, {}) : void 0 },
+          { label: "Run", onClick: onOpenRun },
+          { label: "Preview", onClick: onOpenPreview },
+          { label: "Tokens", onClick: onOpenInspector }
+        ]
+      }
+    ),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("main", { className: "flex min-w-0 flex-1 flex-col bg-vs-bg-primary", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("header", { className: "flex flex-none flex-col gap-3.5 border-b border-vs-border-default px-7 pb-3.5 pt-5", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-3", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("h1", { className: "text-xl font-semibold tracking-[-0.01em]", children: "Verification" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono text-xs text-vs-text-muted", children: "visual-verify + adversarial review" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex-1" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: `font-mono text-xs ${openTotal ? "text-vs-warning" : "text-vs-success"}`, children: findings === null ? "" : openTotal ? `${openTotal} open · ${openErrors} blocking` : "all resolved" })
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex gap-0.5 self-start rounded-lg border border-vs-border-default bg-vs-bg-surface p-0.5", children: ["all", "error", "warning", "info"].map((s) => /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "button",
+          {
+            onClick: () => setSev(s),
+            className: `rounded-md px-3 py-1 text-xs capitalize transition-colors ${sev === s ? "bg-vs-bg-elevated text-vs-text-primary" : "text-vs-text-secondary hover:text-vs-text-primary"}`,
+            children: s
+          },
+          s
+        )) })
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex-1 overflow-y-auto px-7 py-5", children: /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "mx-auto flex max-w-[720px] flex-col gap-6", children: findings === null ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2 text-sm text-vs-text-secondary", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx(Spinner, {}),
+        " Reading reports…"
+      ] }) : findings.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "rounded-md border border-vs-border-default bg-vs-bg-surface px-4 py-12 text-center text-sm text-vs-text-muted", children: [
+        "No verification results yet. Run ",
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono", children: "/visual-verify" }),
+        " (and adversarial review) to populate findings here."
+      ] }) : groups.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "py-12 text-center text-sm text-vs-text-muted", children: "No findings at this severity." }) : groups.map((g) => /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: "flex flex-col gap-2.5", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-baseline gap-2", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-sm font-semibold", children: GROUP_TITLE[g.group] }),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "font-mono text-[11px] text-vs-text-muted", children: [
+            g.open,
+            " open · ",
+            g.total,
+            " total"
+          ] })
+        ] }),
+        g.items.map((f) => /* @__PURE__ */ jsxRuntimeExports.jsx(
+          FindingCard,
+          {
+            finding: f,
+            state: effective(f),
+            canSend: Boolean(verifyStageId),
+            onSend: () => void sendBack(f)
+          },
+          f.id
+        ))
+      ] }, g.group)) }) }),
+      findings !== null && findings.length > 0 && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex flex-none items-center gap-3.5 border-t border-vs-border-default bg-vs-bg-surface px-7 py-3", children: openErrors > 0 ? /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "flex-1 text-xs text-vs-text-secondary", children: [
+          openErrors,
+          " blocking error",
+          openErrors === 1 ? "" : "s",
+          " left · resolve to finish the run."
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "ghost", onClick: onBack, children: "Back to flow" })
+      ] }) : /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "flex-1 text-xs text-vs-success", children: "✓ No blocking findings — errors resolved." }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "primary", onClick: onOpenPreview, children: "Finish & preview →" })
+      ] }) })
+    ] }),
+    toast && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "fixed bottom-6 left-1/2 z-[60] flex -translate-x-1/2 items-center gap-2 rounded-lg border border-vs-border-strong bg-vs-bg-elevated px-4 py-2.5 text-xs text-vs-text-primary shadow-lg", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-vs-success", children: "✓" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono", children: toast })
+    ] })
+  ] });
+}
+function FindingCard({
+  finding,
+  state,
+  canSend,
+  onSend
+}) {
+  const isErrorOpen = finding.severity === "error" && state === "open";
+  const dot = state === "open" ? SEV_COLOR[finding.severity] : "#30A46C";
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs(
+    "div",
+    {
+      className: "overflow-hidden rounded-lg border bg-vs-bg-surface",
+      style: {
+        borderColor: isErrorOpen ? "rgba(229,72,77,0.35)" : "#26282D",
+        boxShadow: isErrorOpen ? "inset 2px 0 0 #E5484D" : "none"
+      },
+      children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-start gap-3 px-4 py-3.5", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "mt-1.5 h-2 w-2 shrink-0 rounded-full", style: { background: dot } }),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "min-w-0 flex-1", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2.5", children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[13px] font-medium text-vs-text-primary", children: finding.title }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx(
+                "span",
+                {
+                  className: "font-mono text-[10px] uppercase tracking-wide",
+                  style: { color: SEV_COLOR[finding.severity] },
+                  children: finding.severity
+                }
+              )
+            ] }),
+            finding.detail && /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "mt-1.5 text-xs leading-relaxed text-vs-text-secondary", children: finding.detail }),
+            finding.ref && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "mt-2 inline-block rounded border border-vs-border-default bg-vs-bg-primary px-2 py-0.5 font-mono text-[11px] text-vs-text-secondary", children: finding.ref })
+          ] }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "shrink-0 font-mono text-[10px] text-vs-text-muted", children: finding.rawId })
+        ] }),
+        state === "open" && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2 border-t border-vs-border-default px-4 py-2.5", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "flex-1 text-[11px] text-vs-text-muted", children: finding.severity === "error" ? "Blocks finishing the run until resolved." : "Non-blocking — send back to the agent or leave as noted." }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "default", disabled: !canSend, onClick: onSend, children: "Send back" })
+        ] }),
+        state === "resolved" && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2 border-t border-vs-border-default px-4 py-2.5", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs text-vs-success", children: "✓" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs text-vs-text-secondary", children: "Resolved in the report." })
+        ] }),
+        state === "sent" && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2 border-t border-vs-border-default px-4 py-2.5", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx(Spinner, {}),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs text-vs-text-secondary", children: "Sent back to the agent — re-run the verify stage to pick up the fix." })
+        ] })
+      ]
+    }
+  );
+}
 const frameworkSchema = enumType([
   "react",
   "next",
@@ -19128,6 +19317,15 @@ function App() {
         onOpenPreview: () => setProjectView("preview"),
         onOpenInspector: () => setProjectView("inspector")
       }
+    ) : activeProject && projectView === "verify" ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+      Verification,
+      {
+        project: activeProject,
+        onBack: () => setProjectView("flow"),
+        onOpenRun: () => setProjectView("run"),
+        onOpenPreview: () => setProjectView("preview"),
+        onOpenInspector: () => setProjectView("inspector")
+      }
     ) : activeProject ? /* @__PURE__ */ jsxRuntimeExports.jsx(
       GuidedFlow,
       {
@@ -19136,7 +19334,8 @@ function App() {
         onOpenInspector: () => setProjectView("inspector"),
         onOpenPreview: () => setProjectView("preview"),
         onOpenRun: () => setProjectView("run"),
-        onOpenReview: () => setProjectView("review")
+        onOpenReview: () => setProjectView("review"),
+        onOpenVerify: () => setProjectView("verify")
       }
     ) : /* @__PURE__ */ jsxRuntimeExports.jsx(
       Dashboard,

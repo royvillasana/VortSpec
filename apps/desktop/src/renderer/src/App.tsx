@@ -8,6 +8,7 @@ import { Inspector } from "./views/Inspector";
 import { DevPreview } from "./views/DevPreview";
 import { RunView } from "./views/RunView";
 import { ArtifactReview } from "./views/ArtifactReview";
+import { Verification } from "./views/Verification";
 import { NewProjectWizard } from "./views/NewProjectWizard";
 import { Spinner } from "./components/ui";
 
@@ -29,7 +30,7 @@ export default function App(): React.JSX.Element {
   const [activeProject, setActiveProject] = useState<Project | null>(null);
   const [setupProject, setSetupProject] = useState<Project | null>(null);
   const [projectView, setProjectView] = useState<
-    "flow" | "inspector" | "preview" | "run" | "review"
+    "flow" | "inspector" | "preview" | "run" | "review" | "verify"
   >("flow");
   const [loading, setLoading] = useState(true);
 
@@ -119,6 +120,14 @@ export default function App(): React.JSX.Element {
             onOpenPreview={() => setProjectView("preview")}
             onOpenInspector={() => setProjectView("inspector")}
           />
+        ) : activeProject && projectView === "verify" ? (
+          <Verification
+            project={activeProject}
+            onBack={() => setProjectView("flow")}
+            onOpenRun={() => setProjectView("run")}
+            onOpenPreview={() => setProjectView("preview")}
+            onOpenInspector={() => setProjectView("inspector")}
+          />
         ) : activeProject ? (
           <GuidedFlow
             project={activeProject}
@@ -127,6 +136,7 @@ export default function App(): React.JSX.Element {
             onOpenPreview={() => setProjectView("preview")}
             onOpenRun={() => setProjectView("run")}
             onOpenReview={() => setProjectView("review")}
+            onOpenVerify={() => setProjectView("verify")}
           />
         ) : (
           <Dashboard

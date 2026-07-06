@@ -366,6 +366,26 @@ const inspectorComponentsResultSchema = z.object({
   previewUrl: z.string().nullable(),
   components: z.array(inspectorComponentSchema)
 });
+const findingSeveritySchema = z.enum(["error", "warning", "info"]);
+const verificationFindingSchema = z.object({
+  /** Stable id: `<component>:<raw id>` (e.g. `callout:D2`). */
+  id: z.string(),
+  /** Short raw id from the report (e.g. `D2`, `O-A`). */
+  rawId: z.string(),
+  component: z.string(),
+  group: z.enum(["visual", "adversarial"]),
+  severity: findingSeveritySchema,
+  title: z.string(),
+  detail: z.string(),
+  /** A referenced file/token from the finding, if one was found. */
+  ref: z.string().optional(),
+  status: z.enum(["open", "resolved"]),
+  /** Project-relative path of the report the finding came from. */
+  reportPath: z.string()
+});
+const verificationResultSchema = z.object({
+  findings: z.array(verificationFindingSchema)
+});
 const checkStatusSchema = z.enum(["pass", "fail", "unknown", "checking"]);
 const fixActionSchema = z.object({
   /** install-link → open an external URL; open-login → run login in the PTY; verify → re-run the check */
@@ -491,6 +511,10 @@ const ipcContract = {
       value: z.string()
     }),
     response: inspectorTokensResultSchema
+  },
+  "inspector:getVerification": {
+    request: z.string(),
+    response: verificationResultSchema
   }
 };
 function execFileSafe(command, args, opts = {}) {
@@ -1148,6 +1172,90 @@ async function getInspectorComponents(projectPath) {
   }
   return { componentDir, previewUrl: null, components };
 }
+const BACKTICK = String.fromCharCode(96);
+const CODE_SPAN = new RegExp(BACKTICK, "g");
+async function findReports(specsRoot) {
+  const out = [];
+  async function walk(dir) {
+    let entries;
+    try {
+      entries = await readdir(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      const full = join(dir, entry.name);
+      if (entry.isDirectory()) await walk(full);
+      else if (entry.name === "visual-verify-report.md") out.push({ path: full, group: "visual" });
+      else if (/adversarial.*\.md$/i.test(entry.name)) out.push({ path: full, group: "adversarial" });
+    }
+  }
+  await walk(specsRoot);
+  return out;
+}
+function firstRef(block) {
+  const parts = block.split(BACKTICK);
+  for (let i = 1; i < parts.length; i += 2) {
+    const s = parts[i];
+    if (/[./]/.test(s) && s.length < 60) return s;
+  }
+  const src = block.match(/\b(src\/[\w./-]+)/);
+  return src?.[1];
+}
+function cleanDetail(block) {
+  const line = block.split("\n").map((l) => l.trim()).find((l) => l && !l.startsWith("#") && !l.startsWith("|"));
+  if (!line) return "";
+  return line.replace(/^[-*]\s+/, "").replace(/\*\*/g, "").replace(CODE_SPAN, "").slice(0, 260).trim();
+}
+function nextHeader(md, from) {
+  const idx = md.slice(from + 1).search(/\n#{2,3}\s/);
+  return idx < 0 ? md.length : from + 1 + idx;
+}
+function parseFindings(md, group, component, reportPath) {
+  const findings = [];
+  const push = (rawId, title, detail, severity, block) => {
+    const status = /resolved|passed/i.test(block) ? "resolved" : "open";
+    findings.push({
+      id: component + ":" + rawId,
+      rawId,
+      component,
+      group,
+      severity,
+      title: title.trim().replace(/\s+·.*$/, ""),
+      detail,
+      ref: firstRef(block),
+      status,
+      reportPath
+    });
+  };
+  const dRe = /^###\s+(D\w+)\b[ \t]*[—:-]?[ \t]*(.*)$/gm;
+  const dMatches = [...md.matchAll(dRe)];
+  for (let i = 0; i < dMatches.length; i++) {
+    const m = dMatches[i];
+    const start = m.index ?? 0;
+    const end = i + 1 < dMatches.length ? dMatches[i + 1].index ?? md.length : nextHeader(md, start);
+    const block = md.slice(start, end);
+    push(m[1], m[2] || "Discrepancy", cleanDetail(md.slice(start + m[0].length, end)), "error", block);
+  }
+  for (const m of md.matchAll(/^-\s+\*\*(O[\w-]*)\b[ \t]*[—:-]?[ \t]*([^*]+?)\*\*[ \t]*(.*)$/gm)) {
+    push(m[1], m[2], (m[3] || "").replace(CODE_SPAN, "").slice(0, 260).trim(), "info", m[0]);
+  }
+  return findings;
+}
+async function getVerification(projectPath) {
+  const specsRoot = join(projectPath, "specs");
+  const reports = await findReports(specsRoot);
+  const findings = [];
+  for (const { path, group } of reports) {
+    const md = await readFile(path, "utf8").catch(() => "");
+    if (!md) continue;
+    const rel = path.slice(projectPath.length + 1);
+    const dir = dirname(path);
+    const component = dir === specsRoot ? "system" : basename(dir);
+    findings.push(...parseFindings(md, group, component, rel));
+  }
+  return { findings };
+}
 function truncate(s, n = 200) {
   return s.length > n ? `${s.slice(0, n)}…` : s;
 }
@@ -1561,7 +1669,8 @@ const handlers = {
   "project:config": ((projectPath) => readProjectConfig(projectPath)),
   "inspector:getTokens": ((projectPath) => getInspectorTokens(projectPath)),
   "inspector:getComponents": ((projectPath) => getInspectorComponents(projectPath)),
-  "inspector:setTokenValue": ((req) => setInspectorTokenValue(req.projectPath, req.name, req.value))
+  "inspector:setTokenValue": ((req) => setInspectorTokenValue(req.projectPath, req.name, req.value)),
+  "inspector:getVerification": ((projectPath) => getVerification(projectPath))
 };
 function registerIpc() {
   Object.keys(ipcContract).forEach((channel) => {
