@@ -384,11 +384,11 @@
         var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
         var GAP = 26;          // dot spacing (px)
-        var RADIUS = 150;      // cursor influence radius (px)
-        var BASE_OP = 0.05;    // resting opacity — really subtle
-        var MAX_OP = 0.42;     // opacity right under the cursor
-        var BASE_R = 0.9, MAX_R = 2.1; // dot radius range
-        var PUSH = 7;          // px the dots drift away from the cursor
+        var RADIUS = 165;      // cursor influence radius (px)
+        var BASE_OP = 0.16;    // resting opacity — visible but calm
+        var MAX_OP = 0.72;     // opacity right under the cursor (highlight)
+        var BASE_R = 1.1, MAX_R = 2.6; // dot radius range
+        var PUSH = 8;          // px the dots drift away from the cursor
         var GRAY = [126, 132, 142];
         var HUE = [124, 111, 240]; // accent — only a small amount is mixed in
         var TAU = Math.PI * 2;
