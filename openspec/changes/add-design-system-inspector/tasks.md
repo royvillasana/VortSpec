@@ -55,4 +55,4 @@
 - [x] 9.1 Main-process unit tests: token-file parser, source classifier, where-used index, verify-report reader (Vitest, fixture files)
 - [x] 9.2 Renderer tests for Tokens/Components views over fixture data (Playwright or component tests)
 - [x] 9.3 Recorded-transcript / fixture-based test for the harness-generation + preview path
-- [ ] 9.4 End-to-end through the UI: open the Inspector on a real generated project, browse all tokens + components, render Button in the Playground, run the gated modify loop once; `pnpm build && pnpm test && pnpm lint` green
+- [ ] 9.4 End-to-end through the UI: open the Inspector on a real generated project, browse all tokens + components, render Button in the Playground, run the gated modify loop once; `pnpm build && pnpm test && pnpm lint` green — checklist in `acceptance-9.4.md`; automated parts (command gate + data-layer over the real `sdd based test` project) verified, interactive UI walkthrough + gated-modify (spends Claude usage) awaiting human sign-off
