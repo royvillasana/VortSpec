@@ -19240,10 +19240,11 @@ function App() {
       ]);
       setReport(envReport);
       setProjects(projectList);
-      setView(envReport.ready ? "dashboard" : "env");
+      setView(isCoreReady(envReport) ? "dashboard" : "env");
       setLoading(false);
     })();
   }, []);
+  if (loading || !report) return /* @__PURE__ */ jsxRuntimeExports.jsx(Splash, {});
   const coreReady = isCoreReady(report);
   return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex min-h-screen flex-col bg-vs-bg-primary text-vs-text-primary", children: [
     /* @__PURE__ */ jsxRuntimeExports.jsx(
@@ -19262,10 +19263,7 @@ function App() {
         }
       }
     ),
-    /* @__PURE__ */ jsxRuntimeExports.jsx("main", { className: "flex-1", children: loading || !report ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex h-full items-center justify-center gap-2 py-24 text-vs-text-secondary", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx(Spinner, {}),
-      " Checking your environment…"
-    ] }) : view === "env" ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+    /* @__PURE__ */ jsxRuntimeExports.jsx("main", { className: "flex-1", children: view === "env" ? /* @__PURE__ */ jsxRuntimeExports.jsx(
       EnvironmentCheck,
       {
         report,
@@ -19347,6 +19345,22 @@ function App() {
       }
     ) })
   ] });
+}
+function Splash() {
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs(
+    "div",
+    {
+      className: "flex min-h-screen flex-col items-center justify-center gap-6 bg-vs-bg-primary",
+      style: { WebkitAppRegion: "drag" },
+      children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col items-center gap-3", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "grid h-14 w-14 place-items-center rounded-2xl bg-vs-accent font-mono text-2xl font-semibold text-vs-bg-primary", children: "V" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-lg font-semibold tracking-[-0.01em] text-vs-text-primary", children: "VortSpec" })
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "h-1 w-48 overflow-hidden rounded-full bg-vs-border-default", children: /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "h-full w-1/3 rounded-full bg-vs-accent animate-[vsSlide_1.2s_ease-in-out_infinite]" }) })
+      ]
+    }
+  );
 }
 function TopBar({
   view,

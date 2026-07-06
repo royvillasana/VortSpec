@@ -10,7 +10,6 @@ import { RunView } from "./views/RunView";
 import { ArtifactReview } from "./views/ArtifactReview";
 import { Verification } from "./views/Verification";
 import { NewProjectWizard } from "./views/NewProjectWizard";
-import { Spinner } from "./components/ui";
 
 type View = "env" | "dashboard";
 
@@ -46,11 +45,17 @@ export default function App(): React.JSX.Element {
       ]);
       setReport(envReport);
       setProjects(projectList);
-      // Skip the gate when the environment is already fully ready.
-      setView(envReport.ready ? "dashboard" : "env");
+      // Go straight to the projects screen when the installable deps (Node, git,
+      // Claude Code) are present. Login is NOT probed here (that would spend the
+      // user's Claude usage on every launch) — it's verified on the first real
+      // run, where an auth error surfaces as a fix-it card.
+      setView(isCoreReady(envReport) ? "dashboard" : "env");
       setLoading(false);
     })();
   }, []);
+
+  // Startup splash while the background environment scan runs.
+  if (loading || !report) return <Splash />;
 
   const coreReady = isCoreReady(report);
 
@@ -70,11 +75,7 @@ export default function App(): React.JSX.Element {
         }}
       />
       <main className="flex-1">
-        {loading || !report ? (
-          <div className="flex h-full items-center justify-center gap-2 py-24 text-vs-text-secondary">
-            <Spinner /> Checking your environment…
-          </div>
-        ) : view === "env" ? (
+        {view === "env" ? (
           <EnvironmentCheck
             report={report}
             onReport={setReport}
@@ -147,6 +148,29 @@ export default function App(): React.JSX.Element {
           />
         )}
       </main>
+    </div>
+  );
+}
+
+/** Startup splash: logo + app name + an indeterminate progress bar while the
+ *  environment scan runs in the background. The window stays draggable. */
+function Splash(): React.JSX.Element {
+  return (
+    <div
+      className="flex min-h-screen flex-col items-center justify-center gap-6 bg-vs-bg-primary"
+      style={{ WebkitAppRegion: "drag" } as React.CSSProperties}
+    >
+      <div className="flex flex-col items-center gap-3">
+        <span className="grid h-14 w-14 place-items-center rounded-2xl bg-vs-accent font-mono text-2xl font-semibold text-vs-bg-primary">
+          V
+        </span>
+        <span className="text-lg font-semibold tracking-[-0.01em] text-vs-text-primary">
+          VortSpec
+        </span>
+      </div>
+      <div className="h-1 w-48 overflow-hidden rounded-full bg-vs-border-default">
+        <div className="h-full w-1/3 rounded-full bg-vs-accent animate-[vsSlide_1.2s_ease-in-out_infinite]" />
+      </div>
     </div>
   );
 }
