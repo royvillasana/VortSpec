@@ -30,6 +30,9 @@ const HARNESS_PROMPT = [
   "   - Listen for messages { source: 'vortspec-preview', type: 'render', component: string,",
   "     props: object } and render just that component with those props (map props to its",
   "     props/variants). Before any message arrives, render the full gallery as the default.",
+  "   - Only forward props the target component actually declares. Do NOT spread unknown keys",
+  "     onto components/DOM elements (that triggers React attribute warnings) — pick the known",
+  "     props explicitly and ignore the rest.",
   "",
   "When done, the dev server should render the component gallery at its root URL.",
 ].join("\n");
@@ -231,13 +234,24 @@ export function DevPreview({
   // Push the selected component + current prop values to the harness. A dev
   // server that doesn't speak the protocol simply never signals ready, so this
   // is a no-op there and the gallery renders as-is (graceful degradation).
+  //
+  // Scope the props to the selected component's OWN declared props: on a
+  // component switch, `previewProps` can still hold the previous component's
+  // values for a tick, and sending e.g. Button's `outline`/`iconOnly` to Logo
+  // makes the harness forward unknown attributes onto DOM nodes (React warnings).
   useEffect(() => {
     if (!iframeReady || !selName) return;
+    const declared = new Set(
+      (components?.find((c) => c.name === selName)?.props ?? []).map((p) => p.key),
+    );
+    const scoped = Object.fromEntries(
+      Object.entries(previewProps).filter(([key]) => declared.has(key)),
+    );
     iframeRef.current?.contentWindow?.postMessage(
-      { source: "vortspec-preview", type: "render", component: selName, props: previewProps },
+      { source: "vortspec-preview", type: "render", component: selName, props: scoped },
       "*",
     );
-  }, [iframeReady, selName, previewProps]);
+  }, [iframeReady, selName, previewProps, components]);
 
   const groups = useMemo(() => {
     if (!components) return [];
