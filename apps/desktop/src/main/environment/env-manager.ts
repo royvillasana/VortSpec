@@ -25,6 +25,17 @@ const CLAUDE_INSTALL: FixAction = {
 };
 const OPEN_LOGIN: FixAction = { kind: "open-login", label: "Open login" };
 const VERIFY_LOGIN: FixAction = { kind: "verify", label: "Verify login" };
+const FIGMA_ADD: FixAction = {
+  kind: "install-link",
+  label: "Add Figma MCP",
+  url: "https://code.claude.com/docs/en/mcp",
+};
+const FIGMA_CONNECT: FixAction = {
+  kind: "install-link",
+  label: "Connect Figma",
+  url: "https://claude.ai/customize/connectors",
+};
+const VERIFY_FIGMA: FixAction = { kind: "verify", label: "Verify" };
 
 const MIN_NODE_MAJOR = 20;
 
@@ -102,6 +113,65 @@ function pendingLogin(): EnvCheck {
   };
 }
 
+/** Lazy Figma MCP row: verified on the environment screen (costs no Claude usage). */
+function pendingFigmaMcp(): EnvCheck {
+  return {
+    id: "figma-mcp",
+    label: "Figma MCP",
+    status: "unknown",
+    detail: "Not verified yet",
+    fix: VERIFY_FIGMA,
+  };
+}
+
+/**
+ * Validate the Figma MCP connection via `claude mcp list` — this only reads and
+ * health-checks the user's MCP config, so it spends no Claude usage and is safe
+ * to run automatically. Optional: a Figma MCP is only needed for Figma design
+ * sources, so a missing one is informational, not a hard failure.
+ */
+export async function verifyFigmaMcp(): Promise<EnvCheck> {
+  const r = await execFileSafe("claude", ["mcp", "list"], { timeoutMs: 20000 });
+  if (r.spawnError || r.code !== 0) {
+    return {
+      id: "figma-mcp",
+      label: "Figma MCP",
+      status: "unknown",
+      detail: "Could not list MCP servers",
+      fix: FIGMA_ADD,
+    };
+  }
+  const figma = r.stdout.split("\n").filter((l) => /figma/i.test(l));
+  if (figma.length === 0) {
+    return {
+      id: "figma-mcp",
+      label: "Figma MCP",
+      status: "unknown",
+      detail: "Not configured — only needed for Figma design sources",
+      fix: FIGMA_ADD,
+    };
+  }
+  if (figma.some((l) => /connected|✔/i.test(l) && !/needs authentication/i.test(l))) {
+    return { id: "figma-mcp", label: "Figma MCP", status: "pass", detail: "Connected" };
+  }
+  if (figma.some((l) => /needs authentication|✘|failed/i.test(l))) {
+    return {
+      id: "figma-mcp",
+      label: "Figma MCP",
+      status: "fail",
+      detail: "Configured but not authenticated",
+      fix: FIGMA_CONNECT,
+    };
+  }
+  return {
+    id: "figma-mcp",
+    label: "Figma MCP",
+    status: "unknown",
+    detail: "Configured (status unclear)",
+    fix: FIGMA_CONNECT,
+  };
+}
+
 const AUTH_ERROR_RE =
   /authentication_failed|not logged in|please run.*login|oauth|unauthorized|invalid api key|401/i;
 
@@ -172,7 +242,9 @@ export async function checkEnvironment(): Promise<EnvReport> {
     checkGit(),
     checkClaudeInstall(),
   ]);
-  const checks: EnvCheck[] = [node, git, install, pendingLogin()];
-  const ready = checks.every((c) => c.status === "pass");
+  const checks: EnvCheck[] = [node, git, install, pendingLogin(), pendingFigmaMcp()];
+  // `ready` reflects the installable core deps; the lazy login + optional Figma
+  // rows are verified on the environment screen, not gated here.
+  const ready = [node, git, install].every((c) => c.status === "pass");
   return { checks, ready };
 }

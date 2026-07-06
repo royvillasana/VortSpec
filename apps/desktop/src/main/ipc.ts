@@ -1,6 +1,6 @@
 import { ipcMain, shell, app, type WebContents } from "electron";
 import { ipcContract, type IpcChannel } from "../shared/ipc";
-import { checkEnvironment, verifyClaudeLogin } from "./environment/env-manager";
+import { checkEnvironment, verifyClaudeLogin, verifyFigmaMcp } from "./environment/env-manager";
 import {
   listProjects,
   pickFolder,
@@ -46,6 +46,7 @@ const handlers: Record<IpcChannel, Handler> = {
 
   "env:check": () => checkEnvironment(),
   "env:verifyLogin": () => verifyClaudeLogin(),
+  "env:verifyFigmaMcp": () => verifyFigmaMcp(),
   "env:openInstall": ((url: string) =>
     shell.openExternal(url).then(() => undefined)) as Handler,
 

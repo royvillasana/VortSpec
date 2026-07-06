@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { EnvCheck, EnvReport } from "../../../shared/ipc";
 import { api } from "../lib/api";
 import { Button, Card, StatusDot, statusLabelClass } from "../components/ui";
@@ -42,10 +42,31 @@ export function EnvironmentCheck({
     }
   }
 
+  async function verifyFigma(): Promise<void> {
+    setBusy("figma-mcp");
+    onReport(patchCheck(report, "figma-mcp", { status: "checking" }));
+    try {
+      onReport(patchCheck(report, "figma-mcp", await api.verifyFigmaMcp()));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  // The Figma MCP check reads MCP config only (no Claude usage), so verify it
+  // automatically whenever the environment screen is shown.
+  useEffect(() => {
+    void verifyFigma();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   async function runFix(check: EnvCheck): Promise<void> {
     if (!check.fix) return;
     if (check.fix.kind === "install-link" && check.fix.url) {
       await api.openInstall(check.fix.url);
+      return;
+    }
+    if (check.id === "figma-mcp") {
+      await verifyFigma();
       return;
     }
     if (check.fix.kind === "verify" || check.fix.kind === "open-login") {
@@ -97,6 +118,15 @@ export function EnvironmentCheck({
           Log in with Claude Code (run <code className="text-vs-text-secondary">claude</code>{" "}
           in a terminal and use <code className="text-vs-text-secondary">/login</code>), then
           verify. An embedded login terminal arrives in the next milestone.
+        </p>
+      )}
+
+      {report.checks.find((c) => c.id === "figma-mcp")?.status === "fail" && (
+        <p className="text-xs text-vs-text-muted">
+          Figma designs are read through your Claude Code&rsquo;s Figma MCP. Connect it at{" "}
+          <code className="text-vs-text-secondary">claude.ai/customize/connectors</code> (or add one
+          with <code className="text-vs-text-secondary">claude mcp add</code>), then re-check. Only
+          needed for Figma design sources.
         </p>
       )}
 

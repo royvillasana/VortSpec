@@ -397,7 +397,8 @@ const envCheckIdSchema = z.enum([
   "node",
   "git",
   "claude-install",
-  "claude-login"
+  "claude-login",
+  "figma-mcp"
 ]);
 const envCheckSchema = z.object({
   id: envCheckIdSchema,
@@ -431,6 +432,7 @@ const ipcContract = {
   "system:getVersion": { request: z.void(), response: z.string() },
   "env:check": { request: z.void(), response: envReportSchema },
   "env:verifyLogin": { request: z.void(), response: envCheckSchema },
+  "env:verifyFigmaMcp": { request: z.void(), response: envCheckSchema },
   "env:openInstall": { request: z.string().url(), response: z.void() },
   "workspace:pickFolder": {
     request: z.object({ create: z.boolean().default(false) }).optional(),
@@ -567,6 +569,17 @@ const CLAUDE_INSTALL = {
 };
 const OPEN_LOGIN = { kind: "open-login", label: "Open login" };
 const VERIFY_LOGIN = { kind: "verify", label: "Verify login" };
+const FIGMA_ADD = {
+  kind: "install-link",
+  label: "Add Figma MCP",
+  url: "https://code.claude.com/docs/en/mcp"
+};
+const FIGMA_CONNECT = {
+  kind: "install-link",
+  label: "Connect Figma",
+  url: "https://claude.ai/customize/connectors"
+};
+const VERIFY_FIGMA = { kind: "verify", label: "Verify" };
 const MIN_NODE_MAJOR = 20;
 async function checkNode() {
   const r = await execFileSafe("node", ["--version"], { timeoutMs: 8e3 });
@@ -637,6 +650,56 @@ function pendingLogin() {
     fix: VERIFY_LOGIN
   };
 }
+function pendingFigmaMcp() {
+  return {
+    id: "figma-mcp",
+    label: "Figma MCP",
+    status: "unknown",
+    detail: "Not verified yet",
+    fix: VERIFY_FIGMA
+  };
+}
+async function verifyFigmaMcp() {
+  const r = await execFileSafe("claude", ["mcp", "list"], { timeoutMs: 2e4 });
+  if (r.spawnError || r.code !== 0) {
+    return {
+      id: "figma-mcp",
+      label: "Figma MCP",
+      status: "unknown",
+      detail: "Could not list MCP servers",
+      fix: FIGMA_ADD
+    };
+  }
+  const figma = r.stdout.split("\n").filter((l) => /figma/i.test(l));
+  if (figma.length === 0) {
+    return {
+      id: "figma-mcp",
+      label: "Figma MCP",
+      status: "unknown",
+      detail: "Not configured — only needed for Figma design sources",
+      fix: FIGMA_ADD
+    };
+  }
+  if (figma.some((l) => /connected|✔/i.test(l) && !/needs authentication/i.test(l))) {
+    return { id: "figma-mcp", label: "Figma MCP", status: "pass", detail: "Connected" };
+  }
+  if (figma.some((l) => /needs authentication|✘|failed/i.test(l))) {
+    return {
+      id: "figma-mcp",
+      label: "Figma MCP",
+      status: "fail",
+      detail: "Configured but not authenticated",
+      fix: FIGMA_CONNECT
+    };
+  }
+  return {
+    id: "figma-mcp",
+    label: "Figma MCP",
+    status: "unknown",
+    detail: "Configured (status unclear)",
+    fix: FIGMA_CONNECT
+  };
+}
 const AUTH_ERROR_RE = /authentication_failed|not logged in|please run.*login|oauth|unauthorized|invalid api key|401/i;
 async function verifyClaudeLogin() {
   const install = await checkClaudeInstall();
@@ -696,8 +759,8 @@ async function checkEnvironment() {
     checkGit(),
     checkClaudeInstall()
   ]);
-  const checks = [node, git, install, pendingLogin()];
-  const ready = checks.every((c) => c.status === "pass");
+  const checks = [node, git, install, pendingLogin(), pendingFigmaMcp()];
+  const ready = [node, git, install].every((c) => c.status === "pass");
   return { checks, ready };
 }
 const SDD_DE_INSTALL_CMD = "npx @royvillasana/sdd-de";
@@ -1643,6 +1706,7 @@ const handlers = {
   "system:getVersion": () => app.getVersion(),
   "env:check": () => checkEnvironment(),
   "env:verifyLogin": () => verifyClaudeLogin(),
+  "env:verifyFigmaMcp": () => verifyFigmaMcp(),
   "env:openInstall": ((url) => shell.openExternal(url).then(() => void 0)),
   "workspace:pickFolder": ((req) => pickFolder(req ?? { create: false })),
   "workspace:createFolder": (() => createFolder()),

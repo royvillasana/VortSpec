@@ -42,6 +42,7 @@ const api = {
 
   checkEnvironment: () => invoke("env:check"),
   verifyLogin: () => invoke("env:verifyLogin"),
+  verifyFigmaMcp: () => invoke("env:verifyFigmaMcp"),
   openInstall: (url: string) => invoke("env:openInstall", url),
 
   pickFolder: (create = false) => invoke("workspace:pickFolder", { create }),

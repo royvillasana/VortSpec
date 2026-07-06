@@ -68,6 +68,7 @@ export const envCheckIdSchema = z.enum([
   "git",
   "claude-install",
   "claude-login",
+  "figma-mcp",
 ]);
 export type EnvCheckId = z.infer<typeof envCheckIdSchema>;
 
@@ -119,6 +120,7 @@ export const ipcContract = {
 
   "env:check": { request: z.void(), response: envReportSchema },
   "env:verifyLogin": { request: z.void(), response: envCheckSchema },
+  "env:verifyFigmaMcp": { request: z.void(), response: envCheckSchema },
   "env:openInstall": { request: z.string().url(), response: z.void() },
 
   "workspace:pickFolder": {

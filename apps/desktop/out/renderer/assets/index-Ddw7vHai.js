@@ -12572,10 +12572,26 @@ function EnvironmentCheck({
       setBusy(null);
     }
   }
+  async function verifyFigma() {
+    setBusy("figma-mcp");
+    onReport(patchCheck(report, "figma-mcp", { status: "checking" }));
+    try {
+      onReport(patchCheck(report, "figma-mcp", await api.verifyFigmaMcp()));
+    } finally {
+      setBusy(null);
+    }
+  }
+  reactExports.useEffect(() => {
+    void verifyFigma();
+  }, []);
   async function runFix(check) {
     if (!check.fix) return;
     if (check.fix.kind === "install-link" && check.fix.url) {
       await api.openInstall(check.fix.url);
+      return;
+    }
+    if (check.id === "figma-mcp") {
+      await verifyFigma();
       return;
     }
     if (check.fix.kind === "verify" || check.fix.kind === "open-login") {
@@ -12610,6 +12626,14 @@ function EnvironmentCheck({
       "in a terminal and use ",
       /* @__PURE__ */ jsxRuntimeExports.jsx("code", { className: "text-vs-text-secondary", children: "/login" }),
       "), then verify. An embedded login terminal arrives in the next milestone."
+    ] }),
+    report.checks.find((c) => c.id === "figma-mcp")?.status === "fail" && /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "text-xs text-vs-text-muted", children: [
+      "Figma designs are read through your Claude Code’s Figma MCP. Connect it at",
+      " ",
+      /* @__PURE__ */ jsxRuntimeExports.jsx("code", { className: "text-vs-text-secondary", children: "claude.ai/customize/connectors" }),
+      " (or add one with ",
+      /* @__PURE__ */ jsxRuntimeExports.jsx("code", { className: "text-vs-text-secondary", children: "claude mcp add" }),
+      "), then re-check. Only needed for Figma design sources."
     ] }),
     /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "ghost", disabled: busy === "recheck", onClick: () => void recheck(), children: busy === "recheck" ? "Re-checking…" : "Re-check" }),
