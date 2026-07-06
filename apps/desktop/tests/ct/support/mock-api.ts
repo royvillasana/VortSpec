@@ -86,6 +86,13 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
   const api = {
     isElectron: async () => true,
     getVersion: async () => "test",
+    checkUpdate: async () => ({
+      current: "0.1.0",
+      latest: null,
+      hasUpdate: false,
+      releaseUrl: null,
+      downloadUrl: null,
+    }),
     checkEnvironment: async () => ({ checks: [], ready: true }),
     verifyLogin: async () => ({ id: "claude-login", label: "Claude", status: "pass" }),
     verifyFigmaMcp: async () =>

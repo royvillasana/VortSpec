@@ -38,6 +38,7 @@ import {
   findLatestArtifact,
 } from "./flow/flow-manager";
 import { getRunHistory } from "./flow/history-reader";
+import { checkForUpdate } from "./update/update-checker";
 import {
   getManifest,
   saveManifest,
@@ -70,6 +71,7 @@ type Handler = (req: never, sender: WebContents) => unknown;
 const handlers: Record<IpcChannel, Handler> = {
   "system:isElectron": () => true,
   "system:getVersion": () => app.getVersion(),
+  "system:checkUpdate": () => checkForUpdate(),
 
   "env:check": () => checkEnvironment(),
   "env:verifyLogin": () => verifyClaudeLogin(),

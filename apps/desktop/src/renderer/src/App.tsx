@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { EnvReport, Project, SetupAnswers } from "../../shared/ipc";
+import type { EnvReport, Project, SetupAnswers, UpdateInfo } from "../../shared/ipc";
 import { api } from "./lib/api";
 import { EnvironmentCheck } from "./views/EnvironmentCheck";
 import { Dashboard } from "./views/Dashboard";
@@ -78,6 +78,16 @@ export default function App(): React.JSX.Element {
   >("flow");
   const [loading, setLoading] = useState(true);
   const [chatOpen, setChatOpen] = useState(false);
+  const [update, setUpdate] = useState<UpdateInfo | null>(null);
+
+  // Check for a newer release on launch (GitHub Releases; no Claude usage, never
+  // blocks startup, tolerant of being offline). Notify-only — the user chooses
+  // to download; the ad-hoc-signed build can't auto-install macOS updates yet.
+  useEffect(() => {
+    void api.checkUpdate().then((info) => {
+      if (info.hasUpdate) setUpdate(info);
+    });
+  }, []);
 
   // Auto-open the assistant when entering the Playground (modifying components is
   // the point there); it stays dismissible via the same top-bar toggle.
@@ -155,6 +165,16 @@ export default function App(): React.JSX.Element {
           }
         }}
       />
+      {update && (
+        <UpdateBanner
+          info={update}
+          onDownload={() =>
+            void api.openInstall(update.downloadUrl ?? update.releaseUrl ?? "")
+          }
+          onNotes={() => update.releaseUrl && void api.openInstall(update.releaseUrl)}
+          onDismiss={() => setUpdate(null)}
+        />
+      )}
       <div className="flex min-h-0 flex-1">
       <main className="min-w-0 flex-1">
         {view === "env" ? (
@@ -311,6 +331,48 @@ export default function App(): React.JSX.Element {
         </div>
       )}
       </div>
+    </div>
+  );
+}
+
+/** A quiet, dismissible bar shown when a newer release is available on GitHub. */
+function UpdateBanner({
+  info,
+  onDownload,
+  onNotes,
+  onDismiss,
+}: {
+  info: UpdateInfo;
+  onDownload: () => void;
+  onNotes: () => void;
+  onDismiss: () => void;
+}): React.JSX.Element {
+  return (
+    <div className="flex items-center gap-3 border-b border-vs-accent/40 bg-vs-accent-muted px-6 py-2 text-[13px]">
+      <span className="inline-block h-1.5 w-1.5 rounded-full bg-vs-accent" />
+      <span className="text-vs-text-primary">
+        VortSpec <span className="font-mono">{info.latest}</span> is available
+        <span className="text-vs-text-muted"> — you have {info.current}</span>
+      </span>
+      <div className="flex-1" />
+      {info.releaseUrl && (
+        <button onClick={onNotes} className="text-vs-text-secondary hover:text-vs-text-primary">
+          What&rsquo;s new
+        </button>
+      )}
+      <button
+        onClick={onDownload}
+        className="rounded-md bg-vs-accent px-3 py-1 text-xs font-medium text-white hover:brightness-110"
+      >
+        Download
+      </button>
+      <button
+        onClick={onDismiss}
+        title="Dismiss"
+        className="rounded px-1.5 py-1 leading-none text-vs-text-muted hover:text-vs-text-primary"
+      >
+        ×
+      </button>
     </div>
   );
 }

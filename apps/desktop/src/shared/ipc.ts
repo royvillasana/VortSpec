@@ -3,6 +3,7 @@ import { agentRunOptionsSchema } from "./run-events";
 import { flowSchema, stageStatusSchema, runHistoryResultSchema } from "./flow";
 import { devServerStatusSchema } from "./dev-server";
 import { manifestResultSchema, manifestVersionsResultSchema } from "./manifest";
+import { updateInfoSchema } from "./update";
 
 export type { DevServerStatus, DevServerState, DevServerUpdate } from "./dev-server";
 export { DEV_SERVER_UPDATE_CHANNEL, devServerUpdateSchema } from "./dev-server";
@@ -42,6 +43,7 @@ export type {
   ManifestVersionsResult,
   SnapshotReason,
 } from "./manifest";
+export type { UpdateInfo } from "./update";
 
 // Re-exported so renderer code can import run + IPC types from one module.
 export type {
@@ -145,6 +147,7 @@ export const projectListSchema = z.array(projectSchema);
 export const ipcContract = {
   "system:isElectron": { request: z.void(), response: z.boolean() },
   "system:getVersion": { request: z.void(), response: z.string() },
+  "system:checkUpdate": { request: z.void(), response: updateInfoSchema },
 
   "env:check": { request: z.void(), response: envReportSchema },
   "env:verifyLogin": { request: z.void(), response: envCheckSchema },
