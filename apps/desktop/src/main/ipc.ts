@@ -11,6 +11,7 @@ import {
 import { getToolkitStatus, installToolkit } from "./workspace/toolkit-manager";
 import { createProject } from "./workspace/setup-manager";
 import { readProjectConfig } from "./workspace/config-manager";
+import { getInspectorTokens } from "./inspector/token-parser";
 import type { SetupAnswers } from "../shared/setup";
 import { startRun, cancelRun } from "./agent/run-manager";
 import {
@@ -89,6 +90,7 @@ const handlers: Record<IpcChannel, Handler> = {
   "artifact:findLatest": ((req: { projectPath: string; suffix: string }) =>
     findLatestArtifact(req.projectPath, req.suffix)) as Handler,
   "project:config": ((projectPath: string) => readProjectConfig(projectPath)) as Handler,
+  "inspector:getTokens": ((projectPath: string) => getInspectorTokens(projectPath)) as Handler,
 };
 
 export function registerIpc(): void {

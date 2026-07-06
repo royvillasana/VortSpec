@@ -302,6 +302,34 @@ function buildProjectYaml(a) {
   lines.push(`test_runner: ${a.testRunner}`);
   return lines.join("\n") + "\n";
 }
+const tokenTypeSchema = z.enum([
+  "color",
+  "typography",
+  "spacing",
+  "radius",
+  "shadow",
+  "other"
+]);
+const tokenSourceSchema = z.enum([
+  "figma-variable",
+  "generated-code",
+  "hand-edited"
+]);
+const inspectorTokenSchema = z.object({
+  /** CSS custom-property name without the leading `--` (e.g. `color-primary`). */
+  name: z.string(),
+  type: tokenTypeSchema,
+  /** Raw value as written in the token file (may be a `var(--other)` reference). */
+  rawValue: z.string(),
+  /** Value with in-file `var(--x)` references resolved, for display/swatches. */
+  resolvedValue: z.string(),
+  source: tokenSourceSchema
+});
+const inspectorTokensResultSchema = z.object({
+  /** Project-relative path of the token file that was parsed, or null if none. */
+  tokenFile: z.string().nullable(),
+  tokens: z.array(inspectorTokenSchema)
+});
 const checkStatusSchema = z.enum(["pass", "fail", "unknown", "checking"]);
 const fixActionSchema = z.object({
   /** install-link → open an external URL; open-login → run login in the PTY; verify → re-run the check */
@@ -411,10 +439,14 @@ const ipcContract = {
   "project:config": {
     request: z.string(),
     response: projectConfigSchema.nullable()
+  },
+  "inspector:getTokens": {
+    request: z.string(),
+    response: inspectorTokensResultSchema
   }
 };
 function execFileSafe(command, args, opts = {}) {
-  return new Promise((resolve) => {
+  return new Promise((resolve2) => {
     const child = spawn(command, args, {
       cwd: opts.cwd,
       env: process.env,
@@ -435,11 +467,11 @@ function execFileSafe(command, args, opts = {}) {
     });
     child.on("error", (err) => {
       if (timer) clearTimeout(timer);
-      resolve({ code: null, stdout, stderr, timedOut, spawnError: err.message });
+      resolve2({ code: null, stdout, stderr, timedOut, spawnError: err.message });
     });
     child.on("close", (code) => {
       if (timer) clearTimeout(timer);
-      resolve({ code, stdout, stderr, timedOut });
+      resolve2({ code, stdout, stderr, timedOut });
     });
     if (opts.input !== void 0) {
       child.stdin?.end(opts.input);
@@ -809,6 +841,72 @@ async function readProjectConfig(projectPath) {
   }
   const parsed = projectConfigSchema.safeParse(config);
   return parsed.success ? parsed.data : null;
+}
+const CSS_VAR = /--([\w-]+)\s*:\s*([^;]+);/g;
+const HEX = /^#(?:[0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/;
+const COLOR_FN = /^(?:rgb|rgba|hsl|hsla|oklch|color)\(/i;
+const CSS_COLOR_KEYWORDS = /* @__PURE__ */ new Set([
+  "white",
+  "black",
+  "transparent",
+  "currentcolor",
+  "red",
+  "green",
+  "blue",
+  "gray",
+  "grey"
+]);
+function looksLikeColor(value) {
+  const v = value.trim().toLowerCase();
+  return HEX.test(v) || COLOR_FN.test(v) || CSS_COLOR_KEYWORDS.has(v);
+}
+function classify(name, resolvedValue) {
+  const n = name.toLowerCase();
+  if (/(^|[-/])(radius)([-/]|$)/.test(n)) return "radius";
+  if (/(^|[-/])(shadow|elevation)([-/]|$)/.test(n)) return "shadow";
+  if (/(^|[-/])(spacing|space|gap|size-)/.test(n) && !/font/.test(n)) return "spacing";
+  if (/(font|line-height|letter|weight|leading|tracking|family|type)/.test(n))
+    return "typography";
+  if (/(color|colour|bg|background|foreground|border|text|fill|stroke|primary|secondary|accent|status|neutral|surface|muted)/.test(n))
+    return "color";
+  if (looksLikeColor(resolvedValue)) return "color";
+  return "other";
+}
+function resolve(value, table, depth = 0) {
+  if (depth > 10) return value;
+  const match = value.trim().match(/^var\(\s*--([\w-]+)\s*(?:,\s*([^)]*))?\)$/);
+  if (!match) return value.trim();
+  const referenced = table.get(match[1]);
+  if (referenced !== void 0) return resolve(referenced, table, depth + 1);
+  return (match[2] ?? value).trim();
+}
+function parseTokensFromCss(css) {
+  const raw = /* @__PURE__ */ new Map();
+  for (const m of css.matchAll(CSS_VAR)) {
+    raw.set(m[1], m[2].trim());
+  }
+  const tokens = [];
+  for (const [name, rawValue] of raw) {
+    const resolvedValue = resolve(rawValue, raw);
+    tokens.push({ name, rawValue, resolvedValue, type: classify(name, resolvedValue) });
+  }
+  return tokens;
+}
+async function getInspectorTokens(projectPath) {
+  const config = await readProjectConfig(projectPath);
+  const tokenFile = config?.tokenFile ?? null;
+  if (!tokenFile) return { tokenFile: null, tokens: [] };
+  let css;
+  try {
+    css = await readFile(join(projectPath, tokenFile), "utf8");
+  } catch {
+    return { tokenFile, tokens: [] };
+  }
+  const tokens = parseTokensFromCss(css).map((t) => ({
+    ...t,
+    source: "generated-code"
+  }));
+  return { tokenFile, tokens };
 }
 function truncate(s, n = 200) {
   return s.length > n ? `${s.slice(0, n)}…` : s;
@@ -1220,7 +1318,8 @@ const handlers = {
   "flow:setPublishTarget": ((req) => setPublishTarget(req.projectPath, req.repoUrl)),
   "artifact:read": ((req) => readArtifact(req.projectPath, req.relPath)),
   "artifact:findLatest": ((req) => findLatestArtifact(req.projectPath, req.suffix)),
-  "project:config": ((projectPath) => readProjectConfig(projectPath))
+  "project:config": ((projectPath) => readProjectConfig(projectPath)),
+  "inspector:getTokens": ((projectPath) => getInspectorTokens(projectPath))
 };
 function registerIpc() {
   Object.keys(ipcContract).forEach((channel) => {

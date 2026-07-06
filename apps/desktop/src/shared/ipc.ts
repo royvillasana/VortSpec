@@ -2,8 +2,10 @@ import { z } from "zod";
 import { agentRunOptionsSchema } from "./run-events";
 import { flowSchema, stageStatusSchema } from "./flow";
 import { setupAnswersSchema, projectConfigSchema } from "./setup";
+import { inspectorTokensResultSchema } from "./inspector";
 
 export type { SetupAnswers, ProjectConfig } from "./setup";
+export type { InspectorToken, InspectorTokensResult, TokenType, TokenSource } from "./inspector";
 
 // Re-exported so renderer code can import run + IPC types from one module.
 export type {
@@ -164,6 +166,10 @@ export const ipcContract = {
   "project:config": {
     request: z.string(),
     response: projectConfigSchema.nullable(),
+  },
+  "inspector:getTokens": {
+    request: z.string(),
+    response: inspectorTokensResultSchema,
   },
 } as const;
 

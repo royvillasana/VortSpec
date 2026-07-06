@@ -6,7 +6,7 @@
 
 ## 2. Data sourcing (main process, files → typed models)
 
-- [ ] 2.1 Token-file parser: read the configured `token_file` (CSS custom properties first; SCSS/JS variants per `styling`) into a typed token list (name, type, resolved value), zod-validated at the boundary
+- [x] 2.1 Token-file parser: read the configured `token_file` (CSS custom properties first; SCSS/JS variants per `styling`) into a typed token list (name, type, resolved value), zod-validated at the boundary
 - [ ] 2.2 Figma-authoritative reconciliation: when the Desktop Bridge is connected, pull resolved values via `figma_get_variables` and reconcile with the token file, flagging drift
 - [ ] 2.3 Source model: classify each token as `figma-variable` / `generated-code` / `hand-edited` from where its value lives
 - [ ] 2.4 Component reader: parse `.sdd-de/components.json` (reuse `detectedComponentsSchema`) and read generated source under `component_dir` for variants, states, and source-declared props
@@ -28,7 +28,7 @@
 
 ## 5. Renderer — Tokens view
 
-- [ ] 5.1 Tokens panel: grouped-by-type list (color/typography/spacing/radius/shadow/other) with swatches/specimens, mono values, source badges, search/filter — bundle visual language
+- [x] 5.1 Tokens panel: grouped-by-type list (color/typography/spacing/radius/shadow/other) with swatches/specimens, mono values, source badges, search/filter — bundle visual language
 - [ ] 5.2 Token detail: value editor + where-used listing (from the usage index); gated value edit that writes to the token file and re-marks source
 - [ ] 5.3 Rename/merge/delete/promote routed through the gated modify loop (Claude Code diff approval), never silent
 
@@ -47,8 +47,8 @@
 
 ## 8. Shell & entry points
 
-- [ ] 8.1 Add an Inspector destination in the app shell, reachable once the token file / `components.json` exist
-- [ ] 8.2 Link into the Inspector from the flow completion banner ("Open Inspector") and the project view
+- [x] 8.1 Add an Inspector destination in the app shell, reachable once the token file / `components.json` exist
+- [x] 8.2 Link into the Inspector from the flow completion banner ("Open Inspector") and the project view
 
 ## 9. Tests & verification
 

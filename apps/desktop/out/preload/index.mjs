@@ -100,7 +100,8 @@ const api = {
   setPublishTarget: (projectPath, repoUrl) => invoke("flow:setPublishTarget", { projectPath, repoUrl }),
   readArtifact: (projectPath, relPath) => invoke("artifact:read", { projectPath, relPath }),
   findLatestArtifact: (projectPath, suffix) => invoke("artifact:findLatest", { projectPath, suffix }),
-  projectConfig: (projectPath) => invoke("project:config", projectPath)
+  projectConfig: (projectPath) => invoke("project:config", projectPath),
+  inspectorTokens: (projectPath) => invoke("inspector:getTokens", projectPath)
 };
 if (process.contextIsolated) {
   try {

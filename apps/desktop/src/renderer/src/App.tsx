@@ -4,6 +4,7 @@ import { api } from "./lib/api";
 import { EnvironmentCheck } from "./views/EnvironmentCheck";
 import { Dashboard } from "./views/Dashboard";
 import { GuidedFlow } from "./views/GuidedFlow";
+import { Inspector } from "./views/Inspector";
 import { NewProjectWizard } from "./views/NewProjectWizard";
 import { Spinner } from "./components/ui";
 
@@ -24,6 +25,7 @@ export default function App(): React.JSX.Element {
   const [view, setView] = useState<View>("env");
   const [activeProject, setActiveProject] = useState<Project | null>(null);
   const [setupProject, setSetupProject] = useState<Project | null>(null);
+  const [inspecting, setInspecting] = useState(false);
   const [loading, setLoading] = useState(true);
 
   function mergeProject(project: Project): void {
@@ -57,6 +59,7 @@ export default function App(): React.JSX.Element {
           if (v === "dashboard") {
             setActiveProject(null);
             setSetupProject(null);
+            setInspecting(false);
           }
         }}
       />
@@ -82,8 +85,14 @@ export default function App(): React.JSX.Element {
               setActiveProject(project);
             }}
           />
+        ) : activeProject && inspecting ? (
+          <Inspector project={activeProject} onBack={() => setInspecting(false)} />
         ) : activeProject ? (
-          <GuidedFlow project={activeProject} onBack={() => setActiveProject(null)} />
+          <GuidedFlow
+            project={activeProject}
+            onBack={() => setActiveProject(null)}
+            onOpenInspector={() => setInspecting(true)}
+          />
         ) : (
           <Dashboard
             projects={projects}

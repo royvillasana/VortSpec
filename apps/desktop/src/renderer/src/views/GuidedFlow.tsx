@@ -45,9 +45,11 @@ function StageDot({
 export function GuidedFlow({
   project,
   onBack,
+  onOpenInspector,
 }: {
   project: Project;
   onBack: () => void;
+  onOpenInspector: () => void;
 }): React.JSX.Element {
   const [flow, setFlow] = useState<Flow | null>(null);
   const [config, setConfig] = useState<ProjectConfig | null>(null);
@@ -97,6 +99,12 @@ export function GuidedFlow({
           currentIndex={currentIndex}
           onSelect={setSelectedId}
         />
+        <button
+          onClick={onOpenInspector}
+          className="mt-4 w-full rounded-md border border-vs-border-default px-2.5 py-2 text-left text-[13px] text-vs-text-secondary transition-colors hover:bg-vs-bg-hover hover:text-vs-text-primary"
+        >
+          Design Inspector →
+        </button>
       </aside>
 
       <section className="flex min-w-0 flex-1 flex-col gap-4">
@@ -106,6 +114,7 @@ export function GuidedFlow({
             published={flow.state.publishRepoUrl}
             canPublish={Boolean(commitStage)}
             onPublish={() => commitStage && setSelectedId(commitStage.id)}
+            onOpenInspector={onOpenInspector}
             onBack={onBack}
           />
         )}
@@ -659,12 +668,14 @@ function CompletionBanner({
   published,
   canPublish,
   onPublish,
+  onOpenInspector,
   onBack,
 }: {
   project: Project;
   published?: string;
   canPublish: boolean;
   onPublish: () => void;
+  onOpenInspector: () => void;
   onBack: () => void;
 }): React.JSX.Element {
   return (
@@ -682,8 +693,11 @@ function CompletionBanner({
         )}
       </div>
       <div className="flex flex-wrap gap-2">
+        <Button variant="primary" onClick={onOpenInspector}>
+          Open Inspector
+        </Button>
         {canPublish && (
-          <Button variant="primary" onClick={onPublish}>
+          <Button variant="default" onClick={onPublish}>
             {published ? "Publish to GitHub" : "Connect GitHub & publish…"}
           </Button>
         )}

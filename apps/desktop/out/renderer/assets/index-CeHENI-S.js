@@ -16732,7 +16732,8 @@ function StageDot({
 }
 function GuidedFlow({
   project,
-  onBack
+  onBack,
+  onOpenInspector
 }) {
   const [flow, setFlow] = reactExports.useState(null);
   const [config, setConfig] = reactExports.useState(null);
@@ -16774,6 +16775,14 @@ function GuidedFlow({
           currentIndex,
           onSelect: setSelectedId
         }
+      ),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(
+        "button",
+        {
+          onClick: onOpenInspector,
+          className: "mt-4 w-full rounded-md border border-vs-border-default px-2.5 py-2 text-left text-[13px] text-vs-text-secondary transition-colors hover:bg-vs-bg-hover hover:text-vs-text-primary",
+          children: "Design Inspector →"
+        }
       )
     ] }),
     /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: "flex min-w-0 flex-1 flex-col gap-4", children: [
@@ -16784,6 +16793,7 @@ function GuidedFlow({
           published: flow.state.publishRepoUrl,
           canPublish: Boolean(commitStage),
           onPublish: () => commitStage && setSelectedId(commitStage.id),
+          onOpenInspector,
           onBack
         }
       ),
@@ -17139,6 +17149,7 @@ function CompletionBanner({
   published,
   canPublish,
   onPublish,
+  onOpenInspector,
   onBack
 }) {
   return /* @__PURE__ */ jsxRuntimeExports.jsxs(Card, { className: "flex flex-col gap-3 border-vs-success-border bg-vs-success-muted p-4", children: [
@@ -17151,7 +17162,8 @@ function CompletionBanner({
       ] })
     ] }),
     /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-wrap gap-2", children: [
-      canPublish && /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "primary", onClick: onPublish, children: published ? "Publish to GitHub" : "Connect GitHub & publish…" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "primary", onClick: onOpenInspector, children: "Open Inspector" }),
+      canPublish && /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "default", onClick: onPublish, children: published ? "Publish to GitHub" : "Connect GitHub & publish…" }),
       /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "default", onClick: () => void api.openFolder(project.path), children: "Open project folder" }),
       /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "ghost", onClick: onBack, children: "Back to projects" })
     ] }),
@@ -17286,6 +17298,170 @@ function ArtifactGate({
       /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "default", onClick: () => setMode("changes"), children: "Request changes" })
     ] })
   ] });
+}
+const TYPE_ORDER = [
+  "color",
+  "typography",
+  "spacing",
+  "radius",
+  "shadow",
+  "other"
+];
+const TYPE_LABEL = {
+  color: "Color",
+  typography: "Typography",
+  spacing: "Spacing",
+  radius: "Radius",
+  shadow: "Shadow",
+  other: "Other"
+};
+function Inspector({
+  project,
+  onBack
+}) {
+  const [tokens, setTokens] = reactExports.useState(null);
+  const [tokenFile, setTokenFile] = reactExports.useState(null);
+  const [query, setQuery] = reactExports.useState("");
+  const [typeFilter, setTypeFilter] = reactExports.useState("all");
+  reactExports.useEffect(() => {
+    void api.inspectorTokens(project.path).then((r) => {
+      setTokens(r.tokens);
+      setTokenFile(r.tokenFile);
+    });
+  }, [project.path]);
+  const groups = reactExports.useMemo(() => {
+    if (!tokens) return [];
+    const q = query.trim().toLowerCase();
+    const filtered = tokens.filter(
+      (t) => (typeFilter === "all" || t.type === typeFilter) && (q === "" || t.name.toLowerCase().includes(q) || t.resolvedValue.toLowerCase().includes(q))
+    );
+    return TYPE_ORDER.map((type) => ({
+      type,
+      items: filtered.filter((t) => t.type === type)
+    })).filter((g) => g.items.length > 0);
+  }, [tokens, query, typeFilter]);
+  const total = tokens?.length ?? 0;
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "mx-auto flex w-full max-w-5xl flex-col gap-4 px-6 py-8", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("header", { className: "flex items-center justify-between", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs(
+          "button",
+          {
+            onClick: onBack,
+            className: "mb-1 text-xs text-vs-text-secondary hover:text-vs-text-primary",
+            children: [
+              "← ",
+              project.name
+            ]
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("h2", { className: "text-base font-semibold text-vs-text-primary", children: "Design Inspector" }),
+        tokenFile && /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "mt-0.5 font-mono text-[11px] text-vs-text-muted", children: tokenFile })
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex gap-0.5 rounded-md border border-vs-border-default bg-vs-bg-primary p-0.5 text-xs", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "rounded bg-vs-bg-elevated px-2.5 py-1 text-vs-text-primary", children: [
+          "Tokens ",
+          total > 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-vs-text-muted", children: [
+            "· ",
+            total
+          ] })
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "px-2.5 py-1 text-vs-text-muted", title: "Coming in the next slice", children: "Components" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "px-2.5 py-1 text-vs-text-muted", title: "Coming in the next slice", children: "Playground" })
+      ] })
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-wrap items-center gap-2", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx(
+        "input",
+        {
+          value: query,
+          onChange: (e) => setQuery(e.target.value),
+          placeholder: "Search tokens…",
+          className: "w-56 rounded-md border border-vs-border-default bg-vs-bg-primary px-3 py-1.5 text-sm text-vs-text-primary placeholder:text-vs-text-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-vs-accent-subtle"
+        }
+      ),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex gap-0.5 rounded-md border border-vs-border-default bg-vs-bg-primary p-0.5 text-xs", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx(FilterChip, { active: typeFilter === "all", onClick: () => setTypeFilter("all"), children: "All" }),
+        TYPE_ORDER.map((t) => /* @__PURE__ */ jsxRuntimeExports.jsx(FilterChip, { active: typeFilter === t, onClick: () => setTypeFilter(t), children: TYPE_LABEL[t] }, t))
+      ] })
+    ] }),
+    tokens === null ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2 py-16 text-sm text-vs-text-secondary", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx(Spinner, {}),
+      " Reading tokens…"
+    ] }) : total === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "rounded-md border border-vs-border-default bg-vs-bg-surface px-4 py-10 text-center text-sm text-vs-text-muted", children: "No tokens found. Run the design-system stage to extract tokens into the project token file." }) : groups.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "rounded-md border border-vs-border-default bg-vs-bg-surface px-4 py-10 text-center text-sm text-vs-text-muted", children: "No tokens match your search." }) : /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex flex-col gap-5", children: groups.map((g) => /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("h3", { className: "mb-1.5 text-xs font-medium uppercase tracking-wide text-vs-text-secondary", children: [
+        TYPE_LABEL[g.type],
+        " ",
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-vs-text-muted", children: [
+          "· ",
+          g.items.length
+        ] })
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "overflow-hidden rounded-md border border-vs-border-default", children: g.items.map((t, i) => /* @__PURE__ */ jsxRuntimeExports.jsx(TokenRow, { token: t, last: i === g.items.length - 1 }, t.name)) })
+    ] }, g.type)) })
+  ] });
+}
+function FilterChip({
+  active,
+  onClick,
+  children
+}) {
+  return /* @__PURE__ */ jsxRuntimeExports.jsx(
+    "button",
+    {
+      onClick,
+      className: `rounded px-2 py-1 transition-colors ${active ? "bg-vs-bg-elevated text-vs-text-primary" : "text-vs-text-muted hover:text-vs-text-primary"}`,
+      children
+    }
+  );
+}
+const SOURCE_LABEL = {
+  "figma-variable": { text: "Figma variable", cls: "text-vs-success" },
+  "generated-code": { text: "From code", cls: "text-vs-warning" },
+  "hand-edited": { text: "Hand-edited", cls: "text-vs-accent" }
+};
+function TokenRow({ token, last }) {
+  const src = SOURCE_LABEL[token.source];
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs(
+    "div",
+    {
+      className: `flex items-center gap-3 bg-vs-bg-surface px-3 py-2 ${last ? "" : "border-b border-vs-border-subtle"}`,
+      children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx(Preview, { token }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "min-w-0 flex-1 truncate font-mono text-xs text-vs-text-primary", children: token.name }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "max-w-[40%] truncate font-mono text-xs text-vs-text-secondary", children: token.resolvedValue }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: `shrink-0 text-[10px] uppercase tracking-wide ${src.cls}`, children: src.text })
+      ]
+    }
+  );
+}
+function Preview({ token }) {
+  const v = token.resolvedValue;
+  if (token.type === "color") {
+    return /* @__PURE__ */ jsxRuntimeExports.jsx(
+      "span",
+      {
+        className: "h-5 w-5 shrink-0 rounded-[5px] border border-vs-border-strong",
+        style: { background: isCssColor(v) ? v : "transparent" }
+      }
+    );
+  }
+  if (token.type === "typography") {
+    return /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "grid h-5 w-5 shrink-0 place-items-center rounded-[5px] border border-vs-border-default text-[11px] text-vs-text-secondary", children: "Ag" });
+  }
+  if (token.type === "radius") {
+    return /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "h-5 w-5 shrink-0 rounded-tl-[8px] border-l-2 border-t-2 border-vs-border-strong" });
+  }
+  if (token.type === "spacing") {
+    const px = Math.min(20, Math.max(2, parseFloat(v) || 4));
+    return /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "flex h-5 w-5 shrink-0 items-center", children: /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "rounded-sm bg-vs-accent", style: { width: `${px}px`, height: "4px" } }) });
+  }
+  return /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "h-5 w-5 shrink-0 rounded-full border border-vs-border-default" });
+}
+function isCssColor(v) {
+  return /^#|^(rgb|rgba|hsl|hsla|oklch)\(|^(white|black|transparent|currentcolor)$/i.test(
+    v.trim()
+  );
 }
 const frameworkSchema = enumType([
   "react",
@@ -17777,6 +17953,7 @@ function App() {
   const [view, setView] = reactExports.useState("env");
   const [activeProject, setActiveProject] = reactExports.useState(null);
   const [setupProject, setSetupProject] = reactExports.useState(null);
+  const [inspecting, setInspecting] = reactExports.useState(false);
   const [loading, setLoading] = reactExports.useState(true);
   function mergeProject(project) {
     setProjects((prev) => [project, ...prev.filter((p) => p.path !== project.path)]);
@@ -17806,6 +17983,7 @@ function App() {
           if (v === "dashboard") {
             setActiveProject(null);
             setSetupProject(null);
+            setInspecting(false);
           }
         }
       }
@@ -17832,7 +18010,14 @@ function App() {
           setActiveProject(project);
         }
       }
-    ) : activeProject ? /* @__PURE__ */ jsxRuntimeExports.jsx(GuidedFlow, { project: activeProject, onBack: () => setActiveProject(null) }) : /* @__PURE__ */ jsxRuntimeExports.jsx(
+    ) : activeProject && inspecting ? /* @__PURE__ */ jsxRuntimeExports.jsx(Inspector, { project: activeProject, onBack: () => setInspecting(false) }) : activeProject ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+      GuidedFlow,
+      {
+        project: activeProject,
+        onBack: () => setActiveProject(null),
+        onOpenInspector: () => setInspecting(true)
+      }
+    ) : /* @__PURE__ */ jsxRuntimeExports.jsx(
       Dashboard,
       {
         projects,
