@@ -10,13 +10,13 @@
 - [ ] 2.2 Figma-authoritative reconciliation: when the Desktop Bridge is connected, pull resolved values via `figma_get_variables` and reconcile with the token file, flagging drift
 - [ ] 2.3 Source model: classify each token as `figma-variable` / `generated-code` / `hand-edited` from where its value lives
 - [x] 2.4 Component reader: parse `.sdd-de/components.json` (reuse `detectedComponentsSchema`) and read generated source under `component_dir` for variants, states, and source-declared props
-- [ ] 2.5 Where-used index: scan component source for token references (`var(--token)` / token utilities) to build the token→usage map
+- [x] 2.5 Where-used index: scan component source for token references (`var(--token)` / token utilities) to build the token→usage map
 - [ ] 2.6 Verify-report reader: parse `specs/*/visual-verify-report.md` (+ adversarial-review) into per-component status (built / verified / has-issues) and issue lists
 
 ## 3. IPC contracts (zod, main↔renderer)
 
 - [ ] 3.1 Add `inspector:getTokens`, `inspector:getComponents`, `inspector:getTokenUsage`, `inspector:getComponentIssues` channels + handlers
-- [ ] 3.2 Add gated token-edit channel `inspector:setTokenValue` (writes token file, marks `hand-edited`)
+- [x] 3.2 Add gated token-edit channel `inspector:setTokenValue` (writes token file, marks `hand-edited`)
 - [ ] 3.3 Wire preload bridge + renderer `api` wrappers for all of the above
 
 ## 4. Managed preview substrate (Playground infra)
@@ -29,7 +29,7 @@
 ## 5. Renderer — Tokens view
 
 - [x] 5.1 Tokens panel: grouped-by-type list (color/typography/spacing/radius/shadow/other) with swatches/specimens, mono values, source badges, search/filter — bundle visual language
-- [ ] 5.2 Token detail: value editor + where-used listing (from the usage index); gated value edit that writes to the token file and re-marks source
+- [x] 5.2 Token detail: value editor + where-used listing (from the usage index); gated value edit that writes to the token file and re-marks source
 - [ ] 5.3 Rename/merge/delete/promote routed through the gated modify loop (Claude Code diff approval), never silent
 
 ## 6. Renderer — Components view + detail

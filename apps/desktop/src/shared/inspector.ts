@@ -34,13 +34,24 @@ export const inspectorTokenSchema = z.object({
   /** Value with in-file `var(--x)` references resolved, for display/swatches. */
   resolvedValue: z.string(),
   source: tokenSourceSchema,
+  /** How many component source references this token (best-effort var() scan). */
+  uses: z.number(),
 });
 export type InspectorToken = z.infer<typeof inspectorTokenSchema>;
+
+/** One "where used" entry for the token detail drawer. */
+export const tokenUsageSchema = z.object({
+  component: z.string(),
+  property: z.string().optional(),
+});
+export type TokenUsage = z.infer<typeof tokenUsageSchema>;
 
 export const inspectorTokensResultSchema = z.object({
   /** Project-relative path of the token file that was parsed, or null if none. */
   tokenFile: z.string().nullable(),
   tokens: z.array(inspectorTokenSchema),
+  /** token name → components/props that reference it (for the detail drawer). */
+  usage: z.record(z.string(), z.array(tokenUsageSchema)),
 });
 export type InspectorTokensResult = z.infer<typeof inspectorTokensResultSchema>;
 

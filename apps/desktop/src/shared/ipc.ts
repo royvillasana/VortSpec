@@ -5,7 +5,13 @@ import { setupAnswersSchema, projectConfigSchema } from "./setup";
 import { inspectorTokensResultSchema, inspectorComponentsResultSchema } from "./inspector";
 
 export type { SetupAnswers, ProjectConfig } from "./setup";
-export type { InspectorToken, InspectorTokensResult, TokenType, TokenSource } from "./inspector";
+export type {
+  InspectorToken,
+  InspectorTokensResult,
+  TokenType,
+  TokenSource,
+  TokenUsage,
+} from "./inspector";
 export type {
   InspectorComponent,
   InspectorComponentsResult,
@@ -180,6 +186,14 @@ export const ipcContract = {
   "inspector:getComponents": {
     request: z.string(),
     response: inspectorComponentsResultSchema,
+  },
+  "inspector:setTokenValue": {
+    request: z.object({
+      projectPath: z.string(),
+      name: z.string(),
+      value: z.string(),
+    }),
+    response: inspectorTokensResultSchema,
   },
 } as const;
 

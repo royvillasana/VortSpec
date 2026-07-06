@@ -102,7 +102,8 @@ const api = {
   findLatestArtifact: (projectPath, suffix) => invoke("artifact:findLatest", { projectPath, suffix }),
   projectConfig: (projectPath) => invoke("project:config", projectPath),
   inspectorTokens: (projectPath) => invoke("inspector:getTokens", projectPath),
-  inspectorComponents: (projectPath) => invoke("inspector:getComponents", projectPath)
+  inspectorComponents: (projectPath) => invoke("inspector:getComponents", projectPath),
+  setTokenValue: (projectPath, name, value) => invoke("inspector:setTokenValue", { projectPath, name, value })
 };
 if (process.contextIsolated) {
   try {

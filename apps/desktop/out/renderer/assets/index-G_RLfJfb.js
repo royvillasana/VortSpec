@@ -17299,14 +17299,7 @@ function ArtifactGate({
     ] })
   ] });
 }
-const TYPE_ORDER = [
-  "color",
-  "typography",
-  "spacing",
-  "radius",
-  "shadow",
-  "other"
-];
+const TYPE_ORDER = ["color", "typography", "spacing", "radius", "shadow", "other"];
 const TYPE_LABEL = {
   color: "Color",
   typography: "Typography",
@@ -17315,108 +17308,207 @@ const TYPE_LABEL = {
   shadow: "Shadow",
   other: "Other"
 };
+const SOURCE = {
+  "figma-variable": {
+    label: "Figma variable",
+    dot: "#30A46C",
+    text: "text-vs-success",
+    line: "From Figma variables (authoritative)"
+  },
+  "generated-code": {
+    label: "From code",
+    dot: "#FFB224",
+    text: "text-vs-warning",
+    line: "Read from the generated token file"
+  },
+  "hand-edited": {
+    label: "Hand-edited",
+    dot: "#7C6FF0",
+    text: "text-vs-accent",
+    line: "Edited by you in the Inspector"
+  }
+};
 function Inspector({
   project,
   onBack,
   onOpenPreview
 }) {
   const [tokens, setTokens] = reactExports.useState(null);
+  const [usage, setUsage] = reactExports.useState({});
   const [tokenFile, setTokenFile] = reactExports.useState(null);
+  const [segment, setSegment] = reactExports.useState("all");
   const [query, setQuery] = reactExports.useState("");
-  const [typeFilter, setTypeFilter] = reactExports.useState("all");
+  const [codeOnly, setCodeOnly] = reactExports.useState(false);
+  const [selected, setSelected] = reactExports.useState(null);
+  const [toast, setToast] = reactExports.useState("");
   reactExports.useEffect(() => {
     void api.inspectorTokens(project.path).then((r) => {
       setTokens(r.tokens);
+      setUsage(r.usage);
       setTokenFile(r.tokenFile);
     });
   }, [project.path]);
+  function flash(msg) {
+    setToast(msg);
+    window.setTimeout(() => setToast(""), 2600);
+  }
   const groups = reactExports.useMemo(() => {
     if (!tokens) return [];
     const q = query.trim().toLowerCase();
     const filtered = tokens.filter(
-      (t) => (typeFilter === "all" || t.type === typeFilter) && (q === "" || t.name.toLowerCase().includes(q) || t.resolvedValue.toLowerCase().includes(q))
+      (t) => (segment === "all" || t.type === segment) && (!codeOnly || t.source === "generated-code") && (q === "" || t.name.toLowerCase().includes(q) || t.resolvedValue.toLowerCase().includes(q))
     );
     return TYPE_ORDER.map((type) => ({
       type,
       items: filtered.filter((t) => t.type === type)
     })).filter((g) => g.items.length > 0);
-  }, [tokens, query, typeFilter]);
+  }, [tokens, query, segment, codeOnly]);
   const total = tokens?.length ?? 0;
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "mx-auto flex w-full max-w-5xl flex-col gap-4 px-6 py-8", children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("header", { className: "flex items-center justify-between", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsxs(
-          "button",
-          {
-            onClick: onBack,
-            className: "mb-1 text-xs text-vs-text-secondary hover:text-vs-text-primary",
-            children: [
-              "← ",
-              project.name
-            ]
-          }
-        ),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("h2", { className: "text-base font-semibold text-vs-text-primary", children: "Design Inspector" }),
-        tokenFile && /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "mt-0.5 font-mono text-[11px] text-vs-text-muted", children: tokenFile })
-      ] }),
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex gap-0.5 rounded-md border border-vs-border-default bg-vs-bg-primary p-0.5 text-xs", children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "rounded bg-vs-bg-elevated px-2.5 py-1 text-vs-text-primary", children: [
-          "Tokens ",
-          total > 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-vs-text-muted", children: [
-            "· ",
-            total
-          ] })
-        ] }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx(
-          "button",
-          {
-            onClick: onOpenPreview,
-            className: "rounded px-2.5 py-1 text-vs-text-muted hover:text-vs-text-primary",
-            children: "Components"
-          }
-        ),
-        /* @__PURE__ */ jsxRuntimeExports.jsx(
-          "button",
-          {
-            onClick: onOpenPreview,
-            className: "rounded px-2.5 py-1 text-vs-text-muted hover:text-vs-text-primary",
-            children: "Playground"
-          }
-        )
-      ] })
-    ] }),
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-wrap items-center gap-2", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx(
-        "input",
+  const resultCount = groups.reduce((a, g) => a + g.items.length, 0);
+  const selectedToken = tokens?.find((t) => t.name === selected) ?? null;
+  async function saveValue(name, value) {
+    const r = await api.setTokenValue(project.path, name, value);
+    setTokens(r.tokens);
+    setUsage(r.usage);
+    flash(`Saved --${name} to ${tokenFile ?? "token file"}`);
+  }
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex h-[calc(100vh-3rem)] w-full overflow-hidden bg-vs-bg-primary text-[13px] text-vs-text-primary", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("nav", { className: "flex w-52 shrink-0 flex-col border-r border-vs-border-default bg-vs-bg-surface p-3", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs(
+        "button",
         {
-          value: query,
-          onChange: (e) => setQuery(e.target.value),
-          placeholder: "Search tokens…",
-          className: "w-56 rounded-md border border-vs-border-default bg-vs-bg-primary px-3 py-1.5 text-sm text-vs-text-primary placeholder:text-vs-text-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-vs-accent-subtle"
+          onClick: onBack,
+          className: "mb-3 flex items-center gap-2 border-b border-vs-border-default px-2 pb-3 text-left hover:opacity-85",
+          children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "grid h-5 w-5 place-items-center rounded-md bg-vs-accent font-mono text-[11px] font-medium text-vs-bg-primary", children: project.name.charAt(0).toUpperCase() }),
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "min-w-0", children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "block truncate text-[13px] font-semibold", children: project.name }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "block truncate font-mono text-[11px] text-vs-text-muted", children: project.path })
+            ] })
+          ]
         }
       ),
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex gap-0.5 rounded-md border border-vs-border-default bg-vs-bg-primary p-0.5 text-xs", children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx(FilterChip, { active: typeFilter === "all", onClick: () => setTypeFilter("all"), children: "All" }),
-        TYPE_ORDER.map((t) => /* @__PURE__ */ jsxRuntimeExports.jsx(FilterChip, { active: typeFilter === t, onClick: () => setTypeFilter(t), children: TYPE_LABEL[t] }, t))
-      ] })
+      /* @__PURE__ */ jsxRuntimeExports.jsx(RailItem$1, { label: "Flow", onClick: onBack }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(RailItem$1, { label: "Preview", onClick: onOpenPreview }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(RailItem$1, { label: "Tokens", active: true, count: total })
     ] }),
-    tokens === null ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2 py-16 text-sm text-vs-text-secondary", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx(Spinner, {}),
-      " Reading tokens…"
-    ] }) : total === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "rounded-md border border-vs-border-default bg-vs-bg-surface px-4 py-10 text-center text-sm text-vs-text-muted", children: "No tokens found. Run the design-system stage to extract tokens into the project token file." }) : groups.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "rounded-md border border-vs-border-default bg-vs-bg-surface px-4 py-10 text-center text-sm text-vs-text-muted", children: "No tokens match your search." }) : /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex flex-col gap-5", children: groups.map((g) => /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("h3", { className: "mb-1.5 text-xs font-medium uppercase tracking-wide text-vs-text-secondary", children: [
-        TYPE_LABEL[g.type],
-        " ",
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-vs-text-muted", children: [
-          "· ",
-          g.items.length
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("main", { className: "flex min-w-0 flex-1 flex-col bg-vs-bg-primary", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("header", { className: "flex flex-none flex-col gap-3.5 border-b border-vs-border-default px-6 pb-3 pt-5", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-3", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("h1", { className: "text-xl font-semibold tracking-[-0.01em]", children: "Tokens" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "font-mono text-xs text-vs-text-muted", children: [
+            total,
+            " tokens",
+            tokenFile && /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { children: [
+              " · ",
+              tokenFile
+            ] })
+          ] })
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-wrap items-center gap-3", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex gap-0.5 rounded-lg border border-vs-border-default bg-vs-bg-surface p-0.5", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx(Segment, { active: segment === "all", onClick: () => setSegment("all"), children: "All" }),
+            TYPE_ORDER.map((t) => /* @__PURE__ */ jsxRuntimeExports.jsx(Segment, { active: segment === t, onClick: () => setSegment(t), children: TYPE_LABEL[t] }, t))
+          ] }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "input",
+            {
+              value: query,
+              onChange: (e) => setQuery(e.target.value),
+              placeholder: "Search tokens…",
+              className: "w-52 rounded-md border border-vs-border-default bg-vs-bg-surface px-2.5 py-1.5 text-xs text-vs-text-primary placeholder:text-vs-text-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-vs-accent-subtle"
+            }
+          ),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs(
+            "button",
+            {
+              onClick: () => setCodeOnly((v) => !v),
+              className: `flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs ${codeOnly ? "border-vs-accent bg-vs-bg-elevated text-vs-text-primary" : "border-vs-border-default bg-vs-bg-surface text-vs-text-secondary hover:border-vs-border-strong"}`,
+              children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "inline-block h-1.5 w-1.5 rounded-full bg-vs-warning" }),
+                "From code only",
+                codeOnly && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "ml-0.5 text-vs-text-secondary", children: "×" })
+              ]
+            }
+          )
         ] })
       ] }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "overflow-hidden rounded-md border border-vs-border-default", children: g.items.map((t, i) => /* @__PURE__ */ jsxRuntimeExports.jsx(TokenRow, { token: t, last: i === g.items.length - 1 }, t.name)) })
-    ] }, g.type)) })
+      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex-1 overflow-x-hidden overflow-y-auto", children: tokens === null ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2 p-6 text-sm text-vs-text-secondary", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx(Spinner, {}),
+        " Reading tokens…"
+      ] }) : total === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsx(Empty, { text: "No tokens found. Run the design-system stage to extract them." }) : resultCount === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "py-16 text-center text-vs-text-muted", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "mb-2 text-[13px]", children: "No tokens match" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "button",
+          {
+            onClick: () => {
+              setQuery("");
+              setSegment("all");
+              setCodeOnly(false);
+            },
+            className: "text-xs text-vs-accent underline hover:text-vs-text-primary",
+            children: "Clear filters"
+          }
+        )
+      ] }) : groups.map((g) => /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "sticky top-0 z-[3] flex items-baseline gap-2 border-b border-vs-border-default bg-vs-bg-primary px-6 pb-2 pt-4", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[15px] font-semibold", children: TYPE_LABEL[g.type] }),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "font-mono text-[11px] text-vs-text-muted", children: [
+            g.items.length,
+            " tokens"
+          ] })
+        ] }),
+        g.items.map((t) => /* @__PURE__ */ jsxRuntimeExports.jsx(
+          TokenRow,
+          {
+            token: t,
+            selected: t.name === selected,
+            onSelect: () => setSelected(t.name),
+            onCopy: (text, what) => {
+              void navigator.clipboard?.writeText(text);
+              flash(`Copied ${what}`);
+            }
+          },
+          t.name
+        ))
+      ] }, g.type)) })
+    ] }),
+    selectedToken && /* @__PURE__ */ jsxRuntimeExports.jsx(
+      TokenDrawer,
+      {
+        token: selectedToken,
+        usage: usage[selectedToken.name] ?? [],
+        tokenFile,
+        onClose: () => setSelected(null),
+        onSave: saveValue
+      },
+      selectedToken.name
+    ),
+    toast && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "fixed bottom-6 left-1/2 z-[60] flex -translate-x-1/2 items-center gap-2 rounded-lg border border-vs-border-strong bg-vs-bg-elevated px-4 py-2.5 text-xs text-vs-text-primary shadow-lg", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-vs-success", children: "✓" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono", children: toast })
+    ] })
   ] });
 }
-function FilterChip({
+function RailItem$1({
+  label,
+  active,
+  count,
+  onClick
+}) {
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs(
+    "button",
+    {
+      onClick,
+      className: `flex items-center gap-2.5 rounded-md px-2 py-1.5 text-left text-[13px] ${active ? "bg-vs-bg-elevated font-medium text-vs-accent" : "text-vs-text-secondary hover:bg-vs-bg-elevated hover:text-vs-text-primary"}`,
+      children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "flex-1", children: label }),
+        count !== void 0 && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono text-[11px] text-vs-text-muted", children: count })
+      ]
+    }
+  );
+}
+function Segment({
   active,
   onClick,
   children
@@ -17425,58 +17517,237 @@ function FilterChip({
     "button",
     {
       onClick,
-      className: `rounded px-2 py-1 transition-colors ${active ? "bg-vs-bg-elevated text-vs-text-primary" : "text-vs-text-muted hover:text-vs-text-primary"}`,
+      className: `rounded-md px-2.5 py-1 text-xs transition-colors ${active ? "bg-vs-bg-elevated text-vs-text-primary" : "text-vs-text-secondary hover:text-vs-text-primary"}`,
       children
     }
   );
 }
-const SOURCE_LABEL = {
-  "figma-variable": { text: "Figma variable", cls: "text-vs-success" },
-  "generated-code": { text: "From code", cls: "text-vs-warning" },
-  "hand-edited": { text: "Hand-edited", cls: "text-vs-accent" }
-};
-function TokenRow({ token, last }) {
-  const src = SOURCE_LABEL[token.source];
+function Empty({ text }) {
+  return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "m-6 rounded-md border border-vs-border-default bg-vs-bg-surface px-4 py-10 text-center text-sm text-vs-text-muted", children: text });
+}
+function TokenRow({
+  token,
+  selected,
+  onSelect,
+  onCopy
+}) {
+  const [menu, setMenu] = reactExports.useState(false);
+  const src = SOURCE[token.source];
   return /* @__PURE__ */ jsxRuntimeExports.jsxs(
     "div",
     {
-      className: `flex items-center gap-3 bg-vs-bg-surface px-3 py-2 ${last ? "" : "border-b border-vs-border-subtle"}`,
+      onClick: onSelect,
+      style: selected ? { boxShadow: "inset 2px 0 0 #7C6FF0" } : void 0,
+      className: `relative flex h-11 cursor-pointer items-center gap-3 border-b border-vs-border-default pl-[22px] pr-5 ${selected ? "bg-vs-bg-elevated" : "hover:bg-vs-bg-hover"}`,
       children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx(Preview, { token }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "min-w-0 flex-1 truncate font-mono text-xs text-vs-text-primary", children: token.name }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "max-w-[40%] truncate font-mono text-xs text-vs-text-secondary", children: token.resolvedValue }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: `shrink-0 text-[10px] uppercase tracking-wide ${src.cls}`, children: src.text })
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "w-[210px] shrink-0 truncate font-mono text-xs text-vs-text-primary", children: token.name }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "w-40 shrink-0 truncate font-mono text-xs text-vs-text-secondary", children: token.resolvedValue }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "flex w-24 shrink-0 items-center gap-1.5", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "inline-block h-2 w-2 rounded-full", style: { background: src.dot } }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs text-vs-text-secondary", children: src.label })
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "flex-1" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "font-mono text-xs text-vs-text-muted", children: [
+          token.uses,
+          " ",
+          token.uses === 1 ? "use" : "uses"
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "relative shrink-0", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "button",
+            {
+              onClick: (e) => {
+                e.stopPropagation();
+                setMenu((v) => !v);
+              },
+              className: "rounded px-1.5 py-1 leading-none tracking-widest text-vs-text-muted hover:bg-vs-bg-elevated hover:text-vs-text-primary",
+              children: "⋯"
+            }
+          ),
+          menu && /* @__PURE__ */ jsxRuntimeExports.jsxs(
+            "div",
+            {
+              className: "absolute right-0 top-7 z-30 w-40 rounded-lg border border-vs-border-strong bg-vs-bg-elevated p-1 shadow-lg",
+              onClick: (e) => e.stopPropagation(),
+              children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx(MenuItem, { onClick: () => {
+                  onSelect();
+                  setMenu(false);
+                }, children: "Edit" }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx(MenuItem, { onClick: () => {
+                  onCopy(`--${token.name}`, "name");
+                  setMenu(false);
+                }, children: "Copy name" }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx(MenuItem, { onClick: () => {
+                  onCopy(token.resolvedValue, "value");
+                  setMenu(false);
+                }, children: "Copy value" })
+              ]
+            }
+          )
+        ] })
       ]
     }
   );
 }
-function Preview({ token }) {
+function MenuItem({
+  onClick,
+  children
+}) {
+  return /* @__PURE__ */ jsxRuntimeExports.jsx(
+    "button",
+    {
+      onClick,
+      className: "block w-full rounded px-2 py-1.5 text-left text-xs text-vs-text-primary hover:bg-vs-border-default",
+      children
+    }
+  );
+}
+function TokenDrawer({
+  token,
+  usage,
+  tokenFile,
+  onClose,
+  onSave
+}) {
+  const [value, setValue] = reactExports.useState(token.rawValue);
+  const [saving, setSaving] = reactExports.useState(false);
+  const src = SOURCE[token.source];
+  const isColor = token.type === "color";
+  const dirty = value.trim() !== token.rawValue.trim();
+  const colorHex = /^#[0-9a-fA-F]{6}$/.test(value.trim()) ? value.trim() : "#000000";
+  async function save() {
+    if (!dirty) return;
+    setSaving(true);
+    await onSave(token.name, value);
+    setSaving(false);
+  }
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs(
+    "aside",
+    {
+      className: "flex w-[360px] shrink-0 flex-col overflow-y-auto border-l border-vs-border-default bg-vs-bg-surface",
+      style: { animation: "vsFade 0.18s ease" },
+      children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between border-b border-vs-border-default px-4 pb-3 pt-4", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[11px] font-semibold uppercase tracking-wide text-vs-text-muted", children: "Token details" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "button",
+            {
+              onClick: onClose,
+              className: "rounded px-1.5 py-1 leading-none text-vs-text-muted hover:bg-vs-bg-elevated hover:text-vs-text-primary",
+              children: "×"
+            }
+          )
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col gap-4 p-4", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx(Field, { label: "Name", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "rounded-md border border-vs-border-default bg-vs-bg-elevated px-2.5 py-2 font-mono text-xs text-vs-text-primary", children: [
+            "--",
+            token.name
+          ] }) }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(Field, { label: "Type", children: /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "rounded-md border border-vs-border-default bg-vs-bg-elevated px-2.5 py-2 text-xs text-vs-text-secondary", children: TYPE_LABEL[token.type] }) }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(Field, { label: "Value", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2", children: [
+            isColor && /* @__PURE__ */ jsxRuntimeExports.jsx(
+              "input",
+              {
+                type: "color",
+                value: colorHex,
+                onChange: (e) => setValue(e.target.value.toUpperCase()),
+                className: "h-8 w-9 shrink-0 cursor-pointer rounded-md border border-vs-border-default bg-vs-bg-elevated p-0.5"
+              }
+            ),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              "input",
+              {
+                value,
+                onChange: (e) => setValue(e.target.value),
+                className: "flex-1 rounded-md border border-vs-border-default bg-vs-bg-elevated px-2.5 py-2 font-mono text-xs text-vs-text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-vs-accent-subtle"
+              }
+            )
+          ] }) }),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-3 rounded-lg border border-vs-border-default bg-vs-bg-primary p-3", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx(Preview, { token: { ...token, resolvedValue: value }, large: true }),
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "min-w-0", children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "truncate font-mono text-xs text-vs-text-primary", children: [
+                "--",
+                token.name
+              ] }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "font-mono text-[11px] text-vs-text-secondary", children: value })
+            ] })
+          ] }),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2 border-t border-vs-border-default pt-4", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "inline-block h-2 w-2 rounded-full", style: { background: src.dot } }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs text-vs-text-secondary", children: src.line })
+          ] }),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col gap-2 border-t border-vs-border-default pt-4", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-[11px] font-semibold uppercase tracking-wide text-vs-text-muted", children: [
+              "Where used ",
+              /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-vs-border-strong", children: [
+                "· ",
+                token.uses
+              ] })
+            ] }),
+            usage.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "px-2 py-1.5 text-xs text-vs-text-muted", children: "Not referenced yet" }) : usage.map((u, i) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
+              "div",
+              {
+                className: "flex items-center justify-between rounded-md px-2 py-1.5 hover:bg-vs-bg-elevated",
+                children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs text-vs-text-primary", children: u.component }),
+                  u.property && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono text-[11px] text-vs-text-secondary", children: u.property })
+                ]
+              },
+              `${u.component}-${i}`
+            ))
+          ] })
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "mt-auto flex items-center gap-3 border-t border-vs-border-default px-4 py-3.5", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "flex-1 text-[11px] text-vs-text-muted", children: dirty ? "Value edits are written to the token file" : `Saved to ${tokenFile ?? "token file"}` }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "button",
+            {
+              disabled: !dirty || saving,
+              onClick: () => void save(),
+              className: `rounded-lg px-4 py-2 text-xs font-medium ${dirty && !saving ? "bg-vs-accent text-white hover:brightness-110" : "cursor-not-allowed bg-vs-bg-elevated text-vs-text-muted"}`,
+              children: saving ? "Saving…" : "Save value"
+            }
+          )
+        ] })
+      ]
+    }
+  );
+}
+function Field({
+  label,
+  children
+}) {
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col gap-1.5", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsx("label", { className: "text-[11px] text-vs-text-muted", children: label }),
+    children
+  ] });
+}
+function Preview({ token, large }) {
+  const size = large ? "h-9 w-9" : "h-5 w-5";
   const v = token.resolvedValue;
   if (token.type === "color") {
     return /* @__PURE__ */ jsxRuntimeExports.jsx(
       "span",
       {
-        className: "h-5 w-5 shrink-0 rounded-[5px] border border-vs-border-strong",
+        className: `${size} shrink-0 rounded-md border border-vs-border-strong`,
         style: { background: isCssColor(v) ? v : "transparent" }
       }
     );
   }
-  if (token.type === "typography") {
-    return /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "grid h-5 w-5 shrink-0 place-items-center rounded-[5px] border border-vs-border-default text-[11px] text-vs-text-secondary", children: "Ag" });
-  }
-  if (token.type === "radius") {
-    return /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "h-5 w-5 shrink-0 rounded-tl-[8px] border-l-2 border-t-2 border-vs-border-strong" });
-  }
-  if (token.type === "spacing") {
-    const px = Math.min(20, Math.max(2, parseFloat(v) || 4));
-    return /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "flex h-5 w-5 shrink-0 items-center", children: /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "rounded-sm bg-vs-accent", style: { width: `${px}px`, height: "4px" } }) });
-  }
-  return /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "h-5 w-5 shrink-0 rounded-full border border-vs-border-default" });
+  const inner = token.type === "typography" ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[10px] text-vs-text-primary", children: "Ag" }) : token.type === "spacing" ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "h-0.5 w-2.5 rounded-sm bg-vs-text-secondary" }) : token.type === "radius" ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "h-2.5 w-2.5 rounded-tl border-l-2 border-t-2 border-vs-text-secondary" }) : token.type === "shadow" ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "h-2.5 w-2.5 rounded bg-vs-border-strong shadow" }) : /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "h-1.5 w-1.5 rounded-full bg-vs-text-muted" });
+  return /* @__PURE__ */ jsxRuntimeExports.jsx(
+    "span",
+    {
+      className: `${size} grid shrink-0 place-items-center rounded-md border border-vs-border-strong bg-vs-bg-elevated`,
+      children: inner
+    }
+  );
 }
 function isCssColor(v) {
-  return /^#|^(rgb|rgba|hsl|hsla|oklch)\(|^(white|black|transparent|currentcolor)$/i.test(
-    v.trim()
-  );
+  return /^#|^(rgb|rgba|hsl|hsla|oklch)\(|^(white|black|transparent|currentcolor)$/i.test(v.trim());
 }
 const BG = { app: "#EFEFF1", white: "#FFFFFF", dark: "#0F0F10" };
 const LEVEL_ORDER = ["atom", "molecule", "organism", "other"];

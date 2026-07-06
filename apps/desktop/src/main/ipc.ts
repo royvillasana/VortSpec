@@ -11,7 +11,7 @@ import {
 import { getToolkitStatus, installToolkit } from "./workspace/toolkit-manager";
 import { createProject } from "./workspace/setup-manager";
 import { readProjectConfig } from "./workspace/config-manager";
-import { getInspectorTokens } from "./inspector/token-parser";
+import { getInspectorTokens, setInspectorTokenValue } from "./inspector/token-parser";
 import { getInspectorComponents } from "./inspector/component-reader";
 import type { SetupAnswers } from "../shared/setup";
 import { startRun, cancelRun } from "./agent/run-manager";
@@ -94,6 +94,8 @@ const handlers: Record<IpcChannel, Handler> = {
   "inspector:getTokens": ((projectPath: string) => getInspectorTokens(projectPath)) as Handler,
   "inspector:getComponents": ((projectPath: string) =>
     getInspectorComponents(projectPath)) as Handler,
+  "inspector:setTokenValue": ((req: { projectPath: string; name: string; value: string }) =>
+    setInspectorTokenValue(req.projectPath, req.name, req.value)) as Handler,
 };
 
 export function registerIpc(): void {

@@ -1,10 +1,11 @@
-import { join } from "node:path";
-import { readFile } from "node:fs/promises";
+import { join, basename, extname } from "node:path";
+import { readFile, readdir, writeFile } from "node:fs/promises";
 import { readProjectConfig } from "../workspace/config-manager";
 import type {
   InspectorToken,
   InspectorTokensResult,
   TokenType,
+  TokenUsage,
 } from "../../shared/inspector";
 
 /**
@@ -59,13 +60,15 @@ function resolve(value: string, table: Map<string, string>, depth = 0): string {
   return (match[2] ?? value).trim();
 }
 
-export function parseTokensFromCss(css: string): Omit<InspectorToken, "source">[] {
+export function parseTokensFromCss(
+  css: string,
+): Omit<InspectorToken, "source" | "uses">[] {
   const raw = new Map<string, string>();
   for (const m of css.matchAll(CSS_VAR)) {
     // Last declaration wins, matching CSS cascade within a single :root block.
     raw.set(m[1], m[2].trim());
   }
-  const tokens: Omit<InspectorToken, "source">[] = [];
+  const tokens: Omit<InspectorToken, "source" | "uses">[] = [];
   for (const [name, rawValue] of raw) {
     const resolvedValue = resolve(rawValue, raw);
     tokens.push({ name, rawValue, resolvedValue, type: classify(name, resolvedValue) });
@@ -73,21 +76,101 @@ export function parseTokensFromCss(css: string): Omit<InspectorToken, "source">[
   return tokens;
 }
 
+const SOURCE_EXTS = new Set([".tsx", ".jsx", ".ts", ".vue", ".svelte", ".css", ".scss"]);
+
+/** Read every component source file under `dir` as { component, text }. */
+async function collectSources(dir: string): Promise<{ component: string; text: string }[]> {
+  const out: { component: string; text: string }[] = [];
+  async function walk(d: string): Promise<void> {
+    let entries;
+    try {
+      entries = await readdir(d, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      const full = join(d, entry.name);
+      if (entry.isDirectory()) await walk(full);
+      else if (SOURCE_EXTS.has(extname(entry.name)) && !entry.name.endsWith(".variants.ts")) {
+        const text = await readFile(full, "utf8").catch(() => "");
+        if (text) out.push({ component: basename(entry.name, extname(entry.name)), text });
+      }
+    }
+  }
+  await walk(dir);
+  return out;
+}
+
+/** Build a token → usage map by scanning component sources for `var(--name)`. */
+function buildUsage(
+  tokenNames: string[],
+  sources: { component: string; text: string }[],
+): Record<string, TokenUsage[]> {
+  const usage: Record<string, TokenUsage[]> = {};
+  const names = new Set(tokenNames);
+  for (const { component, text } of sources) {
+    const seen = new Set<string>();
+    for (const m of text.matchAll(/var\(\s*--([\w-]+)/g)) {
+      const name = m[1];
+      if (!names.has(name) || seen.has(name)) continue;
+      seen.add(name);
+      (usage[name] ??= []).push({ component });
+    }
+  }
+  return usage;
+}
+
 export async function getInspectorTokens(
   projectPath: string,
 ): Promise<InspectorTokensResult> {
   const config = await readProjectConfig(projectPath);
   const tokenFile = config?.tokenFile ?? null;
-  if (!tokenFile) return { tokenFile: null, tokens: [] };
+  if (!tokenFile) return { tokenFile: null, tokens: [], usage: {} };
   let css: string;
   try {
     css = await readFile(join(projectPath, tokenFile), "utf8");
   } catch {
-    return { tokenFile, tokens: [] };
+    return { tokenFile, tokens: [], usage: {} };
   }
-  const tokens: InspectorToken[] = parseTokensFromCss(css).map((t) => ({
+  const parsed = parseTokensFromCss(css);
+  const sources = config?.componentDir
+    ? await collectSources(join(projectPath, config.componentDir))
+    : [];
+  const usage = buildUsage(
+    parsed.map((t) => t.name),
+    sources,
+  );
+  const tokens: InspectorToken[] = parsed.map((t) => ({
     ...t,
     source: "generated-code",
+    uses: usage[t.name]?.length ?? 0,
   }));
-  return { tokenFile, tokens };
+  return { tokenFile, tokens, usage };
+}
+
+/**
+ * Gated value edit: write a new value for `--name` into the token file. Only the
+ * value of an existing declaration is changed (the property name is untouched —
+ * renames that also rewrite code go through the Claude Code modify loop). Returns
+ * the refreshed token set.
+ */
+export async function setInspectorTokenValue(
+  projectPath: string,
+  name: string,
+  value: string,
+): Promise<InspectorTokensResult> {
+  const config = await readProjectConfig(projectPath);
+  const tokenFile = config?.tokenFile;
+  if (tokenFile) {
+    const path = join(projectPath, tokenFile);
+    const css = await readFile(path, "utf8").catch(() => null);
+    if (css) {
+      // Replace the value of `--name: <value>;`, preserving indentation + comment.
+      const re = new RegExp(`(--${name}\\s*:\\s*)([^;]*)(;)`);
+      if (re.test(css)) {
+        await writeFile(path, css.replace(re, `$1${value.trim()}$3`), "utf8");
+      }
+    }
+  }
+  return getInspectorTokens(projectPath);
 }

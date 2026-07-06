@@ -82,6 +82,8 @@ const api = {
   projectConfig: (projectPath: string) => invoke("project:config", projectPath),
   inspectorTokens: (projectPath: string) => invoke("inspector:getTokens", projectPath),
   inspectorComponents: (projectPath: string) => invoke("inspector:getComponents", projectPath),
+  setTokenValue: (projectPath: string, name: string, value: string) =>
+    invoke("inspector:setTokenValue", { projectPath, name, value }),
 };
 
 export type VortSpecApi = typeof api;

@@ -3,7 +3,7 @@ import { join as join$1 } from "path";
 import { electronApp, optimizer, is } from "@electron-toolkit/utils";
 import { z } from "zod";
 import { spawn } from "node:child_process";
-import { join, basename, dirname } from "node:path";
+import { join, basename, dirname, extname } from "node:path";
 import { access, mkdir, readFile, writeFile, cp, copyFile, appendFile, readdir, symlink, stat } from "node:fs/promises";
 import { createHash, randomUUID } from "node:crypto";
 import { createRequire } from "node:module";
@@ -323,12 +323,20 @@ const inspectorTokenSchema = z.object({
   rawValue: z.string(),
   /** Value with in-file `var(--x)` references resolved, for display/swatches. */
   resolvedValue: z.string(),
-  source: tokenSourceSchema
+  source: tokenSourceSchema,
+  /** How many component source references this token (best-effort var() scan). */
+  uses: z.number()
+});
+const tokenUsageSchema = z.object({
+  component: z.string(),
+  property: z.string().optional()
 });
 const inspectorTokensResultSchema = z.object({
   /** Project-relative path of the token file that was parsed, or null if none. */
   tokenFile: z.string().nullable(),
-  tokens: z.array(inspectorTokenSchema)
+  tokens: z.array(inspectorTokenSchema),
+  /** token name → components/props that reference it (for the detail drawer). */
+  usage: z.record(z.string(), z.array(tokenUsageSchema))
 });
 const propControlSchema = z.object({
   key: z.string(),
@@ -475,6 +483,14 @@ const ipcContract = {
   "inspector:getComponents": {
     request: z.string(),
     response: inspectorComponentsResultSchema
+  },
+  "inspector:setTokenValue": {
+    request: z.object({
+      projectPath: z.string(),
+      name: z.string(),
+      value: z.string()
+    }),
+    response: inspectorTokensResultSchema
   }
 };
 function execFileSafe(command, args, opts = {}) {
@@ -924,21 +940,79 @@ function parseTokensFromCss(css) {
   }
   return tokens;
 }
+const SOURCE_EXTS$1 = /* @__PURE__ */ new Set([".tsx", ".jsx", ".ts", ".vue", ".svelte", ".css", ".scss"]);
+async function collectSources(dir) {
+  const out = [];
+  async function walk(d) {
+    let entries;
+    try {
+      entries = await readdir(d, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      const full = join(d, entry.name);
+      if (entry.isDirectory()) await walk(full);
+      else if (SOURCE_EXTS$1.has(extname(entry.name)) && !entry.name.endsWith(".variants.ts")) {
+        const text = await readFile(full, "utf8").catch(() => "");
+        if (text) out.push({ component: basename(entry.name, extname(entry.name)), text });
+      }
+    }
+  }
+  await walk(dir);
+  return out;
+}
+function buildUsage(tokenNames, sources) {
+  const usage = {};
+  const names = new Set(tokenNames);
+  for (const { component, text } of sources) {
+    const seen = /* @__PURE__ */ new Set();
+    for (const m of text.matchAll(/var\(\s*--([\w-]+)/g)) {
+      const name = m[1];
+      if (!names.has(name) || seen.has(name)) continue;
+      seen.add(name);
+      (usage[name] ??= []).push({ component });
+    }
+  }
+  return usage;
+}
 async function getInspectorTokens(projectPath) {
   const config = await readProjectConfig(projectPath);
   const tokenFile = config?.tokenFile ?? null;
-  if (!tokenFile) return { tokenFile: null, tokens: [] };
+  if (!tokenFile) return { tokenFile: null, tokens: [], usage: {} };
   let css;
   try {
     css = await readFile(join(projectPath, tokenFile), "utf8");
   } catch {
-    return { tokenFile, tokens: [] };
+    return { tokenFile, tokens: [], usage: {} };
   }
-  const tokens = parseTokensFromCss(css).map((t) => ({
+  const parsed = parseTokensFromCss(css);
+  const sources = config?.componentDir ? await collectSources(join(projectPath, config.componentDir)) : [];
+  const usage = buildUsage(
+    parsed.map((t) => t.name),
+    sources
+  );
+  const tokens = parsed.map((t) => ({
     ...t,
-    source: "generated-code"
+    source: "generated-code",
+    uses: usage[t.name]?.length ?? 0
   }));
-  return { tokenFile, tokens };
+  return { tokenFile, tokens, usage };
+}
+async function setInspectorTokenValue(projectPath, name, value) {
+  const config = await readProjectConfig(projectPath);
+  const tokenFile = config?.tokenFile;
+  if (tokenFile) {
+    const path = join(projectPath, tokenFile);
+    const css = await readFile(path, "utf8").catch(() => null);
+    if (css) {
+      const re = new RegExp(`(--${name}\\s*:\\s*)([^;]*)(;)`);
+      if (re.test(css)) {
+        await writeFile(path, css.replace(re, `$1${value.trim()}$3`), "utf8");
+      }
+    }
+  }
+  return getInspectorTokens(projectPath);
 }
 const SOURCE_EXTS = [".tsx", ".jsx", ".vue", ".svelte", ".ts"];
 function balanced(src, from) {
@@ -1486,7 +1560,8 @@ const handlers = {
   "artifact:findLatest": ((req) => findLatestArtifact(req.projectPath, req.suffix)),
   "project:config": ((projectPath) => readProjectConfig(projectPath)),
   "inspector:getTokens": ((projectPath) => getInspectorTokens(projectPath)),
-  "inspector:getComponents": ((projectPath) => getInspectorComponents(projectPath))
+  "inspector:getComponents": ((projectPath) => getInspectorComponents(projectPath)),
+  "inspector:setTokenValue": ((req) => setInspectorTokenValue(req.projectPath, req.name, req.value))
 };
 function registerIpc() {
   Object.keys(ipcContract).forEach((channel) => {
