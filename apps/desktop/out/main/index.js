@@ -1,0 +1,2316 @@
+import { shell, dialog, app, ipcMain, BrowserWindow } from "electron";
+import { join as join$1 } from "path";
+import { electronApp, optimizer, is } from "@electron-toolkit/utils";
+import { z } from "zod";
+import { spawn } from "node:child_process";
+import { join, resolve as resolve$1, sep, basename, dirname, extname } from "node:path";
+import { access, mkdir, readFile, writeFile, cp, copyFile, appendFile, readdir, symlink, stat } from "node:fs/promises";
+import { createHash, randomUUID } from "node:crypto";
+import { createRequire } from "node:module";
+import { EventEmitter } from "node:events";
+import { existsSync } from "node:fs";
+import __cjs_mod__ from "node:module";
+const __filename = import.meta.filename;
+const __dirname = import.meta.dirname;
+const require2 = __cjs_mod__.createRequire(import.meta.url);
+const runEventSchema = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("system-init"),
+    sessionId: z.string().optional(),
+    model: z.string().optional(),
+    tools: z.array(z.string()),
+    mcpServers: z.array(z.string()),
+    mcpErrors: z.array(z.string())
+  }),
+  z.object({ kind: z.literal("text-delta"), text: z.string() }),
+  z.object({ kind: z.literal("assistant-text"), text: z.string() }),
+  z.object({
+    kind: z.literal("tool-use"),
+    id: z.string(),
+    name: z.string(),
+    path: z.string().optional()
+  }),
+  z.object({
+    kind: z.literal("tool-result"),
+    toolUseId: z.string(),
+    isError: z.boolean()
+  }),
+  z.object({
+    kind: z.literal("api-retry"),
+    attempt: z.number(),
+    maxRetries: z.number(),
+    errorCategory: z.string(),
+    retryDelayMs: z.number().optional()
+  }),
+  z.object({ kind: z.literal("notice"), text: z.string() }),
+  z.object({
+    kind: z.literal("result"),
+    isError: z.boolean(),
+    text: z.string().optional(),
+    costUsd: z.number().optional(),
+    sessionId: z.string().optional()
+  }),
+  z.object({ kind: z.literal("error"), message: z.string() }),
+  z.object({ kind: z.literal("exit"), code: z.number().nullable() })
+]);
+const agentRunOptionsSchema = z.object({
+  prompt: z.string().min(1),
+  cwd: z.string().min(1),
+  appendSystemPrompt: z.string().optional(),
+  allowedTools: z.array(z.string()).optional(),
+  resumeSessionId: z.string().optional(),
+  /**
+   * Bypass Claude Code permission prompts for this run
+   * (`--dangerously-skip-permissions`). Headless `-p` mode cannot show
+   * interactive prompts, so MCP tools (Figma, Stitch…) and Bash are otherwise
+   * auto-denied. The guided flow sets this because the user explicitly triggers
+   * each stage; the run is confined to the project folder.
+   */
+  bypassPermissions: z.boolean().optional()
+});
+const AGENT_EVENT_CHANNEL = "agent:event";
+const AGENT_RAW_CHANNEL = "agent:raw";
+z.object({
+  runId: z.string(),
+  event: runEventSchema
+});
+z.object({
+  runId: z.string(),
+  line: z.string()
+});
+const stageKindSchema = z.enum([
+  "source",
+  "components",
+  "input",
+  "intake",
+  "agent",
+  "verify"
+]);
+const stageStatusSchema = z.enum([
+  "pending",
+  "running",
+  "needs-review",
+  "approved",
+  "failed"
+]);
+const stageDefSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  summary: z.string(),
+  kind: stageKindSchema,
+  /** produces an artifact that must be approved before advancing */
+  gated: z.boolean().default(false),
+  /** not required for the flow to be considered complete (e.g. publishing to
+   *  GitHub). Optional stages can be run/skipped freely and never block. */
+  optional: z.boolean().optional(),
+  /** relative path of the artifact this stage produces, if any (fixed path) */
+  artifact: z.string().optional(),
+  /** filename suffix to resolve under specs/ when the path is dynamic
+   *  (SDD-DE writes specs/[feature-name]/…, so the feature name is not known ahead of time) */
+  artifactGlob: z.string().optional(),
+  /** prompt handed to Claude Code for agent/verify stages */
+  promptTemplate: z.string().optional(),
+  allowedTools: z.array(z.string()).optional()
+});
+const stageStateSchema = z.object({
+  id: z.string(),
+  status: stageStatusSchema,
+  updatedAt: z.string(),
+  decisionNotes: z.string().optional()
+});
+const detectedComponentSchema = z.object({
+  name: z.string(),
+  level: z.enum(["atom", "molecule", "organism"]).optional(),
+  description: z.string().optional()
+});
+const detectedComponentsSchema = z.array(detectedComponentSchema);
+const COMPONENTS_MANIFEST = ".sdd-de/components.json";
+const flowStateSchema = z.object({
+  currentStageId: z.string(),
+  stages: z.array(stageStateSchema),
+  /** Opt-in GitHub publish target (a repo URL). Only the URL is stored — never
+   *  credentials; the push runs through the user's own git/gh in the commit stage. */
+  publishRepoUrl: z.string().optional()
+});
+const flowSchema = z.object({
+  definitions: z.array(stageDefSchema),
+  state: flowStateSchema
+});
+const runStageSummarySchema = z.object({
+  name: z.string(),
+  decision: z.string(),
+  status: z.enum(["done", "review", "cancelled", "pending"])
+});
+const runSummarySchema = z.object({
+  id: z.string(),
+  label: z.string(),
+  title: z.string(),
+  outcome: z.enum(["running", "in-review", "passed", "cancelled", "failed", "in-progress"]),
+  updatedAt: z.string(),
+  stages: z.array(runStageSummarySchema),
+  artifacts: z.array(z.string())
+});
+const runHistoryResultSchema = z.object({ runs: z.array(runSummarySchema) });
+const DEFAULT_FLOW = [
+  {
+    id: "design-system",
+    title: "Design system",
+    summary: "Connect to your configured design source (e.g. the Figma file), extract design tokens + variables, and detect every component — no brief needed.",
+    kind: "source",
+    gated: true,
+    artifact: COMPONENTS_MANIFEST,
+    promptTemplate: 'Read .sdd-de/project.yaml for `design_source` and the project configuration (framework, language, token_file, component_dir). Connect to the configured source — do NOT ask for a brief; the design source is the input.\n\nFor `design_source: figma`, use the Figma MCP to read the file at `figma_file_url` and the variable collection named `figma_token_collection`.\n\n1. Extract every design token and variable from the source into the configured `token_file`.\n2. Detect every component in the design system and write `.sdd-de/components.json` — a JSON array of objects `{ "name": string, "level": "atom"|"molecule"|"organism", "description": string }`, ordered tokens → atoms → molecules → organisms.\n\nDo NOT implement the components yet — this stage only extracts tokens and detects the inventory.',
+    allowedTools: ["Read", "Write", "Edit"]
+  },
+  {
+    id: "components",
+    title: "Components",
+    summary: "Choose to build every detected component at once, or one by one. Each is generated in your framework and language using the extracted tokens.",
+    kind: "components",
+    gated: true,
+    allowedTools: ["Read", "Write", "Edit", "Bash"]
+  },
+  {
+    id: "visual-verify",
+    title: "Visual verify",
+    summary: "/visual-verify — compare the implementation to the spec across viewports; a11y audit; list discrepancies.",
+    kind: "verify",
+    gated: true,
+    // The skill writes specs/<component>/visual-verify-report.md — surface the
+    // newest one in the approval gate so this stage can be reviewed + approved.
+    artifactGlob: "visual-verify-report.md",
+    promptTemplate: "/visual-verify\n\nRun the visual-verify skill: compare the live implementation to the spec across 375/768/1440px, check every token, variant, and state, run the accessibility audit, and report discrepancies.",
+    allowedTools: ["Read", "Bash"]
+  },
+  {
+    id: "sync",
+    title: "Sync",
+    summary: "/sync-tokens — reconcile design.md and token files with the decisions made during implementation.",
+    kind: "agent",
+    gated: false,
+    promptTemplate: "/sync-tokens\n\nRun the sync-tokens skill: update design.md and token files so they reflect the implementation. No undocumented deviations.",
+    allowedTools: ["Read", "Write", "Edit"]
+  },
+  {
+    id: "commit",
+    title: "Commit & publish",
+    summary: "Optional — keep everything local, or connect a GitHub repo and publish from here using your own git/gh.",
+    kind: "agent",
+    gated: false,
+    optional: true,
+    promptTemplate: "/commit\n\nRun the commit skill: commit the changes and open a PR whose description is the component spec, with the Figma link and QA screenshots. No direct pushes to main.",
+    allowedTools: ["Read", "Bash"]
+  }
+];
+const devServerStateSchema = z.enum([
+  "stopped",
+  "starting",
+  "running",
+  "error",
+  "no-script"
+]);
+const devServerStatusSchema = z.object({
+  state: devServerStateSchema,
+  /** The detected local URL once the server is up. */
+  url: z.string().nullable(),
+  /** The package.json script being run (e.g. "dev", "storybook"). */
+  script: z.string().nullable(),
+  /** A human message for error / no-script states. */
+  message: z.string().nullable()
+});
+const DEV_SERVER_UPDATE_CHANNEL = "devserver:update";
+z.object({
+  projectPath: z.string(),
+  status: devServerStatusSchema
+});
+const frameworkSchema = z.enum([
+  "react",
+  "next",
+  "vue",
+  "nuxt",
+  "svelte",
+  "sveltekit",
+  "angular",
+  "astro",
+  "vanilla"
+]);
+const languageSchema = z.enum(["typescript", "javascript"]);
+const designSourceSchema = z.enum(["figma", "library", "github", "zip", "stitch"]);
+const componentLibrarySchema = z.enum([
+  "shadcn",
+  "radix",
+  "mui",
+  "antd",
+  "chakra",
+  "mantine",
+  "headlessui",
+  "other"
+]);
+const stylingSchema = z.enum([
+  "tailwind",
+  "css-modules",
+  "scss",
+  "styled-components",
+  "emotion",
+  "css"
+]);
+const testRunnerSchema = z.enum(["vitest", "jest", "playwright", "cypress", "none"]);
+const stitchConnectionSchema = z.enum(["mcp", "zip"]);
+const setupAnswersSchema = z.object({
+  framework: frameworkSchema,
+  language: languageSchema,
+  designSource: designSourceSchema,
+  // Figma
+  figmaFileUrl: z.string().optional(),
+  figmaTokenCollection: z.string().optional(),
+  // Library
+  componentLibrary: componentLibrarySchema.optional(),
+  // GitHub
+  githubRepoUrl: z.string().optional(),
+  githubBranch: z.string().optional(),
+  githubComponentDir: z.string().optional(),
+  // ZIP
+  zipFilePath: z.string().optional(),
+  zipComponentDir: z.string().optional(),
+  // Stitch
+  stitchConnection: stitchConnectionSchema.optional(),
+  stitchApiKey: z.string().optional(),
+  stitchProjectId: z.string().optional(),
+  stitchZipPath: z.string().optional(),
+  // Common
+  styling: stylingSchema,
+  tokenFile: z.string(),
+  componentDir: z.string(),
+  testRunner: testRunnerSchema
+});
+const projectConfigSchema = z.object({
+  designSource: z.string().optional(),
+  figmaFileUrl: z.string().optional(),
+  figmaTokenCollection: z.string().optional(),
+  componentLibrary: z.string().optional(),
+  githubRepoUrl: z.string().optional(),
+  githubBranch: z.string().optional(),
+  githubComponentDir: z.string().optional(),
+  zipFilePath: z.string().optional(),
+  stitchConnection: z.string().optional(),
+  framework: z.string().optional(),
+  language: z.string().optional(),
+  styling: z.string().optional(),
+  tokenFile: z.string().optional(),
+  componentDir: z.string().optional()
+});
+function buildProjectYaml(a) {
+  const lines = [
+    "# SDD-DE Project Configuration",
+    "# Generated by VortSpec — update any time your stack changes.",
+    "# See .sdd-de/docs/framework-config.md for framework-specific guidance.",
+    "",
+    `framework: ${a.framework}`,
+    `language: ${a.language}`,
+    `styling: ${a.styling}`,
+    "",
+    "# Design system source: figma | library | github | zip | stitch",
+    `design_source: ${a.designSource}`
+  ];
+  if (a.designSource === "figma") {
+    lines.push(`figma_file_url: "${a.figmaFileUrl ?? ""}"`);
+    lines.push(`figma_token_collection: ${a.figmaTokenCollection || "Tokens"}`);
+  } else if (a.designSource === "library") {
+    lines.push(`component_library: ${a.componentLibrary ?? "other"}`);
+  } else if (a.designSource === "github") {
+    lines.push(`github_repo_url: "${a.githubRepoUrl ?? ""}"`);
+    lines.push(`github_branch: ${a.githubBranch || "main"}`);
+    lines.push(`github_component_dir: ${a.githubComponentDir || "src/components"}`);
+  } else if (a.designSource === "zip") {
+    lines.push(`zip_file_path: "${a.zipFilePath ?? ""}"`);
+    lines.push(`zip_component_dir: ${a.zipComponentDir || "src/components"}`);
+  } else if (a.designSource === "stitch") {
+    lines.push(`stitch_connection: ${a.stitchConnection ?? "mcp"}`);
+    if (a.stitchConnection === "mcp") {
+      lines.push(`stitch_api_key: "${a.stitchApiKey ?? ""}"`);
+      lines.push(`stitch_project_id: "${a.stitchProjectId ?? ""}"`);
+    } else {
+      lines.push(`stitch_zip_path: "${a.stitchZipPath ?? ""}"`);
+    }
+  }
+  lines.push("");
+  lines.push(`token_file: ${a.tokenFile}`);
+  lines.push(`component_dir: ${a.componentDir}`);
+  lines.push(`test_runner: ${a.testRunner}`);
+  return lines.join("\n") + "\n";
+}
+const tokenTypeSchema = z.enum([
+  "color",
+  "typography",
+  "spacing",
+  "radius",
+  "shadow",
+  "other"
+]);
+const tokenSourceSchema = z.enum([
+  "figma-variable",
+  "generated-code",
+  "hand-edited"
+]);
+const tokenDriftSchema = z.enum(["in-sync", "drifted"]);
+const inspectorTokenSchema = z.object({
+  /** CSS custom-property name without the leading `--` (e.g. `color-primary`). */
+  name: z.string(),
+  type: tokenTypeSchema,
+  /** Raw value as written in the token file (may be a `var(--other)` reference). */
+  rawValue: z.string(),
+  /** Value with in-file `var(--x)` references resolved, for display/swatches. */
+  resolvedValue: z.string(),
+  source: tokenSourceSchema,
+  /** How many component source references this token (best-effort var() scan). */
+  uses: z.number(),
+  /** The matched Figma variable's resolved value, when a Figma export is present. */
+  figmaValue: z.string().optional(),
+  /** In-sync/drifted vs the matched Figma variable; absent when unmatched/no export. */
+  drift: tokenDriftSchema.optional()
+});
+const figmaVariableSchema = z.object({
+  name: z.string(),
+  resolvedValue: z.string(),
+  type: tokenTypeSchema.optional(),
+  collection: z.string().optional()
+});
+const tokenUsageSchema = z.object({
+  component: z.string(),
+  property: z.string().optional()
+});
+const inspectorTokensResultSchema = z.object({
+  /** Project-relative path of the token file that was parsed, or null if none. */
+  tokenFile: z.string().nullable(),
+  tokens: z.array(inspectorTokenSchema),
+  /** token name → components/props that reference it (for the detail drawer). */
+  usage: z.record(z.string(), z.array(tokenUsageSchema)),
+  /** Figma variables with no matching code token (present only after a Figma sync). */
+  figmaOnly: z.array(figmaVariableSchema).default([]),
+  /** Whether a `.vortspec/figma-variables.json` export was found and reconciled. */
+  figmaSynced: z.boolean().default(false)
+});
+const propControlSchema = z.object({
+  key: z.string(),
+  kind: z.enum(["enum", "boolean", "text"]),
+  /** Options for an enum control. */
+  options: z.array(z.string()).default([]),
+  /** Default value from the component's defaultVariants, if any. */
+  defaultValue: z.string().optional()
+});
+const componentStatusSchema = z.enum(["verified", "has-issues", "built", "unknown"]);
+const inspectorComponentSchema = z.object({
+  name: z.string(),
+  level: z.enum(["atom", "molecule", "organism"]).optional(),
+  description: z.string().optional(),
+  /** Project-relative path of the component's source file, or null if not found. */
+  file: z.string().nullable(),
+  props: z.array(propControlSchema),
+  /** Token names the component references (best-effort scan of its source). */
+  tokens: z.array(z.string()),
+  status: componentStatusSchema,
+  /** Open issues from the visual-verify report, if any. */
+  issues: z.array(z.string()),
+  /** Project-relative path of the component's spec dir/file, if one exists. */
+  specPath: z.string().nullable(),
+  /** Project-relative path of the visual-verify report, if one exists. */
+  reportPath: z.string().nullable()
+});
+const inspectorComponentsResultSchema = z.object({
+  componentDir: z.string().nullable(),
+  /** The dev-server URL to embed for live preview, if one is configured/known. */
+  previewUrl: z.string().nullable(),
+  components: z.array(inspectorComponentSchema)
+});
+const fileSnapshotSchema = z.object({ path: z.string(), content: z.string() });
+const fileSnapshotListSchema = z.array(fileSnapshotSchema);
+const findingSeveritySchema = z.enum(["error", "warning", "info"]);
+const verificationFindingSchema = z.object({
+  /** Stable id: `<component>:<raw id>` (e.g. `callout:D2`). */
+  id: z.string(),
+  /** Short raw id from the report (e.g. `D2`, `O-A`). */
+  rawId: z.string(),
+  component: z.string(),
+  group: z.enum(["visual", "adversarial"]),
+  severity: findingSeveritySchema,
+  title: z.string(),
+  detail: z.string(),
+  /** A referenced file/token from the finding, if one was found. */
+  ref: z.string().optional(),
+  status: z.enum(["open", "resolved"]),
+  /** Project-relative path of the report the finding came from. */
+  reportPath: z.string()
+});
+const verificationResultSchema = z.object({
+  findings: z.array(verificationFindingSchema)
+});
+const checkStatusSchema = z.enum(["pass", "fail", "unknown", "checking"]);
+const fixActionSchema = z.object({
+  /** install-link → open an external URL; open-login → run login in the PTY; verify → re-run the check */
+  kind: z.enum(["install-link", "open-login", "verify"]),
+  label: z.string(),
+  url: z.string().url().optional()
+});
+const envCheckIdSchema = z.enum([
+  "node",
+  "git",
+  "claude-install",
+  "claude-login",
+  "figma-mcp"
+]);
+const envCheckSchema = z.object({
+  id: envCheckIdSchema,
+  label: z.string(),
+  status: checkStatusSchema,
+  detail: z.string(),
+  fix: fixActionSchema.optional()
+});
+const envReportSchema = z.object({
+  checks: z.array(envCheckSchema),
+  /** true when every required check passes */
+  ready: z.boolean()
+});
+const toolkitStatusSchema = z.object({
+  present: z.boolean(),
+  version: z.string().nullable(),
+  /** true when a newer toolkit version is available to install */
+  updateAvailable: z.boolean()
+});
+const projectSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  path: z.string(),
+  toolkit: toolkitStatusSchema,
+  lastRunStatus: z.enum(["none", "running", "needs-review", "approved", "failed"]).default("none"),
+  addedAt: z.string()
+});
+const projectListSchema = z.array(projectSchema);
+const ipcContract = {
+  "system:isElectron": { request: z.void(), response: z.boolean() },
+  "system:getVersion": { request: z.void(), response: z.string() },
+  "env:check": { request: z.void(), response: envReportSchema },
+  "env:verifyLogin": { request: z.void(), response: envCheckSchema },
+  "env:verifyFigmaMcp": { request: z.void(), response: envCheckSchema },
+  "env:openInstall": { request: z.string().url(), response: z.void() },
+  "workspace:pickFolder": {
+    request: z.object({ create: z.boolean().default(false) }).optional(),
+    response: projectSchema.nullable()
+  },
+  "workspace:createFolder": { request: z.void(), response: projectSchema.nullable() },
+  "workspace:listProjects": { request: z.void(), response: projectListSchema },
+  "workspace:openFolder": { request: z.string(), response: z.void() },
+  "workspace:revealPath": {
+    request: z.object({ projectPath: z.string(), relPath: z.string() }),
+    response: z.void()
+  },
+  "workspace:refreshProject": { request: z.string(), response: projectSchema },
+  "workspace:createProject": {
+    request: z.object({ path: z.string(), answers: setupAnswersSchema }),
+    response: projectSchema
+  },
+  "toolkit:status": { request: z.string(), response: toolkitStatusSchema },
+  "toolkit:install": { request: z.string(), response: toolkitStatusSchema },
+  "agent:startRun": {
+    request: agentRunOptionsSchema,
+    response: z.object({ runId: z.string() })
+  },
+  "agent:cancelRun": { request: z.string(), response: z.void() },
+  "flow:get": { request: z.string(), response: flowSchema },
+  "flow:setStageStatus": {
+    request: z.object({
+      projectPath: z.string(),
+      stageId: z.string(),
+      status: stageStatusSchema
+    }),
+    response: flowSchema
+  },
+  "flow:approveStage": {
+    request: z.object({ projectPath: z.string(), stageId: z.string() }),
+    response: flowSchema
+  },
+  "flow:requestChanges": {
+    request: z.object({
+      projectPath: z.string(),
+      stageId: z.string(),
+      notes: z.string()
+    }),
+    response: flowSchema
+  },
+  "flow:saveIntake": {
+    request: z.object({ projectPath: z.string(), content: z.string() }),
+    response: flowSchema
+  },
+  "flow:completeInput": {
+    request: z.object({ projectPath: z.string(), stageId: z.string() }),
+    response: flowSchema
+  },
+  "flow:getHistory": { request: z.string(), response: runHistoryResultSchema },
+  "devserver:start": { request: z.string(), response: devServerStatusSchema },
+  "devserver:stop": { request: z.string(), response: z.void() },
+  "devserver:status": { request: z.string(), response: devServerStatusSchema },
+  "flow:setPublishTarget": {
+    request: z.object({ projectPath: z.string(), repoUrl: z.string() }),
+    response: flowSchema
+  },
+  "artifact:read": {
+    request: z.object({ projectPath: z.string(), relPath: z.string() }),
+    response: z.string().nullable()
+  },
+  "artifact:findLatest": {
+    request: z.object({ projectPath: z.string(), suffix: z.string() }),
+    response: z.object({ path: z.string(), content: z.string() }).nullable()
+  },
+  "project:config": {
+    request: z.string(),
+    response: projectConfigSchema.nullable()
+  },
+  "inspector:getTokens": {
+    request: z.string(),
+    response: inspectorTokensResultSchema
+  },
+  "inspector:getComponents": {
+    request: z.string(),
+    response: inspectorComponentsResultSchema
+  },
+  "inspector:setTokenValue": {
+    request: z.object({
+      projectPath: z.string(),
+      name: z.string(),
+      value: z.string()
+    }),
+    response: inspectorTokensResultSchema
+  },
+  "inspector:getVerification": {
+    request: z.string(),
+    response: verificationResultSchema
+  },
+  "inspector:snapshotComponent": {
+    request: z.object({ projectPath: z.string(), file: z.string() }),
+    response: fileSnapshotListSchema
+  },
+  "inspector:snapshotTokenScope": {
+    request: z.string(),
+    response: fileSnapshotListSchema
+  },
+  "inspector:restoreFiles": {
+    request: z.object({ projectPath: z.string(), files: fileSnapshotListSchema }),
+    response: z.void()
+  }
+};
+function execFileSafe(command, args, opts = {}) {
+  return new Promise((resolve2) => {
+    const child = spawn(command, args, {
+      cwd: opts.cwd,
+      env: process.env,
+      shell: false
+    });
+    let stdout = "";
+    let stderr = "";
+    let timedOut = false;
+    const timer = opts.timeoutMs ? setTimeout(() => {
+      timedOut = true;
+      child.kill("SIGKILL");
+    }, opts.timeoutMs) : null;
+    child.stdout?.on("data", (d) => {
+      stdout += d.toString();
+    });
+    child.stderr?.on("data", (d) => {
+      stderr += d.toString();
+    });
+    child.on("error", (err) => {
+      if (timer) clearTimeout(timer);
+      resolve2({ code: null, stdout, stderr, timedOut, spawnError: err.message });
+    });
+    child.on("close", (code) => {
+      if (timer) clearTimeout(timer);
+      resolve2({ code, stdout, stderr, timedOut });
+    });
+    if (opts.input !== void 0) {
+      child.stdin?.end(opts.input);
+    }
+  });
+}
+const NODE_INSTALL = {
+  kind: "install-link",
+  label: "Install Node.js",
+  url: "https://nodejs.org/en/download"
+};
+const GIT_INSTALL = {
+  kind: "install-link",
+  label: "Install Git",
+  url: "https://git-scm.com/downloads"
+};
+const CLAUDE_INSTALL = {
+  kind: "install-link",
+  label: "Install Claude Code",
+  url: "https://code.claude.com/docs/en/overview"
+};
+const OPEN_LOGIN = { kind: "open-login", label: "Open login" };
+const VERIFY_LOGIN = { kind: "verify", label: "Verify login" };
+const FIGMA_ADD = {
+  kind: "install-link",
+  label: "Add Figma MCP",
+  url: "https://code.claude.com/docs/en/mcp"
+};
+const FIGMA_CONNECT = {
+  kind: "install-link",
+  label: "Connect Figma",
+  url: "https://claude.ai/customize/connectors"
+};
+const VERIFY_FIGMA = { kind: "verify", label: "Verify" };
+const MIN_NODE_MAJOR = 20;
+async function checkNode() {
+  const r = await execFileSafe("node", ["--version"], { timeoutMs: 8e3 });
+  if (r.spawnError || r.code !== 0) {
+    return {
+      id: "node",
+      label: "Node.js",
+      status: "fail",
+      detail: "Not found on PATH",
+      fix: NODE_INSTALL
+    };
+  }
+  const version = r.stdout.trim();
+  const major = Number.parseInt(version.replace(/^v/, "").split(".")[0] ?? "0", 10);
+  if (Number.isFinite(major) && major < MIN_NODE_MAJOR) {
+    return {
+      id: "node",
+      label: "Node.js",
+      status: "fail",
+      detail: `${version} — needs ≥ ${MIN_NODE_MAJOR}`,
+      fix: NODE_INSTALL
+    };
+  }
+  return { id: "node", label: "Node.js", status: "pass", detail: version };
+}
+async function checkGit() {
+  const r = await execFileSafe("git", ["--version"], { timeoutMs: 8e3 });
+  if (r.spawnError || r.code !== 0) {
+    return {
+      id: "git",
+      label: "Git",
+      status: "fail",
+      detail: "Not found on PATH",
+      fix: GIT_INSTALL
+    };
+  }
+  return {
+    id: "git",
+    label: "Git",
+    status: "pass",
+    detail: r.stdout.trim().replace(/^git version /, "v")
+  };
+}
+async function checkClaudeInstall() {
+  const r = await execFileSafe("claude", ["--version"], { timeoutMs: 8e3 });
+  if (r.spawnError || r.code !== 0) {
+    return {
+      id: "claude-install",
+      label: "Claude Code",
+      status: "fail",
+      detail: "Not found on PATH",
+      fix: CLAUDE_INSTALL
+    };
+  }
+  return {
+    id: "claude-install",
+    label: "Claude Code",
+    status: "pass",
+    detail: r.stdout.trim().split("\n")[0] ?? "installed"
+  };
+}
+function pendingLogin() {
+  return {
+    id: "claude-login",
+    label: "Claude Code login",
+    status: "unknown",
+    detail: "Not verified yet",
+    fix: VERIFY_LOGIN
+  };
+}
+function pendingFigmaMcp() {
+  return {
+    id: "figma-mcp",
+    label: "Figma MCP",
+    status: "unknown",
+    detail: "Not verified yet",
+    fix: VERIFY_FIGMA
+  };
+}
+async function verifyFigmaMcp() {
+  const r = await execFileSafe("claude", ["mcp", "list"], { timeoutMs: 2e4 });
+  if (r.spawnError || r.code !== 0) {
+    return {
+      id: "figma-mcp",
+      label: "Figma MCP",
+      status: "unknown",
+      detail: "Could not list MCP servers",
+      fix: FIGMA_ADD
+    };
+  }
+  const figma = r.stdout.split("\n").filter((l) => /figma/i.test(l));
+  if (figma.length === 0) {
+    return {
+      id: "figma-mcp",
+      label: "Figma MCP",
+      status: "unknown",
+      detail: "Not configured — only needed for Figma design sources",
+      fix: FIGMA_ADD
+    };
+  }
+  if (figma.some((l) => /connected|✔/i.test(l) && !/needs authentication/i.test(l))) {
+    return { id: "figma-mcp", label: "Figma MCP", status: "pass", detail: "Connected" };
+  }
+  if (figma.some((l) => /needs authentication|✘|failed/i.test(l))) {
+    return {
+      id: "figma-mcp",
+      label: "Figma MCP",
+      status: "fail",
+      detail: "Configured but not authenticated",
+      fix: FIGMA_CONNECT
+    };
+  }
+  return {
+    id: "figma-mcp",
+    label: "Figma MCP",
+    status: "unknown",
+    detail: "Configured (status unclear)",
+    fix: FIGMA_CONNECT
+  };
+}
+const AUTH_ERROR_RE = /authentication_failed|not logged in|please run.*login|oauth|unauthorized|invalid api key|401/i;
+async function verifyClaudeLogin() {
+  const install = await checkClaudeInstall();
+  if (install.status !== "pass") {
+    return {
+      id: "claude-login",
+      label: "Claude Code login",
+      status: "fail",
+      detail: "Claude Code is not installed",
+      fix: CLAUDE_INSTALL
+    };
+  }
+  const r = await execFileSafe(
+    "claude",
+    ["-p", "Reply with the single word: ok", "--output-format", "json"],
+    { timeoutMs: 3e4 }
+  );
+  const haystack = `${r.stdout}
+${r.stderr}`;
+  if (r.timedOut) {
+    return {
+      id: "claude-login",
+      label: "Claude Code login",
+      status: "unknown",
+      detail: "Verification timed out",
+      fix: VERIFY_LOGIN
+    };
+  }
+  if (AUTH_ERROR_RE.test(haystack)) {
+    return {
+      id: "claude-login",
+      label: "Claude Code login",
+      status: "fail",
+      detail: "Not logged in",
+      fix: OPEN_LOGIN
+    };
+  }
+  if (r.code === 0) {
+    return {
+      id: "claude-login",
+      label: "Claude Code login",
+      status: "pass",
+      detail: "Logged in"
+    };
+  }
+  return {
+    id: "claude-login",
+    label: "Claude Code login",
+    status: "unknown",
+    detail: "Could not verify",
+    fix: VERIFY_LOGIN
+  };
+}
+async function checkEnvironment() {
+  const [node, git, install] = await Promise.all([
+    checkNode(),
+    checkGit(),
+    checkClaudeInstall()
+  ]);
+  const checks = [node, git, install, pendingLogin(), pendingFigmaMcp()];
+  const ready = [node, git, install].every((c) => c.status === "pass");
+  return { checks, ready };
+}
+const SDD_DE_INSTALL_CMD = "npx @royvillasana/sdd-de";
+async function exists$1(path) {
+  try {
+    await access(path);
+    return true;
+  } catch {
+    return false;
+  }
+}
+async function getToolkitStatus(projectPath) {
+  const sdde = join(projectPath, ".sdd-de");
+  const present = await exists$1(join(sdde, "project.yaml")) || await exists$1(join(sdde, "ai-specs", "skills"));
+  return { present, version: null, updateAvailable: false };
+}
+async function installToolkit(projectPath) {
+  const override = process.env.VORTSPEC_TOOLKIT_INSTALL_CMD?.trim();
+  if (!override) {
+    throw new Error(
+      `SDD-DE setup is interactive. Run \`${SDD_DE_INSTALL_CMD}\` in a terminal in this project and answer the prompts, then re-check. (In-app terminal install arrives in D5.)`
+    );
+  }
+  const [cmd, ...args] = override.split(/\s+/);
+  const r = await execFileSafe(cmd, args, { cwd: projectPath, timeoutMs: 18e4 });
+  if (r.spawnError || r.code !== 0) {
+    throw new Error(
+      `Toolkit install failed: ${r.spawnError ?? r.stderr.trim() ?? `exit ${r.code}`}`
+    );
+  }
+  return getToolkitStatus(projectPath);
+}
+function registryPath() {
+  return join(app.getPath("userData"), "projects.json");
+}
+function projectId(path) {
+  return createHash("sha1").update(path).digest("hex").slice(0, 12);
+}
+async function readRegistry() {
+  try {
+    const raw = await readFile(registryPath(), "utf8");
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(
+      (p) => typeof p === "object" && p !== null && typeof p.path === "string"
+    );
+  } catch {
+    return [];
+  }
+}
+async function writeRegistry(entries) {
+  await mkdir(app.getPath("userData"), { recursive: true });
+  await writeFile(registryPath(), JSON.stringify(entries, null, 2), "utf8");
+}
+async function hydrate(entry) {
+  const toolkit = await getToolkitStatus(entry.path);
+  return {
+    id: entry.id,
+    name: basename(entry.path),
+    path: entry.path,
+    toolkit,
+    lastRunStatus: "none",
+    addedAt: entry.addedAt
+  };
+}
+async function listProjects() {
+  const entries = await readRegistry();
+  const projects = await Promise.all(entries.map(hydrate));
+  return projectListSchema.parse(projects);
+}
+async function pickFolder(opts = { create: false }) {
+  const result = await dialog.showOpenDialog({
+    title: opts.create ? "Create or choose a project folder" : "Choose a project folder",
+    properties: opts.create ? ["openDirectory", "createDirectory"] : ["openDirectory"],
+    buttonLabel: "Use this folder"
+  });
+  if (result.canceled || result.filePaths.length === 0) return null;
+  return registerPath(result.filePaths[0]);
+}
+async function createFolder() {
+  const result = await dialog.showSaveDialog({
+    title: "Create a new project folder",
+    buttonLabel: "Create folder",
+    nameFieldLabel: "Folder name:",
+    message: "Choose where to create your new project folder"
+  });
+  if (result.canceled || !result.filePath) return null;
+  await mkdir(result.filePath, { recursive: true });
+  return registerPath(result.filePath);
+}
+async function registerPath(path) {
+  const entries = await readRegistry();
+  const existing = entries.find((e) => e.path === path);
+  const entry = existing ?? { id: projectId(path), path, addedAt: (/* @__PURE__ */ new Date()).toISOString() };
+  if (!existing) {
+    entries.push(entry);
+    await writeRegistry(entries);
+  }
+  return hydrate(entry);
+}
+async function refreshProject(path) {
+  const entries = await readRegistry();
+  const entry = entries.find((e) => e.path === path) ?? { id: projectId(path), path, addedAt: (/* @__PURE__ */ new Date()).toISOString() };
+  return hydrate(entry);
+}
+async function openFolder(path) {
+  await shell.openPath(path);
+}
+function revealPath(projectPath, relPath) {
+  const target = resolve$1(projectPath, relPath);
+  const root = resolve$1(projectPath);
+  if (target !== root && !target.startsWith(root + sep)) return;
+  shell.showItemInFolder(target);
+}
+const require$1 = createRequire(import.meta.url);
+function packageDir() {
+  return dirname(require$1.resolve("@royvillasana/sdd-de/package.json"));
+}
+async function exists(path) {
+  try {
+    await access(path);
+    return true;
+  } catch {
+    return false;
+  }
+}
+async function createSkillSymlinks(sourceDir, targetDir) {
+  if (!await exists(sourceDir)) return;
+  await mkdir(targetDir, { recursive: true });
+  const entries = await readdir(sourceDir, { withFileTypes: true });
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    const linkPath = join(targetDir, entry.name);
+    const linkTarget = `../../.sdd-de/ai-specs/skills/${entry.name}`;
+    if (!await exists(linkPath)) {
+      try {
+        await symlink(linkTarget, linkPath);
+      } catch {
+      }
+    }
+  }
+}
+async function createProject(projectPath, answers) {
+  const pkgDir = packageDir();
+  const sddeDir = join(projectPath, ".sdd-de");
+  await mkdir(sddeDir, { recursive: true });
+  await cp(join(pkgDir, "ai-specs", "skills"), join(sddeDir, "ai-specs", "skills"), {
+    recursive: true
+  });
+  await cp(join(pkgDir, "docs"), join(sddeDir, "docs"), { recursive: true });
+  await writeFile(join(sddeDir, "project.yaml"), buildProjectYaml(answers), "utf8");
+  const claudeSrc = join(pkgDir, "CLAUDE.md");
+  for (const name of ["CLAUDE.md", "AGENTS.md", "GEMINI.md", "codex.md"]) {
+    const dst = join(projectPath, name);
+    if (!await exists(dst)) {
+      try {
+        await copyFile(claudeSrc, dst);
+      } catch {
+      }
+    }
+  }
+  await createSkillSymlinks(
+    join(sddeDir, "ai-specs", "skills"),
+    join(projectPath, ".claude", "skills")
+  );
+  const gitignorePath = join(projectPath, ".gitignore");
+  if (await exists(gitignorePath)) {
+    const content = await readFile(gitignorePath, "utf8");
+    if (!content.includes(".sdd-de")) {
+      await appendFile(gitignorePath, "\n# SDD-DE toolkit\n.sdd-de/\n");
+    }
+  }
+  return refreshProject(projectPath);
+}
+const KEY_MAP = {
+  design_source: "designSource",
+  figma_file_url: "figmaFileUrl",
+  figma_token_collection: "figmaTokenCollection",
+  component_library: "componentLibrary",
+  github_repo_url: "githubRepoUrl",
+  github_branch: "githubBranch",
+  github_component_dir: "githubComponentDir",
+  zip_file_path: "zipFilePath",
+  stitch_connection: "stitchConnection",
+  framework: "framework",
+  language: "language",
+  styling: "styling",
+  token_file: "tokenFile",
+  component_dir: "componentDir"
+};
+function parseFlatYaml(text) {
+  const out = {};
+  for (const raw of text.split("\n")) {
+    const line = raw.trim();
+    if (!line || line.startsWith("#")) continue;
+    const idx = line.indexOf(":");
+    if (idx < 0) continue;
+    const key = line.slice(0, idx).trim();
+    let value = line.slice(idx + 1).trim();
+    if (value.startsWith('"') && value.endsWith('"') || value.startsWith("'") && value.endsWith("'")) {
+      value = value.slice(1, -1);
+    }
+    out[key] = value;
+  }
+  return out;
+}
+async function readProjectConfig(projectPath) {
+  let text;
+  try {
+    text = await readFile(join(projectPath, ".sdd-de", "project.yaml"), "utf8");
+  } catch {
+    return null;
+  }
+  const flat = parseFlatYaml(text);
+  const config = {};
+  for (const [yamlKey, value] of Object.entries(flat)) {
+    const mapped = KEY_MAP[yamlKey];
+    if (mapped) config[mapped] = value;
+  }
+  const parsed = projectConfigSchema.safeParse(config);
+  return parsed.success ? parsed.data : null;
+}
+const FIGMA_VARS_PATH = ".vortspec/figma-variables.json";
+function normName(name) {
+  return name.replace(/^--/, "").trim().toLowerCase().replace(/[\s/._]+/g, "-").replace(/-+/g, "-");
+}
+function normValue(value) {
+  let s = value.trim().toLowerCase().replace(/\s+/g, " ");
+  const hex = s.match(/^#([0-9a-f]{3,8})$/);
+  if (hex) {
+    let h = hex[1];
+    if (h.length === 3 || h.length === 4) h = h.split("").map((c) => c + c).join("");
+    if (h.length === 8 && h.endsWith("ff")) h = h.slice(0, 6);
+    s = `#${h}`;
+  }
+  return s;
+}
+async function readFigmaVariables(projectPath) {
+  let raw;
+  try {
+    raw = await readFile(join(projectPath, FIGMA_VARS_PATH), "utf8");
+  } catch {
+    return null;
+  }
+  let data;
+  try {
+    data = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+  const rows = Array.isArray(data) ? data : data && typeof data === "object" ? Object.entries(data).map(([name, value]) => ({ name, value })) : [];
+  const vars = [];
+  for (const row of rows) {
+    if (!row || typeof row !== "object") continue;
+    const r = row;
+    const name = typeof r.name === "string" ? r.name : null;
+    const value = r.resolvedValue ?? r.value ?? r.resolved ?? r.val;
+    if (!name || value == null) continue;
+    const parsed = figmaVariableSchema.safeParse({
+      name,
+      resolvedValue: String(value),
+      type: r.type,
+      collection: r.collection
+    });
+    if (parsed.success) vars.push(parsed.data);
+  }
+  return vars;
+}
+function reconcile$1(tokens, figmaVars) {
+  const codeByNorm = /* @__PURE__ */ new Map();
+  for (const t of tokens) codeByNorm.set(normName(t.name), t.resolvedValue);
+  const byName = /* @__PURE__ */ new Map();
+  const figmaOnly = [];
+  const seen = /* @__PURE__ */ new Set();
+  for (const v of figmaVars) {
+    const key = normName(v.name);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const codeValue = codeByNorm.get(key);
+    if (codeValue === void 0) {
+      figmaOnly.push(v);
+      continue;
+    }
+    byName.set(key, {
+      figmaValue: v.resolvedValue,
+      drift: normValue(codeValue) === normValue(v.resolvedValue) ? "in-sync" : "drifted"
+    });
+  }
+  return { byName, figmaOnly };
+}
+const CSS_VAR = /--([\w-]+)\s*:\s*([^;]+);/g;
+const HEX = /^#(?:[0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/;
+const COLOR_FN = /^(?:rgb|rgba|hsl|hsla|oklch|color)\(/i;
+const CSS_COLOR_KEYWORDS = /* @__PURE__ */ new Set([
+  "white",
+  "black",
+  "transparent",
+  "currentcolor",
+  "red",
+  "green",
+  "blue",
+  "gray",
+  "grey"
+]);
+function looksLikeColor(value) {
+  const v = value.trim().toLowerCase();
+  return HEX.test(v) || COLOR_FN.test(v) || CSS_COLOR_KEYWORDS.has(v);
+}
+function classify(name, resolvedValue) {
+  const n = name.toLowerCase();
+  if (/(^|[-/])(radius)([-/]|$)/.test(n)) return "radius";
+  if (/(^|[-/])(shadow|elevation)([-/]|$)/.test(n)) return "shadow";
+  if (/(^|[-/])(spacing|space|gap|size-)/.test(n) && !/font/.test(n)) return "spacing";
+  if (/(font|line-height|letter|weight|leading|tracking|family|type)/.test(n))
+    return "typography";
+  if (/(color|colour|bg|background|foreground|border|text|fill|stroke|primary|secondary|accent|status|neutral|surface|muted)/.test(n))
+    return "color";
+  if (looksLikeColor(resolvedValue)) return "color";
+  return "other";
+}
+function resolve(value, table, depth = 0) {
+  if (depth > 10) return value;
+  const match = value.trim().match(/^var\(\s*--([\w-]+)\s*(?:,\s*([^)]*))?\)$/);
+  if (!match) return value.trim();
+  const referenced = table.get(match[1]);
+  if (referenced !== void 0) return resolve(referenced, table, depth + 1);
+  return (match[2] ?? value).trim();
+}
+function parseTokensFromCss(css) {
+  const raw = /* @__PURE__ */ new Map();
+  for (const m of css.matchAll(CSS_VAR)) {
+    raw.set(m[1], m[2].trim());
+  }
+  const tokens = [];
+  for (const [name, rawValue] of raw) {
+    const resolvedValue = resolve(rawValue, raw);
+    tokens.push({ name, rawValue, resolvedValue, type: classify(name, resolvedValue) });
+  }
+  return tokens;
+}
+const SOURCE_EXTS$1 = /* @__PURE__ */ new Set([".tsx", ".jsx", ".ts", ".vue", ".svelte", ".css", ".scss"]);
+async function collectSources(dir) {
+  const out = [];
+  async function walk(d) {
+    let entries;
+    try {
+      entries = await readdir(d, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      const full = join(d, entry.name);
+      if (entry.isDirectory()) await walk(full);
+      else if (SOURCE_EXTS$1.has(extname(entry.name)) && !entry.name.endsWith(".variants.ts")) {
+        const text = await readFile(full, "utf8").catch(() => "");
+        if (text) out.push({ component: basename(entry.name, extname(entry.name)), text });
+      }
+    }
+  }
+  await walk(dir);
+  return out;
+}
+function deriveProperty(text, at) {
+  const before = text.slice(Math.max(0, at - 48), at);
+  const tw = before.match(/([a-z][a-z-]*)-\[(?:var\()?$/);
+  if (tw) return tw[1];
+  const css = before.match(/([a-zA-Z-]+)\s*:\s*(?:var\()?$/);
+  if (css) return css[1];
+  return void 0;
+}
+function buildUsage(tokenNames, sources) {
+  const usage = {};
+  const names = new Set(tokenNames);
+  for (const { component, text } of sources) {
+    const seen = /* @__PURE__ */ new Set();
+    for (const m of text.matchAll(/--([\w-]+)(?![\w-])/g)) {
+      const name = m[1];
+      if (!names.has(name) || seen.has(name)) continue;
+      seen.add(name);
+      const property = deriveProperty(text, m.index ?? 0);
+      (usage[name] ??= []).push(property ? { component, property } : { component });
+    }
+  }
+  return usage;
+}
+const OVERRIDES_PATH = ".vortspec/token-overrides.json";
+async function readOverrides(projectPath) {
+  try {
+    const raw = await readFile(join(projectPath, OVERRIDES_PATH), "utf8");
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) return new Set(parsed.filter((x) => typeof x === "string"));
+  } catch {
+  }
+  return /* @__PURE__ */ new Set();
+}
+async function markOverridden(projectPath, name) {
+  const set = await readOverrides(projectPath);
+  set.add(name);
+  const path = join(projectPath, OVERRIDES_PATH);
+  await mkdir(dirname(path), { recursive: true }).catch(() => void 0);
+  await writeFile(path, `${JSON.stringify([...set].sort(), null, 2)}
+`, "utf8").catch(
+    () => void 0
+  );
+}
+async function getInspectorTokens(projectPath) {
+  const config = await readProjectConfig(projectPath);
+  const tokenFile = config?.tokenFile ?? null;
+  if (!tokenFile) return { tokenFile: null, tokens: [], usage: {}, figmaOnly: [], figmaSynced: false };
+  let css;
+  try {
+    css = await readFile(join(projectPath, tokenFile), "utf8");
+  } catch {
+    return { tokenFile, tokens: [], usage: {}, figmaOnly: [], figmaSynced: false };
+  }
+  const parsed = parseTokensFromCss(css);
+  const sources = config?.componentDir ? await collectSources(join(projectPath, config.componentDir)) : [];
+  const usage = buildUsage(
+    parsed.map((t) => t.name),
+    sources
+  );
+  const edited = await readOverrides(projectPath);
+  const figmaVars = await readFigmaVariables(projectPath);
+  const recon = figmaVars ? reconcile$1(parsed, figmaVars) : null;
+  const tokens = parsed.map((t) => {
+    const match = recon?.byName.get(normName(t.name));
+    const source = edited.has(t.name) ? "hand-edited" : match ? "figma-variable" : "generated-code";
+    return {
+      ...t,
+      source,
+      uses: usage[t.name]?.length ?? 0,
+      figmaValue: match?.figmaValue,
+      drift: match?.drift
+    };
+  });
+  return {
+    tokenFile,
+    tokens,
+    usage,
+    figmaOnly: recon?.figmaOnly ?? [],
+    figmaSynced: figmaVars !== null
+  };
+}
+async function setInspectorTokenValue(projectPath, name, value) {
+  const config = await readProjectConfig(projectPath);
+  const tokenFile = config?.tokenFile;
+  if (tokenFile) {
+    const path = join(projectPath, tokenFile);
+    const css = await readFile(path, "utf8").catch(() => null);
+    if (css) {
+      const re = new RegExp(`(--${name}\\s*:\\s*)([^;]*)(;)`);
+      if (re.test(css)) {
+        await writeFile(path, css.replace(re, `$1${value.trim()}$3`), "utf8");
+        await markOverridden(projectPath, name);
+      }
+    }
+  }
+  return getInspectorTokens(projectPath);
+}
+async function snapshotTokenScope(projectPath) {
+  const config = await readProjectConfig(projectPath);
+  const snaps = [];
+  const seen = /* @__PURE__ */ new Set();
+  async function capture(rel) {
+    if (seen.has(rel)) return;
+    seen.add(rel);
+    const content = await readFile(join(projectPath, rel), "utf8").catch(() => null);
+    if (content !== null) snaps.push({ path: rel, content });
+  }
+  if (config?.tokenFile) await capture(config.tokenFile);
+  if (config?.componentDir) {
+    const root = join(projectPath, config.componentDir);
+    async function walk(d) {
+      let entries;
+      try {
+        entries = await readdir(d, { withFileTypes: true });
+      } catch {
+        return;
+      }
+      for (const entry of entries) {
+        const full = join(d, entry.name);
+        if (entry.isDirectory()) await walk(full);
+        else if (SOURCE_EXTS$1.has(extname(entry.name))) await capture(full.slice(projectPath.length + 1));
+      }
+    }
+    await walk(root);
+  }
+  return snaps;
+}
+const SOURCE_EXTS = [".tsx", ".jsx", ".vue", ".svelte", ".ts"];
+function balanced(src, from) {
+  const open = src.indexOf("{", from);
+  if (open < 0) return null;
+  let depth = 0;
+  for (let i = open; i < src.length; i++) {
+    if (src[i] === "{") depth++;
+    else if (src[i] === "}") {
+      depth--;
+      if (depth === 0) return { body: src.slice(open + 1, i), end: i };
+    }
+  }
+  return null;
+}
+function stripStrings(s) {
+  return s.replace(/'(?:[^'\\]|\\.)*'/g, "''").replace(/"(?:[^"\\]|\\.)*"/g, '""').replace(/`(?:[^`\\]|\\.)*`/g, "``");
+}
+function parseProps(src) {
+  const vIdx = src.search(/\bvariants\s*:/);
+  if (vIdx < 0) return [];
+  const vb = balanced(src, vIdx);
+  if (!vb) return [];
+  const defaults = /* @__PURE__ */ new Map();
+  const dIdx = src.search(/\bdefaultVariants\s*:/);
+  if (dIdx >= 0) {
+    const db = balanced(src, dIdx);
+    if (db) {
+      for (const m of stripStrings(db.body).matchAll(/([A-Za-z_$][\w$]*)\s*:/g)) {
+        const valMatch = db.body.match(
+          new RegExp(`${m[1]}\\s*:\\s*['"]([^'"]+)['"]`)
+        );
+        if (valMatch) defaults.set(m[1], valMatch[1]);
+      }
+    }
+  }
+  const props = [];
+  for (const m of vb.body.matchAll(/([A-Za-z_$][\w$]*)\s*:\s*\{([^{}]*)\}/g)) {
+    const key = m[1];
+    const options = [];
+    for (const om of stripStrings(m[2]).matchAll(
+      /(['"]?)([A-Za-z_$][\w$-]*|true|false)\1\s*:/g
+    )) {
+      options.push(om[2]);
+    }
+    if (options.length === 0) continue;
+    const isBool = options.every((o) => o === "true" || o === "false");
+    props.push({
+      key,
+      kind: isBool ? "boolean" : "enum",
+      options,
+      defaultValue: defaults.get(key)
+    });
+  }
+  return props;
+}
+async function variantsSibling(projectPath, file) {
+  const dir = dirname(file);
+  const stem = basename(file).replace(/\.(tsx|jsx|ts)$/, "").toLowerCase();
+  const entries = await readdir(join(projectPath, dir)).catch(() => []);
+  const hit = entries.find(
+    (n) => n.endsWith(".variants.ts") && n.slice(0, -".variants.ts".length).toLowerCase() === stem
+  );
+  return hit ? join(dir, hit) : null;
+}
+async function findSourceFile(dir, name) {
+  let entries;
+  try {
+    entries = await readdir(dir, { withFileTypes: true });
+  } catch {
+    return null;
+  }
+  for (const entry of entries) {
+    const full = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      const found = await findSourceFile(full, name);
+      if (found) return found;
+    } else if (SOURCE_EXTS.some((ext) => entry.name === `${name}${ext}`)) {
+      return full;
+    }
+  }
+  return null;
+}
+function scanTokens(...sources) {
+  const found = /* @__PURE__ */ new Set();
+  for (const src of sources) {
+    for (const m of src.matchAll(/var\(\s*--([\w-]+)/g)) found.add(m[1]);
+  }
+  return [...found].sort();
+}
+async function firstExisting(projectPath, rels) {
+  for (const rel of rels) {
+    try {
+      await readFile(join(projectPath, rel), "utf8");
+      return rel;
+    } catch {
+    }
+  }
+  return null;
+}
+async function componentStatus(projectPath, name, hasFile) {
+  const slug = name.toLowerCase();
+  const specPath = await firstExisting(projectPath, [
+    join("specs", slug, "spec.md"),
+    join("specs", slug, `${slug}.md`),
+    join("specs", slug, "README.md")
+  ]);
+  const reportPath = await firstExisting(projectPath, [
+    join("specs", slug, "visual-verify-report.md")
+  ]);
+  if (!hasFile) return { status: "unknown", issues: [], specPath, reportPath };
+  let report;
+  try {
+    report = reportPath ? await readFile(join(projectPath, reportPath), "utf8") : "";
+    if (!reportPath) return { status: "built", issues: [], specPath, reportPath };
+  } catch {
+    return { status: "built", issues: [], specPath, reportPath };
+  }
+  const hasOpen = /status:\s*open/i.test(report) || /open (discrepanc|source-level)/i.test(report);
+  if (hasOpen) {
+    const issues = [...report.matchAll(/^###\s+(D\d[^\n]*)/gm)].map((m) => m[1].trim());
+    return { status: "has-issues", issues, specPath, reportPath };
+  }
+  return { status: "verified", issues: [], specPath, reportPath };
+}
+async function getInspectorComponents(projectPath) {
+  const config = await readProjectConfig(projectPath);
+  const componentDir = config?.componentDir ?? null;
+  let manifest = [];
+  try {
+    const raw = await readFile(join(projectPath, ".sdd-de/components.json"), "utf8");
+    const parsed = detectedComponentsSchema.safeParse(JSON.parse(raw));
+    if (parsed.success) manifest = parsed.data;
+  } catch {
+  }
+  const root = componentDir ? join(projectPath, componentDir) : projectPath;
+  const components = [];
+  for (const entry of manifest) {
+    const abs = await findSourceFile(root, entry.name);
+    const file = abs ? abs.slice(projectPath.length + 1) : null;
+    let props = [];
+    let tokens = [];
+    if (abs && file) {
+      const src = await readFile(abs, "utf8").catch(() => "");
+      const vrel = await variantsSibling(projectPath, file);
+      const variantsSrc = vrel ? await readFile(join(projectPath, vrel), "utf8").catch(() => "") : "";
+      props = parseProps(variantsSrc || src);
+      tokens = scanTokens(src, variantsSrc);
+    }
+    const { status, issues, specPath, reportPath } = await componentStatus(
+      projectPath,
+      entry.name,
+      Boolean(abs)
+    );
+    components.push({
+      name: entry.name,
+      level: entry.level,
+      description: entry.description,
+      file,
+      props,
+      tokens,
+      status,
+      issues,
+      specPath,
+      reportPath
+    });
+  }
+  return { componentDir, previewUrl: null, components };
+}
+async function snapshotComponent(projectPath, file) {
+  const vrel = await variantsSibling(projectPath, file);
+  const candidates = [file, ...vrel ? [vrel] : []];
+  const snaps = [];
+  for (const rel of candidates) {
+    const content = await readFile(join(projectPath, rel), "utf8").catch(() => null);
+    if (content !== null) snaps.push({ path: rel, content });
+  }
+  return snaps;
+}
+async function restoreFiles(projectPath, files) {
+  for (const f of files) {
+    await writeFile(join(projectPath, f.path), f.content, "utf8").catch(() => void 0);
+  }
+}
+const BACKTICK = String.fromCharCode(96);
+const CODE_SPAN = new RegExp(BACKTICK, "g");
+async function findReports(specsRoot) {
+  const out = [];
+  async function walk(dir) {
+    let entries;
+    try {
+      entries = await readdir(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      const full = join(dir, entry.name);
+      if (entry.isDirectory()) await walk(full);
+      else if (entry.name === "visual-verify-report.md") out.push({ path: full, group: "visual" });
+      else if (/adversarial.*\.md$/i.test(entry.name)) out.push({ path: full, group: "adversarial" });
+    }
+  }
+  await walk(specsRoot);
+  return out;
+}
+function firstRef(block) {
+  const parts = block.split(BACKTICK);
+  for (let i = 1; i < parts.length; i += 2) {
+    const s = parts[i];
+    if (/[./]/.test(s) && s.length < 60) return s;
+  }
+  const src = block.match(/\b(src\/[\w./-]+)/);
+  return src?.[1];
+}
+function cleanDetail(block) {
+  const line = block.split("\n").map((l) => l.trim()).find((l) => l && !l.startsWith("#") && !l.startsWith("|"));
+  if (!line) return "";
+  return line.replace(/^[-*]\s+/, "").replace(/\*\*/g, "").replace(CODE_SPAN, "").slice(0, 260).trim();
+}
+function nextHeader(md, from) {
+  const idx = md.slice(from + 1).search(/\n#{2,3}\s/);
+  return idx < 0 ? md.length : from + 1 + idx;
+}
+function parseFindings(md, group, component, reportPath) {
+  const findings = [];
+  const push2 = (rawId, title, detail, severity, block) => {
+    const status = /resolved|passed/i.test(block) ? "resolved" : "open";
+    findings.push({
+      id: component + ":" + rawId,
+      rawId,
+      component,
+      group,
+      severity,
+      title: title.trim().replace(/\s+·.*$/, ""),
+      detail,
+      ref: firstRef(block),
+      status,
+      reportPath
+    });
+  };
+  const dRe = /^###\s+(D\w+)\b[ \t]*[—:-]?[ \t]*(.*)$/gm;
+  const dMatches = [...md.matchAll(dRe)];
+  for (let i = 0; i < dMatches.length; i++) {
+    const m = dMatches[i];
+    const start = m.index ?? 0;
+    const end = i + 1 < dMatches.length ? dMatches[i + 1].index ?? md.length : nextHeader(md, start);
+    const block = md.slice(start, end);
+    push2(m[1], m[2] || "Discrepancy", cleanDetail(md.slice(start + m[0].length, end)), "error", block);
+  }
+  for (const m of md.matchAll(/^-\s+\*\*(O[\w-]*)\b[ \t]*[—:-]?[ \t]*([^*]+?)\*\*[ \t]*(.*)$/gm)) {
+    push2(m[1], m[2], (m[3] || "").replace(CODE_SPAN, "").slice(0, 260).trim(), "info", m[0]);
+  }
+  return findings;
+}
+async function getVerification(projectPath) {
+  const specsRoot = join(projectPath, "specs");
+  const reports = await findReports(specsRoot);
+  const findings = [];
+  for (const { path, group } of reports) {
+    const md = await readFile(path, "utf8").catch(() => "");
+    if (!md) continue;
+    const rel = path.slice(projectPath.length + 1);
+    const dir = dirname(path);
+    const component = dir === specsRoot ? "system" : basename(dir);
+    findings.push(...parseFindings(md, group, component, rel));
+  }
+  return { findings };
+}
+function truncate(s, n = 200) {
+  return s.length > n ? `${s.slice(0, n)}…` : s;
+}
+function toolPath(input) {
+  if (typeof input !== "object" || input === null) return void 0;
+  const record = input;
+  for (const key of ["file_path", "path", "filePath", "notebook_path"]) {
+    const value = record[key];
+    if (typeof value === "string" && value.length > 0) return value;
+  }
+  return void 0;
+}
+function mapAssistant(message) {
+  if (typeof message !== "object" || message === null) return [];
+  const content = message.content;
+  if (!Array.isArray(content)) return [];
+  const events = [];
+  for (const block of content) {
+    if (typeof block !== "object" || block === null) continue;
+    const b = block;
+    if (b.type === "text" && typeof b.text === "string" && b.text.trim()) {
+      events.push({ kind: "assistant-text", text: b.text });
+    } else if (b.type === "tool_use") {
+      events.push({
+        kind: "tool-use",
+        id: typeof b.id === "string" ? b.id : "",
+        name: typeof b.name === "string" ? b.name : "tool",
+        path: toolPath(b.input)
+      });
+    }
+  }
+  return events;
+}
+function mapToolResults(message) {
+  if (typeof message !== "object" || message === null) return [];
+  const content = message.content;
+  if (!Array.isArray(content)) return [];
+  const events = [];
+  for (const block of content) {
+    if (typeof block !== "object" || block === null) continue;
+    const b = block;
+    if (b.type === "tool_result") {
+      events.push({
+        kind: "tool-result",
+        toolUseId: typeof b.tool_use_id === "string" ? b.tool_use_id : "",
+        isError: b.is_error === true
+      });
+    }
+  }
+  return events;
+}
+function mapObject(obj) {
+  switch (obj.type) {
+    case "system": {
+      if (obj.subtype === "init") {
+        const mcp = Array.isArray(obj.mcp_servers) ? obj.mcp_servers : [];
+        const pluginErrors = Array.isArray(obj.plugin_errors) ? obj.plugin_errors : [];
+        return [
+          {
+            kind: "system-init",
+            sessionId: typeof obj.session_id === "string" ? obj.session_id : void 0,
+            model: typeof obj.model === "string" ? obj.model : void 0,
+            tools: (Array.isArray(obj.tools) ? obj.tools : []).map(String),
+            mcpServers: mcp.map(
+              (m) => typeof m === "object" && m !== null ? String(m.name ?? "") : String(m)
+            ).filter(Boolean),
+            mcpErrors: pluginErrors.map(
+              (e) => typeof e === "object" && e !== null ? String(e.message ?? "plugin error") : String(e)
+            )
+          }
+        ];
+      }
+      if (obj.subtype === "api_retry") {
+        return [
+          {
+            kind: "api-retry",
+            attempt: Number(obj.attempt ?? 0),
+            maxRetries: Number(obj.max_retries ?? 0),
+            errorCategory: typeof obj.error === "string" ? obj.error : "unknown",
+            retryDelayMs: typeof obj.retry_delay_ms === "number" ? obj.retry_delay_ms : void 0
+          }
+        ];
+      }
+      if (obj.subtype === "plugin_install") {
+        return [
+          {
+            kind: "notice",
+            text: `Plugin ${String(obj.name ?? "")} ${String(obj.status ?? "")}`.trim()
+          }
+        ];
+      }
+      return [];
+    }
+    case "assistant":
+      return mapAssistant(obj.message);
+    case "user":
+      return mapToolResults(obj.message);
+    case "stream_event": {
+      const event = obj.event;
+      const delta = event?.delta;
+      if (delta?.type === "text_delta" && typeof delta.text === "string") {
+        return [{ kind: "text-delta", text: delta.text }];
+      }
+      return [];
+    }
+    case "result":
+      return [
+        {
+          kind: "result",
+          isError: obj.is_error === true || obj.subtype === "error",
+          text: typeof obj.result === "string" ? obj.result : void 0,
+          costUsd: typeof obj.total_cost_usd === "number" ? obj.total_cost_usd : void 0,
+          sessionId: typeof obj.session_id === "string" ? obj.session_id : void 0
+        }
+      ];
+    default:
+      return [];
+  }
+}
+function parseStreamLine(line) {
+  const trimmed = line.trim();
+  if (!trimmed) return [];
+  let obj;
+  try {
+    obj = JSON.parse(trimmed);
+  } catch {
+    return [{ kind: "error", message: `Unparseable stream line: ${truncate(trimmed)}` }];
+  }
+  if (typeof obj !== "object" || obj === null) return [];
+  return mapObject(obj);
+}
+class AgentAdapter extends EventEmitter {
+  child = null;
+  stdoutBuffer = "";
+  canceled = false;
+  start(opts) {
+    const args = [
+      "-p",
+      opts.prompt,
+      "--output-format",
+      "stream-json",
+      "--verbose",
+      "--include-partial-messages"
+    ];
+    if (opts.appendSystemPrompt) {
+      args.push("--append-system-prompt", opts.appendSystemPrompt);
+    }
+    if (opts.allowedTools && opts.allowedTools.length > 0) {
+      args.push("--allowedTools", opts.allowedTools.join(","));
+    }
+    if (opts.resumeSessionId) {
+      args.push("--resume", opts.resumeSessionId);
+    }
+    if (opts.bypassPermissions) {
+      args.push("--dangerously-skip-permissions");
+    }
+    this.child = spawn("claude", args, {
+      cwd: opts.cwd,
+      env: process.env,
+      shell: false
+    });
+    this.child.stdout?.on("data", (chunk) => this.onStdout(chunk.toString()));
+    this.child.stderr?.on("data", (chunk) => {
+      const text = chunk.toString().trim();
+      if (text) this.emitEvent({ kind: "notice", text });
+    });
+    this.child.on("error", (err) => {
+      this.emitEvent({
+        kind: "error",
+        message: `Could not start Claude Code: ${err.message}. Is it installed and on PATH?`
+      });
+    });
+    this.child.on("close", (code) => {
+      this.flush();
+      if (!this.canceled) this.emitEvent({ kind: "exit", code });
+      this.child = null;
+    });
+  }
+  cancel() {
+    if (this.canceled) return;
+    this.canceled = true;
+    const child = this.child;
+    if (child) {
+      child.kill("SIGTERM");
+      setTimeout(() => {
+        if (!child.killed) child.kill("SIGKILL");
+      }, 2e3);
+    }
+    this.emitEvent({ kind: "notice", text: "Run canceled." });
+    this.emitEvent({ kind: "exit", code: null });
+  }
+  onStdout(chunk) {
+    this.stdoutBuffer += chunk;
+    let newlineIndex = this.stdoutBuffer.indexOf("\n");
+    while (newlineIndex >= 0) {
+      const line = this.stdoutBuffer.slice(0, newlineIndex);
+      this.stdoutBuffer = this.stdoutBuffer.slice(newlineIndex + 1);
+      this.dispatch(line);
+      newlineIndex = this.stdoutBuffer.indexOf("\n");
+    }
+  }
+  flush() {
+    if (this.stdoutBuffer.trim()) {
+      this.dispatch(this.stdoutBuffer);
+    }
+    this.stdoutBuffer = "";
+  }
+  dispatch(line) {
+    if (line.trim()) this.emit("raw", line);
+    for (const event of parseStreamLine(line)) {
+      this.emitEvent(event);
+    }
+  }
+  emitEvent(event) {
+    this.emit("event", event);
+  }
+}
+function newAccumulator() {
+  return { files: /* @__PURE__ */ new Set(), isError: false };
+}
+function runTitle(prompt) {
+  const first = prompt.split("\n").find((l) => l.trim()) ?? "Run";
+  const cmd = first.trim().match(/^\/([\w-]+)/);
+  if (cmd) return cmd[1].replace(/-/g, " ").replace(/^\w/, (c) => c.toUpperCase());
+  return first.trim().slice(0, 60);
+}
+async function recordRun(opts, acc, exitCode) {
+  const dir = join(opts.cwd, ".vortspec", "runs");
+  try {
+    await mkdir(dir, { recursive: true });
+  } catch {
+    return;
+  }
+  let seq = 1;
+  try {
+    seq = (await readdir(dir)).filter((n) => n.endsWith(".json")).length + 1;
+  } catch {
+  }
+  const cancelled = exitCode === null;
+  const failed = !cancelled && (acc.isError || exitCode !== 0);
+  const title = runTitle(opts.prompt);
+  const summary = {
+    id: `run-${Date.now()}-${seq}`,
+    label: `#${seq}`,
+    title,
+    outcome: cancelled ? "cancelled" : failed ? "failed" : "passed",
+    updatedAt: (/* @__PURE__ */ new Date()).toISOString(),
+    stages: [
+      {
+        name: title,
+        decision: cancelled ? "cancelled" : failed ? "failed" : "completed",
+        status: cancelled ? "cancelled" : failed ? "cancelled" : "done"
+      }
+    ],
+    artifacts: [...acc.files].map((f) => basename(f))
+  };
+  await writeFile(join(dir, `${summary.id}.json`), JSON.stringify(summary, null, 2), "utf8").catch(
+    () => void 0
+  );
+}
+const runs = /* @__PURE__ */ new Map();
+function startRun(sender, opts) {
+  const runId = randomUUID();
+  const adapter = new AgentAdapter();
+  runs.set(runId, adapter);
+  const acc = newAccumulator();
+  adapter.on("event", (raw) => {
+    const parsed = runEventSchema.safeParse(raw);
+    const event = parsed.success ? parsed.data : { kind: "error", message: "Invalid run event dropped at the boundary" };
+    if (event.kind === "tool-use" && event.path) acc.files.add(event.path);
+    if (event.kind === "result" && event.isError || event.kind === "error") acc.isError = true;
+    if (!sender.isDestroyed()) {
+      sender.send(AGENT_EVENT_CHANNEL, { runId, event });
+    }
+    if (event.kind === "exit") {
+      runs.delete(runId);
+      void recordRun(opts, acc, event.code);
+    }
+  });
+  adapter.on("raw", (line) => {
+    if (!sender.isDestroyed()) {
+      sender.send(AGENT_RAW_CHANNEL, { runId, line });
+    }
+  });
+  adapter.start(opts);
+  return { runId };
+}
+function cancelRun(runId) {
+  runs.get(runId)?.cancel();
+}
+function vortspecDir(projectPath) {
+  return join(projectPath, ".vortspec");
+}
+function flowFile(projectPath) {
+  return join(vortspecDir(projectPath), "flow.json");
+}
+function initialState() {
+  const first = DEFAULT_FLOW[0];
+  return {
+    currentStageId: first.id,
+    stages: DEFAULT_FLOW.map((def) => ({
+      id: def.id,
+      status: "pending",
+      updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+    }))
+  };
+}
+async function readState(projectPath) {
+  try {
+    const raw = await readFile(flowFile(projectPath), "utf8");
+    const parsed = flowStateSchema.safeParse(JSON.parse(raw));
+    if (parsed.success) return reconcile(parsed.data);
+  } catch {
+  }
+  return initialState();
+}
+function reconcile(state) {
+  const byId = new Map(state.stages.map((s) => [s.id, s]));
+  const stages = DEFAULT_FLOW.map(
+    (def) => byId.get(def.id) ?? {
+      id: def.id,
+      status: "pending",
+      updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+    }
+  );
+  const currentValid = DEFAULT_FLOW.some((d) => d.id === state.currentStageId);
+  return {
+    currentStageId: currentValid ? state.currentStageId : DEFAULT_FLOW[0].id,
+    stages,
+    publishRepoUrl: state.publishRepoUrl
+  };
+}
+async function writeState(projectPath, state) {
+  await mkdir(vortspecDir(projectPath), { recursive: true });
+  await writeFile(flowFile(projectPath), JSON.stringify(state, null, 2), "utf8");
+}
+function withFlow(state) {
+  return { definitions: DEFAULT_FLOW, state };
+}
+function patchStage(state, stageId, patch) {
+  return {
+    ...state,
+    stages: state.stages.map(
+      (s) => s.id === stageId ? { ...s, ...patch, updatedAt: (/* @__PURE__ */ new Date()).toISOString() } : s
+    )
+  };
+}
+function nextStageId(stageId) {
+  const index = DEFAULT_FLOW.findIndex((d) => d.id === stageId);
+  const next = DEFAULT_FLOW[index + 1];
+  return next ? next.id : null;
+}
+async function getFlow(projectPath) {
+  return withFlow(await readState(projectPath));
+}
+async function setStageStatus(projectPath, stageId, status) {
+  const next = patchStage(await readState(projectPath), stageId, { status });
+  await writeState(projectPath, next);
+  return withFlow(next);
+}
+async function setPublishTarget(projectPath, repoUrl) {
+  const state = await readState(projectPath);
+  const next = {
+    ...state,
+    publishRepoUrl: repoUrl.trim() || void 0
+  };
+  await writeState(projectPath, next);
+  return withFlow(next);
+}
+async function approveStage(projectPath, stageId) {
+  let state = patchStage(await readState(projectPath), stageId, {
+    status: "approved",
+    decisionNotes: void 0
+  });
+  const next = nextStageId(stageId);
+  if (next) state = { ...state, currentStageId: next };
+  await writeState(projectPath, state);
+  return withFlow(state);
+}
+async function requestChanges(projectPath, stageId, notes) {
+  const next = patchStage(await readState(projectPath), stageId, {
+    status: "needs-review",
+    decisionNotes: notes
+  });
+  await writeState(projectPath, next);
+  return withFlow(next);
+}
+async function saveIntake(projectPath, content) {
+  const sddeDir = join(projectPath, ".sdd-de");
+  await mkdir(sddeDir, { recursive: true });
+  await writeFile(join(sddeDir, "brief.md"), content, "utf8");
+  return approveStage(projectPath, "brief");
+}
+async function findLatestArtifact(projectPath, suffix) {
+  const specsRoot = join(projectPath, "specs");
+  let best = null;
+  async function walk(dir) {
+    let entries;
+    try {
+      entries = await readdir(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      const full = join(dir, entry.name);
+      if (entry.isDirectory()) {
+        await walk(full);
+      } else if (entry.name.endsWith(suffix)) {
+        const { mtimeMs } = await stat(full);
+        if (!best || mtimeMs > best.mtime) best = { path: full, mtime: mtimeMs };
+      }
+    }
+  }
+  await walk(specsRoot);
+  if (!best) return null;
+  const chosen = best;
+  const content = await readFile(chosen.path, "utf8");
+  return { path: chosen.path.slice(projectPath.length + 1), content };
+}
+async function completeInput(projectPath, stageId) {
+  return approveStage(projectPath, stageId);
+}
+async function readArtifact(projectPath, relPath) {
+  try {
+    return await readFile(join(projectPath, relPath), "utf8");
+  } catch {
+    return null;
+  }
+}
+function stageStatus(s) {
+  if (s === "approved") return "done";
+  if (s === "needs-review") return "review";
+  if (s === "failed") return "cancelled";
+  return "pending";
+}
+function decisionText(status, notes) {
+  if (notes) return "changes requested";
+  return {
+    approved: "approved",
+    "needs-review": "awaiting approval",
+    running: "running",
+    failed: "failed",
+    pending: "not started"
+  }[status];
+}
+async function currentFlowRun(projectPath) {
+  const flow = await getFlow(projectPath);
+  const stageOf = (id) => flow.state.stages.find((s) => s.id === id);
+  const statuses = flow.state.stages.map((s) => s.status);
+  const requiredDone = flow.definitions.filter((d) => !d.optional).every((d) => stageOf(d.id)?.status === "approved");
+  const outcome = statuses.includes("running") ? "running" : statuses.includes("failed") ? "failed" : statuses.includes("needs-review") ? "in-review" : requiredDone ? "passed" : "in-progress";
+  const updatedAt = flow.state.stages.map((s) => s.updatedAt).sort().pop() ?? (/* @__PURE__ */ new Date(0)).toISOString();
+  const artifacts = [
+    ...new Set(
+      flow.definitions.map((d) => d.artifact ?? d.artifactGlob).filter((a) => Boolean(a)).map((a) => a.split("/").pop())
+    )
+  ];
+  return {
+    id: "current",
+    label: "Current",
+    title: "Design system flow",
+    outcome,
+    updatedAt,
+    stages: flow.definitions.map((d) => {
+      const st = stageOf(d.id);
+      return {
+        name: d.title,
+        decision: st ? decisionText(st.status, st.decisionNotes) : "not started",
+        status: st ? stageStatus(st.status) : "pending"
+      };
+    }),
+    artifacts
+  };
+}
+async function recordedRuns(projectPath) {
+  const dir = join(projectPath, ".vortspec", "runs");
+  let entries;
+  try {
+    entries = await readdir(dir);
+  } catch {
+    return [];
+  }
+  const runs2 = [];
+  for (const name of entries.filter((n) => n.endsWith(".json"))) {
+    const raw = await readFile(join(dir, name), "utf8").catch(() => null);
+    if (!raw) continue;
+    try {
+      const parsed = runSummarySchema.safeParse(JSON.parse(raw));
+      if (parsed.success) runs2.push(parsed.data);
+    } catch {
+    }
+  }
+  return runs2.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+}
+async function getRunHistory(projectPath) {
+  const [current, recorded] = await Promise.all([
+    currentFlowRun(projectPath),
+    recordedRuns(projectPath)
+  ]);
+  return { runs: [current, ...recorded] };
+}
+const servers = /* @__PURE__ */ new Map();
+async function detectScript(projectPath) {
+  const pkg = await readFile(join(projectPath, "package.json"), "utf8").catch(() => null);
+  if (!pkg) return null;
+  let scripts = {};
+  try {
+    scripts = JSON.parse(pkg).scripts ?? {};
+  } catch {
+    return null;
+  }
+  for (const name of ["dev", "storybook", "start", "preview"]) {
+    if (typeof scripts[name] === "string") return name;
+  }
+  return null;
+}
+function detectPackageManager(projectPath) {
+  if (existsSync(join(projectPath, "pnpm-lock.yaml"))) return "pnpm";
+  if (existsSync(join(projectPath, "yarn.lock"))) return "yarn";
+  if (existsSync(join(projectPath, "bun.lockb"))) return "bun";
+  return "npm";
+}
+function urlFrom(text) {
+  const m = text.match(
+    /(https?:\/\/(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\]):\d+[^\s)'"]*)/i
+  );
+  if (!m) return null;
+  return m[1].replace("0.0.0.0", "localhost").replace(/\/+$/, "") + "/";
+}
+function push(server, projectPath) {
+  if (!server.sender.isDestroyed()) {
+    server.sender.send(DEV_SERVER_UPDATE_CHANNEL, { projectPath, status: server.status });
+  }
+}
+async function startDevServer(sender, projectPath) {
+  const existing = servers.get(projectPath);
+  if (existing && (existing.status.state === "starting" || existing.status.state === "running")) {
+    existing.sender = sender;
+    return existing.status;
+  }
+  const script = await detectScript(projectPath);
+  if (!script) {
+    return {
+      state: "no-script",
+      url: null,
+      script: null,
+      message: "No dev / storybook / start script found in package.json."
+    };
+  }
+  const pm = detectPackageManager(projectPath);
+  const child = spawn(pm, ["run", script], {
+    cwd: projectPath,
+    shell: false,
+    env: { ...process.env, FORCE_COLOR: "0", BROWSER: "none", CI: "1" }
+  });
+  const server = {
+    child,
+    status: { state: "starting", url: null, script, message: null },
+    sender
+  };
+  servers.set(projectPath, server);
+  const onData = (buf) => {
+    if (server.status.state !== "starting") return;
+    const url = urlFrom(buf.toString());
+    if (url) {
+      server.status = { state: "running", url, script, message: null };
+      push(server, projectPath);
+    }
+  };
+  child.stdout?.on("data", onData);
+  child.stderr?.on("data", onData);
+  child.on("error", (err) => {
+    server.status = { state: "error", url: null, script, message: err.message };
+    push(server, projectPath);
+  });
+  child.on("exit", (code) => {
+    const clean = server.status.state === "running" && code === null;
+    server.status = {
+      state: clean ? "stopped" : code && code !== 0 ? "error" : "stopped",
+      url: null,
+      script,
+      message: clean ? null : code ? `Preview process exited with code ${code}.` : null
+    };
+    push(server, projectPath);
+  });
+  push(server, projectPath);
+  return server.status;
+}
+function stopDevServer(projectPath) {
+  const server = servers.get(projectPath);
+  if (!server) return;
+  server.child.kill("SIGTERM");
+  const child = server.child;
+  setTimeout(() => {
+    if (!child.killed) child.kill("SIGKILL");
+  }, 4e3);
+}
+function getDevServerStatus(projectPath) {
+  return servers.get(projectPath)?.status ?? {
+    state: "stopped",
+    url: null,
+    script: null,
+    message: null
+  };
+}
+function stopAllDevServers() {
+  for (const server of servers.values()) server.child.kill("SIGTERM");
+}
+const handlers = {
+  "system:isElectron": () => true,
+  "system:getVersion": () => app.getVersion(),
+  "env:check": () => checkEnvironment(),
+  "env:verifyLogin": () => verifyClaudeLogin(),
+  "env:verifyFigmaMcp": () => verifyFigmaMcp(),
+  "env:openInstall": ((url) => shell.openExternal(url).then(() => void 0)),
+  "workspace:pickFolder": ((req) => pickFolder(req ?? { create: false })),
+  "workspace:createFolder": (() => createFolder()),
+  "workspace:listProjects": () => listProjects(),
+  "workspace:openFolder": ((path) => openFolder(path)),
+  "workspace:revealPath": ((req) => {
+    revealPath(req.projectPath, req.relPath);
+    return void 0;
+  }),
+  "workspace:refreshProject": ((path) => refreshProject(path)),
+  "workspace:createProject": ((req) => createProject(req.path, req.answers)),
+  "toolkit:status": ((path) => getToolkitStatus(path)),
+  "toolkit:install": ((path) => installToolkit(path)),
+  "agent:startRun": ((opts, sender) => startRun(sender, opts)),
+  "agent:cancelRun": ((runId) => {
+    cancelRun(runId);
+    return void 0;
+  }),
+  "flow:get": ((projectPath) => getFlow(projectPath)),
+  "flow:setStageStatus": ((req) => setStageStatus(req.projectPath, req.stageId, req.status)),
+  "flow:approveStage": ((req) => approveStage(req.projectPath, req.stageId)),
+  "flow:requestChanges": ((req) => requestChanges(req.projectPath, req.stageId, req.notes)),
+  "flow:saveIntake": ((req) => saveIntake(req.projectPath, req.content)),
+  "flow:completeInput": ((req) => completeInput(req.projectPath, req.stageId)),
+  "flow:getHistory": ((projectPath) => getRunHistory(projectPath)),
+  "devserver:start": ((projectPath, sender) => startDevServer(sender, projectPath)),
+  "devserver:stop": ((projectPath) => {
+    stopDevServer(projectPath);
+    return void 0;
+  }),
+  "devserver:status": ((projectPath) => getDevServerStatus(projectPath)),
+  "flow:setPublishTarget": ((req) => setPublishTarget(req.projectPath, req.repoUrl)),
+  "artifact:read": ((req) => readArtifact(req.projectPath, req.relPath)),
+  "artifact:findLatest": ((req) => findLatestArtifact(req.projectPath, req.suffix)),
+  "project:config": ((projectPath) => readProjectConfig(projectPath)),
+  "inspector:getTokens": ((projectPath) => getInspectorTokens(projectPath)),
+  "inspector:getComponents": ((projectPath) => getInspectorComponents(projectPath)),
+  "inspector:setTokenValue": ((req) => setInspectorTokenValue(req.projectPath, req.name, req.value)),
+  "inspector:getVerification": ((projectPath) => getVerification(projectPath)),
+  "inspector:snapshotComponent": ((req) => snapshotComponent(req.projectPath, req.file)),
+  "inspector:snapshotTokenScope": ((projectPath) => snapshotTokenScope(projectPath)),
+  "inspector:restoreFiles": ((req) => restoreFiles(req.projectPath, req.files).then(() => void 0))
+};
+function registerIpc() {
+  Object.keys(ipcContract).forEach((channel) => {
+    const contract = ipcContract[channel];
+    ipcMain.handle(channel, async (event, rawRequest) => {
+      const request = contract.request.parse(rawRequest);
+      const result = await handlers[channel](request, event.sender);
+      return contract.response.parse(result);
+    });
+  });
+}
+function createWindow() {
+  const mainWindow = new BrowserWindow({
+    width: 1440,
+    height: 900,
+    minWidth: 1024,
+    minHeight: 720,
+    show: false,
+    title: "VortSpec",
+    backgroundColor: "#0B0C0E",
+    titleBarStyle: "hiddenInset",
+    icon: join$1(__dirname, "../../build/icon.png"),
+    webPreferences: {
+      preload: join$1(__dirname, "../preload/index.mjs"),
+      sandbox: false,
+      contextIsolation: true,
+      nodeIntegration: false
+    }
+  });
+  mainWindow.on("ready-to-show", () => {
+    mainWindow.show();
+    if (is.dev) mainWindow.webContents.openDevTools({ mode: "detach" });
+  });
+  mainWindow.webContents.setWindowOpenHandler((details) => {
+    void shell.openExternal(details.url);
+    return { action: "deny" };
+  });
+  if (is.dev && process.env["ELECTRON_RENDERER_URL"]) {
+    void mainWindow.loadURL(process.env["ELECTRON_RENDERER_URL"]);
+  } else {
+    void mainWindow.loadFile(join$1(__dirname, "../renderer/index.html"));
+  }
+}
+app.whenReady().then(() => {
+  electronApp.setAppUserModelId("com.vortspec.desktop");
+  app.on("browser-window-created", (_, window) => {
+    optimizer.watchWindowShortcuts(window);
+  });
+  registerIpc();
+  createWindow();
+  app.on("activate", () => {
+    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+  });
+});
+app.on("before-quit", () => {
+  stopAllDevServers();
+});
+app.on("window-all-closed", () => {
+  stopAllDevServers();
+  if (process.platform !== "darwin") {
+    app.quit();
+  }
+});
