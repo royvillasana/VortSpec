@@ -42,6 +42,8 @@ import {
   startDevServer,
   stopDevServer,
   getDevServerStatus,
+  getPreviewInfo,
+  getStorybookIndex,
 } from "./workspace/dev-server";
 import type { AgentRunOptions } from "../shared/run-events";
 import type { StageStatus } from "../shared/flow";
@@ -114,6 +116,8 @@ const handlers: Record<IpcChannel, Handler> = {
     return undefined;
   }) as Handler,
   "devserver:status": ((projectPath: string) => getDevServerStatus(projectPath)) as Handler,
+  "devserver:previewInfo": ((projectPath: string) => getPreviewInfo(projectPath)) as Handler,
+  "devserver:storybookIndex": ((url: string) => getStorybookIndex(url)) as Handler,
   "flow:setPublishTarget": ((req: { projectPath: string; repoUrl: string }) =>
     setPublishTarget(req.projectPath, req.repoUrl)) as Handler,
   "artifact:read": ((req: { projectPath: string; relPath: string }) =>

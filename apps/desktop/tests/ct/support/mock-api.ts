@@ -21,6 +21,10 @@ export interface MockConfig {
   devStatus?: DevServerStatus;
   /** Status returned by startDevServer() — defaults to a running server with a URL. */
   devStartStatus?: DevServerStatus;
+  /** Whether the project already has a Storybook setup. */
+  previewInfo?: { hasStorybook: boolean; script: string | null };
+  /** Entries returned by storybookIndex(). */
+  storybookIndex?: { id: string; title: string; name: string; type: "docs" | "story" }[];
   /** Replayed to onAgentEvent subscribers (with the started run's id) on startRun. */
   runScript?: RunEvent[];
 }
@@ -103,6 +107,8 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
     startDevServer: async () => cfg.devStartStatus ?? RUNNING,
     stopDevServer: async () => undefined,
     devServerStatus: async () => cfg.devStatus ?? STOPPED,
+    previewInfo: async () => cfg.previewInfo ?? { hasStorybook: false, script: "storybook" },
+    storybookIndex: async () => cfg.storybookIndex ?? [],
     onDevServerUpdate: (cb: (e: { projectPath: string; status: DevServerStatus }) => void) => {
       devSubs.add(cb);
       return () => devSubs.delete(cb);

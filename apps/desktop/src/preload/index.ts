@@ -82,6 +82,8 @@ const api = {
   startDevServer: (projectPath: string) => invoke("devserver:start", projectPath),
   stopDevServer: (projectPath: string) => invoke("devserver:stop", projectPath),
   devServerStatus: (projectPath: string) => invoke("devserver:status", projectPath),
+  previewInfo: (projectPath: string) => invoke("devserver:previewInfo", projectPath),
+  storybookIndex: (url: string) => invoke("devserver:storybookIndex", url),
   onDevServerUpdate: (callback: (payload: DevServerUpdate) => void) =>
     subscribe(DEV_SERVER_UPDATE_CHANNEL, callback),
   setPublishTarget: (projectPath: string, repoUrl: string) =>

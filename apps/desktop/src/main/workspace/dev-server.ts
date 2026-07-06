@@ -19,20 +19,41 @@ interface Server {
 }
 const servers = new Map<string, Server>();
 
-/** Prefer a browsable surface: dev → storybook → start. */
-async function detectScript(projectPath: string): Promise<string | null> {
+async function readScripts(projectPath: string): Promise<Record<string, unknown>> {
   const pkg = await readFile(join(projectPath, "package.json"), "utf8").catch(() => null);
-  if (!pkg) return null;
-  let scripts: Record<string, unknown> = {};
+  if (!pkg) return {};
   try {
-    scripts = (JSON.parse(pkg).scripts as Record<string, unknown>) ?? {};
+    return (JSON.parse(pkg).scripts as Record<string, unknown>) ?? {};
   } catch {
-    return null;
+    return {};
   }
-  for (const name of ["dev", "storybook", "start", "preview"]) {
+}
+
+/**
+ * Prefer a real Storybook surface: storybook → dev → start → preview. Storybook
+ * is the design-system-native docs/controls tool, so once it's set up we launch
+ * it rather than the project's own app.
+ */
+async function detectScript(projectPath: string): Promise<string | null> {
+  const scripts = await readScripts(projectPath);
+  for (const name of ["storybook", "dev", "start", "preview"]) {
     if (typeof scripts[name] === "string") return name;
   }
   return null;
+}
+
+/** Whether the project already has a Storybook setup (a `storybook` script + config dir). */
+export async function getPreviewInfo(
+  projectPath: string,
+): Promise<{ hasStorybook: boolean; script: string | null }> {
+  const scripts = await readScripts(projectPath);
+  const hasStorybookScript = typeof scripts["storybook"] === "string";
+  const hasConfig =
+    existsSync(join(projectPath, ".storybook")) || existsSync(join(projectPath, ".storybook/main.ts"));
+  return {
+    hasStorybook: hasStorybookScript && hasConfig,
+    script: await detectScript(projectPath),
+  };
 }
 
 function detectPackageManager(projectPath: string): string {
@@ -44,7 +65,12 @@ function detectPackageManager(projectPath: string): string {
 
 /** First localhost/loopback http(s) URL in a chunk of server output. */
 export function urlFrom(text: string): string | null {
-  const m = text.match(
+  // Dev servers colorize output — vite/picocolors emit ANSI codes even under
+  // CI/FORCE_COLOR, and they land INSIDE the URL (http://localhost:‹ESC›5173‹ESC›/),
+  // which would break `:\d+`. Strip escape sequences before matching.
+  const ansi = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*[A-Za-z]`, "g");
+  const clean = text.replace(ansi, "");
+  const m = clean.match(
     /(https?:\/\/(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\]):\d+[^\s)'"]*)/i,
   );
   if (!m) return null;
@@ -81,7 +107,9 @@ export async function startDevServer(
   const child = spawn(pm, ["run", script], {
     cwd: projectPath,
     shell: false,
-    env: { ...process.env, FORCE_COLOR: "0", BROWSER: "none", CI: "1" },
+    // NO_COLOR asks tools (picocolors/vite) not to emit ANSI; urlFrom still
+    // strips any that slip through. CI keeps them non-interactive.
+    env: { ...process.env, NO_COLOR: "1", FORCE_COLOR: "0", BROWSER: "none", CI: "1" },
   });
   const server: Server = {
     child,
@@ -119,6 +147,46 @@ export async function startDevServer(
 
   push(server, projectPath);
   return server.status;
+}
+
+/**
+ * Fetch a running Storybook's story index so the Playground can deep-link the
+ * right autodocs page per component. Storybook 7+ serves `index.json`; older
+ * versions serve `stories.json`. Returns a flat list of entries, or [] if the
+ * server isn't a Storybook / isn't ready yet.
+ */
+export interface StorybookEntry {
+  id: string;
+  title: string;
+  name: string;
+  type: "docs" | "story";
+  importPath?: string;
+}
+export async function getStorybookIndex(url: string): Promise<StorybookEntry[]> {
+  const base = url.replace(/\/+$/, "");
+  for (const path of ["/index.json", "/stories.json"]) {
+    try {
+      const res = await fetch(`${base}${path}`);
+      if (!res.ok) continue;
+      const json = (await res.json()) as {
+        entries?: Record<string, Record<string, unknown>>;
+        stories?: Record<string, Record<string, unknown>>;
+      };
+      const map = json.entries ?? json.stories;
+      if (!map) continue;
+      // Normalize both shapes (v7 index.json / v6 stories.json) into our contract.
+      return Object.entries(map).map(([id, e]) => ({
+        id: typeof e.id === "string" ? e.id : id,
+        title: typeof e.title === "string" ? e.title : "",
+        name: typeof e.name === "string" ? e.name : "",
+        type: e.type === "docs" ? "docs" : "story",
+        importPath: typeof e.importPath === "string" ? e.importPath : undefined,
+      }));
+    } catch {
+      /* try the next path / give up */
+    }
+  }
+  return [];
 }
 
 export function stopDevServer(projectPath: string): void {

@@ -61,6 +61,16 @@ export type {
  * only place channel names and payload shapes are defined.
  */
 
+/** One entry from a running Storybook's story index (`index.json`). */
+export const storybookEntrySchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  name: z.string(),
+  type: z.enum(["docs", "story"]),
+  importPath: z.string().optional(),
+});
+export type StorybookEntry = z.infer<typeof storybookEntrySchema>;
+
 // ── Environment check ────────────────────────────────────────────────
 
 export const checkStatusSchema = z.enum(["pass", "fail", "unknown", "checking"]);
@@ -193,6 +203,14 @@ export const ipcContract = {
   "devserver:start": { request: z.string(), response: devServerStatusSchema },
   "devserver:stop": { request: z.string(), response: z.void() },
   "devserver:status": { request: z.string(), response: devServerStatusSchema },
+  "devserver:previewInfo": {
+    request: z.string(),
+    response: z.object({ hasStorybook: z.boolean(), script: z.string().nullable() }),
+  },
+  "devserver:storybookIndex": {
+    request: z.string(),
+    response: z.array(storybookEntrySchema),
+  },
   "flow:setPublishTarget": {
     request: z.object({ projectPath: z.string(), repoUrl: z.string() }),
     response: flowSchema,

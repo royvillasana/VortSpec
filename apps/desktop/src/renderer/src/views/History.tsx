@@ -54,7 +54,7 @@ export function History({
         items={[
           { label: "Flow", onClick: onBack },
           { label: "Run", onClick: onOpenRun },
-          { label: "Preview", onClick: onOpenPreview },
+          { label: "Playground", onClick: onOpenPreview },
           { label: "Tokens", onClick: onOpenInspector },
           { label: "History", active: true },
         ]}

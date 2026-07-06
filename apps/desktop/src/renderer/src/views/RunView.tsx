@@ -40,7 +40,7 @@ export function RunView({
             active: true,
             badge: running ? <span className="h-1.5 w-1.5 rounded-full bg-vs-accent" /> : undefined,
           },
-          { label: "Preview", onClick: onOpenPreview },
+          { label: "Playground", onClick: onOpenPreview },
           { label: "Tokens", onClick: onOpenInspector },
           { label: "History", onClick: onOpenHistory },
         ]}
