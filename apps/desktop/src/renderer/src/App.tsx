@@ -79,6 +79,12 @@ export default function App(): React.JSX.Element {
   const [loading, setLoading] = useState(true);
   const [chatOpen, setChatOpen] = useState(false);
 
+  // Auto-open the assistant when entering the Playground (modifying components is
+  // the point there); it stays dismissible via the same top-bar toggle.
+  useEffect(() => {
+    if (projectView === "preview") setChatOpen(true);
+  }, [projectView]);
+
   function mergeProject(project: Project): void {
     setProjects((prev) => [project, ...prev.filter((p) => p.path !== project.path)]);
   }
@@ -202,6 +208,7 @@ export default function App(): React.JSX.Element {
             onOpenPreview={() => setProjectView("preview")}
             onOpenRun={() => setProjectView("run")}
             onOpenHistory={() => setProjectView("history")}
+            onOpenManifest={() => setProjectView("manifest")}
           />
         ) : activeProject && projectView === "preview" ? (
           <DevPreview
@@ -210,6 +217,7 @@ export default function App(): React.JSX.Element {
             onOpenRun={() => setProjectView("run")}
             onOpenInspector={() => setProjectView("inspector")}
             onOpenHistory={() => setProjectView("history")}
+            onOpenManifest={() => setProjectView("manifest")}
           />
         ) : activeProject && projectView === "run" ? (
           <RunView
@@ -218,6 +226,7 @@ export default function App(): React.JSX.Element {
             onOpenPreview={() => setProjectView("preview")}
             onOpenInspector={() => setProjectView("inspector")}
             onOpenHistory={() => setProjectView("history")}
+            onOpenManifest={() => setProjectView("manifest")}
           />
         ) : activeProject && projectView === "review" ? (
           <ArtifactReview
@@ -226,6 +235,8 @@ export default function App(): React.JSX.Element {
             onOpenRun={() => setProjectView("run")}
             onOpenPreview={() => setProjectView("preview")}
             onOpenInspector={() => setProjectView("inspector")}
+            onOpenHistory={() => setProjectView("history")}
+            onOpenManifest={() => setProjectView("manifest")}
           />
         ) : activeProject && projectView === "verify" ? (
           <Verification
@@ -234,6 +245,8 @@ export default function App(): React.JSX.Element {
             onOpenRun={() => setProjectView("run")}
             onOpenPreview={() => setProjectView("preview")}
             onOpenInspector={() => setProjectView("inspector")}
+            onOpenHistory={() => setProjectView("history")}
+            onOpenManifest={() => setProjectView("manifest")}
           />
         ) : activeProject && projectView === "history" ? (
           <History
@@ -242,6 +255,7 @@ export default function App(): React.JSX.Element {
             onOpenRun={() => setProjectView("run")}
             onOpenPreview={() => setProjectView("preview")}
             onOpenInspector={() => setProjectView("inspector")}
+            onOpenManifest={() => setProjectView("manifest")}
           />
         ) : activeProject && projectView === "manifest" ? (
           <DesignManifest
@@ -249,6 +263,7 @@ export default function App(): React.JSX.Element {
             onBack={() => setProjectView("flow")}
             onOpenRun={() => setProjectView("run")}
             onOpenPreview={() => setProjectView("preview")}
+            onOpenInspector={() => setProjectView("inspector")}
             onOpenHistory={() => setProjectView("history")}
           />
         ) : activeProject ? (
@@ -258,7 +273,6 @@ export default function App(): React.JSX.Element {
             onOpenInspector={() => setProjectView("inspector")}
             onOpenPreview={() => setProjectView("preview")}
             onOpenRun={() => setProjectView("run")}
-            onOpenReview={() => setProjectView("review")}
             onOpenVerify={() => setProjectView("verify")}
             onOpenHistory={() => setProjectView("history")}
             onOpenManifest={() => setProjectView("manifest")}
@@ -272,17 +286,29 @@ export default function App(): React.JSX.Element {
           />
         )}
       </main>
-      {activeProject && chatOpen && (
-        <AssistantDock
-          key={activeProject.path}
-          project={activeProject}
-          seedContext={
-            projectView === "manifest"
-              ? "Context: the user is on the Design Manifest screen (DESIGN.md). Help them refine or reason about the manifest."
-              : undefined
-          }
-          onClose={() => setChatOpen(false)}
-        />
+      {activeProject && (
+        // Width-animated wrapper: the dock stays mounted (session persists across
+        // open/close) while the wrapper animates 0↔360px, so flexbox smoothly
+        // reflows <main> — pushing content left on open and back on close.
+        <div
+          className={`flex h-[calc(100vh-3rem)] shrink-0 justify-end overflow-hidden transition-[width] duration-200 ease-out ${
+            chatOpen ? "w-[360px]" : "w-0"
+          }`}
+        >
+          <AssistantDock
+            key={activeProject.path}
+            project={activeProject}
+            allowModify={projectView === "preview"}
+            seedContext={
+              projectView === "preview"
+                ? "Context: the user is viewing this project's components in Storybook (Playground). When they ask for a change, edit only the relevant component's source under the component directory, keep values token-referenced (no hardcoded hex/px), and match the surrounding code style. Storybook hot-reloads, so the change appears live. Do not touch unrelated components or the token file."
+                : projectView === "manifest"
+                  ? "Context: the user is on the Design Manifest screen (DESIGN.md). Help them refine or reason about the manifest."
+                  : undefined
+            }
+            onClose={() => setChatOpen(false)}
+          />
+        </div>
       )}
       </div>
     </div>

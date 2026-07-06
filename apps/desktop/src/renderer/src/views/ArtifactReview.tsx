@@ -3,7 +3,7 @@ import type { Flow, Project, StageDef, StageState, StageStatus } from "../../../
 import { api } from "../lib/api";
 import { Button, Spinner } from "../components/ui";
 import { Markdown } from "../components/Markdown";
-import { ProjectRail, ReviewBadge } from "../components/ProjectRail";
+import { ProjectRail, ReviewBadge, projectRailItems } from "../components/ProjectRail";
 
 /**
  * Artifact Review (design: "Artifact Review.dc.html", adapted to v2) — the
@@ -17,12 +17,16 @@ export function ArtifactReview({
   onOpenRun,
   onOpenPreview,
   onOpenInspector,
+  onOpenHistory,
+  onOpenManifest,
 }: {
   project: Project;
   onBack: () => void;
   onOpenRun: () => void;
   onOpenPreview: () => void;
   onOpenInspector: () => void;
+  onOpenHistory: () => void;
+  onOpenManifest: () => void;
 }): React.JSX.Element {
   const [flow, setFlow] = useState<Flow | null>(null);
   const [content, setContent] = useState<string | null | undefined>(undefined);
@@ -79,17 +83,18 @@ export function ArtifactReview({
       <ProjectRail
         project={project}
         onHeaderClick={onBack}
-        items={[
+        items={projectRailItems(
+          "flow",
           {
-            label: "Flow",
-            active: true,
-            onClick: onBack,
-            badge: approved ? undefined : <ReviewBadge />,
+            onFlow: onBack,
+            onRun: onOpenRun,
+            onPlayground: onOpenPreview,
+            onTokens: onOpenInspector,
+            onManifest: onOpenManifest,
+            onHistory: onOpenHistory,
           },
-          { label: "Run", onClick: onOpenRun },
-          { label: "Playground", onClick: onOpenPreview },
-          { label: "Tokens", onClick: onOpenInspector },
-        ]}
+          { flow: approved ? undefined : <ReviewBadge /> },
+        )}
       />
 
       <main className="flex min-w-0 flex-1 flex-col bg-vs-bg-primary">

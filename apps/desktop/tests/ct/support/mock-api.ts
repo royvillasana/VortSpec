@@ -33,6 +33,8 @@ export interface MockConfig {
   manifest?: ManifestResult;
   /** Manifest returned by getManifest() after a run transcript completes (design-doc wrote it). */
   manifestAfterGenerate?: ManifestResult;
+  /** Components returned by inspectorComponents() after a run transcript completes (built from files). */
+  componentsAfterRun?: InspectorComponentsResult;
   /** Versions returned by listManifestVersions(). */
   manifestVersions?: ManifestVersion[];
   /** Flow returned by getFlow() — used by the manifest screen to read approval. */
@@ -147,7 +149,8 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
     projectConfig: async () => null,
 
     inspectorTokens: async () => cfg.tokens ?? EMPTY_TOKENS,
-    inspectorComponents: async () => cfg.components ?? EMPTY_COMPONENTS,
+    inspectorComponents: async () =>
+      (generated && cfg.componentsAfterRun) || cfg.components || EMPTY_COMPONENTS,
     setTokenValue: async () => cfg.tokens ?? EMPTY_TOKENS,
     getVerification: async () => ({ findings: [] }),
     snapshotComponent: async () => [],

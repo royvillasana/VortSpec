@@ -43,7 +43,7 @@ const FLOW_APPROVED = {
 };
 
 const noop = (): void => {};
-const props = { project: PROJECT, onBack: noop, onOpenRun: noop, onOpenPreview: noop, onOpenHistory: noop };
+const props = { project: PROJECT, onBack: noop, onOpenRun: noop, onOpenPreview: noop, onOpenInspector: noop, onOpenHistory: noop };
 
 test("renders the manifest and its path in the rendered view", async ({ mount }) => {
   const c = await mount(<DesignManifest {...props} />, {

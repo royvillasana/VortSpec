@@ -13,6 +13,46 @@ export interface RailItem {
   onClick?: () => void;
 }
 
+/** The canonical project destinations, in order. `manifest` (DESIGN.md) is the final step. */
+export type RailKey = "flow" | "run" | "playground" | "tokens" | "manifest" | "history";
+
+export interface RailNav {
+  onFlow: () => void;
+  onRun: () => void;
+  onPlayground: () => void;
+  onTokens: () => void;
+  onManifest: () => void;
+  onHistory: () => void;
+}
+
+/**
+ * Build the standard project rail — the same destinations on every screen, with
+ * `active` marking the current one. Defined once here so the nav never drifts
+ * between screens. `badges` lets a screen decorate an item (e.g. a review pill).
+ */
+export function projectRailItems(
+  active: RailKey,
+  nav: RailNav,
+  badges?: Partial<Record<RailKey, React.ReactNode>>,
+): RailItem[] {
+  const defs: { key: RailKey; label: string; onClick: () => void }[] = [
+    { key: "flow", label: "Flow", onClick: nav.onFlow },
+    { key: "run", label: "Run", onClick: nav.onRun },
+    { key: "playground", label: "Playground", onClick: nav.onPlayground },
+    { key: "tokens", label: "Tokens", onClick: nav.onTokens },
+    { key: "manifest", label: "Manifest", onClick: nav.onManifest },
+    { key: "history", label: "History", onClick: nav.onHistory },
+  ];
+  return defs.map((d) => ({
+    label: d.label,
+    active: d.key === active,
+    // Keep the handler even when active: some screens (Verification, Review) mark
+    // "Flow" active while living on their own screen, so clicking it must navigate.
+    onClick: d.onClick,
+    badge: badges?.[d.key],
+  }));
+}
+
 export function ProjectRail({
   project,
   onHeaderClick,

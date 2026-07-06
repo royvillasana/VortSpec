@@ -14,38 +14,30 @@ const props = {
   onOpenRun: noop,
   onOpenInspector: noop,
   onOpenHistory: noop,
+  onOpenManifest: noop,
 };
 
-test("lists components grouped by level with their status", async ({ mount }) => {
+test("rail includes the Manifest destination", async ({ mount }) => {
   const c = await mount(<DevPreview {...props} />, {
     hooksConfig: { mock: { components: COMPONENTS, devStatus: RUNNING, previewInfo: HAS_SB } },
   });
-  await expect(c.getByText("Atoms")).toBeVisible();
-  await expect(c.getByText("Molecules")).toBeVisible();
-  await expect(c.getByRole("button", { name: /^Button/ })).toBeVisible();
-  await expect(c.getByRole("button", { name: /^Card/ })).toBeVisible();
+  // The canonical rail: Flow · Run · Playground · Tokens · Manifest · History.
+  for (const label of ["Flow", "Run", "Playground", "Tokens", "Manifest", "History"]) {
+    await expect(c.getByRole("button", { name: label, exact: true })).toBeVisible();
+  }
 });
 
-test("shows the selected component's identity, tokens, and spec/report links", async ({ mount }) => {
+test("embeds Storybook at its root with no VortSpec component sidebar", async ({ mount }) => {
   const c = await mount(<DevPreview {...props} />, {
     hooksConfig: { mock: { components: COMPONENTS, devStatus: RUNNING, previewInfo: HAS_SB } },
   });
-  // Cockpit panel for the default-selected Button. Interactive controls now live
-  // in the embedded Storybook, so the panel shows identity + provenance instead.
-  await expect(c.getByText("Primary action")).toBeVisible();
-  await expect(c.getByText("Tokens consumed")).toBeVisible();
-  await expect(c.getByText("--color-primary")).toBeVisible();
-  await expect(c.getByText("Source & spec")).toBeVisible();
-  await expect(c.getByText("Component source")).toBeVisible();
-  await expect(c.getByText("Visual-verify report")).toBeVisible();
-});
-
-test("dims spec/report links that don't exist yet", async ({ mount }) => {
-  const c = await mount(<DevPreview {...props} />, {
-    hooksConfig: { mock: { components: COMPONENTS, devStatus: RUNNING, previewInfo: HAS_SB } },
-  });
-  await c.getByText("Card", { exact: true }).click();
-  await expect(c.getByText("not created yet").first()).toBeVisible();
+  // No VortSpec component sidebar anymore — Storybook's own sidebar navigates.
+  await expect(c.getByText("Browse components in the Storybook sidebar →")).toBeVisible();
+  // The embedded Storybook loads at its root URL.
+  const frame = c.locator("iframe");
+  await expect(frame).toHaveAttribute("src", `${RUNNING.url}/`);
+  // No embedded chat panel in the view — the assistant is the global top-bar dock.
+  await expect(c.getByText("Modify with Claude")).toHaveCount(0);
 });
 
 test("auto-generates Storybook (no clicks) when the project has none", async ({ mount }) => {
@@ -57,7 +49,6 @@ test("auto-generates Storybook (no clicks) when the project has none", async ({ 
       mock: { components: COMPONENTS, devStatus: STOPPED, previewInfo: NO_SB, runScript: streaming },
     },
   });
-  // No interaction: the Playground detects no Storybook and stands one up.
   await expect(
     c.getByText("Created a preview harness that renders every component."),
   ).toBeVisible();
@@ -74,30 +65,16 @@ test("auto-embeds Storybook when it is already set up (no clicks)", async ({ mou
       },
     },
   });
-  // No interaction: startDevServer returns a running Storybook and it embeds.
   const frame = c.locator("iframe");
   await expect(frame).toBeVisible();
-  await expect(frame).toHaveAttribute("src", RUNNING.url);
+  await expect(frame).toHaveAttribute("src", `${RUNNING.url}/`);
 });
 
-test("deep-links the embedded Storybook to the selected component's autodocs", async ({ mount }) => {
+test("offers Regenerate Storybook from the header", async ({ mount }) => {
   const c = await mount(<DevPreview {...props} />, {
-    hooksConfig: {
-      mock: {
-        components: COMPONENTS,
-        devStatus: RUNNING,
-        previewInfo: HAS_SB,
-        storybookIndex: [
-          { id: "button--docs", title: "Button", name: "Docs", type: "docs" },
-          { id: "card--docs", title: "Card", name: "Docs", type: "docs" },
-        ],
-      },
-    },
+    hooksConfig: { mock: { components: COMPONENTS, devStatus: RUNNING, previewInfo: HAS_SB } },
   });
-  // Button is selected by default → its autodocs page is embedded.
-  const frame = c.locator("iframe");
-  await expect(frame).toHaveAttribute("src", `${RUNNING.url}/iframe.html?viewMode=docs&id=button--docs`);
-  // Selecting Card re-points the embed.
-  await c.getByRole("button", { name: /^Card/ }).click();
-  await expect(frame).toHaveAttribute("src", `${RUNNING.url}/iframe.html?viewMode=docs&id=card--docs`);
+  await expect(c.getByRole("button", { name: "Regenerate Storybook" })).toBeVisible();
+  // The dev-server control shows the running port.
+  await expect(c.getByText(":6006")).toBeVisible();
 });
