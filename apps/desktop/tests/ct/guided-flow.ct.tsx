@@ -81,6 +81,8 @@ test("offers build for detected, verify/open for built components", async ({ mou
   // Always-available add actions.
   await expect(c.getByRole("button", { name: /Build all detected/ })).toBeVisible();
   await expect(c.getByRole("button", { name: "+ New component" })).toBeVisible();
+  // Re-scan the design source to reconcile against what's already built.
+  await expect(c.getByRole("button", { name: /Re-scan/ })).toBeVisible();
 });
 
 test("opens the new-component form", async ({ mount }) => {

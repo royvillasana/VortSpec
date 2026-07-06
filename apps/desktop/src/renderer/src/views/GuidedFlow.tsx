@@ -38,6 +38,29 @@ const BUILD_REMAINING_PROMPT =
   "its specs, then implement it. Build in order: atoms → molecules → organisms. Skip components that " +
   "already have a source file.";
 
+/**
+ * Re-scan the design source and RECONCILE — additive, never destructive. Refresh
+ * tokens and merge newly-detected components into the inventory so the roster
+ * shows what's on the source vs. what's already built, without touching built
+ * code or dropping hand-added components.
+ */
+const RESCAN_PROMPT = [
+  "Re-scan this project's design source and reconcile the design system. Do NOT implement or",
+  "modify any component code — this only refreshes tokens and the component inventory.",
+  "",
+  "1. Read `.sdd-de/project.yaml` for `design_source` and the config. Connect to the configured",
+  "   source. For `design_source: figma`, use the Figma MCP to read `figma_file_url` and the",
+  "   variable collection `figma_token_collection`.",
+  "2. Re-extract design tokens into the configured `token_file`: add newly-found tokens and update",
+  "   values that changed. Do NOT remove tokens that existing components still reference.",
+  "3. Detect EVERY component in the source and MERGE into `.sdd-de/components.json`:",
+  "   - keep every existing entry (including components added by hand),",
+  "   - add any component found in the source that isn't already listed ({ name, level, description }),",
+  "   - do NOT delete entries and do NOT touch component source files.",
+  "4. End with a one-line summary: how many components are in the source, how many are already",
+  "   implemented (have a source file under the component dir), and how many are new since last scan.",
+].join("\n");
+
 function newComponentPrompt(name: string, intent: string): string {
   return [
     `Add a brand-new component "${name}" to this design system.`,
@@ -279,6 +302,20 @@ export function GuidedFlow({
                       Components <span className="text-vs-border-strong">· {total}</span>
                     </h2>
                     <div className="flex-1" />
+                    <Button
+                      variant="default"
+                      disabled={running}
+                      title="Re-read the design source and reconcile: refresh tokens and add any newly-detected components. Never touches built code."
+                      onClick={() =>
+                        void op(
+                          `Re-scanning ${config?.designSource === "figma" ? "Figma" : "the design source"} — reconciling tokens + components`,
+                          RESCAN_PROMPT,
+                          FOUNDATION_DEF.allowedTools,
+                        )
+                      }
+                    >
+                      ↻ Re-scan {config?.designSource === "figma" ? "Figma" : "source"}
+                    </Button>
                     {remaining.length > 0 && (
                       <Button
                         variant="default"
