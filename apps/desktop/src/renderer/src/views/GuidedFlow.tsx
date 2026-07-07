@@ -72,8 +72,14 @@ const RESCAN_PROMPT = [
   "   - keep every existing entry (including components added by hand),",
   "   - add any component found in the source that isn't already listed ({ name, level, description }),",
   "   - do NOT delete entries and do NOT touch component source files.",
-  "4. End with a one-line summary: how many components are in the source, how many are already",
-  "   implemented (have a source file under the component dir), and how many are new since last scan.",
+  "4. RECONCILE IMPLEMENTATION STATUS: for every existing entry whose description says it is",
+  "   \"not yet implemented\" (or similar wording, e.g. \"discovered in a re-scan; not yet implemented\")",
+  "   but which NOW has an implemented source file under the component dir, update that entry's",
+  "   description to remove the stale status note and reflect that it is implemented — keep the",
+  "   substantive text, correct only the status wording. Do NOT modify component source code.",
+  "5. End with a one-line summary: how many components are in the inventory, how many are",
+  "   implemented (have a source file under the component dir), how many are new since last scan,",
+  "   and how many stale descriptions you corrected.",
 ].join("\n");
 
 function newComponentPrompt(name: string, intent: string): string {
