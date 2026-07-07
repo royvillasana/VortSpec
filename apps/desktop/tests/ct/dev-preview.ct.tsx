@@ -75,6 +75,8 @@ test("offers Sync stories from the header", async ({ mount }) => {
     hooksConfig: { mock: { components: COMPONENTS, devStatus: RUNNING, previewInfo: HAS_SB } },
   });
   await expect(c.getByRole("button", { name: "Sync stories" })).toBeVisible();
+  // …and Sync docs for the rich per-component documentation pages.
+  await expect(c.getByRole("button", { name: "Sync docs" })).toBeVisible();
   // The dev-server control shows the running port.
   await expect(c.getByText(":6006")).toBeVisible();
 });

@@ -39,6 +39,71 @@ const STORYBOOK_PROMPT = [
   "When done, `storybook dev` should serve at http://localhost:6006 with an autodocs page per component.",
 ].join("\n");
 
+// Generates rich, machine-facing per-component documentation pages in Storybook —
+// matching a design-system component-doc reference. Additive + idempotent: builds
+// shared doc-block components once, then a `<Component>.mdx` only for components
+// that don't already have one. Data comes from the component specs + CVA/source +
+// the Figma component-doc metadata tool (figma_generate_component_doc).
+const DOCS_PROMPT = [
+  "Generate rich, reference-grade Storybook documentation pages for this design system's components —",
+  "the machine-facing 'component metadata' docs an AI agent reads to compose UIs. This is ADDITIVE and",
+  "safe to re-run: never overwrite an existing docs page or story, never modify component source.",
+  "Assumes each component already has a `<Component>.stories.tsx` (if not, generate the missing stories",
+  "first, same rules as the story sync).",
+  "",
+  "Read `.sdd-de/project.yaml` (framework, language, component_dir, token_file, design_source,",
+  "figma_file_url) and `.sdd-de/components.json`.",
+  "",
+  "STEP 1 — Shared doc blocks (create under `.storybook/doc-blocks/` only if missing; do NOT overwrite).",
+  "Build small, reusable, presentational React components so every component's docs page looks identical",
+  "and matches the reference. Style them clean and light (subtle table borders, monospace for code/values,",
+  "chips/pills for enums, red-tinted cards for anti-patterns, color swatches for tokens, a highlighted box",
+  "for AI hints). Use the project's own tokens where reasonable. Create:",
+  "  - `Identity.tsx` — a key/value table: Category, Type, Import, Figma file, Figma node.",
+  "  - `PropsTable.tsx` — columns Prop | Type/Values | Default | Description; render enum unions as pills.",
+  "  - `Patterns.tsx` — 'Common Patterns': a list of { title, description, code } rendered as titled code examples.",
+  "  - `AntiPatterns.tsx` — red cards, each { title, why, instead } with a ✗ marker.",
+  "  - `StatesTable.tsx` — 'States & Behaviour': State | Description table.",
+  "  - `A11y.tsx` — Accessibility: an ARIA role / Keyboard / Screen reader / WCAG table plus bullet notes.",
+  "  - `Tokens.tsx` — 'Design Tokens': a swatch grid of { name, value } (color chip + name + value) with a",
+  "    border-radius / shadow footnote.",
+  "  - `AIHints.tsx` — 'AI Generation Hints': a use-case sentence, a Keywords chip list, and numbered Generation Rules.",
+  "  Also add an `index.ts` barrel export.",
+  "",
+  "STEP 2 — Per-component data. For EACH component that does NOT already have a `<Component>.mdx` beside its",
+  "story, gather its documentation data from:",
+  "  - its Component Spec `specs/**/<component>-component-spec.md` (Purpose, Design Tokens Used, Variants,",
+  "    States, Sizes, Props/API, Content Rules, Accessibility, Do-Not) and Interaction Spec if present,",
+  "  - its `*.variants.ts` (CVA) and source file (real props, enum values, defaults),",
+  "  - the token map: resolve the Tailwind classes the component uses to `token_file` values for the swatches,",
+  "  - and, when `design_source: figma`, call the `figma_generate_component_doc` MCP tool with the component's",
+  "    Figma nodeId (from its spec's Figma frame, or via `figma_get_component_details` by name) and codeInfo",
+  "    (props, variantDefinition = the CVA block, sourceFiles, importStatement, usageExamples) to enrich the",
+  "    anatomy, per-variant tokens, content guidelines, design annotations, accessibility, and design-code parity.",
+  "  Compose the curated sections not present in the sources: Common Patterns (real usage recipes with code),",
+  "  Anti-Patterns (Why + Instead), and AI Generation Hints (a use-case sentence + Keywords + numbered Generation Rules).",
+  "",
+  "STEP 3 — Write `<Component>.mdx` beside each component's story. Start with `import { Meta, Primary, Controls,",
+  "Stories } from '@storybook/blocks';`, import the shared doc blocks, import the component's stories, and set",
+  "`<Meta of={<Component>Stories} />` so this MDX becomes that component's docs page (replacing thin autodocs).",
+  "Render the sections in EXACTLY this order to match the reference:",
+  "  1) a live preview via <Primary /> (with Storybook's show/copy-code),",
+  "  2) Component Identity  (<Identity … />),",
+  "  3) Props               (<PropsTable … /> — or <Controls /> plus the typed table),",
+  "  4) Common Patterns     (<Patterns … />),",
+  "  5) Anti-Patterns       (<AntiPatterns … />),",
+  "  6) States & Behaviour  (<StatesTable … />),",
+  "  7) Accessibility       (<A11y … />),",
+  "  8) Design Tokens       (<Tokens … />),",
+  "  9) AI Generation Hints (<AIHints … />),",
+  "  10) Stories            (<Stories />).",
+  "",
+  "Idempotent: skip any component that already has a `<Component>.mdx`; do not modify components, existing",
+  "stories, or existing docs. If `design_source` is not figma, skip the figma tool and compose from the specs +",
+  "source only. End with a one-line summary: how many docs pages you created, how many already existed, and how",
+  "many components are now fully documented. Re-run to complete any remaining.",
+].join("\n");
+
 /**
  * Component Playground — generates and embeds a real Storybook for the project.
  * Storybook's own sidebar drives which component/story you see; VortSpec just
@@ -72,6 +137,8 @@ export function DevPreview({
 
   const storybook = useAgentRun();
   const autoRef = useRef(false);
+  // Which Storybook sync is in flight — labels the run overlay.
+  const [syncMode, setSyncMode] = useState<"stories" | "docs">("stories");
 
   const base = (devUrl.trim() || dev.url || "").replace(/\/+$/, "");
   const embedUrl = base ? `${base}/` : "";
@@ -91,8 +158,18 @@ export function DevPreview({
     void api.stopDevServer(project.path);
   }
   async function generateStorybook(): Promise<void> {
+    setSyncMode("stories");
     await storybook.start({
       prompt: STORYBOOK_PROMPT,
+      cwd: project.path,
+      allowedTools: ["Read", "Write", "Edit", "Bash"],
+      bypassPermissions: true,
+    });
+  }
+  async function generateDocs(): Promise<void> {
+    setSyncMode("docs");
+    await storybook.start({
+      prompt: DOCS_PROMPT,
       cwd: project.path,
       allowedTools: ["Read", "Write", "Edit", "Bash"],
       bypassPermissions: true,
@@ -160,7 +237,15 @@ export function DevPreview({
             onClick={() => void generateStorybook()}
             title="Set up Storybook if needed, and add stories for any newly-built components (existing stories are left untouched)"
           >
-            {storybook.running ? "Syncing stories…" : "Sync stories"}
+            {storybook.running && syncMode === "stories" ? "Syncing stories…" : "Sync stories"}
+          </Button>
+          <Button
+            variant="ghost"
+            disabled={storybook.running}
+            onClick={() => void generateDocs()}
+            title="Generate rich per-component documentation pages (identity, props, patterns, anti-patterns, states, accessibility, tokens, AI hints) from the specs + Figma metadata. Additive — existing docs are left untouched."
+          >
+            {storybook.running && syncMode === "docs" ? "Syncing docs…" : "Sync docs"}
           </Button>
           <DevServerControl
             status={dev}
@@ -175,7 +260,9 @@ export function DevPreview({
             <RunOverlay
               title={
                 storybook.running
-                  ? "Syncing Storybook — adding stories for any components that don't have one yet…"
+                  ? syncMode === "docs"
+                    ? "Generating rich component documentation pages (identity, props, patterns, tokens, AI hints)…"
+                    : "Syncing Storybook — adding stories for any components that don't have one yet…"
                   : "Storybook ready — starting it up…"
               }
               run={storybook}
