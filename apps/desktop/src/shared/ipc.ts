@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { agentRunOptionsSchema } from "./run-events";
+import { agentRunOptionsSchema, lastRunSchema } from "./run-events";
 import { flowSchema, stageStatusSchema, runHistoryResultSchema } from "./flow";
 import { devServerStatusSchema } from "./dev-server";
 import { manifestResultSchema, manifestVersionsResultSchema } from "./manifest";
@@ -51,6 +51,7 @@ export type {
   AgentRunOptions,
   AgentEventEnvelope,
   AgentRawEnvelope,
+  LastRun,
 } from "./run-events";
 export type {
   Flow,
@@ -180,6 +181,7 @@ export const ipcContract = {
   },
   "agent:cancelRun": { request: z.string(), response: z.void() },
   "agent:hasActiveRun": { request: z.string(), response: z.boolean() },
+  "agent:lastRun": { request: z.string(), response: lastRunSchema.nullable() },
 
   "flow:get": { request: z.string(), response: flowSchema },
   "flow:setStageStatus": {

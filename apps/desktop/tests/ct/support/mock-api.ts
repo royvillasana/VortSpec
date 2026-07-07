@@ -40,6 +40,8 @@ export interface MockConfig {
   verification?: VerificationResult;
   /** Whether hasActiveRun() reports an in-flight run for the project (reconnect banner). */
   hasActiveRun?: boolean;
+  /** The resumable last run returned by lastRun() — drives the resume card. */
+  lastRun?: import("../../../src/shared/ipc").LastRun | null;
   /** Versions returned by listManifestVersions(). */
   manifestVersions?: ManifestVersion[];
   /** Flow returned by getFlow() — used by the manifest screen to read approval. */
@@ -117,6 +119,7 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
     startRun,
     cancelRun: async () => undefined,
     hasActiveRun: async () => cfg.hasActiveRun ?? false,
+    lastRun: async () => cfg.lastRun ?? null,
     onAgentEvent: (cb: (e: { runId: string; event: RunEvent }) => void) => {
       eventSubs.add(cb);
       return () => eventSubs.delete(cb);

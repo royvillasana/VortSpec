@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { InspectorComponent, Project, ProjectConfig, VerificationResult } from "../../../shared/ipc";
+import type { InspectorComponent, LastRun, Project, ProjectConfig, VerificationResult } from "../../../shared/ipc";
 import { DEFAULT_FLOW } from "../../../shared/flow";
 import { api } from "../lib/api";
 import { useAgentRun, useLatestRun } from "../lib/useAgentRun";
+import { deriveProgress, type OpKind } from "../lib/run-progress";
 import { Button, Card, Spinner } from "../components/ui";
 import { RunPanel } from "../components/RunPanel";
+import { RunProgress } from "../components/RunProgress";
 import { ProjectRail, projectRailItems } from "../components/ProjectRail";
 
 /**
@@ -31,8 +33,21 @@ function buildOnePrompt(name: string, level?: string): string {
   );
 }
 
+/**
+ * Every batch action is idempotent so an interrupted run resumes from the files:
+ * re-running only does the work that isn't already on disk. This is the
+ * local-first resume path — it survives an app restart because state lives in
+ * the project, not memory.
+ */
+const RESUMABLE =
+  "This may be resuming an interrupted run — first check what is already done from the files and " +
+  "skip it: do NOT rebuild a component that already has a source file, do NOT re-generate specs " +
+  "that already exist, and do NOT re-verify a component that already has an up-to-date " +
+  "visual-verify-report.md. Only do the remaining work, then stop.";
+
 const BUILD_REMAINING_PROMPT =
-  "Read .sdd-de/components.json and .sdd-de/project.yaml. Implement EVERY component listed in " +
+  RESUMABLE +
+  "\n\nRead .sdd-de/components.json and .sdd-de/project.yaml. Implement EVERY component listed in " +
   "components.json that is NOT yet implemented in component_dir, in the configured framework and " +
   "language, using ONLY the extracted design tokens. For each, run /generate-artifacts to produce " +
   "its specs, then implement it. Build in order: atoms → molecules → organisms. Skip components that " +
@@ -99,9 +114,16 @@ const NO_MANUAL_STEPS =
   "Do this entirely yourself, in the background — never tell me to open a browser, open Figma Dev " +
   "Mode, start a server, or run a command. You have the tools; use them.";
 
+/** Resumes an interrupted run's own Claude Code session (via --resume). */
+const RESUME_PROMPT =
+  "Continue exactly where the previous run stopped. Re-check what is already complete from the " +
+  "files and skip it — do not redo finished work. Finish only the remaining steps, then stop. " +
+  NO_MANUAL_STEPS;
+
 function verifyPrompt(target: string, url: string | null, isFigma: boolean): string {
   const scope = target === "all" ? "every built component" : `the "${target}" component`;
   return [
+    ...(target === "all" ? [RESUMABLE] : []),
     `Run visual verification for ${scope} autonomously.`,
     `1. /visual-verify for ${scope}: compare the implementation to its spec across 375/768/1440px, ` +
       `check every token/variant/state, and run the accessibility audit. ${harnessClause(url)} ${figmaClause(isFigma)}`,
@@ -119,6 +141,7 @@ function verifyPrompt(target: string, url: string | null, isFigma: boolean): str
 /** Build every not-yet-built component AND verify it — the CLI's Apply → Verify chain. */
 function buildVerifyRestPrompt(url: string | null, isFigma: boolean): string {
   return [
+    RESUMABLE,
     "Read .sdd-de/components.json and .sdd-de/project.yaml. For EVERY component listed that is NOT " +
       "yet implemented in component_dir, in atoms → molecules → organisms order, run the full SDD-DE " +
       "cycle autonomously and in the background:",
@@ -202,11 +225,13 @@ export function GuidedFlow({
   const run = useAgentRun();
   const latest = useLatestRun();
   const [runLabel, setRunLabel] = useState("");
-  const [opKind, setOpKind] = useState<"other" | "verify" | "pipeline">("other");
+  const [opKind, setOpKind] = useState<OpKind>("other");
+  const [pipelineTotal, setPipelineTotal] = useState<number | undefined>(undefined);
   const [verifyResult, setVerifyResult] = useState<VerificationResult | null>(null);
   const [harnessMsg, setHarnessMsg] = useState("");
   const [showTranscript, setShowTranscript] = useState(false);
   const [externalRun, setExternalRun] = useState(false);
+  const [resume, setResume] = useState<LastRun | null>(null);
   const runDismissRef = useRef(false);
 
   async function reload(): Promise<void> {
@@ -228,6 +253,8 @@ export function GuidedFlow({
     // navigated away, or from another screen) — reflect it so we don't start a
     // duplicate and the user can go watch it.
     void api.hasActiveRun(project.path).then(setExternalRun);
+    // Offer to resume the previous run if it was interrupted (cancel/crash/fail).
+    void api.lastRun(project.path).then(setResume);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project.path]);
 
@@ -236,7 +263,11 @@ export function GuidedFlow({
   useEffect(() => {
     if (run.model.status === "done") {
       void reload();
-      if (opKind !== "other") void api.getVerification(project.path).then(setVerifyResult);
+      // Refresh resume state (a completed run clears it) after this run finishes.
+      void api.lastRun(project.path).then(setResume);
+      if (opKind === "verify" || opKind === "pipeline") {
+        void api.getVerification(project.path).then(setVerifyResult);
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [run.model.status]);
@@ -250,18 +281,36 @@ export function GuidedFlow({
   async function op(
     label: string,
     prompt: string,
-    opts?: { tools?: string[]; kind?: "other" | "verify" | "pipeline" },
+    opts?: { tools?: string[]; kind?: OpKind; total?: number; resumeSessionId?: string },
   ): Promise<void> {
+    const kind = opts?.kind ?? "other";
     setRunLabel(label);
     setVerifyResult(null);
     setShowTranscript(false);
-    setOpKind(opts?.kind ?? "other");
+    setOpKind(kind);
+    setPipelineTotal(opts?.total);
+    setResume(null);
     runDismissRef.current = false;
     await run.start({
       prompt,
       cwd: project.path,
       allowedTools: opts?.tools ?? ["Read", "Write", "Edit", "Bash"],
       bypassPermissions: true,
+      resumeSessionId: opts?.resumeSessionId,
+      // Persisted so an interrupted run can be resumed with its stage view intact.
+      meta: { kind, label, total: opts?.total },
+    });
+  }
+
+  /** Resume the previous interrupted run's own Claude Code session. */
+  async function resumeRun(): Promise<void> {
+    if (!resume?.sessionId) return;
+    const kind = (resume.kind as OpKind) || "other";
+    if (kind === "verify" || kind === "pipeline") await ensureHarness();
+    await op(resume.label || resume.title || "Resuming the previous run", RESUME_PROMPT, {
+      kind,
+      total: resume.total ?? undefined,
+      resumeSessionId: resume.sessionId,
     });
   }
 
@@ -297,7 +346,7 @@ export function GuidedFlow({
     await op(
       `Building & verifying ${n} component${n === 1 ? "" : "s"}`,
       buildVerifyRestPrompt(url, config?.designSource === "figma"),
-      { kind: "pipeline" },
+      { kind: "pipeline", total: n },
     );
   }
 
@@ -320,9 +369,10 @@ export function GuidedFlow({
   // A run is in flight either here or (adopted) elsewhere for this project.
   const busy = running || externalRun;
   const showRunCard = running || (run.model.status === "done" && !runDismissRef.current);
-  // Verify/pipeline runs show the outcome, not the raw checklist churn.
-  const collapsed = opKind === "verify" || opKind === "pipeline";
+  const showsOutcome = opKind === "verify" || opKind === "pipeline";
   const openFindings = verifyResult?.findings.filter((f) => f.status === "open") ?? [];
+  // Holistic stage/progress view of the current run (build, verify, pipeline, …).
+  const progress = deriveProgress(run.model, opKind, { total: pipelineTotal });
 
   const status = !foundationReady
     ? "Set up the foundation to begin"
@@ -371,6 +421,31 @@ export function GuidedFlow({
 
         <div className="flex-1 overflow-y-auto px-8 pb-16 pt-6">
           <div className="mx-auto flex max-w-[720px] flex-col gap-5">
+            {/* The previous run was interrupted — offer to pick up where it stopped. */}
+            {resume?.sessionId && !busy && !showRunCard && (
+              <Card className="flex items-center gap-3 border-vs-warning-border bg-vs-warning-muted p-3 text-xs">
+                <span className="text-vs-warning">⤺</span>
+                <div className="flex flex-1 flex-col gap-0.5">
+                  <span className="text-vs-text-primary">
+                    “{resume.label || resume.title}” was interrupted.
+                  </span>
+                  <span className="text-vs-text-secondary">
+                    Resume picks up where it stopped — already-finished work is skipped, not redone.
+                  </span>
+                </div>
+                <Button variant="primary" onClick={() => void resumeRun()}>
+                  Resume
+                </Button>
+                <button
+                  onClick={() => setResume(null)}
+                  className="text-vs-text-muted hover:text-vs-text-primary"
+                  title="Dismiss — you can still re-run the action; completed work is skipped either way."
+                >
+                  Dismiss
+                </button>
+              </Card>
+            )}
+
             {/* A run started elsewhere for this project is still going. */}
             {externalRun && !running && (
               <Card className="flex items-center gap-2 p-3 text-xs text-vs-text-secondary">
@@ -402,41 +477,44 @@ export function GuidedFlow({
                   )}
                 </div>
 
-                {collapsed ? (
-                  <>
-                    {running && (
-                      <p className="text-xs text-vs-text-muted">
-                        Running in the background — you can leave this screen; it keeps going.
-                      </p>
+                {/* Holistic stage/progress view — the same structure for every action. */}
+                <RunProgress progress={progress} running={running} />
+
+                {running && (
+                  <p className="text-xs text-vs-text-muted">
+                    Running in the background — you can leave this screen; it keeps going.
+                  </p>
+                )}
+
+                {/* Verify/pipeline outcome summary from the report files. */}
+                {!running && showsOutcome && verifyResult && (
+                  <div className="text-sm">
+                    {openFindings.length === 0 ? (
+                      <span className="text-vs-success">✓ Verification passed — no open findings.</span>
+                    ) : (
+                      <span className="text-vs-warning">
+                        ⚠ {openFindings.length} open finding{openFindings.length === 1 ? "" : "s"}
+                        {openFindings[0] ? ` — e.g. ${openFindings[0].component}: ${openFindings[0].title}` : ""}
+                      </span>
                     )}
-                    {!running && verifyResult && (
-                      <div className="flex flex-col gap-2 text-sm">
-                        {openFindings.length === 0 ? (
-                          <span className="text-vs-success">✓ Verification passed — no open findings.</span>
-                        ) : (
-                          <span className="text-vs-warning">
-                            ⚠ {openFindings.length} open finding{openFindings.length === 1 ? "" : "s"}
-                            {openFindings[0] ? ` — e.g. ${openFindings[0].component}: ${openFindings[0].title}` : ""}
-                          </span>
-                        )}
-                        <div className="flex gap-3 text-xs">
-                          <button onClick={onOpenVerify} className="text-vs-accent hover:underline">
-                            Verification report →
-                          </button>
-                          <button
-                            onClick={() => setShowTranscript((v) => !v)}
-                            className="text-vs-text-secondary hover:text-vs-text-primary"
-                          >
-                            {showTranscript ? "Hide transcript" : "View details"}
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                    {showTranscript && (
-                      <RunPanel model={run.model} onSend={(t) => void run.send(t)} canChat={run.canChat} />
-                    )}
-                  </>
-                ) : (
+                  </div>
+                )}
+
+                <div className="flex gap-3 text-xs">
+                  {showsOutcome && (
+                    <button onClick={onOpenVerify} className="text-vs-accent hover:underline">
+                      Verification report →
+                    </button>
+                  )}
+                  <button
+                    onClick={() => setShowTranscript((v) => !v)}
+                    className="text-vs-text-secondary hover:text-vs-text-primary"
+                  >
+                    {showTranscript ? "Hide details" : "View details"}
+                  </button>
+                </div>
+
+                {showTranscript && (
                   <RunPanel model={run.model} onSend={(t) => void run.send(t)} canChat={run.canChat} />
                 )}
               </Card>
@@ -450,7 +528,7 @@ export function GuidedFlow({
                   void op(
                     "Connecting the design source — extracting tokens + detecting components",
                     FOUNDATION_DEF.promptTemplate ?? "Extract tokens and detect components.",
-                    { tools: FOUNDATION_DEF.allowedTools },
+                    { tools: FOUNDATION_DEF.allowedTools, kind: "source" },
                   )
                 }
               />
@@ -467,7 +545,7 @@ export function GuidedFlow({
                     void op(
                       "Re-extracting tokens + re-detecting components",
                       FOUNDATION_DEF.promptTemplate ?? "Re-extract tokens and detect components.",
-                      { tools: FOUNDATION_DEF.allowedTools },
+                      { tools: FOUNDATION_DEF.allowedTools, kind: "source" },
                     )
                   }
                   onOpenTokens={onOpenInspector}
@@ -488,7 +566,7 @@ export function GuidedFlow({
                         void op(
                           `Re-scanning ${config?.designSource === "figma" ? "Figma" : "the design source"} — reconciling tokens + components`,
                           RESCAN_PROMPT,
-                          { tools: FOUNDATION_DEF.allowedTools },
+                          { tools: FOUNDATION_DEF.allowedTools, kind: "source" },
                         )
                       }
                     >
@@ -530,7 +608,7 @@ export function GuidedFlow({
                       onCancel={() => setAddNew(false)}
                       onCreate={(name, intent) => {
                         setAddNew(false);
-                        void op(`Creating the "${name}" component`, newComponentPrompt(name, intent));
+                        void op(`Creating the "${name}" component`, newComponentPrompt(name, intent), { kind: "build" });
                       }}
                     />
                   )}
@@ -559,7 +637,7 @@ export function GuidedFlow({
                               key={c.name}
                               component={c}
                               disabled={busy}
-                              onBuild={() => void op(`Building "${c.name}"`, buildOnePrompt(c.name, c.level))}
+                              onBuild={() => void op(`Building "${c.name}"`, buildOnePrompt(c.name, c.level), { kind: "build" })}
                               onVerify={() => void verify(c.name, `Verifying "${c.name}"`)}
                               onOpen={onOpenPreview}
                             />
@@ -594,6 +672,7 @@ export function GuidedFlow({
                     onClick={() =>
                       void op("Committing & publishing with your git/gh", COMMIT_PROMPT, {
                         tools: ["Read", "Bash"],
+                        kind: "commit",
                       })
                     }
                   />

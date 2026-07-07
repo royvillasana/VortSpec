@@ -64,6 +64,7 @@ const api = {
   startRun: (opts: AgentRunOptions) => invoke("agent:startRun", opts),
   cancelRun: (runId: string) => invoke("agent:cancelRun", runId),
   hasActiveRun: (projectPath: string) => invoke("agent:hasActiveRun", projectPath),
+  lastRun: (projectPath: string) => invoke("agent:lastRun", projectPath),
   onAgentEvent: (callback: (payload: AgentEventEnvelope) => void) =>
     subscribe(AGENT_EVENT_CHANNEL, callback),
   onAgentRaw: (callback: (payload: AgentRawEnvelope) => void) =>

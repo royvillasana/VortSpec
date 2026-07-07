@@ -2,7 +2,7 @@ import { describe, expect, it, beforeEach, afterEach } from "vitest";
 import { mkdtemp, rm, readdir, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { newAccumulator, recordRun, runTitle } from "./run-recorder";
+import { newAccumulator, recordRun, runTitle, readLastRun, writeLastRun, patchLastRun } from "./run-recorder";
 import { runSummarySchema } from "../../shared/flow";
 
 describe("run-recorder", () => {
@@ -51,6 +51,46 @@ describe("run-recorder", () => {
       const byLabel = new Map(outcomes.map((o) => [o.label, o.outcome]));
       expect(byLabel.get("#1")).toBe("cancelled");
       expect(byLabel.get("#2")).toBe("failed");
+    });
+  });
+
+  describe("last-run pointer", () => {
+    let dir: string;
+    beforeEach(async () => {
+      dir = await mkdtemp(join(tmpdir(), "vortspec-last-"));
+    });
+    afterEach(async () => {
+      await rm(dir, { recursive: true, force: true });
+    });
+
+    it("returns null when no last run exists", async () => {
+      expect(await readLastRun(dir)).toBeNull();
+    });
+
+    it("round-trips a written record", async () => {
+      await writeLastRun(dir, {
+        sessionId: "s1",
+        title: "Verify",
+        kind: "verify",
+        total: 3,
+        status: "cancelled",
+        updatedAt: "2026-07-07T00:00:00.000Z",
+      });
+      const got = await readLastRun(dir);
+      expect(got?.sessionId).toBe("s1");
+      expect(got?.status).toBe("cancelled");
+    });
+
+    it("merges patches without dropping prior fields", async () => {
+      await patchLastRun(dir, { title: "Build & verify", kind: "pipeline", total: 5, status: "running" });
+      await patchLastRun(dir, { sessionId: "sess-9" }); // later, once known
+      await patchLastRun(dir, { status: "cancelled" }); // interrupted
+      const got = await readLastRun(dir);
+      expect(got?.title).toBe("Build & verify");
+      expect(got?.kind).toBe("pipeline");
+      expect(got?.total).toBe(5);
+      expect(got?.sessionId).toBe("sess-9");
+      expect(got?.status).toBe("cancelled");
     });
   });
 });

@@ -1,6 +1,7 @@
 import { join, basename } from "node:path";
-import { mkdir, writeFile, readdir } from "node:fs/promises";
-import type { AgentRunOptions } from "../../shared/run-events";
+import { mkdir, writeFile, readFile, readdir } from "node:fs/promises";
+import type { AgentRunOptions, LastRun } from "../../shared/run-events";
+import { lastRunSchema } from "../../shared/run-events";
 import type { RunSummary } from "../../shared/flow";
 
 /**
@@ -12,10 +13,56 @@ import type { RunSummary } from "../../shared/flow";
 export interface RunAccumulator {
   files: Set<string>;
   isError: boolean;
+  /** Captured from the run's system-init / result events; enables `--resume`. */
+  sessionId?: string;
 }
 
 export function newAccumulator(): RunAccumulator {
   return { files: new Set(), isError: false };
+}
+
+// ── Last-run pointer (resume support) ────────────────────────────────
+// A single `.vortspec/last-run.json` per project records the most recent run so
+// the app can offer "resume where it left off" after a cancel, failure, or crash.
+
+function lastRunPath(cwd: string): string {
+  return join(cwd, ".vortspec", "last-run.json");
+}
+
+export async function readLastRun(cwd: string): Promise<LastRun | null> {
+  const raw = await readFile(lastRunPath(cwd), "utf8").catch(() => null);
+  if (!raw) return null;
+  try {
+    const parsed = lastRunSchema.safeParse(JSON.parse(raw));
+    return parsed.success ? parsed.data : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function writeLastRun(cwd: string, run: LastRun): Promise<void> {
+  const dir = join(cwd, ".vortspec");
+  try {
+    await mkdir(dir, { recursive: true });
+    await writeFile(lastRunPath(cwd), JSON.stringify(run, null, 2), "utf8");
+  } catch {
+    /* best-effort; resume is an optimization over the file-derived path */
+  }
+}
+
+/** Merge a patch into the existing last-run record (or seed a new one). */
+export async function patchLastRun(cwd: string, patch: Partial<LastRun>): Promise<void> {
+  const prev = await readLastRun(cwd);
+  const next: LastRun = {
+    sessionId: patch.sessionId ?? prev?.sessionId ?? null,
+    title: patch.title ?? prev?.title ?? "Run",
+    kind: patch.kind ?? prev?.kind,
+    label: patch.label ?? prev?.label,
+    total: patch.total ?? prev?.total ?? null,
+    status: patch.status ?? prev?.status ?? "running",
+    updatedAt: new Date().toISOString(),
+  };
+  await writeLastRun(cwd, next);
 }
 
 /** A short, human title for the run from its prompt (slash command or first line). */

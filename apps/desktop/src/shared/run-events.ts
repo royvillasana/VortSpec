@@ -63,8 +63,36 @@ export const agentRunOptionsSchema = z.object({
    * each stage; the run is confined to the project folder.
    */
   bypassPermissions: z.boolean().optional(),
+  /**
+   * Renderer-supplied labels persisted with the run so an interrupted run can be
+   * resumed later with its original stage view (kind) and scope (total). Opaque
+   * to the main process except for persistence.
+   */
+  meta: z
+    .object({
+      kind: z.string().optional(),
+      label: z.string().optional(),
+      total: z.number().optional(),
+    })
+    .optional(),
 });
 export type AgentRunOptions = z.infer<typeof agentRunOptionsSchema>;
+
+/**
+ * The last run recorded for a project, used to offer "resume where it left off".
+ * `status: "running"` persisted with no live process (after an app restart) means
+ * the run was interrupted; `sessionId` lets Claude Code `--resume` that session.
+ */
+export const lastRunSchema = z.object({
+  sessionId: z.string().nullable(),
+  title: z.string(),
+  kind: z.string().optional(),
+  label: z.string().optional(),
+  total: z.number().nullable().optional(),
+  status: z.enum(["running", "passed", "cancelled", "failed"]),
+  updatedAt: z.string(),
+});
+export type LastRun = z.infer<typeof lastRunSchema>;
 
 // ── main→renderer push channels (outside the invoke contract) ─────────
 

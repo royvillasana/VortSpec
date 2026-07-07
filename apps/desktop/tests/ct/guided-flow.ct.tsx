@@ -123,6 +123,38 @@ test("reflects an in-flight run started elsewhere", async ({ mount }) => {
   await expect(c.getByRole("button", { name: /Watch it/ })).toBeVisible();
 });
 
+test("offers to resume an interrupted run and resumes on click", async ({ mount }) => {
+  const RESUME_RUN: RunEvent[] = [
+    { kind: "system-init", model: "claude-opus-4-8", sessionId: "sess-r", tools: [], mcpServers: [], mcpErrors: [] },
+    { kind: "result", isError: false, text: "done", sessionId: "sess-r" },
+  ];
+  const c = await mount(<GuidedFlow {...props} />, {
+    hooksConfig: {
+      mock: {
+        tokens: TOKENS,
+        components: ROSTER,
+        manifest: MANIFEST,
+        runScript: RESUME_RUN,
+        lastRun: {
+          sessionId: "sess-r",
+          title: "Building & verifying 3 components",
+          kind: "pipeline",
+          total: 3,
+          status: "cancelled",
+          updatedAt: "2026-07-07T00:00:00.000Z",
+        },
+      },
+    },
+  });
+  // The resume prompt surfaces the interrupted run.
+  await expect(c.getByText(/was interrupted/)).toBeVisible();
+  const resumeBtn = c.getByRole("button", { name: "Resume" });
+  await expect(resumeBtn).toBeVisible();
+  // Clicking Resume starts a run — the resume card gives way to the run card.
+  await resumeBtn.click();
+  await expect(c.getByText(/was interrupted/)).toHaveCount(0);
+});
+
 test("opens the new-component form", async ({ mount }) => {
   const c = await mount(<GuidedFlow {...props} />, {
     hooksConfig: { mock: { tokens: TOKENS, components: ROSTER, manifest: MANIFEST } },
@@ -151,6 +183,9 @@ test("build-one runs a transcript, then the roster reflects it from files", asyn
   });
   // Modal is the only detected component → its row shows Build.
   await c.getByRole("button", { name: "Build", exact: true }).click();
+  // The holistic progress card renders for a build (same structure as verify —
+  // "View details" is its stable affordance; stage-derivation is unit-tested).
+  await expect(c.getByRole("button", { name: /View details|Hide details/ })).toBeVisible();
   // After the run completes, the roster re-reads and no detected row remains.
   await expect(c.getByText("detected", { exact: true })).toHaveCount(0);
   await expect(c.getByText(/Foundation ready · 3\/3 built/)).toBeVisible();
