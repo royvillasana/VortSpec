@@ -9,12 +9,27 @@ import { ProjectRail, projectRailItems } from "../components/ProjectRail";
 
 const STAGE_ID = "design-manifest";
 const GENERATE_PROMPT = [
-  "/design-doc",
+  "Generate the AI hand-off manifest as a proper @google/design.md-format DESIGN.md. Follow these steps",
+  "exactly — the filename handling matters because macOS is case-insensitive, so `design.md` and",
+  "`DESIGN.md` are the SAME file and must not clobber each other.",
   "",
-  "Run the design-doc skill: generate and validate DESIGN.md with @google/design.md,",
-  "capturing every design token, component contract (props, states, tokens consumed),",
-  "and convention as the AI hand-off file. Install @google/design.md if it is missing.",
-  "Do not modify the components themselves — only read them and write DESIGN.md.",
+  "1. PRESERVE ANY DECISIONS LOG. Check the project root for an existing `DESIGN.md`/`design.md`. If its",
+  "   content is NOT the @google/design.md format (i.e. it has no YAML frontmatter with design tokens —",
+  "   e.g. it's a `/sync-tokens` 'Design Decisions & Token Mapping' log), MOVE it to",
+  "   `.sdd-de/design-decisions.md` (create the dir; `git mv` if tracked). This frees the root name for",
+  "   the Google-format file and keeps the decisions log as context.",
+  "2. GENERATE. Run the /design-doc skill to write the @google/design.md-format `DESIGN.md` at the",
+  "   project root, installing @google/design.md if missing. Cover EVERY built component (read the",
+  "   component dir + .sdd-de/components.json). Read `.sdd-de/design-decisions.md` (if present) and fold",
+  "   its deviations/decisions into the DESIGN.md 'Design Decisions' prose section. Do not overwrite the",
+  "   decisions log, and do not modify the components themselves.",
+  "3. KEEP THE FRONTMATTER LINT-CLEAN. In the YAML `components:` map, use ONLY @google/design.md-valid",
+  "   properties (backgroundColor, textColor, typography, rounded, padding, size, height, width). Put",
+  "   source paths, variant files, Storybook URLs, spec links, import snippets, and USAGE EXAMPLES in the",
+  "   `## Components` prose section instead — with a Storybook URL",
+  "   (http://localhost:6006/?path=/docs/<category>-<componentname>) and a usage example per component.",
+  "4. VALIDATE. Run `npx @google/design.md lint DESIGN.md` and resolve every error (warnings are ok).",
+  "   Confirm DESIGN.md begins with a `---` YAML frontmatter block. End with the lint summary.",
 ].join("\n");
 
 type View = "rendered" | "markdown";
@@ -180,6 +195,14 @@ export function DesignManifest({
               {manifest.path}
             </span>
           )}
+          {hasManifest && manifest?.format === "google" && (
+            <span
+              className="rounded border border-vs-success-border bg-vs-success-muted px-1.5 py-px text-[11px] text-vs-success"
+              title="Valid @google/design.md format (YAML frontmatter present)"
+            >
+              Google format ✓
+            </span>
+          )}
           <div className="flex-1" />
           {hasManifest && (
             <>
@@ -211,6 +234,25 @@ export function DesignManifest({
 
         {/* Body */}
         <div className="min-h-0 flex-1 overflow-y-auto">
+          {hasManifest && !generating && !editing && manifest?.format === "decisions-log" && (
+            <div className="mx-auto mt-6 flex max-w-[760px] items-start gap-3 rounded-lg border border-vs-warning-border bg-vs-warning-muted px-4 py-3">
+              <span className="text-vs-warning">⚠</span>
+              <div className="flex flex-1 flex-col gap-0.5 text-xs">
+                <span className="font-medium text-vs-text-primary">
+                  This isn't the @google/design.md format
+                </span>
+                <span className="text-vs-text-secondary">
+                  What's here looks like a token-decisions log, not the DESIGN.md hand-off format (no YAML
+                  frontmatter). Regenerate to produce the proper Google format — your decisions log is
+                  preserved to <span className="font-mono">.sdd-de/design-decisions.md</span> and folded in
+                  as context.
+                </span>
+              </div>
+              <Button variant="primary" onClick={() => void generate()}>
+                Regenerate
+              </Button>
+            </div>
+          )}
           {manifest === null ? (
             <div className="flex items-center gap-2 p-8 text-sm text-vs-text-secondary">
               <Spinner /> Reading manifest…

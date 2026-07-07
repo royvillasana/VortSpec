@@ -9,7 +9,41 @@ import {
   listManifestVersions,
   readManifestVersion,
   restoreManifestVersion,
+  detectManifestFormat,
 } from "./manifest-reader";
+
+const GOOGLE = `---
+name: Heritage
+colors:
+  primary: "#1A1C1E"
+---
+
+## Overview
+A design system.`;
+
+const DECISIONS_LOG = `# Design Decisions & Token Mapping
+
+Running log maintained by /sync-tokens.
+
+## Token mapping
+| alias | value |
+|---|---|`;
+
+describe("detectManifestFormat", () => {
+  it("recognizes the @google/design.md format by its token frontmatter", () => {
+    expect(detectManifestFormat(GOOGLE)).toBe("google");
+  });
+  it("flags a token-decisions log (no YAML frontmatter) as decisions-log", () => {
+    expect(detectManifestFormat(DECISIONS_LOG)).toBe("decisions-log");
+  });
+  it("treats blank content as empty", () => {
+    expect(detectManifestFormat("")).toBe("empty");
+    expect(detectManifestFormat("   \n  ")).toBe("empty");
+  });
+  it("does not count a frontmatter without design-token keys as google", () => {
+    expect(detectManifestFormat("---\ntitle: notes\n---\n\n# x")).toBe("decisions-log");
+  });
+});
 
 let dir: string;
 beforeEach(async () => {
@@ -23,7 +57,7 @@ describe("getManifest — path resolution", () => {
   it("resolves root DESIGN.md first", async () => {
     await writeFile(join(dir, "DESIGN.md"), "# Root manifest\n", "utf8");
     const r = await getManifest(dir);
-    expect(r).toEqual({ path: "DESIGN.md", content: "# Root manifest\n", exists: true });
+    expect(r).toEqual({ path: "DESIGN.md", content: "# Root manifest\n", exists: true, format: "decisions-log" });
   });
 
   it("falls back to .sdd-de/design.md", async () => {
@@ -36,7 +70,7 @@ describe("getManifest — path resolution", () => {
 
   it("reports the default target when no manifest exists", async () => {
     const r = await getManifest(dir);
-    expect(r).toEqual({ path: "DESIGN.md", content: "", exists: false });
+    expect(r).toEqual({ path: "DESIGN.md", content: "", exists: false, format: "empty" });
   });
 });
 

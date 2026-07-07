@@ -161,11 +161,16 @@ export const DEFAULT_FLOW: StageDef[] = [
     id: "sync",
     title: "Sync",
     summary:
-      "/sync-tokens — reconcile design.md and token files with the decisions made during implementation.",
+      "/sync-tokens — reconcile the token-decisions log and token files with the decisions made during implementation.",
     kind: "agent",
     gated: false,
+    // Write the decisions log to `.sdd-de/design-decisions.md`, NOT `design.md`:
+    // on case-insensitive macOS `design.md` is the same file as the Google-format
+    // `DESIGN.md`, so writing there would clobber the manifest.
     promptTemplate:
-      "/sync-tokens\n\nRun the sync-tokens skill: update design.md and token files so they reflect the implementation. No undocumented deviations.",
+      "/sync-tokens\n\nRun the sync-tokens skill: reconcile token files with the implementation and " +
+      "maintain the token-decisions log at `.sdd-de/design-decisions.md` (NOT `design.md` — on macOS that " +
+      "collides with the Google-format DESIGN.md). No undocumented deviations.",
     allowedTools: ["Read", "Write", "Edit"],
   },
   {

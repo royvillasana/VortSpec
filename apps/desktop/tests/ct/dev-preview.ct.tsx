@@ -70,11 +70,11 @@ test("auto-embeds Storybook when it is already set up (no clicks)", async ({ mou
   await expect(frame).toHaveAttribute("src", `${RUNNING.url}/`);
 });
 
-test("offers Regenerate Storybook from the header", async ({ mount }) => {
+test("offers Sync stories from the header", async ({ mount }) => {
   const c = await mount(<DevPreview {...props} />, {
     hooksConfig: { mock: { components: COMPONENTS, devStatus: RUNNING, previewInfo: HAS_SB } },
   });
-  await expect(c.getByRole("button", { name: "Regenerate Storybook" })).toBeVisible();
+  await expect(c.getByRole("button", { name: "Sync stories" })).toBeVisible();
   // The dev-server control shows the running port.
   await expect(c.getByText(":6006")).toBeVisible();
 });

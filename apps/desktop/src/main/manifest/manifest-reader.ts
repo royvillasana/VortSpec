@@ -2,6 +2,7 @@ import { join, dirname } from "node:path";
 import { readFile, writeFile, mkdir, readdir } from "node:fs/promises";
 import type {
   ManifestResult,
+  ManifestFormat,
   ManifestVersion,
   ManifestVersionsResult,
   SnapshotReason,
@@ -20,13 +21,29 @@ const DEFAULT_TARGET = "DESIGN.md";
 const VERSIONS_DIR = ".vortspec/manifests";
 const INDEX_FILE = ".vortspec/manifests/index.json";
 
+/**
+ * Detect whether the manifest is the `@google/design.md` format. The Google
+ * linter keys "not the format" on the absence of YAML — so we mirror that: a
+ * leading `---` frontmatter block containing any design-token key is the Google
+ * format; anything else with content is a token-decisions log. Cheap + offline;
+ * the authoritative `npx @google/design.md lint` runs inside the generate prompt.
+ */
+export function detectManifestFormat(content: string): ManifestFormat {
+  if (!content.trim()) return "empty";
+  const fm = /^﻿?\s*---\s*\n([\s\S]*?)\n---/.exec(content);
+  if (fm && /^\s*(colors|typography|components|rounded|spacing|name)\s*:/m.test(fm[1])) {
+    return "google";
+  }
+  return "decisions-log";
+}
+
 /** Resolve the manifest path (first existing candidate) + its content. */
 export async function getManifest(projectPath: string): Promise<ManifestResult> {
   for (const rel of CANDIDATES) {
     const content = await readFile(join(projectPath, rel), "utf8").catch(() => null);
-    if (content !== null) return { path: rel, content, exists: true };
+    if (content !== null) return { path: rel, content, exists: true, format: detectManifestFormat(content) };
   }
-  return { path: DEFAULT_TARGET, content: "", exists: false };
+  return { path: DEFAULT_TARGET, content: "", exists: false, format: "empty" };
 }
 
 /** Where a write should land: the existing manifest, else the default target. */

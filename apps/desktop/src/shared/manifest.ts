@@ -7,12 +7,23 @@ import { z } from "zod";
  * lives only at this parse boundary.
  */
 
+/**
+ * Which shape the manifest file is in:
+ * - `google` — the `@google/design.md` format (YAML frontmatter with design tokens).
+ * - `decisions-log` — a `/sync-tokens` token-decisions log (no token frontmatter).
+ * - `empty` — no manifest yet.
+ */
+export const manifestFormatSchema = z.enum(["google", "decisions-log", "empty"]);
+export type ManifestFormat = z.infer<typeof manifestFormatSchema>;
+
 export const manifestResultSchema = z.object({
   /** Project-relative path of the resolved manifest, or the default target when absent. */
   path: z.string(),
   /** Manifest markdown, or "" when it does not exist yet. */
   content: z.string(),
   exists: z.boolean(),
+  /** Detected format, so the UI can flag a non-Google-format manifest. */
+  format: manifestFormatSchema.optional(),
 });
 export type ManifestResult = z.infer<typeof manifestResultSchema>;
 

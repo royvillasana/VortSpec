@@ -6,27 +6,35 @@ import { Button, Spinner } from "../components/ui";
 import { RunPanel } from "../components/RunPanel";
 import { ProjectRail, projectRailItems } from "../components/ProjectRail";
 
+// Additive + idempotent: sets Storybook up if absent, then generates a story only
+// for components that don't already have one — so it doubles as "sync stories" as
+// the design system grows, without clobbering hand-tuned existing stories.
 const STORYBOOK_PROMPT = [
-  "Set up Storybook for this project so VortSpec can embed real component docs, controls, and variants.",
+  "Set up Storybook (if not already present) and generate stories for any components that don't have",
+  "one yet, so VortSpec can embed real component docs, controls, and variants. This is safe to re-run.",
   "",
   "1. Read `.sdd-de/project.yaml` (framework, language, styling, component_dir) and",
   "   `.sdd-de/components.json` (the component inventory).",
-  "2. Install and initialize Storybook for this framework with the project's package manager",
-  "   (for React + Vite + TypeScript, use `@storybook/react-vite` with the essentials addon).",
-  "   Add `.storybook/main.ts` (a stories glob covering the component dir, the framework, and",
-  "   `docs: { autodocs: true }`) and `.storybook/preview.ts` that imports the project's global",
-  "   styles / design-token CSS so components render themed, with `parameters.layout = 'centered'`.",
-  "3. For EVERY component in components.json, write a `<Component>.stories.tsx` beside it under the",
-  "   component dir with:",
+  "2. If Storybook is NOT installed (no `.storybook/main.*`), install and initialize it for this",
+  "   framework with the project's package manager (for React + Vite + TypeScript, use",
+  "   `@storybook/react-vite` with the essentials addon). Add `.storybook/main.ts` (a stories glob",
+  "   covering the component dir, the framework, and `docs: { autodocs: true }`) and",
+  "   `.storybook/preview.ts` that imports the project's global styles / design-token CSS so",
+  "   components render themed, with `parameters.layout = 'centered'`. If Storybook already exists,",
+  "   leave its config and package.json untouched.",
+  "3. Scan the component dir for source components and, for EACH component that does NOT already have a",
+  "   sibling `<Component>.stories.tsx`, write one. Do NOT overwrite or modify any existing story file.",
+  "   Each new story has:",
   "   - `title: '<ComponentName>'` (exactly the component name, no folder prefix), `tags: ['autodocs']`,",
   "     and `component: <Component>`.",
   "   - `argTypes` for the component's real props/variants (variant enum → select control, boolean →",
   "     boolean control) with short descriptions.",
   "   - A `Default` story with representative args PLUS a named story for each meaningful variant/state",
   "     (every `variant`, every `size`, disabled, etc.) so the autodocs page shows the full matrix.",
-  "4. Add scripts to package.json: `\"storybook\": \"storybook dev -p 6006 --no-open\"` and",
+  "4. Ensure package.json has `\"storybook\": \"storybook dev -p 6006 --no-open\"` and",
   "   `\"build-storybook\": \"storybook build\"`. Install any missing deps.",
-  "5. Do NOT modify the components themselves. Leave everything else untouched.",
+  "5. Do NOT modify the components themselves, and do NOT touch existing stories. End with a one-line",
+  "   summary: how many components exist, how many stories already existed, and how many you added.",
   "",
   "When done, `storybook dev` should serve at http://localhost:6006 with an autodocs page per component.",
 ].join("\n");
@@ -150,9 +158,9 @@ export function DevPreview({
             variant="ghost"
             disabled={storybook.running}
             onClick={() => void generateStorybook()}
-            title="Have Claude Code (re)generate Storybook stories for this project"
+            title="Set up Storybook if needed, and add stories for any newly-built components (existing stories are left untouched)"
           >
-            {storybook.running ? "Setting up…" : "Regenerate Storybook"}
+            {storybook.running ? "Syncing stories…" : "Sync stories"}
           </Button>
           <DevServerControl
             status={dev}
@@ -167,7 +175,7 @@ export function DevPreview({
             <RunOverlay
               title={
                 storybook.running
-                  ? "Setting up Storybook — installing + writing stories (first time only)…"
+                  ? "Syncing Storybook — adding stories for any components that don't have one yet…"
                   : "Storybook ready — starting it up…"
               }
               run={storybook}
@@ -194,7 +202,7 @@ export function DevPreview({
                     Try again
                   </Button>
                   <Button variant="primary" onClick={() => void generateStorybook()}>
-                    Regenerate Storybook
+                    Sync stories
                   </Button>
                 </div>
                 <UrlOverride value={devUrl} onChange={setDevUrl} />

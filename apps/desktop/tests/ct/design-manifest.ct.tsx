@@ -130,6 +130,26 @@ test("generates from a recorded transcript, then renders the produced manifest",
   await expect(c.getByRole("button", { name: "Approve manifest" })).toBeVisible();
 });
 
+test("warns when the manifest is a token-decisions log, not the Google format", async ({ mount }) => {
+  const c = await mount(<DesignManifest {...props} />, {
+    hooksConfig: {
+      mock: { manifest: { ...MANIFEST, format: "decisions-log" }, flow: FLOW_REVIEW },
+    },
+  });
+  await expect(c.getByText(/isn't the @google\/design.md format/)).toBeVisible();
+  await expect(c.getByText(/design-decisions\.md/)).toBeVisible();
+});
+
+test("shows the Google-format indicator and no warning for a valid manifest", async ({ mount }) => {
+  const c = await mount(<DesignManifest {...props} />, {
+    hooksConfig: {
+      mock: { manifest: { ...MANIFEST, format: "google" }, flow: FLOW_REVIEW },
+    },
+  });
+  await expect(c.getByText("Google format ✓")).toBeVisible();
+  await expect(c.getByText(/isn't the @google\/design.md format/)).toHaveCount(0);
+});
+
 test("enters edit mode with the raw source in a textarea", async ({ mount }) => {
   const c = await mount(<DesignManifest {...props} />, {
     hooksConfig: { mock: { manifest: MANIFEST, flow: FLOW_REVIEW } },
