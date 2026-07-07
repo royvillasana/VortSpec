@@ -19,6 +19,7 @@ export function AssistantDock({
   seedContext,
   allowModify = false,
   onClose,
+  userName,
 }: {
   project: Project;
   /** Optional one-line context the dock mentions to Claude on the first message. */
@@ -27,6 +28,8 @@ export function AssistantDock({
   allowModify?: boolean;
   /** When provided, a close button is shown; omit for a permanent panel. */
   onClose?: () => void;
+  /** The user's profile name — the assistant addresses them by it, if set. */
+  userName?: string;
 }): React.JSX.Element {
   const run = useAgentRun();
   const [draft, setDraft] = useState("");
@@ -60,6 +63,11 @@ export function AssistantDock({
         cwd: project.path,
         allowedTools: allowModify ? MODIFY_TOOLS : READ_TOOLS,
         bypassPermissions: true,
+        // Persisted across the whole session (send() spreads the base opts), so
+        // the assistant addresses the user by name for every turn.
+        appendSystemPrompt: userName
+          ? `The user's name is ${userName}. Address them as ${userName} when appropriate.`
+          : undefined,
       });
     } else {
       void run.send(text);

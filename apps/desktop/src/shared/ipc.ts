@@ -1,5 +1,7 @@
 import { z } from "zod";
 import { agentRunOptionsSchema, lastRunSchema } from "./run-events";
+import { usageResultSchema } from "./usage";
+import { profileSchema } from "./profile";
 import { flowSchema, stageStatusSchema, runHistoryResultSchema } from "./flow";
 import { devServerStatusSchema } from "./dev-server";
 import { manifestResultSchema, manifestVersionsResultSchema } from "./manifest";
@@ -53,6 +55,8 @@ export type {
   AgentRawEnvelope,
   LastRun,
 } from "./run-events";
+export type { UsageResult, UsageLimit } from "./usage";
+export type { Profile, ProfilePreferences } from "./profile";
 export type {
   Flow,
   StageDef,
@@ -182,6 +186,9 @@ export const ipcContract = {
   "agent:cancelRun": { request: z.string(), response: z.void() },
   "agent:hasActiveRun": { request: z.string(), response: z.boolean() },
   "agent:lastRun": { request: z.string(), response: lastRunSchema.nullable() },
+  "usage:get": { request: z.void(), response: usageResultSchema },
+  "profile:get": { request: z.void(), response: profileSchema },
+  "profile:save": { request: profileSchema, response: profileSchema },
 
   "flow:get": { request: z.string(), response: flowSchema },
   "flow:setStageStatus": {

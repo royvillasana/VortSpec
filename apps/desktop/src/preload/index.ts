@@ -6,6 +6,7 @@ import type {
   StageStatus,
   SetupAnswers,
   FileSnapshot,
+  Profile,
 } from "../shared/ipc";
 import {
   AGENT_EVENT_CHANNEL,
@@ -65,6 +66,9 @@ const api = {
   cancelRun: (runId: string) => invoke("agent:cancelRun", runId),
   hasActiveRun: (projectPath: string) => invoke("agent:hasActiveRun", projectPath),
   lastRun: (projectPath: string) => invoke("agent:lastRun", projectPath),
+  getUsage: () => invoke("usage:get", undefined),
+  getProfile: () => invoke("profile:get", undefined),
+  saveProfile: (profile: Profile) => invoke("profile:save", profile),
   onAgentEvent: (callback: (payload: AgentEventEnvelope) => void) =>
     subscribe(AGENT_EVENT_CHANNEL, callback),
   onAgentRaw: (callback: (payload: AgentRawEnvelope) => void) =>

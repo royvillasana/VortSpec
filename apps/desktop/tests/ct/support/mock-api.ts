@@ -42,6 +42,10 @@ export interface MockConfig {
   hasActiveRun?: boolean;
   /** The resumable last run returned by lastRun() — drives the resume card. */
   lastRun?: import("../../../src/shared/ipc").LastRun | null;
+  /** Usage snapshot returned by getUsage() — drives the Profile usage bars. */
+  usage?: import("../../../src/shared/ipc").UsageResult;
+  /** Profile returned by getProfile(). */
+  profile?: import("../../../src/shared/ipc").Profile;
   /** Versions returned by listManifestVersions(). */
   manifestVersions?: ManifestVersion[];
   /** Flow returned by getFlow() — used by the manifest screen to read approval. */
@@ -120,6 +124,10 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
     cancelRun: async () => undefined,
     hasActiveRun: async () => cfg.hasActiveRun ?? false,
     lastRun: async () => cfg.lastRun ?? null,
+    getUsage: async () =>
+      cfg.usage ?? { available: false, headline: null, limits: [], note: null, raw: "", capturedAt: "", error: "no usage" },
+    getProfile: async () => cfg.profile ?? { name: "", avatarDataUrl: null, preferences: {} },
+    saveProfile: async (p: import("../../../src/shared/ipc").Profile) => p,
     onAgentEvent: (cb: (e: { runId: string; event: RunEvent }) => void) => {
       eventSubs.add(cb);
       return () => eventSubs.delete(cb);

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { EnvReport, Project, SetupAnswers, UpdateInfo } from "../../shared/ipc";
+import type { EnvReport, Project, SetupAnswers, UpdateInfo, Profile as ProfileT } from "../../shared/ipc";
 import { api } from "./lib/api";
 import { EnvironmentCheck } from "./views/EnvironmentCheck";
 import { Dashboard } from "./views/Dashboard";
@@ -11,15 +11,29 @@ import { ArtifactReview } from "./views/ArtifactReview";
 import { Verification } from "./views/Verification";
 import { History } from "./views/History";
 import { DesignManifest } from "./views/DesignManifest";
+import { Profile } from "./views/Profile";
 import { DesignInput } from "./views/DesignInput";
 import { Intake } from "./views/Intake";
 import { NewProjectWizard } from "./views/NewProjectWizard";
 import { Logo } from "./components/Logo";
 import { AssistantDock } from "./components/AssistantDock";
 
-type View = "env" | "dashboard";
+type View = "env" | "dashboard" | "profile";
 
 const CORE_IDS = ["node", "git", "claude-install"] as const;
+
+/** Global profile preferences → the subset of setup answers they pre-fill. */
+function profileDefaults(profile: ProfileT | null): Partial<SetupAnswers> {
+  const p = profile?.preferences;
+  if (!p) return {};
+  const out: Partial<SetupAnswers> = {};
+  if (p.framework) out.framework = p.framework as SetupAnswers["framework"];
+  if (p.language) out.language = p.language as SetupAnswers["language"];
+  if (p.styling) out.styling = p.styling as SetupAnswers["styling"];
+  if (p.testRunner) out.testRunner = p.testRunner as SetupAnswers["testRunner"];
+  if (p.figmaTokenCollection) out.figmaTokenCollection = p.figmaTokenCollection;
+  return out;
+}
 
 /** Reject if `promise` doesn't settle within `ms` — used to bound startup probes. */
 function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
@@ -79,6 +93,13 @@ export default function App(): React.JSX.Element {
   const [loading, setLoading] = useState(true);
   const [chatOpen, setChatOpen] = useState(false);
   const [update, setUpdate] = useState<UpdateInfo | null>(null);
+  const [profile, setProfile] = useState<ProfileT | null>(null);
+
+  // Load the global profile once (name + avatar drive the top-bar avatar and how
+  // the assistant addresses the user).
+  useEffect(() => {
+    void api.getProfile().then(setProfile);
+  }, []);
 
   // Check for a newer release on launch (GitHub Releases; no Claude usage, never
   // blocks startup, tolerant of being offline). Notify-only — the user chooses
@@ -153,6 +174,7 @@ export default function App(): React.JSX.Element {
           activeProject?.name ??
           null
         }
+        profile={profile}
         onNavigate={(v) => {
           setView(v);
           if (v === "dashboard") {
@@ -184,6 +206,8 @@ export default function App(): React.JSX.Element {
             coreReady={coreReady}
             onContinue={() => setView("dashboard")}
           />
+        ) : view === "profile" ? (
+          <Profile onBack={() => setView("dashboard")} onSaved={setProfile} />
         ) : sourceProject ? (
           <DesignInput
             project={sourceProject}
@@ -197,7 +221,9 @@ export default function App(): React.JSX.Element {
         ) : setupProject ? (
           <NewProjectWizard
             project={setupProject}
-            initialSource={pendingSource}
+            // Profile preferences seed the wizard; the design-source screen's
+            // choices (pendingSource) still win over the global defaults.
+            initialSource={{ ...profileDefaults(profile), ...pendingSource }}
             onCancel={() => {
               setSetupProject(null);
               setPendingSource(undefined);
@@ -318,6 +344,7 @@ export default function App(): React.JSX.Element {
           <AssistantDock
             key={activeProject.path}
             project={activeProject}
+            userName={profile?.name?.trim() || undefined}
             allowModify={projectView === "preview"}
             seedContext={
               projectView === "preview"
@@ -406,6 +433,7 @@ function TopBar({
   chatAvailable,
   chatOpen,
   onToggleChat,
+  profile,
 }: {
   view: View;
   coreReady: boolean;
@@ -414,7 +442,9 @@ function TopBar({
   chatAvailable: boolean;
   chatOpen: boolean;
   onToggleChat: () => void;
+  profile: ProfileT | null;
 }): React.JSX.Element {
+  const initial = (profile?.name.trim()?.[0] ?? "").toUpperCase() || "You";
   return (
     <header
       className="flex h-12 shrink-0 items-center justify-between border-b border-vs-border-default px-6"
@@ -475,9 +505,22 @@ function TopBar({
             Chat
           </button>
         )}
-        <span className="grid h-7 w-7 place-items-center rounded-full border border-vs-border-strong bg-vs-bg-elevated text-[11px] font-medium text-vs-text-secondary">
-          You
-        </span>
+        <button
+          onClick={() => onNavigate("profile")}
+          title="Profile, settings & usage"
+          aria-label="Profile"
+          className={`overflow-hidden rounded-full border transition-colors ${
+            view === "profile" ? "border-vs-accent" : "border-vs-border-strong hover:border-vs-accent"
+          }`}
+        >
+          {profile?.avatarDataUrl ? (
+            <img src={profile.avatarDataUrl} alt="" className="h-7 w-7 object-cover" />
+          ) : (
+            <span className="grid h-7 w-7 place-items-center bg-vs-bg-elevated text-[11px] font-medium text-vs-text-secondary">
+              {initial}
+            </span>
+          )}
+        </button>
       </div>
     </header>
   );

@@ -26,6 +26,9 @@ import type { FileSnapshot } from "../shared/ipc";
 import { getVerification } from "./inspector/verification-reader";
 import type { SetupAnswers } from "../shared/setup";
 import { startRun, cancelRun, hasActiveRun, getLastRun } from "./agent/run-manager";
+import { getUsage } from "./usage/usage-reader";
+import { readProfile, saveProfile } from "./settings/profile-manager";
+import type { Profile } from "../shared/profile";
 import {
   getFlow,
   setStageStatus,
@@ -103,6 +106,9 @@ const handlers: Record<IpcChannel, Handler> = {
   }) as Handler,
   "agent:hasActiveRun": ((projectPath: string) => hasActiveRun(projectPath)) as Handler,
   "agent:lastRun": ((projectPath: string) => getLastRun(projectPath)) as Handler,
+  "usage:get": (() => getUsage()) as Handler,
+  "profile:get": (() => readProfile()) as Handler,
+  "profile:save": ((profile: Profile) => saveProfile(profile)) as Handler,
 
   "flow:get": ((projectPath: string) => getFlow(projectPath)) as Handler,
   "flow:setStageStatus": ((req: {
