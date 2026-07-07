@@ -1,6 +1,13 @@
 import { test, expect } from "@playwright/experimental-ct-react";
 import { Inspector } from "../../src/renderer/src/views/Inspector";
 import { PROJECT, TOKENS } from "./support/fixtures";
+import type { RunEvent } from "../../src/shared/run-events";
+
+// A run that starts but never finishes → the sync stays "running" so the Cancel
+// affordance is visible (the transcript has no result/exit event).
+const RUNNING_ONLY: RunEvent[] = [
+  { kind: "system-init", model: "claude-opus-4-8", sessionId: "sess-fs", tools: [], mcpServers: [], mcpErrors: [] },
+];
 
 const CONNECTED = { id: "figma-mcp", label: "Figma MCP", status: "pass", detail: "Connected" };
 const NOT_CONNECTED = {
@@ -56,6 +63,16 @@ test("offers the sync action when the Figma bridge is connected", async ({ mount
     hooksConfig: { mock: { tokens: TOKENS, figmaMcp: CONNECTED } },
   });
   await expect(c.getByRole("button", { name: /Sync from Figma|Re-sync from Figma/ })).toBeVisible();
+});
+
+test("shows a Cancel button while a Figma sync is running", async ({ mount }) => {
+  const c = await mount(<Inspector {...props} />, {
+    hooksConfig: { mock: { tokens: TOKENS, figmaMcp: CONNECTED, runScript: RUNNING_ONLY } },
+  });
+  await c.getByRole("button", { name: /Sync from Figma|Re-sync from Figma/ }).click();
+  // The sync modal is up and offers a way out.
+  await expect(c.getByText("Syncing Figma variables")).toBeVisible();
+  await expect(c.getByRole("button", { name: "Cancel sync" })).toBeVisible();
 });
 
 test("gates the sync action when the Figma bridge is not connected", async ({ mount }) => {

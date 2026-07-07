@@ -201,6 +201,18 @@ export function Inspector({
     tokenMod.reset();
     flash(modLabel + " · kept");
   }
+  // Cancel a running token modification. A half-applied rename/delete is unsafe,
+  // so restore the pre-run snapshot (token file + component sources) on cancel.
+  async function cancelTokenMod(): Promise<void> {
+    await tokenMod.cancel();
+    if (snapshot) await api.restoreFiles(project.path, snapshot);
+    await reloadTokens();
+    setSnapshot(null);
+    setModReview(false);
+    setSelected(null);
+    tokenMod.reset();
+    flash("Canceled — restored the token file and components");
+  }
 
   const groups = useMemo(() => {
     if (!tokens) return [];
@@ -402,6 +414,16 @@ export function Inspector({
             <div className="min-h-0 flex-1 overflow-y-auto">
               <RunPanel model={tokenMod.model} onSend={tokenMod.send} canChat={tokenMod.canChat} />
             </div>
+            {tokenMod.running && !modReview && (
+              <div className="flex items-center justify-end border-t border-vs-border-default pt-3">
+                <button
+                  onClick={() => void cancelTokenMod()}
+                  className="rounded-lg border border-vs-border-strong px-3.5 py-2 text-xs text-vs-text-secondary hover:border-vs-error hover:text-vs-error"
+                >
+                  Cancel &amp; revert
+                </button>
+              </div>
+            )}
             {modReview && (
               <div className="flex items-center gap-3 border-t border-vs-border-default pt-3">
                 <span className="flex-1 text-[11px] text-vs-text-muted">
@@ -439,16 +461,23 @@ export function Inspector({
             <div className="min-h-0 flex-1 overflow-y-auto">
               <RunPanel model={figmaSync.model} />
             </div>
-            {figmaSync.model.status === "error" && (
-              <div className="flex items-center justify-end border-t border-vs-border-default pt-3">
+            <div className="flex items-center justify-end border-t border-vs-border-default pt-3">
+              {figmaSync.running ? (
+                <button
+                  onClick={() => void figmaSync.cancel()}
+                  className="rounded-lg border border-vs-border-strong px-3.5 py-2 text-xs text-vs-text-secondary hover:border-vs-error hover:text-vs-error"
+                >
+                  Cancel sync
+                </button>
+              ) : (
                 <button
                   onClick={() => figmaSync.reset()}
                   className="rounded-lg border border-vs-border-strong px-3.5 py-2 text-xs text-vs-text-secondary hover:bg-vs-bg-elevated hover:text-vs-text-primary"
                 >
                   Close
                 </button>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         </div>
       )}
