@@ -119,19 +119,26 @@ export function Profile({ onBack, onSaved }: { onBack: () => void; onSaved?: (p:
                     </div>
                   ))}
                 </div>
-                {usage.note && <p className="text-[11px] text-vs-text-muted">{usage.note}</p>}
                 <div className="flex items-center gap-3 text-[11px]">
                   <button onClick={() => setShowRaw((v) => !v)} className="text-vs-text-secondary hover:text-vs-text-primary">
                     {showRaw ? "Hide details" : "What's contributing?"}
                   </button>
                   <span className="text-vs-text-muted">
-                    Mirrors Claude Code's <code className="text-vs-text-secondary">/usage</code> · this machine only
+                    Your account's plan limits, mirrored from Claude Code's{" "}
+                    <code className="text-vs-text-secondary">/usage</code>
                   </span>
                 </div>
                 {showRaw && (
-                  <pre className="max-h-72 overflow-auto whitespace-pre-wrap rounded-md border border-vs-border-default bg-vs-bg-code p-3 font-mono text-[11px] leading-relaxed text-vs-text-secondary">
-                    {usage.raw}
-                  </pre>
+                  <div className="flex flex-col gap-2">
+                    {usage.note && (
+                      <p className="text-[11px] text-vs-text-muted">
+                        The breakdown below is a local estimate: {usage.note}
+                      </p>
+                    )}
+                    <pre className="max-h-72 overflow-auto whitespace-pre-wrap rounded-md border border-vs-border-default bg-vs-bg-code p-3 font-mono text-[11px] leading-relaxed text-vs-text-secondary">
+                      {usage.raw}
+                    </pre>
+                  </div>
                 )}
               </>
             ) : (

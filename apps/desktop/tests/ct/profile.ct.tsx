@@ -28,7 +28,7 @@ test("mirrors Claude's usage percentage bars", async ({ mount }) => {
   await expect(c.getByText("Current week (all models)")).toBeVisible();
   await expect(c.getByText("46%", { exact: true })).toBeVisible();
   await expect(c.getByText(/resets Jul 7 at 6:30pm/)).toBeVisible();
-  await expect(c.getByText(/Mirrors Claude Code's/)).toBeVisible();
+  await expect(c.getByText(/Your account's plan limits/)).toBeVisible();
 });
 
 test("shows a fix-it message when usage is unavailable", async ({ mount }) => {
