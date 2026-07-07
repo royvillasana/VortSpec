@@ -179,6 +179,7 @@ export const ipcContract = {
     response: z.object({ runId: z.string() }),
   },
   "agent:cancelRun": { request: z.string(), response: z.void() },
+  "agent:hasActiveRun": { request: z.string(), response: z.boolean() },
 
   "flow:get": { request: z.string(), response: flowSchema },
   "flow:setStageStatus": {

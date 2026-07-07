@@ -25,7 +25,7 @@ import {
 import type { FileSnapshot } from "../shared/ipc";
 import { getVerification } from "./inspector/verification-reader";
 import type { SetupAnswers } from "../shared/setup";
-import { startRun, cancelRun } from "./agent/run-manager";
+import { startRun, cancelRun, hasActiveRun } from "./agent/run-manager";
 import {
   getFlow,
   setStageStatus,
@@ -101,6 +101,7 @@ const handlers: Record<IpcChannel, Handler> = {
     cancelRun(runId);
     return undefined;
   }) as Handler,
+  "agent:hasActiveRun": ((projectPath: string) => hasActiveRun(projectPath)) as Handler,
 
   "flow:get": ((projectPath: string) => getFlow(projectPath)) as Handler,
   "flow:setStageStatus": ((req: {

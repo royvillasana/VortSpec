@@ -13,6 +13,7 @@ import type {
   DevServerStatus,
   ManifestResult,
   ManifestVersion,
+  VerificationResult,
 } from "../../../src/shared/ipc";
 
 export interface MockConfig {
@@ -35,6 +36,10 @@ export interface MockConfig {
   manifestAfterGenerate?: ManifestResult;
   /** Components returned by inspectorComponents() after a run transcript completes (built from files). */
   componentsAfterRun?: InspectorComponentsResult;
+  /** Verification report returned by getVerification() — drives the verify outcome card. */
+  verification?: VerificationResult;
+  /** Whether hasActiveRun() reports an in-flight run for the project (reconnect banner). */
+  hasActiveRun?: boolean;
   /** Versions returned by listManifestVersions(). */
   manifestVersions?: ManifestVersion[];
   /** Flow returned by getFlow() — used by the manifest screen to read approval. */
@@ -111,6 +116,7 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
 
     startRun,
     cancelRun: async () => undefined,
+    hasActiveRun: async () => cfg.hasActiveRun ?? false,
     onAgentEvent: (cb: (e: { runId: string; event: RunEvent }) => void) => {
       eventSubs.add(cb);
       return () => eventSubs.delete(cb);
@@ -159,7 +165,7 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
     inspectorComponents: async () =>
       (generated && cfg.componentsAfterRun) || cfg.components || EMPTY_COMPONENTS,
     setTokenValue: async () => cfg.tokens ?? EMPTY_TOKENS,
-    getVerification: async () => ({ findings: [] }),
+    getVerification: async () => cfg.verification ?? { findings: [] },
     snapshotComponent: async () => [],
     snapshotTokenScope: async () => [],
     restoreFiles: async () => undefined,

@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { InspectorComponent, Project, ProjectConfig } from "../../../shared/ipc";
+import type { InspectorComponent, Project, ProjectConfig, VerificationResult } from "../../../shared/ipc";
 import { DEFAULT_FLOW } from "../../../shared/flow";
 import { api } from "../lib/api";
-import { useAgentRun } from "../lib/useAgentRun";
+import { useAgentRun, useLatestRun } from "../lib/useAgentRun";
 import { Button, Card, Spinner } from "../components/ui";
 import { RunPanel } from "../components/RunPanel";
 import { ProjectRail, projectRailItems } from "../components/ProjectRail";
@@ -76,18 +76,79 @@ function newComponentPrompt(name: string, intent: string): string {
   ].join("\n");
 }
 
-function verifyOnePrompt(name: string): string {
-  return (
-    `/visual-verify\n\nRun the visual-verify skill focused on the "${name}" component: compare its ` +
-    "implementation to its spec across 375/768/1440px, check every token/variant/state, run the " +
-    "accessibility audit, and write specs/<component>/visual-verify-report.md with the findings."
-  );
+/**
+ * Verify is the CLI's autonomous QA — visual-verify + adversarial-review run
+ * as one background agent session. The app provisions everything it needs (a
+ * live render harness URL + the Figma MCP) so it never hands the visual-verify
+ * checklist back to the user as manual steps.
+ */
+function harnessClause(url: string | null): string {
+  return url
+    ? `The live component is served at ${url} — load it there to inspect it.`
+    : "No live preview server is available; run the code-level audit (grep for hardcoded " +
+        "hex/px, check every variant/state and a11y in the source, verify spec compliance) and " +
+        'record any browser-only check as "pending" in the report — do NOT ask me to start a server.';
+}
+function figmaClause(isFigma: boolean): string {
+  return isFigma
+    ? "Use the Figma MCP (figma_file_url in .sdd-de/project.yaml) to read the authoritative design " +
+        "and screenshots for the comparison."
+    : "Compare against each component's spec and its source files (design_source is not Figma).";
+}
+const NO_MANUAL_STEPS =
+  "Do this entirely yourself, in the background — never tell me to open a browser, open Figma Dev " +
+  "Mode, start a server, or run a command. You have the tools; use them.";
+
+function verifyPrompt(target: string, url: string | null, isFigma: boolean): string {
+  const scope = target === "all" ? "every built component" : `the "${target}" component`;
+  return [
+    `Run visual verification for ${scope} autonomously.`,
+    `1. /visual-verify for ${scope}: compare the implementation to its spec across 375/768/1440px, ` +
+      `check every token/variant/state, and run the accessibility audit. ${harnessClause(url)} ${figmaClause(isFigma)}`,
+    `2. /adversarial-review for ${scope}: red-team tokens (grep hardcoded hex/px), variant/state ` +
+      `coverage, accessibility, and spec compliance.`,
+    "3. Fix any discrepancies inline, then write specs/<component>/visual-verify-report.md and the " +
+      "adversarial-review report.",
+    NO_MANUAL_STEPS,
+    target === "all"
+      ? "End with one line per component: '<name>: PASS' or '<name>: ISSUES (n)'."
+      : "End with one line: 'VERIFY: PASS' or 'VERIFY: ISSUES (n)'.",
+  ].join("\n");
 }
 
-const VERIFY_ALL_PROMPT =
-  "/visual-verify\n\nRun the visual-verify skill across every built component: compare each to its " +
-  "spec across viewports, check tokens/variants/states, run the a11y audit, and write each " +
-  "specs/<component>/visual-verify-report.md.";
+/** Build every not-yet-built component AND verify it — the CLI's Apply → Verify chain. */
+function buildVerifyRestPrompt(url: string | null, isFigma: boolean): string {
+  return [
+    "Read .sdd-de/components.json and .sdd-de/project.yaml. For EVERY component listed that is NOT " +
+      "yet implemented in component_dir, in atoms → molecules → organisms order, run the full SDD-DE " +
+      "cycle autonomously and in the background:",
+    "  a. /generate-artifacts to produce its specs, then implement it using ONLY the extracted design tokens.",
+    `  b. /visual-verify then /adversarial-review for it. ${harnessClause(url)} ${figmaClause(isFigma)}`,
+    "  c. Fix any discrepancies inline; write specs/<component>/visual-verify-report.md and the adversarial report.",
+    "Skip components that already have a source file. " + NO_MANUAL_STEPS,
+    "End with one line per component: '<name>: PASS' or '<name>: ISSUES (n)'.",
+  ].join("\n");
+}
+
+/** Resolve once the managed dev server for this project reports a live URL. */
+function waitForDevUrl(projectPath: string, timeoutMs: number): Promise<string | null> {
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (v: string | null): void => {
+      if (settled) return;
+      settled = true;
+      off();
+      clearTimeout(timer);
+      resolve(v);
+    };
+    const off = api.onDevServerUpdate(({ projectPath: p, status }) => {
+      if (p !== projectPath) return;
+      if (status.state === "running" && status.url) finish(status.url);
+      else if (status.state === "error" || status.state === "stopped") finish(null);
+    });
+    const timer = setTimeout(() => finish(null), timeoutMs);
+  });
+}
 
 /** Map the file-derived inspector status to the roster's display vocabulary. */
 type RosterStatus = "detected" | "built" | "verified" | "issues";
@@ -139,7 +200,13 @@ export function GuidedFlow({
   const [addNew, setAddNew] = useState(false);
 
   const run = useAgentRun();
+  const latest = useLatestRun();
   const [runLabel, setRunLabel] = useState("");
+  const [opKind, setOpKind] = useState<"other" | "verify" | "pipeline">("other");
+  const [verifyResult, setVerifyResult] = useState<VerificationResult | null>(null);
+  const [harnessMsg, setHarnessMsg] = useState("");
+  const [showTranscript, setShowTranscript] = useState(false);
+  const [externalRun, setExternalRun] = useState(false);
   const runDismissRef = useRef(false);
 
   async function reload(): Promise<void> {
@@ -157,24 +224,81 @@ export function GuidedFlow({
 
   useEffect(() => {
     void reload();
+    // A run may already be in flight for this project (started here before we
+    // navigated away, or from another screen) — reflect it so we don't start a
+    // duplicate and the user can go watch it.
+    void api.hasActiveRun(project.path).then(setExternalRun);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project.path]);
 
-  // When any run finishes, re-read the roster from files (status is file-derived).
+  // When any run finishes, re-read the roster from files (status is file-derived)
+  // and, for verify/pipeline runs, load the report summary for the outcome card.
   useEffect(() => {
-    if (run.model.status === "done") void reload();
+    if (run.model.status === "done") {
+      void reload();
+      if (opKind !== "other") void api.getVerification(project.path).then(setVerifyResult);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [run.model.status]);
 
-  async function op(label: string, prompt: string, tools?: string[]): Promise<void> {
+  // Follow an externally-started run so the "in progress" banner clears when it ends.
+  useEffect(() => {
+    if (externalRun && latest.model.status === "done") setExternalRun(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [latest.model.status]);
+
+  async function op(
+    label: string,
+    prompt: string,
+    opts?: { tools?: string[]; kind?: "other" | "verify" | "pipeline" },
+  ): Promise<void> {
     setRunLabel(label);
+    setVerifyResult(null);
+    setShowTranscript(false);
+    setOpKind(opts?.kind ?? "other");
     runDismissRef.current = false;
     await run.start({
       prompt,
       cwd: project.path,
-      allowedTools: tools ?? ["Read", "Write", "Edit", "Bash"],
+      allowedTools: opts?.tools ?? ["Read", "Write", "Edit", "Bash"],
       bypassPermissions: true,
     });
+  }
+
+  /**
+   * Bring the project's managed dev/storybook server up so a verify run has a
+   * live surface to inspect, and return its URL. Idempotent; returns null (and
+   * verify degrades to a code-level audit) when the project has no run script.
+   */
+  async function ensureHarness(): Promise<string | null> {
+    const status = await api.devServerStatus(project.path);
+    if (status.state === "running" && status.url) return status.url;
+    const info = await api.previewInfo(project.path);
+    if (!info.script) return null;
+    setHarnessMsg("Starting the preview harness…");
+    try {
+      const started = await api.startDevServer(project.path);
+      if (started.state === "running" && started.url) return started.url;
+      return await waitForDevUrl(project.path, 90_000);
+    } finally {
+      setHarnessMsg("");
+    }
+  }
+
+  async function verify(target: string, label: string): Promise<void> {
+    const url = await ensureHarness();
+    await op(label, verifyPrompt(target, url, config?.designSource === "figma"), { kind: "verify" });
+  }
+
+  async function buildAndVerifyRest(): Promise<void> {
+    const n = remaining.length;
+    if (n === 0) return;
+    const url = await ensureHarness();
+    await op(
+      `Building & verifying ${n} component${n === 1 ? "" : "s"}`,
+      buildVerifyRestPrompt(url, config?.designSource === "figma"),
+      { kind: "pipeline" },
+    );
   }
 
   const total = components?.length ?? 0;
@@ -193,7 +317,12 @@ export function GuidedFlow({
   }, [components]);
 
   const running = run.running;
+  // A run is in flight either here or (adopted) elsewhere for this project.
+  const busy = running || externalRun;
   const showRunCard = running || (run.model.status === "done" && !runDismissRef.current);
+  // Verify/pipeline runs show the outcome, not the raw checklist churn.
+  const collapsed = opKind === "verify" || opKind === "pipeline";
+  const openFindings = verifyResult?.findings.filter((f) => f.status === "open") ?? [];
 
   const status = !foundationReady
     ? "Set up the foundation to begin"
@@ -231,8 +360,8 @@ export function GuidedFlow({
               </button>
               <Button
                 variant="default"
-                disabled={running}
-                onClick={() => void op("Verify all built components", VERIFY_ALL_PROMPT, ["Read", "Bash"])}
+                disabled={busy}
+                onClick={() => void verify("all", "Verifying all built components")}
               >
                 Verify all
               </Button>
@@ -242,16 +371,28 @@ export function GuidedFlow({
 
         <div className="flex-1 overflow-y-auto px-8 pb-16 pt-6">
           <div className="mx-auto flex max-w-[720px] flex-col gap-5">
+            {/* A run started elsewhere for this project is still going. */}
+            {externalRun && !running && (
+              <Card className="flex items-center gap-2 p-3 text-xs text-vs-text-secondary">
+                <Spinner />
+                <span className="flex-1">A run is in progress for this project.</span>
+                <button onClick={onOpenRun} className="text-vs-accent hover:underline">
+                  Watch it →
+                </button>
+              </Card>
+            )}
+
             {/* Active run */}
             {showRunCard && (
               <Card className="flex flex-col gap-3 p-4">
                 <div className="flex items-center gap-2 text-sm text-vs-text-primary">
                   {running ? <Spinner /> : <span className="text-vs-success">✓</span>}
-                  <span className="flex-1">{runLabel || "Working…"}</span>
+                  <span className="flex-1">{harnessMsg || runLabel || "Working…"}</span>
                   {!running && (
                     <button
                       onClick={() => {
                         runDismissRef.current = true;
+                        setShowTranscript(false);
                         run.reset();
                       }}
                       className="rounded-md border border-vs-border-strong px-2.5 py-1 text-[11px] text-vs-text-secondary hover:border-vs-accent hover:text-vs-text-primary"
@@ -260,19 +401,56 @@ export function GuidedFlow({
                     </button>
                   )}
                 </div>
-                <RunPanel model={run.model} onSend={(t) => void run.send(t)} canChat={run.canChat} />
+
+                {collapsed ? (
+                  <>
+                    {running && (
+                      <p className="text-xs text-vs-text-muted">
+                        Running in the background — you can leave this screen; it keeps going.
+                      </p>
+                    )}
+                    {!running && verifyResult && (
+                      <div className="flex flex-col gap-2 text-sm">
+                        {openFindings.length === 0 ? (
+                          <span className="text-vs-success">✓ Verification passed — no open findings.</span>
+                        ) : (
+                          <span className="text-vs-warning">
+                            ⚠ {openFindings.length} open finding{openFindings.length === 1 ? "" : "s"}
+                            {openFindings[0] ? ` — e.g. ${openFindings[0].component}: ${openFindings[0].title}` : ""}
+                          </span>
+                        )}
+                        <div className="flex gap-3 text-xs">
+                          <button onClick={onOpenVerify} className="text-vs-accent hover:underline">
+                            Verification report →
+                          </button>
+                          <button
+                            onClick={() => setShowTranscript((v) => !v)}
+                            className="text-vs-text-secondary hover:text-vs-text-primary"
+                          >
+                            {showTranscript ? "Hide transcript" : "View details"}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                    {showTranscript && (
+                      <RunPanel model={run.model} onSend={(t) => void run.send(t)} canChat={run.canChat} />
+                    )}
+                  </>
+                ) : (
+                  <RunPanel model={run.model} onSend={(t) => void run.send(t)} canChat={run.canChat} />
+                )}
               </Card>
             )}
 
             {!foundationReady ? (
               <FoundationSetup
                 config={config}
-                running={running}
+                running={busy}
                 onRun={() =>
                   void op(
                     "Connecting the design source — extracting tokens + detecting components",
                     FOUNDATION_DEF.promptTemplate ?? "Extract tokens and detect components.",
-                    FOUNDATION_DEF.allowedTools,
+                    { tools: FOUNDATION_DEF.allowedTools },
                   )
                 }
               />
@@ -284,12 +462,12 @@ export function GuidedFlow({
                   componentCount={total}
                   open={foundationOpen}
                   onToggle={() => setFoundationOpen((v) => !v)}
-                  running={running}
+                  running={busy}
                   onReExtract={() =>
                     void op(
                       "Re-extracting tokens + re-detecting components",
                       FOUNDATION_DEF.promptTemplate ?? "Re-extract tokens and detect components.",
-                      FOUNDATION_DEF.allowedTools,
+                      { tools: FOUNDATION_DEF.allowedTools },
                     )
                   }
                   onOpenTokens={onOpenInspector}
@@ -304,40 +482,51 @@ export function GuidedFlow({
                     <div className="flex-1" />
                     <Button
                       variant="default"
-                      disabled={running}
+                      disabled={busy}
                       title="Re-read the design source and reconcile: refresh tokens and add any newly-detected components. Never touches built code."
                       onClick={() =>
                         void op(
                           `Re-scanning ${config?.designSource === "figma" ? "Figma" : "the design source"} — reconciling tokens + components`,
                           RESCAN_PROMPT,
-                          FOUNDATION_DEF.allowedTools,
+                          { tools: FOUNDATION_DEF.allowedTools },
                         )
                       }
                     >
                       ↻ Re-scan {config?.designSource === "figma" ? "Figma" : "source"}
                     </Button>
                     {remaining.length > 0 && (
-                      <Button
-                        variant="default"
-                        disabled={running}
-                        onClick={() =>
-                          void op(
-                            `Building ${remaining.length} remaining component${remaining.length === 1 ? "" : "s"}`,
-                            BUILD_REMAINING_PROMPT,
-                          )
-                        }
-                      >
-                        Build all detected ({remaining.length})
-                      </Button>
+                      <>
+                        <Button
+                          variant="default"
+                          disabled={busy}
+                          title="Build the remaining components without running verification."
+                          onClick={() =>
+                            void op(
+                              `Building ${remaining.length} remaining component${remaining.length === 1 ? "" : "s"}`,
+                              BUILD_REMAINING_PROMPT,
+                            )
+                          }
+                        >
+                          Build only ({remaining.length})
+                        </Button>
+                        <Button
+                          variant="default"
+                          disabled={busy}
+                          title="Build every detected component and verify each in the background — the CLI's Apply → Visual-Verify → Adversarial-Review cycle."
+                          onClick={() => void buildAndVerifyRest()}
+                        >
+                          Build &amp; verify the rest ({remaining.length})
+                        </Button>
+                      </>
                     )}
-                    <Button variant="primary" disabled={running} onClick={() => setAddNew(true)}>
+                    <Button variant="primary" disabled={busy} onClick={() => setAddNew(true)}>
                       + New component
                     </Button>
                   </div>
 
                   {addNew && (
                     <NewComponentForm
-                      disabled={running}
+                      disabled={busy}
                       onCancel={() => setAddNew(false)}
                       onCreate={(name, intent) => {
                         setAddNew(false);
@@ -369,11 +558,9 @@ export function GuidedFlow({
                             <ComponentRow
                               key={c.name}
                               component={c}
-                              disabled={running}
+                              disabled={busy}
                               onBuild={() => void op(`Building "${c.name}"`, buildOnePrompt(c.name, c.level))}
-                              onVerify={() =>
-                                void op(`Verifying "${c.name}"`, verifyOnePrompt(c.name), ["Read", "Bash"])
-                              }
+                              onVerify={() => void verify(c.name, `Verifying "${c.name}"`)}
                               onOpen={onOpenPreview}
                             />
                           ))}
@@ -405,7 +592,9 @@ export function GuidedFlow({
                     desc="Optional. Publish these components, tokens, and DESIGN.md with your own git/gh when you're ready to build screens for your site."
                     cta="Commit & publish"
                     onClick={() =>
-                      void op("Committing & publishing with your git/gh", COMMIT_PROMPT, ["Read", "Bash"])
+                      void op("Committing & publishing with your git/gh", COMMIT_PROMPT, {
+                        tools: ["Read", "Bash"],
+                      })
                     }
                   />
                 </section>

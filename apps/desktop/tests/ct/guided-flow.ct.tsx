@@ -78,11 +78,49 @@ test("offers build for detected, verify/open for built components", async ({ mou
   await expect(c.getByRole("button", { name: "Build", exact: true })).toBeVisible();
   await expect(c.getByRole("button", { name: "Verify", exact: true }).first()).toBeVisible();
   await expect(c.getByRole("button", { name: "Open", exact: true }).first()).toBeVisible();
-  // Always-available add actions.
-  await expect(c.getByRole("button", { name: /Build all detected/ })).toBeVisible();
+  // Incremental add/build actions: build-only, the build+verify pipeline, and new.
+  await expect(c.getByRole("button", { name: /Build only/ })).toBeVisible();
+  await expect(c.getByRole("button", { name: /Build & verify the rest/ })).toBeVisible();
   await expect(c.getByRole("button", { name: "+ New component" })).toBeVisible();
   // Re-scan the design source to reconcile against what's already built.
   await expect(c.getByRole("button", { name: /Re-scan/ })).toBeVisible();
+});
+
+test("verify shows the outcome, not the raw checklist, and reports issues", async ({ mount }) => {
+  const VERIFY_RUN: RunEvent[] = [
+    { kind: "system-init", model: "claude-opus-4-8", sessionId: "sess-v", tools: ["Read", "Bash"], mcpServers: [], mcpErrors: [] },
+    { kind: "assistant-text", text: "Button: ISSUES (1)" },
+    { kind: "result", isError: false, text: "done", sessionId: "sess-v" },
+  ];
+  const c = await mount(<GuidedFlow {...props} />, {
+    hooksConfig: {
+      mock: {
+        tokens: TOKENS,
+        components: ROSTER,
+        manifest: MANIFEST,
+        runScript: VERIFY_RUN,
+        verification: {
+          findings: [
+            { id: "button:D1", rawId: "D1", component: "Button", group: "adversarial", severity: "major", title: "hardcoded #F4A500", detail: "in .btn--primary", status: "open", reportPath: "specs/button/reports/x.md" },
+          ],
+        },
+      },
+    },
+  });
+  // "Verify all" runs the autonomous verify and, on completion, shows a summary card.
+  await c.getByRole("button", { name: "Verify all" }).click();
+  await expect(c.getByText(/1 open finding/)).toBeVisible();
+  await expect(c.getByText(/hardcoded #F4A500/)).toBeVisible();
+  // The raw transcript is hidden behind "View details", not shown by default.
+  await expect(c.getByRole("button", { name: "View details" })).toBeVisible();
+});
+
+test("reflects an in-flight run started elsewhere", async ({ mount }) => {
+  const c = await mount(<GuidedFlow {...props} />, {
+    hooksConfig: { mock: { tokens: TOKENS, components: ROSTER, manifest: MANIFEST, hasActiveRun: true } },
+  });
+  await expect(c.getByText(/A run is in progress for this project/)).toBeVisible();
+  await expect(c.getByRole("button", { name: /Watch it/ })).toBeVisible();
 });
 
 test("opens the new-component form", async ({ mount }) => {

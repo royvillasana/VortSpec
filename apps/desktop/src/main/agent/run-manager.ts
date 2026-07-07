@@ -14,8 +14,17 @@ import { newAccumulator, recordRun } from "./run-recorder";
  * Owns the set of active agent runs and forwards their events to the renderer.
  * Every typed event is re-validated against the contract before it crosses the
  * IPC boundary, so a parser bug surfaces as a clear error, never a bad payload.
+ * We track each run's `cwd` so the UI can tell whether a project already has a
+ * run in flight (reconnect after navigating away; prevent duplicate concurrent
+ * runs on the same files).
  */
-const runs = new Map<string, AgentAdapter>();
+const runs = new Map<string, { adapter: AgentAdapter; cwd: string }>();
+
+/** Whether the given project folder currently has an agent run in flight. */
+export function hasActiveRun(projectPath: string): boolean {
+  for (const { cwd } of runs.values()) if (cwd === projectPath) return true;
+  return false;
+}
 
 export function startRun(
   sender: WebContents,
@@ -23,7 +32,7 @@ export function startRun(
 ): { runId: string } {
   const runId = randomUUID();
   const adapter = new AgentAdapter();
-  runs.set(runId, adapter);
+  runs.set(runId, { adapter, cwd: opts.cwd });
   const acc = newAccumulator();
 
   adapter.on("event", (raw: RunEvent) => {
@@ -56,5 +65,5 @@ export function startRun(
 }
 
 export function cancelRun(runId: string): void {
-  runs.get(runId)?.cancel();
+  runs.get(runId)?.adapter.cancel();
 }
