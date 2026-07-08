@@ -2,7 +2,7 @@ import type { JSX } from "react";
 
 /** The activities the left rail switches between. "explorer" is the code view
  *  (Explorer + editor + preview); the rest render a reused @vortspec/ui panel. */
-export type ActivityKey = "explorer" | "source" | "tokens" | "tasks" | "manifest";
+export type ActivityKey = "explorer" | "pipeline" | "source" | "tokens" | "tasks" | "manifest";
 
 const ITEMS: { key: ActivityKey; label: string; icon: JSX.Element }[] = [
   {
@@ -10,6 +10,13 @@ const ITEMS: { key: ActivityKey; label: string; icon: JSX.Element }[] = [
     label: "Explorer",
     icon: (
       <path d="M3 4.5A1.5 1.5 0 0 1 4.5 3h4l2 2.5h5A1.5 1.5 0 0 1 17 7v8.5A1.5 1.5 0 0 1 15.5 17h-11A1.5 1.5 0 0 1 3 15.5v-11Z" />
+    ),
+  },
+  {
+    key: "pipeline",
+    label: "SDD-DE pipeline",
+    icon: (
+      <path d="M5 4h10M5 4a1.5 1.5 0 1 1 0 .01M5 10h10M15 10a1.5 1.5 0 1 1 0 .01M5 16h10M5 16a1.5 1.5 0 1 1 0 .01M5 5.5v3M15 11.5v3" />
     ),
   },
   {

@@ -64,6 +64,10 @@
       "types": "./src/views/Inspector.tsx",
       "default": "./src/views/Inspector.tsx"
     },
+    "./PipelinePanel": {
+      "types": "./src/views/PipelinePanel.tsx",
+      "default": "./src/views/PipelinePanel.tsx"
+    },
     "./DesignManifest": {
       "types": "./src/views/DesignManifest.tsx",
       "default": "./src/views/DesignManifest.tsx"

@@ -5,6 +5,7 @@ import { api } from "@vortspec/ui/api";
 import { AssistantDock } from "@vortspec/ui/AssistantDock";
 import { SourceControl } from "@vortspec/ui/SourceControl";
 import { Inspector } from "@vortspec/ui/Inspector";
+import { PipelinePanel } from "@vortspec/ui/PipelinePanel";
 import { Tasks } from "@vortspec/ui/Tasks";
 import { DesignManifest } from "@vortspec/ui/DesignManifest";
 import { Terminal } from "@vortspec/ui/Terminal";
@@ -67,6 +68,7 @@ export default function App(): JSX.Element {
   // Reused cockpit panels expect navigation callbacks; map them onto the IDE's
   // activity switcher so their internal rail stays consistent with ours.
   const goExplorer = (): void => setActivity("explorer");
+  const goPipeline = (): void => setActivity("pipeline");
   const goTokens = (): void => setActivity("tokens");
   const goManifest = (): void => setActivity("manifest");
   const goSource = (): void => setActivity("source");
@@ -93,12 +95,21 @@ export default function App(): JSX.Element {
         <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
           <main className="flex min-h-0 flex-1 overflow-hidden">
           {activity === "explorer" && <CodeWorkspace project={workspace} />}
+          {activity === "pipeline" && (
+            <div className="min-w-0 flex-1 overflow-auto">
+              <PipelinePanel
+                project={workspace}
+                onOpenManifest={goManifest}
+                onOpenTokens={goTokens}
+              />
+            </div>
+          )}
           {activity === "source" && (
             <div className="min-w-0 flex-1 overflow-auto">
               <SourceControl
                 project={workspace}
                 onBack={goExplorer}
-                onFlow={goExplorer}
+                onFlow={goPipeline}
                 onRun={goExplorer}
                 onPlayground={goExplorer}
                 onTokens={goTokens}
@@ -124,7 +135,7 @@ export default function App(): JSX.Element {
               <Tasks
                 project={workspace}
                 onBack={goExplorer}
-                onFlow={goExplorer}
+                onFlow={goPipeline}
                 onRun={goExplorer}
                 onPlayground={goExplorer}
                 onTokens={goTokens}

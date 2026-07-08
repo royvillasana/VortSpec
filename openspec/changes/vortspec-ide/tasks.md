@@ -66,7 +66,7 @@ Milestones I0→I5 are strictly ordered. I0 must leave the cockpit fully green b
 
 ## 7. I6 — Procedure parity, packaging, release
 
-- [ ] 7.1 Surface the SDD-DE pipeline (foundation → build → verify → docs → `DESIGN.md`) inside the IDE as an Explorer panel driven entirely by `@vortspec/core`; confirm a procedure edit in `core` shows up in both apps (parity check).
+- [x] 7.1 Surface the SDD-DE pipeline inside the IDE — a new "SDD-DE pipeline" activity renders `<PipelinePanel>` (in `@vortspec/ui`, shared), driven entirely by `@vortspec/core`: stage **definitions** come from `DEFAULT_FLOW` and live **status** from `api.getFlow` (`.vortspec/flow.json`), so the panel holds no pipeline logic. Parity is by construction — the same core-defined stages drive the cockpit's GuidedFlow and the IDE panel; the IDE CT iterates the real `DEFAULT_FLOW` and asserts every stage renders, so a core rename/reorder/add surfaces in both apps with no IDE change. IDE 20 CT (+3 pipeline/parity), gate green (build/test/lint 4/6/4).
 - [ ] 7.2 End-to-end validation through the IDE UI: open a workspace, run the pipeline, edit code in Monaco, use the terminal, see the live preview, view a Git diff, vibe-engineer a change with the gates intact.
 - [ ] 7.3 Add `apps/ide` to the release pipeline: `pnpm run dist` → codesign → hdiutil dmg → GitHub release; second download on the site.
 - [ ] 7.4 Update docs (the website documentation screen) to cover the two-app model, the terminal, and the IDE workflow.
