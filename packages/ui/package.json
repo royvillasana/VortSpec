@@ -11,7 +11,16 @@
     "./ProjectRail": { "types": "./src/components/ProjectRail.tsx", "default": "./src/components/ProjectRail.tsx" },
     "./RunPanel": { "types": "./src/components/RunPanel.tsx", "default": "./src/components/RunPanel.tsx" },
     "./run-model": { "types": "./src/lib/run-model.ts", "default": "./src/lib/run-model.ts" },
-    "./run-progress": { "types": "./src/lib/run-progress.ts", "default": "./src/lib/run-progress.ts" }
+    "./run-progress": { "types": "./src/lib/run-progress.ts", "default": "./src/lib/run-progress.ts" },
+    "./api": { "types": "./src/lib/api.ts", "default": "./src/lib/api.ts" },
+    "./useAgentRun": { "types": "./src/lib/useAgentRun.ts", "default": "./src/lib/useAgentRun.ts" },
+    "./AssistantDock": { "types": "./src/components/AssistantDock.tsx", "default": "./src/components/AssistantDock.tsx" },
+    "./SourceControl": { "types": "./src/views/SourceControl.tsx", "default": "./src/views/SourceControl.tsx" },
+    "./RunApp": { "types": "./src/views/RunApp.tsx", "default": "./src/views/RunApp.tsx" },
+    "./Tasks": { "types": "./src/views/Tasks.tsx", "default": "./src/views/Tasks.tsx" },
+    "./Inspector": { "types": "./src/views/Inspector.tsx", "default": "./src/views/Inspector.tsx" },
+    "./DesignManifest": { "types": "./src/views/DesignManifest.tsx", "default": "./src/views/DesignManifest.tsx" },
+    "./Profile": { "types": "./src/views/Profile.tsx", "default": "./src/views/Profile.tsx" }
   },
   "scripts": {
     "build": "tsc -p tsconfig.json --noEmit",

@@ -1,25 +1,25 @@
 import { useEffect, useState } from "react";
 import type { EnvReport, Project, SetupAnswers, UpdateInfo, Profile as ProfileT } from "@vortspec/core/ipc";
-import { api } from "./lib/api";
+import { api } from "@vortspec/ui/api";
 import { EnvironmentCheck } from "./views/EnvironmentCheck";
 import { Dashboard } from "./views/Dashboard";
 import { GuidedFlow } from "./views/GuidedFlow";
-import { Inspector } from "./views/Inspector";
+import { Inspector } from "@vortspec/ui/Inspector";
 import { DevPreview } from "./views/DevPreview";
 import { RunView } from "./views/RunView";
 import { ArtifactReview } from "./views/ArtifactReview";
 import { Verification } from "./views/Verification";
 import { History } from "./views/History";
-import { DesignManifest } from "./views/DesignManifest";
-import { Profile } from "./views/Profile";
-import { SourceControl } from "./views/SourceControl";
-import { RunApp } from "./views/RunApp";
-import { Tasks } from "./views/Tasks";
+import { DesignManifest } from "@vortspec/ui/DesignManifest";
+import { Profile } from "@vortspec/ui/Profile";
+import { SourceControl } from "@vortspec/ui/SourceControl";
+import { RunApp } from "@vortspec/ui/RunApp";
+import { Tasks } from "@vortspec/ui/Tasks";
 import { DesignInput } from "./views/DesignInput";
 import { Intake } from "./views/Intake";
 import { NewProjectWizard } from "./views/NewProjectWizard";
 import { Logo } from "@vortspec/ui/Logo";
-import { AssistantDock } from "./components/AssistantDock";
+import { AssistantDock } from "@vortspec/ui/AssistantDock";
 
 type View = "env" | "dashboard" | "profile";
 

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { CheckStatus, EnvCheck, EnvReport } from "@vortspec/core/ipc";
-import { api } from "../lib/api";
+import { api } from "@vortspec/ui/api";
 import { Button, Spinner } from "@vortspec/ui/ui";
 
 /**

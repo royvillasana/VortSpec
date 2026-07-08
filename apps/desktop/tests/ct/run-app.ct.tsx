@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/experimental-ct-react";
-import { RunApp } from "../../src/renderer/src/views/RunApp";
+import { RunApp } from "@vortspec/ui/RunApp";
 import { PROJECT } from "./support/fixtures";
 import type { DevServerStatus } from "@vortspec/core/ipc";
 

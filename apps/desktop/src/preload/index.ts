@@ -16,6 +16,7 @@ import {
   type AgentRunOptions,
 } from "@vortspec/core/run-events";
 import { DEV_SERVER_UPDATE_CHANNEL, type DevServerUpdate } from "@vortspec/core/dev-server";
+import type { VortSpecApi } from "@vortspec/core/api";
 
 /**
  * The safe bridge between the sandboxed renderer and the main process.
@@ -39,7 +40,7 @@ function subscribe<T>(
   return () => ipcRenderer.removeListener(channel, listener);
 }
 
-const api = {
+const api: VortSpecApi = {
   isElectron: () => invoke("system:isElectron"),
   getVersion: () => invoke("system:getVersion"),
   checkUpdate: () => invoke("system:checkUpdate"),
@@ -160,7 +161,7 @@ const api = {
     invoke("inspector:restoreFiles", { projectPath, files }),
 };
 
-export type VortSpecApi = typeof api;
+export type { VortSpecApi };
 
 if (process.contextIsolated) {
   try {

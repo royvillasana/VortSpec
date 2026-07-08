@@ -10,7 +10,7 @@ import {
   autoTokenFile,
   autoComponentDir,
 } from "@vortspec/core/setup";
-import { api } from "../lib/api";
+import { api } from "@vortspec/ui/api";
 import { Button, Card } from "@vortspec/ui/ui";
 
 /**

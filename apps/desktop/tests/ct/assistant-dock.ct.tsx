@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/experimental-ct-react";
-import { AssistantDock } from "../../src/renderer/src/components/AssistantDock";
+import { AssistantDock } from "@vortspec/ui/AssistantDock";
 import { PROJECT } from "./support/fixtures";
 import type { RunEvent } from "@vortspec/core/run-events";
 

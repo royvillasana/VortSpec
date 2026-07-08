@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/experimental-ct-react";
-import { DesignManifest } from "../../src/renderer/src/views/DesignManifest";
+import { DesignManifest } from "@vortspec/ui/DesignManifest";
 import { PROJECT } from "./support/fixtures";
 import type { RunEvent } from "@vortspec/core/run-events";
 

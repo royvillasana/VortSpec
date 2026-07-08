@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { Project, RunStageSummary, RunSummary } from "@vortspec/core/ipc";
-import { api } from "../lib/api";
+import { api } from "@vortspec/ui/api";
 import { Spinner } from "@vortspec/ui/ui";
 import { ProjectRail, projectRailItems } from "@vortspec/ui/ProjectRail";
 

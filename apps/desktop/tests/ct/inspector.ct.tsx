@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/experimental-ct-react";
-import { Inspector } from "../../src/renderer/src/views/Inspector";
+import { Inspector } from "@vortspec/ui/Inspector";
 import { PROJECT, TOKENS } from "./support/fixtures";
 import type { RunEvent } from "@vortspec/core/run-events";
 

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { DevServerStatus, Project } from "@vortspec/core/ipc";
-import { api } from "../lib/api";
-import { useAgentRun } from "../lib/useAgentRun";
+import { api } from "@vortspec/ui/api";
+import { useAgentRun } from "@vortspec/ui/useAgentRun";
 import { Button, Spinner } from "@vortspec/ui/ui";
 import { RunPanel } from "@vortspec/ui/RunPanel";
 import { ProjectRail, projectRailItems } from "@vortspec/ui/ProjectRail";

@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/experimental-ct-react";
-import { Tasks } from "../../src/renderer/src/views/Tasks";
+import { Tasks } from "@vortspec/ui/Tasks";
 import { PROJECT } from "./support/fixtures";
 import type { TaskAuth } from "@vortspec/core/ipc";
 

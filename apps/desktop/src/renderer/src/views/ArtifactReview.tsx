@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { Flow, Project, StageDef, StageState, StageStatus } from "@vortspec/core/ipc";
-import { api } from "../lib/api";
+import { api } from "@vortspec/ui/api";
 import { Button, Spinner } from "@vortspec/ui/ui";
 import { Markdown } from "@vortspec/ui/Markdown";
 import { ProjectRail, ReviewBadge, projectRailItems } from "@vortspec/ui/ProjectRail";

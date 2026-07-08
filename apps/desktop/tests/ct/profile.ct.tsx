@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/experimental-ct-react";
-import { Profile } from "../../src/renderer/src/views/Profile";
+import { Profile } from "@vortspec/ui/Profile";
 import type { UsageResult, Profile as ProfileT } from "@vortspec/core/ipc";
 
 const noop = (): void => {};

@@ -11,8 +11,8 @@ import {
   verifyPrompt,
   buildVerifyRestPrompt,
 } from "@vortspec/core/sdd-prompts";
-import { api } from "../lib/api";
-import { useAgentRun, useLatestRun } from "../lib/useAgentRun";
+import { api } from "@vortspec/ui/api";
+import { useAgentRun, useLatestRun } from "@vortspec/ui/useAgentRun";
 import { deriveProgress, type OpKind } from "@vortspec/ui/run-progress";
 import { Button, Card, Spinner } from "@vortspec/ui/ui";
 import { RunPanel } from "@vortspec/ui/RunPanel";

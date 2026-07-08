@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { Project } from "@vortspec/core/ipc";
 import type { Activity, RunModel, RunStatus } from "@vortspec/ui/run-model";
-import { useLatestRun } from "../lib/useAgentRun";
+import { useLatestRun } from "@vortspec/ui/useAgentRun";
 import { Button, Spinner } from "@vortspec/ui/ui";
 import { ProjectRail, projectRailItems } from "@vortspec/ui/ProjectRail";
 

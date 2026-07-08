@@ -8,7 +8,9 @@
  * component tests install a stub `window.vortspec` before the first call,
  * regardless of module evaluation order.
  */
-export const api: Window["vortspec"] = new Proxy({} as Window["vortspec"], {
+import type { VortSpecApi } from "@vortspec/core/api";
+
+export const api: VortSpecApi = new Proxy({} as VortSpecApi, {
   get(_target, prop) {
     const impl = window.vortspec as unknown as Record<string | symbol, unknown> | undefined;
     if (!impl) throw new Error("window.vortspec is not available (preload bridge missing)");
