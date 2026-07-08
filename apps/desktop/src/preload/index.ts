@@ -87,6 +87,9 @@ const api = {
     invoke("github:createRepo", req),
   githubCreatePR: (req: { projectPath: string; base?: string; title: string; body?: string }) =>
     invoke("github:createPR", req),
+  gitImport: (req: { projectPath: string; url: string; branch?: string }) => invoke("git:import", req),
+  githubPublish: (req: { projectPath: string; branch: string; title: string; body?: string }) =>
+    invoke("github:publish", req),
   getProfile: () => invoke("profile:get", undefined),
   saveProfile: (profile: Profile) => invoke("profile:save", profile),
   onAgentEvent: (callback: (payload: AgentEventEnvelope) => void) =>

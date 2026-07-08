@@ -88,6 +88,17 @@ export const prCreateRequestSchema = z.object({
   body: z.string().optional(),
 });
 export const accountSwitchRequestSchema = z.object({ account: z.string().min(1) });
+export const importRequestSchema = z.object({
+  projectPath: z.string(),
+  url: z.string().min(1),
+  branch: z.string().optional(),
+});
+export const publishRequestSchema = z.object({
+  projectPath: z.string(),
+  branch: z.string().min(1),
+  title: z.string().min(1),
+  body: z.string().optional(),
+});
 
 /** Presence + auth of the GitHub CLI (a light M1 read; full provider is M2). */
 export const providerAuthSchema = z.object({

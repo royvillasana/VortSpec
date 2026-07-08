@@ -36,6 +36,9 @@ export function SourceControl({
   const [newBranch, setNewBranch] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const [toast, setToast] = useState("");
+  const [manifestReady, setManifestReady] = useState(false);
+  const [importUrl, setImportUrl] = useState("");
+  const [importBranch, setImportBranch] = useState("");
 
   async function reload(): Promise<void> {
     const [s, b, r] = await Promise.all([
@@ -50,6 +53,7 @@ export function SourceControl({
   useEffect(() => {
     void reload();
     void api.githubAuth().then(setAuth);
+    void api.getManifest(project.path).then((m) => setManifestReady(m.exists));
   }, [project.path]);
 
   function flash(m: string): void {
@@ -106,11 +110,45 @@ export function SourceControl({
           {status === null ? (
             <div className="flex items-center gap-2 text-sm text-vs-text-secondary"><Spinner /> Reading git…</div>
           ) : notRepo ? (
-            <Card className="flex flex-col items-start gap-3 p-5">
-              <p className="text-sm text-vs-text-secondary">This folder isn't a git repository yet.</p>
-              <Button variant="primary" disabled={busy !== null} onClick={() => void act("init", () => api.gitInit(project.path))}>
-                Initialize repository
-              </Button>
+            <Card className="flex flex-col items-start gap-4 p-5">
+              <div className="flex flex-col items-start gap-2">
+                <p className="text-sm text-vs-text-secondary">This folder isn't a git repository yet.</p>
+                <Button variant="default" disabled={busy !== null} onClick={() => void act("init", () => api.gitInit(project.path))}>
+                  Initialize repository
+                </Button>
+              </div>
+              <div className="flex w-full flex-col gap-2 border-t border-vs-border-default pt-4">
+                <p className="text-sm font-medium text-vs-text-primary">Import a GitHub repo as the design source</p>
+                <p className="text-[11px] text-vs-text-muted">
+                  Bring a repository into this project, then run the Design system stage to scan its tokens and
+                  components and build them locally.
+                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <input
+                    value={importUrl}
+                    onChange={(e) => setImportUrl(e.target.value)}
+                    placeholder="https://github.com/owner/repo"
+                    className="w-72 rounded-md border border-vs-border-default bg-vs-bg-primary px-2.5 py-1.5 text-xs placeholder:text-vs-text-muted"
+                  />
+                  <input
+                    value={importBranch}
+                    onChange={(e) => setImportBranch(e.target.value)}
+                    placeholder="branch (optional)"
+                    className="w-40 rounded-md border border-vs-border-default bg-vs-bg-primary px-2.5 py-1.5 text-xs placeholder:text-vs-text-muted"
+                  />
+                  <Button
+                    variant="primary"
+                    disabled={busy !== null || !importUrl.trim()}
+                    onClick={() =>
+                      void act("import", () =>
+                        api.gitImport({ projectPath: project.path, url: importUrl.trim(), branch: importBranch.trim() || undefined }),
+                      )
+                    }
+                  >
+                    Import from GitHub
+                  </Button>
+                </div>
+              </div>
             </Card>
           ) : (
             <>
@@ -120,6 +158,7 @@ export function SourceControl({
                 remotes={remotes}
                 projectPath={project.path}
                 branch={status.branch}
+                manifestReady={manifestReady}
                 busy={busy !== null}
                 onChanged={async () => {
                   await reload();
@@ -245,6 +284,7 @@ function GitHubConnect({
   remotes,
   projectPath,
   branch,
+  manifestReady,
   busy,
   onChanged,
   flash,
@@ -254,6 +294,7 @@ function GitHubConnect({
   remotes: GitRemote[];
   projectPath: string;
   branch: string | null;
+  manifestReady: boolean;
   busy: boolean;
   onChanged: () => Promise<void>;
   flash: (m: string) => void;
@@ -373,6 +414,32 @@ function GitHubConnect({
           >
             Open pull request for {branch}
           </Button>
+        </div>
+      )}
+
+      {/* Gated push-back (M3): publish the built design system on a new branch + PR */}
+      {auth && auth.authenticated && origin && (
+        <div className="flex flex-col gap-1.5 border-t border-vs-border-default pt-2.5">
+          <Button
+            variant="primary"
+            disabled={busy || !manifestReady}
+            onClick={() =>
+              void run("publish design system", () =>
+                api.githubPublish({
+                  projectPath,
+                  branch: "vortspec/design-system",
+                  title: "VortSpec: design system (tokens, components, DESIGN.md)",
+                }),
+              )
+            }
+          >
+            Publish design system → new branch + PR
+          </Button>
+          <p className="text-[11px] text-vs-text-muted">
+            {manifestReady
+              ? "Creates the vortspec/design-system branch, commits the generated tokens/components/DESIGN.md, pushes, and opens a PR. Never pushes to main."
+              : "Available once DESIGN.md is generated (the design-system gate). Generate the manifest first."}
+          </p>
         </div>
       )}
     </Card>

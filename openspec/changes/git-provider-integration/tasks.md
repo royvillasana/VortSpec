@@ -38,14 +38,14 @@
 - [x] 2.5 Tests + gate; Done-when: connect → create repo → push a fresh folder.
 
 ## M3 — GitHub as a design source (bidirectional)
-- [ ] 3.1 Setup/DesignInput: choose a GitHub repo + branch as the design source; clone/
+- [~] 3.1 Setup/DesignInput: choose a GitHub repo + branch as the design source; clone/
   pull into the project folder; record in project config.
-- [ ] 3.2 Source-driven pipeline with source = repo files: extract tokens + detect
+- [x] 3.2 Source-driven pipeline with source = repo files: extract tokens + detect
   components, build in the selected framework/language (reuse Foundation/components stages).
-- [ ] 3.3 Push-back (gated): create a new branch (app-named) or use the chosen branch;
+- [x] 3.3 Push-back (gated): create a new branch (app-named) or use the chosen branch;
   stage + commit + push the generated tokens/components/DESIGN.md; open a PR. Never
   silent-push to `main`; unavailable until the flow gate is approved.
-- [ ] 3.4 Tests + gate; Done-when: a repo becomes a built design system pushed back as a PR.
+- [x] 3.4 Tests + gate; Done-when: a repo becomes a built design system pushed back as a PR.
 
 ## M4 — Non-destructive parallel refactor
 - [ ] 4.1 Screen/page discovery: map the repo's existing screens + the UI they compose.

@@ -127,6 +127,10 @@ export const DEFAULT_FLOW: StageDef[] = [
       "ask for a brief; the design source is the input.\n\n" +
       "For `design_source: figma`, use the Figma MCP to read the file at `figma_file_url` and the " +
       "variable collection named `figma_token_collection`.\n\n" +
+      "For `design_source: github` (a repository imported into this project), the repo's own files ARE " +
+      "the source: scan them for the design system — read its existing token definitions (CSS variables, " +
+      "Tailwind/theme config, SCSS/JS token files) and its component library, and reconcile them into the " +
+      "configured `token_file` and inventory. Do not fetch anything remotely; read the files on disk.\n\n" +
       "1. Extract every design token and variable from the source into the configured `token_file`.\n" +
       "2. Detect every component in the design system and write `.sdd-de/components.json` — a JSON " +
       "array of objects `{ \"name\": string, \"level\": \"atom\"|\"molecule\"|\"organism\", " +

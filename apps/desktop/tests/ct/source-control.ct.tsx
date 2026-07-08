@@ -84,11 +84,36 @@ test("offers Open pull request when connected with a remote (M2)", async ({ moun
   await expect(c.getByRole("button", { name: /Open pull request for feature\/x/ })).toBeVisible();
 });
 
-test("offers to initialize when the folder is not a repo", async ({ mount }) => {
+test("offers to initialize and import a repo when the folder is not a repo (M3)", async ({ mount }) => {
   const c = await mount(<SourceControl {...props} />, {
     hooksConfig: {
       mock: { gitStatus: { ...DIRTY, isRepo: false, clean: true, staged: [], unstaged: [], untracked: [], conflicts: [] } },
     },
   });
   await expect(c.getByRole("button", { name: "Initialize repository" })).toBeVisible();
+  await expect(c.getByPlaceholder("https://github.com/owner/repo")).toBeVisible();
+  await expect(c.getByRole("button", { name: "Import from GitHub" })).toBeVisible();
+});
+
+const REMOTE_ONE = [{ name: "origin", url: "https://github.com/me/app.git" }];
+
+test("gates push-back until the manifest is ready (M3)", async ({ mount }) => {
+  const c = await mount(<SourceControl {...props} />, {
+    hooksConfig: {
+      mock: { gitStatus: DIRTY, gitRemotes: REMOTE_ONE, githubAuth: AUTHED_ONE, manifest: { path: "DESIGN.md", content: "", exists: false } },
+    },
+  });
+  const pub = c.getByRole("button", { name: /Publish design system/ });
+  await expect(pub).toBeVisible();
+  await expect(pub).toBeDisabled();
+  await expect(c.getByText(/Available once DESIGN.md is generated/)).toBeVisible();
+});
+
+test("enables push-back when the manifest exists (M3)", async ({ mount }) => {
+  const c = await mount(<SourceControl {...props} />, {
+    hooksConfig: {
+      mock: { gitStatus: DIRTY, gitRemotes: REMOTE_ONE, githubAuth: AUTHED_ONE, manifest: { path: "DESIGN.md", content: "# x", exists: true } },
+    },
+  });
+  await expect(c.getByRole("button", { name: /Publish design system/ })).toBeEnabled();
 });

@@ -224,6 +224,30 @@ export async function pull(cwd: string): Promise<GitResult> {
   return r.ok ? ok("Pulled (fast-forward).") : fail(r, "Pull failed.");
 }
 
+/**
+ * Import a remote repo INTO an existing project folder (M3) so its files become the
+ * design source. Uses init + remote + fetch + checkout so it works alongside the
+ * already-present `.sdd-de/` toolkit (a plain `git clone` needs an empty dir). URL
+ * and branch travel as argv. Refuses if the folder is already a repo.
+ */
+export async function importInto(cwd: string, url: string, branch?: string): Promise<GitResult> {
+  if (await isRepo(cwd)) return { ok: false, message: "This folder is already a git repository." };
+  let r = await git(cwd, ["init"]);
+  if (!r.ok) return fail(r, "git init failed.");
+  r = await git(cwd, ["remote", "add", "origin", url]);
+  if (!r.ok) return fail(r, "Could not add the remote.");
+  r = await git(cwd, ["fetch", "origin"]);
+  if (!r.ok) return fail(r, "Fetch failed — check the repo URL and your access.");
+  let b = branch;
+  if (!b) {
+    await git(cwd, ["remote", "set-head", "origin", "-a"]);
+    const h = await git(cwd, ["rev-parse", "--abbrev-ref", "origin/HEAD"]);
+    b = h.ok ? h.stdout.trim().replace(/^origin\//, "") : "main";
+  }
+  r = await git(cwd, ["checkout", "-f", "-B", b, `origin/${b}`]);
+  return r.ok ? ok(`Imported ${url} (${b}).`) : fail(r, `Could not check out ${b}.`);
+}
+
 /** Normal push only — never `--force`, never `--delete`. Sets upstream for new branches. */
 export async function push(cwd: string): Promise<GitResult> {
   const branch = (await git(cwd, ["rev-parse", "--abbrev-ref", "HEAD"])).stdout.trim();

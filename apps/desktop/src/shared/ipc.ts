@@ -15,6 +15,8 @@ import {
   repoCreateRequestSchema,
   prCreateRequestSchema,
   accountSwitchRequestSchema,
+  importRequestSchema,
+  publishRequestSchema,
 } from "./git";
 import { flowSchema, stageStatusSchema, runHistoryResultSchema } from "./flow";
 import { devServerStatusSchema } from "./dev-server";
@@ -229,6 +231,8 @@ export const ipcContract = {
   "github:switchAccount": { request: accountSwitchRequestSchema, response: gitResultSchema },
   "github:createRepo": { request: repoCreateRequestSchema, response: gitResultSchema },
   "github:createPR": { request: prCreateRequestSchema, response: gitResultSchema },
+  "git:import": { request: importRequestSchema, response: gitResultSchema },
+  "github:publish": { request: publishRequestSchema, response: gitResultSchema },
   "profile:get": { request: z.void(), response: profileSchema },
   "profile:save": { request: profileSchema, response: profileSchema },
 

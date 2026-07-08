@@ -1,5 +1,6 @@
 import { execFileSafe } from "../util/exec";
 import type { ProviderAuth, GitResult, RepoVisibility } from "../../shared/git";
+import * as git from "./git-adapter";
 
 /**
  * A light read of the GitHub CLI's auth state (M1) — enough to make the "Connect
@@ -102,4 +103,34 @@ export async function createGithubPR(
   const text = `${r.stdout}\n${r.stderr}`;
   if (r.code !== 0) return { ok: false, message: r.stderr.trim() || "Could not open the pull request." };
   return { ok: true, message: "Opened a pull request.", url: parseGithubUrl(text) };
+}
+
+/**
+ * M3 gated push-back: publish the built design system to a NEW branch and open a PR
+ * — additive only (never to `main`, never force). Creates the branch (or switches if
+ * it already exists), stages everything, commits, pushes, and opens the PR.
+ */
+export async function publishDesignSystem(
+  cwd: string,
+  opts: { branch: string; title: string; body?: string },
+): Promise<GitResult> {
+  // Create the app-named branch, or switch to it if a prior publish made it. Never main.
+  const created = await git.createBranch(cwd, opts.branch);
+  if (!created.ok) {
+    const sw = await git.checkout(cwd, opts.branch);
+    if (!sw.ok) return { ok: false, message: `Could not create or switch to ${opts.branch}.` };
+  }
+  const staged = await git.stage(cwd, ["."]);
+  if (!staged.ok) return staged;
+  const committed = await git.commit(cwd, opts.title);
+  // A "nothing to commit" is fine if a prior commit already captured it — keep going.
+  const pushed = await git.push(cwd);
+  if (!pushed.ok) return pushed;
+  const pr = await createGithubPR(cwd, { title: opts.title, body: opts.body });
+  if (!pr.ok) return { ok: false, message: `Pushed ${opts.branch}, but opening the PR failed: ${pr.message}` };
+  return {
+    ok: true,
+    message: committed.ok ? `Published to ${opts.branch} and opened a PR.` : `Pushed ${opts.branch} and opened a PR.`,
+    url: pr.url,
+  };
 }
