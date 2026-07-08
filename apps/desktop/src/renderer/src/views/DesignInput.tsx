@@ -3,7 +3,7 @@ import type { Project, SetupAnswers } from "../../../shared/ipc";
 import { api } from "../lib/api";
 import { Button } from "../components/ui";
 
-type Tab = "zip" | "figma" | "folder";
+type Tab = "zip" | "figma" | "github" | "folder";
 type Mcp = "checking" | "ok" | "unauth" | "unknown";
 
 /**
@@ -25,6 +25,8 @@ export function DesignInput({
   const [zipPath, setZipPath] = useState("");
   const [figmaUrl, setFigmaUrl] = useState("");
   const [folderPath, setFolderPath] = useState("");
+  const [githubUrl, setGithubUrl] = useState("");
+  const [githubBranch, setGithubBranch] = useState("");
   const [mcp, setMcp] = useState<Mcp>("checking");
   const [mcpDetail, setMcpDetail] = useState("");
   const [dsOpen, setDsOpen] = useState(false);
@@ -43,15 +45,23 @@ export function DesignInput({
   }
 
   const figmaValid = /figma\.com\//.test(figmaUrl);
+  const githubValid = /^(https?:\/\/|git@|ssh:\/\/).+/.test(githubUrl.trim());
   const canStart =
     (tab === "zip" && zipPath.trim().endsWith(".zip")) ||
     (tab === "figma" && figmaValid) ||
+    (tab === "github" && githubValid) ||
     (tab === "folder" && folderPath.trim().length > 0);
 
   function submit(): void {
     if (!canStart) return;
     if (tab === "zip") onContinue({ designSource: "zip", zipFilePath: zipPath.trim() });
     else if (tab === "figma") onContinue({ designSource: "figma", figmaFileUrl: figmaUrl.trim() });
+    else if (tab === "github")
+      onContinue({
+        designSource: "github",
+        githubRepoUrl: githubUrl.trim(),
+        githubBranch: githubBranch.trim() || undefined,
+      });
     else onContinue({ designSource: "github", githubRepoUrl: folderPath.trim() });
   }
 
@@ -91,6 +101,7 @@ export function DesignInput({
             [
               ["zip", "ZIP export"],
               ["figma", "Figma link"],
+              ["github", "GitHub repo"],
               ["folder", "Folder / repo"],
             ] as [Tab, string][]
           ).map(([id, label]) => (
@@ -178,6 +189,29 @@ export function DesignInput({
                 </div>
               </div>
             )}
+          </Panel>
+        )}
+
+        {tab === "github" && (
+          <Panel title="Import a GitHub repository" desc="VortSpec clones the repo into your project, then scans it for design tokens and components and builds them locally. Uses your own git.">
+            <div className="flex flex-col gap-2.5">
+              <input
+                value={githubUrl}
+                onChange={(e) => setGithubUrl(e.target.value)}
+                placeholder="https://github.com/owner/repo"
+                className="h-[38px] w-full rounded-md border border-vs-border-default bg-vs-bg-primary px-3 font-mono text-xs text-vs-text-primary placeholder:text-vs-text-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-vs-accent-subtle"
+              />
+              <input
+                value={githubBranch}
+                onChange={(e) => setGithubBranch(e.target.value)}
+                placeholder="branch (optional — defaults to the repo's default branch)"
+                className="h-[38px] w-full rounded-md border border-vs-border-default bg-vs-bg-primary px-3 font-mono text-xs text-vs-text-primary placeholder:text-vs-text-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-vs-accent-subtle"
+              />
+              <p className="text-xs text-vs-text-muted">
+                The repo is imported into this project folder on Continue; the design system is built from it,
+                and you can publish changes back on a new branch + PR from Source Control.
+              </p>
+            </div>
           </Panel>
         )}
 

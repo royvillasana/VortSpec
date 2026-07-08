@@ -65,6 +65,20 @@ export function NewProjectWizard({
     setBusy(true);
     setError(null);
     try {
+      // A remote GitHub repo as the source → clone it into the project folder first,
+      // then lay down the SDD-DE toolkit. (A local folder path is read in place.)
+      if (a.designSource === "github" && a.githubRepoUrl && /^(https?:\/\/|git@|ssh:\/\/)/.test(a.githubRepoUrl)) {
+        const r = await api.gitImport({
+          projectPath: project.path,
+          url: a.githubRepoUrl.trim(),
+          branch: a.githubBranch?.trim() || undefined,
+        });
+        if (!r.ok) {
+          setError(`Couldn't import the repository: ${r.message}`);
+          setBusy(false);
+          return;
+        }
+      }
       onCreated(await api.createProject(project.path, a));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not set up the project");

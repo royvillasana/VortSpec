@@ -38,7 +38,7 @@
 - [x] 2.5 Tests + gate; Done-when: connect → create repo → push a fresh folder.
 
 ## M3 — GitHub as a design source (bidirectional)
-- [~] 3.1 Setup/DesignInput: choose a GitHub repo + branch as the design source; clone/
+- [x] 3.1 Setup/DesignInput: choose a GitHub repo + branch as the design source; clone/
   pull into the project folder; record in project config.
 - [x] 3.2 Source-driven pipeline with source = repo files: extract tokens + detect
   components, build in the selected framework/language (reuse Foundation/components stages).
