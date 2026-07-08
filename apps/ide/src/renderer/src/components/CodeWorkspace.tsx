@@ -1,52 +1,117 @@
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { JSX } from "react";
 import type { Project } from "@vortspec/core/ipc";
 import { api } from "@vortspec/ui/api";
+import { Explorer } from "./Explorer";
+import { EditorGroup, type OpenFile } from "./EditorGroup";
 
 /**
- * The "code" activity: Explorer (left) + editor (top) + live preview (bottom).
- * These are scaffolded placeholders in I1 — the Monaco editor + real file tree
- * land in I2, and the live preview in I4. Each placeholder names the milestone
- * that fills it in, and offers the raw-form escape hatch (reveal in Finder).
+ * The "code" activity: Explorer (left) + editor group (top) + live-preview
+ * placeholder (bottom). File contents are read/written through the
+ * workspace-root-guarded core handlers; the renderer never touches `fs`. The
+ * live preview arrives in I4.
  */
 export function CodeWorkspace({ project }: { project: Project }): JSX.Element {
+  const [files, setFiles] = useState<OpenFile[]>([]);
+  const [activePath, setActivePath] = useState<string | null>(null);
+  const filesRef = useRef(files);
+  filesRef.current = files;
+
+  // Reset when the workspace changes.
+  useEffect(() => {
+    setFiles([]);
+    setActivePath(null);
+  }, [project.path]);
+
+  const openFile = useCallback(
+    async (path: string): Promise<void> => {
+      if (filesRef.current.some((f) => f.path === path)) {
+        setActivePath(path);
+        return;
+      }
+      const file = await api.readFile(project.path, path);
+      if (file.truncated) return; // binary / too large — don't open in the text editor
+      setFiles((prev) => [...prev, { path, content: file.content, dirty: false, staleOnDisk: false }]);
+      setActivePath(path);
+    },
+    [project.path],
+  );
+
+  const change = useCallback((path: string, value: string): void => {
+    setFiles((prev) =>
+      prev.map((f) => (f.path === path ? { ...f, content: value, dirty: true } : f)),
+    );
+  }, []);
+
+  const save = useCallback(
+    async (path: string): Promise<void> => {
+      const file = filesRef.current.find((f) => f.path === path);
+      if (!file) return;
+      const res = await api.writeFile(project.path, path, file.content);
+      if (res.ok) {
+        setFiles((prev) =>
+          prev.map((f) => (f.path === path ? { ...f, dirty: false, staleOnDisk: false } : f)),
+        );
+      }
+    },
+    [project.path],
+  );
+
+  const close = useCallback((path: string): void => {
+    setFiles((prev) => prev.filter((f) => f.path !== path));
+    setActivePath((cur) => {
+      if (cur !== path) return cur;
+      const rest = filesRef.current.filter((f) => f.path !== path);
+      return rest.length ? rest[rest.length - 1].path : null;
+    });
+  }, []);
+
+  const reload = useCallback(
+    async (path: string): Promise<void> => {
+      const file = await api.readFile(project.path, path);
+      setFiles((prev) =>
+        prev.map((f) =>
+          f.path === path ? { ...f, content: file.content, dirty: false, staleOnDisk: false } : f,
+        ),
+      );
+    },
+    [project.path],
+  );
+
+  // Reconcile open files with on-disk changes: silently reload clean files,
+  // flag dirty ones as stale (never clobber unsaved edits).
+  useEffect(() => {
+    const off = api.onWorkspaceChange((e) => {
+      if (e.projectPath !== project.path || !e.path) return;
+      const open = filesRef.current.find((f) => f.path === e.path);
+      if (!open) return;
+      if (open.dirty) {
+        setFiles((prev) => prev.map((f) => (f.path === e.path ? { ...f, staleOnDisk: true } : f)));
+      } else {
+        void reload(e.path);
+      }
+    });
+    return () => off();
+  }, [project.path, reload]);
+
   return (
     <div className="flex min-w-0 flex-1">
-      {/* Explorer */}
-      <aside className="flex w-60 shrink-0 flex-col border-r border-vs-border-default bg-vs-bg-surface">
-        <div className="flex items-center justify-between px-3 py-2">
-          <span className="text-[11px] font-semibold uppercase tracking-wide text-vs-text-muted">
-            Explorer
-          </span>
-          <button
-            type="button"
-            title="Reveal in Finder"
-            onClick={() => void api.revealPath(project.path, ".")}
-            className="text-vs-text-muted hover:text-vs-text-secondary"
-          >
-            <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M3 6.5A1.5 1.5 0 0 1 4.5 5h3l1.5 2h6A1.5 1.5 0 0 1 16.5 8.5v5A1.5 1.5 0 0 1 15 15H4.5A1.5 1.5 0 0 1 3 13.5v-7Z" />
-            </svg>
-          </button>
-        </div>
-        <div className="px-3 pb-2 text-sm text-vs-text-primary">{project.name}</div>
-        <div className="mx-3 rounded-md border border-dashed border-vs-border-default p-3 text-xs text-vs-text-muted">
-          The file tree and Monaco editor arrive in I2. For now, open files from
-          your terminal or reveal the folder above.
-        </div>
+      <aside className="w-60 shrink-0 border-r border-vs-border-default bg-vs-bg-surface">
+        <Explorer project={project} activePath={activePath} onOpen={(p) => void openFile(p)} />
       </aside>
 
-      {/* Editor + preview split */}
       <div className="flex min-w-0 flex-1 flex-col">
-        <section className="flex flex-1 items-center justify-center border-b border-vs-border-default bg-vs-bg-code">
-          <div className="max-w-sm text-center">
-            <p className="text-sm text-vs-text-secondary">Editor</p>
-            <p className="mt-1 text-xs text-vs-text-muted">
-              Monaco (VS Code's editor engine) mounts here in I2 — open, edit, and
-              diff files scoped to the workspace.
-            </p>
-          </div>
-        </section>
-        <section className="flex h-2/5 items-center justify-center bg-vs-bg-primary">
+        <EditorGroup
+          files={files}
+          activePath={activePath}
+          onActivate={setActivePath}
+          onClose={close}
+          onChange={change}
+          onSave={(p) => void save(p)}
+          onReload={(p) => void reload(p)}
+          loadHead={(p) => api.fileAtHead(project.path, p)}
+        />
+        <section className="flex h-2/5 items-center justify-center border-t border-vs-border-default bg-vs-bg-primary">
           <div className="max-w-sm text-center">
             <p className="text-sm text-vs-text-secondary">Live preview</p>
             <p className="mt-1 text-xs text-vs-text-muted">

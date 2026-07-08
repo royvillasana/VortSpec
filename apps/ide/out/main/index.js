@@ -4,12 +4,12 @@ import { electronApp, optimizer, is } from "@electron-toolkit/utils";
 import { z } from "zod";
 import { spawn } from "node:child_process";
 import { join, resolve as resolve$1, sep, basename, dirname, extname } from "node:path";
-import { access, mkdir, readFile, writeFile, cp, copyFile, appendFile, readdir, symlink, stat } from "node:fs/promises";
+import { access, mkdir, readFile as readFile$1, writeFile as writeFile$1, cp, copyFile, appendFile, readdir, symlink, stat } from "node:fs/promises";
 import { createHash, randomUUID } from "node:crypto";
 import { createRequire } from "node:module";
+import { watch, promises, existsSync } from "node:fs";
 import { EventEmitter } from "node:events";
 import { homedir, platform } from "node:os";
-import { existsSync } from "node:fs";
 import __cjs_mod__ from "node:module";
 const __filename = import.meta.filename;
 const __dirname = import.meta.dirname;
@@ -478,6 +478,28 @@ const updateInfoSchema = z.object({
   /** Direct download URL of the macOS .dmg asset, if present. */
   downloadUrl: z.string().nullable()
 });
+const fsEntrySchema = z.object({
+  name: z.string(),
+  /** path relative to the workspace root, using "/" separators */
+  path: z.string(),
+  type: z.enum(["file", "dir"])
+});
+const fsFileSchema = z.object({
+  path: z.string(),
+  content: z.string(),
+  /** true when the file was binary or too large to read as text */
+  truncated: z.boolean()
+});
+const fsWriteResultSchema = z.object({
+  ok: z.boolean(),
+  message: z.string()
+});
+const WORKSPACE_CHANGE_CHANNEL = "workspace:change";
+z.object({
+  projectPath: z.string(),
+  path: z.string().nullable(),
+  kind: z.enum(["add", "change", "unlink", "refresh"])
+});
 const frameworkSchema = z.enum([
   "react",
   "next",
@@ -770,6 +792,24 @@ const ipcContract = {
   "workspace:createProject": {
     request: z.object({ path: z.string(), answers: setupAnswersSchema }),
     response: projectSchema
+  },
+  "workspace:listDir": {
+    request: z.object({ projectPath: z.string(), relPath: z.string() }),
+    response: z.array(fsEntrySchema)
+  },
+  "workspace:readFile": {
+    request: z.object({ projectPath: z.string(), relPath: z.string() }),
+    response: fsFileSchema
+  },
+  "workspace:writeFile": {
+    request: z.object({ projectPath: z.string(), relPath: z.string(), content: z.string() }),
+    response: fsWriteResultSchema
+  },
+  "workspace:watchStart": { request: z.string(), response: z.void() },
+  "workspace:watchStop": { request: z.string(), response: z.void() },
+  "git:fileAtHead": {
+    request: z.object({ projectPath: z.string(), relPath: z.string() }),
+    response: z.string().nullable()
   },
   "toolkit:status": { request: z.string(), response: toolkitStatusSchema },
   "toolkit:install": { request: z.string(), response: toolkitStatusSchema },
@@ -1214,7 +1254,7 @@ function projectId(path) {
 }
 async function readRegistry() {
   try {
-    const raw = await readFile(registryPath(), "utf8");
+    const raw = await readFile$1(registryPath(), "utf8");
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
     return parsed.filter(
@@ -1226,7 +1266,7 @@ async function readRegistry() {
 }
 async function writeRegistry(entries) {
   await mkdir(app.getPath("userData"), { recursive: true });
-  await writeFile(registryPath(), JSON.stringify(entries, null, 2), "utf8");
+  await writeFile$1(registryPath(), JSON.stringify(entries, null, 2), "utf8");
 }
 async function hydrate(entry) {
   const toolkit = await getToolkitStatus(entry.path);
@@ -1328,7 +1368,7 @@ async function createProject(projectPath, answers) {
     recursive: true
   });
   await cp(join(pkgDir, "docs"), join(sddeDir, "docs"), { recursive: true });
-  await writeFile(join(sddeDir, "project.yaml"), buildProjectYaml(answers), "utf8");
+  await writeFile$1(join(sddeDir, "project.yaml"), buildProjectYaml(answers), "utf8");
   const claudeSrc = join(pkgDir, "CLAUDE.md");
   for (const name of ["CLAUDE.md", "AGENTS.md", "GEMINI.md", "codex.md"]) {
     const dst = join(projectPath, name);
@@ -1345,12 +1385,88 @@ async function createProject(projectPath, answers) {
   );
   const gitignorePath = join(projectPath, ".gitignore");
   if (await exists(gitignorePath)) {
-    const content = await readFile(gitignorePath, "utf8");
+    const content = await readFile$1(gitignorePath, "utf8");
     if (!content.includes(".sdd-de")) {
       await appendFile(gitignorePath, "\n# SDD-DE toolkit\n.sdd-de/\n");
     }
   }
   return refreshProject(projectPath);
+}
+function resolveInside(root, rel) {
+  const rootAbs = resolve$1(root);
+  const abs = resolve$1(rootAbs, rel);
+  if (abs !== rootAbs && !abs.startsWith(rootAbs + sep)) {
+    throw new Error("Path escapes the workspace root.");
+  }
+  return abs;
+}
+const IGNORE = /* @__PURE__ */ new Set([".git"]);
+const MAX_BYTES = 2e6;
+function toPosix(rel) {
+  return rel.split(sep).join("/");
+}
+async function listDir(root, rel) {
+  const abs = resolveInside(root, rel);
+  const dirents = await promises.readdir(abs, { withFileTypes: true });
+  const entries = [];
+  for (const d of dirents) {
+    if (rel === "" && IGNORE.has(d.name)) continue;
+    const childRel = rel ? `${rel}/${d.name}` : d.name;
+    entries.push({ name: d.name, path: childRel, type: d.isDirectory() ? "dir" : "file" });
+  }
+  entries.sort(
+    (a, b) => a.type === b.type ? a.name.localeCompare(b.name) : a.type === "dir" ? -1 : 1
+  );
+  return entries;
+}
+async function readFile(root, rel) {
+  const abs = resolveInside(root, rel);
+  const stat2 = await promises.stat(abs);
+  if (stat2.size > MAX_BYTES) return { path: rel, content: "", truncated: true };
+  const buf = await promises.readFile(abs);
+  if (buf.includes(0)) return { path: rel, content: "", truncated: true };
+  return { path: rel, content: buf.toString("utf8"), truncated: false };
+}
+async function writeFile(root, rel, content) {
+  try {
+    const abs = resolveInside(root, rel);
+    await promises.writeFile(abs, content, "utf8");
+    return { ok: true, message: "Saved." };
+  } catch (err) {
+    return { ok: false, message: err instanceof Error ? err.message : "Could not save the file." };
+  }
+}
+const watchers = /* @__PURE__ */ new Map();
+function startWatch(sender, root) {
+  if (watchers.has(root)) return;
+  try {
+    const w = watch(root, { recursive: true }, (event, filename) => {
+      if (!filename) {
+        sender.send(WORKSPACE_CHANGE_CHANNEL, { projectPath: root, path: null, kind: "refresh" });
+        return;
+      }
+      const rel = filename.toString();
+      if (rel.split(sep)[0] === ".git") return;
+      sender.send(WORKSPACE_CHANGE_CHANNEL, {
+        projectPath: root,
+        path: toPosix(rel),
+        kind: event === "rename" ? "add" : "change"
+      });
+    });
+    watchers.set(root, w);
+  } catch {
+  }
+}
+function stopWatch(root) {
+  const w = watchers.get(root);
+  if (w) {
+    w.close();
+    watchers.delete(root);
+  }
+}
+function stopAllWatchers() {
+  for (const w of watchers.values()) w.close();
+  watchers.clear();
 }
 const KEY_MAP = {
   design_source: "designSource",
@@ -1387,7 +1503,7 @@ function parseFlatYaml(text) {
 async function readProjectConfig(projectPath) {
   let text;
   try {
-    text = await readFile(join(projectPath, ".sdd-de", "project.yaml"), "utf8");
+    text = await readFile$1(join(projectPath, ".sdd-de", "project.yaml"), "utf8");
   } catch {
     return null;
   }
@@ -1418,7 +1534,7 @@ function normValue(value) {
 async function readFigmaVariables(projectPath) {
   let raw;
   try {
-    raw = await readFile(join(projectPath, FIGMA_VARS_PATH), "utf8");
+    raw = await readFile$1(join(projectPath, FIGMA_VARS_PATH), "utf8");
   } catch {
     return null;
   }
@@ -1532,7 +1648,7 @@ async function collectSources(dir) {
       const full = join(d, entry.name);
       if (entry.isDirectory()) await walk(full);
       else if (SOURCE_EXTS$1.has(extname(entry.name)) && !entry.name.endsWith(".variants.ts")) {
-        const text = await readFile(full, "utf8").catch(() => "");
+        const text = await readFile$1(full, "utf8").catch(() => "");
         if (text) out.push({ component: basename(entry.name, extname(entry.name)), text });
       }
     }
@@ -1566,7 +1682,7 @@ function buildUsage(tokenNames, sources) {
 const OVERRIDES_PATH = ".vortspec/token-overrides.json";
 async function readOverrides(projectPath) {
   try {
-    const raw = await readFile(join(projectPath, OVERRIDES_PATH), "utf8");
+    const raw = await readFile$1(join(projectPath, OVERRIDES_PATH), "utf8");
     const parsed = JSON.parse(raw);
     if (Array.isArray(parsed)) return new Set(parsed.filter((x) => typeof x === "string"));
   } catch {
@@ -1578,7 +1694,7 @@ async function markOverridden(projectPath, name) {
   set.add(name);
   const path = join(projectPath, OVERRIDES_PATH);
   await mkdir(dirname(path), { recursive: true }).catch(() => void 0);
-  await writeFile(path, `${JSON.stringify([...set].sort(), null, 2)}
+  await writeFile$1(path, `${JSON.stringify([...set].sort(), null, 2)}
 `, "utf8").catch(
     () => void 0
   );
@@ -1589,7 +1705,7 @@ async function getInspectorTokens(projectPath) {
   if (!tokenFile) return { tokenFile: null, tokens: [], usage: {}, figmaOnly: [], figmaSynced: false };
   let css;
   try {
-    css = await readFile(join(projectPath, tokenFile), "utf8");
+    css = await readFile$1(join(projectPath, tokenFile), "utf8");
   } catch {
     return { tokenFile, tokens: [], usage: {}, figmaOnly: [], figmaSynced: false };
   }
@@ -1626,11 +1742,11 @@ async function setInspectorTokenValue(projectPath, name, value) {
   const tokenFile = config?.tokenFile;
   if (tokenFile) {
     const path = join(projectPath, tokenFile);
-    const css = await readFile(path, "utf8").catch(() => null);
+    const css = await readFile$1(path, "utf8").catch(() => null);
     if (css) {
       const re = new RegExp(`(--${name}\\s*:\\s*)([^;]*)(;)`);
       if (re.test(css)) {
-        await writeFile(path, css.replace(re, `$1${value.trim()}$3`), "utf8");
+        await writeFile$1(path, css.replace(re, `$1${value.trim()}$3`), "utf8");
         await markOverridden(projectPath, name);
       }
     }
@@ -1644,7 +1760,7 @@ async function snapshotTokenScope(projectPath) {
   async function capture(rel) {
     if (seen.has(rel)) return;
     seen.add(rel);
-    const content = await readFile(join(projectPath, rel), "utf8").catch(() => null);
+    const content = await readFile$1(join(projectPath, rel), "utf8").catch(() => null);
     if (content !== null) snaps.push({ path: rel, content });
   }
   if (config?.tokenFile) await capture(config.tokenFile);
@@ -1759,7 +1875,7 @@ function scanTokens(...sources) {
 async function firstExisting(projectPath, rels) {
   for (const rel of rels) {
     try {
-      await readFile(join(projectPath, rel), "utf8");
+      await readFile$1(join(projectPath, rel), "utf8");
       return rel;
     } catch {
     }
@@ -1779,7 +1895,7 @@ async function componentStatus(projectPath, name, hasFile) {
   if (!hasFile) return { status: "unknown", issues: [], specPath, reportPath };
   let report;
   try {
-    report = reportPath ? await readFile(join(projectPath, reportPath), "utf8") : "";
+    report = reportPath ? await readFile$1(join(projectPath, reportPath), "utf8") : "";
     if (!reportPath) return { status: "built", issues: [], specPath, reportPath };
   } catch {
     return { status: "built", issues: [], specPath, reportPath };
@@ -1796,7 +1912,7 @@ async function getInspectorComponents(projectPath) {
   const componentDir = config?.componentDir ?? null;
   let manifest = [];
   try {
-    const raw = await readFile(join(projectPath, ".sdd-de/components.json"), "utf8");
+    const raw = await readFile$1(join(projectPath, ".sdd-de/components.json"), "utf8");
     const parsed = detectedComponentsSchema.safeParse(JSON.parse(raw));
     if (parsed.success) manifest = parsed.data;
   } catch {
@@ -1809,9 +1925,9 @@ async function getInspectorComponents(projectPath) {
     let props = [];
     let tokens = [];
     if (abs && file) {
-      const src = await readFile(abs, "utf8").catch(() => "");
+      const src = await readFile$1(abs, "utf8").catch(() => "");
       const vrel = await variantsSibling(projectPath, file);
-      const variantsSrc = vrel ? await readFile(join(projectPath, vrel), "utf8").catch(() => "") : "";
+      const variantsSrc = vrel ? await readFile$1(join(projectPath, vrel), "utf8").catch(() => "") : "";
       props = parseProps(variantsSrc || src);
       tokens = scanTokens(src, variantsSrc);
     }
@@ -1840,14 +1956,14 @@ async function snapshotComponent(projectPath, file) {
   const candidates = [file, ...vrel ? [vrel] : []];
   const snaps = [];
   for (const rel of candidates) {
-    const content = await readFile(join(projectPath, rel), "utf8").catch(() => null);
+    const content = await readFile$1(join(projectPath, rel), "utf8").catch(() => null);
     if (content !== null) snaps.push({ path: rel, content });
   }
   return snaps;
 }
 async function restoreFiles(projectPath, files) {
   for (const f of files) {
-    await writeFile(join(projectPath, f.path), f.content, "utf8").catch(() => void 0);
+    await writeFile$1(join(projectPath, f.path), f.content, "utf8").catch(() => void 0);
   }
 }
 const BACKTICK = String.fromCharCode(96);
@@ -1925,7 +2041,7 @@ async function getVerification(projectPath) {
   const reports = await findReports(specsRoot);
   const findings = [];
   for (const { path, group } of reports) {
-    const md = await readFile(path, "utf8").catch(() => "");
+    const md = await readFile$1(path, "utf8").catch(() => "");
     if (!md) continue;
     const rel = path.slice(projectPath.length + 1);
     const dir = dirname(path);
@@ -2158,7 +2274,7 @@ function lastRunPath(cwd) {
   return join(cwd, ".vortspec", "last-run.json");
 }
 async function readLastRun(cwd) {
-  const raw = await readFile(lastRunPath(cwd), "utf8").catch(() => null);
+  const raw = await readFile$1(lastRunPath(cwd), "utf8").catch(() => null);
   if (!raw) return null;
   try {
     const parsed = lastRunSchema.safeParse(JSON.parse(raw));
@@ -2171,7 +2287,7 @@ async function writeLastRun(cwd, run) {
   const dir = join(cwd, ".vortspec");
   try {
     await mkdir(dir, { recursive: true });
-    await writeFile(lastRunPath(cwd), JSON.stringify(run, null, 2), "utf8");
+    await writeFile$1(lastRunPath(cwd), JSON.stringify(run, null, 2), "utf8");
   } catch {
   }
 }
@@ -2224,7 +2340,7 @@ async function recordRun(opts, acc, exitCode) {
     ],
     artifacts: [...acc.files].map((f) => basename(f))
   };
-  await writeFile(join(dir, `${summary.id}.json`), JSON.stringify(summary, null, 2), "utf8").catch(
+  await writeFile$1(join(dir, `${summary.id}.json`), JSON.stringify(summary, null, 2), "utf8").catch(
     () => void 0
   );
 }
@@ -2498,6 +2614,10 @@ async function getLog(cwd, limit = 20) {
   const r = await git(cwd, ["log", `-${limit}`, "--pretty=format:%H%x1f%h%x1f%s%x1f%an%x1f%ad", "--date=short"]);
   const withRs = r.stdout.split("\n").join("");
   return parseLog(withRs + "");
+}
+async function getFileAtHead(cwd, path) {
+  const r = await git(cwd, ["show", `HEAD:${path}`]);
+  return r.ok ? r.stdout : null;
 }
 function ok(message) {
   return { ok: true, message };
@@ -2899,7 +3019,7 @@ function linksPath(cwd) {
   return join(cwd, ".vortspec", "jira-links.json");
 }
 async function readLinks(cwd) {
-  const raw = await readFile(linksPath(cwd), "utf8").catch(() => null);
+  const raw = await readFile$1(linksPath(cwd), "utf8").catch(() => null);
   if (!raw) return {};
   try {
     const parsed = issueLinksSchema.safeParse(JSON.parse(raw));
@@ -2913,12 +3033,12 @@ async function linkIssue(cwd, ref, key) {
   links[ref] = key;
   try {
     await mkdir(join(cwd, ".vortspec"), { recursive: true });
-    await writeFile(linksPath(cwd), JSON.stringify(links, null, 2), "utf8");
+    await writeFile$1(linksPath(cwd), JSON.stringify(links, null, 2), "utf8");
   } catch {
   }
 }
 async function createIssueFromSpec(req) {
-  const body = await readFile(join(req.projectPath, req.specPath), "utf8").catch(() => null);
+  const body = await readFile$1(join(req.projectPath, req.specPath), "utf8").catch(() => null);
   if (body === null) return { ok: false, message: `Couldn't read the spec at ${req.specPath}.` };
   const summary = `${req.ref} — ${req.type.toLowerCase()} from VortSpec spec`;
   const created = await createJiraIssue({
@@ -2935,7 +3055,7 @@ function profilePath() {
 }
 async function readProfile() {
   try {
-    const raw = await readFile(profilePath(), "utf8");
+    const raw = await readFile$1(profilePath(), "utf8");
     const parsed = profileSchema.safeParse(JSON.parse(raw));
     return parsed.success ? parsed.data : EMPTY_PROFILE;
   } catch {
@@ -2945,7 +3065,7 @@ async function readProfile() {
 async function saveProfile(profile) {
   const next = profileSchema.parse(profile);
   await mkdir(app.getPath("userData"), { recursive: true });
-  await writeFile(profilePath(), JSON.stringify(next, null, 2), "utf8");
+  await writeFile$1(profilePath(), JSON.stringify(next, null, 2), "utf8");
   return next;
 }
 function vortspecDir(projectPath) {
@@ -2967,7 +3087,7 @@ function initialState() {
 }
 async function readState(projectPath) {
   try {
-    const raw = await readFile(flowFile(projectPath), "utf8");
+    const raw = await readFile$1(flowFile(projectPath), "utf8");
     const parsed = flowStateSchema.safeParse(JSON.parse(raw));
     if (parsed.success) return reconcile(parsed.data);
   } catch {
@@ -2992,7 +3112,7 @@ function reconcile(state) {
 }
 async function writeState(projectPath, state) {
   await mkdir(vortspecDir(projectPath), { recursive: true });
-  await writeFile(flowFile(projectPath), JSON.stringify(state, null, 2), "utf8");
+  await writeFile$1(flowFile(projectPath), JSON.stringify(state, null, 2), "utf8");
 }
 function withFlow(state) {
   return { definitions: DEFAULT_FLOW, state };
@@ -3048,7 +3168,7 @@ async function requestChanges(projectPath, stageId, notes) {
 async function saveIntake(projectPath, content) {
   const sddeDir = join(projectPath, ".sdd-de");
   await mkdir(sddeDir, { recursive: true });
-  await writeFile(join(sddeDir, "brief.md"), content, "utf8");
+  await writeFile$1(join(sddeDir, "brief.md"), content, "utf8");
   return approveStage(projectPath, "brief");
 }
 async function findLatestArtifact(projectPath, suffix) {
@@ -3074,7 +3194,7 @@ async function findLatestArtifact(projectPath, suffix) {
   await walk(specsRoot);
   if (!best) return null;
   const chosen = best;
-  const content = await readFile(chosen.path, "utf8");
+  const content = await readFile$1(chosen.path, "utf8");
   return { path: chosen.path.slice(projectPath.length + 1), content };
 }
 async function completeInput(projectPath, stageId) {
@@ -3082,7 +3202,7 @@ async function completeInput(projectPath, stageId) {
 }
 async function readArtifact(projectPath, relPath) {
   try {
-    return await readFile(join(projectPath, relPath), "utf8");
+    return await readFile$1(join(projectPath, relPath), "utf8");
   } catch {
     return null;
   }
@@ -3101,14 +3221,14 @@ function detectManifestFormat(content) {
 }
 async function getManifest(projectPath) {
   for (const rel of CANDIDATES) {
-    const content = await readFile(join(projectPath, rel), "utf8").catch(() => null);
+    const content = await readFile$1(join(projectPath, rel), "utf8").catch(() => null);
     if (content !== null) return { path: rel, content, exists: true, format: detectManifestFormat(content) };
   }
   return { path: DEFAULT_TARGET, content: "", exists: false, format: "empty" };
 }
 async function resolveTarget(projectPath) {
   for (const rel of CANDIDATES) {
-    const ok2 = await readFile(join(projectPath, rel), "utf8").then(
+    const ok2 = await readFile$1(join(projectPath, rel), "utf8").then(
       () => true,
       () => false
     );
@@ -3117,7 +3237,7 @@ async function resolveTarget(projectPath) {
   return DEFAULT_TARGET;
 }
 async function readIndex(projectPath) {
-  const raw = await readFile(join(projectPath, INDEX_FILE), "utf8").catch(() => null);
+  const raw = await readFile$1(join(projectPath, INDEX_FILE), "utf8").catch(() => null);
   if (!raw) return [];
   try {
     const parsed = JSON.parse(raw);
@@ -3129,7 +3249,7 @@ async function readIndex(projectPath) {
 async function writeIndex(projectPath, metas) {
   const path = join(projectPath, INDEX_FILE);
   await mkdir(join(projectPath, VERSIONS_DIR), { recursive: true }).catch(() => void 0);
-  await writeFile(path, `${JSON.stringify(metas, null, 2)}
+  await writeFile$1(path, `${JSON.stringify(metas, null, 2)}
 `, "utf8").catch(() => void 0);
 }
 async function snapshotManifest(projectPath, opts) {
@@ -3137,7 +3257,7 @@ async function snapshotManifest(projectPath, opts) {
   if (!current.exists || !current.content) return null;
   const id = opts.timestamp.replace(/[:.]/g, "-");
   await mkdir(join(projectPath, VERSIONS_DIR), { recursive: true }).catch(() => void 0);
-  await writeFile(join(projectPath, VERSIONS_DIR, `${id}.md`), current.content, "utf8").catch(
+  await writeFile$1(join(projectPath, VERSIONS_DIR, `${id}.md`), current.content, "utf8").catch(
     () => void 0
   );
   const meta = {
@@ -3158,7 +3278,7 @@ async function saveManifest(projectPath, content, timestamp) {
   const target = await resolveTarget(projectPath);
   const abs = join(projectPath, target);
   await mkdir(dirname(abs), { recursive: true }).catch(() => void 0);
-  await writeFile(abs, content, "utf8");
+  await writeFile$1(abs, content, "utf8");
   return { path: target, content, exists: true };
 }
 async function listManifestVersions(projectPath) {
@@ -3175,14 +3295,14 @@ async function listManifestVersions(projectPath) {
   return { versions };
 }
 async function readManifestVersion(projectPath, id) {
-  return readFile(join(projectPath, VERSIONS_DIR, `${id}.md`), "utf8").catch(() => null);
+  return readFile$1(join(projectPath, VERSIONS_DIR, `${id}.md`), "utf8").catch(() => null);
 }
 async function restoreManifestVersion(projectPath, id, timestamp) {
   const content = await readManifestVersion(projectPath, id);
   if (content === null) return getManifest(projectPath);
   await snapshotManifest(projectPath, { reason: "restore", timestamp });
   const target = await resolveTarget(projectPath);
-  await writeFile(join(projectPath, target), content, "utf8");
+  await writeFile$1(join(projectPath, target), content, "utf8");
   return { path: target, content, exists: true };
 }
 async function currentFlowRun(projectPath) {
@@ -3248,7 +3368,7 @@ async function recordedRuns(projectPath) {
   }
   const runs2 = [];
   for (const name of entries.filter((n) => n.endsWith(".json"))) {
-    const raw = await readFile(join(dir, name), "utf8").catch(() => null);
+    const raw = await readFile$1(join(dir, name), "utf8").catch(() => null);
     if (!raw) continue;
     try {
       const parsed = runSummarySchema.safeParse(JSON.parse(raw));
@@ -3328,7 +3448,7 @@ async function checkForUpdate() {
 const servers = /* @__PURE__ */ new Map();
 const keyOf = (projectPath, kind) => `${projectPath}::${kind}`;
 async function readScripts(projectPath) {
-  const pkg = await readFile(join(projectPath, "package.json"), "utf8").catch(() => null);
+  const pkg = await readFile$1(join(projectPath, "package.json"), "utf8").catch(() => null);
   if (!pkg) return {};
   try {
     return JSON.parse(pkg).scripts ?? {};
@@ -3495,6 +3615,18 @@ const handlers = {
   }),
   "workspace:refreshProject": ((path) => refreshProject(path)),
   "workspace:createProject": ((req) => createProject(req.path, req.answers)),
+  "workspace:listDir": ((r) => listDir(r.projectPath, r.relPath)),
+  "workspace:readFile": ((r) => readFile(r.projectPath, r.relPath)),
+  "workspace:writeFile": ((r) => writeFile(r.projectPath, r.relPath, r.content)),
+  "workspace:watchStart": ((projectPath, sender) => {
+    startWatch(sender, projectPath);
+    return void 0;
+  }),
+  "workspace:watchStop": ((projectPath) => {
+    stopWatch(projectPath);
+    return void 0;
+  }),
+  "git:fileAtHead": ((r) => getFileAtHead(r.projectPath, r.relPath)),
   "toolkit:status": ((path) => getToolkitStatus(path)),
   "toolkit:install": ((path) => installToolkit(path)),
   "agent:startRun": ((opts, sender) => startRun(sender, opts)),
@@ -3667,9 +3799,11 @@ app.whenReady().then(async () => {
 });
 app.on("before-quit", () => {
   stopAllDevServers();
+  stopAllWatchers();
 });
 app.on("window-all-closed", () => {
   stopAllDevServers();
+  stopAllWatchers();
   if (process.platform !== "darwin") {
     app.quit();
   }

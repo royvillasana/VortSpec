@@ -107,6 +107,28 @@ z.object({
   kind: serverKindSchema.default("storybook"),
   status: devServerStatusSchema
 });
+z.object({
+  name: z.string(),
+  /** path relative to the workspace root, using "/" separators */
+  path: z.string(),
+  type: z.enum(["file", "dir"])
+});
+z.object({
+  path: z.string(),
+  content: z.string(),
+  /** true when the file was binary or too large to read as text */
+  truncated: z.boolean()
+});
+z.object({
+  ok: z.boolean(),
+  message: z.string()
+});
+const WORKSPACE_CHANGE_CHANNEL = "workspace:change";
+z.object({
+  projectPath: z.string(),
+  path: z.string().nullable(),
+  kind: z.enum(["add", "change", "unlink", "refresh"])
+});
 function invoke(channel, request) {
   return ipcRenderer.invoke(channel, request);
 }
@@ -189,6 +211,14 @@ const api = {
   previewInfo: (projectPath) => invoke("devserver:previewInfo", projectPath),
   storybookIndex: (url) => invoke("devserver:storybookIndex", url),
   onDevServerUpdate: (callback) => subscribe(DEV_SERVER_UPDATE_CHANNEL, callback),
+  // Workspace filesystem (IDE)
+  listDir: (projectPath, relPath) => invoke("workspace:listDir", { projectPath, relPath }),
+  readFile: (projectPath, relPath) => invoke("workspace:readFile", { projectPath, relPath }),
+  writeFile: (projectPath, relPath, content) => invoke("workspace:writeFile", { projectPath, relPath, content }),
+  watchWorkspace: (projectPath) => invoke("workspace:watchStart", projectPath),
+  unwatchWorkspace: (projectPath) => invoke("workspace:watchStop", projectPath),
+  fileAtHead: (projectPath, relPath) => invoke("git:fileAtHead", { projectPath, relPath }),
+  onWorkspaceChange: (callback) => subscribe(WORKSPACE_CHANGE_CHANNEL, callback),
   setPublishTarget: (projectPath, repoUrl) => invoke("flow:setPublishTarget", { projectPath, repoUrl }),
   readArtifact: (projectPath, relPath) => invoke("artifact:read", { projectPath, relPath }),
   findLatestArtifact: (projectPath, suffix) => invoke("artifact:findLatest", { projectPath, suffix }),

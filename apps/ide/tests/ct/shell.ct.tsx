@@ -35,8 +35,9 @@ test("opening a workspace reveals the four-region shell", async ({ mount }) => {
   await expect(rail.getByRole("button", { name: "Explorer" })).toBeVisible();
   await expect(rail.getByRole("button", { name: "Source Control" })).toBeVisible();
   await expect(rail.getByRole("button", { name: "Design tokens" })).toBeVisible();
-  // The code activity's editor + preview regions.
-  await expect(c.getByText("Editor", { exact: true })).toBeVisible();
+  // The code activity's Explorer + editor + preview regions.
+  await expect(c.getByText("Explorer", { exact: true })).toBeVisible();
+  await expect(c.getByText("No file open")).toBeVisible();
   await expect(c.getByText("Live preview", { exact: true })).toBeVisible();
   // The assistant chat (right rail) toggle.
   await expect(rail.getByRole("button", { name: "Toggle assistant" })).toBeVisible();
@@ -49,7 +50,8 @@ test("the activity bar switches to a reused @vortspec/ui panel", async ({ mount 
   const sc = c.getByRole("navigation", { name: "Activity bar" }).getByRole("button", { name: "Source Control" });
   await sc.click();
   await expect(sc).toHaveAttribute("aria-pressed", "true");
-  await expect(c.getByText("Editor", { exact: true })).toHaveCount(0);
+  // The code activity (Explorer's "No file open") gives way to the reused panel.
+  await expect(c.getByText("No file open")).toHaveCount(0);
 });
 
 test("can collapse the assistant chat", async ({ mount }) => {
