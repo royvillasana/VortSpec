@@ -3,6 +3,7 @@ import type { JSX } from "react";
 import type { DevServerStatus, Project } from "@vortspec/core/ipc";
 import { api } from "@vortspec/ui/api";
 import { Button, Spinner } from "@vortspec/ui/ui";
+import { useIde } from "../lib/ide-context";
 
 type Kind = "app" | "storybook";
 
@@ -29,7 +30,14 @@ export function PreviewPane({ project }: { project: Project }): JSX.Element {
   const [kind, setKind] = useState<Kind>("app");
   const [dev, setDev] = useState<DevServerStatus>(STOPPED);
   const [frameLoading, setFrameLoading] = useState(true);
+  const { setPreviewUrl } = useIde();
   const embedUrl = dev.url ? dev.url.replace(/\/+$/, "") + "/" : "";
+
+  // Publish the running preview URL to the assistant's context.
+  useEffect(() => {
+    setPreviewUrl(dev.state === "running" ? dev.url : null);
+    return () => setPreviewUrl(null);
+  }, [dev.state, dev.url, setPreviewUrl]);
 
   // Attach to the current server for this kind and follow its updates.
   useEffect(() => {

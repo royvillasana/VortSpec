@@ -5,6 +5,7 @@ import { api } from "@vortspec/ui/api";
 import { Explorer } from "./Explorer";
 import { EditorGroup, type OpenFile } from "./EditorGroup";
 import { PreviewPane } from "./PreviewPane";
+import { useIde } from "../lib/ide-context";
 
 /**
  * The "code" activity: Explorer (left) + editor group (top) + live-preview
@@ -19,12 +20,20 @@ export function CodeWorkspace({ project }: { project: Project }): JSX.Element {
   const [layout, setLayout] = useState<"stacked" | "side">("stacked");
   const filesRef = useRef(files);
   filesRef.current = files;
+  const { setActiveFile } = useIde();
 
   // Reset when the workspace changes.
   useEffect(() => {
     setFiles([]);
     setActivePath(null);
   }, [project.path]);
+
+  // Publish the active file to the assistant's context (cleared when the code
+  // activity unmounts).
+  useEffect(() => {
+    setActiveFile(activePath);
+    return () => setActiveFile(null);
+  }, [activePath, setActiveFile]);
 
   const openFile = useCallback(
     async (path: string): Promise<void> => {

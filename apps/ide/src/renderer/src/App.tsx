@@ -11,6 +11,7 @@ import { Terminal } from "@vortspec/ui/Terminal";
 import { ActivityBar, type ActivityKey } from "./components/ActivityBar";
 import { WorkspacePicker } from "./components/WorkspacePicker";
 import { CodeWorkspace } from "./components/CodeWorkspace";
+import { IdeContext, buildSeedContext } from "./lib/ide-context";
 
 /**
  * VortSpec IDE shell.
@@ -28,6 +29,8 @@ export default function App(): JSX.Element {
   const [chatOpen, setChatOpen] = useState(true);
   const [terminalOpen, setTerminalOpen] = useState(false);
   const [userName, setUserName] = useState<string | undefined>(undefined);
+  const [activeFile, setActiveFile] = useState<string | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
   useEffect(() => {
     void api
@@ -69,6 +72,7 @@ export default function App(): JSX.Element {
   const goSource = (): void => setActivity("source");
 
   return (
+    <IdeContext.Provider value={{ activeFile, previewUrl, setActiveFile, setPreviewUrl }}>
     <div className="flex h-screen w-screen flex-col overflow-hidden bg-vs-bg-primary text-vs-text-primary">
       {/* Draggable title bar (hiddenInset) */}
       <header
@@ -166,13 +170,34 @@ export default function App(): JSX.Element {
 
         {chatOpen && (
           <div className="flex w-[380px] shrink-0 flex-col border-l border-vs-border-default">
-            <AssistantDock
-              project={workspace}
-              allowModify
-              userName={userName}
-              seedContext="Working in the VortSpec IDE."
-              onClose={() => setChatOpen(false)}
-            />
+            {/* Context chip: what the assistant is grounded in (transparency). */}
+            <div
+              data-testid="assistant-context"
+              className="flex flex-none flex-wrap items-center gap-1.5 border-b border-vs-border-subtle bg-vs-bg-surface px-3 py-1.5 text-[11px] text-vs-text-muted"
+            >
+              <span className="uppercase tracking-wide">Context</span>
+              {activeFile ? (
+                <span className="rounded bg-vs-bg-elevated px-1.5 py-0.5 font-mono text-vs-text-secondary">
+                  {activeFile}
+                </span>
+              ) : (
+                <span>no file open</span>
+              )}
+              {previewUrl && (
+                <span className="rounded bg-vs-bg-elevated px-1.5 py-0.5 font-mono text-vs-text-secondary">
+                  {previewUrl.replace(/^https?:\/\//, "")}
+                </span>
+              )}
+            </div>
+            <div className="min-h-0 flex-1">
+              <AssistantDock
+                project={workspace}
+                allowModify
+                userName={userName}
+                seedContext={buildSeedContext(activeFile, previewUrl)}
+                onClose={() => setChatOpen(false)}
+              />
+            </div>
           </div>
         )}
       </div>
@@ -200,5 +225,6 @@ export default function App(): JSX.Element {
         </button>
       </footer>
     </div>
+    </IdeContext.Provider>
   );
 }
