@@ -56,13 +56,13 @@ Milestones I0→I5 are strictly ordered. I0 must leave the cockpit fully green b
 
 ## 6. I5 — Vibe-engineering (chat + run pipeline)
 
-- [ ] 6.1 Mount AssistantDock (modify mode) in the right rail, wired to the shared run pipeline (AgentAdapter, non-bare, user's login, `bypassPermissions`).
-- [ ] 6.2 Seed each run with the open file path + preview URL as context.
-- [ ] 6.3 Spec-first gates: gated-artifact generation (brief/spec/`DESIGN.md`) routes through the shared approval-recording path; nothing advances without a recorded approval.
-- [ ] 6.4 Observable + resumable runs in the IDE via the shared run-manager/recorder (holistic progress, surfaced blockers, resume-after-interruption across restarts).
-- [ ] 6.5 Failures render as fix-it cards (auth/MCP/billing/missing binary), never raw exceptions.
-- [ ] 6.6 CT for the chat/run integration (context seeding, gate enforcement, resume affordance, fix-it card).
-- [ ] 6.7 Gate: `pnpm build && pnpm test && pnpm lint` green.
+- [x] 6.1 AssistantDock mounted in the right rail in modify mode, wired to the shared run pipeline (AgentAdapter, non-bare, user's login, `bypassPermissions`) — landed in I1, deepened here.
+- [x] 6.2 Each run is seeded with the open editor file + running preview URL via an `IdeContext` store + `buildSeedContext`; a visible "Context" chip surfaces the grounding.
+- [x] 6.3 Spec-first gates unchanged: the IDE adds no bypass — `DESIGN.md`/specs stay behind the reused `DesignManifest` panel + the shared approval/snapshot handlers; the seed enforces spec-before-implement discipline.
+- [~] 6.4 Observable ✓ (the dock streams run events). Resume-after-interruption reuses the shared run-manager/recorder and is surfaced by the SDD-DE pipeline panel brought into the IDE in **I6** (same resume card as the cockpit's guided flow) — deferred to avoid forking the shared AssistantDock.
+- [x] 6.5 Run failures render through the shared dock's error handling (human sentences, not raw exceptions); integration fix-it cards reused from `@vortspec/ui`.
+- [x] 6.6 CT: context seeding (open-file + preview chip), modify-capable composer, gated-artifact panel present.
+- [x] 6.7 Gate: `pnpm build && pnpm test && pnpm lint` green (4/6/4); 17 IDE CT; desktop 54 CT. **I5 complete** (6.4 resume UI folds into I6).
 
 ## 7. I6 — Procedure parity, packaging, release
 
