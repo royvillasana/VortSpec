@@ -8,6 +8,7 @@ import { access, mkdir, readFile, writeFile, cp, copyFile, appendFile, readdir, 
 import { createHash, randomUUID } from "node:crypto";
 import { createRequire } from "node:module";
 import { EventEmitter } from "node:events";
+import { homedir } from "node:os";
 import { existsSync } from "node:fs";
 import __cjs_mod__ from "node:module";
 const __filename = import.meta.filename;
@@ -66,7 +67,26 @@ const agentRunOptionsSchema = z.object({
    * auto-denied. The guided flow sets this because the user explicitly triggers
    * each stage; the run is confined to the project folder.
    */
-  bypassPermissions: z.boolean().optional()
+  bypassPermissions: z.boolean().optional(),
+  /**
+   * Renderer-supplied labels persisted with the run so an interrupted run can be
+   * resumed later with its original stage view (kind) and scope (total). Opaque
+   * to the main process except for persistence.
+   */
+  meta: z.object({
+    kind: z.string().optional(),
+    label: z.string().optional(),
+    total: z.number().optional()
+  }).optional()
+});
+const lastRunSchema = z.object({
+  sessionId: z.string().nullable(),
+  title: z.string(),
+  kind: z.string().optional(),
+  label: z.string().optional(),
+  total: z.number().nullable().optional(),
+  status: z.enum(["running", "passed", "cancelled", "failed"]),
+  updatedAt: z.string()
 });
 const AGENT_EVENT_CHANNEL = "agent:event";
 const AGENT_RAW_CHANNEL = "agent:raw";
@@ -78,13 +98,55 @@ z.object({
   runId: z.string(),
   line: z.string()
 });
+const usageLimitSchema = z.object({
+  /** e.g. "Current session", "Current week (all models)", "Current week (Fable)". */
+  label: z.string(),
+  /** 0–100, as Claude reports it. */
+  percent: z.number(),
+  /** Human reset string exactly as Claude prints it, or null if none given. */
+  resetsAt: z.string().nullable()
+});
+const usageResultSchema = z.object({
+  /** True when `/usage` was read and parsed into at least one limit bar. */
+  available: z.boolean(),
+  /** The opening line (e.g. "You are currently using your subscription…"), if any. */
+  headline: z.string().nullable(),
+  /** The percentage bars (session, weekly, per-model). */
+  limits: z.array(usageLimitSchema),
+  /** Claude's own approximation disclaimer, if present. */
+  note: z.string().nullable(),
+  /** The full raw `/usage` text for a details view. */
+  raw: z.string(),
+  /** ISO timestamp of when this snapshot was captured. */
+  capturedAt: z.string(),
+  /** A human, next-step error message when usage couldn't be read (else null). */
+  error: z.string().nullable()
+});
+const profilePreferencesSchema = z.object({
+  framework: z.string().optional(),
+  language: z.string().optional(),
+  styling: z.string().optional(),
+  testRunner: z.string().optional(),
+  /** A default Figma variable-collection name to pre-fill for Figma sources. */
+  figmaTokenCollection: z.string().optional()
+});
+const profileSchema = z.object({
+  /** Display name; used to address the user when they chat with the AI. */
+  name: z.string().default(""),
+  /** Optional avatar image as a data: URL (stored inline; no external fetch). */
+  avatarDataUrl: z.string().nullable().default(null),
+  /** Default answers that pre-fill the intake/setup wizard for new projects. */
+  preferences: profilePreferencesSchema.default({})
+});
+const EMPTY_PROFILE = { name: "", avatarDataUrl: null, preferences: {} };
 const stageKindSchema = z.enum([
   "source",
   "components",
   "input",
   "intake",
   "agent",
-  "verify"
+  "verify",
+  "manifest"
 ]);
 const stageStatusSchema = z.enum([
   "pending",
@@ -185,11 +247,26 @@ const DEFAULT_FLOW = [
   {
     id: "sync",
     title: "Sync",
-    summary: "/sync-tokens — reconcile design.md and token files with the decisions made during implementation.",
+    summary: "/sync-tokens — reconcile the token-decisions log and token files with the decisions made during implementation.",
     kind: "agent",
     gated: false,
-    promptTemplate: "/sync-tokens\n\nRun the sync-tokens skill: update design.md and token files so they reflect the implementation. No undocumented deviations.",
+    // Write the decisions log to `.sdd-de/design-decisions.md`, NOT `design.md`:
+    // on case-insensitive macOS `design.md` is the same file as the Google-format
+    // `DESIGN.md`, so writing there would clobber the manifest.
+    promptTemplate: "/sync-tokens\n\nRun the sync-tokens skill: reconcile token files with the implementation and maintain the token-decisions log at `.sdd-de/design-decisions.md` (NOT `design.md` — on macOS that collides with the Google-format DESIGN.md). No undocumented deviations.",
     allowedTools: ["Read", "Write", "Edit"]
+  },
+  {
+    id: "design-manifest",
+    title: "Design manifest",
+    summary: "/design-doc — generate DESIGN.md: the tokens, component contracts, and conventions any AI coding agent reads to build on-brand screens. Review and approve before publishing.",
+    kind: "manifest",
+    gated: true,
+    // The design-doc skill writes DESIGN.md at the project root (reader also
+    // tolerates .sdd-de/design.md). Surface it for the approval gate.
+    artifact: "DESIGN.md",
+    promptTemplate: "/design-doc\n\nRun the design-doc skill: generate and validate DESIGN.md with @google/design.md, capturing every design token, component contract (props, states, tokens consumed), and convention as the AI hand-off file. Install @google/design.md if it is missing. Do not modify the components themselves.",
+    allowedTools: ["Read", "Write", "Edit", "Bash"]
   },
   {
     id: "commit",
@@ -222,6 +299,44 @@ const DEV_SERVER_UPDATE_CHANNEL = "devserver:update";
 z.object({
   projectPath: z.string(),
   status: devServerStatusSchema
+});
+const manifestFormatSchema = z.enum(["google", "decisions-log", "empty"]);
+const manifestResultSchema = z.object({
+  /** Project-relative path of the resolved manifest, or the default target when absent. */
+  path: z.string(),
+  /** Manifest markdown, or "" when it does not exist yet. */
+  content: z.string(),
+  exists: z.boolean(),
+  /** Detected format, so the UI can flag a non-Google-format manifest. */
+  format: manifestFormatSchema.optional()
+});
+const manifestVersionSchema = z.object({
+  /** Snapshot id — the ISO-ish timestamp used as the file stem. */
+  id: z.string(),
+  /** ISO timestamp the snapshot was taken. */
+  timestamp: z.string(),
+  /** Whether this snapshot was captured at an approval. */
+  approved: z.boolean(),
+  /** The run id that produced it, if it came from a generate/regenerate. */
+  runId: z.string().optional(),
+  /** Byte length of the snapshot content, for the version list. */
+  size: z.number()
+});
+const manifestVersionsResultSchema = z.object({
+  versions: z.array(manifestVersionSchema)
+});
+z.enum(["generate", "edit", "approve", "restore"]);
+const updateInfoSchema = z.object({
+  /** The running app version (e.g. "0.1.0"). */
+  current: z.string(),
+  /** The latest released version, or null if the check couldn't reach GitHub. */
+  latest: z.string().nullable(),
+  /** True when `latest` is newer than `current`. */
+  hasUpdate: z.boolean(),
+  /** The release page URL (for "What's new"). */
+  releaseUrl: z.string().nullable(),
+  /** Direct download URL of the macOS .dmg asset, if present. */
+  downloadUrl: z.string().nullable()
 });
 const frameworkSchema = z.enum([
   "react",
@@ -444,6 +559,13 @@ const verificationFindingSchema = z.object({
 const verificationResultSchema = z.object({
   findings: z.array(verificationFindingSchema)
 });
+const storybookEntrySchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  name: z.string(),
+  type: z.enum(["docs", "story"]),
+  importPath: z.string().optional()
+});
 const checkStatusSchema = z.enum(["pass", "fail", "unknown", "checking"]);
 const fixActionSchema = z.object({
   /** install-link → open an external URL; open-login → run login in the PTY; verify → re-run the check */
@@ -488,6 +610,7 @@ const projectListSchema = z.array(projectSchema);
 const ipcContract = {
   "system:isElectron": { request: z.void(), response: z.boolean() },
   "system:getVersion": { request: z.void(), response: z.string() },
+  "system:checkUpdate": { request: z.void(), response: updateInfoSchema },
   "env:check": { request: z.void(), response: envReportSchema },
   "env:verifyLogin": { request: z.void(), response: envCheckSchema },
   "env:verifyFigmaMcp": { request: z.void(), response: envCheckSchema },
@@ -515,6 +638,11 @@ const ipcContract = {
     response: z.object({ runId: z.string() })
   },
   "agent:cancelRun": { request: z.string(), response: z.void() },
+  "agent:hasActiveRun": { request: z.string(), response: z.boolean() },
+  "agent:lastRun": { request: z.string(), response: lastRunSchema.nullable() },
+  "usage:get": { request: z.void(), response: usageResultSchema },
+  "profile:get": { request: z.void(), response: profileSchema },
+  "profile:save": { request: profileSchema, response: profileSchema },
   "flow:get": { request: z.string(), response: flowSchema },
   "flow:setStageStatus": {
     request: z.object({
@@ -548,6 +676,36 @@ const ipcContract = {
   "devserver:start": { request: z.string(), response: devServerStatusSchema },
   "devserver:stop": { request: z.string(), response: z.void() },
   "devserver:status": { request: z.string(), response: devServerStatusSchema },
+  "devserver:previewInfo": {
+    request: z.string(),
+    response: z.object({ hasStorybook: z.boolean(), script: z.string().nullable() })
+  },
+  "devserver:storybookIndex": {
+    request: z.string(),
+    response: z.array(storybookEntrySchema)
+  },
+  "manifest:get": { request: z.string(), response: manifestResultSchema },
+  "manifest:save": {
+    request: z.object({ projectPath: z.string(), content: z.string() }),
+    response: manifestResultSchema
+  },
+  "manifest:listVersions": { request: z.string(), response: manifestVersionsResultSchema },
+  "manifest:readVersion": {
+    request: z.object({ projectPath: z.string(), id: z.string() }),
+    response: z.string().nullable()
+  },
+  "manifest:restoreVersion": {
+    request: z.object({ projectPath: z.string(), id: z.string() }),
+    response: manifestResultSchema
+  },
+  "manifest:snapshot": {
+    request: z.object({
+      projectPath: z.string(),
+      reason: z.enum(["generate", "edit", "approve", "restore"]),
+      runId: z.string().optional()
+    }),
+    response: manifestResultSchema
+  },
   "flow:setPublishTarget": {
     request: z.object({ projectPath: z.string(), repoUrl: z.string() }),
     response: flowSchema
@@ -607,9 +765,17 @@ function execFileSafe(command, args, opts = {}) {
     let stdout = "";
     let stderr = "";
     let timedOut = false;
+    let settled = false;
+    const settle = (result) => {
+      if (settled) return;
+      settled = true;
+      if (timer) clearTimeout(timer);
+      resolve2(result);
+    };
     const timer = opts.timeoutMs ? setTimeout(() => {
       timedOut = true;
       child.kill("SIGKILL");
+      settle({ code: null, stdout, stderr, timedOut: true });
     }, opts.timeoutMs) : null;
     child.stdout?.on("data", (d) => {
       stdout += d.toString();
@@ -618,12 +784,10 @@ function execFileSafe(command, args, opts = {}) {
       stderr += d.toString();
     });
     child.on("error", (err) => {
-      if (timer) clearTimeout(timer);
-      resolve2({ code: null, stdout, stderr, timedOut, spawnError: err.message });
+      settle({ code: null, stdout, stderr, timedOut, spawnError: err.message });
     });
     child.on("close", (code) => {
-      if (timer) clearTimeout(timer);
-      resolve2({ code, stdout, stderr, timedOut });
+      settle({ code, stdout, stderr, timedOut });
     });
     if (opts.input !== void 0) {
       child.stdin?.end(opts.input);
@@ -954,8 +1118,12 @@ function revealPath(projectPath, relPath) {
   shell.showItemInFolder(target);
 }
 const require$1 = createRequire(import.meta.url);
+function toUnpacked(p) {
+  if (p.includes(`app.asar.unpacked${sep}`)) return p;
+  return p.replace(`app.asar${sep}`, `app.asar.unpacked${sep}`);
+}
 function packageDir() {
-  return dirname(require$1.resolve("@royvillasana/sdd-de/package.json"));
+  return toUnpacked(dirname(require$1.resolve("@royvillasana/sdd-de/package.json")));
 }
 async function exists(path) {
   try {
@@ -1815,6 +1983,40 @@ class AgentAdapter extends EventEmitter {
 function newAccumulator() {
   return { files: /* @__PURE__ */ new Set(), isError: false };
 }
+function lastRunPath(cwd) {
+  return join(cwd, ".vortspec", "last-run.json");
+}
+async function readLastRun(cwd) {
+  const raw = await readFile(lastRunPath(cwd), "utf8").catch(() => null);
+  if (!raw) return null;
+  try {
+    const parsed = lastRunSchema.safeParse(JSON.parse(raw));
+    return parsed.success ? parsed.data : null;
+  } catch {
+    return null;
+  }
+}
+async function writeLastRun(cwd, run) {
+  const dir = join(cwd, ".vortspec");
+  try {
+    await mkdir(dir, { recursive: true });
+    await writeFile(lastRunPath(cwd), JSON.stringify(run, null, 2), "utf8");
+  } catch {
+  }
+}
+async function patchLastRun(cwd, patch) {
+  const prev = await readLastRun(cwd);
+  const next = {
+    sessionId: patch.sessionId ?? prev?.sessionId ?? null,
+    title: patch.title ?? prev?.title ?? "Run",
+    kind: patch.kind ?? prev?.kind,
+    label: patch.label ?? prev?.label,
+    total: patch.total ?? prev?.total ?? null,
+    status: patch.status ?? prev?.status ?? "running",
+    updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+  };
+  await writeLastRun(cwd, next);
+}
 function runTitle(prompt) {
   const first = prompt.split("\n").find((l) => l.trim()) ?? "Run";
   const cmd = first.trim().match(/^\/([\w-]+)/);
@@ -1856,21 +2058,41 @@ async function recordRun(opts, acc, exitCode) {
   );
 }
 const runs = /* @__PURE__ */ new Map();
+function hasActiveRun(projectPath) {
+  for (const { cwd } of runs.values()) if (cwd === projectPath) return true;
+  return false;
+}
 function startRun(sender, opts) {
   const runId = randomUUID();
   const adapter = new AgentAdapter();
-  runs.set(runId, adapter);
+  runs.set(runId, { adapter, cwd: opts.cwd });
   const acc = newAccumulator();
+  void patchLastRun(opts.cwd, {
+    sessionId: opts.resumeSessionId ?? null,
+    title: opts.meta?.label ?? runTitle(opts.prompt),
+    kind: opts.meta?.kind,
+    label: opts.meta?.label,
+    total: opts.meta?.total ?? null,
+    status: "running"
+  });
   adapter.on("event", (raw) => {
     const parsed = runEventSchema.safeParse(raw);
     const event = parsed.success ? parsed.data : { kind: "error", message: "Invalid run event dropped at the boundary" };
     if (event.kind === "tool-use" && event.path) acc.files.add(event.path);
     if (event.kind === "result" && event.isError || event.kind === "error") acc.isError = true;
+    if ((event.kind === "system-init" || event.kind === "result") && event.sessionId) {
+      if (acc.sessionId !== event.sessionId) {
+        acc.sessionId = event.sessionId;
+        void patchLastRun(opts.cwd, { sessionId: event.sessionId });
+      }
+    }
     if (!sender.isDestroyed()) {
       sender.send(AGENT_EVENT_CHANNEL, { runId, event });
     }
     if (event.kind === "exit") {
       runs.delete(runId);
+      const status = event.code === null ? "cancelled" : acc.isError || event.code !== 0 ? "failed" : "passed";
+      void patchLastRun(opts.cwd, { status });
       void recordRun(opts, acc, event.code);
     }
   });
@@ -1883,7 +2105,126 @@ function startRun(sender, opts) {
   return { runId };
 }
 function cancelRun(runId) {
-  runs.get(runId)?.cancel();
+  runs.get(runId)?.adapter.cancel();
+}
+async function getLastRun(projectPath) {
+  const last = await readLastRun(projectPath);
+  if (!last) return null;
+  if (last.status === "passed") return null;
+  if (last.status === "running" && hasActiveRun(projectPath)) return null;
+  return last;
+}
+const LIMIT_RE = /^(.*?):\s*(\d+(?:\.\d+)?)%\s*used(?:\s*·\s*resets\s*(.+?))?\s*$/;
+function parseUsage(text) {
+  const lines = text.split("\n");
+  const limits = [];
+  let headline = null;
+  let note = null;
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    const m = LIMIT_RE.exec(trimmed);
+    if (m) {
+      limits.push({
+        label: m[1].trim(),
+        percent: Number(m[2]),
+        resetsAt: m[3] ? m[3].trim() : null
+      });
+      continue;
+    }
+    if (!headline && /using your (subscription|api|claude)/i.test(trimmed)) {
+      headline = trimmed;
+    }
+    if (!note && /^approximate\b/i.test(trimmed)) {
+      note = trimmed;
+    }
+  }
+  return { headline, limits, note };
+}
+const TIMEOUT_MS$1 = 2e4;
+function runUsage() {
+  return new Promise((resolve2) => {
+    let child;
+    try {
+      child = spawn("claude", ["-p", "/usage", "--output-format", "json"], {
+        cwd: homedir(),
+        env: process.env,
+        shell: false
+      });
+    } catch {
+      resolve2({ ok: false, error: "Couldn't start Claude Code. Is it installed and on your PATH?" });
+      return;
+    }
+    let stdout = "";
+    let stderr = "";
+    let settled = false;
+    const done = (r) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve2(r);
+    };
+    const timer = setTimeout(() => {
+      child.kill("SIGKILL");
+      done({ ok: false, error: "Reading usage timed out. Try again in a moment." });
+    }, TIMEOUT_MS$1);
+    child.stdout?.on("data", (c) => stdout += c.toString());
+    child.stderr?.on("data", (c) => stderr += c.toString());
+    child.on("error", () => done({ ok: false, error: "Couldn't run Claude Code. Is it installed and logged in?" }));
+    child.on("close", () => {
+      try {
+        const env = JSON.parse(stdout);
+        if (typeof env.result === "string" && env.result.trim()) {
+          done({ ok: true, text: env.result });
+          return;
+        }
+      } catch {
+      }
+      if (stdout.trim()) {
+        done({ ok: true, text: stdout });
+        return;
+      }
+      done({
+        ok: false,
+        error: stderr.trim() ? "Claude Code couldn't report usage. Make sure you're logged in (run `claude` once)." : "No usage data returned by Claude Code."
+      });
+    });
+  });
+}
+async function getUsage() {
+  const capturedAt = (/* @__PURE__ */ new Date()).toISOString();
+  const res = await runUsage();
+  if (!res.ok) {
+    return { available: false, headline: null, limits: [], note: null, raw: "", capturedAt, error: res.error };
+  }
+  const parsed = parseUsage(res.text);
+  return {
+    available: parsed.limits.length > 0,
+    headline: parsed.headline,
+    limits: parsed.limits,
+    note: parsed.note,
+    raw: res.text,
+    capturedAt,
+    error: parsed.limits.length > 0 ? null : "Couldn't read usage percentages from Claude Code. Open the details to see its raw output."
+  };
+}
+function profilePath() {
+  return join(app.getPath("userData"), "profile.json");
+}
+async function readProfile() {
+  try {
+    const raw = await readFile(profilePath(), "utf8");
+    const parsed = profileSchema.safeParse(JSON.parse(raw));
+    return parsed.success ? parsed.data : EMPTY_PROFILE;
+  } catch {
+    return EMPTY_PROFILE;
+  }
+}
+async function saveProfile(profile) {
+  const next = profileSchema.parse(profile);
+  await mkdir(app.getPath("userData"), { recursive: true });
+  await writeFile(profilePath(), JSON.stringify(next, null, 2), "utf8");
+  return next;
 }
 function vortspecDir(projectPath) {
   return join(projectPath, ".vortspec");
@@ -2024,48 +2365,154 @@ async function readArtifact(projectPath, relPath) {
     return null;
   }
 }
-function stageStatus(s) {
-  if (s === "approved") return "done";
-  if (s === "needs-review") return "review";
-  if (s === "failed") return "cancelled";
-  return "pending";
+const CANDIDATES = ["DESIGN.md", ".sdd-de/design.md", "design.md"];
+const DEFAULT_TARGET = "DESIGN.md";
+const VERSIONS_DIR = ".vortspec/manifests";
+const INDEX_FILE = ".vortspec/manifests/index.json";
+function detectManifestFormat(content) {
+  if (!content.trim()) return "empty";
+  const fm = /^﻿?\s*---\s*\n([\s\S]*?)\n---/.exec(content);
+  if (fm && /^\s*(colors|typography|components|rounded|spacing|name)\s*:/m.test(fm[1])) {
+    return "google";
+  }
+  return "decisions-log";
 }
-function decisionText(status, notes) {
-  if (notes) return "changes requested";
-  return {
-    approved: "approved",
-    "needs-review": "awaiting approval",
-    running: "running",
-    failed: "failed",
-    pending: "not started"
-  }[status];
+async function getManifest(projectPath) {
+  for (const rel of CANDIDATES) {
+    const content = await readFile(join(projectPath, rel), "utf8").catch(() => null);
+    if (content !== null) return { path: rel, content, exists: true, format: detectManifestFormat(content) };
+  }
+  return { path: DEFAULT_TARGET, content: "", exists: false, format: "empty" };
+}
+async function resolveTarget(projectPath) {
+  for (const rel of CANDIDATES) {
+    const ok = await readFile(join(projectPath, rel), "utf8").then(
+      () => true,
+      () => false
+    );
+    if (ok) return rel;
+  }
+  return DEFAULT_TARGET;
+}
+async function readIndex(projectPath) {
+  const raw = await readFile(join(projectPath, INDEX_FILE), "utf8").catch(() => null);
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+async function writeIndex(projectPath, metas) {
+  const path = join(projectPath, INDEX_FILE);
+  await mkdir(join(projectPath, VERSIONS_DIR), { recursive: true }).catch(() => void 0);
+  await writeFile(path, `${JSON.stringify(metas, null, 2)}
+`, "utf8").catch(() => void 0);
+}
+async function snapshotManifest(projectPath, opts) {
+  const current = await getManifest(projectPath);
+  if (!current.exists || !current.content) return null;
+  const id = opts.timestamp.replace(/[:.]/g, "-");
+  await mkdir(join(projectPath, VERSIONS_DIR), { recursive: true }).catch(() => void 0);
+  await writeFile(join(projectPath, VERSIONS_DIR, `${id}.md`), current.content, "utf8").catch(
+    () => void 0
+  );
+  const meta = {
+    id,
+    timestamp: opts.timestamp,
+    approved: opts.reason === "approve",
+    runId: opts.runId,
+    size: current.content.length,
+    reason: opts.reason
+  };
+  const index = await readIndex(projectPath);
+  index.unshift(meta);
+  await writeIndex(projectPath, index);
+  return { id, timestamp: meta.timestamp, approved: meta.approved, runId: meta.runId, size: meta.size };
+}
+async function saveManifest(projectPath, content, timestamp) {
+  await snapshotManifest(projectPath, { reason: "edit", timestamp });
+  const target = await resolveTarget(projectPath);
+  const abs = join(projectPath, target);
+  await mkdir(dirname(abs), { recursive: true }).catch(() => void 0);
+  await writeFile(abs, content, "utf8");
+  return { path: target, content, exists: true };
+}
+async function listManifestVersions(projectPath) {
+  const index = await readIndex(projectPath);
+  const dir = join(projectPath, VERSIONS_DIR);
+  const present = new Set(await readdir(dir).catch(() => []));
+  const versions = index.filter((m) => present.has(`${m.id}.md`)).map((m) => ({
+    id: m.id,
+    timestamp: m.timestamp,
+    approved: m.approved,
+    runId: m.runId,
+    size: m.size
+  }));
+  return { versions };
+}
+async function readManifestVersion(projectPath, id) {
+  return readFile(join(projectPath, VERSIONS_DIR, `${id}.md`), "utf8").catch(() => null);
+}
+async function restoreManifestVersion(projectPath, id, timestamp) {
+  const content = await readManifestVersion(projectPath, id);
+  if (content === null) return getManifest(projectPath);
+  await snapshotManifest(projectPath, { reason: "restore", timestamp });
+  const target = await resolveTarget(projectPath);
+  await writeFile(join(projectPath, target), content, "utf8");
+  return { path: target, content, exists: true };
 }
 async function currentFlowRun(projectPath) {
-  const flow = await getFlow(projectPath);
-  const stageOf = (id) => flow.state.stages.find((s) => s.id === id);
-  const statuses = flow.state.stages.map((s) => s.status);
-  const requiredDone = flow.definitions.filter((d) => !d.optional).every((d) => stageOf(d.id)?.status === "approved");
-  const outcome = statuses.includes("running") ? "running" : statuses.includes("failed") ? "failed" : statuses.includes("needs-review") ? "in-review" : requiredDone ? "passed" : "in-progress";
-  const updatedAt = flow.state.stages.map((s) => s.updatedAt).sort().pop() ?? (/* @__PURE__ */ new Date(0)).toISOString();
-  const artifacts = [
-    ...new Set(
-      flow.definitions.map((d) => d.artifact ?? d.artifactGlob).filter((a) => Boolean(a)).map((a) => a.split("/").pop())
+  const [comps, toks, manifest, flow] = await Promise.all([
+    getInspectorComponents(projectPath),
+    getInspectorTokens(projectPath),
+    getManifest(projectPath),
+    getFlow(projectPath)
+  ]);
+  const total = comps.components.length;
+  const built = comps.components.filter((c) => c.status !== "unknown").length;
+  const verified = comps.components.filter((c) => c.status === "verified").length;
+  const tokenCount = toks.tokens.length;
+  const foundationReady = tokenCount > 0 || total > 0;
+  const manifestApproved = flow.state.stages.find((s) => s.id === "design-manifest")?.status === "approved";
+  const outcome = "in-progress";
+  const stage = (name, decision, status) => ({ name, decision, status });
+  const stages = [
+    stage(
+      "Foundation",
+      foundationReady ? `${tokenCount} tokens · ${total} detected` : "not set up",
+      foundationReady ? "done" : "pending"
+    ),
+    stage(
+      "Components",
+      total > 0 ? `${built}/${total} built` : "none yet",
+      built === 0 ? "pending" : built < total ? "review" : "done"
+    ),
+    stage(
+      "Verification",
+      built > 0 ? `${verified}/${built} verified` : "none yet",
+      verified === 0 ? "pending" : verified < built ? "review" : "done"
+    ),
+    stage(
+      "Design manifest",
+      manifestApproved ? "approved" : manifest.exists ? "generated" : "not generated",
+      manifestApproved ? "done" : manifest.exists ? "review" : "pending"
     )
   ];
+  const updatedAt = flow.state.stages.map((s) => s.updatedAt).sort().pop() ?? (/* @__PURE__ */ new Date(0)).toISOString();
+  const artifacts = [
+    toks.tokenFile,
+    total > 0 ? ".sdd-de/components.json" : null,
+    manifest.exists ? manifest.path : null
+  ].filter((a) => Boolean(a)).map((a) => a.split("/").pop());
   return {
     id: "current",
     label: "Current",
-    title: "Design system flow",
+    title: "Design system",
     outcome,
     updatedAt,
-    stages: flow.definitions.map((d) => {
-      const st = stageOf(d.id);
-      return {
-        name: d.title,
-        decision: st ? decisionText(st.status, st.decisionNotes) : "not started",
-        status: st ? stageStatus(st.status) : "pending"
-      };
-    }),
+    stages,
     artifacts
   };
 }
@@ -2096,20 +2543,91 @@ async function getRunHistory(projectPath) {
   ]);
   return { runs: [current, ...recorded] };
 }
-const servers = /* @__PURE__ */ new Map();
-async function detectScript(projectPath) {
-  const pkg = await readFile(join(projectPath, "package.json"), "utf8").catch(() => null);
-  if (!pkg) return null;
-  let scripts = {};
-  try {
-    scripts = JSON.parse(pkg).scripts ?? {};
-  } catch {
-    return null;
+const REPO = "royvillasana/VortSpec";
+const LATEST_RELEASE = `https://api.github.com/repos/${REPO}/releases/latest`;
+const TIMEOUT_MS = 8e3;
+function compareVersions(a, b) {
+  const parse = (v) => v.replace(/^v/i, "").split("-")[0].split(".").map((n) => parseInt(n, 10) || 0);
+  const pa = parse(a);
+  const pb = parse(b);
+  const len = Math.max(pa.length, pb.length);
+  for (let i = 0; i < len; i++) {
+    const d = (pa[i] ?? 0) - (pb[i] ?? 0);
+    if (d !== 0) return d > 0 ? 1 : -1;
   }
-  for (const name of ["dev", "storybook", "start", "preview"]) {
+  return 0;
+}
+function dmgUrl(assets) {
+  if (!Array.isArray(assets)) return null;
+  for (const a of assets) {
+    const name = a && typeof a === "object" ? a.name : null;
+    const url = a && typeof a === "object" ? a.browser_download_url : null;
+    if (typeof name === "string" && name.toLowerCase().endsWith(".dmg") && typeof url === "string") {
+      return url;
+    }
+  }
+  return null;
+}
+async function checkForUpdate() {
+  const current = app.getVersion();
+  const offline = {
+    current,
+    latest: null,
+    hasUpdate: false,
+    releaseUrl: null,
+    downloadUrl: null
+  };
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  try {
+    const res = await fetch(LATEST_RELEASE, {
+      headers: { Accept: "application/vnd.github+json", "User-Agent": "VortSpec" },
+      signal: controller.signal
+    });
+    if (!res.ok) return offline;
+    const json = await res.json();
+    const tag = typeof json.tag_name === "string" ? json.tag_name : null;
+    if (!tag) return offline;
+    const latest = tag.replace(/^v/i, "");
+    const releaseUrl = typeof json.html_url === "string" ? json.html_url : null;
+    return {
+      current,
+      latest,
+      hasUpdate: compareVersions(latest, current) > 0,
+      releaseUrl,
+      downloadUrl: dmgUrl(json.assets)
+    };
+  } catch {
+    return offline;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+const servers = /* @__PURE__ */ new Map();
+async function readScripts(projectPath) {
+  const pkg = await readFile(join(projectPath, "package.json"), "utf8").catch(() => null);
+  if (!pkg) return {};
+  try {
+    return JSON.parse(pkg).scripts ?? {};
+  } catch {
+    return {};
+  }
+}
+async function detectScript(projectPath) {
+  const scripts = await readScripts(projectPath);
+  for (const name of ["storybook", "dev", "start", "preview"]) {
     if (typeof scripts[name] === "string") return name;
   }
   return null;
+}
+async function getPreviewInfo(projectPath) {
+  const scripts = await readScripts(projectPath);
+  const hasStorybookScript = typeof scripts["storybook"] === "string";
+  const hasConfig = existsSync(join(projectPath, ".storybook")) || existsSync(join(projectPath, ".storybook/main.ts"));
+  return {
+    hasStorybook: hasStorybookScript && hasConfig,
+    script: await detectScript(projectPath)
+  };
 }
 function detectPackageManager(projectPath) {
   if (existsSync(join(projectPath, "pnpm-lock.yaml"))) return "pnpm";
@@ -2118,7 +2636,9 @@ function detectPackageManager(projectPath) {
   return "npm";
 }
 function urlFrom(text) {
-  const m = text.match(
+  const ansi = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*[A-Za-z]`, "g");
+  const clean = text.replace(ansi, "");
+  const m = clean.match(
     /(https?:\/\/(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\]):\d+[^\s)'"]*)/i
   );
   if (!m) return null;
@@ -2148,7 +2668,9 @@ async function startDevServer(sender, projectPath) {
   const child = spawn(pm, ["run", script], {
     cwd: projectPath,
     shell: false,
-    env: { ...process.env, FORCE_COLOR: "0", BROWSER: "none", CI: "1" }
+    // NO_COLOR asks tools (picocolors/vite) not to emit ANSI; urlFrom still
+    // strips any that slip through. CI keeps them non-interactive.
+    env: { ...process.env, NO_COLOR: "1", FORCE_COLOR: "0", BROWSER: "none", CI: "1" }
   });
   const server = {
     child,
@@ -2183,6 +2705,27 @@ async function startDevServer(sender, projectPath) {
   push(server, projectPath);
   return server.status;
 }
+async function getStorybookIndex(url) {
+  const base = url.replace(/\/+$/, "");
+  for (const path of ["/index.json", "/stories.json"]) {
+    try {
+      const res = await fetch(`${base}${path}`);
+      if (!res.ok) continue;
+      const json = await res.json();
+      const map = json.entries ?? json.stories;
+      if (!map) continue;
+      return Object.entries(map).map(([id, e]) => ({
+        id: typeof e.id === "string" ? e.id : id,
+        title: typeof e.title === "string" ? e.title : "",
+        name: typeof e.name === "string" ? e.name : "",
+        type: e.type === "docs" ? "docs" : "story",
+        importPath: typeof e.importPath === "string" ? e.importPath : void 0
+      }));
+    } catch {
+    }
+  }
+  return [];
+}
 function stopDevServer(projectPath) {
   const server = servers.get(projectPath);
   if (!server) return;
@@ -2206,6 +2749,7 @@ function stopAllDevServers() {
 const handlers = {
   "system:isElectron": () => true,
   "system:getVersion": () => app.getVersion(),
+  "system:checkUpdate": () => checkForUpdate(),
   "env:check": () => checkEnvironment(),
   "env:verifyLogin": () => verifyClaudeLogin(),
   "env:verifyFigmaMcp": () => verifyFigmaMcp(),
@@ -2227,6 +2771,11 @@ const handlers = {
     cancelRun(runId);
     return void 0;
   }),
+  "agent:hasActiveRun": ((projectPath) => hasActiveRun(projectPath)),
+  "agent:lastRun": ((projectPath) => getLastRun(projectPath)),
+  "usage:get": (() => getUsage()),
+  "profile:get": (() => readProfile()),
+  "profile:save": ((profile) => saveProfile(profile)),
   "flow:get": ((projectPath) => getFlow(projectPath)),
   "flow:setStageStatus": ((req) => setStageStatus(req.projectPath, req.stageId, req.status)),
   "flow:approveStage": ((req) => approveStage(req.projectPath, req.stageId)),
@@ -2234,12 +2783,24 @@ const handlers = {
   "flow:saveIntake": ((req) => saveIntake(req.projectPath, req.content)),
   "flow:completeInput": ((req) => completeInput(req.projectPath, req.stageId)),
   "flow:getHistory": ((projectPath) => getRunHistory(projectPath)),
+  "manifest:get": ((projectPath) => getManifest(projectPath)),
+  "manifest:save": ((req) => saveManifest(req.projectPath, req.content, (/* @__PURE__ */ new Date()).toISOString())),
+  "manifest:listVersions": ((projectPath) => listManifestVersions(projectPath)),
+  "manifest:readVersion": ((req) => readManifestVersion(req.projectPath, req.id)),
+  "manifest:restoreVersion": ((req) => restoreManifestVersion(req.projectPath, req.id, (/* @__PURE__ */ new Date()).toISOString())),
+  "manifest:snapshot": ((req) => snapshotManifest(req.projectPath, {
+    reason: req.reason,
+    runId: req.runId,
+    timestamp: (/* @__PURE__ */ new Date()).toISOString()
+  }).then(() => getManifest(req.projectPath))),
   "devserver:start": ((projectPath, sender) => startDevServer(sender, projectPath)),
   "devserver:stop": ((projectPath) => {
     stopDevServer(projectPath);
     return void 0;
   }),
   "devserver:status": ((projectPath) => getDevServerStatus(projectPath)),
+  "devserver:previewInfo": ((projectPath) => getPreviewInfo(projectPath)),
+  "devserver:storybookIndex": ((url) => getStorybookIndex(url)),
   "flow:setPublishTarget": ((req) => setPublishTarget(req.projectPath, req.repoUrl)),
   "artifact:read": ((req) => readArtifact(req.projectPath, req.relPath)),
   "artifact:findLatest": ((req) => findLatestArtifact(req.projectPath, req.suffix)),
@@ -2261,6 +2822,42 @@ function registerIpc() {
       return contract.response.parse(result);
     });
   });
+}
+const MARKER = "__VS_PATH__";
+const FALLBACK_DIRS = [
+  "/opt/homebrew/bin",
+  "/opt/homebrew/sbin",
+  "/usr/local/bin",
+  "/usr/local/sbin",
+  `${process.env.HOME ?? ""}/.local/bin`,
+  `${process.env.HOME ?? ""}/.volta/bin`,
+  `${process.env.HOME ?? ""}/.bun/bin`
+];
+function mergePath(...parts) {
+  const seen = /* @__PURE__ */ new Set();
+  const out = [];
+  for (const p of parts) {
+    for (const dir of p.split(":")) {
+      if (dir && !seen.has(dir)) {
+        seen.add(dir);
+        out.push(dir);
+      }
+    }
+  }
+  return out.join(":");
+}
+async function fixGuiPath() {
+  if (process.platform === "win32") return;
+  let shellPath = "";
+  const shell2 = process.env.SHELL || "/bin/zsh";
+  const r = await execFileSafe(shell2, ["-ilc", `printf '%s' "${MARKER}\${PATH}${MARKER}"`], {
+    timeoutMs: 5e3
+  });
+  if (!r.spawnError && !r.timedOut) {
+    const m = r.stdout.match(new RegExp(`${MARKER}(.*?)${MARKER}`, "s"));
+    if (m?.[1]) shellPath = m[1];
+  }
+  process.env.PATH = mergePath(shellPath, FALLBACK_DIRS.join(":"), process.env.PATH ?? "");
 }
 function createWindow() {
   const mainWindow = new BrowserWindow({
@@ -2294,11 +2891,12 @@ function createWindow() {
     void mainWindow.loadFile(join$1(__dirname, "../renderer/index.html"));
   }
 }
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   electronApp.setAppUserModelId("com.vortspec.desktop");
   app.on("browser-window-created", (_, window) => {
     optimizer.watchWindowShortcuts(window);
   });
+  await fixGuiPath();
   registerIpc();
   createWindow();
   app.on("activate", () => {

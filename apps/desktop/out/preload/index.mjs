@@ -53,7 +53,26 @@ z.object({
    * auto-denied. The guided flow sets this because the user explicitly triggers
    * each stage; the run is confined to the project folder.
    */
-  bypassPermissions: z.boolean().optional()
+  bypassPermissions: z.boolean().optional(),
+  /**
+   * Renderer-supplied labels persisted with the run so an interrupted run can be
+   * resumed later with its original stage view (kind) and scope (total). Opaque
+   * to the main process except for persistence.
+   */
+  meta: z.object({
+    kind: z.string().optional(),
+    label: z.string().optional(),
+    total: z.number().optional()
+  }).optional()
+});
+z.object({
+  sessionId: z.string().nullable(),
+  title: z.string(),
+  kind: z.string().optional(),
+  label: z.string().optional(),
+  total: z.number().nullable().optional(),
+  status: z.enum(["running", "passed", "cancelled", "failed"]),
+  updatedAt: z.string()
 });
 const AGENT_EVENT_CHANNEL = "agent:event";
 const AGENT_RAW_CHANNEL = "agent:raw";
@@ -97,6 +116,7 @@ function subscribe(channel, callback) {
 const api = {
   isElectron: () => invoke("system:isElectron"),
   getVersion: () => invoke("system:getVersion"),
+  checkUpdate: () => invoke("system:checkUpdate"),
   checkEnvironment: () => invoke("env:check"),
   verifyLogin: () => invoke("env:verifyLogin"),
   verifyFigmaMcp: () => invoke("env:verifyFigmaMcp"),
@@ -112,6 +132,11 @@ const api = {
   installToolkit: (path) => invoke("toolkit:install", path),
   startRun: (opts) => invoke("agent:startRun", opts),
   cancelRun: (runId) => invoke("agent:cancelRun", runId),
+  hasActiveRun: (projectPath) => invoke("agent:hasActiveRun", projectPath),
+  lastRun: (projectPath) => invoke("agent:lastRun", projectPath),
+  getUsage: () => invoke("usage:get", void 0),
+  getProfile: () => invoke("profile:get", void 0),
+  saveProfile: (profile) => invoke("profile:save", profile),
   onAgentEvent: (callback) => subscribe(AGENT_EVENT_CHANNEL, callback),
   onAgentRaw: (callback) => subscribe(AGENT_RAW_CHANNEL, callback),
   getFlow: (projectPath) => invoke("flow:get", projectPath),
@@ -121,9 +146,17 @@ const api = {
   saveIntake: (projectPath, content) => invoke("flow:saveIntake", { projectPath, content }),
   completeInput: (projectPath, stageId) => invoke("flow:completeInput", { projectPath, stageId }),
   getHistory: (projectPath) => invoke("flow:getHistory", projectPath),
+  getManifest: (projectPath) => invoke("manifest:get", projectPath),
+  saveManifest: (projectPath, content) => invoke("manifest:save", { projectPath, content }),
+  listManifestVersions: (projectPath) => invoke("manifest:listVersions", projectPath),
+  readManifestVersion: (projectPath, id) => invoke("manifest:readVersion", { projectPath, id }),
+  restoreManifestVersion: (projectPath, id) => invoke("manifest:restoreVersion", { projectPath, id }),
+  snapshotManifest: (projectPath, reason, runId) => invoke("manifest:snapshot", { projectPath, reason, runId }),
   startDevServer: (projectPath) => invoke("devserver:start", projectPath),
   stopDevServer: (projectPath) => invoke("devserver:stop", projectPath),
   devServerStatus: (projectPath) => invoke("devserver:status", projectPath),
+  previewInfo: (projectPath) => invoke("devserver:previewInfo", projectPath),
+  storybookIndex: (url) => invoke("devserver:storybookIndex", url),
   onDevServerUpdate: (callback) => subscribe(DEV_SERVER_UPDATE_CHANNEL, callback),
   setPublishTarget: (projectPath, repoUrl) => invoke("flow:setPublishTarget", { projectPath, repoUrl }),
   readArtifact: (projectPath, relPath) => invoke("artifact:read", { projectPath, relPath }),

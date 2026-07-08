@@ -3,13 +3,18 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!--
+      frame-src allows embedding the user's local dev server (the Playground live
+      preview) — ports are dynamic (vite 5173+, storybook 6006, …), so loopback
+      hosts are wildcarded by port. Everything else stays locked to 'self'.
+    -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:;"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; frame-src 'self' http://localhost:* http://127.0.0.1:* https://localhost:* https://127.0.0.1:*;"
     />
     <title>VortSpec</title>
-    <script type="module" crossorigin src="./assets/index-r2akWO9J.js"></script>
-    <link rel="stylesheet" crossorigin href="./assets/index-BPtt1-8b.css">
+    <script type="module" crossorigin src="./assets/index-DA7t2VI1.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-BqrvXhOc.css">
   </head>
   <body>
     <div id="root"></div>

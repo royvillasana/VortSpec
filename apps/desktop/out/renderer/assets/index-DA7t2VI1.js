@@ -12499,7 +12499,13 @@ function requireClient() {
 }
 var clientExports = requireClient();
 const ReactDOM = /* @__PURE__ */ getDefaultExportFromCjs(clientExports);
-const api = window.vortspec;
+const api = new Proxy({}, {
+  get(_target, prop) {
+    const impl = window.vortspec;
+    if (!impl) throw new Error("window.vortspec is not available (preload bridge missing)");
+    return impl[prop];
+  }
+});
 function Button({
   variant = "default",
   className = "",
@@ -12685,16 +12691,16 @@ function Dashboard({
 }) {
   const [busy, setBusy] = reactExports.useState(false);
   const [error, setError] = reactExports.useState(null);
-  async function startProject(source) {
+  async function startProject() {
     setBusy(true);
     setError(null);
     try {
-      const project = source === "new" ? await api.createFolder() : await api.pickFolder(false);
+      const project = await api.createFolder();
       if (!project) return;
       onProjects([project, ...projects.filter((p) => p.path !== project.path)]);
       onSetup(project);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not open project");
+      setError(e instanceof Error ? e.message : "Could not create project");
     } finally {
       setBusy(false);
     }
@@ -12707,11 +12713,10 @@ function Dashboard({
         " local"
       ] }),
       /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex-1" }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "default", disabled: busy, onClick: () => void startProject("existing"), children: "Open folder" }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "primary", disabled: busy, onClick: () => void startProject("new"), children: busy ? "…" : "New project" })
+      /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "primary", disabled: busy, onClick: () => void startProject(), children: busy ? "…" : "New project" })
     ] }),
     error && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "mb-4 rounded-md border border-vs-error/40 bg-vs-error/10 px-4 py-2 text-sm text-vs-error", children: error }),
-    projects.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsx(EmptyState, { onNew: () => void startProject("new") }) : /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "grid grid-cols-2 gap-4", children: projects.map((project) => /* @__PURE__ */ jsxRuntimeExports.jsx(
+    projects.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsx(EmptyState$1, { onNew: () => void startProject() }) : /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "grid grid-cols-2 gap-4", children: projects.map((project) => /* @__PURE__ */ jsxRuntimeExports.jsx(
       ProjectCard,
       {
         project,
@@ -12803,14 +12808,14 @@ function ActionButton({
     }
   );
 }
-function EmptyState({ onNew }) {
+function EmptyState$1({ onNew }) {
   return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "mt-14 flex flex-col items-center gap-3 rounded-lg border border-vs-border-default bg-vs-bg-surface px-6 py-14 text-center", children: [
     /* @__PURE__ */ jsxRuntimeExports.jsxs("svg", { width: "48", height: "48", viewBox: "0 0 48 48", "aria-hidden": true, children: [
       /* @__PURE__ */ jsxRuntimeExports.jsx("rect", { x: "10", y: "14", width: "22", height: "22", rx: "4", fill: "none", stroke: "#34373D", strokeWidth: "2" }),
       /* @__PURE__ */ jsxRuntimeExports.jsx("rect", { x: "18", y: "10", width: "22", height: "22", rx: "4", fill: "none", stroke: "#7C6FF0", strokeWidth: "2", strokeDasharray: "5 4" })
     ] }),
     /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-[15px] font-semibold text-vs-text-primary", children: "No projects yet" }),
-    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "max-w-xs text-sm text-vs-text-secondary", children: "Point VortSpec at a folder and import a design to start a run." }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "max-w-xs text-sm text-vs-text-secondary", children: "Create a project, then pick your design source — a ZIP, a Figma link, or an existing folder — to start a run." }),
     /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "primary", className: "mt-1", onClick: onNew, children: "New project" })
   ] });
 }
@@ -16415,7 +16420,8 @@ const stageKindSchema = enumType([
   "input",
   "intake",
   "agent",
-  "verify"
+  "verify",
+  "manifest"
 ]);
 const stageStatusSchema = enumType([
   "pending",
@@ -16454,7 +16460,7 @@ const detectedComponentSchema = objectType({
   level: enumType(["atom", "molecule", "organism"]).optional(),
   description: stringType().optional()
 });
-const detectedComponentsSchema = arrayType(detectedComponentSchema);
+arrayType(detectedComponentSchema);
 const COMPONENTS_MANIFEST = ".sdd-de/components.json";
 const flowStateSchema = objectType({
   currentStageId: stringType(),
@@ -16482,6 +16488,72 @@ const runSummarySchema = objectType({
   artifacts: arrayType(stringType())
 });
 objectType({ runs: arrayType(runSummarySchema) });
+const DEFAULT_FLOW = [
+  {
+    id: "design-system",
+    title: "Design system",
+    summary: "Connect to your configured design source (e.g. the Figma file), extract design tokens + variables, and detect every component — no brief needed.",
+    kind: "source",
+    gated: true,
+    artifact: COMPONENTS_MANIFEST,
+    promptTemplate: 'Read .sdd-de/project.yaml for `design_source` and the project configuration (framework, language, token_file, component_dir). Connect to the configured source — do NOT ask for a brief; the design source is the input.\n\nFor `design_source: figma`, use the Figma MCP to read the file at `figma_file_url` and the variable collection named `figma_token_collection`.\n\n1. Extract every design token and variable from the source into the configured `token_file`.\n2. Detect every component in the design system and write `.sdd-de/components.json` — a JSON array of objects `{ "name": string, "level": "atom"|"molecule"|"organism", "description": string }`, ordered tokens → atoms → molecules → organisms.\n\nDo NOT implement the components yet — this stage only extracts tokens and detects the inventory.',
+    allowedTools: ["Read", "Write", "Edit"]
+  },
+  {
+    id: "components",
+    title: "Components",
+    summary: "Choose to build every detected component at once, or one by one. Each is generated in your framework and language using the extracted tokens.",
+    kind: "components",
+    gated: true,
+    allowedTools: ["Read", "Write", "Edit", "Bash"]
+  },
+  {
+    id: "visual-verify",
+    title: "Visual verify",
+    summary: "/visual-verify — compare the implementation to the spec across viewports; a11y audit; list discrepancies.",
+    kind: "verify",
+    gated: true,
+    // The skill writes specs/<component>/visual-verify-report.md — surface the
+    // newest one in the approval gate so this stage can be reviewed + approved.
+    artifactGlob: "visual-verify-report.md",
+    promptTemplate: "/visual-verify\n\nRun the visual-verify skill: compare the live implementation to the spec across 375/768/1440px, check every token, variant, and state, run the accessibility audit, and report discrepancies.",
+    allowedTools: ["Read", "Bash"]
+  },
+  {
+    id: "sync",
+    title: "Sync",
+    summary: "/sync-tokens — reconcile the token-decisions log and token files with the decisions made during implementation.",
+    kind: "agent",
+    gated: false,
+    // Write the decisions log to `.sdd-de/design-decisions.md`, NOT `design.md`:
+    // on case-insensitive macOS `design.md` is the same file as the Google-format
+    // `DESIGN.md`, so writing there would clobber the manifest.
+    promptTemplate: "/sync-tokens\n\nRun the sync-tokens skill: reconcile token files with the implementation and maintain the token-decisions log at `.sdd-de/design-decisions.md` (NOT `design.md` — on macOS that collides with the Google-format DESIGN.md). No undocumented deviations.",
+    allowedTools: ["Read", "Write", "Edit"]
+  },
+  {
+    id: "design-manifest",
+    title: "Design manifest",
+    summary: "/design-doc — generate DESIGN.md: the tokens, component contracts, and conventions any AI coding agent reads to build on-brand screens. Review and approve before publishing.",
+    kind: "manifest",
+    gated: true,
+    // The design-doc skill writes DESIGN.md at the project root (reader also
+    // tolerates .sdd-de/design.md). Surface it for the approval gate.
+    artifact: "DESIGN.md",
+    promptTemplate: "/design-doc\n\nRun the design-doc skill: generate and validate DESIGN.md with @google/design.md, capturing every design token, component contract (props, states, tokens consumed), and convention as the AI hand-off file. Install @google/design.md if it is missing. Do not modify the components themselves.",
+    allowedTools: ["Read", "Write", "Edit", "Bash"]
+  },
+  {
+    id: "commit",
+    title: "Commit & publish",
+    summary: "Optional — keep everything local, or connect a GitHub repo and publish from here using your own git/gh.",
+    kind: "agent",
+    gated: false,
+    optional: true,
+    promptTemplate: "/commit\n\nRun the commit skill: commit the changes and open a PR whose description is the component spec, with the Figma link and QA screenshots. No direct pushes to main.",
+    allowedTools: ["Read", "Bash"]
+  }
+];
 const initialRun = {
   status: "idle",
   messages: [],
@@ -16678,6 +16750,125 @@ function useLatestRun() {
     }
   };
 }
+const CATALOG = {
+  source: [
+    { id: "source", label: "Reading source" },
+    { id: "tokens", label: "Extracting tokens" },
+    { id: "detect", label: "Detecting components" }
+  ],
+  build: [
+    { id: "specs", label: "Generating specs" },
+    { id: "implement", label: "Implementing" }
+  ],
+  verify: [
+    { id: "visual", label: "Visual QA" },
+    { id: "adversarial", label: "Adversarial review" }
+  ],
+  pipeline: [
+    { id: "specs", label: "Specs" },
+    { id: "implement", label: "Build" },
+    { id: "visual", label: "Visual QA" },
+    { id: "adversarial", label: "Review" }
+  ],
+  commit: [{ id: "commit", label: "Committing" }],
+  other: [{ id: "working", label: "Working" }]
+};
+const SIGNALS = {
+  source: { files: [], text: [/design[\s_-]?source/, /\bfigma\b/, /re-?scan/, /\bmcp__[a-z_]*figma/] },
+  tokens: { files: [/tokens?\.(css|scss|json|ts)$/i, /globals\.css$/i], text: [/extract\w*\s+token/, /design token/] },
+  detect: { files: [/\.sdd-de\/components\.json$/i], text: [/detect\w*\s+component/, /component inventory/] },
+  specs: {
+    files: [/specs\/.*(component-spec|interaction-spec|page-spec)\.md$/i],
+    text: [/generate-artifacts/, /component spec/]
+  },
+  implement: {
+    files: [/(?<!spec)\.(tsx|jsx|vue|svelte)$/i],
+    text: [/\bimplement\w*\b/]
+  },
+  visual: { files: [/visual-verify-report\.md$/i], text: [/visual-verify/, /visual qa/] },
+  adversarial: { files: [/adversarial-review/i], text: [/adversarial-review/, /red-?team/] },
+  commit: { files: [], text: [/git commit/, /gh pr\b/, /\/commit\b/, /pull request/] }
+};
+function haystack(model) {
+  const text = [
+    ...model.messages.map((m) => m.text),
+    model.streamingText,
+    ...model.activity.map((a) => a.label)
+  ].join("\n").toLowerCase();
+  return { text, files: model.files };
+}
+function stageReached(id, hay) {
+  if (id === "working") return true;
+  const sig = SIGNALS[id];
+  if (sig.files.some((re) => hay.files.some((f) => re.test(f)))) return true;
+  return sig.text.some((re) => re.test(hay.text));
+}
+function countVerdicts(text) {
+  const matches = text.match(/:\s*(pass|issues)\b/g);
+  return matches ? matches.length : 0;
+}
+function deriveBlockers(model) {
+  const blockers = [];
+  if (model.mcpErrors.length > 0) {
+    const joined = model.mcpErrors.join("; ");
+    const isFigma = /figma/i.test(joined);
+    blockers.push({
+      title: isFigma ? "Figma isn't connected" : "A tool (MCP) isn't available",
+      hint: isFigma ? "Open the Figma desktop app and reconnect the Figma MCP, then retry — verification falls back to a code-level audit until then." : `Reconnect the tool and retry. Details: ${joined}`,
+      tone: "error"
+    });
+  }
+  if (model.result?.isError) {
+    blockers.push({
+      title: "The step ended with an error",
+      hint: (model.result.text || "Open View details for the full output, fix the cause, and retry.").slice(0, 240),
+      tone: "error"
+    });
+  }
+  const retries = model.activity.filter((a) => a.tone === "retry").length;
+  if (retries >= 2 && model.status === "running") {
+    blockers.push({
+      title: "Claude is retrying",
+      hint: "The API is rate-limiting or erroring; it will keep retrying. No action needed unless it persists.",
+      tone: "warning"
+    });
+  }
+  return blockers;
+}
+function deriveProgress(model, kind, opts) {
+  const stages = CATALOG[kind];
+  const hay = haystack(model);
+  const done = model.status === "done";
+  const running = model.status === "running";
+  let currentIndex = -1;
+  for (let i = 0; i < stages.length; i++) {
+    if (stageReached(stages[i].id, hay)) currentIndex = i;
+  }
+  if (currentIndex < 0 && (running || done)) currentIndex = 0;
+  const blockers = deriveBlockers(model);
+  const stagesLen = stages.length;
+  let counter;
+  let fraction;
+  if (kind === "pipeline" && opts?.total && opts.total > 0) {
+    const finished = Math.min(countVerdicts(hay.text), opts.total);
+    counter = { done: finished, total: opts.total };
+    const per = 1 / opts.total;
+    const intra = (currentIndex + 1) / stagesLen * per;
+    fraction = done ? 1 : Math.min(finished * per + intra, 0.98);
+  } else {
+    fraction = done ? 1 : Math.min((currentIndex + 1) / stagesLen, running ? 0.95 : 1);
+  }
+  const stageLabel = currentIndex >= 0 ? stages[currentIndex].label : "Starting";
+  let legend;
+  if (done) {
+    legend = "Done";
+  } else if (counter) {
+    legend = `${stageLabel} — component ${Math.min(counter.done + 1, counter.total)} of ${counter.total}`;
+  } else {
+    legend = `${stageLabel}…`;
+  }
+  return { stages, currentIndex, legend, fraction, counter, blockers, done };
+}
 function RunPanel({
   model,
   onSend,
@@ -16760,8 +16951,8 @@ function ChatView({
   return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col gap-3", children: [
     /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex max-h-96 flex-col gap-3 overflow-auto", children: [
       empty && /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-xs text-vs-text-muted", children: idle ? "Start the step to stream the assistant’s replies here." : "Waiting for the assistant…" }),
-      model.messages.map((m) => /* @__PURE__ */ jsxRuntimeExports.jsx(Bubble, { role: m.role, text: m.text }, m.id)),
-      running && /* @__PURE__ */ jsxRuntimeExports.jsx(Bubble, { role: "assistant", text: model.streamingText, streaming: true }),
+      model.messages.map((m) => /* @__PURE__ */ jsxRuntimeExports.jsx(Bubble$1, { role: m.role, text: m.text }, m.id)),
+      running && /* @__PURE__ */ jsxRuntimeExports.jsx(Bubble$1, { role: "assistant", text: model.streamingText, streaming: true }),
       /* @__PURE__ */ jsxRuntimeExports.jsx("div", { ref: endRef })
     ] }),
     /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex flex-col gap-1.5", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-end gap-2", children: [
@@ -16786,7 +16977,7 @@ function ChatView({
     ] }) })
   ] });
 }
-function Bubble({
+function Bubble$1({
   role,
   text,
   streaming = false
@@ -16848,10 +17039,101 @@ function RawTerminal$1({ lines }) {
   reactExports.useEffect(() => {
     endRef.current?.scrollIntoView();
   }, [lines.length]);
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "h-80 overflow-auto rounded-md border border-vs-border-default bg-black/40 p-3", children: [
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "h-80 overflow-auto rounded-md border border-vs-border-default bg-vs-bg-code p-3", children: [
     /* @__PURE__ */ jsxRuntimeExports.jsx("pre", { className: "font-mono text-[11px] leading-relaxed text-vs-text-secondary", children: lines.length === 0 ? "Raw Claude Code output will appear here…" : lines.join("\n") }),
     /* @__PURE__ */ jsxRuntimeExports.jsx("div", { ref: endRef })
   ] });
+}
+function RunProgress({
+  progress,
+  running
+}) {
+  const pct = Math.round(progress.fraction * 100);
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col gap-2.5", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex flex-wrap items-center gap-1", children: progress.stages.map((s, i) => {
+      const state = progress.done || i < progress.currentIndex ? "done" : i === progress.currentIndex ? "active" : "pending";
+      return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-1", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs(
+          "span",
+          {
+            className: `rounded-full px-2 py-0.5 text-[10px] font-medium ${state === "done" ? "bg-vs-success-muted text-vs-success" : state === "active" ? "bg-vs-accent-subtle text-vs-text-primary" : "text-vs-text-muted"}`,
+            children: [
+              state === "done" ? "✓ " : "",
+              s.label
+            ]
+          }
+        ),
+        i < progress.stages.length - 1 && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-vs-border-strong", children: "›" })
+      ] }, s.id);
+    }) }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "h-1.5 w-full overflow-hidden rounded-full bg-vs-border-default", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+      "div",
+      {
+        className: "h-full rounded-full bg-vs-accent transition-[width] duration-500 ease-out",
+        style: { width: `${pct}%` }
+      }
+    ) }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2 text-[11px] text-vs-text-secondary", children: [
+      running && /* @__PURE__ */ jsxRuntimeExports.jsx(Spinner, {}),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "flex-1", children: progress.legend }),
+      progress.counter && /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "tabular-nums text-vs-text-muted", children: [
+        progress.counter.done,
+        "/",
+        progress.counter.total,
+        " components"
+      ] })
+    ] }),
+    progress.blockers.map((b, i) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
+      "div",
+      {
+        className: `rounded-md border px-3 py-2 text-xs ${b.tone === "error" ? "border-vs-error bg-vs-error/10 text-vs-error" : "border-vs-warning-border bg-vs-warning-muted text-vs-warning"}`,
+        children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "font-medium", children: [
+            "⚠ ",
+            b.title
+          ] }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "mt-0.5 opacity-90", children: b.hint })
+        ]
+      },
+      i
+    ))
+  ] });
+}
+const logoUrl = "" + new URL("vortspec-logo-BLXfuqHH.png", import.meta.url).href;
+function Logo({
+  size = 18,
+  className = ""
+}) {
+  return /* @__PURE__ */ jsxRuntimeExports.jsx(
+    "img",
+    {
+      src: logoUrl,
+      alt: "VortSpec",
+      width: size,
+      height: size,
+      className: `object-contain ${className}`,
+      style: { width: size, height: size },
+      draggable: false
+    }
+  );
+}
+function projectRailItems(active, nav, badges) {
+  const defs = [
+    { key: "flow", label: "Flow", onClick: nav.onFlow },
+    { key: "run", label: "Run", onClick: nav.onRun },
+    { key: "playground", label: "Playground", onClick: nav.onPlayground },
+    { key: "tokens", label: "Tokens", onClick: nav.onTokens },
+    { key: "manifest", label: "Manifest", onClick: nav.onManifest },
+    { key: "history", label: "History", onClick: nav.onHistory }
+  ];
+  return defs.map((d) => ({
+    label: d.label,
+    active: d.key === active,
+    // Keep the handler even when active: some screens (Verification, Review) mark
+    // "Flow" active while living on their own screen, so clicking it must navigate.
+    onClick: d.onClick,
+    badge: badges?.[d.key]
+  }));
 }
 function ProjectRail({
   project,
@@ -16866,7 +17148,7 @@ function ProjectRail({
         title: "All projects",
         className: "mb-3 flex items-center gap-2 border-b border-vs-border-default px-2 pb-3 text-left hover:opacity-85",
         children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "grid h-5 w-5 place-items-center rounded-md bg-vs-accent font-mono text-[11px] font-medium text-vs-bg-primary", children: project.name.charAt(0).toUpperCase() }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(Logo, { size: 20, className: "shrink-0" }),
           /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "min-w-0", children: [
             /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "block truncate text-[13px] font-semibold", children: project.name }),
             /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "block truncate font-mono text-[11px] text-vs-text-muted", children: project.path })
@@ -16891,247 +17173,703 @@ function ProjectRail({
 function ReviewBadge() {
   return /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "rounded-full border border-vs-warning-border px-1.5 font-mono text-[10px] text-vs-warning", children: "review" });
 }
+const FOUNDATION_DEF = DEFAULT_FLOW.find((d) => d.kind === "source");
+const COMMIT_DEF = DEFAULT_FLOW.find((d) => d.id === "commit");
+const COMMIT_PROMPT = COMMIT_DEF?.promptTemplate ?? "/commit\n\nRun the commit skill: commit the changes and open a PR. No direct pushes to main.";
+function buildOnePrompt(name, level) {
+  return `Read .sdd-de/project.yaml. Implement the "${name}" component` + (level ? ` (${level})` : "") + " into component_dir in the configured framework and language, using ONLY the extracted design tokens. Run /generate-artifacts for it to produce its specs, then implement it.";
+}
+const RESUMABLE = "This may be resuming an interrupted run — first check what is already done from the files and skip it: do NOT rebuild a component that already has a source file, do NOT re-generate specs that already exist, and do NOT re-verify a component that already has an up-to-date visual-verify-report.md. Only do the remaining work, then stop.";
+const BUILD_REMAINING_PROMPT = RESUMABLE + "\n\nRead .sdd-de/components.json and .sdd-de/project.yaml. Implement EVERY component listed in components.json that is NOT yet implemented in component_dir, in the configured framework and language, using ONLY the extracted design tokens. For each, run /generate-artifacts to produce its specs, then implement it. Build in order: atoms → molecules → organisms. Skip components that already have a source file.";
+const RESCAN_PROMPT = [
+  "Re-scan this project's design source and reconcile the design system. Do NOT implement or",
+  "modify any component code — this only refreshes tokens and the component inventory.",
+  "",
+  "1. Read `.sdd-de/project.yaml` for `design_source` and the config. Connect to the configured",
+  "   source. For `design_source: figma`, use the Figma MCP to read `figma_file_url` and the",
+  "   variable collection `figma_token_collection`.",
+  "2. Re-extract design tokens into the configured `token_file`: add newly-found tokens and update",
+  "   values that changed. Do NOT remove tokens that existing components still reference.",
+  "3. Detect EVERY component in the source and MERGE into `.sdd-de/components.json`:",
+  "   - keep every existing entry (including components added by hand),",
+  "   - add any component found in the source that isn't already listed ({ name, level, description }),",
+  "   - for `design_source: figma`, record each entry's Figma node id as a `figmaNodeId` field (resolve it",
+  "     via `figma_get_component_details`/`figma_search_components` by name) so component docs can be enriched",
+  "     later without re-resolving — add/refresh it where missing or changed,",
+  "   - do NOT delete entries and do NOT touch component source files.",
+  "4. RECONCILE IMPLEMENTATION STATUS: for every existing entry whose description says it is",
+  '   "not yet implemented" (or similar wording, e.g. "discovered in a re-scan; not yet implemented")',
+  "   but which NOW has an implemented source file under the component dir, update that entry's",
+  "   description to remove the stale status note and reflect that it is implemented — keep the",
+  "   substantive text, correct only the status wording. Do NOT modify component source code.",
+  "5. End with a one-line summary: how many components are in the inventory, how many are",
+  "   implemented (have a source file under the component dir), how many are new since last scan,",
+  "   and how many stale descriptions you corrected."
+].join("\n");
+function newComponentPrompt(name, intent) {
+  return [
+    `Add a brand-new component "${name}" to this design system.`,
+    '1. Append an entry to .sdd-de/components.json: { "name": "' + name + '", "level": <atom|molecule|organism>, "description": <one line from the intent below> }.',
+    "2. Run /generate-artifacts for it to produce its specs.",
+    "3. Implement it into component_dir in the configured framework and language, using ONLY the",
+    "   extracted design tokens and matching the existing components' conventions.",
+    "",
+    "Intent:",
+    intent
+  ].join("\n");
+}
+function harnessClause(url) {
+  return url ? `The live component is served at ${url} — load it there to inspect it.` : 'No live preview server is available; run the code-level audit (grep for hardcoded hex/px, check every variant/state and a11y in the source, verify spec compliance) and record any browser-only check as "pending" in the report — do NOT ask me to start a server.';
+}
+function figmaClause(isFigma) {
+  return isFigma ? "Use the Figma MCP (figma_file_url in .sdd-de/project.yaml) to read the authoritative design and screenshots for the comparison." : "Compare against each component's spec and its source files (design_source is not Figma).";
+}
+const NO_MANUAL_STEPS = "Do this entirely yourself, in the background — never tell me to open a browser, open Figma Dev Mode, start a server, or run a command. You have the tools; use them.";
+const RESUME_PROMPT = "Continue exactly where the previous run stopped. Re-check what is already complete from the files and skip it — do not redo finished work. Finish only the remaining steps, then stop. " + NO_MANUAL_STEPS;
+function verifyPrompt(target, url, isFigma) {
+  const scope = target === "all" ? "every built component" : `the "${target}" component`;
+  return [
+    ...target === "all" ? [RESUMABLE] : [],
+    `Run visual verification for ${scope} autonomously.`,
+    `1. /visual-verify for ${scope}: compare the implementation to its spec across 375/768/1440px, check every token/variant/state, and run the accessibility audit. ${harnessClause(url)} ${figmaClause(isFigma)}`,
+    `2. /adversarial-review for ${scope}: red-team tokens (grep hardcoded hex/px), variant/state coverage, accessibility, and spec compliance.`,
+    "3. Fix any discrepancies inline, then write specs/<component>/visual-verify-report.md and the adversarial-review report.",
+    NO_MANUAL_STEPS,
+    target === "all" ? "End with one line per component: '<name>: PASS' or '<name>: ISSUES (n)'." : "End with one line: 'VERIFY: PASS' or 'VERIFY: ISSUES (n)'."
+  ].join("\n");
+}
+function buildVerifyRestPrompt(url, isFigma) {
+  return [
+    RESUMABLE,
+    "Read .sdd-de/components.json and .sdd-de/project.yaml. For EVERY component listed that is NOT yet implemented in component_dir, in atoms → molecules → organisms order, run the full SDD-DE cycle autonomously and in the background:",
+    "  a. /generate-artifacts to produce its specs, then implement it using ONLY the extracted design tokens.",
+    `  b. /visual-verify then /adversarial-review for it. ${harnessClause(url)} ${figmaClause(isFigma)}`,
+    "  c. Fix any discrepancies inline; write specs/<component>/visual-verify-report.md and the adversarial report.",
+    "Skip components that already have a source file. " + NO_MANUAL_STEPS,
+    "End with one line per component: '<name>: PASS' or '<name>: ISSUES (n)'."
+  ].join("\n");
+}
+function waitForDevUrl(projectPath, timeoutMs) {
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (v) => {
+      if (settled) return;
+      settled = true;
+      off();
+      clearTimeout(timer);
+      resolve(v);
+    };
+    const off = api.onDevServerUpdate(({ projectPath: p, status }) => {
+      if (p !== projectPath) return;
+      if (status.state === "running" && status.url) finish(status.url);
+      else if (status.state === "error" || status.state === "stopped") finish(null);
+    });
+    const timer = setTimeout(() => finish(null), timeoutMs);
+  });
+}
+function rosterStatus(c) {
+  if (c.status === "verified") return "verified";
+  if (c.status === "has-issues") return "issues";
+  if (c.status === "built") return "built";
+  return "detected";
+}
+const STATUS_META = {
+  detected: { label: "detected", dot: "bg-vs-text-muted", text: "text-vs-text-muted" },
+  built: { label: "built", dot: "bg-vs-text-secondary", text: "text-vs-text-secondary" },
+  verified: { label: "verified", dot: "bg-vs-success", text: "text-vs-success" },
+  issues: { label: "has issues", dot: "bg-vs-warning", text: "text-vs-warning" }
+};
+const LEVEL_ORDER = ["atom", "molecule", "organism", "other"];
+const LEVEL_LABEL = {
+  atom: "Atoms",
+  molecule: "Molecules",
+  organism: "Organisms",
+  other: "Components"
+};
 function GuidedFlow({
   project,
   onBack,
   onOpenInspector,
   onOpenPreview,
   onOpenRun,
-  onOpenReview,
   onOpenVerify,
-  onOpenHistory
+  onOpenHistory,
+  onOpenManifest
 }) {
-  const [flow, setFlow] = reactExports.useState(null);
   const [config, setConfig] = reactExports.useState(null);
-  const [selectedId, setSelectedId] = reactExports.useState(null);
+  const [components, setComponents] = reactExports.useState(null);
+  const [tokenCount, setTokenCount] = reactExports.useState(null);
+  const [manifestExists, setManifestExists] = reactExports.useState(false);
+  const [foundationOpen, setFoundationOpen] = reactExports.useState(false);
+  const [addNew, setAddNew] = reactExports.useState(false);
+  const run = useAgentRun();
+  const latest = useLatestRun();
+  const [runLabel, setRunLabel] = reactExports.useState("");
+  const [opKind, setOpKind] = reactExports.useState("other");
+  const [pipelineTotal, setPipelineTotal] = reactExports.useState(void 0);
+  const [verifyResult, setVerifyResult] = reactExports.useState(null);
+  const [harnessMsg, setHarnessMsg] = reactExports.useState("");
+  const [showTranscript, setShowTranscript] = reactExports.useState(false);
+  const [externalRun, setExternalRun] = reactExports.useState(false);
+  const [resume, setResume] = reactExports.useState(null);
+  const runDismissRef = reactExports.useRef(false);
+  async function reload() {
+    const [cfg, comps, toks, man] = await Promise.all([
+      api.projectConfig(project.path),
+      api.inspectorComponents(project.path),
+      api.inspectorTokens(project.path),
+      api.getManifest(project.path)
+    ]);
+    setConfig(cfg);
+    setComponents(comps.components);
+    setTokenCount(toks.tokens.length);
+    setManifestExists(man.exists);
+  }
   reactExports.useEffect(() => {
-    void api.getFlow(project.path).then((f) => {
-      setFlow(f);
-      setSelectedId(f.state.currentStageId);
-    });
-    void api.projectConfig(project.path).then(setConfig);
+    void reload();
+    void api.hasActiveRun(project.path).then(setExternalRun);
+    void api.lastRun(project.path).then(setResume);
   }, [project.path]);
-  const currentIndex = flow ? flow.definitions.findIndex((d) => d.id === flow.state.currentStageId) : 0;
-  const requiredDefs = flow?.definitions.filter((d) => !d.optional) ?? [];
-  const requiredDone = flow ? requiredDefs.filter(
-    (d) => flow.state.stages.find((s) => s.id === d.id)?.status === "approved"
-  ).length : 0;
-  const flowComplete = flow ? requiredDone === requiredDefs.length : false;
-  const commitStage = flow?.definitions.find((d) => d.optional);
-  const reviewStage = flow?.definitions.find(
-    (d) => flow.state.stages.find((s) => s.id === d.id)?.status === "needs-review"
-  );
-  const progressLabel = !flow ? "" : flowComplete ? "Complete · commit optional" : `${requiredDone} of ${requiredDefs.length} approved${reviewStage ? ` · paused at ${reviewStage.title}` : ""}`;
+  reactExports.useEffect(() => {
+    if (run.model.status === "done") {
+      void reload();
+      void api.lastRun(project.path).then(setResume);
+      if (opKind === "verify" || opKind === "pipeline") {
+        void api.getVerification(project.path).then(setVerifyResult);
+      }
+    }
+  }, [run.model.status]);
+  reactExports.useEffect(() => {
+    if (externalRun && latest.model.status === "done") setExternalRun(false);
+  }, [latest.model.status]);
+  async function op(label, prompt, opts) {
+    const kind = opts?.kind ?? "other";
+    setRunLabel(label);
+    setVerifyResult(null);
+    setShowTranscript(false);
+    setOpKind(kind);
+    setPipelineTotal(opts?.total);
+    setResume(null);
+    runDismissRef.current = false;
+    await run.start({
+      prompt,
+      cwd: project.path,
+      allowedTools: opts?.tools ?? ["Read", "Write", "Edit", "Bash"],
+      bypassPermissions: true,
+      resumeSessionId: opts?.resumeSessionId,
+      // Persisted so an interrupted run can be resumed with its stage view intact.
+      meta: { kind, label, total: opts?.total }
+    });
+  }
+  async function resumeRun() {
+    if (!resume?.sessionId) return;
+    const kind = resume.kind || "other";
+    if (kind === "verify" || kind === "pipeline") await ensureHarness();
+    await op(resume.label || resume.title || "Resuming the previous run", RESUME_PROMPT, {
+      kind,
+      total: resume.total ?? void 0,
+      resumeSessionId: resume.sessionId
+    });
+  }
+  async function ensureHarness() {
+    const status2 = await api.devServerStatus(project.path);
+    if (status2.state === "running" && status2.url) return status2.url;
+    const info = await api.previewInfo(project.path);
+    if (!info.script) return null;
+    setHarnessMsg("Starting the preview harness…");
+    try {
+      const started = await api.startDevServer(project.path);
+      if (started.state === "running" && started.url) return started.url;
+      return await waitForDevUrl(project.path, 9e4);
+    } finally {
+      setHarnessMsg("");
+    }
+  }
+  async function verify(target, label) {
+    const url = await ensureHarness();
+    await op(label, verifyPrompt(target, url, config?.designSource === "figma"), { kind: "verify" });
+  }
+  async function buildAndVerifyRest() {
+    const n = remaining.length;
+    if (n === 0) return;
+    const url = await ensureHarness();
+    await op(
+      `Building & verifying ${n} component${n === 1 ? "" : "s"}`,
+      buildVerifyRestPrompt(url, config?.designSource === "figma"),
+      { kind: "pipeline", total: n }
+    );
+  }
+  const total = components?.length ?? 0;
+  const builtCount = components?.filter((c) => rosterStatus(c) !== "detected").length ?? 0;
+  const verifiedCount = components?.filter((c) => rosterStatus(c) === "verified").length ?? 0;
+  const remaining = components?.filter((c) => rosterStatus(c) === "detected") ?? [];
+  const foundationReady = (tokenCount ?? 0) > 0 || total > 0;
+  const groups = reactExports.useMemo(() => {
+    if (!components) return [];
+    return LEVEL_ORDER.map((level) => ({
+      level,
+      items: components.filter((c) => (c.level ?? "other") === level)
+    })).filter((g) => g.items.length > 0);
+  }, [components]);
+  const running = run.running;
+  const busy = running || externalRun;
+  const showRunCard = running || run.model.status === "done" && !runDismissRef.current;
+  const showsOutcome = opKind === "verify" || opKind === "pipeline";
+  const openFindings = verifyResult?.findings.filter((f) => f.status === "open") ?? [];
+  const progress = deriveProgress(run.model, opKind, { total: pipelineTotal });
+  const status = !foundationReady ? "Set up the foundation to begin" : `Foundation ready · ${builtCount}/${total} built · ${verifiedCount} verified`;
   return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex h-[calc(100vh-3rem)] w-full overflow-hidden bg-vs-bg-primary text-[13px] text-vs-text-primary", children: [
     /* @__PURE__ */ jsxRuntimeExports.jsx(
       ProjectRail,
       {
         project,
         onHeaderClick: onBack,
-        items: [
-          { label: "Flow", active: true, badge: reviewStage ? /* @__PURE__ */ jsxRuntimeExports.jsx(ReviewBadge, {}) : void 0 },
-          { label: "Run", onClick: onOpenRun },
-          { label: "Preview", onClick: onOpenPreview },
-          { label: "Tokens", onClick: onOpenInspector },
-          { label: "History", onClick: onOpenHistory }
-        ]
+        items: projectRailItems("flow", {
+          onFlow: () => void 0,
+          onRun: onOpenRun,
+          onPlayground: onOpenPreview,
+          onTokens: onOpenInspector,
+          onManifest: onOpenManifest,
+          onHistory: onOpenHistory
+        })
       }
     ),
     /* @__PURE__ */ jsxRuntimeExports.jsxs("main", { className: "flex min-w-0 flex-1 flex-col bg-vs-bg-primary", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsxs("header", { className: "flex flex-none items-center gap-3.5 border-b border-vs-border-default px-8 pb-4 pt-5", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col gap-0.5", children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsx("h1", { className: "text-xl font-semibold tracking-[-0.01em]", children: "Guided flow" }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs text-vs-text-secondary", children: "The SDD-DE cycle, driven through Claude Code" })
+          /* @__PURE__ */ jsxRuntimeExports.jsx("h1", { className: "text-xl font-semibold tracking-[-0.01em]", children: "Design system" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs text-vs-text-secondary", children: status })
         ] }),
         /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex-1" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono text-xs text-vs-warning", children: progressLabel })
-      ] }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex-1 overflow-y-auto px-8 pb-16 pt-7", children: !flow ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2 text-sm text-vs-text-secondary", children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx(Spinner, {}),
-        " Loading flow…"
-      ] }) : /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "mx-auto flex max-w-[640px] flex-col", children: [
-        flowComplete && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "mb-4", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
-          CompletionBanner,
-          {
-            project,
-            published: flow.state.publishRepoUrl,
-            canPublish: Boolean(commitStage),
-            onPublish: () => commitStage && setSelectedId(commitStage.id),
-            onOpenInspector,
-            onBack
-          }
-        ) }),
-        flow.definitions.map((def, i) => {
-          const state = flow.state.stages.find((s) => s.id === def.id);
-          return /* @__PURE__ */ jsxRuntimeExports.jsx(
-            TimelineStage,
+        foundationReady && builtCount > 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "button",
             {
-              project,
-              def,
-              state,
-              index: i,
-              isLast: i === flow.definitions.length - 1,
-              locked: i > currentIndex,
-              selected: def.id === selectedId,
+              onClick: onOpenVerify,
+              className: "text-xs text-vs-text-secondary hover:text-vs-text-primary",
+              children: "Verification report →"
+            }
+          ),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            Button,
+            {
+              variant: "default",
+              disabled: busy,
+              onClick: () => void verify("all", "Verifying all built components"),
+              children: "Verify all"
+            }
+          )
+        ] })
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex-1 overflow-y-auto px-8 pb-16 pt-6", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "mx-auto flex max-w-[720px] flex-col gap-5", children: [
+        resume?.sessionId && !busy && !showRunCard && /* @__PURE__ */ jsxRuntimeExports.jsxs(Card, { className: "flex items-center gap-3 border-vs-warning-border bg-vs-warning-muted p-3 text-xs", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-vs-warning", children: "⤺" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-1 flex-col gap-0.5", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-vs-text-primary", children: [
+              "“",
+              resume.label || resume.title,
+              "” was interrupted."
+            ] }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-vs-text-secondary", children: "Resume picks up where it stopped — already-finished work is skipped, not redone." })
+          ] }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "primary", onClick: () => void resumeRun(), children: "Resume" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "button",
+            {
+              onClick: () => setResume(null),
+              className: "text-vs-text-muted hover:text-vs-text-primary",
+              title: "Dismiss — you can still re-run the action; completed work is skipped either way.",
+              children: "Dismiss"
+            }
+          )
+        ] }),
+        externalRun && !running && /* @__PURE__ */ jsxRuntimeExports.jsxs(Card, { className: "flex items-center gap-2 p-3 text-xs text-vs-text-secondary", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx(Spinner, {}),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "flex-1", children: "A run is in progress for this project." }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("button", { onClick: onOpenRun, className: "text-vs-accent hover:underline", children: "Watch it →" })
+        ] }),
+        showRunCard && /* @__PURE__ */ jsxRuntimeExports.jsxs(Card, { className: "flex flex-col gap-3 p-4", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2 text-sm text-vs-text-primary", children: [
+            running ? /* @__PURE__ */ jsxRuntimeExports.jsx(Spinner, {}) : /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-vs-success", children: "✓" }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "flex-1", children: harnessMsg || runLabel || "Working…" }),
+            !running && /* @__PURE__ */ jsxRuntimeExports.jsx(
+              "button",
+              {
+                onClick: () => {
+                  runDismissRef.current = true;
+                  setShowTranscript(false);
+                  run.reset();
+                },
+                className: "rounded-md border border-vs-border-strong px-2.5 py-1 text-[11px] text-vs-text-secondary hover:border-vs-accent hover:text-vs-text-primary",
+                children: "Dismiss"
+              }
+            )
+          ] }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(RunProgress, { progress, running }),
+          running && /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-xs text-vs-text-muted", children: "Running in the background — you can leave this screen; it keeps going." }),
+          !running && showsOutcome && verifyResult && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-sm", children: openFindings.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-vs-success", children: "✓ Verification passed — no open findings." }) : /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-vs-warning", children: [
+            "⚠ ",
+            openFindings.length,
+            " open finding",
+            openFindings.length === 1 ? "" : "s",
+            openFindings[0] ? ` — e.g. ${openFindings[0].component}: ${openFindings[0].title}` : ""
+          ] }) }),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex gap-3 text-xs", children: [
+            showsOutcome && /* @__PURE__ */ jsxRuntimeExports.jsx("button", { onClick: onOpenVerify, className: "text-vs-accent hover:underline", children: "Verification report →" }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              "button",
+              {
+                onClick: () => setShowTranscript((v) => !v),
+                className: "text-vs-text-secondary hover:text-vs-text-primary",
+                children: showTranscript ? "Hide details" : "View details"
+              }
+            )
+          ] }),
+          showTranscript && /* @__PURE__ */ jsxRuntimeExports.jsx(RunPanel, { model: run.model, onSend: (t) => void run.send(t), canChat: run.canChat })
+        ] }),
+        !foundationReady ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+          FoundationSetup,
+          {
+            config,
+            running: busy,
+            onRun: () => void op(
+              "Connecting the design source — extracting tokens + detecting components",
+              FOUNDATION_DEF.promptTemplate ?? "Extract tokens and detect components.",
+              { tools: FOUNDATION_DEF.allowedTools, kind: "source" }
+            )
+          }
+        ) : /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            FoundationHeader,
+            {
               config,
-              publishRepoUrl: flow.state.publishRepoUrl,
-              onSelect: () => setSelectedId(def.id),
-              onReview: def.kind === "verify" ? onOpenVerify : onOpenReview,
-              onFlow: setFlow
-            },
-            def.id
-          );
-        })
+              tokenCount: tokenCount ?? 0,
+              componentCount: total,
+              open: foundationOpen,
+              onToggle: () => setFoundationOpen((v) => !v),
+              running: busy,
+              onReExtract: () => void op(
+                "Re-extracting tokens + re-detecting components",
+                FOUNDATION_DEF.promptTemplate ?? "Re-extract tokens and detect components.",
+                { tools: FOUNDATION_DEF.allowedTools, kind: "source" }
+              ),
+              onOpenTokens: onOpenInspector
+            }
+          ),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: "flex flex-col gap-3", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-3", children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsxs("h2", { className: "text-[13px] font-semibold uppercase tracking-wide text-vs-text-muted", children: [
+                "Components ",
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-vs-border-strong", children: [
+                  "· ",
+                  total
+                ] })
+              ] }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex-1" }),
+              /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                Button,
+                {
+                  variant: "default",
+                  disabled: busy,
+                  title: "Re-read the design source and reconcile: refresh tokens and add any newly-detected components. Never touches built code.",
+                  onClick: () => void op(
+                    `Re-scanning ${config?.designSource === "figma" ? "Figma" : "the design source"} — reconciling tokens + components`,
+                    RESCAN_PROMPT,
+                    { tools: FOUNDATION_DEF.allowedTools, kind: "source" }
+                  ),
+                  children: [
+                    "↻ Re-scan ",
+                    config?.designSource === "figma" ? "Figma" : "source"
+                  ]
+                }
+              ),
+              remaining.length > 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                  Button,
+                  {
+                    variant: "default",
+                    disabled: busy,
+                    title: "Build the remaining components without running verification.",
+                    onClick: () => void op(
+                      `Building ${remaining.length} remaining component${remaining.length === 1 ? "" : "s"}`,
+                      BUILD_REMAINING_PROMPT
+                    ),
+                    children: [
+                      "Build only (",
+                      remaining.length,
+                      ")"
+                    ]
+                  }
+                ),
+                /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                  Button,
+                  {
+                    variant: "default",
+                    disabled: busy,
+                    title: "Build every detected component and verify each in the background — the CLI's Apply → Visual-Verify → Adversarial-Review cycle.",
+                    onClick: () => void buildAndVerifyRest(),
+                    children: [
+                      "Build & verify the rest (",
+                      remaining.length,
+                      ")"
+                    ]
+                  }
+                )
+              ] }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "primary", disabled: busy, onClick: () => setAddNew(true), children: "+ New component" })
+            ] }),
+            addNew && /* @__PURE__ */ jsxRuntimeExports.jsx(
+              NewComponentForm,
+              {
+                disabled: busy,
+                onCancel: () => setAddNew(false),
+                onCreate: (name, intent) => {
+                  setAddNew(false);
+                  void op(`Creating the "${name}" component`, newComponentPrompt(name, intent), { kind: "build" });
+                }
+              }
+            ),
+            components === null ? /* @__PURE__ */ jsxRuntimeExports.jsxs(Card, { className: "flex items-center gap-2 p-4 text-sm text-vs-text-secondary", children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx(Spinner, {}),
+              " Reading components…"
+            ] }) : total === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsx(Card, { className: "p-6 text-center text-sm text-vs-text-muted", children: "No components detected yet. Re-extract the foundation, or add one above." }) : /* @__PURE__ */ jsxRuntimeExports.jsx(Card, { className: "flex flex-col p-0", children: groups.map((g, gi) => /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                "div",
+                {
+                  className: `bg-vs-bg-primary px-4 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-vs-text-muted ${gi > 0 ? "border-t border-vs-border-default" : ""}`,
+                  children: [
+                    LEVEL_LABEL[g.level],
+                    " ",
+                    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-vs-border-strong", children: g.items.length })
+                  ]
+                }
+              ),
+              g.items.map((c) => /* @__PURE__ */ jsxRuntimeExports.jsx(
+                ComponentRow,
+                {
+                  component: c,
+                  disabled: busy,
+                  onBuild: () => void op(`Building "${c.name}"`, buildOnePrompt(c.name, c.level), { kind: "build" }),
+                  onVerify: () => void verify(c.name, `Verifying "${c.name}"`),
+                  onOpen: onOpenPreview
+                },
+                c.name
+              ))
+            ] }, g.level)) })
+          ] }),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: "flex flex-col gap-3", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx("h2", { className: "text-[13px] font-semibold uppercase tracking-wide text-vs-text-muted", children: "Outputs" }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              OutputCard,
+              {
+                title: "Design manifest",
+                mono: "DESIGN.md",
+                desc: manifestExists ? "The AI hand-off file. Regenerate it after adding or changing components." : "Generate DESIGN.md — the tokens, component contracts, and conventions any AI agent reads to build on-brand screens.",
+                cta: manifestExists ? "Open manifest" : "Generate manifest",
+                onClick: onOpenManifest
+              }
+            ),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              OutputCard,
+              {
+                title: "Publish to GitHub",
+                optional: true,
+                desc: "Optional. Publish these components, tokens, and DESIGN.md with your own git/gh when you're ready to build screens for your site.",
+                cta: "Commit & publish",
+                onClick: () => void op("Committing & publishing with your git/gh", COMMIT_PROMPT, {
+                  tools: ["Read", "Bash"],
+                  kind: "commit"
+                })
+              }
+            )
+          ] })
+        ] })
       ] }) })
     ] })
   ] });
 }
-function StageRing({
-  status,
-  locked,
-  n
-}) {
-  const ringColor = locked ? "#34373D" : status === "approved" ? "#30A46C" : status === "running" ? "#7C6FF0" : status === "needs-review" ? "#FFB224" : "#34373D";
-  return /* @__PURE__ */ jsxRuntimeExports.jsx(
-    "span",
-    {
-      className: "mt-0.5 flex h-6 w-6 flex-none items-center justify-center rounded-full border-[1.5px]",
-      style: { borderColor: ringColor, background: status === "approved" ? "#30A46C" : "transparent" },
-      children: status === "approved" ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs font-semibold text-vs-bg-primary", children: "✓" }) : status === "running" ? /* @__PURE__ */ jsxRuntimeExports.jsx(Spinner, {}) : status === "needs-review" ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "h-[7px] w-[7px] rounded-full bg-vs-warning" }) : /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono text-[11px] text-vs-text-muted", children: n })
-    }
-  );
-}
-function TimelineStage({
-  project,
-  def,
-  state,
-  index,
-  isLast,
-  locked,
-  selected,
+function FoundationSetup({
   config,
-  publishRepoUrl,
-  onSelect,
-  onReview,
-  onFlow
+  running,
+  onRun
 }) {
-  const review = state.status === "needs-review";
-  const artifact = def.artifact ?? def.artifactGlob;
-  const edge = review && !selected ? "inset 2px 0 0 #FFB224" : state.status === "running" ? "inset 2px 0 0 #7C6FF0" : "none";
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex gap-4", children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex w-6 flex-none flex-col items-center", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx(StageRing, { status: state.status, locked, n: index + 1 }),
-      !isLast && /* @__PURE__ */ jsxRuntimeExports.jsx(
-        "span",
-        {
-          className: "my-1 w-[1.5px] flex-1",
-          style: { background: state.status === "approved" ? "rgba(48,164,108,0.4)" : "#26282D" }
-        }
-      )
+  const source = config?.designSource === "figma" ? config.figmaFileUrl || "Figma file" : config?.designSource === "zip" ? config.zipFilePath || "ZIP archive" : config?.designSource === "github" ? config.githubRepoUrl || "GitHub repository" : config?.designSource ?? "your configured source";
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs(Card, { className: "flex flex-col gap-4 p-6", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col gap-1.5", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("h2", { className: "text-[15px] font-semibold", children: "Set up the foundation" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "text-xs leading-relaxed text-vs-text-secondary", children: [
+        "Claude Code reads ",
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono text-vs-text-primary", children: source }),
+        ", extracts the design tokens, and detects every component — the base your design system is built from. No brief needed."
+      ] })
     ] }),
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "min-w-0 flex-1 pb-3.5", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsxs(
-        "div",
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col gap-1.5 rounded-md border border-vs-border-default bg-vs-bg-primary p-3", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx(Row, { label: "Source", value: String(config?.designSource ?? "—") }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(
+        Row,
         {
-          className: "overflow-hidden rounded-lg border border-vs-border-default bg-vs-bg-surface",
-          style: { boxShadow: edge },
-          children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsxs(
-              "button",
-              {
-                onClick: locked ? void 0 : onSelect,
-                className: `flex w-full flex-col items-start gap-1.5 px-4 py-3.5 text-left ${locked ? "cursor-default opacity-50" : "hover:bg-vs-bg-hover"}`,
-                children: [
-                  /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex w-full items-center gap-2.5", children: [
-                    /* @__PURE__ */ jsxRuntimeExports.jsx(
-                      "span",
-                      {
-                        className: `text-sm font-semibold ${state.status === "pending" || locked ? "text-vs-text-secondary" : "text-vs-text-primary"}`,
-                        children: def.title
-                      }
-                    ),
-                    /* @__PURE__ */ jsxRuntimeExports.jsx(StatusBadge, { status: state.status, locked }),
-                    def.optional && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "rounded-full border border-vs-border-default px-1.5 font-mono text-[9px] uppercase tracking-wide text-vs-text-muted", children: "opt" })
-                  ] }),
-                  /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-xs leading-relaxed text-vs-text-secondary", children: def.summary }),
-                  artifact && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "mt-0.5 rounded border border-vs-border-default bg-vs-bg-primary px-2 py-0.5 font-mono text-[11px] text-vs-text-secondary", children: artifact.split("/").pop() })
-                ]
-              }
-            ),
-            review && !selected && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-3 border-t border-vs-border-default bg-vs-warning-muted px-4 py-3", children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "flex-1 text-xs text-vs-warning", children: "Flow paused — this artifact needs your approval before implementation." }),
-              /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "primary", onClick: onReview, children: "Review →" })
-            ] })
-          ]
+          label: "Target",
+          value: `${config?.framework ?? "—"} · ${config?.language ?? "—"} · ${config?.styling ?? "—"}`
         }
       ),
-      selected && !locked && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "mt-3", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
-        StageBody,
-        {
-          project,
-          def,
-          state,
-          config,
-          publishRepoUrl,
-          onFlow
-        }
-      ) })
+      /* @__PURE__ */ jsxRuntimeExports.jsx(Row, { label: "Tokens →", value: config?.tokenFile ?? "—", mono: true }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(Row, { label: "Components →", value: config?.componentDir ?? "—", mono: true })
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { children: /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "primary", disabled: running, onClick: onRun, children: "Extract tokens & detect components" }) })
+  ] });
+}
+function FoundationHeader({
+  config,
+  tokenCount,
+  componentCount,
+  open,
+  onToggle,
+  running,
+  onReExtract,
+  onOpenTokens
+}) {
+  const sourceLabel = config?.designSource ?? "source";
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs(Card, { className: "flex flex-col p-0", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs(
+      "button",
+      {
+        onClick: onToggle,
+        className: "flex items-center gap-2.5 px-4 py-3 text-left hover:bg-vs-bg-hover",
+        children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "span",
+            {
+              className: "text-[10px] text-vs-text-muted transition-transform",
+              style: { transform: open ? "rotate(90deg)" : "rotate(0deg)" },
+              children: "▶"
+            }
+          ),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[13px] font-semibold text-vs-text-primary", children: "Foundation" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "font-mono text-[11px] text-vs-text-secondary", children: [
+            sourceLabel,
+            " · ",
+            tokenCount,
+            " tokens · ",
+            componentCount,
+            " components"
+          ] }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "flex-1" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[11px] text-vs-success", children: "ready" })
+        ]
+      }
+    ),
+    open && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col gap-3 border-t border-vs-border-default px-4 py-3.5", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col gap-1.5", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx(Row, { label: "Design source", value: String(config?.designSource ?? "—") }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          Row,
+          {
+            label: "Target",
+            value: `${config?.framework ?? "—"} · ${config?.language ?? "—"} · ${config?.styling ?? "—"}`
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(Row, { label: "Tokens →", value: config?.tokenFile ?? "—", mono: true }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(Row, { label: "Components →", value: config?.componentDir ?? "—", mono: true })
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex gap-2", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "default", onClick: onOpenTokens, children: "View tokens" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "default", disabled: running, onClick: onReExtract, children: "Re-extract" })
+      ] })
     ] })
   ] });
 }
-function StageBody({
-  project,
-  def,
-  state,
-  config,
-  publishRepoUrl,
-  onFlow
+function ComponentRow({
+  component,
+  disabled,
+  onBuild,
+  onVerify,
+  onOpen
 }) {
-  if (def.kind === "source")
-    return /* @__PURE__ */ jsxRuntimeExports.jsx(
-      AgentStage,
-      {
-        project,
-        def,
-        state,
-        onFlow,
-        header: /* @__PURE__ */ jsxRuntimeExports.jsx(SourceInfo, { config }),
-        runLabel: "Connect & extract tokens + detect components"
-      }
-    );
-  if (def.kind === "components")
-    return /* @__PURE__ */ jsxRuntimeExports.jsx(ComponentsStage, { project, def, state, onFlow });
-  if (def.optional)
-    return /* @__PURE__ */ jsxRuntimeExports.jsx(
-      PublishStage,
-      {
-        project,
-        def,
-        state,
-        publishRepoUrl,
-        onFlow
-      }
-    );
-  return /* @__PURE__ */ jsxRuntimeExports.jsx(AgentStage, { project, def, state, onFlow });
+  const s = rosterStatus(component);
+  const meta = STATUS_META[s];
+  const isBuilt = s !== "detected";
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-3 border-t border-vs-border-subtle px-4 py-2.5 first:border-t-0", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: `h-1.5 w-1.5 shrink-0 rounded-full ${meta.dot}` }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "min-w-0 flex-1", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-[13px] text-vs-text-primary", children: component.name }),
+      component.description && /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "truncate text-[11px] text-vs-text-muted", children: component.description })
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: `font-mono text-[10px] ${meta.text}`, children: meta.label }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex items-center gap-1.5", children: isBuilt ? /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx(RowButton, { disabled, onClick: onVerify, children: "Verify" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(RowButton, { disabled, onClick: onOpen, children: "Open" })
+    ] }) : /* @__PURE__ */ jsxRuntimeExports.jsx(RowButton, { disabled, primary: true, onClick: onBuild, children: "Build" }) })
+  ] });
 }
-function SourceInfo({ config }) {
-  if (!config) {
-    return /* @__PURE__ */ jsxRuntimeExports.jsx(Card, { className: "p-4 text-sm text-vs-text-muted", children: "Reading project configuration…" });
-  }
-  const source = config.designSource === "figma" ? config.figmaFileUrl || "Figma file (URL not set)" : config.designSource === "library" ? `Component library: ${config.componentLibrary ?? "—"}` : config.designSource === "github" ? config.githubRepoUrl || "GitHub repository" : config.designSource === "zip" ? config.zipFilePath || "ZIP archive" : config.designSource === "stitch" ? `Google Stitch (${config.stitchConnection ?? "mcp"})` : "Not configured";
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs(Card, { className: "flex flex-col gap-2 p-4", children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsx(Row, { label: "Design source", value: `${config.designSource ?? "—"}` }),
-    /* @__PURE__ */ jsxRuntimeExports.jsx(Row, { label: "Source", value: source, mono: true }),
+function RowButton({
+  children,
+  onClick,
+  disabled,
+  primary
+}) {
+  return /* @__PURE__ */ jsxRuntimeExports.jsx(
+    "button",
+    {
+      onClick,
+      disabled,
+      className: `rounded-md px-2.5 py-1 text-[11px] disabled:cursor-not-allowed disabled:opacity-50 ${primary ? "bg-vs-accent text-white hover:brightness-110" : "border border-vs-border-strong text-vs-text-secondary hover:border-vs-accent hover:text-vs-text-primary"}`,
+      children
+    }
+  );
+}
+function NewComponentForm({
+  disabled,
+  onCancel,
+  onCreate
+}) {
+  const [name, setName] = reactExports.useState("");
+  const [intent, setIntent] = reactExports.useState("");
+  const canCreate = name.trim().length > 0 && intent.trim().length > 0 && !disabled;
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs(Card, { className: "flex flex-col gap-3 p-4", children: [
     /* @__PURE__ */ jsxRuntimeExports.jsx(
-      Row,
+      "input",
       {
-        label: "Target",
-        value: `${config.framework ?? "—"} · ${config.language ?? "—"} · ${config.styling ?? "—"}`
+        value: name,
+        onChange: (e) => setName(e.target.value),
+        placeholder: "Component name — e.g. Tooltip",
+        className: "h-9 rounded-md border border-vs-border-default bg-vs-bg-primary px-3 text-sm text-vs-text-primary placeholder:text-vs-text-muted focus:outline-none focus-visible:border-vs-accent"
       }
     ),
-    /* @__PURE__ */ jsxRuntimeExports.jsx(Row, { label: "Tokens →", value: config.tokenFile ?? "—", mono: true }),
-    /* @__PURE__ */ jsxRuntimeExports.jsx(Row, { label: "Components →", value: config.componentDir ?? "—", mono: true }),
-    /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "mt-1 text-xs text-vs-text-muted", children: "No brief needed — the agent reads this source, extracts tokens & variables, and generates every component." })
+    /* @__PURE__ */ jsxRuntimeExports.jsx(
+      "textarea",
+      {
+        value: intent,
+        onChange: (e) => setIntent(e.target.value),
+        rows: 2,
+        placeholder: "What it is and does — states, variants, when to use it.",
+        className: "resize-none rounded-md border border-vs-border-default bg-vs-bg-primary px-3 py-2 text-sm text-vs-text-primary placeholder:text-vs-text-muted focus:outline-none focus-visible:border-vs-accent"
+      }
+    ),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "flex-1 text-[11px] text-vs-text-muted", children: "Added to components.json and generated with the extracted tokens." }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "default", onClick: onCancel, children: "Cancel" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "primary", disabled: !canCreate, onClick: () => onCreate(name.trim(), intent.trim()), children: "Create component" })
+    ] })
+  ] });
+}
+function OutputCard({
+  title,
+  mono,
+  desc,
+  cta,
+  optional,
+  onClick
+}) {
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs(Card, { className: "flex items-center gap-4 p-4", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "min-w-0 flex-1", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[13px] font-semibold text-vs-text-primary", children: title }),
+        mono && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "rounded border border-vs-border-default px-1.5 py-px font-mono text-[10px] text-vs-text-secondary", children: mono }),
+        optional && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "rounded-full border border-vs-border-default px-1.5 text-[9px] uppercase tracking-wide text-vs-text-muted", children: "optional" })
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "mt-1 text-xs leading-relaxed text-vs-text-secondary", children: desc })
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: optional ? "default" : "primary", onClick, children: cta })
   ] });
 }
 function Row({
@@ -17142,389 +17880,6 @@ function Row({
   return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-baseline gap-2 text-xs", children: [
     /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "w-28 shrink-0 text-vs-text-muted", children: label }),
     /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: `truncate text-vs-text-primary ${mono ? "font-mono" : ""}`, children: value })
-  ] });
-}
-function StatusBadge({
-  status,
-  locked
-}) {
-  const map = {
-    approved: { label: "approved", color: "#30A46C", border: "rgba(48,164,108,0.35)", bg: "rgba(48,164,108,0.08)" },
-    running: { label: "running", color: "#7C6FF0", border: "rgba(124,111,240,0.4)", bg: "rgba(124,111,240,0.08)" },
-    "needs-review": { label: "needs review", color: "#FFB224", border: "rgba(255,178,36,0.4)", bg: "rgba(255,178,36,0.08)" },
-    pending: { label: "pending", color: "#6B7280", border: "#26282D", bg: "#0B0C0E" },
-    failed: { label: "failed", color: "#E5484D", border: "rgba(229,72,77,0.4)", bg: "rgba(229,72,77,0.08)" }
-  };
-  const m = locked ? { label: "locked", color: "#6B7280", border: "#26282D", bg: "#0B0C0E" } : map[status];
-  return /* @__PURE__ */ jsxRuntimeExports.jsx(
-    "span",
-    {
-      className: "rounded-full border px-2 py-0.5 font-mono text-[10px]",
-      style: { color: m.color, borderColor: m.border, background: m.bg },
-      children: m.label
-    }
-  );
-}
-function AgentStage({
-  project,
-  def,
-  state,
-  onFlow,
-  header,
-  runLabel
-}) {
-  const run = useAgentRun();
-  const [artifact, setArtifact] = reactExports.useState(null);
-  const [artifactPath, setArtifactPath] = reactExports.useState("");
-  const [notes, setNotes] = reactExports.useState("");
-  const justFinished = run.model.status === "done";
-  const approved = state.status === "approved";
-  const showGate = def.gated && !approved && (justFinished || state.status === "needs-review");
-  const prompt = reactExports.useMemo(() => {
-    const base = def.promptTemplate ?? "Run this step.";
-    return state.decisionNotes ? `${base}
-
-Requested changes to address:
-${state.decisionNotes}` : base;
-  }, [def.promptTemplate, state.decisionNotes]);
-  async function start() {
-    setArtifact(null);
-    await run.start({
-      prompt,
-      cwd: project.path,
-      allowedTools: def.allowedTools,
-      bypassPermissions: true
-    });
-    if (def.gated) await onFlow(await api.setStageStatus(project.path, def.id, "running"));
-  }
-  reactExports.useEffect(() => {
-    if (!justFinished || !def.gated) return;
-    void api.setStageStatus(project.path, def.id, "needs-review").then(onFlow);
-  }, [justFinished]);
-  reactExports.useEffect(() => {
-    if (!showGate) return;
-    const resolve = def.artifactGlob ? api.findLatestArtifact(project.path, def.artifactGlob) : def.artifact ? api.readArtifact(project.path, def.artifact).then((c) => c === null ? null : { path: def.artifact, content: c }) : Promise.resolve(null);
-    void resolve.then((r) => {
-      setArtifact(r?.content ?? null);
-      setArtifactPath(r?.path ?? "");
-    });
-  }, [showGate, def.artifactGlob, def.artifact]);
-  async function approve() {
-    onFlow(await api.approveStage(project.path, def.id));
-  }
-  async function requestChanges() {
-    onFlow(await api.requestChanges(project.path, def.id, notes));
-    setNotes("");
-  }
-  async function completeImplement() {
-    onFlow(await api.approveStage(project.path, def.id));
-  }
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col gap-4", children: [
-    header,
-    /* @__PURE__ */ jsxRuntimeExports.jsxs(Card, { className: "flex flex-col gap-3 p-4", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between", children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-xs text-vs-text-muted", children: state.decisionNotes ? "Re-run addresses your requested changes." : "Runs autonomously — Figma MCP, file, and shell access are granted for this run." }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex gap-2", children: run.running ? /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { onClick: () => void run.cancel(), children: "Cancel" }) : /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "primary", onClick: () => void start(), children: state.status === "pending" ? runLabel ?? "Run step" : "Run again" }) })
-      ] }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx(RunPanel, { model: run.model, onSend: (t) => void run.send(t), canChat: run.canChat })
-    ] }),
-    showGate && /* @__PURE__ */ jsxRuntimeExports.jsx(
-      ArtifactGate,
-      {
-        path: artifactPath || void 0,
-        content: artifact,
-        notes,
-        onNotes: setNotes,
-        onApprove: () => void approve(),
-        onRequestChanges: () => void requestChanges()
-      }
-    ),
-    !def.gated && justFinished && !approved && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between rounded-md border border-vs-border-default bg-vs-bg-surface px-4 py-3", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-sm text-vs-text-secondary", children: "Implementation run complete." }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "primary", onClick: () => void completeImplement(), children: "Mark done & continue" })
-    ] }),
-    approved && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "rounded-md border border-vs-success-border bg-vs-success-muted px-4 py-2 text-sm text-vs-success", children: [
-      "Approved. ",
-      def.artifact ? `Artifact: ${def.artifact}` : ""
-    ] })
-  ] });
-}
-function ComponentsStage({
-  project,
-  def,
-  state,
-  onFlow
-}) {
-  const run = useAgentRun();
-  const [components, setComponents] = reactExports.useState(null);
-  const [mode, setMode] = reactExports.useState("all");
-  const [built, setBuilt] = reactExports.useState(/* @__PURE__ */ new Set());
-  const [activeName, setActiveName] = reactExports.useState(null);
-  reactExports.useEffect(() => {
-    void api.readArtifact(project.path, COMPONENTS_MANIFEST).then((raw) => setComponents(parseComponents(raw)));
-  }, [project.path]);
-  reactExports.useEffect(() => {
-    if (run.model.status === "done" && activeName) {
-      setBuilt((prev) => new Set(prev).add(activeName));
-    }
-  }, [run.model.status]);
-  const total = components?.length ?? 0;
-  const approved = state.status === "approved";
-  const allBuilt = total > 0 && built.size >= total;
-  const canApprove = mode === "all" ? run.model.status === "done" : allBuilt;
-  async function buildAll() {
-    setActiveName(null);
-    await run.start({
-      prompt: "Read .sdd-de/components.json and .sdd-de/project.yaml. Implement EVERY detected component into component_dir as components in the configured framework and language, using ONLY the extracted design tokens. For each, run /generate-artifacts to produce its specs, then implement it. Build in order: atoms → molecules → organisms.",
-      cwd: project.path,
-      allowedTools: def.allowedTools,
-      bypassPermissions: true
-    });
-  }
-  async function buildOne(c) {
-    setActiveName(c.name);
-    await run.start({
-      prompt: `Read .sdd-de/project.yaml. Implement the "${c.name}" component` + (c.level ? ` (${c.level})` : "") + " into component_dir in the configured framework and language, using ONLY the extracted design tokens. Run /generate-artifacts for it to produce its specs, then implement it.",
-      cwd: project.path,
-      allowedTools: def.allowedTools,
-      bypassPermissions: true
-    });
-  }
-  async function approve() {
-    onFlow(await api.approveStage(project.path, def.id));
-  }
-  if (approved) {
-    return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "rounded-md border border-vs-success-border bg-vs-success-muted px-4 py-2 text-sm text-vs-success", children: "Components approved." });
-  }
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col gap-4", children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsxs(Card, { className: "flex items-center justify-between p-3", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs text-vs-text-muted", children: total > 0 ? `${total} components detected` : "No components detected yet" }),
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex gap-0.5 rounded-md border border-vs-border-default bg-vs-bg-primary p-0.5 text-xs", children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx(Segmented, { active: mode === "all", onClick: () => setMode("all"), children: "Build all at once" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx(Segmented, { active: mode === "each", onClick: () => setMode("each"), children: "One by one" })
-      ] })
-    ] }),
-    mode === "all" ? /* @__PURE__ */ jsxRuntimeExports.jsxs(Card, { className: "flex flex-col gap-3 p-4", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between", children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "text-sm text-vs-text-secondary", children: [
-          "Generate all ",
-          total,
-          " components in one run."
-        ] }),
-        run.running ? /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { onClick: () => void run.cancel(), children: "Cancel" }) : /* @__PURE__ */ jsxRuntimeExports.jsxs(Button, { variant: "primary", disabled: total === 0, onClick: () => void buildAll(), children: [
-          "Build all ",
-          total || "",
-          " components"
-        ] })
-      ] }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx(RunPanel, { model: run.model, onSend: (t) => void run.send(t), canChat: run.canChat })
-    ] }) : /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col gap-3", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx(Card, { className: "flex flex-col divide-y divide-vs-border-subtle p-0", children: (components ?? []).map((c) => {
-        const isBuilt = built.has(c.name);
-        const isActive = activeName === c.name && run.running;
-        return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-3 px-4 py-2.5", children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "min-w-0 flex-1", children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-sm text-vs-text-primary", children: c.name }),
-            c.level && /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "font-mono text-[10px] uppercase tracking-wide text-vs-text-muted", children: c.level })
-          ] }),
-          isBuilt ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs text-vs-success", children: "Built ✓" }) : isActive ? /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { onClick: () => void run.cancel(), children: "Cancel" }) : /* @__PURE__ */ jsxRuntimeExports.jsx(
-            Button,
-            {
-              variant: "default",
-              disabled: run.running,
-              onClick: () => void buildOne(c),
-              children: "Build"
-            }
-          )
-        ] }, c.name);
-      }) }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx(RunPanel, { model: run.model, onSend: (t) => void run.send(t), canChat: run.canChat })
-    ] }),
-    canApprove && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between rounded-md border border-vs-border-default bg-vs-bg-surface px-4 py-3", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-sm text-vs-text-secondary", children: mode === "all" ? "All components built." : `All ${total} components built.` }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "primary", onClick: () => void approve(), children: "Approve & continue" })
-    ] })
-  ] });
-}
-function Segmented({
-  active,
-  onClick,
-  children
-}) {
-  return /* @__PURE__ */ jsxRuntimeExports.jsx(
-    "button",
-    {
-      onClick,
-      className: `rounded px-2.5 py-1 transition-colors ${active ? "bg-vs-bg-elevated text-vs-text-primary" : "text-vs-text-muted hover:text-vs-text-primary"}`,
-      children
-    }
-  );
-}
-function parseComponents(raw) {
-  if (!raw) return null;
-  let text = raw.trim();
-  const fence = text.match(/```(?:json)?\s*([\s\S]*?)```/);
-  if (fence?.[1]) text = fence[1].trim();
-  try {
-    const parsed = detectedComponentsSchema.safeParse(JSON.parse(text));
-    return parsed.success ? parsed.data : null;
-  } catch {
-    return null;
-  }
-}
-function CompletionBanner({
-  project,
-  published,
-  canPublish,
-  onPublish,
-  onOpenInspector,
-  onBack
-}) {
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs(Card, { className: "flex flex-col gap-3 border-vs-success-border bg-vs-success-muted p-4", children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-sm font-semibold text-vs-success", children: "Design system complete 🎉" }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "mt-1 text-xs text-vs-text-secondary", children: "Every required step is done — everything lives in your project folder. Publishing to GitHub is optional; you can keep working entirely locally." }),
-      published && /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "mt-1 text-xs text-vs-text-muted", children: [
-        "Publish target: ",
-        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono", children: published })
-      ] })
-    ] }),
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-wrap gap-2", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "primary", onClick: onOpenInspector, children: "Open Inspector" }),
-      canPublish && /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "default", onClick: onPublish, children: published ? "Publish to GitHub" : "Connect GitHub & publish…" }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "default", onClick: () => void api.openFolder(project.path), children: "Open project folder" }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "ghost", onClick: onBack, children: "Back to projects" })
-    ] }),
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "text-[11px] text-vs-text-muted", children: [
-      "Want true pixel & axe QA? Run ",
-      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono", children: "/storybook" }),
-      " in the project to make the components browsable, then screenshot against the Figma frames."
-    ] })
-  ] });
-}
-function PublishStage({
-  project,
-  def,
-  state,
-  publishRepoUrl,
-  onFlow
-}) {
-  const run = useAgentRun();
-  const [url, setUrl] = reactExports.useState(publishRepoUrl ?? "");
-  const approved = state.status === "approved";
-  const justFinished = run.model.status === "done";
-  async function publish() {
-    const target = url.trim();
-    if (!target) return;
-    onFlow(await api.setPublishTarget(project.path, target));
-    const prompt = (def.promptTemplate ?? "/commit") + `
-
-Publish target: ${target}
-Ensure this project is a git repository (run \`git init\` if it is not yet). If no \`origin\` remote exists, add the publish target as \`origin\` (never overwrite an existing origin). Stage and commit all changes with a clear message, push the current branch, and open a pull request whose description is the component spec. Use the user's existing git and gh credentials — never ask for or store tokens. If git or gh is not authenticated, stop and tell the user exactly what to run (e.g. \`gh auth login\`).`;
-    await run.start({
-      prompt,
-      cwd: project.path,
-      allowedTools: def.allowedTools,
-      bypassPermissions: true
-    });
-  }
-  async function markDone() {
-    onFlow(await api.approveStage(project.path, def.id));
-  }
-  if (approved) {
-    return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "rounded-md border border-vs-success-border bg-vs-success-muted px-4 py-2 text-sm text-vs-success", children: [
-      "Commit & publish resolved.",
-      " ",
-      publishRepoUrl ? `Published to ${publishRepoUrl}.` : "Kept local — nothing pushed."
-    ] });
-  }
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col gap-4", children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsxs(Card, { className: "flex flex-col gap-3 p-4", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "text-xs text-vs-text-muted", children: [
-        "Optional. Your work is already saved locally. To publish, connect a GitHub repo — VortSpec uses your own ",
-        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono", children: "git" }),
-        "/",
-        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono", children: "gh" }),
-        " ",
-        "and stores only the URL, never credentials."
-      ] }),
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "flex flex-col gap-1 text-xs text-vs-text-secondary", children: [
-        "GitHub repository URL",
-        /* @__PURE__ */ jsxRuntimeExports.jsx(
-          "input",
-          {
-            value: url,
-            onChange: (e) => setUrl(e.target.value),
-            placeholder: "https://github.com/you/your-repo",
-            className: "rounded-md border border-vs-border-default bg-vs-bg-primary px-3 py-2 text-sm text-vs-text-primary placeholder:text-vs-text-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-vs-accent-subtle"
-          }
-        )
-      ] }),
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex gap-2", children: [
-        run.running ? /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { onClick: () => void run.cancel(), children: "Cancel" }) : /* @__PURE__ */ jsxRuntimeExports.jsx(
-          Button,
-          {
-            variant: "primary",
-            disabled: url.trim().length === 0,
-            onClick: () => void publish(),
-            children: "Publish to GitHub"
-          }
-        ),
-        /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "ghost", onClick: () => void markDone(), children: "Skip — keep it local" })
-      ] }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx(RunPanel, { model: run.model, onSend: (t) => void run.send(t), canChat: run.canChat })
-    ] }),
-    justFinished && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between rounded-md border border-vs-border-default bg-vs-bg-surface px-4 py-3", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-sm text-vs-text-secondary", children: "Publish run complete." }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "primary", onClick: () => void markDone(), children: "Mark done" })
-    ] })
-  ] });
-}
-function ArtifactGate({
-  path,
-  content,
-  notes,
-  onNotes,
-  onApprove,
-  onRequestChanges
-}) {
-  const [mode, setMode] = reactExports.useState("view");
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs(Card, { className: "flex flex-col gap-3 p-4", children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-xs font-medium text-vs-text-secondary", children: path ? /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
-        "Review artifact · ",
-        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono", children: path })
-      ] }) : "Review this step, then approve to continue" }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "rounded-full border border-vs-warning-border px-2 py-0.5 text-[10px] uppercase tracking-wide text-vs-warning", children: "needs review" })
-    ] }),
-    content !== null && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "max-h-80 overflow-auto rounded-md border border-vs-border-default bg-vs-bg-primary p-3", children: /* @__PURE__ */ jsxRuntimeExports.jsx("pre", { className: "whitespace-pre-wrap font-mono text-xs text-vs-text-primary", children: content }) }),
-    mode === "changes" ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col gap-2", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx(
-        "textarea",
-        {
-          rows: 3,
-          value: notes,
-          onChange: (e) => onNotes(e.target.value),
-          placeholder: "Describe the changes you want the agent to make…",
-          className: "resize-y rounded-md border border-vs-border-default bg-vs-bg-primary px-3 py-2 text-sm text-vs-text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-vs-accent-subtle"
-        }
-      ),
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex gap-2", children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx(
-          Button,
-          {
-            variant: "primary",
-            disabled: notes.trim().length === 0,
-            onClick: onRequestChanges,
-            children: "Send back for changes"
-          }
-        ),
-        /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "ghost", onClick: () => setMode("view"), children: "Cancel" })
-      ] })
-    ] }) : /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex gap-2", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "primary", onClick: onApprove, children: "Approve" }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "default", onClick: () => setMode("changes"), children: "Request changes" })
-    ] })
   ] });
 }
 const FIGMA_SYNC_PROMPT = [
@@ -17592,7 +17947,8 @@ function Inspector({
   onBack,
   onOpenPreview,
   onOpenRun,
-  onOpenHistory
+  onOpenHistory,
+  onOpenManifest
 }) {
   const [tokens, setTokens] = reactExports.useState(null);
   const [usage, setUsage] = reactExports.useState({});
@@ -17673,6 +18029,16 @@ function Inspector({
     tokenMod.reset();
     flash(modLabel + " · kept");
   }
+  async function cancelTokenMod() {
+    await tokenMod.cancel();
+    if (snapshot) await api.restoreFiles(project.path, snapshot);
+    await reloadTokens();
+    setSnapshot(null);
+    setModReview(false);
+    setSelected(null);
+    tokenMod.reset();
+    flash("Canceled — restored the token file and components");
+  }
   const groups = reactExports.useMemo(() => {
     if (!tokens) return [];
     const q = query.trim().toLowerCase();
@@ -17702,17 +18068,18 @@ function Inspector({
       {
         project,
         onHeaderClick: onBack,
-        items: [
-          { label: "Flow", onClick: onBack },
-          { label: "Run", onClick: onOpenRun },
-          { label: "Preview", onClick: onOpenPreview },
+        items: projectRailItems(
+          "tokens",
           {
-            label: "Tokens",
-            active: true,
-            badge: /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono text-[11px] text-vs-text-muted", children: total })
+            onFlow: onBack,
+            onRun: onOpenRun,
+            onPlayground: onOpenPreview,
+            onTokens: () => void 0,
+            onManifest: onOpenManifest,
+            onHistory: onOpenHistory
           },
-          { label: "History", onClick: onOpenHistory }
-        ]
+          { tokens: /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono text-[11px] text-vs-text-muted", children: total }) }
+        )
       }
     ),
     /* @__PURE__ */ jsxRuntimeExports.jsxs("main", { className: "flex min-w-0 flex-1 flex-col bg-vs-bg-primary", children: [
@@ -17853,6 +18220,14 @@ function Inspector({
         /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono text-[11px] text-vs-text-muted", children: "Claude Code · gated" })
       ] }),
       /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "min-h-0 flex-1 overflow-y-auto", children: /* @__PURE__ */ jsxRuntimeExports.jsx(RunPanel, { model: tokenMod.model, onSend: tokenMod.send, canChat: tokenMod.canChat }) }),
+      tokenMod.running && !modReview && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex items-center justify-end border-t border-vs-border-default pt-3", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+        "button",
+        {
+          onClick: () => void cancelTokenMod(),
+          className: "rounded-lg border border-vs-border-strong px-3.5 py-2 text-xs text-vs-text-secondary hover:border-vs-error hover:text-vs-error",
+          children: "Cancel & revert"
+        }
+      ) }),
       modReview && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-3 border-t border-vs-border-default pt-3", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "flex-1 text-[11px] text-vs-text-muted", children: "Review the change, then keep or revert. Revert restores the token file and every component source." }),
         /* @__PURE__ */ jsxRuntimeExports.jsx(
@@ -17879,7 +18254,14 @@ function Inspector({
         /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono text-[11px] text-vs-text-muted", children: "Claude Code · Figma MCP" })
       ] }),
       /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "min-h-0 flex-1 overflow-y-auto", children: /* @__PURE__ */ jsxRuntimeExports.jsx(RunPanel, { model: figmaSync.model }) }),
-      figmaSync.model.status === "error" && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex items-center justify-end border-t border-vs-border-default pt-3", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex items-center justify-end border-t border-vs-border-default pt-3", children: figmaSync.running ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+        "button",
+        {
+          onClick: () => void figmaSync.cancel(),
+          className: "rounded-lg border border-vs-border-strong px-3.5 py-2 text-xs text-vs-text-secondary hover:border-vs-error hover:text-vs-error",
+          children: "Cancel sync"
+        }
+      ) : /* @__PURE__ */ jsxRuntimeExports.jsx(
         "button",
         {
           onClick: () => figmaSync.reset(),
@@ -18288,57 +18670,117 @@ function Preview({ token, large }) {
 function isCssColor(v) {
   return /^#|^(rgb|rgba|hsl|hsla|oklch)\(|^(white|black|transparent|currentcolor)$/i.test(v.trim());
 }
-const HARNESS_PROMPT = [
-  "Set up a live component preview so this project's dev server renders every component.",
+const STORYBOOK_PROMPT = [
+  "Set up Storybook (if not already present) and generate stories for any components that don't have",
+  "one yet, so VortSpec can embed real component docs, controls, and variants. This is safe to re-run.",
   "",
   "1. Read `.sdd-de/project.yaml` (framework, language, styling, component_dir) and",
   "   `.sdd-de/components.json` (the component inventory).",
-  "2. Create a preview harness for that framework: a mount entry + a gallery page that imports",
-  "   and renders EVERY component from components.json across its main variants/states, using the",
-  "   project's design tokens. If the project already uses Storybook, generate stories instead.",
-  "3. Ensure a working dev script serves the harness at the root (e.g. for a Vite React app, add",
-  "   src/main.tsx + index.html and a `dev` script). Install any missing dev deps with the",
-  "   project's package manager.",
-  "4. Keep it minimal and self-contained. Do NOT modify the components themselves; make the",
-  "   harness git-ignorable where practical.",
-  "5. Implement a live-control protocol so the VortSpec preview can drive it:",
-  "   - On load, post to window.parent: { source: 'vortspec-preview', type: 'ready' }.",
-  "   - Listen for messages { source: 'vortspec-preview', type: 'render', component: string,",
-  "     props: object } and render just that component with those props (map props to its",
-  "     props/variants). Before any message arrives, render the full gallery as the default.",
+  "2. If Storybook is NOT installed (no `.storybook/main.*`), install and initialize it for this",
+  "   framework with the project's package manager (for React + Vite + TypeScript, use",
+  "   `@storybook/react-vite` with the essentials addon). Add `.storybook/main.ts` whose `stories`",
+  "   glob covers BOTH stories and MDX docs pages in the component dir (e.g. include",
+  "   `'../src/components/**/*.stories.@(ts|tsx)'` AND `'../src/components/**/*.mdx'`), the framework,",
+  "   and `docs: { autodocs: true }`) and",
+  "   `.storybook/preview.ts` that imports the project's global styles / design-token CSS so",
+  "   components render themed, with `parameters.layout = 'centered'`. If Storybook already exists,",
+  "   leave its config and package.json untouched.",
+  "3. Scan the component dir for source components and, for EACH component that does NOT already have a",
+  "   sibling `<Component>.stories.tsx`, write one. Do NOT overwrite or modify any existing story file.",
+  "   Each new story has:",
+  "   - `title: '<ComponentName>'` (exactly the component name, no folder prefix), `tags: ['autodocs']`,",
+  "     and `component: <Component>`.",
+  "   - `argTypes` for the component's real props/variants (variant enum → select control, boolean →",
+  "     boolean control) with short descriptions.",
+  "   - A `Default` story with representative args PLUS a named story for each meaningful variant/state",
+  "     (every `variant`, every `size`, disabled, etc.) so the autodocs page shows the full matrix.",
+  '4. Ensure package.json has `"storybook": "storybook dev -p 6006 --no-open"` and',
+  '   `"build-storybook": "storybook build"`. Install any missing deps.',
+  "5. Do NOT modify the components themselves, and do NOT touch existing stories. End with a one-line",
+  "   summary: how many components exist, how many stories already existed, and how many you added.",
   "",
-  "When done, the dev server should render the component gallery at its root URL."
+  "When done, `storybook dev` should serve at http://localhost:6006 with an autodocs page per component."
 ].join("\n");
-function modifyPrompt(name, file, request) {
-  return [
-    `Modify the "${name}" component${file ? ` (source: ${file}, and its .variants.ts sibling if present)` : ""} per this request.`,
-    "Edit ONLY that component's source under the component directory — do not touch other components or the token file.",
-    "Keep every value token-referenced (no hardcoded hex or px). Match the surrounding code style.",
-    "",
-    "Request:",
-    request
-  ].join("\n");
-}
-const BG = { app: "#EFEFF1", white: "#FFFFFF", dark: "#0F0F10" };
-const LEVEL_ORDER = ["atom", "molecule", "organism", "other"];
-const LEVEL_LABEL = {
-  atom: "Atoms",
-  molecule: "Molecules",
-  organism: "Organisms",
-  other: "Components"
-};
+const DOCS_PROMPT = [
+  "Generate rich, reference-grade Storybook documentation pages for this design system's components —",
+  "the machine-facing 'component metadata' docs an AI agent reads to compose UIs. This is ADDITIVE and",
+  "safe to re-run: never overwrite an existing docs page or story, never modify component source.",
+  "Assumes each component already has a `<Component>.stories.tsx` (if not, generate the missing stories",
+  "first, same rules as the story sync).",
+  "",
+  "Read `.sdd-de/project.yaml` (framework, language, component_dir, token_file, design_source,",
+  "figma_file_url) and `.sdd-de/components.json`.",
+  "",
+  "STEP 1 — Shared doc blocks (create under `.storybook/doc-blocks/` only if missing; do NOT overwrite).",
+  "Build small, reusable, presentational React components so every component's docs page looks identical",
+  "and matches the reference. Style them clean and light (subtle table borders, monospace for code/values,",
+  "chips/pills for enums, red-tinted cards for anti-patterns, color swatches for tokens, a highlighted box",
+  "for AI hints). Use the project's own tokens where reasonable. Create:",
+  "  - `Identity.tsx` — a key/value table: Category, Type, Import, Figma file, Figma node.",
+  "  - `PropsTable.tsx` — columns Prop | Type/Values | Default | Description; render enum unions as pills.",
+  "  - `Patterns.tsx` — 'Common Patterns': a list of { title, description, code } rendered as titled code examples.",
+  "  - `AntiPatterns.tsx` — red cards, each { title, why, instead } with a ✗ marker.",
+  "  - `StatesTable.tsx` — 'States & Behaviour': State | Description table.",
+  "  - `A11y.tsx` — Accessibility: an ARIA role / Keyboard / Screen reader / WCAG table plus bullet notes.",
+  "  - `Tokens.tsx` — 'Design Tokens': a swatch grid of { name, value } (color chip + name + value) with a",
+  "    border-radius / shadow footnote.",
+  "  - `AIHints.tsx` — 'AI Generation Hints': a use-case sentence, a Keywords chip list, and numbered Generation Rules.",
+  "  Also add an `index.ts` barrel export.",
+  "",
+  "STEP 2 — Per-component data. For EACH component that does NOT already have a `<Component>.mdx` beside its",
+  "story, gather its documentation data from:",
+  "  - its Component Spec `specs/**/<component>-component-spec.md` (Purpose, Design Tokens Used, Variants,",
+  "    States, Sizes, Props/API, Content Rules, Accessibility, Do-Not) and Interaction Spec if present,",
+  "  - its `*.variants.ts` (CVA) and source file (real props, enum values, defaults),",
+  "  - the token map: resolve the Tailwind classes the component uses to `token_file` values for the swatches,",
+  "  - and, when `design_source: figma`, ENRICH with the Figma component-doc metadata tool. Resolve the",
+  "    component's Figma nodeId in this order and DO NOT skip the tool just because the spec lacks a node id:",
+  "      (a) a `figmaNodeId` field on the entry in `.sdd-de/components.json`, else",
+  "      (b) the Figma frame/node URL in its Component Spec, else",
+  "      (c) look it up by name via `figma_get_component_details` (componentName) or `figma_search_components`",
+  "          against `figma_file_url`.",
+  "    Then call `figma_generate_component_doc` with that nodeId and codeInfo (props, variantDefinition = the CVA",
+  "    block, sourceFiles, importStatement, usageExamples). Use its output to source/verify the accurate data for",
+  "    the EXISTING sections (per-variant color tokens for Design Tokens, anatomy/content-guidelines for the",
+  "    identity + patterns, design annotations for States & Behaviour, a11y notes for Accessibility, and",
+  "    design-code parity) — do NOT add new sections; keep the reference's 10-section layout. Record the resolved",
+  "    nodeId in the Identity block. Only fall back to specs-only if the Figma bridge is genuinely unreachable,",
+  "    and note that in the run summary.",
+  "  Compose the curated sections not present in the sources: Common Patterns (real usage recipes with code),",
+  "  Anti-Patterns (Why + Instead), and AI Generation Hints (a use-case sentence + Keywords + numbered Generation Rules).",
+  "",
+  "STEP 3 — Write `<Component>.mdx` beside each component's story. Start with `import { Meta, Primary, Controls,",
+  "Stories } from '@storybook/blocks';`, import the shared doc blocks, import the component's stories, and set",
+  "`<Meta of={<Component>Stories} />` so this MDX becomes that component's docs page (replacing thin autodocs).",
+  "Render the sections in EXACTLY this order to match the reference:",
+  "  1) a live preview via <Primary /> (with Storybook's show/copy-code),",
+  "  2) Component Identity  (<Identity … />),",
+  "  3) Props               (<PropsTable … /> — or <Controls /> plus the typed table),",
+  "  4) Common Patterns     (<Patterns … />),",
+  "  5) Anti-Patterns       (<AntiPatterns … />),",
+  "  6) States & Behaviour  (<StatesTable … />),",
+  "  7) Accessibility       (<A11y … />),",
+  "  8) Design Tokens       (<Tokens … />),",
+  "  9) AI Generation Hints (<AIHints … />),",
+  "  10) Stories            (<Stories />).",
+  "",
+  "STEP 4 — Make the docs pages render. Ensure `.storybook/main.ts`'s `stories` glob matches `*.mdx` in the",
+  "component dir (add e.g. `'../src/components/**/*.mdx'` if it isn't already) — otherwise Storybook compiles",
+  "but never displays these pages. Then run `build-storybook` as a sanity check (remove the artifact).",
+  "",
+  "Idempotent: skip any component that already has a `<Component>.mdx`; do not modify components, existing",
+  "stories, or existing docs. If `design_source` is not figma, skip the figma tool and compose from the specs +",
+  "source only. End with a one-line summary: how many docs pages you created, how many already existed, and how",
+  "many components are now fully documented. Re-run to complete any remaining."
+].join("\n");
 function DevPreview({
   project,
   onBack,
   onOpenRun,
   onOpenInspector,
-  onOpenHistory
+  onOpenHistory,
+  onOpenManifest
 }) {
-  const [components, setComponents] = reactExports.useState(null);
-  const [previewUrl, setPreviewUrl] = reactExports.useState(null);
-  const [selName, setSelName] = reactExports.useState(null);
-  const [query, setQuery] = reactExports.useState("");
-  const [bg, setBg] = reactExports.useState("app");
   const [devUrl, setDevUrl] = reactExports.useState("");
   const [dev, setDev] = reactExports.useState({
     state: "stopped",
@@ -18346,201 +18788,104 @@ function DevPreview({
     script: null,
     message: null
   });
-  const iframeRef = reactExports.useRef(null);
-  const [iframeReady, setIframeReady] = reactExports.useState(false);
-  const [previewProps, setPreviewProps] = reactExports.useState({});
-  reactExports.useEffect(() => {
-    void api.inspectorComponents(project.path).then((r) => {
-      setComponents(r.components);
-      setPreviewUrl(r.previewUrl);
-      setSelName((cur) => cur ?? r.components[0]?.name ?? null);
-    });
-  }, [project.path]);
+  const [frameLoading, setFrameLoading] = reactExports.useState(true);
+  const storybook = useAgentRun();
+  const autoRef = reactExports.useRef(false);
+  const [syncMode, setSyncMode] = reactExports.useState("stories");
+  const base = (devUrl.trim() || dev.url || "").replace(/\/+$/, "");
+  const embedUrl = base ? `${base}/` : "";
   reactExports.useEffect(() => {
     void api.devServerStatus(project.path).then(setDev);
     return api.onDevServerUpdate(({ projectPath, status }) => {
       if (projectPath === project.path) setDev(status);
     });
   }, [project.path]);
-  const harness = useAgentRun();
-  const modify = useAgentRun();
-  const [snapshot, setSnapshot] = reactExports.useState(null);
-  const [modifyReview, setModifyReview] = reactExports.useState(false);
-  async function requestModify(request) {
-    if (!selName) return;
-    const file = components?.find((c) => c.name === selName)?.file ?? null;
-    setModifyReview(false);
-    if (file) setSnapshot(await api.snapshotComponent(project.path, file));
-    await modify.start({
-      prompt: modifyPrompt(selName, file, request),
-      cwd: project.path,
-      allowedTools: ["Read", "Edit", "Write"],
-      bypassPermissions: true
-    });
-  }
-  reactExports.useEffect(() => {
-    if (modify.model.status !== "done") return;
-    void api.inspectorComponents(project.path).then((r) => setComponents(r.components));
-    setModifyReview(true);
-  }, [modify.model.status]);
-  async function revertModify() {
-    if (snapshot) await api.restoreFiles(project.path, snapshot);
-    await api.inspectorComponents(project.path).then((r) => setComponents(r.components));
-    setSnapshot(null);
-    setModifyReview(false);
-    modify.reset();
-  }
-  function keepModify() {
-    setSnapshot(null);
-    setModifyReview(false);
-    modify.reset();
-  }
   async function startPreview() {
     setDev(await api.startDevServer(project.path));
   }
   function stopPreview() {
     void api.stopDevServer(project.path);
   }
-  async function generateHarness() {
-    await harness.start({
-      prompt: HARNESS_PROMPT,
+  async function generateStorybook() {
+    setSyncMode("stories");
+    await storybook.start({
+      prompt: STORYBOOK_PROMPT,
+      cwd: project.path,
+      allowedTools: ["Read", "Write", "Edit", "Bash"],
+      bypassPermissions: true
+    });
+  }
+  async function generateDocs() {
+    setSyncMode("docs");
+    await storybook.start({
+      prompt: DOCS_PROMPT,
       cwd: project.path,
       allowedTools: ["Read", "Write", "Edit", "Bash"],
       bypassPermissions: true
     });
   }
   reactExports.useEffect(() => {
-    if (harness.model.status === "done") void startPreview();
-  }, [harness.model.status]);
+    if (storybook.model.status === "done") void startPreview();
+  }, [storybook.model.status]);
   reactExports.useEffect(() => {
-    function onMessage(e) {
-      const d = e.data;
-      if (d?.source === "vortspec-preview" && d.type === "ready") setIframeReady(true);
-    }
-    window.addEventListener("message", onMessage);
-    return () => window.removeEventListener("message", onMessage);
-  }, []);
-  reactExports.useEffect(() => {
-    if (!iframeReady || !selName) return;
-    iframeRef.current?.contentWindow?.postMessage(
-      { source: "vortspec-preview", type: "render", component: selName, props: previewProps },
-      "*"
-    );
-  }, [iframeReady, selName, previewProps]);
-  const groups = reactExports.useMemo(() => {
-    if (!components) return [];
-    const q = query.trim().toLowerCase();
-    const filtered = components.filter((c) => q === "" || c.name.toLowerCase().includes(q));
-    return LEVEL_ORDER.map((level) => ({
-      level,
-      items: filtered.filter((c) => (c.level ?? "other") === level)
-    })).filter((g) => g.items.length > 0);
-  }, [components, query]);
-  const selected = components?.find((c) => c.name === selName) ?? null;
-  const embedUrl = devUrl.trim() || dev.url || previewUrl || "";
+    if (autoRef.current) return;
+    autoRef.current = true;
+    void (async () => {
+      const status = await api.devServerStatus(project.path);
+      if (status.url) {
+        setDev(status);
+        return;
+      }
+      const info = await api.previewInfo(project.path);
+      if (info.hasStorybook) {
+        await startPreview();
+        return;
+      }
+      if (!storybook.running) void generateStorybook();
+    })();
+  }, [project.path]);
+  reactExports.useEffect(() => setFrameLoading(true), [embedUrl]);
+  const building = storybook.running || storybook.model.status === "done" && !dev.url;
   return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex h-[calc(100vh-3rem)] w-full overflow-hidden bg-vs-bg-primary text-[13px] text-vs-text-primary", children: [
     /* @__PURE__ */ jsxRuntimeExports.jsx(
       ProjectRail,
       {
         project,
         onHeaderClick: onBack,
-        items: [
-          { label: "Flow", onClick: onBack },
-          { label: "Run", onClick: onOpenRun },
-          { label: "Preview", active: true },
-          { label: "Tokens", onClick: onOpenInspector },
-          { label: "History", onClick: onOpenHistory }
-        ]
+        items: projectRailItems("playground", {
+          onFlow: onBack,
+          onRun: onOpenRun,
+          onPlayground: () => void 0,
+          onTokens: onOpenInspector,
+          onManifest: onOpenManifest,
+          onHistory: onOpenHistory
+        })
       }
     ),
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex w-52 shrink-0 flex-col border-r border-vs-border-default bg-vs-bg-surface", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "border-b border-vs-border-default p-3", children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "mb-2 text-[11px] font-semibold uppercase tracking-wide text-vs-text-muted", children: [
-          "Components ",
-          components && /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-vs-text-muted", children: [
-            "· ",
-            components.length
-          ] })
-        ] }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx(
-          "input",
-          {
-            value: query,
-            onChange: (e) => setQuery(e.target.value),
-            placeholder: "Search",
-            className: "h-[30px] w-full rounded-md border border-vs-border-default bg-vs-bg-primary px-2.5 text-xs text-vs-text-primary placeholder:text-vs-text-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-vs-accent-subtle"
-          }
-        )
-      ] }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex-1 overflow-y-auto p-2", children: components === null ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2 p-3 text-xs text-vs-text-secondary", children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx(Spinner, {}),
-        " Reading…"
-      ] }) : groups.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "p-3 text-xs text-vs-text-muted", children: "No components detected." }) : groups.map((g) => /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "mb-3", children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-vs-text-muted", children: [
-          LEVEL_LABEL[g.level],
-          " ",
-          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-vs-border-strong", children: g.items.length })
-        ] }),
-        g.items.map((c) => {
-          const active = c.name === selName;
-          return /* @__PURE__ */ jsxRuntimeExports.jsxs(
-            "button",
-            {
-              onClick: () => setSelName(c.name),
-              className: `flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left ${active ? "bg-vs-bg-elevated" : "hover:bg-vs-bg-elevated"}`,
-              children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsx(
-                  "span",
-                  {
-                    className: `h-3 w-3 shrink-0 rounded-sm border ${active ? "border-vs-accent" : "border-vs-text-muted"}`
-                  }
-                ),
-                /* @__PURE__ */ jsxRuntimeExports.jsx(
-                  "span",
-                  {
-                    className: `flex-1 truncate text-[13px] ${active ? "font-medium text-vs-text-primary" : "text-vs-text-secondary"}`,
-                    children: c.name
-                  }
-                ),
-                /* @__PURE__ */ jsxRuntimeExports.jsx(StatusDot, { status: c.status })
-              ]
-            },
-            c.name
-          );
-        })
-      ] }, g.level)) })
-    ] }),
     /* @__PURE__ */ jsxRuntimeExports.jsxs("main", { className: "flex min-w-0 flex-1 flex-col bg-vs-bg-primary", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsxs("header", { className: "flex flex-none items-center gap-3 border-b border-vs-border-default px-5 py-3", children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[15px] font-semibold", children: selected?.name ?? "—" }),
-        selected?.file && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "rounded border border-vs-border-default px-1.5 py-px font-mono text-[11px] text-vs-text-secondary", children: selected.file }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[15px] font-semibold", children: "Playground" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "rounded border border-vs-border-default px-1.5 py-px text-[10px] uppercase tracking-wide text-vs-text-muted", children: "Storybook" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs text-vs-text-muted", children: "Browse components in the Storybook sidebar →" }),
         /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex-1" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex gap-0.5 rounded-lg border border-vs-border-default bg-vs-bg-surface p-0.5", children: Object.keys(BG).map((b) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
-          "button",
-          {
-            onClick: () => setBg(b),
-            className: `flex items-center gap-1.5 rounded-md px-2.5 py-1 ${bg === b ? "bg-vs-bg-elevated" : "hover:opacity-85"}`,
-            children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsx(
-                "span",
-                {
-                  className: "inline-block h-3 w-3 rounded-[3px] border border-vs-border-strong",
-                  style: { background: BG[b] }
-                }
-              ),
-              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: `text-[11px] ${bg === b ? "text-vs-text-primary" : "text-vs-text-secondary"}`, children: b === "app" ? "App" : b === "white" ? "White" : "Dark" })
-            ]
-          },
-          b
-        )) }),
         /* @__PURE__ */ jsxRuntimeExports.jsx(
           Button,
           {
             variant: "ghost",
-            disabled: harness.running,
-            onClick: () => void generateHarness(),
-            title: "Have Claude Code write a preview harness for this project",
-            children: harness.running ? "Generating…" : "Generate harness"
+            disabled: storybook.running,
+            onClick: () => void generateStorybook(),
+            title: "Set up Storybook if needed, and add stories for any newly-built components (existing stories are left untouched)",
+            children: storybook.running && syncMode === "stories" ? "Syncing stories…" : "Sync stories"
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          Button,
+          {
+            variant: "ghost",
+            disabled: storybook.running,
+            onClick: () => void generateDocs(),
+            title: "Generate rich per-component documentation pages (identity, props, patterns, anti-patterns, states, accessibility, tokens, AI hints) from the specs + Figma metadata. Additive — existing docs are left untouched.",
+            children: storybook.running && syncMode === "docs" ? "Syncing docs…" : "Sync docs"
           }
         ),
         /* @__PURE__ */ jsxRuntimeExports.jsx(
@@ -18553,86 +18898,48 @@ function DevPreview({
           }
         )
       ] }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "min-h-0 flex-1 overflow-y-auto transition-colors", style: { background: BG[bg] }, children: modify.running ? /* @__PURE__ */ jsxRuntimeExports.jsx(RunOverlay, { title: "Applying your change with Claude Code…", run: modify }) : harness.running || harness.model.status === "done" && !dev.url ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "min-h-0 flex-1 overflow-y-auto bg-vs-bg-primary", children: building ? /* @__PURE__ */ jsxRuntimeExports.jsx(
         RunOverlay,
         {
-          title: harness.running ? "Generating a preview harness with Claude Code…" : "Harness generated — starting the preview…",
-          run: harness,
-          done: !harness.running
+          title: storybook.running ? syncMode === "docs" ? "Generating rich component documentation pages (identity, props, patterns, tokens, AI hints)…" : "Syncing Storybook — adding stories for any components that don't have one yet…" : "Storybook ready — starting it up…",
+          run: storybook,
+          done: !storybook.running
         }
       ) : embedUrl ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "relative h-full min-h-[340px]", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx(
           "iframe",
           {
-            ref: iframeRef,
-            title: "preview",
+            title: "storybook",
             src: embedUrl,
-            onLoad: () => setIframeReady(false),
+            onLoad: () => setFrameLoading(false),
             className: "h-full min-h-[340px] w-full border-0 bg-white"
-          }
+          },
+          embedUrl
         ),
-        modifyReview && /* @__PURE__ */ jsxRuntimeExports.jsx(KeepRevertBar, { onKeep: keepModify, onRevert: () => void revertModify() })
-      ] }) : modifyReview ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex min-h-[340px] items-start justify-center p-6", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "w-full max-w-2xl rounded-xl border border-vs-border-default bg-vs-bg-surface p-4", children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "mb-3 flex items-center gap-2 text-sm text-vs-text-primary", children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-vs-success", children: "✓" }),
-          " Change applied — start the preview to see it live."
-        ] }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx(
-          RunPanel,
-          {
-            model: modify.model,
-            onSend: (t) => void modify.send(t),
-            canChat: modify.canChat
-          }
-        ),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "mt-3", children: /* @__PURE__ */ jsxRuntimeExports.jsx(KeepRevertBar, { onKeep: keepModify, onRevert: () => void revertModify(), inline: true }) })
-      ] }) }) : /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex min-h-[340px] items-center justify-center p-12", children: /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex max-w-md flex-col items-center gap-3 rounded-xl border border-black/10 bg-white/80 p-6 text-center", children: dev.state === "starting" ? /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx(Spinner, {}),
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "text-sm font-medium text-zinc-700", children: [
-          "Starting the dev server",
-          dev.script ? ` (${dev.script})` : "",
-          "…"
-        ] })
-      ] }) : dev.state === "no-script" ? /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-sm font-semibold text-zinc-800", children: "No preview surface yet" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "text-xs text-zinc-500", children: [
-          dev.message,
-          " Claude Code can generate a gallery/Storybook harness so the dev server renders every component."
-        ] }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "primary", onClick: () => void generateHarness(), children: "Generate preview harness" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx(UrlOverride, { value: devUrl, onChange: setDevUrl })
-      ] }) : dev.state === "error" ? /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-sm font-semibold text-red-600", children: "Preview failed to start" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-xs text-zinc-500", children: dev.message }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "default", onClick: () => void startPreview(), children: "Try again" })
-      ] }) : /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-sm font-semibold text-zinc-800", children: "No live preview yet" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-xs text-zinc-500", children: "Start the project’s dev server to render components live. If it renders nothing, have Claude Code generate a preview harness." }),
+        frameLoading && /* @__PURE__ */ jsxRuntimeExports.jsx(LoadingVeil, { label: "Loading Storybook…" })
+      ] }) : dev.state === "error" ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex min-h-[340px] items-center justify-center p-12", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex max-w-md flex-col items-center gap-3 rounded-xl border border-vs-border-default bg-vs-bg-surface p-6 text-center", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-sm font-semibold text-vs-error", children: "Storybook failed to start" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-xs text-vs-text-muted", children: dev.message }),
         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex gap-2", children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "primary", onClick: () => void startPreview(), children: "Start preview" }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "default", onClick: () => void generateHarness(), children: "Generate harness" })
+          /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "default", onClick: () => void startPreview(), children: "Try again" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "primary", onClick: () => void generateStorybook(), children: "Sync stories" })
         ] }),
         /* @__PURE__ */ jsxRuntimeExports.jsx(UrlOverride, { value: devUrl, onChange: setDevUrl })
-      ] }) }) }) })
-    ] }),
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("aside", { className: "flex w-[300px] shrink-0 flex-col border-l border-vs-border-default bg-vs-bg-surface", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-none items-center gap-2 border-b border-vs-border-default px-4 py-3", children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-sm font-semibold", children: "Controls" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex-1" })
-      ] }),
-      selected ? /* @__PURE__ */ jsxRuntimeExports.jsx(
-        ControlsPanel,
-        {
-          component: selected,
-          projectPath: project.path,
-          onValues: setPreviewProps,
-          onModify: (req) => void requestModify(req),
-          modifyBusy: modify.running
-        },
-        selected.name
-      ) : /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "p-4 text-xs text-vs-text-muted", children: "Select a component." })
+      ] }) }) : /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex min-h-[340px] items-center justify-center p-12", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex max-w-md flex-col items-center gap-3 rounded-xl border border-vs-border-default bg-vs-bg-surface p-6 text-center", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx(Spinner, {}),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-sm font-medium text-vs-text-secondary", children: dev.state === "starting" ? "Starting Storybook — the first boot can take a moment…" : "Preparing the Storybook playground…" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-xs text-vs-text-muted", children: "VortSpec is standing up Storybook for you — no setup needed." }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(UrlOverride, { value: devUrl, onChange: setDevUrl })
+      ] }) }) })
     ] })
   ] });
+}
+function LoadingVeil({ label }) {
+  return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "pointer-events-none absolute inset-0 flex items-center justify-center bg-white/70 backdrop-blur-[1px]", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2 rounded-full border border-black/10 bg-white px-3 py-1.5 text-xs font-medium text-zinc-600 shadow-sm", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsx(Spinner, {}),
+    " ",
+    label
+  ] }) });
 }
 function RunOverlay({
   title,
@@ -18647,23 +18954,6 @@ function RunOverlay({
     ] }),
     /* @__PURE__ */ jsxRuntimeExports.jsx(RunPanel, { model: run.model, onSend: (t) => void run.send(t), canChat: run.canChat })
   ] }) });
-}
-function KeepRevertBar({
-  onKeep,
-  onRevert,
-  inline: inline2
-}) {
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs(
-    "div",
-    {
-      className: inline2 ? "flex items-center gap-2" : "absolute inset-x-0 bottom-0 flex items-center gap-2 border-t border-vs-border-default bg-vs-bg-surface px-4 py-2.5",
-      children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "flex-1 text-xs text-vs-text-secondary", children: "Change applied to the component source — keep it, or revert to the previous version." }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "ghost", onClick: onRevert, children: "Revert" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "primary", onClick: onKeep, children: "Keep" })
-      ]
-    }
-  );
 }
 function DevServerControl({
   status,
@@ -18715,8 +19005,8 @@ function DevServerControl({
       variant: "default",
       disabled,
       onClick: onStart,
-      title: disabled ? "No dev/storybook script in package.json" : void 0,
-      children: "Start preview"
+      title: disabled ? "No storybook/dev script in package.json" : void 0,
+      children: "Start Storybook"
     }
   );
 }
@@ -18729,226 +19019,18 @@ function UrlOverride({
     {
       value,
       onChange: (e) => onChange(e.target.value),
-      placeholder: "http://localhost:5173",
-      className: "mt-1 w-56 rounded-md border border-zinc-300 bg-white px-2.5 py-1.5 text-center font-mono text-[11px] text-zinc-700 placeholder:text-zinc-400 focus:outline-none"
+      placeholder: "http://localhost:6006",
+      className: "mt-1 w-56 rounded-md border border-vs-border-strong bg-vs-bg-primary px-2.5 py-1.5 text-center font-mono text-[11px] text-vs-text-secondary placeholder:text-vs-text-muted focus:outline-none focus-visible:border-vs-accent"
     }
   );
-}
-function StatusDot({ status }) {
-  const color = status === "verified" ? "bg-vs-success" : status === "has-issues" ? "bg-vs-warning" : status === "built" ? "bg-vs-text-muted" : "bg-vs-border-strong";
-  return /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: `h-1.5 w-1.5 shrink-0 rounded-full ${color}`, title: status });
-}
-function initialValues(props) {
-  const v = {};
-  for (const p of props) {
-    if (p.kind === "boolean") v[p.key] = p.defaultValue === "true";
-    else v[p.key] = p.defaultValue ?? p.options[0] ?? "";
-  }
-  return v;
-}
-function ControlsPanel({
-  component,
-  projectPath,
-  onValues,
-  onModify,
-  modifyBusy
-}) {
-  const [values, setValues] = reactExports.useState(() => initialValues(component.props));
-  const [modifyDraft, setModifyDraft] = reactExports.useState("");
-  const set = (k, v) => setValues((s) => ({ ...s, [k]: v }));
-  const reset = () => setValues(initialValues(component.props));
-  reactExports.useEffect(() => {
-    onValues(values);
-  }, [values, onValues]);
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex-1 overflow-y-auto px-4 pb-4", children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center py-2", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-[11px] text-vs-text-muted", children: [
-        component.props.length,
-        " prop",
-        component.props.length === 1 ? "" : "s",
-        " · from source"
-      ] }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex-1" }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx(
-        "button",
-        {
-          onClick: reset,
-          className: "rounded-md border border-vs-border-strong px-2.5 py-1 text-[11px] text-vs-text-secondary hover:border-vs-accent hover:text-vs-text-primary",
-          children: "Reset"
-        }
-      )
-    ] }),
-    component.props.length === 0 && /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "py-2 text-xs text-vs-text-muted", children: "No source-declared variant props found." }),
-    component.props.map((p) => /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col gap-1.5 border-b border-vs-border-subtle py-3", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2", children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono text-xs text-vs-text-primary", children: p.key }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono text-[10px] text-vs-text-muted", children: p.kind })
-      ] }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx(PropInput, { prop: p, value: values[p.key], onChange: (v) => set(p.key, v) })
-    ] }, p.key)),
-    /* @__PURE__ */ jsxRuntimeExports.jsx(Section$1, { title: "Tokens consumed", children: component.tokens.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs text-vs-text-muted", children: "— (uses token utilities; var() scan found none)" }) : /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex flex-wrap gap-1.5", children: component.tokens.map((t) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
-      "span",
-      {
-        className: "rounded border border-vs-border-default bg-vs-bg-primary px-1.5 py-0.5 font-mono text-[11px] text-vs-text-secondary",
-        children: [
-          "--",
-          t
-        ]
-      },
-      t
-    )) }) }),
-    /* @__PURE__ */ jsxRuntimeExports.jsx(Section$1, { title: "Accessibility", children: component.status === "verified" ? /* @__PURE__ */ jsxRuntimeExports.jsx(Check, { icon: "✓", color: "text-vs-success", label: "visual-verify passed" }) : component.status === "has-issues" ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex flex-col gap-1.5", children: component.issues.map((i) => /* @__PURE__ */ jsxRuntimeExports.jsx(Check, { icon: "!", color: "text-vs-warning", label: i }, i)) }) : /* @__PURE__ */ jsxRuntimeExports.jsx(Check, { icon: "—", color: "text-vs-text-muted", label: "Run /visual-verify to populate checks" }) }),
-    /* @__PURE__ */ jsxRuntimeExports.jsx(Section$1, { title: "Source & spec", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col gap-1", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx(FileLink, { projectPath, path: component.file, label: "Component source" }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx(FileLink, { projectPath, path: component.specPath, label: "Spec" }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx(
-        FileLink,
-        {
-          projectPath,
-          path: component.reportPath,
-          label: "Visual-verify report"
-        }
-      )
-    ] }) }),
-    /* @__PURE__ */ jsxRuntimeExports.jsx(Section$1, { title: "Code", children: /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "whitespace-pre-wrap break-words rounded-md border border-vs-border-default bg-black/40 p-3 font-mono text-[11px] leading-relaxed text-vs-text-secondary", children: snippet(component.name, component.props, values) }) }),
-    /* @__PURE__ */ jsxRuntimeExports.jsxs(Section$1, { title: "Modify with Claude", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx(
-        "textarea",
-        {
-          rows: 2,
-          value: modifyDraft,
-          onChange: (e) => setModifyDraft(e.target.value),
-          placeholder: "Describe a change — e.g. add a loading state, tighten the padding…",
-          className: "w-full resize-none rounded-md border border-vs-border-default bg-vs-bg-primary px-2.5 py-2 text-xs text-vs-text-primary placeholder:text-vs-text-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-vs-accent-subtle"
-        }
-      ),
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "mt-2 flex items-center gap-2", children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "flex-1 text-[11px] text-vs-text-muted", children: "Applied by Claude Code, then reviewable — keep or revert." }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx(
-          Button,
-          {
-            variant: "primary",
-            disabled: modifyBusy || modifyDraft.trim().length === 0,
-            onClick: () => {
-              onModify(modifyDraft.trim());
-              setModifyDraft("");
-            },
-            children: modifyBusy ? "Applying…" : "Apply"
-          }
-        )
-      ] })
-    ] })
-  ] });
-}
-function PropInput({
-  prop,
-  value,
-  onChange
-}) {
-  if (prop.kind === "boolean") {
-    const on = value === true;
-    return /* @__PURE__ */ jsxRuntimeExports.jsx(
-      "button",
-      {
-        onClick: () => onChange(!on),
-        className: `flex h-[19px] w-[34px] rounded-full border border-vs-border-strong p-px hover:border-vs-accent ${on ? "justify-end bg-vs-accent" : "justify-start bg-vs-border-default"}`,
-        children: /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "block h-[15px] w-[15px] rounded-full bg-vs-text-primary" })
-      }
-    );
-  }
-  if (prop.kind === "enum" && prop.options.length <= 4) {
-    return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex flex-wrap gap-0.5 rounded-md border border-vs-border-default bg-vs-bg-primary p-0.5", children: prop.options.map((o) => /* @__PURE__ */ jsxRuntimeExports.jsx(
-      "button",
-      {
-        onClick: () => onChange(o),
-        className: `min-w-[44px] flex-1 rounded px-2 py-1 font-mono text-[11px] ${value === o ? "bg-vs-bg-elevated text-vs-accent" : "text-vs-text-muted hover:text-vs-text-primary"}`,
-        children: o
-      },
-      o
-    )) });
-  }
-  if (prop.kind === "enum") {
-    return /* @__PURE__ */ jsxRuntimeExports.jsx(
-      "select",
-      {
-        value: String(value),
-        onChange: (e) => onChange(e.target.value),
-        className: "h-8 rounded-md border border-vs-border-default bg-vs-bg-primary px-2.5 text-xs text-vs-text-primary focus:outline-none focus-visible:border-vs-accent",
-        children: prop.options.map((o) => /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: o, children: o }, o))
-      }
-    );
-  }
-  return /* @__PURE__ */ jsxRuntimeExports.jsx(
-    "input",
-    {
-      value: String(value),
-      onChange: (e) => onChange(e.target.value),
-      className: "h-8 rounded-md border border-vs-border-default bg-vs-bg-primary px-2.5 text-xs text-vs-text-primary focus:outline-none focus-visible:border-vs-accent"
-    }
-  );
-}
-function Section$1({
-  title,
-  children
-}) {
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "border-b border-vs-border-subtle py-3.5", children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "mb-2.5 text-[10px] font-semibold uppercase tracking-wide text-vs-text-muted", children: title }),
-    children
-  ] });
-}
-function FileLink({
-  projectPath,
-  path,
-  label
-}) {
-  if (!path) {
-    return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2 text-xs text-vs-text-muted", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "w-3.5 text-center", children: "—" }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "flex-1", children: label }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[10px]", children: "not created yet" })
-    ] });
-  }
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs(
-    "button",
-    {
-      onClick: () => void api.revealPath(projectPath, path),
-      title: `Reveal ${path} in Finder`,
-      className: "group flex items-center gap-2 text-left text-xs text-vs-text-secondary hover:text-vs-text-primary",
-      children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "w-3.5 text-center text-vs-accent", children: "↗" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "flex-1", children: label }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "max-w-[150px] truncate font-mono text-[10px] text-vs-text-muted group-hover:text-vs-text-secondary", children: path })
-      ]
-    }
-  );
-}
-function Check({
-  icon,
-  color,
-  label
-}) {
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2", children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: `w-3.5 text-center text-xs ${color}`, children: icon }),
-    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "flex-1 text-xs text-vs-text-primary", children: label })
-  ] });
-}
-function snippet(name, props, values) {
-  const attrs = props.map((p) => {
-    const v = values[p.key];
-    if (p.kind === "boolean") return v ? `
-  ${p.key}` : "";
-    return `
-  ${p.key}="${String(v)}"`;
-  }).filter(Boolean).join("");
-  return attrs ? `<${name}${attrs}
-/>` : `<${name} />`;
 }
 function RunView({
   project,
   onBack,
   onOpenPreview,
   onOpenInspector,
-  onOpenHistory
+  onOpenHistory,
+  onOpenManifest
 }) {
   const { model, running, hasRun, cancel } = useLatestRun();
   const [term, setTerm] = reactExports.useState(false);
@@ -18959,17 +19041,18 @@ function RunView({
       {
         project,
         onHeaderClick: onBack,
-        items: [
-          { label: "Flow", onClick: onBack },
+        items: projectRailItems(
+          "run",
           {
-            label: "Run",
-            active: true,
-            badge: running ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "h-1.5 w-1.5 rounded-full bg-vs-accent" }) : void 0
+            onFlow: onBack,
+            onRun: () => void 0,
+            onPlayground: onOpenPreview,
+            onTokens: onOpenInspector,
+            onManifest: onOpenManifest,
+            onHistory: onOpenHistory
           },
-          { label: "Preview", onClick: onOpenPreview },
-          { label: "Tokens", onClick: onOpenInspector },
-          { label: "History", onClick: onOpenHistory }
-        ]
+          { run: running ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "h-1.5 w-1.5 rounded-full bg-vs-accent" }) : void 0 }
+        )
       }
     ),
     /* @__PURE__ */ jsxRuntimeExports.jsxs("main", { className: "flex min-w-0 flex-1 flex-col bg-vs-bg-primary", children: [
@@ -19094,7 +19177,7 @@ function RawTerminal({ lines, running }) {
   reactExports.useEffect(() => {
     endRef.current?.scrollIntoView();
   }, [lines.length]);
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "min-w-0 flex-1 overflow-y-auto bg-black/60 p-5 font-mono text-xs leading-relaxed", children: [
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "min-w-0 flex-1 overflow-y-auto bg-vs-bg-code p-5 font-mono text-xs leading-relaxed", children: [
     lines.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-vs-text-muted", children: "Raw stream-json output will appear here…" }) : lines.map((l, i) => /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "whitespace-pre-wrap text-vs-text-secondary", children: l }, i)),
     running && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "inline-block h-3.5 w-[7px] align-[-2px] bg-vs-accent animate-[vsBlink_1s_step-end_infinite]" }),
     /* @__PURE__ */ jsxRuntimeExports.jsx("div", { ref: endRef })
@@ -19134,7 +19217,7 @@ function renderBlocks(text) {
         /* @__PURE__ */ jsxRuntimeExports.jsx(
           "pre",
           {
-            className: "overflow-x-auto rounded-md border border-vs-border-default bg-black/40 p-3 font-mono text-[12px] leading-relaxed text-vs-text-secondary",
+            className: "overflow-x-auto rounded-md border border-vs-border-default bg-vs-bg-code p-3 font-mono text-[12px] leading-relaxed text-vs-text-secondary",
             children: body.join("\n")
           },
           key++
@@ -19223,7 +19306,9 @@ function ArtifactReview({
   onBack,
   onOpenRun,
   onOpenPreview,
-  onOpenInspector
+  onOpenInspector,
+  onOpenHistory,
+  onOpenManifest
 }) {
   const [flow, setFlow] = reactExports.useState(null);
   const [content, setContent] = reactExports.useState(void 0);
@@ -19267,17 +19352,18 @@ function ArtifactReview({
       {
         project,
         onHeaderClick: onBack,
-        items: [
+        items: projectRailItems(
+          "flow",
           {
-            label: "Flow",
-            active: true,
-            onClick: onBack,
-            badge: approved ? void 0 : /* @__PURE__ */ jsxRuntimeExports.jsx(ReviewBadge, {})
+            onFlow: onBack,
+            onRun: onOpenRun,
+            onPlayground: onOpenPreview,
+            onTokens: onOpenInspector,
+            onManifest: onOpenManifest,
+            onHistory: onOpenHistory
           },
-          { label: "Run", onClick: onOpenRun },
-          { label: "Preview", onClick: onOpenPreview },
-          { label: "Tokens", onClick: onOpenInspector }
-        ]
+          { flow: approved ? void 0 : /* @__PURE__ */ jsxRuntimeExports.jsx(ReviewBadge, {}) }
+        )
       }
     ),
     /* @__PURE__ */ jsxRuntimeExports.jsxs("main", { className: "flex min-w-0 flex-1 flex-col bg-vs-bg-primary", children: [
@@ -19361,7 +19447,9 @@ function Verification({
   onBack,
   onOpenRun,
   onOpenPreview,
-  onOpenInspector
+  onOpenInspector,
+  onOpenHistory,
+  onOpenManifest
 }) {
   const [findings, setFindings] = reactExports.useState(null);
   const [verifyStageId, setVerifyStageId] = reactExports.useState(null);
@@ -19413,12 +19501,18 @@ function Verification({
       {
         project,
         onHeaderClick: onBack,
-        items: [
-          { label: "Flow", active: true, onClick: onBack, badge: openTotal ? /* @__PURE__ */ jsxRuntimeExports.jsx(ReviewBadge, {}) : void 0 },
-          { label: "Run", onClick: onOpenRun },
-          { label: "Preview", onClick: onOpenPreview },
-          { label: "Tokens", onClick: onOpenInspector }
-        ]
+        items: projectRailItems(
+          "flow",
+          {
+            onFlow: onBack,
+            onRun: onOpenRun,
+            onPlayground: onOpenPreview,
+            onTokens: onOpenInspector,
+            onManifest: onOpenManifest,
+            onHistory: onOpenHistory
+          },
+          { flow: openTotal ? /* @__PURE__ */ jsxRuntimeExports.jsx(ReviewBadge, {}) : void 0 }
+        )
       }
     ),
     /* @__PURE__ */ jsxRuntimeExports.jsxs("main", { className: "flex min-w-0 flex-1 flex-col bg-vs-bg-primary", children: [
@@ -19551,7 +19645,8 @@ function History({
   onBack,
   onOpenRun,
   onOpenPreview,
-  onOpenInspector
+  onOpenInspector,
+  onOpenManifest
 }) {
   const [runs, setRuns] = reactExports.useState(null);
   const [open, setOpen] = reactExports.useState(/* @__PURE__ */ new Set(["current"]));
@@ -19571,13 +19666,14 @@ function History({
       {
         project,
         onHeaderClick: onBack,
-        items: [
-          { label: "Flow", onClick: onBack },
-          { label: "Run", onClick: onOpenRun },
-          { label: "Preview", onClick: onOpenPreview },
-          { label: "Tokens", onClick: onOpenInspector },
-          { label: "History", active: true }
-        ]
+        items: projectRailItems("history", {
+          onFlow: onBack,
+          onRun: onOpenRun,
+          onPlayground: onOpenPreview,
+          onTokens: onOpenInspector,
+          onManifest: onOpenManifest,
+          onHistory: () => void 0
+        })
       }
     ),
     /* @__PURE__ */ jsxRuntimeExports.jsxs("main", { className: "flex min-w-0 flex-1 flex-col bg-vs-bg-primary", children: [
@@ -19719,6 +19815,618 @@ function relativeTime(iso) {
   if (hours < 24) return `${hours}h ago`;
   return `${Math.floor(hours / 24)}d ago`;
 }
+const STAGE_ID = "design-manifest";
+const GENERATE_PROMPT = [
+  "Generate the AI hand-off manifest as a proper @google/design.md-format DESIGN.md. Follow these steps",
+  "exactly — the filename handling matters because macOS is case-insensitive, so `design.md` and",
+  "`DESIGN.md` are the SAME file and must not clobber each other.",
+  "",
+  "1. PRESERVE ANY DECISIONS LOG. Check the project root for an existing `DESIGN.md`/`design.md`. If its",
+  "   content is NOT the @google/design.md format (i.e. it has no YAML frontmatter with design tokens —",
+  "   e.g. it's a `/sync-tokens` 'Design Decisions & Token Mapping' log), MOVE it to",
+  "   `.sdd-de/design-decisions.md` (create the dir; `git mv` if tracked). This frees the root name for",
+  "   the Google-format file and keeps the decisions log as context.",
+  "2. GENERATE. Run the /design-doc skill to write the @google/design.md-format `DESIGN.md` at the",
+  "   project root, installing @google/design.md if missing. Cover EVERY built component (read the",
+  "   component dir + .sdd-de/components.json). Read `.sdd-de/design-decisions.md` (if present) and fold",
+  "   its deviations/decisions into the DESIGN.md 'Design Decisions' prose section. Do not overwrite the",
+  "   decisions log, and do not modify the components themselves.",
+  "3. KEEP THE FRONTMATTER LINT-CLEAN. In the YAML `components:` map, use ONLY @google/design.md-valid",
+  "   properties (backgroundColor, textColor, typography, rounded, padding, size, height, width). Put",
+  "   source paths, variant files, Storybook URLs, spec links, import snippets, and USAGE EXAMPLES in the",
+  "   `## Components` prose section instead — with a Storybook URL",
+  "   (http://localhost:6006/?path=/docs/<category>-<componentname>) and a usage example per component.",
+  "4. VALIDATE. Run `npx @google/design.md lint DESIGN.md` and resolve every error (warnings are ok).",
+  "   Confirm DESIGN.md begins with a `---` YAML frontmatter block. End with the lint summary."
+].join("\n");
+function DesignManifest({
+  project,
+  onBack,
+  onOpenRun,
+  onOpenPreview,
+  onOpenInspector,
+  onOpenHistory
+}) {
+  const [manifest, setManifest] = reactExports.useState(null);
+  const [view, setView] = reactExports.useState("rendered");
+  const [editing, setEditing] = reactExports.useState(false);
+  const [editDraft, setEditDraft] = reactExports.useState("");
+  const [saving, setSaving] = reactExports.useState(false);
+  const [approved, setApproved] = reactExports.useState(false);
+  const [versions, setVersions] = reactExports.useState(null);
+  const [showVersions, setShowVersions] = reactExports.useState(false);
+  const [toast, setToast] = reactExports.useState("");
+  const gen = useAgentRun();
+  function flash(msg) {
+    setToast(msg);
+    window.setTimeout(() => setToast(""), 2400);
+  }
+  async function reload() {
+    const [m, f] = await Promise.all([
+      api.getManifest(project.path),
+      api.getFlow(project.path)
+    ]);
+    setManifest(m);
+    setApproved(f?.state.stages.find((s) => s.id === STAGE_ID)?.status === "approved");
+  }
+  reactExports.useEffect(() => {
+    void reload();
+  }, [project.path]);
+  async function loadVersions() {
+    const r = await api.listManifestVersions(project.path);
+    setVersions(r.versions);
+  }
+  async function generate() {
+    if (manifest?.exists) await api.snapshotManifest(project.path, "generate");
+    await gen.start({
+      prompt: GENERATE_PROMPT,
+      cwd: project.path,
+      allowedTools: ["Read", "Write", "Edit", "Bash"],
+      bypassPermissions: true
+    });
+  }
+  reactExports.useEffect(() => {
+    if (gen.model.status !== "done") return;
+    void reload().then(() => flash("DESIGN.md generated"));
+    void loadVersions();
+  }, [gen.model.status]);
+  function startEdit() {
+    setEditDraft(manifest?.content ?? "");
+    setEditing(true);
+    setView("markdown");
+  }
+  async function saveEdit() {
+    setSaving(true);
+    const r = await api.saveManifest(project.path, editDraft);
+    setManifest(r);
+    setSaving(false);
+    setEditing(false);
+    await loadVersions();
+    flash("Saved DESIGN.md");
+  }
+  function cancelEdit() {
+    setEditing(false);
+  }
+  async function copyMd() {
+    await navigator.clipboard?.writeText(manifest?.content ?? "");
+    flash("DESIGN.md copied to clipboard");
+  }
+  function downloadMd() {
+    const blob = new Blob([manifest?.content ?? ""], { type: "text/markdown" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "DESIGN.md";
+    a.click();
+    URL.revokeObjectURL(url);
+    flash("Saved DESIGN.md");
+  }
+  async function approve() {
+    await api.snapshotManifest(project.path, "approve");
+    await api.approveStage(project.path, STAGE_ID);
+    setApproved(true);
+    await loadVersions();
+    flash("Manifest approved");
+  }
+  async function restoreVersion(id) {
+    const r = await api.restoreManifestVersion(project.path, id);
+    setManifest(r);
+    await loadVersions();
+    setShowVersions(false);
+    flash("Version restored");
+  }
+  const generating = gen.running;
+  const hasManifest = Boolean(manifest?.exists);
+  const fileMeta = reactExports.useMemo(() => {
+    if (!manifest?.exists) return "";
+    const lines = manifest.content.split("\n").length;
+    return `${lines} lines · ${(manifest.content.length / 1024).toFixed(1)} KB`;
+  }, [manifest]);
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex h-[calc(100vh-3rem)] w-full overflow-hidden bg-vs-bg-primary text-[13px] text-vs-text-primary", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsx(
+      ProjectRail,
+      {
+        project,
+        onHeaderClick: onBack,
+        items: projectRailItems("manifest", {
+          onFlow: onBack,
+          onRun: onOpenRun,
+          onPlayground: onOpenPreview,
+          onTokens: onOpenInspector,
+          onManifest: () => void 0,
+          onHistory: onOpenHistory
+        })
+      }
+    ),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("main", { className: "flex min-w-0 flex-1 flex-col bg-vs-bg-primary", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("header", { className: "flex flex-none items-center gap-3 border-b border-vs-border-default px-8 py-4", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("button", { onClick: onBack, className: "text-[13px] text-vs-text-muted hover:text-vs-text-primary", children: "Flow" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-vs-text-muted", children: "/" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[15px] font-semibold", children: "Design manifest" }),
+        manifest && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "rounded border border-vs-border-default px-1.5 py-px font-mono text-[11px] text-vs-text-secondary", children: manifest.path }),
+        hasManifest && manifest?.format === "google" && /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "span",
+          {
+            className: "rounded border border-vs-success-border bg-vs-success-muted px-1.5 py-px text-[11px] text-vs-success",
+            title: "Valid @google/design.md format (YAML frontmatter present)",
+            children: "Google format ✓"
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex-1" }),
+        hasManifest && /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsxs(
+            "button",
+            {
+              onClick: () => {
+                setShowVersions((v) => !v);
+                if (versions === null) void loadVersions();
+              },
+              className: "rounded-md border border-vs-border-default px-2.5 py-1 text-[11px] text-vs-text-secondary hover:border-vs-accent hover:text-vs-text-primary",
+              children: [
+                "Versions",
+                versions ? ` · ${versions.length}` : ""
+              ]
+            }
+          ),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex gap-0.5 rounded-lg border border-vs-border-default bg-vs-bg-surface p-0.5", children: ["rendered", "markdown"].map((v) => /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "button",
+            {
+              onClick: () => setView(v),
+              className: `rounded-md px-3 py-1 text-xs capitalize transition-colors ${view === v ? "bg-vs-bg-elevated text-vs-text-primary" : "text-vs-text-secondary hover:text-vs-text-primary"}`,
+              children: v
+            },
+            v
+          )) })
+        ] })
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "min-h-0 flex-1 overflow-y-auto", children: [
+        hasManifest && !generating && !editing && manifest?.format === "decisions-log" && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "mx-auto mt-6 flex max-w-[760px] items-start gap-3 rounded-lg border border-vs-warning-border bg-vs-warning-muted px-4 py-3", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-vs-warning", children: "⚠" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-1 flex-col gap-0.5 text-xs", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-medium text-vs-text-primary", children: "This isn't the @google/design.md format" }),
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-vs-text-secondary", children: [
+              "What's here looks like a token-decisions log, not the DESIGN.md hand-off format (no YAML frontmatter). Regenerate to produce the proper Google format — your decisions log is preserved to ",
+              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono", children: ".sdd-de/design-decisions.md" }),
+              " and folded in as context."
+            ] })
+          ] }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "primary", onClick: () => void generate(), children: "Regenerate" })
+        ] }),
+        manifest === null ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2 p-8 text-sm text-vs-text-secondary", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx(Spinner, {}),
+          " Reading manifest…"
+        ] }) : generating ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex min-h-[340px] items-start justify-center p-6", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "w-full max-w-2xl rounded-xl border border-vs-border-default bg-vs-bg-surface p-4", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "mb-3 flex items-center gap-2 text-sm text-vs-text-primary", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx(Spinner, {}),
+            " Generating DESIGN.md with the design-doc skill (first run installs @google/design.md)…"
+          ] }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(RunPanel, { model: gen.model, onSend: (t) => void gen.send(t), canChat: gen.canChat })
+        ] }) }) : !hasManifest ? /* @__PURE__ */ jsxRuntimeExports.jsx(EmptyState, { onGenerate: () => void generate() }) : editing ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+          EditPane,
+          {
+            value: editDraft,
+            onChange: setEditDraft,
+            onSave: () => void saveEdit(),
+            onCancel: cancelEdit,
+            saving
+          }
+        ) : view === "rendered" ? /* @__PURE__ */ jsxRuntimeExports.jsx("article", { className: "mx-auto max-w-[760px] px-8 py-8", children: /* @__PURE__ */ jsxRuntimeExports.jsx(Markdown, { text: stripFrontmatter(manifest.content) }) }) : /* @__PURE__ */ jsxRuntimeExports.jsx(
+          MarkdownSource,
+          {
+            content: manifest.content,
+            path: manifest.path,
+            meta: fileMeta,
+            onCopy: () => void copyMd(),
+            onDownload: downloadMd
+          }
+        )
+      ] }),
+      hasManifest && !generating && !editing && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex-none border-t border-vs-border-default bg-vs-bg-surface px-8 py-3.5", children: approved ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-3", style: { animation: "vsFade 0.18s ease" }, children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-vs-success", children: "✓" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "flex-1 text-[13px] text-vs-text-primary", children: [
+          "Manifest approved and written to",
+          " ",
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono text-vs-text-secondary", children: manifest?.path }),
+          "."
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "primary", onClick: onBack, children: "Back to flow →" })
+      ] }) : /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-3", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "default", onClick: () => void generate(), children: "Regenerate" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "default", onClick: startEdit, children: "Edit" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "flex-1 text-[12px] text-vs-text-muted", children: "Review the manifest before publishing — this is what future AI agents read." }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "default", onClick: () => void copyMd(), children: "Copy markdown" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "primary", onClick: () => void approve(), children: "Approve manifest" })
+      ] }) })
+    ] }),
+    showVersions && /* @__PURE__ */ jsxRuntimeExports.jsx(
+      VersionsDrawer,
+      {
+        versions,
+        onClose: () => setShowVersions(false),
+        onRestore: (id) => void restoreVersion(id)
+      }
+    ),
+    toast && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "fixed bottom-6 left-1/2 z-[60] flex -translate-x-1/2 items-center gap-2 rounded-lg border border-vs-border-strong bg-vs-bg-elevated px-4 py-2.5 text-xs text-vs-text-primary shadow-lg", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-vs-success", children: "✓" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono", children: toast })
+    ] })
+  ] });
+}
+function stripFrontmatter(md) {
+  const m = md.match(/^---\n[\s\S]*?\n---\n?/);
+  return m ? md.slice(m[0].length) : md;
+}
+function EmptyState({ onGenerate }) {
+  return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex min-h-[340px] items-center justify-center p-12", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex max-w-md flex-col items-center gap-3 rounded-xl border border-vs-border-default bg-vs-bg-surface p-8 text-center", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[15px] font-semibold text-vs-text-primary", children: "No manifest yet" }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "text-xs leading-relaxed text-vs-text-secondary", children: [
+      "Generate ",
+      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono text-vs-text-primary", children: "DESIGN.md" }),
+      " — the hand-off file any AI agent reads to build on-brand screens. VortSpec runs the SDD-DE",
+      " ",
+      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono", children: "design-doc" }),
+      " skill (via",
+      " ",
+      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono", children: "@google/design.md" }),
+      ") to produce and validate it."
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "primary", onClick: onGenerate, children: "Generate DESIGN.md" })
+  ] }) });
+}
+function EditPane({
+  value,
+  onChange,
+  onSave,
+  onCancel,
+  saving
+}) {
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "mx-auto flex max-w-[900px] flex-col gap-3 px-8 py-6", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsx(
+      "textarea",
+      {
+        value,
+        onChange: (e) => onChange(e.target.value),
+        spellCheck: false,
+        className: "min-h-[420px] w-full rounded-lg border border-vs-border-default bg-vs-bg-code p-4 font-mono text-[12px] leading-relaxed text-vs-text-secondary focus:outline-none focus-visible:border-vs-accent"
+      }
+    ),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-3", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "flex-1 text-[11px] text-vs-text-muted", children: "Saving snapshots the current version first, so you can revert." }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "default", onClick: onCancel, children: "Cancel" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "primary", disabled: saving, onClick: onSave, children: saving ? "Saving…" : "Save manifest" })
+    ] })
+  ] });
+}
+function MarkdownSource({
+  content,
+  path,
+  meta,
+  onCopy,
+  onDownload
+}) {
+  const lines = content.replace(/\r\n/g, "\n").split("\n");
+  const scrollRef = reactExports.useRef(null);
+  return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "mx-auto max-w-[900px] px-8 py-6", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "overflow-hidden rounded-lg border border-vs-border-default", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2.5 border-b border-vs-border-default bg-vs-bg-surface px-3.5 py-2.5", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono text-[12px] text-vs-text-primary", children: path }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono text-[11px] text-vs-text-muted", children: meta }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "flex-1" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(
+        "button",
+        {
+          onClick: onCopy,
+          className: "rounded-md border border-vs-border-strong px-2.5 py-1 text-[11px] text-vs-text-secondary hover:border-vs-accent hover:text-vs-text-primary",
+          children: "Copy"
+        }
+      ),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(
+        "button",
+        {
+          onClick: onDownload,
+          className: "rounded-md border border-vs-border-strong px-2.5 py-1 text-[11px] text-vs-text-secondary hover:border-vs-accent hover:text-vs-text-primary",
+          children: "Download"
+        }
+      )
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { ref: scrollRef, className: "overflow-x-auto bg-vs-bg-code py-3", children: lines.map((text, i) => /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex gap-3.5 px-4 hover:bg-white/[0.02]", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "w-7 flex-none select-none text-right font-mono text-[12px] leading-[1.8] text-vs-text-muted/60", children: i + 1 }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "whitespace-pre-wrap break-words font-mono text-[12px] leading-[1.8] text-vs-text-secondary", children: text || " " })
+    ] }, i)) })
+  ] }) });
+}
+function VersionsDrawer({
+  versions,
+  onClose,
+  onRestore
+}) {
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs(
+    "aside",
+    {
+      className: "flex w-[320px] shrink-0 flex-col border-l border-vs-border-default bg-vs-bg-surface",
+      style: { animation: "vsFade 0.18s ease" },
+      children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between border-b border-vs-border-default px-4 pb-3 pt-4", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[11px] font-semibold uppercase tracking-wide text-vs-text-muted", children: "Version history" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "button",
+            {
+              onClick: onClose,
+              className: "rounded px-1.5 py-1 leading-none text-vs-text-muted hover:bg-vs-bg-elevated hover:text-vs-text-primary",
+              children: "×"
+            }
+          )
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex-1 overflow-y-auto p-3", children: versions === null ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2 p-3 text-xs text-vs-text-secondary", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx(Spinner, {}),
+          " Loading…"
+        ] }) : versions.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "p-3 text-xs text-vs-text-muted", children: "No versions yet. Generating, editing, or approving snapshots the manifest." }) : /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex flex-col gap-1.5", children: versions.map((v) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
+          "div",
+          {
+            className: "flex items-center gap-2 rounded-md border border-vs-border-default bg-vs-bg-primary px-3 py-2",
+            children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "min-w-0 flex-1", children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2", children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono text-[11px] text-vs-text-secondary", children: formatTs(v.timestamp) }),
+                  v.approved && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "rounded-full border border-vs-border-strong px-1.5 text-[9px] text-vs-success", children: "approved" })
+                ] }),
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "font-mono text-[10px] text-vs-text-muted", children: [
+                  (v.size / 1024).toFixed(1),
+                  " KB"
+                ] })
+              ] }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx(
+                "button",
+                {
+                  onClick: () => onRestore(v.id),
+                  className: "rounded-md border border-vs-border-strong px-2 py-1 text-[10px] text-vs-text-secondary hover:border-vs-accent hover:text-vs-text-primary",
+                  children: "Restore"
+                }
+              )
+            ]
+          },
+          v.id
+        )) }) })
+      ]
+    }
+  );
+}
+function formatTs(iso) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleString(void 0, {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+}
+const FRAMEWORKS = ["react", "next", "vue", "nuxt", "svelte", "sveltekit", "angular", "astro", "vanilla"];
+const LANGUAGES = ["typescript", "javascript"];
+const STYLINGS = ["tailwind", "css-modules", "scss", "styled-components", "emotion", "css"];
+const TEST_RUNNERS = ["vitest", "jest", "playwright", "cypress", "none"];
+function barTone(percent) {
+  if (percent >= 90) return "bg-vs-error";
+  if (percent >= 70) return "bg-vs-warning";
+  return "bg-vs-accent";
+}
+function Profile({ onBack, onSaved }) {
+  const [profile, setProfile] = reactExports.useState(null);
+  const [usage, setUsage] = reactExports.useState(null);
+  const [usageLoading, setUsageLoading] = reactExports.useState(true);
+  const [saved, setSaved] = reactExports.useState(false);
+  const [showRaw, setShowRaw] = reactExports.useState(false);
+  const fileRef = reactExports.useRef(null);
+  reactExports.useEffect(() => {
+    void api.getProfile().then(setProfile);
+    void refreshUsage();
+  }, []);
+  async function refreshUsage() {
+    setUsageLoading(true);
+    setUsage(await api.getUsage());
+    setUsageLoading(false);
+  }
+  function edit(patch) {
+    setProfile((p) => p ? { ...p, ...patch } : p);
+    setSaved(false);
+  }
+  function editPref(patch) {
+    setProfile((p) => p ? { ...p, preferences: { ...p.preferences, ...patch } } : p);
+    setSaved(false);
+  }
+  async function save() {
+    if (!profile) return;
+    const next = await api.saveProfile(profile);
+    setProfile(next);
+    setSaved(true);
+    onSaved?.(next);
+  }
+  function pickAvatar(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => edit({ avatarDataUrl: typeof reader.result === "string" ? reader.result : null });
+    reader.readAsDataURL(file);
+  }
+  const initial = (profile?.name.trim()?.[0] ?? "").toUpperCase() || "?";
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex h-full w-full flex-col overflow-y-auto bg-vs-bg-primary text-vs-text-primary", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("header", { className: "flex flex-none items-center gap-3 border-b border-vs-border-default px-8 py-5", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("button", { onClick: onBack, className: "text-sm text-vs-text-secondary hover:text-vs-text-primary", children: "← Back" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("h1", { className: "text-xl font-semibold tracking-[-0.01em]", children: "Profile" })
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "mx-auto flex w-full max-w-[760px] flex-col gap-6 px-8 py-8", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: "flex flex-col gap-3", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-3", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("h2", { className: "text-[13px] font-semibold uppercase tracking-wide text-vs-text-muted", children: "Plan usage" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex-1" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "button",
+            {
+              onClick: () => void refreshUsage(),
+              disabled: usageLoading,
+              className: "text-xs text-vs-text-secondary hover:text-vs-text-primary disabled:opacity-50",
+              children: usageLoading ? "Refreshing…" : "↻ Refresh"
+            }
+          )
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(Card, { className: "flex flex-col gap-4 p-5", children: usageLoading && !usage ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2 text-sm text-vs-text-secondary", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx(Spinner, {}),
+          " Reading your usage from Claude Code…"
+        ] }) : usage?.available ? /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+          usage.headline && /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-xs text-vs-text-secondary", children: usage.headline }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex flex-col gap-4", children: usage.limits.map((l) => /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col gap-1.5", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-baseline justify-between text-sm", children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-vs-text-primary", children: l.label }),
+              /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "tabular-nums font-medium", children: [
+                l.percent,
+                "%"
+              ] })
+            ] }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "h-2 w-full overflow-hidden rounded-full bg-vs-border-default", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+              "div",
+              {
+                className: `h-full rounded-full ${barTone(l.percent)} transition-[width] duration-500`,
+                style: { width: `${Math.min(Math.max(l.percent, 0), 100)}%` }
+              }
+            ) }),
+            l.resetsAt && /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-[11px] text-vs-text-muted", children: [
+              "resets ",
+              l.resetsAt
+            ] })
+          ] }, l.label)) }),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-3 text-[11px]", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx("button", { onClick: () => setShowRaw((v) => !v), className: "text-vs-text-secondary hover:text-vs-text-primary", children: showRaw ? "Hide details" : "What's contributing?" }),
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-vs-text-muted", children: [
+              "Your account's plan limits, mirrored from Claude Code's",
+              " ",
+              /* @__PURE__ */ jsxRuntimeExports.jsx("code", { className: "text-vs-text-secondary", children: "/usage" })
+            ] })
+          ] }),
+          showRaw && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col gap-2", children: [
+            usage.note && /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "text-[11px] text-vs-text-muted", children: [
+              "The breakdown below is a local estimate: ",
+              usage.note
+            ] }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("pre", { className: "max-h-72 overflow-auto whitespace-pre-wrap rounded-md border border-vs-border-default bg-vs-bg-code p-3 font-mono text-[11px] leading-relaxed text-vs-text-secondary", children: usage.raw })
+          ] })
+        ] }) : /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col gap-2 text-sm", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-vs-warning", children: [
+            "⚠ ",
+            usage?.error ?? "Usage is unavailable."
+          ] }),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-xs text-vs-text-muted", children: [
+            "Usage comes from your own Claude Code (",
+            /* @__PURE__ */ jsxRuntimeExports.jsx("code", { children: "claude -p /usage" }),
+            "). Make sure it's installed and logged in, then Refresh."
+          ] })
+        ] }) })
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: "flex flex-col gap-3", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("h2", { className: "text-[13px] font-semibold uppercase tracking-wide text-vs-text-muted", children: "Your profile" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs(Card, { className: "flex flex-col gap-4 p-5", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-4", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "relative", children: profile?.avatarDataUrl ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+              "img",
+              {
+                src: profile.avatarDataUrl,
+                alt: "avatar",
+                className: "h-16 w-16 rounded-full border border-vs-border-strong object-cover"
+              }
+            ) : /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "grid h-16 w-16 place-items-center rounded-full border border-vs-border-strong bg-vs-bg-elevated text-xl font-medium text-vs-text-secondary", children: initial }) }),
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col gap-2", children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx("input", { ref: fileRef, type: "file", accept: "image/*", onChange: pickAvatar, className: "hidden" }),
+              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex gap-2", children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "default", onClick: () => fileRef.current?.click(), children: profile?.avatarDataUrl ? "Change image" : "Upload image" }),
+                profile?.avatarDataUrl && /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "ghost", onClick: () => edit({ avatarDataUrl: null }), children: "Remove" })
+              ] }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[11px] text-vs-text-muted", children: "Optional. Stored locally on this machine." })
+            ] })
+          ] }),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "flex flex-col gap-1.5", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs text-vs-text-secondary", children: "Name" }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              "input",
+              {
+                value: profile?.name ?? "",
+                onChange: (e) => edit({ name: e.target.value }),
+                placeholder: "How should we call you?",
+                className: "rounded-md border border-vs-border-default bg-vs-bg-primary px-3 py-2 text-sm text-vs-text-primary placeholder:text-vs-text-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-vs-accent-subtle"
+              }
+            ),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[11px] text-vs-text-muted", children: "We'll use this to address you when you chat with the assistant." })
+          ] })
+        ] })
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: "flex flex-col gap-3", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("h2", { className: "text-[13px] font-semibold uppercase tracking-wide text-vs-text-muted", children: "Default project preferences" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs(Card, { className: "grid grid-cols-2 gap-4 p-5", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx(PrefSelect, { label: "Framework", value: profile?.preferences.framework, options: FRAMEWORKS, onChange: (v) => editPref({ framework: v }) }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(PrefSelect, { label: "Language", value: profile?.preferences.language, options: LANGUAGES, onChange: (v) => editPref({ language: v }) }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(PrefSelect, { label: "Styling", value: profile?.preferences.styling, options: STYLINGS, onChange: (v) => editPref({ styling: v }) }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(PrefSelect, { label: "Test runner", value: profile?.preferences.testRunner, options: TEST_RUNNERS, onChange: (v) => editPref({ testRunner: v }) }),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "col-span-2 flex flex-col gap-1.5", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs text-vs-text-secondary", children: "Figma token collection (default)" }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              "input",
+              {
+                value: profile?.preferences.figmaTokenCollection ?? "",
+                onChange: (e) => editPref({ figmaTokenCollection: e.target.value }),
+                placeholder: "e.g. Primitives",
+                className: "rounded-md border border-vs-border-default bg-vs-bg-primary px-3 py-2 text-sm text-vs-text-primary placeholder:text-vs-text-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-vs-accent-subtle"
+              }
+            )
+          ] }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "col-span-2 text-[11px] text-vs-text-muted", children: "These pre-fill the setup wizard when you create a new project. Each project keeps its own config." })
+        ] })
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-3", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "primary", onClick: () => void save(), children: "Save profile" }),
+        saved && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs text-vs-success", children: "✓ Saved" })
+      ] })
+    ] })
+  ] });
+}
+function PrefSelect({
+  label,
+  value,
+  options,
+  onChange
+}) {
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "flex flex-col gap-1.5", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs text-vs-text-secondary", children: label }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs(
+      "select",
+      {
+        value: value ?? "",
+        onChange: (e) => onChange(e.target.value),
+        className: "rounded-md border border-vs-border-default bg-vs-bg-primary px-3 py-2 text-sm text-vs-text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-vs-accent-subtle",
+        children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "", children: "No default" }),
+          options.map((o) => /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: o, children: o }, o))
+        ]
+      }
+    )
+  ] });
+}
 function DesignInput({
   project,
   onBack,
@@ -19760,14 +20468,19 @@ function DesignInput({
       },
       children: [
         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "mx-auto flex w-full max-w-[680px] flex-col gap-5 px-6 pb-16 pt-10", children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col gap-1.5", children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2 text-xs text-vs-text-muted", children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsx("button", { onClick: onBack, className: "hover:text-vs-text-primary", children: project.name }),
-              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "/" }),
-              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "New source" })
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-start gap-3", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex min-w-0 flex-1 flex-col gap-1.5", children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2 text-xs text-vs-text-muted", children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx("button", { onClick: onBack, className: "hover:text-vs-text-primary", children: "Projects" }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "/" }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "truncate", children: project.name }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "/" }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "New source" })
+              ] }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx("h1", { className: "text-[20px] font-semibold tracking-[-0.01em]", children: "Add a design source" }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-[13px] leading-relaxed text-vs-text-secondary", children: "Claude Code reads the design exactly as the SDD-DE CLI does. Pick a source — it’s placed at the project’s expected input path." })
             ] }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("h1", { className: "text-[20px] font-semibold tracking-[-0.01em]", children: "Add a design source" }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-[13px] leading-relaxed text-vs-text-secondary", children: "Claude Code reads the design exactly as the SDD-DE CLI does. Pick a source — it’s placed at the project’s expected input path." })
+            /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "ghost", className: "flex-none", onClick: onBack, children: "Cancel" })
           ] }),
           /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex gap-0.5 self-start rounded-lg border border-vs-border-default bg-vs-bg-surface p-0.5", children: [
             ["zip", "ZIP export"],
@@ -19876,7 +20589,10 @@ function DesignInput({
               /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-xs leading-relaxed text-vs-text-muted", children: "Claude Code matches extracted values against your official tokens and flags conflicts during verification." })
             ] })
           ] }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex justify-end", children: /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "primary", disabled: !canStart, onClick: submit, children: "Continue to setup →" }) })
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between border-t border-vs-border-default pt-5", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "ghost", onClick: onBack, children: "← Cancel" }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "primary", disabled: !canStart, onClick: submit, children: "Continue to setup →" })
+          ] })
         ] }),
         drag && /* @__PURE__ */ jsxRuntimeExports.jsxs(
           "div",
@@ -20609,7 +21325,166 @@ function TextField({
     )
   ] });
 }
+const READ_TOOLS = ["Read", "Grep", "Glob"];
+const MODIFY_TOOLS = ["Read", "Grep", "Glob", "Write", "Edit", "Bash"];
+function AssistantDock({
+  project,
+  seedContext,
+  allowModify = false,
+  onClose,
+  userName
+}) {
+  const run = useAgentRun();
+  const [draft, setDraft] = reactExports.useState("");
+  const [firstPrompt, setFirstPrompt] = reactExports.useState(null);
+  const scrollRef = reactExports.useRef(null);
+  reactExports.useEffect(() => {
+    run.reset();
+    setFirstPrompt(null);
+    setDraft("");
+  }, [project.path]);
+  reactExports.useEffect(() => {
+    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
+  }, [run.model.messages, run.model.streamingText]);
+  const started = firstPrompt !== null || run.model.messages.length > 0 || Boolean(run.model.sessionId);
+  function submit() {
+    const text = draft.trim();
+    if (!text || run.running) return;
+    setDraft("");
+    if (!started) {
+      setFirstPrompt(text);
+      const prompt = seedContext ? `${seedContext}
+
+${text}` : text;
+      void run.start({
+        prompt,
+        cwd: project.path,
+        allowedTools: allowModify ? MODIFY_TOOLS : READ_TOOLS,
+        bypassPermissions: true,
+        // Persisted across the whole session (send() spreads the base opts), so
+        // the assistant addresses the user by name for every turn.
+        appendSystemPrompt: userName ? `The user's name is ${userName}. Address them as ${userName} when appropriate.` : void 0
+      });
+    } else {
+      void run.send(text);
+    }
+  }
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("aside", { className: "flex h-full w-[360px] shrink-0 flex-col border-l border-vs-border-default bg-vs-bg-surface", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-none items-center gap-2 border-b border-vs-border-default px-4 py-3", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-sm font-semibold", children: allowModify ? "Modify with Claude" : "Assistant" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "font-mono text-[10px] text-vs-text-muted", children: [
+        "· ",
+        project.name
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex-1" }),
+      onClose && /* @__PURE__ */ jsxRuntimeExports.jsx(
+        "button",
+        {
+          onClick: onClose,
+          title: "Close assistant",
+          className: "rounded px-1.5 py-1 leading-none text-vs-text-muted hover:bg-vs-bg-elevated hover:text-vs-text-primary",
+          children: "×"
+        }
+      )
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { ref: scrollRef, className: "min-h-0 flex-1 overflow-y-auto px-4 py-4", children: !started ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex h-full flex-col items-center justify-center gap-2 text-center", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-sm font-medium text-vs-text-secondary", children: allowModify ? "Change a component" : "Ask about this project" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "max-w-[240px] text-xs leading-relaxed text-vs-text-muted", children: allowModify ? "Describe a change to a component you see in Storybook — Claude Code edits it and Storybook reloads live. No usage until you send." : "Claude Code reads your project (read-only) to answer. It spends no usage until you send a message." })
+    ] }) : /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col gap-3", children: [
+      firstPrompt && /* @__PURE__ */ jsxRuntimeExports.jsx(Bubble, { role: "user", text: firstPrompt }),
+      run.model.messages.map((m) => /* @__PURE__ */ jsxRuntimeExports.jsx(Bubble, { role: m.role, text: m.text }, m.id)),
+      run.model.streamingText && /* @__PURE__ */ jsxRuntimeExports.jsx(Bubble, { role: "assistant", text: run.model.streamingText }),
+      run.running && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2 text-xs text-vs-text-muted", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx(Spinner, {}),
+        " Thinking…"
+      ] }),
+      run.model.mcpErrors.length > 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "rounded-md border border-vs-warning-border bg-vs-warning-muted px-2.5 py-1.5 text-[11px] text-vs-warning", children: [
+        "MCP issue: ",
+        run.model.mcpErrors.join("; ")
+      ] })
+    ] }) }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex-none border-t border-vs-border-default p-3", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx(
+        "textarea",
+        {
+          value: draft,
+          onChange: (e) => setDraft(e.target.value),
+          onKeyDown: (e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault();
+              submit();
+            }
+          },
+          rows: 2,
+          placeholder: run.running ? "Claude is working…" : allowModify ? "e.g. tighten Button's padding, add a loading state…" : "Ask about tokens, components, the spec…",
+          disabled: run.running,
+          className: "w-full resize-none rounded-md border border-vs-border-default bg-vs-bg-primary px-3 py-2 text-xs text-vs-text-primary placeholder:text-vs-text-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-vs-accent-subtle disabled:opacity-60"
+        }
+      ),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "mt-2 flex items-center gap-2", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "flex-1 text-[10px] text-vs-text-muted", children: "Enter to send · Shift+Enter for a new line" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "button",
+          {
+            onClick: submit,
+            disabled: run.running || draft.trim().length === 0,
+            className: "rounded-md bg-vs-accent px-3 py-1.5 text-xs font-medium text-white hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50",
+            children: "Send"
+          }
+        )
+      ] })
+    ] })
+  ] });
+}
+function Bubble({ role, text }) {
+  const isUser = role === "user";
+  return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: `flex ${isUser ? "justify-end" : "justify-start"}`, children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+    "div",
+    {
+      className: `max-w-[85%] whitespace-pre-wrap break-words rounded-lg px-3 py-2 text-xs leading-relaxed ${isUser ? "bg-vs-accent text-white" : "border border-vs-border-default bg-vs-bg-primary text-vs-text-secondary"}`,
+      children: text
+    }
+  ) });
+}
 const CORE_IDS = ["node", "git", "claude-install"];
+function profileDefaults(profile) {
+  const p = profile?.preferences;
+  if (!p) return {};
+  const out = {};
+  if (p.framework) out.framework = p.framework;
+  if (p.language) out.language = p.language;
+  if (p.styling) out.styling = p.styling;
+  if (p.testRunner) out.testRunner = p.testRunner;
+  if (p.figmaTokenCollection) out.figmaTokenCollection = p.figmaTokenCollection;
+  return out;
+}
+function withTimeout(promise, ms) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error("startup probe timed out")), ms);
+    promise.then(
+      (v) => {
+        clearTimeout(timer);
+        resolve(v);
+      },
+      (e) => {
+        clearTimeout(timer);
+        reject(e);
+      }
+    );
+  });
+}
+const STARTUP_FAILED_REPORT = {
+  ready: false,
+  checks: [
+    {
+      id: "claude-install",
+      label: "Claude Code",
+      status: "unknown",
+      detail: "Couldn't verify your environment on launch — the check timed out. Make sure Claude Code is installed and on your PATH, then press Re-check.",
+      fix: { kind: "install-link", label: "Install Claude Code", url: "https://code.claude.com/docs/en/overview" }
+    }
+  ]
+};
 function isCoreReady(report) {
   if (!report) return false;
   return CORE_IDS.every(
@@ -20627,20 +21502,46 @@ function App() {
   const [pendingSource, setPendingSource] = reactExports.useState(void 0);
   const [projectView, setProjectView] = reactExports.useState("flow");
   const [loading, setLoading] = reactExports.useState(true);
+  const [chatOpen, setChatOpen] = reactExports.useState(false);
+  const [update, setUpdate] = reactExports.useState(null);
+  const [profile, setProfile] = reactExports.useState(null);
+  reactExports.useEffect(() => {
+    void api.getProfile().then(setProfile);
+  }, []);
+  reactExports.useEffect(() => {
+    void api.checkUpdate().then((info) => {
+      if (info.hasUpdate) setUpdate(info);
+    });
+  }, []);
+  reactExports.useEffect(() => {
+    if (projectView === "preview") setChatOpen(true);
+  }, [projectView]);
   function mergeProject(project) {
     setProjects((prev) => [project, ...prev.filter((p) => p.path !== project.path)]);
   }
   reactExports.useEffect(() => {
+    let cancelled = false;
     void (async () => {
-      const [envReport, projectList] = await Promise.all([
-        api.checkEnvironment(),
-        api.listProjects()
-      ]);
-      setReport(envReport);
-      setProjects(projectList);
-      setView(isCoreReady(envReport) ? "dashboard" : "env");
-      setLoading(false);
+      try {
+        const [envReport, projectList] = await Promise.all([
+          withTimeout(api.checkEnvironment(), 15e3),
+          withTimeout(api.listProjects(), 15e3).catch(() => [])
+        ]);
+        if (cancelled) return;
+        setReport(envReport);
+        setProjects(projectList);
+        setView(isCoreReady(envReport) ? "dashboard" : "env");
+      } catch {
+        if (cancelled) return;
+        setReport(STARTUP_FAILED_REPORT);
+        setView("env");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
     })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
   if (loading || !report) return /* @__PURE__ */ jsxRuntimeExports.jsx(Splash, {});
   const coreReady = isCoreReady(report);
@@ -20650,7 +21551,11 @@ function App() {
       {
         view,
         coreReady,
+        chatAvailable: Boolean(activeProject),
+        chatOpen,
+        onToggleChat: () => setChatOpen((v) => !v),
         breadcrumb: sourceProject?.name ?? setupProject?.name ?? intakeProject?.name ?? activeProject?.name ?? null,
+        profile,
         onNavigate: (v) => {
           setView(v);
           if (v === "dashboard") {
@@ -20664,129 +21569,216 @@ function App() {
         }
       }
     ),
-    /* @__PURE__ */ jsxRuntimeExports.jsx("main", { className: "flex-1", children: view === "env" ? /* @__PURE__ */ jsxRuntimeExports.jsx(
-      EnvironmentCheck,
+    update && /* @__PURE__ */ jsxRuntimeExports.jsx(
+      UpdateBanner,
       {
-        report,
-        onReport: setReport,
-        coreReady,
-        onContinue: () => setView("dashboard")
+        info: update,
+        onDownload: () => void api.openInstall(update.downloadUrl ?? update.releaseUrl ?? ""),
+        onNotes: () => update.releaseUrl && void api.openInstall(update.releaseUrl),
+        onDismiss: () => setUpdate(null)
       }
-    ) : sourceProject ? /* @__PURE__ */ jsxRuntimeExports.jsx(
-      DesignInput,
-      {
-        project: sourceProject,
-        onBack: () => setSourceProject(null),
-        onContinue: (source) => {
-          setPendingSource(source);
-          setSetupProject(sourceProject);
-          setSourceProject(null);
+    ),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex min-h-0 flex-1", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("main", { className: "min-w-0 flex-1", children: view === "env" ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+        EnvironmentCheck,
+        {
+          report,
+          onReport: setReport,
+          coreReady,
+          onContinue: () => setView("dashboard")
         }
-      }
-    ) : setupProject ? /* @__PURE__ */ jsxRuntimeExports.jsx(
-      NewProjectWizard,
-      {
-        project: setupProject,
-        initialSource: pendingSource,
-        onCancel: () => {
-          setSetupProject(null);
-          setPendingSource(void 0);
-        },
-        onCreated: (project) => {
-          mergeProject(project);
-          setSetupProject(null);
-          setPendingSource(void 0);
-          setIntakeProject(project);
+      ) : view === "profile" ? /* @__PURE__ */ jsxRuntimeExports.jsx(Profile, { onBack: () => setView("dashboard"), onSaved: setProfile }) : sourceProject ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+        DesignInput,
+        {
+          project: sourceProject,
+          onBack: () => setSourceProject(null),
+          onContinue: (source) => {
+            setPendingSource(source);
+            setSetupProject(sourceProject);
+            setSourceProject(null);
+          }
         }
-      }
-    ) : intakeProject ? /* @__PURE__ */ jsxRuntimeExports.jsx(
-      Intake,
-      {
-        project: intakeProject,
-        onSkip: () => {
-          setActiveProject(intakeProject);
-          setIntakeProject(null);
-        },
-        onDone: () => {
-          setActiveProject(intakeProject);
-          setIntakeProject(null);
+      ) : setupProject ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+        NewProjectWizard,
+        {
+          project: setupProject,
+          initialSource: { ...profileDefaults(profile), ...pendingSource },
+          onCancel: () => {
+            setSetupProject(null);
+            setPendingSource(void 0);
+          },
+          onCreated: (project) => {
+            mergeProject(project);
+            setSetupProject(null);
+            setPendingSource(void 0);
+            setIntakeProject(project);
+          }
         }
-      }
-    ) : activeProject && projectView === "inspector" ? /* @__PURE__ */ jsxRuntimeExports.jsx(
-      Inspector,
+      ) : intakeProject ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+        Intake,
+        {
+          project: intakeProject,
+          onSkip: () => {
+            setActiveProject(intakeProject);
+            setIntakeProject(null);
+          },
+          onDone: () => {
+            setActiveProject(intakeProject);
+            setIntakeProject(null);
+          }
+        }
+      ) : activeProject && projectView === "inspector" ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+        Inspector,
+        {
+          project: activeProject,
+          onBack: () => setProjectView("flow"),
+          onOpenPreview: () => setProjectView("preview"),
+          onOpenRun: () => setProjectView("run"),
+          onOpenHistory: () => setProjectView("history"),
+          onOpenManifest: () => setProjectView("manifest")
+        }
+      ) : activeProject && projectView === "preview" ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+        DevPreview,
+        {
+          project: activeProject,
+          onBack: () => setProjectView("flow"),
+          onOpenRun: () => setProjectView("run"),
+          onOpenInspector: () => setProjectView("inspector"),
+          onOpenHistory: () => setProjectView("history"),
+          onOpenManifest: () => setProjectView("manifest")
+        }
+      ) : activeProject && projectView === "run" ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+        RunView,
+        {
+          project: activeProject,
+          onBack: () => setProjectView("flow"),
+          onOpenPreview: () => setProjectView("preview"),
+          onOpenInspector: () => setProjectView("inspector"),
+          onOpenHistory: () => setProjectView("history"),
+          onOpenManifest: () => setProjectView("manifest")
+        }
+      ) : activeProject && projectView === "review" ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+        ArtifactReview,
+        {
+          project: activeProject,
+          onBack: () => setProjectView("flow"),
+          onOpenRun: () => setProjectView("run"),
+          onOpenPreview: () => setProjectView("preview"),
+          onOpenInspector: () => setProjectView("inspector"),
+          onOpenHistory: () => setProjectView("history"),
+          onOpenManifest: () => setProjectView("manifest")
+        }
+      ) : activeProject && projectView === "verify" ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+        Verification,
+        {
+          project: activeProject,
+          onBack: () => setProjectView("flow"),
+          onOpenRun: () => setProjectView("run"),
+          onOpenPreview: () => setProjectView("preview"),
+          onOpenInspector: () => setProjectView("inspector"),
+          onOpenHistory: () => setProjectView("history"),
+          onOpenManifest: () => setProjectView("manifest")
+        }
+      ) : activeProject && projectView === "history" ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+        History,
+        {
+          project: activeProject,
+          onBack: () => setProjectView("flow"),
+          onOpenRun: () => setProjectView("run"),
+          onOpenPreview: () => setProjectView("preview"),
+          onOpenInspector: () => setProjectView("inspector"),
+          onOpenManifest: () => setProjectView("manifest")
+        }
+      ) : activeProject && projectView === "manifest" ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+        DesignManifest,
+        {
+          project: activeProject,
+          onBack: () => setProjectView("flow"),
+          onOpenRun: () => setProjectView("run"),
+          onOpenPreview: () => setProjectView("preview"),
+          onOpenInspector: () => setProjectView("inspector"),
+          onOpenHistory: () => setProjectView("history")
+        }
+      ) : activeProject ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+        GuidedFlow,
+        {
+          project: activeProject,
+          onBack: () => setActiveProject(null),
+          onOpenInspector: () => setProjectView("inspector"),
+          onOpenPreview: () => setProjectView("preview"),
+          onOpenRun: () => setProjectView("run"),
+          onOpenVerify: () => setProjectView("verify"),
+          onOpenHistory: () => setProjectView("history"),
+          onOpenManifest: () => setProjectView("manifest")
+        }
+      ) : /* @__PURE__ */ jsxRuntimeExports.jsx(
+        Dashboard,
+        {
+          projects,
+          onProjects: setProjects,
+          onOpenProject: setActiveProject,
+          onSetup: setSourceProject
+        }
+      ) }),
+      activeProject && // Width-animated wrapper: the dock stays mounted (session persists across
+      // open/close) while the wrapper animates 0↔360px, so flexbox smoothly
+      // reflows <main> — pushing content left on open and back on close.
+      /* @__PURE__ */ jsxRuntimeExports.jsx(
+        "div",
+        {
+          className: `flex h-[calc(100vh-3rem)] shrink-0 justify-end overflow-hidden transition-[width] duration-200 ease-out ${chatOpen ? "w-[360px]" : "w-0"}`,
+          children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+            AssistantDock,
+            {
+              project: activeProject,
+              userName: profile?.name?.trim() || void 0,
+              allowModify: projectView === "preview",
+              seedContext: projectView === "preview" ? "Context: the user is viewing this project's components in Storybook (Playground). When they ask for a change, edit only the relevant component's source under the component directory, keep values token-referenced (no hardcoded hex/px), and match the surrounding code style. Storybook hot-reloads, so the change appears live. Do not touch unrelated components or the token file." : projectView === "manifest" ? "Context: the user is on the Design Manifest screen (DESIGN.md). Help them refine or reason about the manifest." : void 0,
+              onClose: () => setChatOpen(false)
+            },
+            activeProject.path
+          )
+        }
+      )
+    ] })
+  ] });
+}
+function UpdateBanner({
+  info,
+  onDownload,
+  onNotes,
+  onDismiss
+}) {
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-3 border-b border-vs-accent/40 bg-vs-accent-muted px-6 py-2 text-[13px]", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "inline-block h-1.5 w-1.5 rounded-full bg-vs-accent" }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-vs-text-primary", children: [
+      "VortSpec ",
+      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono", children: info.latest }),
+      " is available",
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-vs-text-muted", children: [
+        " — you have ",
+        info.current
+      ] })
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex-1" }),
+    info.releaseUrl && /* @__PURE__ */ jsxRuntimeExports.jsx("button", { onClick: onNotes, className: "text-vs-text-secondary hover:text-vs-text-primary", children: "What’s new" }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx(
+      "button",
       {
-        project: activeProject,
-        onBack: () => setProjectView("flow"),
-        onOpenPreview: () => setProjectView("preview"),
-        onOpenRun: () => setProjectView("run"),
-        onOpenHistory: () => setProjectView("history")
+        onClick: onDownload,
+        className: "rounded-md bg-vs-accent px-3 py-1 text-xs font-medium text-white hover:brightness-110",
+        children: "Download"
       }
-    ) : activeProject && projectView === "preview" ? /* @__PURE__ */ jsxRuntimeExports.jsx(
-      DevPreview,
+    ),
+    /* @__PURE__ */ jsxRuntimeExports.jsx(
+      "button",
       {
-        project: activeProject,
-        onBack: () => setProjectView("flow"),
-        onOpenRun: () => setProjectView("run"),
-        onOpenInspector: () => setProjectView("inspector"),
-        onOpenHistory: () => setProjectView("history")
+        onClick: onDismiss,
+        title: "Dismiss",
+        className: "rounded px-1.5 py-1 leading-none text-vs-text-muted hover:text-vs-text-primary",
+        children: "×"
       }
-    ) : activeProject && projectView === "run" ? /* @__PURE__ */ jsxRuntimeExports.jsx(
-      RunView,
-      {
-        project: activeProject,
-        onBack: () => setProjectView("flow"),
-        onOpenPreview: () => setProjectView("preview"),
-        onOpenInspector: () => setProjectView("inspector"),
-        onOpenHistory: () => setProjectView("history")
-      }
-    ) : activeProject && projectView === "review" ? /* @__PURE__ */ jsxRuntimeExports.jsx(
-      ArtifactReview,
-      {
-        project: activeProject,
-        onBack: () => setProjectView("flow"),
-        onOpenRun: () => setProjectView("run"),
-        onOpenPreview: () => setProjectView("preview"),
-        onOpenInspector: () => setProjectView("inspector")
-      }
-    ) : activeProject && projectView === "verify" ? /* @__PURE__ */ jsxRuntimeExports.jsx(
-      Verification,
-      {
-        project: activeProject,
-        onBack: () => setProjectView("flow"),
-        onOpenRun: () => setProjectView("run"),
-        onOpenPreview: () => setProjectView("preview"),
-        onOpenInspector: () => setProjectView("inspector")
-      }
-    ) : activeProject && projectView === "history" ? /* @__PURE__ */ jsxRuntimeExports.jsx(
-      History,
-      {
-        project: activeProject,
-        onBack: () => setProjectView("flow"),
-        onOpenRun: () => setProjectView("run"),
-        onOpenPreview: () => setProjectView("preview"),
-        onOpenInspector: () => setProjectView("inspector")
-      }
-    ) : activeProject ? /* @__PURE__ */ jsxRuntimeExports.jsx(
-      GuidedFlow,
-      {
-        project: activeProject,
-        onBack: () => setActiveProject(null),
-        onOpenInspector: () => setProjectView("inspector"),
-        onOpenPreview: () => setProjectView("preview"),
-        onOpenRun: () => setProjectView("run"),
-        onOpenReview: () => setProjectView("review"),
-        onOpenVerify: () => setProjectView("verify"),
-        onOpenHistory: () => setProjectView("history")
-      }
-    ) : /* @__PURE__ */ jsxRuntimeExports.jsx(
-      Dashboard,
-      {
-        projects,
-        onProjects: setProjects,
-        onOpenProject: setActiveProject,
-        onSetup: setSourceProject
-      }
-    ) })
+    )
   ] });
 }
 function Splash() {
@@ -20797,7 +21789,7 @@ function Splash() {
       style: { WebkitAppRegion: "drag" },
       children: [
         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col items-center gap-3", children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "grid h-14 w-14 place-items-center rounded-2xl bg-vs-accent font-mono text-2xl font-semibold text-vs-bg-primary", children: "V" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(Logo, { size: 72 }),
           /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-lg font-semibold tracking-[-0.01em] text-vs-text-primary", children: "VortSpec" })
         ] }),
         /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "h-1 w-48 overflow-hidden rounded-full bg-vs-border-default", children: /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "h-full w-1/3 rounded-full bg-vs-accent animate-[vsSlide_1.2s_ease-in-out_infinite]" }) })
@@ -20809,8 +21801,13 @@ function TopBar({
   view,
   coreReady,
   onNavigate,
-  breadcrumb
+  breadcrumb,
+  chatAvailable,
+  chatOpen,
+  onToggleChat,
+  profile
 }) {
+  const initial = (profile?.name.trim()?.[0] ?? "").toUpperCase() || "You";
   return /* @__PURE__ */ jsxRuntimeExports.jsxs(
     "header",
     {
@@ -20823,7 +21820,7 @@ function TopBar({
             className: "flex items-center gap-2 pl-16 text-[13px]",
             style: { WebkitAppRegion: "no-drag" },
             children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "grid h-[18px] w-[18px] place-items-center rounded-[5px] bg-vs-accent font-mono text-[10px] font-medium text-vs-bg-primary", children: "V" }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx(Logo, { size: 20 }),
               /* @__PURE__ */ jsxRuntimeExports.jsx(
                 "button",
                 {
@@ -20862,7 +21859,38 @@ function TopBar({
                   ]
                 }
               ),
-              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "grid h-7 w-7 place-items-center rounded-full border border-vs-border-strong bg-vs-bg-elevated text-[11px] font-medium text-vs-text-secondary", children: "You" })
+              chatAvailable && /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                "button",
+                {
+                  onClick: onToggleChat,
+                  title: "Assistant",
+                  "aria-pressed": chatOpen,
+                  className: `flex items-center gap-1.5 rounded-md border px-2 py-1 transition-colors ${chatOpen ? "border-vs-accent bg-vs-bg-elevated text-vs-text-primary" : "border-transparent text-vs-text-secondary hover:text-vs-text-primary"}`,
+                  children: [
+                    /* @__PURE__ */ jsxRuntimeExports.jsx("svg", { width: "14", height: "14", viewBox: "0 0 14 14", "aria-hidden": true, children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+                      "path",
+                      {
+                        d: "M2 3.5 A1.5 1.5 0 0 1 3.5 2 H10.5 A1.5 1.5 0 0 1 12 3.5 V8.5 A1.5 1.5 0 0 1 10.5 10 H5.5 L3 12 V10 H3.5 A1.5 1.5 0 0 1 2 8.5 Z",
+                        fill: "none",
+                        stroke: "currentColor",
+                        strokeWidth: "1.2",
+                        strokeLinejoin: "round"
+                      }
+                    ) }),
+                    "Chat"
+                  ]
+                }
+              ),
+              /* @__PURE__ */ jsxRuntimeExports.jsx(
+                "button",
+                {
+                  onClick: () => onNavigate("profile"),
+                  title: "Profile, settings & usage",
+                  "aria-label": "Profile",
+                  className: `overflow-hidden rounded-full border transition-colors ${view === "profile" ? "border-vs-accent" : "border-vs-border-strong hover:border-vs-accent"}`,
+                  children: profile?.avatarDataUrl ? /* @__PURE__ */ jsxRuntimeExports.jsx("img", { src: profile.avatarDataUrl, alt: "", className: "h-7 w-7 object-cover" }) : /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "grid h-7 w-7 place-items-center bg-vs-bg-elevated text-[11px] font-medium text-vs-text-secondary", children: initial })
+                }
+              )
             ]
           }
         )
