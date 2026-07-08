@@ -48,11 +48,11 @@ Milestones I0→I5 are strictly ordered. I0 must leave the cockpit fully green b
 
 ## 5. I4 — Live preview pane
 
-- [ ] 5.1 Embed the app/Storybook runtime beside the editor via the shared dev-server (`startAppServer`/dev-server, `ServerKind`-keyed); attach to an existing server, never double-start.
-- [ ] 5.2 Preview layout toggle (stacked ↔ side-by-side) preserving editor state; start-on-demand when no server is running.
-- [ ] 5.3 Confirm hot-reload: saved edits reflect in the preview; surface server errors as fix-it cards, not raw logs.
-- [ ] 5.4 CT for preview (attach-not-double-start, toggle, error card).
-- [ ] 5.5 Gate: `pnpm build && pnpm test && pnpm lint` green.
+- [x] 5.1 `<PreviewPane>` embeds the running app (`startAppServer`/`appServerStatus`) or Storybook (`startDevServer`/`devServerStatus`) via the shared `ServerKind`-keyed dev-server; checks status first and attaches to an existing server (never double-starts).
+- [x] 5.2 CodeWorkspace stacked ↔ side-by-side layout toggle (editor state preserved — the container reflows without remounting) + preview show/hide; start-on-demand button when nothing is running.
+- [x] 5.3 The embedded server hot-reloads in the iframe (its own HMR); `no-script`/`error` states render as fix-it cards, not raw logs.
+- [x] 5.4 CT: attach-to-running (no double-start), start-on-demand, fix-it card, layout toggle + hide.
+- [x] 5.5 Gate: `pnpm build && pnpm test && pnpm lint` green (4/6/4); 13 IDE CT; desktop 54 CT. **I4 complete.**
 
 ## 6. I5 — Vibe-engineering (chat + run pipeline)
 
