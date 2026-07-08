@@ -9,8 +9,8 @@ import { createHash, randomUUID } from "node:crypto";
 import { createRequire } from "node:module";
 import { watch, promises, existsSync } from "node:fs";
 import { spawn as spawn$1 } from "node-pty";
-import { EventEmitter } from "node:events";
 import { homedir, platform } from "node:os";
+import { EventEmitter } from "node:events";
 import __cjs_mod__ from "node:module";
 const __filename = import.meta.filename;
 const __dirname = import.meta.dirname;
@@ -508,6 +508,26 @@ z.object({
   /** set on the final event when the shell process exits */
   exit: z.number().nullable().optional()
 });
+const figmaCliModeSchema = z.enum(["yolo", "safe"]);
+const figmaConnectionSchema = z.object({
+  /** figma-cli is present on disk (cloned + installed). */
+  installed: z.boolean(),
+  /** where the CLI lives. */
+  cliDir: z.string(),
+  /** the background daemon is running. */
+  daemonRunning: z.boolean(),
+  /** a live connection to Figma Desktop is established (a real command works). */
+  connected: z.boolean(),
+  /** the active connection mode, if connected. */
+  mode: figmaCliModeSchema.nullable(),
+  /** names of the user's open Figma files (proof of connection). */
+  openFiles: z.array(z.string()),
+  /** the app macOS must grant App Management for yolo mode (this app's name). */
+  appName: z.string(),
+  /** a human, next-step message. */
+  message: z.string()
+});
+const figmaConnectRequestSchema = z.object({ mode: figmaCliModeSchema });
 const frameworkSchema = z.enum([
   "react",
   "next",
@@ -837,6 +857,9 @@ const ipcContract = {
     response: z.void()
   },
   "terminal:kill": { request: z.string(), response: z.void() },
+  "figma:status": { request: z.void(), response: figmaConnectionSchema },
+  "figma:openAppManagement": { request: z.void(), response: z.void() },
+  "figma:connect": { request: figmaConnectRequestSchema, response: figmaConnectionSchema },
   "toolkit:status": { request: z.string(), response: toolkitStatusSchema },
   "toolkit:install": { request: z.string(), response: toolkitStatusSchema },
   "agent:startRun": {
@@ -1539,6 +1562,96 @@ function killAllSessions() {
     }
   }
   sessions.clear();
+}
+function figmaCliDir() {
+  return process.env.VORTSPEC_FIGMA_CLI_DIR || join(homedir(), "figma-cli");
+}
+function entryPoint() {
+  return join(figmaCliDir(), "src", "index.js");
+}
+function isInstalled() {
+  return existsSync(entryPoint());
+}
+function appName() {
+  try {
+    return app.getName();
+  } catch {
+    return "VortSpec";
+  }
+}
+function run(args, timeoutMs = 8e3) {
+  return execFileSafe("node", [entryPoint(), ...args], { cwd: figmaCliDir(), timeoutMs });
+}
+function parseFilesJson(raw) {
+  const start = raw.indexOf("[");
+  const end = raw.lastIndexOf("]");
+  if (start === -1 || end === -1 || end < start) return [];
+  try {
+    const arr = JSON.parse(raw.slice(start, end + 1));
+    if (!Array.isArray(arr)) return [];
+    return arr.map((f) => {
+      if (typeof f === "string") return f;
+      if (f && typeof f === "object") {
+        const o = f;
+        return String(o.name ?? o.title ?? o.fileName ?? "");
+      }
+      return "";
+    }).filter((s) => Boolean(s));
+  } catch {
+    return [];
+  }
+}
+function parseMode(text) {
+  if (/safe\s*mode/i.test(text)) return "safe";
+  if (/yolo|cdp|direct/i.test(text)) return "yolo";
+  return null;
+}
+async function getConnection() {
+  const cliDir = figmaCliDir();
+  const name = appName();
+  if (!isInstalled()) {
+    return {
+      installed: false,
+      cliDir,
+      daemonRunning: false,
+      connected: false,
+      mode: null,
+      openFiles: [],
+      appName: name,
+      message: "figma-cli isn't installed yet. VortSpec can set it up for you."
+    };
+  }
+  const status = await run(["daemon", "status"], 6e3);
+  const daemonRunning = /running/i.test(status.stdout);
+  const files = await run(["files"], 8e3);
+  const openFiles = parseFilesJson(files.stdout);
+  const connected = files.code === 0 && files.stdout.includes("[") && !/not connected|no connection|failed|error/i.test(`${files.stdout}
+${files.stderr}`);
+  const debug = await run(["daemon", "status", "--debug"], 6e3);
+  const mode = parseMode(`${debug.stdout}
+${status.stdout}`);
+  return {
+    installed: true,
+    cliDir,
+    daemonRunning,
+    connected,
+    mode,
+    openFiles,
+    appName: name,
+    message: connected ? `Connected to Figma Desktop${mode ? ` (${mode} mode)` : ""}.` : daemonRunning ? "The daemon is running but not connected to Figma yet." : "figma-cli is installed but not connected."
+  };
+}
+async function openAppManagementSettings() {
+  await execFileSafe(
+    "open",
+    ["x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_AppBundles"],
+    { cwd: homedir(), timeoutMs: 5e3 }
+  );
+}
+async function connect(mode) {
+  if (!isInstalled()) return getConnection();
+  await run(mode === "safe" ? ["connect", "--safe"] : ["connect"], 6e4);
+  return getConnection();
 }
 const KEY_MAP = {
   design_source: "designSource",
@@ -2355,11 +2468,11 @@ async function readLastRun(cwd) {
     return null;
   }
 }
-async function writeLastRun(cwd, run) {
+async function writeLastRun(cwd, run2) {
   const dir = join(cwd, ".vortspec");
   try {
     await mkdir(dir, { recursive: true });
-    await writeFile$1(lastRunPath(cwd), JSON.stringify(run, null, 2), "utf8");
+    await writeFile$1(lastRunPath(cwd), JSON.stringify(run2, null, 2), "utf8");
   } catch {
   }
 }
@@ -3715,6 +3828,9 @@ const handlers = {
     killSession(id);
     return void 0;
   }),
+  "figma:status": (() => getConnection()),
+  "figma:openAppManagement": (() => openAppManagementSettings().then(() => void 0)),
+  "figma:connect": ((r) => connect(r.mode)),
   "toolkit:status": ((path) => getToolkitStatus(path)),
   "toolkit:install": ((path) => installToolkit(path)),
   "agent:startRun": ((opts, sender) => startRun(sender, opts)),

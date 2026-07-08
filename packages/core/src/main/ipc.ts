@@ -13,6 +13,8 @@ import { getToolkitStatus, installToolkit } from "./workspace/toolkit-manager";
 import { createProject } from "./workspace/setup-manager";
 import * as fsw from "./workspace/fs-workspace";
 import * as pty from "./terminal/pty-manager";
+import * as figmaCli from "./figma/figma-cli";
+import type { FigmaCliMode } from "@vortspec/core/figma";
 import { readProjectConfig } from "./workspace/config-manager";
 import {
   getInspectorTokens,
@@ -138,6 +140,10 @@ const handlers: Record<IpcChannel, Handler> = {
     pty.killSession(id);
     return undefined;
   }) as Handler,
+  "figma:status": (() => figmaCli.getConnection()) as Handler,
+  "figma:openAppManagement": (() =>
+    figmaCli.openAppManagementSettings().then(() => undefined)) as Handler,
+  "figma:connect": ((r: { mode: FigmaCliMode }) => figmaCli.connect(r.mode)) as Handler,
 
   "toolkit:status": ((path: string) => getToolkitStatus(path)) as Handler,
   "toolkit:install": ((path: string) => installToolkit(path)) as Handler,

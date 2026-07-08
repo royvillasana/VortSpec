@@ -74,6 +74,8 @@ export interface MockConfig {
   fsHead?: Record<string, string>;
   /** Text emitted to onTerminalData shortly after a terminal session is created. */
   terminalGreeting?: string;
+  /** Figma connection status returned by figmaStatus(). */
+  figma?: import("@vortspec/core/ipc").FigmaConnection;
 }
 
 const EMPTY_TOKENS: InspectorTokensResult = {
@@ -258,6 +260,31 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
       termSubs.add(cb);
       return () => termSubs.delete(cb);
     },
+
+    // Figma connection (figma-cli)
+    figmaStatus: async () =>
+      cfg.figma ?? {
+        installed: false,
+        cliDir: "/Users/dev/figma-cli",
+        daemonRunning: false,
+        connected: false,
+        mode: null,
+        openFiles: [],
+        appName: "VortSpec",
+        message: "figma-cli isn't installed yet.",
+      },
+    figmaOpenAppManagement: async () => undefined,
+    figmaConnect: async () =>
+      cfg.figma ?? {
+        installed: true,
+        cliDir: "/Users/dev/figma-cli",
+        daemonRunning: true,
+        connected: true,
+        mode: "yolo",
+        openFiles: ["Design System"],
+        appName: "VortSpec",
+        message: "Connected to Figma Desktop (yolo mode).",
+      },
 
     setPublishTarget: async () => null,
     readArtifact: async () => null,

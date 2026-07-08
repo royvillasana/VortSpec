@@ -13,6 +13,7 @@ import type { AgentRunOptions, AgentEventEnvelope, AgentRawEnvelope } from "./ru
 import type { DevServerUpdate } from "./dev-server";
 import type { WorkspaceChange } from "./fs";
 import type { TerminalData } from "./terminal";
+import type { FigmaCliMode } from "./figma";
 import type { ProviderId, RepoVisibility } from "./git";
 import type { IssueType } from "./task";
 import type { SnapshotReason } from "./manifest";
@@ -145,6 +146,11 @@ export interface VortSpecApi {
   terminalWrite(id: string, data: string): Promise<IpcResponse<"terminal:write">>;
   terminalResize(id: string, cols: number, rows: number): Promise<IpcResponse<"terminal:resize">>;
   terminalKill(id: string): Promise<IpcResponse<"terminal:kill">>;
+
+  // Figma connection (figma-cli — primary; MCP bridge + token are fallbacks)
+  figmaStatus(): Promise<IpcResponse<"figma:status">>;
+  figmaOpenAppManagement(): Promise<IpcResponse<"figma:openAppManagement">>;
+  figmaConnect(mode: FigmaCliMode): Promise<IpcResponse<"figma:connect">>;
 
   // event subscriptions (return an unsubscribe fn)
   onAgentEvent(callback: (payload: AgentEventEnvelope) => void): () => void;

@@ -76,6 +76,10 @@
     "./Terminal": {
       "types": "./src/components/Terminal.tsx",
       "default": "./src/components/Terminal.tsx"
+    },
+    "./FigmaConnection": {
+      "types": "./src/views/FigmaConnection.tsx",
+      "default": "./src/views/FigmaConnection.tsx"
     }
   },
   "scripts": {

@@ -12540,6 +12540,120 @@ function Spinner() {
     }
   );
 }
+function FigmaConnection() {
+  const [status, setStatus] = reactExports.useState(null);
+  const [busy, setBusy] = reactExports.useState(null);
+  async function refresh(kind = "refresh") {
+    setBusy(kind);
+    try {
+      setStatus(await api.figmaStatus());
+    } finally {
+      setBusy(null);
+    }
+  }
+  reactExports.useEffect(() => {
+    void refresh("refresh");
+  }, []);
+  async function connect(mode) {
+    setBusy(mode);
+    try {
+      setStatus(await api.figmaConnect(mode));
+    } finally {
+      setBusy(null);
+    }
+  }
+  const appName = status?.appName ?? "VortSpec";
+  const connected = status?.connected ?? false;
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs(Card, { className: "max-w-2xl p-5", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-3", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("h2", { className: "text-[15px] font-semibold text-vs-text-primary", children: "Figma connection" }),
+      status && /* @__PURE__ */ jsxRuntimeExports.jsx(
+        "span",
+        {
+          className: `rounded px-2 py-0.5 text-[11px] ${connected ? "bg-vs-success-muted text-vs-success" : status.installed ? "bg-vs-warning-muted text-vs-warning" : "bg-vs-bg-elevated text-vs-text-muted"}`,
+          children: connected ? `Connected${status.mode ? ` · ${status.mode} mode` : ""}` : status.installed ? "Not connected" : "Not installed"
+        }
+      ),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex-1" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs(Button, { variant: "ghost", disabled: busy !== null, onClick: () => void refresh("refresh"), children: [
+        busy === "refresh" ? /* @__PURE__ */ jsxRuntimeExports.jsx(Spinner, {}) : null,
+        "Refresh"
+      ] })
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "mt-1 text-xs text-vs-text-muted", children: [
+      "VortSpec connects to Figma through the local ",
+      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono", children: "figma-cli" }),
+      " — it drives Figma Desktop directly, no token. The Figma MCP bridge and REST token stay as automatic fallbacks."
+    ] }),
+    status === null ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "mt-4 flex items-center gap-2 text-sm text-vs-text-muted", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx(Spinner, {}),
+      " Checking the connection…"
+    ] }) : connected ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "mt-4 rounded-md border border-vs-success-border bg-vs-success-muted p-3 text-sm text-vs-text-primary", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "font-medium text-vs-success", children: status.message }),
+      status.openFiles.length > 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "mt-1 text-xs text-vs-text-secondary", children: [
+        "Open files: ",
+        status.openFiles.join(", ")
+      ] })
+    ] }) : /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "mt-4 space-y-4 text-sm", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: "rounded-md border border-vs-border-default p-3", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[13px] font-semibold text-vs-text-primary", children: "Yolo mode" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "rounded bg-vs-bg-elevated px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-vs-text-muted", children: "fastest" })
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "mt-1 text-xs text-vs-text-muted", children: [
+          "Patches Figma Desktop for a direct connection (~10× faster). macOS requires",
+          " ",
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-vs-text-secondary", children: appName }),
+          " to have App Management permission first."
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("ol", { className: "mt-2 list-decimal space-y-1 pl-5 text-xs text-vs-text-secondary", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("li", { children: [
+            "Open ",
+            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-medium", children: "System Settings → Privacy & Security → App Management" }),
+            " and enable ",
+            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-medium", children: appName }),
+            "."
+          ] }),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("li", { children: [
+            "Fully quit ",
+            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-medium", children: appName }),
+            " (⌘Q) and reopen it — macOS only reads the new permission after a restart."
+          ] }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("li", { children: "Come back here and connect." })
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "mt-3 flex flex-wrap gap-2", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "default", onClick: () => void api.figmaOpenAppManagement(), children: "Open App Management settings" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs(Button, { variant: "primary", disabled: busy !== null, onClick: () => void connect("yolo"), children: [
+            busy === "yolo" ? /* @__PURE__ */ jsxRuntimeExports.jsx(Spinner, {}) : null,
+            "Connect (Yolo)"
+          ] })
+        ] })
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: "rounded-md border border-vs-border-default p-3", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[13px] font-semibold text-vs-text-primary", children: "Safe mode" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "rounded bg-vs-bg-elevated px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-vs-text-muted", children: "no permission" })
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "mt-1 text-xs text-vs-text-muted", children: [
+          "Connects through a Figma plugin — no OS permission. After connecting, import the plugin once in Figma (Plugins → Development → Import from manifest) and run",
+          " ",
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono", children: "FigCli" }),
+          "."
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "mt-3", children: /* @__PURE__ */ jsxRuntimeExports.jsxs(Button, { variant: "default", disabled: busy !== null, onClick: () => void connect("safe"), children: [
+          busy === "safe" ? /* @__PURE__ */ jsxRuntimeExports.jsx(Spinner, {}) : null,
+          "Connect (Safe)"
+        ] }) })
+      ] }),
+      !status.installed && /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "text-xs text-vs-text-muted", children: [
+        "figma-cli isn't installed yet at",
+        " ",
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono", children: status.cliDir }),
+        ". VortSpec will set it up during the guided setup."
+      ] })
+    ] })
+  ] });
+}
 function EnvironmentCheck({
   report,
   onReport,
@@ -12646,6 +12760,7 @@ function EnvironmentCheck({
         "), then re-check. Only needed for Figma design sources."
       ] })
     ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx(FigmaConnection, {}),
     /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-4 border-t border-vs-border-default pt-5", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "flex-1 text-[11px] leading-relaxed text-vs-text-muted", children: "No VortSpec account. No telemetry without opt-in. No provider keys, ever — authentication and usage belong to your Claude Code install." }),
       /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "ghost", disabled: busy === "recheck", onClick: () => void recheck(), children: busy === "recheck" ? "Re-checking…" : "Re-check" }),

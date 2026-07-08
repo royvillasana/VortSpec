@@ -18,6 +18,7 @@ import {
 import { DEV_SERVER_UPDATE_CHANNEL, type DevServerUpdate } from "@vortspec/core/dev-server";
 import { WORKSPACE_CHANGE_CHANNEL, type WorkspaceChange } from "@vortspec/core/fs";
 import { TERMINAL_DATA_CHANNEL, type TerminalData } from "@vortspec/core/terminal";
+import type { FigmaCliMode } from "@vortspec/core/figma";
 import type { VortSpecApi } from "@vortspec/core/api";
 
 /**
@@ -167,6 +168,11 @@ const api: VortSpecApi = {
   terminalKill: (id: string) => invoke("terminal:kill", id),
   onTerminalData: (callback: (payload: TerminalData) => void) =>
     subscribe(TERMINAL_DATA_CHANNEL, callback),
+
+  // Figma connection (figma-cli)
+  figmaStatus: () => invoke("figma:status", undefined),
+  figmaOpenAppManagement: () => invoke("figma:openAppManagement", undefined),
+  figmaConnect: (mode: FigmaCliMode) => invoke("figma:connect", { mode }),
   setPublishTarget: (projectPath: string, repoUrl: string) =>
     invoke("flow:setPublishTarget", { projectPath, repoUrl }),
   readArtifact: (projectPath: string, relPath: string) =>

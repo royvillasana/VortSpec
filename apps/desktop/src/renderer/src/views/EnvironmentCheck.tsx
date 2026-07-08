@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { CheckStatus, EnvCheck, EnvReport } from "@vortspec/core/ipc";
 import { api } from "@vortspec/ui/api";
 import { Button, Spinner } from "@vortspec/ui/ui";
+import { FigmaConnection } from "@vortspec/ui/FigmaConnection";
 
 /**
  * The onboarding environment gate (US-01). Renders each check as a pass/fail
@@ -151,6 +152,9 @@ export function EnvironmentCheck({
           </p>
         )}
       </div>
+
+      {/* Primary Figma connection: the local figma-cli (bridge + token fallback). */}
+      <FigmaConnection />
 
       <div className="flex items-center gap-4 border-t border-vs-border-default pt-5">
         <span className="flex-1 text-[11px] leading-relaxed text-vs-text-muted">

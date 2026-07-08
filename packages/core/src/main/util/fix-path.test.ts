@@ -18,16 +18,23 @@ describe("mergePath", () => {
 });
 
 describe("fixGuiPath", () => {
-  it("adds common tool dirs and never throws; leaves a non-empty PATH", async () => {
-    const before = process.env.PATH;
-    try {
-      await fixGuiPath();
-      // The fallback floor is always merged in, so these are present regardless
-      // of what the probe shell returns.
-      expect(process.env.PATH).toContain("/usr/local/bin");
-      expect((process.env.PATH ?? "").length).toBeGreaterThan(0);
-    } finally {
-      process.env.PATH = before;
-    }
-  });
+  // Spawns the user's interactive login shell to read its PATH — inherently
+  // slow when the user's shell profile (e.g. a heavy .zshrc) is slow to start,
+  // so allow well beyond Vitest's 5s default rather than flake under load.
+  it(
+    "adds common tool dirs and never throws; leaves a non-empty PATH",
+    async () => {
+      const before = process.env.PATH;
+      try {
+        await fixGuiPath();
+        // The fallback floor is always merged in, so these are present regardless
+        // of what the probe shell returns.
+        expect(process.env.PATH).toContain("/usr/local/bin");
+        expect((process.env.PATH ?? "").length).toBeGreaterThan(0);
+      } finally {
+        process.env.PATH = before;
+      }
+    },
+    30_000,
+  );
 });

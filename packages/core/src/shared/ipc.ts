@@ -45,6 +45,9 @@ export {
 export type { FsEntry, FsFile, FsWriteResult, WorkspaceChange } from "./fs";
 export { TERMINAL_DATA_CHANNEL, terminalDataSchema } from "./terminal";
 export type { TerminalData } from "./terminal";
+import { figmaConnectionSchema, figmaConnectRequestSchema } from "./figma";
+export { figmaConnectionSchema, figmaCliModeSchema, figmaConnectRequestSchema } from "./figma";
+export type { FigmaConnection, FigmaCliMode } from "./figma";
 import { setupAnswersSchema, projectConfigSchema } from "./setup";
 import {
   inspectorTokensResultSchema,
@@ -258,6 +261,9 @@ export const ipcContract = {
     response: z.void(),
   },
   "terminal:kill": { request: z.string(), response: z.void() },
+  "figma:status": { request: z.void(), response: figmaConnectionSchema },
+  "figma:openAppManagement": { request: z.void(), response: z.void() },
+  "figma:connect": { request: figmaConnectRequestSchema, response: figmaConnectionSchema },
 
   "toolkit:status": { request: z.string(), response: toolkitStatusSchema },
   "toolkit:install": { request: z.string(), response: toolkitStatusSchema },
