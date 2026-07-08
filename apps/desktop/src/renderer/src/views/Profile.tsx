@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { Profile as ProfileT, ProfilePreferences, UsageResult } from "../../../shared/ipc";
+import type { Profile as ProfileT, ProfilePreferences, UsageResult } from "@vortspec/core/ipc";
 import { api } from "../lib/api";
 import { Button, Card, Spinner } from "../components/ui";
 

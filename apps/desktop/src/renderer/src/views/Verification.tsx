@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import type { Flow, FindingSeverity, Project, VerificationFinding } from "../../../shared/ipc";
+import type { Flow, FindingSeverity, Project, VerificationFinding } from "@vortspec/core/ipc";
 import { api } from "../lib/api";
 import { Button, Spinner } from "../components/ui";
 import { ProjectRail, ReviewBadge, projectRailItems } from "../components/ProjectRail";

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { Flow, Project, StageDef, StageState, StageStatus } from "../../../shared/ipc";
+import type { Flow, Project, StageDef, StageState, StageStatus } from "@vortspec/core/ipc";
 import { api } from "../lib/api";
 import { Button, Spinner } from "../components/ui";
 import { Markdown } from "../components/Markdown";

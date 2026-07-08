@@ -6,7 +6,7 @@ import type {
   ManifestVersion,
   ManifestVersionsResult,
   SnapshotReason,
-} from "../../shared/manifest";
+} from "@vortspec/core/manifest";
 
 /**
  * Design manifest (DESIGN.md) data layer — all file-derived, no IR store.

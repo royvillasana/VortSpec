@@ -7,7 +7,7 @@ import type {
   GitRemote,
   GitLogEntry,
   GitResult,
-} from "../../shared/git";
+} from "@vortspec/core/git";
 
 /**
  * The single place that knows `git`. Every call is an argument array confined to

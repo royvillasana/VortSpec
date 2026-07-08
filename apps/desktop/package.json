@@ -23,6 +23,7 @@
     "@fontsource-variable/geist": "^5.2.9",
     "@fontsource-variable/geist-mono": "^5.2.8",
     "@royvillasana/sdd-de": "^1.8.4",
+    "@vortspec/core": "workspace:*",
     "zod": "^3.24.1"
   },
   "devDependencies": {

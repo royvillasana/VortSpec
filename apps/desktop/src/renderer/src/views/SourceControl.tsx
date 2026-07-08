@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { GitStatus, GitBranch, GitRemote, ProviderAuth, Project } from "../../../shared/ipc";
+import type { GitStatus, GitBranch, GitRemote, ProviderAuth, Project } from "@vortspec/core/ipc";
 import { api } from "../lib/api";
 import { Button, Card, Spinner } from "../components/ui";
 import { ProjectRail, projectRailItems } from "../components/ProjectRail";

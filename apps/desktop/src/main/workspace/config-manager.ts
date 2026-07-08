@@ -1,6 +1,6 @@
 import { join } from "node:path";
 import { readFile } from "node:fs/promises";
-import { projectConfigSchema, type ProjectConfig } from "../../shared/setup";
+import { projectConfigSchema, type ProjectConfig } from "@vortspec/core/setup";
 
 /**
  * Reads back `.sdd-de/project.yaml` (written by the setup wizard / CLI) into the

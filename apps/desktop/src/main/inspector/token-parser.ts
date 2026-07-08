@@ -8,7 +8,7 @@ import type {
   InspectorTokensResult,
   TokenType,
   TokenUsage,
-} from "../../shared/inspector";
+} from "@vortspec/core/inspector";
 
 /**
  * Parse the project's design tokens from its configured token file (CSS custom

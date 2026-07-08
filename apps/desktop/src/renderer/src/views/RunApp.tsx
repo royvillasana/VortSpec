@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { DevServerStatus, Project } from "../../../shared/ipc";
+import type { DevServerStatus, Project } from "@vortspec/core/ipc";
 import { api } from "../lib/api";
 import { Button, Spinner } from "../components/ui";
 import { ProjectRail, projectRailItems } from "../components/ProjectRail";

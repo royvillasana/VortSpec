@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { DevServerStatus, Project } from "../../../shared/ipc";
+import type { DevServerStatus, Project } from "@vortspec/core/ipc";
 import { api } from "../lib/api";
 import { useAgentRun } from "../lib/useAgentRun";
 import { Button, Spinner } from "../components/ui";

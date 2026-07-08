@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { ManifestResult, ManifestVersion, Project } from "../../../shared/ipc";
+import type { ManifestResult, ManifestVersion, Project } from "@vortspec/core/ipc";
 import { api } from "../lib/api";
 import { useAgentRun } from "../lib/useAgentRun";
 import { Button, Spinner } from "../components/ui";

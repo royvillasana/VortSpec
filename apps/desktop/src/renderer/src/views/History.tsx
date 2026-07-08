@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { Project, RunStageSummary, RunSummary } from "../../../shared/ipc";
+import type { Project, RunStageSummary, RunSummary } from "@vortspec/core/ipc";
 import { api } from "../lib/api";
 import { Spinner } from "../components/ui";
 import { ProjectRail, projectRailItems } from "../components/ProjectRail";

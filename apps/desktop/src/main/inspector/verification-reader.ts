@@ -4,7 +4,7 @@ import type {
   FindingSeverity,
   VerificationFinding,
   VerificationResult,
-} from "../../shared/inspector";
+} from "@vortspec/core/inspector";
 
 /**
  * Aggregate verification findings from the project's report files — the

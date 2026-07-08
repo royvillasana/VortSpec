@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { Project, SetupAnswers } from "../../../shared/ipc";
+import type { Project, SetupAnswers } from "@vortspec/core/ipc";
 import { api } from "../lib/api";
 import { Button } from "../components/ui";
 

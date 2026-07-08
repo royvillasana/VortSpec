@@ -1,5 +1,5 @@
 import { ipcMain, shell, app, type WebContents } from "electron";
-import { ipcContract, type IpcChannel } from "../shared/ipc";
+import { ipcContract, type IpcChannel } from "@vortspec/core/ipc";
 import { checkEnvironment, verifyClaudeLogin, verifyFigmaMcp } from "./environment/env-manager";
 import {
   listProjects,
@@ -22,20 +22,20 @@ import {
   snapshotComponent,
   restoreFiles,
 } from "./inspector/component-reader";
-import type { FileSnapshot } from "../shared/ipc";
+import type { FileSnapshot } from "@vortspec/core/ipc";
 import { getVerification } from "./inspector/verification-reader";
-import type { SetupAnswers } from "../shared/setup";
+import type { SetupAnswers } from "@vortspec/core/setup";
 import { startRun, cancelRun, hasActiveRun, getLastRun } from "./agent/run-manager";
 import { getUsage } from "./usage/usage-reader";
 import * as gitAdapter from "./git/git-adapter";
 import { providerAuth, providerSwitchAccount, providerCreateRepo, providerCreatePR, providerPublish } from "./git/providers";
-import type { RepoVisibility, ProviderId } from "../shared/git";
+import type { RepoVisibility, ProviderId } from "@vortspec/core/git";
 import { getJiraAuth, installJira, listJiraProjects, createJiraIssue, getJiraIssue } from "./tasks/jira";
 import { createIssueFromSpec } from "./tasks/manager";
 import { readLinks } from "./tasks/link-store";
-import type { IssueType } from "../shared/task";
+import type { IssueType } from "@vortspec/core/task";
 import { readProfile, saveProfile } from "./settings/profile-manager";
-import type { Profile } from "../shared/profile";
+import type { Profile } from "@vortspec/core/profile";
 import {
   getFlow,
   setStageStatus,
@@ -57,7 +57,7 @@ import {
   restoreManifestVersion,
   snapshotManifest,
 } from "./manifest/manifest-reader";
-import type { SnapshotReason } from "../shared/manifest";
+import type { SnapshotReason } from "@vortspec/core/manifest";
 import {
   startDevServer,
   stopDevServer,
@@ -68,8 +68,8 @@ import {
   getPreviewInfo,
   getStorybookIndex,
 } from "./workspace/dev-server";
-import type { AgentRunOptions } from "../shared/run-events";
-import type { StageStatus } from "../shared/flow";
+import type { AgentRunOptions } from "@vortspec/core/run-events";
+import type { StageStatus } from "@vortspec/core/flow";
 
 /**
  * The single place IPC handlers are registered. Every request and response is

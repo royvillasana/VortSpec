@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { IssueLinks, Project, TaskAuth, TaskProject } from "../../../shared/ipc";
+import type { IssueLinks, Project, TaskAuth, TaskProject } from "@vortspec/core/ipc";
 import { api } from "../lib/api";
 import { Button, Card, Spinner } from "../components/ui";
 import { ProjectRail, projectRailItems } from "../components/ProjectRail";

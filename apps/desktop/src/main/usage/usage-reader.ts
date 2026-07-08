@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { homedir } from "node:os";
-import type { UsageResult } from "../../shared/usage";
+import type { UsageResult } from "@vortspec/core/usage";
 import { parseUsage } from "./usage-parser";
 
 /**

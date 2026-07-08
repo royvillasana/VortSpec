@@ -1,7 +1,7 @@
 import { join } from "node:path";
 import { readFile, writeFile, mkdir } from "node:fs/promises";
-import type { IssueLinks } from "../../shared/task";
-import { issueLinksSchema } from "../../shared/task";
+import type { IssueLinks } from "@vortspec/core/task";
+import { issueLinksSchema } from "@vortspec/core/task";
 
 /**
  * Per-project links between VortSpec artifacts (component/screen/spec `ref`) and

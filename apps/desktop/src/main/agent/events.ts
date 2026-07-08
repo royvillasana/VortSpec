@@ -1,4 +1,4 @@
-import { runEventSchema, type RunEvent } from "../../shared/run-events";
+import { runEventSchema, type RunEvent } from "@vortspec/core/run-events";
 
 /**
  * The parser that turns raw Claude Code `stream-json` NDJSON lines into

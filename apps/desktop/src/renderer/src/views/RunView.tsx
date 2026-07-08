@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { Project } from "../../../shared/ipc";
+import type { Project } from "@vortspec/core/ipc";
 import type { Activity, RunModel, RunStatus } from "../lib/run-model";
 import { useLatestRun } from "../lib/useAgentRun";
 import { Button, Spinner } from "../components/ui";

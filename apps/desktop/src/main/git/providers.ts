@@ -1,4 +1,4 @@
-import type { ProviderAuth, GitResult, RepoVisibility, ProviderId } from "../../shared/git";
+import type { ProviderAuth, GitResult, RepoVisibility, ProviderId } from "@vortspec/core/git";
 import * as git from "./git-adapter";
 import { getGithubAuth, switchGithubAccount, createGithubRepo, createGithubPR } from "./github";
 import { getGitlabAuth, switchGitlabAccount, createGitlabRepo, createGitlabMR } from "./gitlab";

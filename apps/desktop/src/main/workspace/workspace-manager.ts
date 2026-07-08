@@ -2,8 +2,8 @@ import { app, dialog, shell } from "electron";
 import { join, basename, resolve, sep } from "node:path";
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { createHash } from "node:crypto";
-import type { Project } from "../../shared/ipc";
-import { projectListSchema } from "../../shared/ipc";
+import type { Project } from "@vortspec/core/ipc";
+import { projectListSchema } from "@vortspec/core/ipc";
 import { getToolkitStatus } from "./toolkit-manager";
 
 /**

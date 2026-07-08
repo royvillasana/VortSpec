@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import type { WebContents } from "electron";
-import { DEV_SERVER_UPDATE_CHANNEL, type DevServerStatus, type ServerKind } from "../../shared/dev-server";
+import { DEV_SERVER_UPDATE_CHANNEL, type DevServerStatus, type ServerKind } from "@vortspec/core/dev-server";
 
 /**
  * Manages one long-running dev/storybook server per project so the Dev Preview

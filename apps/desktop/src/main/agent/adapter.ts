@@ -1,7 +1,7 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { EventEmitter } from "node:events";
 import { parseStreamLine } from "./events";
-import type { AgentRunOptions, RunEvent } from "../../shared/run-events";
+import type { AgentRunOptions, RunEvent } from "@vortspec/core/run-events";
 
 /**
  * The AgentAdapter — the single boundary that knows how to invoke Claude Code

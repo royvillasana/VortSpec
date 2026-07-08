@@ -1,4 +1,4 @@
-import type { RunEvent } from "../../../shared/ipc";
+import type { RunEvent } from "@vortspec/core/ipc";
 
 /** The renderer-side accumulated view of a wrapped Claude Code run. */
 export type RunStatus = "idle" | "running" | "done" | "error" | "canceled";

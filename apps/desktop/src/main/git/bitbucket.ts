@@ -1,4 +1,4 @@
-import type { ProviderAuth, GitResult, RepoVisibility } from "../../shared/git";
+import type { ProviderAuth, GitResult, RepoVisibility } from "@vortspec/core/git";
 
 /**
  * Bitbucket provider (M6, foundation). Bitbucket has no universal local CLI like

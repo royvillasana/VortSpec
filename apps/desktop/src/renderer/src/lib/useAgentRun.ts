@@ -1,5 +1,5 @@
 import { useEffect, useReducer, useRef } from "react";
-import type { AgentRunOptions } from "../../../shared/ipc";
+import type { AgentRunOptions } from "@vortspec/core/ipc";
 import { api } from "./api";
 import { initialRun, reduceRun, type RunModel } from "./run-model";
 

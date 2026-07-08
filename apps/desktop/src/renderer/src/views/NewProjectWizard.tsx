@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { Project, SetupAnswers } from "../../../shared/ipc";
+import type { Project, SetupAnswers } from "@vortspec/core/ipc";
 import {
   FRAMEWORK_OPTIONS,
   DESIGN_SOURCE_OPTIONS,
@@ -9,7 +9,7 @@ import {
   autoStyling,
   autoTokenFile,
   autoComponentDir,
-} from "../../../shared/setup";
+} from "@vortspec/core/setup";
 import { api } from "../lib/api";
 import { Button, Card } from "../components/ui";
 

@@ -7,15 +7,15 @@ import type {
   SetupAnswers,
   FileSnapshot,
   Profile,
-} from "../shared/ipc";
+} from "@vortspec/core/ipc";
 import {
   AGENT_EVENT_CHANNEL,
   AGENT_RAW_CHANNEL,
   type AgentEventEnvelope,
   type AgentRawEnvelope,
   type AgentRunOptions,
-} from "../shared/run-events";
-import { DEV_SERVER_UPDATE_CHANNEL, type DevServerUpdate } from "../shared/dev-server";
+} from "@vortspec/core/run-events";
+import { DEV_SERVER_UPDATE_CHANNEL, type DevServerUpdate } from "@vortspec/core/dev-server";
 
 /**
  * The safe bridge between the sandboxed renderer and the main process.

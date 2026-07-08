@@ -1,5 +1,5 @@
 import type { ButtonHTMLAttributes, ReactNode } from "react";
-import type { CheckStatus } from "../../../shared/ipc";
+import type { CheckStatus } from "@vortspec/core/ipc";
 
 export function Button({
   variant = "default",

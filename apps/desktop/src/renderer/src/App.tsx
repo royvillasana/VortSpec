@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { EnvReport, Project, SetupAnswers, UpdateInfo, Profile as ProfileT } from "../../shared/ipc";
+import type { EnvReport, Project, SetupAnswers, UpdateInfo, Profile as ProfileT } from "@vortspec/core/ipc";
 import { api } from "./lib/api";
 import { EnvironmentCheck } from "./views/EnvironmentCheck";
 import { Dashboard } from "./views/Dashboard";

@@ -3,7 +3,7 @@ import { mkdtemp, rm, readdir, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { newAccumulator, recordRun, runTitle, readLastRun, writeLastRun, patchLastRun } from "./run-recorder";
-import { runSummarySchema } from "../../shared/flow";
+import { runSummarySchema } from "@vortspec/core/flow";
 
 describe("run-recorder", () => {
   it("titles slash-command runs and truncates plain prompts", () => {

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { Project } from "../../../shared/ipc";
+import type { Project } from "@vortspec/core/ipc";
 import { api } from "../lib/api";
 import { Button, Spinner } from "../components/ui";
 

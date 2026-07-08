@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { InspectorComponent, LastRun, Project, ProjectConfig, VerificationResult } from "../../../shared/ipc";
-import { DEFAULT_FLOW } from "../../../shared/flow";
+import type { InspectorComponent, LastRun, Project, ProjectConfig, VerificationResult } from "@vortspec/core/ipc";
+import { DEFAULT_FLOW } from "@vortspec/core/flow";
 import { api } from "../lib/api";
 import { useAgentRun, useLatestRun } from "../lib/useAgentRun";
 import { deriveProgress, type OpKind } from "../lib/run-progress";

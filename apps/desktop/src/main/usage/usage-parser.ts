@@ -1,4 +1,4 @@
-import type { UsageLimit } from "../../shared/usage";
+import type { UsageLimit } from "@vortspec/core/usage";
 
 /**
  * Parse the text of Claude Code's `/usage` command into structured limit bars.

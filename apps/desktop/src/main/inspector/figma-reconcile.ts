@@ -1,6 +1,6 @@
 import { join } from "node:path";
 import { readFile } from "node:fs/promises";
-import { figmaVariableSchema, type FigmaVariable, type TokenDrift } from "../../shared/inspector";
+import { figmaVariableSchema, type FigmaVariable, type TokenDrift } from "@vortspec/core/inspector";
 
 /**
  * Figma-authoritative reconciliation. VortSpec never talks to Figma directly —

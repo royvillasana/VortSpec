@@ -4,8 +4,8 @@ import { getFlow } from "./flow-manager";
 import { getInspectorComponents } from "../inspector/component-reader";
 import { getInspectorTokens } from "../inspector/token-parser";
 import { getManifest } from "../manifest/manifest-reader";
-import { runSummarySchema, type RunSummary } from "../../shared/flow";
-import type { RunHistoryResult } from "../../shared/flow";
+import { runSummarySchema, type RunSummary } from "@vortspec/core/flow";
+import type { RunHistoryResult } from "@vortspec/core/flow";
 
 /**
  * Run history (US-11). The "current" entry reflects the live state of the design

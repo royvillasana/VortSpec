@@ -1,5 +1,5 @@
 import { execFileSafe } from "../util/exec";
-import type { ProviderAuth, GitResult, RepoVisibility } from "../../shared/git";
+import type { ProviderAuth, GitResult, RepoVisibility } from "@vortspec/core/git";
 import * as git from "./git-adapter";
 
 /**

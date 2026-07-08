@@ -1,5 +1,5 @@
 import { execFileSafe } from "../util/exec";
-import type { EnvCheck, EnvReport, FixAction } from "../../shared/ipc";
+import type { EnvCheck, EnvReport, FixAction } from "@vortspec/core/ipc";
 
 /**
  * Detects the local environment VortSpec depends on: Node, git, the Claude Code

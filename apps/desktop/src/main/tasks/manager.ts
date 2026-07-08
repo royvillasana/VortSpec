@@ -1,6 +1,6 @@
 import { join } from "node:path";
 import { readFile } from "node:fs/promises";
-import type { IssueType, TaskResult } from "../../shared/task";
+import type { IssueType, TaskResult } from "@vortspec/core/task";
 import { createJiraIssue } from "./jira";
 import { linkIssue } from "./link-store";
 

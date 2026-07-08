@@ -6,7 +6,7 @@ import {
   type Flow,
   type FlowState,
   type StageStatus,
-} from "../../shared/flow";
+} from "@vortspec/core/flow";
 
 /**
  * Reads and writes the guided-flow state for a project. State lives as plain

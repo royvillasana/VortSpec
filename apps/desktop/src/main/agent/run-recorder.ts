@@ -1,8 +1,8 @@
 import { join, basename } from "node:path";
 import { mkdir, writeFile, readFile, readdir } from "node:fs/promises";
-import type { AgentRunOptions, LastRun } from "../../shared/run-events";
-import { lastRunSchema } from "../../shared/run-events";
-import type { RunSummary } from "../../shared/flow";
+import type { AgentRunOptions, LastRun } from "@vortspec/core/run-events";
+import { lastRunSchema } from "@vortspec/core/run-events";
+import type { RunSummary } from "@vortspec/core/flow";
 
 /**
  * Persists each finished agent run to `.vortspec/runs/<id>.json` (US-11 — run

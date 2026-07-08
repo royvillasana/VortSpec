@@ -1,4 +1,4 @@
-import type { Project } from "../../../shared/ipc";
+import type { Project } from "@vortspec/core/ipc";
 import { Logo } from "./Logo";
 
 /**

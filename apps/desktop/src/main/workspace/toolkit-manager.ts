@@ -1,7 +1,7 @@
 import { join } from "node:path";
 import { access } from "node:fs/promises";
 import { execFileSafe } from "../util/exec";
-import type { ToolkitStatus } from "../../shared/ipc";
+import type { ToolkitStatus } from "@vortspec/core/ipc";
 
 /**
  * Detects and installs the SDD-DE toolkit (`@royvillasana/sdd-de`) in a project.

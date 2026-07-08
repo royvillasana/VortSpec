@@ -11,9 +11,9 @@ import {
   appendFile,
   access,
 } from "node:fs/promises";
-import { buildProjectYaml, type SetupAnswers } from "../../shared/setup";
+import { buildProjectYaml, type SetupAnswers } from "@vortspec/core/setup";
 import { refreshProject } from "./workspace-manager";
-import type { Project } from "../../shared/ipc";
+import type { Project } from "@vortspec/core/ipc";
 
 /**
  * Performs the SDD-DE init non-interactively from the GUI wizard answers — the

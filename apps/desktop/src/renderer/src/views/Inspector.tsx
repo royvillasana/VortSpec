@@ -8,7 +8,7 @@ import type {
   TokenSource,
   TokenType,
   TokenUsage,
-} from "../../../shared/ipc";
+} from "@vortspec/core/ipc";
 import { api } from "../lib/api";
 import { useAgentRun } from "../lib/useAgentRun";
 import { Spinner } from "../components/ui";

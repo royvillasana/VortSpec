@@ -35,6 +35,9 @@ importers:
       '@royvillasana/sdd-de':
         specifier: ^1.8.4
         version: 1.8.4
+      '@vortspec/core':
+        specifier: workspace:*
+        version: link:../../packages/core
       zod:
         specifier: ^3.24.1
         version: 3.25.76
@@ -87,6 +90,16 @@ importers:
       vite:
         specifier: ^6.0.0
         version: 6.4.3(@types/node@22.20.0)(jiti@2.7.0)(lightningcss@1.32.0)(yaml@2.9.0)
+
+  packages/core:
+    dependencies:
+      zod:
+        specifier: ^3.24.1
+        version: 3.25.76
+    devDependencies:
+      typescript:
+        specifier: ^5.9.0
+        version: 5.9.3
 
 packages:
 

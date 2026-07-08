@@ -1,6 +1,6 @@
 import { platform } from "node:os";
 import { execFileSafe } from "../util/exec";
-import type { TaskAuth, TaskProject, TaskIssue, TaskResult, IssueType } from "../../shared/task";
+import type { TaskAuth, TaskProject, TaskIssue, TaskResult, IssueType } from "@vortspec/core/task";
 
 /**
  * Jira via the community `jira` CLI (ankitpokhrel/jira-cli) — the user's own login,

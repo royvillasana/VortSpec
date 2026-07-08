@@ -1,14 +1,14 @@
 import { join, dirname, basename } from "node:path";
 import { readFile, readdir, writeFile } from "node:fs/promises";
 import { readProjectConfig } from "../workspace/config-manager";
-import { detectedComponentsSchema, type DetectedComponent } from "../../shared/flow";
+import { detectedComponentsSchema, type DetectedComponent } from "@vortspec/core/flow";
 import type {
   ComponentStatus,
   FileSnapshot,
   InspectorComponent,
   InspectorComponentsResult,
   PropControl,
-} from "../../shared/inspector";
+} from "@vortspec/core/inspector";
 
 /**
  * Read the design system's components from the project's own files — the

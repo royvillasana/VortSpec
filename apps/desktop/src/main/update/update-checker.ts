@@ -1,5 +1,5 @@
 import { app } from "electron";
-import type { UpdateInfo } from "../../shared/update";
+import type { UpdateInfo } from "@vortspec/core/update";
 
 /**
  * Update check against GitHub Releases. Read-only, no auth (public repo), and

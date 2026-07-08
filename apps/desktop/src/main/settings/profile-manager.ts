@@ -1,8 +1,8 @@
 import { app } from "electron";
 import { join } from "node:path";
 import { readFile, writeFile, mkdir } from "node:fs/promises";
-import type { Profile } from "../../shared/profile";
-import { profileSchema, EMPTY_PROFILE } from "../../shared/profile";
+import type { Profile } from "@vortspec/core/profile";
+import { profileSchema, EMPTY_PROFILE } from "@vortspec/core/profile";
 
 /**
  * The global (per-user) profile — the app's only app-wide settings store,

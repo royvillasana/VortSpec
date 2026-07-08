@@ -7,9 +7,9 @@ import {
   runEventSchema,
   type AgentRunOptions,
   type RunEvent,
-} from "../../shared/run-events";
+} from "@vortspec/core/run-events";
 import { newAccumulator, recordRun, patchLastRun, readLastRun, runTitle } from "./run-recorder";
-import type { LastRun } from "../../shared/run-events";
+import type { LastRun } from "@vortspec/core/run-events";
 
 /**
  * Owns the set of active agent runs and forwards their events to the renderer.
