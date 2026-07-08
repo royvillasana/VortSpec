@@ -1513,6 +1513,7 @@ async function listDir(root, rel) {
 async function readFile(root, rel) {
   const abs = resolveInside(root, rel);
   const stat2 = await promises.stat(abs);
+  if (stat2.isDirectory()) return { path: rel, content: "", truncated: true };
   if (stat2.size > MAX_BYTES) return { path: rel, content: "", truncated: true };
   const buf = await promises.readFile(abs);
   if (buf.includes(0)) return { path: rel, content: "", truncated: true };

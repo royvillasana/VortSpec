@@ -55,6 +55,9 @@ export async function listDir(root: string, rel: string): Promise<FsEntry[]> {
 export async function readFile(root: string, rel: string): Promise<FsFile> {
   const abs = resolveInside(root, rel);
   const stat = await fsp.stat(abs);
+  // A directory isn't a text file — signal "not openable" instead of throwing
+  // EISDIR (callers skip on `truncated`).
+  if (stat.isDirectory()) return { path: rel, content: "", truncated: true };
   if (stat.size > MAX_BYTES) return { path: rel, content: "", truncated: true };
   const buf = await fsp.readFile(abs);
   // Treat a NUL byte as a binary marker — don't load it into the text editor.

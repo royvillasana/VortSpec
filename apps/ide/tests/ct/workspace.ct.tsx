@@ -77,5 +77,7 @@ test("a file can be closed", async ({ mount }) => {
   await expect(c.getByRole("tab", { name: /README\.md/ })).toBeVisible();
   await c.getByRole("button", { name: "Close README.md" }).click();
   await expect(c.getByRole("tab", { name: /README\.md/ })).toHaveCount(0);
-  await expect(c.getByText("No file open")).toBeVisible();
+  // "No file open" is the editor's empty state (exact — the chat chip's
+  // lowercase "no file open" shouldn't be matched too).
+  await expect(c.getByText("No file open", { exact: true })).toBeVisible();
 });
