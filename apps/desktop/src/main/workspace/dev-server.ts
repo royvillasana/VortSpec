@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import type { WebContents } from "electron";
-import { DEV_SERVER_UPDATE_CHANNEL, type DevServerStatus } from "../../shared/dev-server";
+import { DEV_SERVER_UPDATE_CHANNEL, type DevServerStatus, type ServerKind } from "../../shared/dev-server";
 
 /**
  * Manages one long-running dev/storybook server per project so the Dev Preview
@@ -17,7 +17,10 @@ interface Server {
   status: DevServerStatus;
   sender: WebContents;
 }
+// Keyed by `${projectPath}::${kind}` so the Storybook Playground and the live app
+// runtime can run at the same time for one project.
 const servers = new Map<string, Server>();
+const keyOf = (projectPath: string, kind: ServerKind): string => `${projectPath}::${kind}`;
 
 async function readScripts(projectPath: string): Promise<Record<string, unknown>> {
   const pkg = await readFile(join(projectPath, "package.json"), "utf8").catch(() => null);
@@ -30,13 +33,14 @@ async function readScripts(projectPath: string): Promise<Record<string, unknown>
 }
 
 /**
- * Prefer a real Storybook surface: storybook → dev → start → preview. Storybook
- * is the design-system-native docs/controls tool, so once it's set up we launch
- * it rather than the project's own app.
+ * Pick the script to run for a surface. The Storybook Playground prefers
+ * `storybook` → dev → start → preview; the live app runtime deliberately skips
+ * `storybook` and runs the project's OWN app (dev → start → preview).
  */
-async function detectScript(projectPath: string): Promise<string | null> {
+async function detectScript(projectPath: string, kind: ServerKind): Promise<string | null> {
   const scripts = await readScripts(projectPath);
-  for (const name of ["storybook", "dev", "start", "preview"]) {
+  const order = kind === "app" ? ["dev", "start", "preview"] : ["storybook", "dev", "start", "preview"];
+  for (const name of order) {
     if (typeof scripts[name] === "string") return name;
   }
   return null;
@@ -52,7 +56,7 @@ export async function getPreviewInfo(
     existsSync(join(projectPath, ".storybook")) || existsSync(join(projectPath, ".storybook/main.ts"));
   return {
     hasStorybook: hasStorybookScript && hasConfig,
-    script: await detectScript(projectPath),
+    script: await detectScript(projectPath, "storybook"),
   };
 }
 
@@ -77,29 +81,34 @@ export function urlFrom(text: string): string | null {
   return m[1].replace("0.0.0.0", "localhost").replace(/\/+$/, "") + "/";
 }
 
-function push(server: Server, projectPath: string): void {
+function push(server: Server, projectPath: string, kind: ServerKind): void {
   if (!server.sender.isDestroyed()) {
-    server.sender.send(DEV_SERVER_UPDATE_CHANNEL, { projectPath, status: server.status });
+    server.sender.send(DEV_SERVER_UPDATE_CHANNEL, { projectPath, kind, status: server.status });
   }
 }
 
-export async function startDevServer(
+export async function startServer(
   sender: WebContents,
   projectPath: string,
+  kind: ServerKind,
 ): Promise<DevServerStatus> {
-  const existing = servers.get(projectPath);
+  const key = keyOf(projectPath, kind);
+  const existing = servers.get(key);
   if (existing && (existing.status.state === "starting" || existing.status.state === "running")) {
     existing.sender = sender;
     return existing.status;
   }
 
-  const script = await detectScript(projectPath);
+  const script = await detectScript(projectPath, kind);
   if (!script) {
     return {
       state: "no-script",
       url: null,
       script: null,
-      message: "No dev / storybook / start script found in package.json.",
+      message:
+        kind === "app"
+          ? "No dev / start / preview script found in package.json to run the app."
+          : "No dev / storybook / start script found in package.json.",
     };
   }
 
@@ -116,14 +125,14 @@ export async function startDevServer(
     status: { state: "starting", url: null, script, message: null },
     sender,
   };
-  servers.set(projectPath, server);
+  servers.set(key, server);
 
   const onData = (buf: Buffer): void => {
     if (server.status.state !== "starting") return;
     const url = urlFrom(buf.toString());
     if (url) {
       server.status = { state: "running", url, script, message: null };
-      push(server, projectPath);
+      push(server, projectPath, kind);
     }
   };
   child.stdout?.on("data", onData);
@@ -131,7 +140,7 @@ export async function startDevServer(
 
   child.on("error", (err: Error) => {
     server.status = { state: "error", url: null, script, message: err.message };
-    push(server, projectPath);
+    push(server, projectPath, kind);
   });
   child.on("exit", (code) => {
     // A running server that exits with null code was stopped by us (SIGTERM).
@@ -142,12 +151,23 @@ export async function startDevServer(
       script,
       message: clean ? null : code ? `Preview process exited with code ${code}.` : null,
     };
-    push(server, projectPath);
+    push(server, projectPath, kind);
   });
 
-  push(server, projectPath);
+  push(server, projectPath, kind);
   return server.status;
 }
+
+// ── Kind-aware public API (storybook = the Playground, app = the live runtime) ──
+export const startDevServer = (sender: WebContents, projectPath: string): Promise<DevServerStatus> =>
+  startServer(sender, projectPath, "storybook");
+export const startAppServer = (sender: WebContents, projectPath: string): Promise<DevServerStatus> =>
+  startServer(sender, projectPath, "app");
+export const stopDevServer = (projectPath: string): void => stopServer(projectPath, "storybook");
+export const stopAppServer = (projectPath: string): void => stopServer(projectPath, "app");
+export const getDevServerStatus = (projectPath: string): DevServerStatus =>
+  statusOf(projectPath, "storybook");
+export const getAppServerStatus = (projectPath: string): DevServerStatus => statusOf(projectPath, "app");
 
 /**
  * Fetch a running Storybook's story index so the Playground can deep-link the
@@ -189,8 +209,8 @@ export async function getStorybookIndex(url: string): Promise<StorybookEntry[]> 
   return [];
 }
 
-export function stopDevServer(projectPath: string): void {
-  const server = servers.get(projectPath);
+function stopServer(projectPath: string, kind: ServerKind): void {
+  const server = servers.get(keyOf(projectPath, kind));
   if (!server) return;
   server.child.kill("SIGTERM");
   const child = server.child;
@@ -199,9 +219,9 @@ export function stopDevServer(projectPath: string): void {
   }, 4000);
 }
 
-export function getDevServerStatus(projectPath: string): DevServerStatus {
+function statusOf(projectPath: string, kind: ServerKind): DevServerStatus {
   return (
-    servers.get(projectPath)?.status ?? {
+    servers.get(keyOf(projectPath, kind))?.status ?? {
       state: "stopped",
       url: null,
       script: null,

@@ -14,7 +14,7 @@ export interface RailItem {
 }
 
 /** The canonical project destinations, in order. `manifest` (DESIGN.md) is the final step. */
-export type RailKey = "flow" | "run" | "playground" | "tokens" | "manifest" | "source" | "history";
+export type RailKey = "flow" | "run" | "playground" | "runapp" | "tokens" | "manifest" | "source" | "history";
 
 export interface RailNav {
   onFlow: () => void;
@@ -25,6 +25,8 @@ export interface RailNav {
   onHistory: () => void;
   /** Source Control (git) — optional; the item appears only where wired. */
   onSource?: () => void;
+  /** Run App (live localhost runtime) — optional; appears only where wired. */
+  onRunApp?: () => void;
 }
 
 /**
@@ -41,6 +43,7 @@ export function projectRailItems(
     { key: "flow", label: "Flow", onClick: nav.onFlow },
     { key: "run", label: "Run", onClick: nav.onRun },
     { key: "playground", label: "Playground", onClick: nav.onPlayground },
+    ...(nav.onRunApp ? [{ key: "runapp" as const, label: "Run app", onClick: nav.onRunApp }] : []),
     { key: "tokens", label: "Tokens", onClick: nav.onTokens },
     { key: "manifest", label: "Manifest", onClick: nav.onManifest },
     ...(nav.onSource ? [{ key: "source" as const, label: "Source Control", onClick: nav.onSource }] : []),

@@ -27,11 +27,20 @@ export const devServerStatusSchema = z.object({
 });
 export type DevServerStatus = z.infer<typeof devServerStatusSchema>;
 
+/**
+ * Which managed surface: `storybook` (the component Playground) or `app` (the
+ * project's own application dev server — the live localhost runtime, M5). Both can
+ * run at once; they're keyed separately.
+ */
+export const serverKindSchema = z.enum(["storybook", "app"]);
+export type ServerKind = z.infer<typeof serverKindSchema>;
+
 /** main → renderer push channel for live status updates. */
 export const DEV_SERVER_UPDATE_CHANNEL = "devserver:update";
 
 export const devServerUpdateSchema = z.object({
   projectPath: z.string(),
+  kind: serverKindSchema.default("storybook"),
   status: devServerStatusSchema,
 });
 export type DevServerUpdate = z.infer<typeof devServerUpdateSchema>;

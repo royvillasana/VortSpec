@@ -24,6 +24,10 @@ export interface MockConfig {
   devStatus?: DevServerStatus;
   /** Status returned by startDevServer() — defaults to a running server with a URL. */
   devStartStatus?: DevServerStatus;
+  /** Initial app-server status returned by appServerStatus(). */
+  appStatus?: DevServerStatus;
+  /** Status returned by startAppServer(). */
+  appStartStatus?: DevServerStatus;
   /** Whether the project already has a Storybook setup. */
   previewInfo?: { hasStorybook: boolean; script: string | null };
   /** Entries returned by storybookIndex(). */
@@ -184,6 +188,9 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
     startDevServer: async () => cfg.devStartStatus ?? RUNNING,
     stopDevServer: async () => undefined,
     devServerStatus: async () => cfg.devStatus ?? STOPPED,
+    startAppServer: async () => cfg.appStartStatus ?? cfg.appStatus ?? RUNNING,
+    stopAppServer: async () => undefined,
+    appServerStatus: async () => cfg.appStatus ?? STOPPED,
     previewInfo: async () => cfg.previewInfo ?? { hasStorybook: false, script: "storybook" },
     storybookIndex: async () => cfg.storybookIndex ?? [],
     onDevServerUpdate: (cb: (e: { projectPath: string; status: DevServerStatus }) => void) => {

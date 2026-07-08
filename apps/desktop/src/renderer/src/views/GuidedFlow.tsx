@@ -195,8 +195,8 @@ function waitForDevUrl(projectPath: string, timeoutMs: number): Promise<string |
       clearTimeout(timer);
       resolve(v);
     };
-    const off = api.onDevServerUpdate(({ projectPath: p, status }) => {
-      if (p !== projectPath) return;
+    const off = api.onDevServerUpdate(({ projectPath: p, kind, status }) => {
+      if (p !== projectPath || kind !== "storybook") return;
       if (status.state === "running" && status.url) finish(status.url);
       else if (status.state === "error" || status.state === "stopped") finish(null);
     });
@@ -237,6 +237,7 @@ export function GuidedFlow({
   onOpenHistory,
   onOpenManifest,
   onOpenSource,
+  onOpenRunApp,
 }: {
   project: Project;
   onBack: () => void;
@@ -247,6 +248,7 @@ export function GuidedFlow({
   onOpenHistory: () => void;
   onOpenManifest: () => void;
   onOpenSource: () => void;
+  onOpenRunApp: () => void;
 }): React.JSX.Element {
   const [config, setConfig] = useState<ProjectConfig | null>(null);
   const [components, setComponents] = useState<InspectorComponent[] | null>(null);
@@ -423,6 +425,7 @@ export function GuidedFlow({
           onTokens: onOpenInspector,
           onManifest: onOpenManifest,
           onSource: onOpenSource,
+          onRunApp: onOpenRunApp,
           onHistory: onOpenHistory,
         })}
       />

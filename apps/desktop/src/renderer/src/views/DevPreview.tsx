@@ -161,8 +161,8 @@ export function DevPreview({
   // Follow the managed dev server for this project.
   useEffect(() => {
     void api.devServerStatus(project.path).then(setDev);
-    return api.onDevServerUpdate(({ projectPath, status }) => {
-      if (projectPath === project.path) setDev(status);
+    return api.onDevServerUpdate(({ projectPath, kind, status }) => {
+      if (projectPath === project.path && kind === "storybook") setDev(status);
     });
   }, [project.path]);
 

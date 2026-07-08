@@ -123,6 +123,9 @@ const api = {
   startDevServer: (projectPath: string) => invoke("devserver:start", projectPath),
   stopDevServer: (projectPath: string) => invoke("devserver:stop", projectPath),
   devServerStatus: (projectPath: string) => invoke("devserver:status", projectPath),
+  startAppServer: (projectPath: string) => invoke("appserver:start", projectPath),
+  stopAppServer: (projectPath: string) => invoke("appserver:stop", projectPath),
+  appServerStatus: (projectPath: string) => invoke("appserver:status", projectPath),
   previewInfo: (projectPath: string) => invoke("devserver:previewInfo", projectPath),
   storybookIndex: (url: string) => invoke("devserver:storybookIndex", url),
   onDevServerUpdate: (callback: (payload: DevServerUpdate) => void) =>

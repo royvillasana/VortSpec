@@ -13,6 +13,7 @@ import { History } from "./views/History";
 import { DesignManifest } from "./views/DesignManifest";
 import { Profile } from "./views/Profile";
 import { SourceControl } from "./views/SourceControl";
+import { RunApp } from "./views/RunApp";
 import { DesignInput } from "./views/DesignInput";
 import { Intake } from "./views/Intake";
 import { NewProjectWizard } from "./views/NewProjectWizard";
@@ -89,7 +90,7 @@ export default function App(): React.JSX.Element {
   const [intakeProject, setIntakeProject] = useState<Project | null>(null);
   const [pendingSource, setPendingSource] = useState<Partial<SetupAnswers> | undefined>(undefined);
   const [projectView, setProjectView] = useState<
-    "flow" | "inspector" | "preview" | "run" | "review" | "verify" | "history" | "manifest" | "source"
+    "flow" | "inspector" | "preview" | "run" | "review" | "verify" | "history" | "manifest" | "source" | "runapp"
   >("flow");
   const [loading, setLoading] = useState(true);
   const [chatOpen, setChatOpen] = useState(false);
@@ -114,7 +115,7 @@ export default function App(): React.JSX.Element {
   // Auto-open the assistant when entering the Playground (modifying components is
   // the point there); it stays dismissible via the same top-bar toggle.
   useEffect(() => {
-    if (projectView === "preview") setChatOpen(true);
+    if (projectView === "preview" || projectView === "runapp") setChatOpen(true);
   }, [projectView]);
 
   function mergeProject(project: Project): void {
@@ -324,6 +325,18 @@ export default function App(): React.JSX.Element {
             onManifest={() => setProjectView("manifest")}
             onHistory={() => setProjectView("history")}
           />
+        ) : activeProject && projectView === "runapp" ? (
+          <RunApp
+            project={activeProject}
+            onBack={() => setActiveProject(null)}
+            onFlow={() => setProjectView("flow")}
+            onRun={() => setProjectView("run")}
+            onPlayground={() => setProjectView("preview")}
+            onTokens={() => setProjectView("inspector")}
+            onManifest={() => setProjectView("manifest")}
+            onHistory={() => setProjectView("history")}
+            onSource={() => setProjectView("source")}
+          />
         ) : activeProject ? (
           <GuidedFlow
             project={activeProject}
@@ -335,6 +348,7 @@ export default function App(): React.JSX.Element {
             onOpenHistory={() => setProjectView("history")}
             onOpenManifest={() => setProjectView("manifest")}
             onOpenSource={() => setProjectView("source")}
+            onOpenRunApp={() => setProjectView("runapp")}
           />
         ) : (
           <Dashboard
@@ -358,13 +372,15 @@ export default function App(): React.JSX.Element {
             key={activeProject.path}
             project={activeProject}
             userName={profile?.name?.trim() || undefined}
-            allowModify={projectView === "preview"}
+            allowModify={projectView === "preview" || projectView === "runapp"}
             seedContext={
               projectView === "preview"
                 ? "Context: the user is viewing this project's components in Storybook (Playground). When they ask for a change, edit only the relevant component's source under the component directory, keep values token-referenced (no hardcoded hex/px), and match the surrounding code style. Storybook hot-reloads, so the change appears live. Do not touch unrelated components or the token file."
-                : projectView === "manifest"
-                  ? "Context: the user is on the Design Manifest screen (DESIGN.md). Help them refine or reason about the manifest."
-                  : undefined
+                : projectView === "runapp"
+                  ? "Context: the user is on the Run app screen with the project's app running live at localhost. Vibe-engineer screens with them: compose new screens/features from the BUILT design-system components (import them from the component directory) and the design tokens — read DESIGN.md as the hand-off, follow the SDD-DE Screen Creation approach (a spec/plan before implementing), never hardcode hex/px, and write normal project files. The dev server hot-reloads, so changes appear live in the embedded app."
+                  : projectView === "manifest"
+                    ? "Context: the user is on the Design Manifest screen (DESIGN.md). Help them refine or reason about the manifest."
+                    : undefined
             }
             onClose={() => setChatOpen(false)}
           />

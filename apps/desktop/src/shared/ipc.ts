@@ -269,6 +269,9 @@ export const ipcContract = {
   "devserver:start": { request: z.string(), response: devServerStatusSchema },
   "devserver:stop": { request: z.string(), response: z.void() },
   "devserver:status": { request: z.string(), response: devServerStatusSchema },
+  "appserver:start": { request: z.string(), response: devServerStatusSchema },
+  "appserver:stop": { request: z.string(), response: z.void() },
+  "appserver:status": { request: z.string(), response: devServerStatusSchema },
   "devserver:previewInfo": {
     request: z.string(),
     response: z.object({ hasStorybook: z.boolean(), script: z.string().nullable() }),

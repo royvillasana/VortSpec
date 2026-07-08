@@ -23,6 +23,7 @@ const props = {
   onOpenHistory: noop,
   onOpenManifest: noop,
   onOpenSource: noop,
+  onOpenRunApp: noop,
 };
 
 const TOKENS: InspectorTokensResult = {

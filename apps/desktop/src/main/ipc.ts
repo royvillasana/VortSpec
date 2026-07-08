@@ -58,6 +58,9 @@ import {
   startDevServer,
   stopDevServer,
   getDevServerStatus,
+  startAppServer,
+  stopAppServer,
+  getAppServerStatus,
   getPreviewInfo,
   getStorybookIndex,
 } from "./workspace/dev-server";
@@ -186,6 +189,12 @@ const handlers: Record<IpcChannel, Handler> = {
     return undefined;
   }) as Handler,
   "devserver:status": ((projectPath: string) => getDevServerStatus(projectPath)) as Handler,
+  "appserver:start": ((projectPath: string, sender: WebContents) => startAppServer(sender, projectPath)) as Handler,
+  "appserver:stop": ((projectPath: string) => {
+    stopAppServer(projectPath);
+    return undefined;
+  }) as Handler,
+  "appserver:status": ((projectPath: string) => getAppServerStatus(projectPath)) as Handler,
   "devserver:previewInfo": ((projectPath: string) => getPreviewInfo(projectPath)) as Handler,
   "devserver:storybookIndex": ((url: string) => getStorybookIndex(url)) as Handler,
   "flow:setPublishTarget": ((req: { projectPath: string; repoUrl: string }) =>

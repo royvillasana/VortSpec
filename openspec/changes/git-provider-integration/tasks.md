@@ -52,22 +52,22 @@
 - [x] 4.2 Duplicate each screen against the built components as NEW parallel files (route
   tree / `*.vortspec.tsx` sibling / build flag) — Claude Code re-implements using DESIGN.md;
   originals never edited/moved/deleted.
-- [~] 4.3 Side-by-side preview (old vs new).
+- [x] 4.3 Side-by-side preview (old vs new). (via the M5 app runtime: run the app and compare original vs the vortspec/ routes)
 - [x] 4.4 Deliver on a new branch + PR (additive; no delete/overwrite) with a generated
   `MIGRATION.md` (old screen → new duplicate + switch-over steps); cutover is a human step.
 - [x] 4.5 Tests + gate; Done-when: existing screens have token-driven duplicates in a PR,
   originals byte-for-byte intact.
 
 ## M5 — Vibe engineering (Screen Creation) + live localhost runtime
-- [ ] 5.1 Screen Creation flow in the app: describe a screen → SDD-DE enrich → generate-
+- [x] 5.1 Screen Creation flow in the app: describe a screen → SDD-DE enrich → generate-
   artifacts → implement, composing from the built components + tokens (DESIGN.md hand-off),
   conversational via the assistant, spec-first gated.
-- [ ] 5.2 Extend `dev-server.ts` + IPC to run the project's own APP dev server as a distinct
+- [x] 5.2 Extend `dev-server.ts` + IPC to run the project's own APP dev server as a distinct
   managed surface (separate from Storybook), parse the local URL, embed/link the running app,
   cancelable via existing dev-server controls.
-- [ ] 5.3 A "Run app" preview surface + rail entry; live iteration (hot reload reflects
+- [x] 5.3 A "Run app" preview surface + rail entry; live iteration (hot reload reflects
   vibe-engineered changes).
-- [ ] 5.4 Tests + gate; Done-when: describe a screen → built from components → renders in a
+- [x] 5.4 Tests + gate; Done-when: describe a screen → built from components → renders in a
   live localhost app inside VortSpec.
 
 ## M6 — GitLab + Bitbucket
