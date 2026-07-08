@@ -12,6 +12,7 @@ import type { IpcResponse, StageStatus, SetupAnswers, FileSnapshot, Profile } fr
 import type { AgentRunOptions, AgentEventEnvelope, AgentRawEnvelope } from "./run-events";
 import type { DevServerUpdate } from "./dev-server";
 import type { WorkspaceChange } from "./fs";
+import type { TerminalData } from "./terminal";
 import type { ProviderId, RepoVisibility } from "./git";
 import type { IssueType } from "./task";
 import type { SnapshotReason } from "./manifest";
@@ -139,11 +140,18 @@ export interface VortSpecApi {
   unwatchWorkspace(projectPath: string): Promise<IpcResponse<"workspace:watchStop">>;
   fileAtHead(projectPath: string, relPath: string): Promise<IpcResponse<"git:fileAtHead">>;
 
+  // integrated terminal
+  terminalCreate(req: { id: string; projectPath: string; cols?: number; rows?: number }): Promise<IpcResponse<"terminal:create">>;
+  terminalWrite(id: string, data: string): Promise<IpcResponse<"terminal:write">>;
+  terminalResize(id: string, cols: number, rows: number): Promise<IpcResponse<"terminal:resize">>;
+  terminalKill(id: string): Promise<IpcResponse<"terminal:kill">>;
+
   // event subscriptions (return an unsubscribe fn)
   onAgentEvent(callback: (payload: AgentEventEnvelope) => void): () => void;
   onAgentRaw(callback: (payload: AgentRawEnvelope) => void): () => void;
   onDevServerUpdate(callback: (payload: DevServerUpdate) => void): () => void;
   onWorkspaceChange(callback: (payload: WorkspaceChange) => void): () => void;
+  onTerminalData(callback: (payload: TerminalData) => void): () => void;
 }
 
 declare global {

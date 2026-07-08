@@ -4,12 +4,13 @@ import { electronApp, optimizer, is } from "@electron-toolkit/utils";
 import { z } from "zod";
 import { spawn } from "node:child_process";
 import { join, resolve as resolve$1, sep, basename, dirname, extname } from "node:path";
-import { access, mkdir, readFile, writeFile, cp, copyFile, appendFile, readdir, symlink, stat } from "node:fs/promises";
+import { access, mkdir, readFile as readFile$1, writeFile as writeFile$1, cp, copyFile, appendFile, readdir, symlink, stat } from "node:fs/promises";
 import { createHash, randomUUID } from "node:crypto";
 import { createRequire } from "node:module";
+import { watch, promises, existsSync } from "node:fs";
+import { spawn as spawn$1 } from "node-pty";
 import { EventEmitter } from "node:events";
-import { homedir } from "node:os";
-import { existsSync } from "node:fs";
+import { homedir, platform } from "node:os";
 import __cjs_mod__ from "node:module";
 const __filename = import.meta.filename;
 const __dirname = import.meta.dirname;
@@ -139,6 +140,144 @@ const profileSchema = z.object({
   preferences: profilePreferencesSchema.default({})
 });
 const EMPTY_PROFILE = { name: "", avatarDataUrl: null, preferences: {} };
+const taskAuthSchema = z.object({
+  provider: z.literal("jira"),
+  /** The Jira/Atlassian CLI is installed. */
+  cliInstalled: z.boolean(),
+  /** The CLI is configured/authenticated (a login exists). */
+  configured: z.boolean(),
+  /** The logged-in account (email/username), when known. */
+  account: z.string().nullable(),
+  /** Known sites/accounts, for the multi-account picker. */
+  sites: z.array(z.string()),
+  /** A shell command that would install the CLI (shown before running, with permission). */
+  installCommand: z.string().nullable(),
+  /** A human next-step when not installed/configured. */
+  hint: z.string().nullable()
+});
+const taskProjectSchema = z.object({ key: z.string(), name: z.string() });
+const taskIssueSchema = z.object({
+  key: z.string(),
+  url: z.string().nullable(),
+  summary: z.string().nullable(),
+  status: z.string().nullable()
+});
+const taskResultSchema = z.object({
+  ok: z.boolean(),
+  message: z.string(),
+  key: z.string().nullable().optional(),
+  url: z.string().nullable().optional()
+});
+const issueTypeSchema = z.enum(["Story", "Task", "Bug"]);
+const createIssueRequestSchema = z.object({
+  project: z.string().min(1),
+  type: issueTypeSchema,
+  summary: z.string().min(1),
+  description: z.string().optional()
+});
+const createFromSpecRequestSchema = z.object({
+  projectPath: z.string(),
+  project: z.string().min(1),
+  type: issueTypeSchema,
+  /** Project-relative path to the spec that becomes the story body. */
+  specPath: z.string().min(1),
+  /** The ref (component/screen name) to link the created issue to. */
+  ref: z.string().min(1)
+});
+z.object({ projectPath: z.string() });
+const issueLinksSchema = z.record(z.string(), z.string());
+const gitChangeStatusSchema = z.enum([
+  "modified",
+  "added",
+  "deleted",
+  "renamed",
+  "copied",
+  "typechange",
+  "untracked",
+  "conflicted"
+]);
+const gitChangeSchema = z.object({
+  path: z.string(),
+  status: gitChangeStatusSchema
+});
+const gitStatusSchema = z.object({
+  isRepo: z.boolean(),
+  branch: z.string().nullable(),
+  upstream: z.string().nullable(),
+  ahead: z.number(),
+  behind: z.number(),
+  /** Staged (index) changes. */
+  staged: z.array(gitChangeSchema),
+  /** Unstaged (worktree) changes to tracked files. */
+  unstaged: z.array(gitChangeSchema),
+  /** Untracked file paths. */
+  untracked: z.array(z.string()),
+  /** Paths with merge conflicts. */
+  conflicts: z.array(z.string()),
+  clean: z.boolean()
+});
+const gitBranchSchema = z.object({
+  name: z.string(),
+  current: z.boolean(),
+  remote: z.boolean(),
+  upstream: z.string().nullable()
+});
+const gitRemoteSchema = z.object({ name: z.string(), url: z.string() });
+const gitLogEntrySchema = z.object({
+  hash: z.string(),
+  shortHash: z.string(),
+  subject: z.string(),
+  author: z.string(),
+  date: z.string()
+});
+const gitResultSchema = z.object({
+  ok: z.boolean(),
+  message: z.string(),
+  /** A URL produced by the op (repo/PR), when applicable. */
+  url: z.string().nullable().optional()
+});
+const providerIdSchema = z.enum(["github", "gitlab", "bitbucket"]);
+const repoVisibilitySchema = z.enum(["private", "public", "internal"]);
+const repoCreateRequestSchema = z.object({
+  projectPath: z.string(),
+  /** Which provider to create on (from the picker); defaults to the resolved provider. */
+  providerId: providerIdSchema.optional(),
+  name: z.string().min(1),
+  visibility: repoVisibilitySchema,
+  description: z.string().optional()
+});
+const prCreateRequestSchema = z.object({
+  projectPath: z.string(),
+  base: z.string().optional(),
+  title: z.string().min(1),
+  body: z.string().optional()
+});
+const accountSwitchRequestSchema = z.object({ projectPath: z.string(), account: z.string().min(1) });
+const importRequestSchema = z.object({
+  projectPath: z.string(),
+  url: z.string().min(1),
+  branch: z.string().optional()
+});
+const publishRequestSchema = z.object({
+  projectPath: z.string(),
+  branch: z.string().min(1),
+  title: z.string().min(1),
+  body: z.string().optional()
+});
+const providerAuthSchema = z.object({
+  provider: providerIdSchema,
+  cliInstalled: z.boolean(),
+  authenticated: z.boolean(),
+  /** Logged-in accounts (for the multi-account picker); [] when none. */
+  accounts: z.array(z.string()),
+  /** The active account, when known. */
+  activeAccount: z.string().nullable(),
+  /** A human next-step when not installed/authed. */
+  hint: z.string().nullable()
+});
+const gitCommitRequestSchema = z.object({ projectPath: z.string(), message: z.string().min(1) });
+const gitPathsRequestSchema = z.object({ projectPath: z.string(), paths: z.array(z.string()) });
+const gitBranchRequestSchema = z.object({ projectPath: z.string(), name: z.string().min(1) });
 const stageKindSchema = z.enum([
   "source",
   "components",
@@ -221,7 +360,7 @@ const DEFAULT_FLOW = [
     kind: "source",
     gated: true,
     artifact: COMPONENTS_MANIFEST,
-    promptTemplate: 'Read .sdd-de/project.yaml for `design_source` and the project configuration (framework, language, token_file, component_dir). Connect to the configured source — do NOT ask for a brief; the design source is the input.\n\nFor `design_source: figma`, use the Figma MCP to read the file at `figma_file_url` and the variable collection named `figma_token_collection`.\n\n1. Extract every design token and variable from the source into the configured `token_file`.\n2. Detect every component in the design system and write `.sdd-de/components.json` — a JSON array of objects `{ "name": string, "level": "atom"|"molecule"|"organism", "description": string }`, ordered tokens → atoms → molecules → organisms.\n\nDo NOT implement the components yet — this stage only extracts tokens and detects the inventory.',
+    promptTemplate: 'Read .sdd-de/project.yaml for `design_source` and the project configuration (framework, language, token_file, component_dir). Connect to the configured source — do NOT ask for a brief; the design source is the input.\n\nFor `design_source: figma`, use the Figma MCP to read the file at `figma_file_url` and the variable collection named `figma_token_collection`.\n\nFor `design_source: github` (a repository imported into this project), the repo\'s own files ARE the source: scan them for the design system — read its existing token definitions (CSS variables, Tailwind/theme config, SCSS/JS token files) and its component library, and reconcile them into the configured `token_file` and inventory. Do not fetch anything remotely; read the files on disk.\n\n1. Extract every design token and variable from the source into the configured `token_file`.\n2. Detect every component in the design system and write `.sdd-de/components.json` — a JSON array of objects `{ "name": string, "level": "atom"|"molecule"|"organism", "description": string }`, ordered tokens → atoms → molecules → organisms.\n\nDo NOT implement the components yet — this stage only extracts tokens and detects the inventory.',
     allowedTools: ["Read", "Write", "Edit"]
   },
   {
@@ -295,9 +434,11 @@ const devServerStatusSchema = z.object({
   /** A human message for error / no-script states. */
   message: z.string().nullable()
 });
+const serverKindSchema = z.enum(["storybook", "app"]);
 const DEV_SERVER_UPDATE_CHANNEL = "devserver:update";
 z.object({
   projectPath: z.string(),
+  kind: serverKindSchema.default("storybook"),
   status: devServerStatusSchema
 });
 const manifestFormatSchema = z.enum(["google", "decisions-log", "empty"]);
@@ -337,6 +478,35 @@ const updateInfoSchema = z.object({
   releaseUrl: z.string().nullable(),
   /** Direct download URL of the macOS .dmg asset, if present. */
   downloadUrl: z.string().nullable()
+});
+const fsEntrySchema = z.object({
+  name: z.string(),
+  /** path relative to the workspace root, using "/" separators */
+  path: z.string(),
+  type: z.enum(["file", "dir"])
+});
+const fsFileSchema = z.object({
+  path: z.string(),
+  content: z.string(),
+  /** true when the file was binary or too large to read as text */
+  truncated: z.boolean()
+});
+const fsWriteResultSchema = z.object({
+  ok: z.boolean(),
+  message: z.string()
+});
+const WORKSPACE_CHANGE_CHANNEL = "workspace:change";
+z.object({
+  projectPath: z.string(),
+  path: z.string().nullable(),
+  kind: z.enum(["add", "change", "unlink", "refresh"])
+});
+const TERMINAL_DATA_CHANNEL = "terminal:data";
+z.object({
+  id: z.string(),
+  data: z.string(),
+  /** set on the final event when the shell process exits */
+  exit: z.number().nullable().optional()
 });
 const frameworkSchema = z.enum([
   "react",
@@ -631,6 +801,42 @@ const ipcContract = {
     request: z.object({ path: z.string(), answers: setupAnswersSchema }),
     response: projectSchema
   },
+  "workspace:listDir": {
+    request: z.object({ projectPath: z.string(), relPath: z.string() }),
+    response: z.array(fsEntrySchema)
+  },
+  "workspace:readFile": {
+    request: z.object({ projectPath: z.string(), relPath: z.string() }),
+    response: fsFileSchema
+  },
+  "workspace:writeFile": {
+    request: z.object({ projectPath: z.string(), relPath: z.string(), content: z.string() }),
+    response: fsWriteResultSchema
+  },
+  "workspace:watchStart": { request: z.string(), response: z.void() },
+  "workspace:watchStop": { request: z.string(), response: z.void() },
+  "git:fileAtHead": {
+    request: z.object({ projectPath: z.string(), relPath: z.string() }),
+    response: z.string().nullable()
+  },
+  "terminal:create": {
+    request: z.object({
+      id: z.string(),
+      projectPath: z.string(),
+      cols: z.number().optional(),
+      rows: z.number().optional()
+    }),
+    response: z.void()
+  },
+  "terminal:write": {
+    request: z.object({ id: z.string(), data: z.string() }),
+    response: z.void()
+  },
+  "terminal:resize": {
+    request: z.object({ id: z.string(), cols: z.number(), rows: z.number() }),
+    response: z.void()
+  },
+  "terminal:kill": { request: z.string(), response: z.void() },
   "toolkit:status": { request: z.string(), response: toolkitStatusSchema },
   "toolkit:install": { request: z.string(), response: toolkitStatusSchema },
   "agent:startRun": {
@@ -641,6 +847,34 @@ const ipcContract = {
   "agent:hasActiveRun": { request: z.string(), response: z.boolean() },
   "agent:lastRun": { request: z.string(), response: lastRunSchema.nullable() },
   "usage:get": { request: z.void(), response: usageResultSchema },
+  // Git (M1) — additive only; no delete/force channels exist.
+  "git:status": { request: z.string(), response: gitStatusSchema },
+  "git:branches": { request: z.string(), response: z.array(gitBranchSchema) },
+  "git:remotes": { request: z.string(), response: z.array(gitRemoteSchema) },
+  "git:log": { request: z.string(), response: z.array(gitLogEntrySchema) },
+  "git:stage": { request: gitPathsRequestSchema, response: gitResultSchema },
+  "git:unstage": { request: gitPathsRequestSchema, response: gitResultSchema },
+  "git:commit": { request: gitCommitRequestSchema, response: gitResultSchema },
+  "git:checkout": { request: gitBranchRequestSchema, response: gitResultSchema },
+  "git:createBranch": { request: gitBranchRequestSchema, response: gitResultSchema },
+  "git:fetch": { request: z.string(), response: gitResultSchema },
+  "git:pull": { request: z.string(), response: gitResultSchema },
+  "git:push": { request: z.string(), response: gitResultSchema },
+  "git:init": { request: z.string(), response: gitResultSchema },
+  "provider:auth": { request: z.string(), response: providerAuthSchema },
+  "provider:switchAccount": { request: accountSwitchRequestSchema, response: gitResultSchema },
+  "provider:createRepo": { request: repoCreateRequestSchema, response: gitResultSchema },
+  "provider:createPR": { request: prCreateRequestSchema, response: gitResultSchema },
+  "git:import": { request: importRequestSchema, response: gitResultSchema },
+  "provider:publish": { request: publishRequestSchema, response: gitResultSchema },
+  // Tasks (Jira, M7)
+  "task:auth": { request: z.void(), response: taskAuthSchema },
+  "task:install": { request: z.void(), response: taskResultSchema },
+  "task:projects": { request: z.void(), response: z.array(taskProjectSchema) },
+  "task:createIssue": { request: createIssueRequestSchema, response: taskResultSchema },
+  "task:createFromSpec": { request: createFromSpecRequestSchema, response: taskResultSchema },
+  "task:links": { request: z.string(), response: issueLinksSchema },
+  "task:issueStatus": { request: z.string(), response: taskIssueSchema },
   "profile:get": { request: z.void(), response: profileSchema },
   "profile:save": { request: profileSchema, response: profileSchema },
   "flow:get": { request: z.string(), response: flowSchema },
@@ -676,6 +910,9 @@ const ipcContract = {
   "devserver:start": { request: z.string(), response: devServerStatusSchema },
   "devserver:stop": { request: z.string(), response: z.void() },
   "devserver:status": { request: z.string(), response: devServerStatusSchema },
+  "appserver:start": { request: z.string(), response: devServerStatusSchema },
+  "appserver:stop": { request: z.string(), response: z.void() },
+  "appserver:status": { request: z.string(), response: devServerStatusSchema },
   "devserver:previewInfo": {
     request: z.string(),
     response: z.object({ hasStorybook: z.boolean(), script: z.string().nullable() })
@@ -996,13 +1233,13 @@ ${r.stderr}`;
   };
 }
 async function checkEnvironment() {
-  const [node, git, install] = await Promise.all([
+  const [node, git2, install] = await Promise.all([
     checkNode(),
     checkGit(),
     checkClaudeInstall()
   ]);
-  const checks = [node, git, install, pendingLogin(), pendingFigmaMcp()];
-  const ready = [node, git, install].every((c) => c.status === "pass");
+  const checks = [node, git2, install, pendingLogin(), pendingFigmaMcp()];
+  const ready = [node, git2, install].every((c) => c.status === "pass");
   return { checks, ready };
 }
 const SDD_DE_INSTALL_CMD = "npx @royvillasana/sdd-de";
@@ -1043,7 +1280,7 @@ function projectId(path) {
 }
 async function readRegistry() {
   try {
-    const raw = await readFile(registryPath(), "utf8");
+    const raw = await readFile$1(registryPath(), "utf8");
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
     return parsed.filter(
@@ -1055,7 +1292,7 @@ async function readRegistry() {
 }
 async function writeRegistry(entries) {
   await mkdir(app.getPath("userData"), { recursive: true });
-  await writeFile(registryPath(), JSON.stringify(entries, null, 2), "utf8");
+  await writeFile$1(registryPath(), JSON.stringify(entries, null, 2), "utf8");
 }
 async function hydrate(entry) {
   const toolkit = await getToolkitStatus(entry.path);
@@ -1157,7 +1394,7 @@ async function createProject(projectPath, answers) {
     recursive: true
   });
   await cp(join(pkgDir, "docs"), join(sddeDir, "docs"), { recursive: true });
-  await writeFile(join(sddeDir, "project.yaml"), buildProjectYaml(answers), "utf8");
+  await writeFile$1(join(sddeDir, "project.yaml"), buildProjectYaml(answers), "utf8");
   const claudeSrc = join(pkgDir, "CLAUDE.md");
   for (const name of ["CLAUDE.md", "AGENTS.md", "GEMINI.md", "codex.md"]) {
     const dst = join(projectPath, name);
@@ -1174,12 +1411,134 @@ async function createProject(projectPath, answers) {
   );
   const gitignorePath = join(projectPath, ".gitignore");
   if (await exists(gitignorePath)) {
-    const content = await readFile(gitignorePath, "utf8");
+    const content = await readFile$1(gitignorePath, "utf8");
     if (!content.includes(".sdd-de")) {
       await appendFile(gitignorePath, "\n# SDD-DE toolkit\n.sdd-de/\n");
     }
   }
   return refreshProject(projectPath);
+}
+function resolveInside(root, rel) {
+  const rootAbs = resolve$1(root);
+  const abs = resolve$1(rootAbs, rel);
+  if (abs !== rootAbs && !abs.startsWith(rootAbs + sep)) {
+    throw new Error("Path escapes the workspace root.");
+  }
+  return abs;
+}
+const IGNORE = /* @__PURE__ */ new Set([".git"]);
+const MAX_BYTES = 2e6;
+function toPosix(rel) {
+  return rel.split(sep).join("/");
+}
+async function listDir(root, rel) {
+  const abs = resolveInside(root, rel);
+  const dirents = await promises.readdir(abs, { withFileTypes: true });
+  const entries = [];
+  for (const d of dirents) {
+    if (rel === "" && IGNORE.has(d.name)) continue;
+    const childRel = rel ? `${rel}/${d.name}` : d.name;
+    entries.push({ name: d.name, path: childRel, type: d.isDirectory() ? "dir" : "file" });
+  }
+  entries.sort(
+    (a, b) => a.type === b.type ? a.name.localeCompare(b.name) : a.type === "dir" ? -1 : 1
+  );
+  return entries;
+}
+async function readFile(root, rel) {
+  const abs = resolveInside(root, rel);
+  const stat2 = await promises.stat(abs);
+  if (stat2.size > MAX_BYTES) return { path: rel, content: "", truncated: true };
+  const buf = await promises.readFile(abs);
+  if (buf.includes(0)) return { path: rel, content: "", truncated: true };
+  return { path: rel, content: buf.toString("utf8"), truncated: false };
+}
+async function writeFile(root, rel, content) {
+  try {
+    const abs = resolveInside(root, rel);
+    await promises.writeFile(abs, content, "utf8");
+    return { ok: true, message: "Saved." };
+  } catch (err) {
+    return { ok: false, message: err instanceof Error ? err.message : "Could not save the file." };
+  }
+}
+const watchers = /* @__PURE__ */ new Map();
+function startWatch(sender, root) {
+  if (watchers.has(root)) return;
+  try {
+    const w = watch(root, { recursive: true }, (event, filename) => {
+      if (!filename) {
+        sender.send(WORKSPACE_CHANGE_CHANNEL, { projectPath: root, path: null, kind: "refresh" });
+        return;
+      }
+      const rel = filename.toString();
+      if (rel.split(sep)[0] === ".git") return;
+      sender.send(WORKSPACE_CHANGE_CHANNEL, {
+        projectPath: root,
+        path: toPosix(rel),
+        kind: event === "rename" ? "add" : "change"
+      });
+    });
+    watchers.set(root, w);
+  } catch {
+  }
+}
+function stopWatch(root) {
+  const w = watchers.get(root);
+  if (w) {
+    w.close();
+    watchers.delete(root);
+  }
+}
+function buildShell(platform2 = process.platform, env = process.env) {
+  if (platform2 === "win32") return { file: env.COMSPEC || "powershell.exe", args: [] };
+  return { file: env.SHELL || "/bin/zsh", args: [] };
+}
+const sessions = /* @__PURE__ */ new Map();
+function createSession(sender, opts) {
+  if (sessions.has(opts.id)) return;
+  const { file, args } = buildShell();
+  const pty = spawn$1(file, args, {
+    name: "xterm-color",
+    cols: opts.cols ?? 80,
+    rows: opts.rows ?? 24,
+    cwd: opts.cwd,
+    env: process.env
+  });
+  pty.onData((data) => sender.send(TERMINAL_DATA_CHANNEL, { id: opts.id, data }));
+  pty.onExit(({ exitCode }) => {
+    sessions.delete(opts.id);
+    sender.send(TERMINAL_DATA_CHANNEL, { id: opts.id, data: "", exit: exitCode });
+  });
+  sessions.set(opts.id, pty);
+}
+function writeSession(id, data) {
+  sessions.get(id)?.write(data);
+}
+function resizeSession(id, cols, rows) {
+  try {
+    sessions.get(id)?.resize(Math.max(1, cols), Math.max(1, rows));
+  } catch {
+  }
+}
+function killSession(id) {
+  const pty = sessions.get(id);
+  if (pty) {
+    try {
+      pty.kill();
+    } catch {
+    }
+    sessions.delete(id);
+  }
+}
+function killAllSessions() {
+  for (const pty of sessions.values()) {
+    try {
+      pty.kill();
+    } catch {
+    }
+  }
+  sessions.clear();
 }
 const KEY_MAP = {
   design_source: "designSource",
@@ -1216,7 +1575,7 @@ function parseFlatYaml(text) {
 async function readProjectConfig(projectPath) {
   let text;
   try {
-    text = await readFile(join(projectPath, ".sdd-de", "project.yaml"), "utf8");
+    text = await readFile$1(join(projectPath, ".sdd-de", "project.yaml"), "utf8");
   } catch {
     return null;
   }
@@ -1247,7 +1606,7 @@ function normValue(value) {
 async function readFigmaVariables(projectPath) {
   let raw;
   try {
-    raw = await readFile(join(projectPath, FIGMA_VARS_PATH), "utf8");
+    raw = await readFile$1(join(projectPath, FIGMA_VARS_PATH), "utf8");
   } catch {
     return null;
   }
@@ -1361,7 +1720,7 @@ async function collectSources(dir) {
       const full = join(d, entry.name);
       if (entry.isDirectory()) await walk(full);
       else if (SOURCE_EXTS$1.has(extname(entry.name)) && !entry.name.endsWith(".variants.ts")) {
-        const text = await readFile(full, "utf8").catch(() => "");
+        const text = await readFile$1(full, "utf8").catch(() => "");
         if (text) out.push({ component: basename(entry.name, extname(entry.name)), text });
       }
     }
@@ -1395,7 +1754,7 @@ function buildUsage(tokenNames, sources) {
 const OVERRIDES_PATH = ".vortspec/token-overrides.json";
 async function readOverrides(projectPath) {
   try {
-    const raw = await readFile(join(projectPath, OVERRIDES_PATH), "utf8");
+    const raw = await readFile$1(join(projectPath, OVERRIDES_PATH), "utf8");
     const parsed = JSON.parse(raw);
     if (Array.isArray(parsed)) return new Set(parsed.filter((x) => typeof x === "string"));
   } catch {
@@ -1407,7 +1766,7 @@ async function markOverridden(projectPath, name) {
   set.add(name);
   const path = join(projectPath, OVERRIDES_PATH);
   await mkdir(dirname(path), { recursive: true }).catch(() => void 0);
-  await writeFile(path, `${JSON.stringify([...set].sort(), null, 2)}
+  await writeFile$1(path, `${JSON.stringify([...set].sort(), null, 2)}
 `, "utf8").catch(
     () => void 0
   );
@@ -1418,7 +1777,7 @@ async function getInspectorTokens(projectPath) {
   if (!tokenFile) return { tokenFile: null, tokens: [], usage: {}, figmaOnly: [], figmaSynced: false };
   let css;
   try {
-    css = await readFile(join(projectPath, tokenFile), "utf8");
+    css = await readFile$1(join(projectPath, tokenFile), "utf8");
   } catch {
     return { tokenFile, tokens: [], usage: {}, figmaOnly: [], figmaSynced: false };
   }
@@ -1455,11 +1814,11 @@ async function setInspectorTokenValue(projectPath, name, value) {
   const tokenFile = config?.tokenFile;
   if (tokenFile) {
     const path = join(projectPath, tokenFile);
-    const css = await readFile(path, "utf8").catch(() => null);
+    const css = await readFile$1(path, "utf8").catch(() => null);
     if (css) {
       const re = new RegExp(`(--${name}\\s*:\\s*)([^;]*)(;)`);
       if (re.test(css)) {
-        await writeFile(path, css.replace(re, `$1${value.trim()}$3`), "utf8");
+        await writeFile$1(path, css.replace(re, `$1${value.trim()}$3`), "utf8");
         await markOverridden(projectPath, name);
       }
     }
@@ -1473,7 +1832,7 @@ async function snapshotTokenScope(projectPath) {
   async function capture(rel) {
     if (seen.has(rel)) return;
     seen.add(rel);
-    const content = await readFile(join(projectPath, rel), "utf8").catch(() => null);
+    const content = await readFile$1(join(projectPath, rel), "utf8").catch(() => null);
     if (content !== null) snaps.push({ path: rel, content });
   }
   if (config?.tokenFile) await capture(config.tokenFile);
@@ -1588,7 +1947,7 @@ function scanTokens(...sources) {
 async function firstExisting(projectPath, rels) {
   for (const rel of rels) {
     try {
-      await readFile(join(projectPath, rel), "utf8");
+      await readFile$1(join(projectPath, rel), "utf8");
       return rel;
     } catch {
     }
@@ -1608,7 +1967,7 @@ async function componentStatus(projectPath, name, hasFile) {
   if (!hasFile) return { status: "unknown", issues: [], specPath, reportPath };
   let report;
   try {
-    report = reportPath ? await readFile(join(projectPath, reportPath), "utf8") : "";
+    report = reportPath ? await readFile$1(join(projectPath, reportPath), "utf8") : "";
     if (!reportPath) return { status: "built", issues: [], specPath, reportPath };
   } catch {
     return { status: "built", issues: [], specPath, reportPath };
@@ -1625,7 +1984,7 @@ async function getInspectorComponents(projectPath) {
   const componentDir = config?.componentDir ?? null;
   let manifest = [];
   try {
-    const raw = await readFile(join(projectPath, ".sdd-de/components.json"), "utf8");
+    const raw = await readFile$1(join(projectPath, ".sdd-de/components.json"), "utf8");
     const parsed = detectedComponentsSchema.safeParse(JSON.parse(raw));
     if (parsed.success) manifest = parsed.data;
   } catch {
@@ -1638,9 +1997,9 @@ async function getInspectorComponents(projectPath) {
     let props = [];
     let tokens = [];
     if (abs && file) {
-      const src = await readFile(abs, "utf8").catch(() => "");
+      const src = await readFile$1(abs, "utf8").catch(() => "");
       const vrel = await variantsSibling(projectPath, file);
-      const variantsSrc = vrel ? await readFile(join(projectPath, vrel), "utf8").catch(() => "") : "";
+      const variantsSrc = vrel ? await readFile$1(join(projectPath, vrel), "utf8").catch(() => "") : "";
       props = parseProps(variantsSrc || src);
       tokens = scanTokens(src, variantsSrc);
     }
@@ -1669,14 +2028,14 @@ async function snapshotComponent(projectPath, file) {
   const candidates = [file, ...vrel ? [vrel] : []];
   const snaps = [];
   for (const rel of candidates) {
-    const content = await readFile(join(projectPath, rel), "utf8").catch(() => null);
+    const content = await readFile$1(join(projectPath, rel), "utf8").catch(() => null);
     if (content !== null) snaps.push({ path: rel, content });
   }
   return snaps;
 }
 async function restoreFiles(projectPath, files) {
   for (const f of files) {
-    await writeFile(join(projectPath, f.path), f.content, "utf8").catch(() => void 0);
+    await writeFile$1(join(projectPath, f.path), f.content, "utf8").catch(() => void 0);
   }
 }
 const BACKTICK = String.fromCharCode(96);
@@ -1754,7 +2113,7 @@ async function getVerification(projectPath) {
   const reports = await findReports(specsRoot);
   const findings = [];
   for (const { path, group } of reports) {
-    const md = await readFile(path, "utf8").catch(() => "");
+    const md = await readFile$1(path, "utf8").catch(() => "");
     if (!md) continue;
     const rel = path.slice(projectPath.length + 1);
     const dir = dirname(path);
@@ -1987,7 +2346,7 @@ function lastRunPath(cwd) {
   return join(cwd, ".vortspec", "last-run.json");
 }
 async function readLastRun(cwd) {
-  const raw = await readFile(lastRunPath(cwd), "utf8").catch(() => null);
+  const raw = await readFile$1(lastRunPath(cwd), "utf8").catch(() => null);
   if (!raw) return null;
   try {
     const parsed = lastRunSchema.safeParse(JSON.parse(raw));
@@ -2000,7 +2359,7 @@ async function writeLastRun(cwd, run) {
   const dir = join(cwd, ".vortspec");
   try {
     await mkdir(dir, { recursive: true });
-    await writeFile(lastRunPath(cwd), JSON.stringify(run, null, 2), "utf8");
+    await writeFile$1(lastRunPath(cwd), JSON.stringify(run, null, 2), "utf8");
   } catch {
   }
 }
@@ -2053,7 +2412,7 @@ async function recordRun(opts, acc, exitCode) {
     ],
     artifacts: [...acc.files].map((f) => basename(f))
   };
-  await writeFile(join(dir, `${summary.id}.json`), JSON.stringify(summary, null, 2), "utf8").catch(
+  await writeFile$1(join(dir, `${summary.id}.json`), JSON.stringify(summary, null, 2), "utf8").catch(
     () => void 0
   );
 }
@@ -2208,12 +2567,567 @@ async function getUsage() {
     error: parsed.limits.length > 0 ? null : "Couldn't read usage percentages from Claude Code. Open the details to see its raw output."
   };
 }
+async function git(cwd, args) {
+  const r = await execFileSafe("git", args, { cwd, timeoutMs: 6e4 });
+  if (r.spawnError) return { ok: false, stdout: "", stderr: "git is not installed or not on PATH." };
+  return { ok: r.code === 0, stdout: r.stdout, stderr: r.stderr.trim() };
+}
+const CODE = {
+  M: "modified",
+  A: "added",
+  D: "deleted",
+  R: "renamed",
+  C: "copied",
+  T: "typechange"
+};
+function toStatus(code) {
+  return CODE[code] ?? "modified";
+}
+function parseStatus(raw, isRepo2) {
+  const status = {
+    isRepo: isRepo2,
+    branch: null,
+    upstream: null,
+    ahead: 0,
+    behind: 0,
+    staged: [],
+    unstaged: [],
+    untracked: [],
+    conflicts: [],
+    clean: true
+  };
+  if (!isRepo2) return status;
+  for (const line of raw.split("\n")) {
+    if (!line) continue;
+    if (line.startsWith("# branch.head ")) {
+      const head = line.slice("# branch.head ".length).trim();
+      status.branch = head === "(detached)" ? null : head;
+    } else if (line.startsWith("# branch.upstream ")) {
+      status.upstream = line.slice("# branch.upstream ".length).trim();
+    } else if (line.startsWith("# branch.ab ")) {
+      const m = /\+(\d+)\s+-(\d+)/.exec(line);
+      if (m) {
+        status.ahead = Number(m[1]);
+        status.behind = Number(m[2]);
+      }
+    } else if (line.startsWith("1 ") || line.startsWith("2 ")) {
+      const fields = line.split(" ");
+      const xy = fields[1];
+      const rename = line.startsWith("2 ");
+      const rest = fields.slice(rename ? 9 : 8).join(" ");
+      const path = rename ? rest.split("	")[0] : rest;
+      const x = xy[0];
+      const y = xy[1];
+      if (x !== ".") status.staged.push({ path, status: toStatus(x) });
+      if (y !== ".") status.unstaged.push({ path, status: toStatus(y) });
+    } else if (line.startsWith("u ")) {
+      const fields = line.split(" ");
+      status.conflicts.push(fields.slice(10).join(" "));
+    } else if (line.startsWith("? ")) {
+      status.untracked.push(line.slice(2));
+    }
+  }
+  status.clean = status.staged.length === 0 && status.unstaged.length === 0 && status.untracked.length === 0 && status.conflicts.length === 0;
+  return status;
+}
+function parseBranches(raw, currentUpstream) {
+  const out = [];
+  for (const line of raw.split("\n")) {
+    if (!line.trim()) continue;
+    const [name, upstream, head] = line.split("	");
+    if (!name || name.includes("HEAD ->")) continue;
+    const remote = name.startsWith("origin/") || name.includes("/");
+    out.push({
+      name,
+      current: head === "*",
+      remote,
+      upstream: upstream || (head === "*" ? currentUpstream : null) || null
+    });
+  }
+  return out;
+}
+function parseLog(raw) {
+  return raw.split("").map((r) => r.trim()).filter(Boolean).map((rec) => {
+    const [hash, shortHash, subject, author, date] = rec.split("");
+    return { hash, shortHash, subject, author, date };
+  });
+}
+async function isRepo(cwd) {
+  const r = await git(cwd, ["rev-parse", "--is-inside-work-tree"]);
+  return r.ok && r.stdout.trim() === "true";
+}
+async function getStatus(cwd) {
+  const repo = await isRepo(cwd);
+  if (!repo) return parseStatus("", false);
+  const r = await git(cwd, ["status", "--porcelain=v2", "--branch"]);
+  return parseStatus(r.stdout, true);
+}
+async function getBranches(cwd) {
+  if (!await isRepo(cwd)) return [];
+  const r = await git(cwd, [
+    "branch",
+    "--all",
+    "--format=%(refname:short)%09%(upstream:short)%09%(HEAD)"
+  ]);
+  return parseBranches(r.stdout, null);
+}
+async function getRemotes(cwd) {
+  if (!await isRepo(cwd)) return [];
+  const r = await git(cwd, ["remote", "-v"]);
+  const seen = /* @__PURE__ */ new Map();
+  for (const line of r.stdout.split("\n")) {
+    const m = /^(\S+)\s+(\S+)\s+\(fetch\)/.exec(line);
+    if (m) seen.set(m[1], m[2]);
+  }
+  return [...seen].map(([name, url]) => ({ name, url }));
+}
+async function getLog(cwd, limit = 20) {
+  if (!await isRepo(cwd)) return [];
+  const r = await git(cwd, ["log", `-${limit}`, "--pretty=format:%H%x1f%h%x1f%s%x1f%an%x1f%ad", "--date=short"]);
+  const withRs = r.stdout.split("\n").join("");
+  return parseLog(withRs + "");
+}
+async function getFileAtHead(cwd, path) {
+  const r = await git(cwd, ["show", `HEAD:${path}`]);
+  return r.ok ? r.stdout : null;
+}
+function ok(message) {
+  return { ok: true, message };
+}
+function fail(r, fallback) {
+  return { ok: false, message: r.stderr || fallback };
+}
+async function init(cwd) {
+  const r = await git(cwd, ["init"]);
+  return r.ok ? ok("Initialized a git repository.") : fail(r, "git init failed.");
+}
+async function stage(cwd, paths) {
+  const r = await git(cwd, ["add", "--", ...paths]);
+  return r.ok ? ok(`Staged ${paths.length} path(s).`) : fail(r, "Staging failed.");
+}
+async function unstage(cwd, paths) {
+  const r = await git(cwd, ["restore", "--staged", "--", ...paths]);
+  return r.ok ? ok(`Unstaged ${paths.length} path(s).`) : fail(r, "Unstaging failed.");
+}
+async function commit(cwd, message) {
+  const r = await git(cwd, ["commit", "-m", message]);
+  return r.ok ? ok("Committed.") : fail(r, "Commit failed (nothing staged?).");
+}
+async function checkout(cwd, name) {
+  const r = await git(cwd, ["checkout", name]);
+  return r.ok ? ok(`Switched to ${name}.`) : fail(r, `Could not switch to ${name}.`);
+}
+async function createBranch(cwd, name) {
+  const r = await git(cwd, ["checkout", "-b", name]);
+  return r.ok ? ok(`Created and switched to ${name}.`) : fail(r, `Could not create ${name}.`);
+}
+async function fetch$1(cwd) {
+  const r = await git(cwd, ["fetch", "--all"]);
+  return r.ok ? ok("Fetched.") : fail(r, "Fetch failed.");
+}
+async function pull(cwd) {
+  const r = await git(cwd, ["pull", "--ff-only"]);
+  return r.ok ? ok("Pulled (fast-forward).") : fail(r, "Pull failed.");
+}
+async function importInto(cwd, url, branch) {
+  if (await isRepo(cwd)) return { ok: false, message: "This folder is already a git repository." };
+  let r = await git(cwd, ["init"]);
+  if (!r.ok) return fail(r, "git init failed.");
+  r = await git(cwd, ["remote", "add", "origin", url]);
+  if (!r.ok) return fail(r, "Could not add the remote.");
+  r = await git(cwd, ["fetch", "origin"]);
+  if (!r.ok) return fail(r, "Fetch failed — check the repo URL and your access.");
+  let b = branch;
+  if (!b) {
+    await git(cwd, ["remote", "set-head", "origin", "-a"]);
+    const h = await git(cwd, ["rev-parse", "--abbrev-ref", "origin/HEAD"]);
+    b = h.ok ? h.stdout.trim().replace(/^origin\//, "") : "main";
+  }
+  r = await git(cwd, ["checkout", "-f", "-B", b, `origin/${b}`]);
+  return r.ok ? ok(`Imported ${url} (${b}).`) : fail(r, `Could not check out ${b}.`);
+}
+async function push$1(cwd) {
+  const branch = (await git(cwd, ["rev-parse", "--abbrev-ref", "HEAD"])).stdout.trim();
+  let r = await git(cwd, ["push"]);
+  if (!r.ok && /has no upstream branch|set-upstream/i.test(r.stderr) && branch) {
+    r = await git(cwd, ["push", "--set-upstream", "origin", branch]);
+  }
+  return r.ok ? ok("Pushed.") : fail(r, "Push failed.");
+}
+function parseGhAccounts(text) {
+  const accounts = /* @__PURE__ */ new Set();
+  for (const line of text.split("\n")) {
+    const m = /Logged in to \S+ (?:account|as) ([^\s(]+)/i.exec(line);
+    if (m) accounts.add(m[1].trim());
+  }
+  return [...accounts];
+}
+async function getGithubAuth() {
+  const ver = await execFileSafe("gh", ["--version"], { timeoutMs: 8e3 });
+  if (ver.spawnError) {
+    return {
+      provider: "github",
+      cliInstalled: false,
+      authenticated: false,
+      accounts: [],
+      activeAccount: null,
+      hint: "Install the GitHub CLI (gh) to connect — https://cli.github.com — then click Connect again."
+    };
+  }
+  const st = await execFileSafe("gh", ["auth", "status"], { timeoutMs: 1e4 });
+  const text = `${st.stdout}
+${st.stderr}`;
+  const accounts = parseGhAccounts(text);
+  const authenticated = accounts.length > 0;
+  return {
+    provider: "github",
+    cliInstalled: true,
+    authenticated,
+    accounts,
+    activeAccount: accounts[0] ?? null,
+    hint: authenticated ? null : "You're not signed in to GitHub. Run `gh auth login` in your terminal, then click Connect again."
+  };
+}
+function buildRepoCreateArgs(opts) {
+  const args = ["repo", "create", opts.name, `--${opts.visibility}`, "--source=.", "--remote=origin", "--push"];
+  if (opts.description) args.push("--description", opts.description);
+  return args;
+}
+function buildPrCreateArgs(opts) {
+  const args = ["pr", "create", "--title", opts.title, "--body", opts.body ?? ""];
+  if (opts.base) args.push("--base", opts.base);
+  return args;
+}
+function parseGithubUrl(text) {
+  const m = /https:\/\/github\.com\/\S+/.exec(text);
+  return m ? m[0].replace(/[.,)]+$/, "") : null;
+}
+async function switchGithubAccount(account) {
+  const r = await execFileSafe("gh", ["auth", "switch", "--user", account], { timeoutMs: 1e4 });
+  if (r.spawnError) return { ok: false, message: "The GitHub CLI (gh) isn't installed." };
+  return r.code === 0 ? { ok: true, message: `Switched to ${account}.` } : { ok: false, message: (r.stderr || r.stdout).trim() || "Could not switch account." };
+}
+async function createGithubRepo(cwd, opts) {
+  const r = await execFileSafe("gh", buildRepoCreateArgs(opts), { cwd, timeoutMs: 12e4 });
+  if (r.spawnError) return { ok: false, message: "The GitHub CLI (gh) isn't installed." };
+  const text = `${r.stdout}
+${r.stderr}`;
+  if (r.code !== 0) return { ok: false, message: r.stderr.trim() || "Could not create the repository." };
+  return { ok: true, message: `Created ${opts.name} and pushed.`, url: parseGithubUrl(text) };
+}
+async function createGithubPR(cwd, opts) {
+  const r = await execFileSafe("gh", buildPrCreateArgs(opts), { cwd, timeoutMs: 6e4 });
+  if (r.spawnError) return { ok: false, message: "The GitHub CLI (gh) isn't installed." };
+  const text = `${r.stdout}
+${r.stderr}`;
+  if (r.code !== 0) return { ok: false, message: r.stderr.trim() || "Could not open the pull request." };
+  return { ok: true, message: "Opened a pull request.", url: parseGithubUrl(text) };
+}
+function parseGlabAccounts(text) {
+  const accounts = /* @__PURE__ */ new Set();
+  for (const line of text.split("\n")) {
+    let m = /Logged in to \S+ as ([^\s(]+)/i.exec(line);
+    if (!m) m = /username:\s*([^\s)]+)/i.exec(line);
+    if (m) accounts.add(m[1].trim());
+  }
+  return [...accounts];
+}
+function parseGlabUrl(text) {
+  const m = /https:\/\/gitlab\.com\/\S+/.exec(text);
+  return m ? m[0].replace(/[.,)]+$/, "") : null;
+}
+function buildGlabRepoCreateArgs(opts) {
+  const args = ["repo", "create", opts.name, "--visibility", opts.visibility];
+  if (opts.description) args.push("--description", opts.description);
+  return args;
+}
+function buildGlabMrArgs(opts) {
+  const args = ["mr", "create", "--title", opts.title, "--description", opts.body ?? ""];
+  if (opts.base) args.push("--target-branch", opts.base);
+  return args;
+}
+async function getGitlabAuth() {
+  const ver = await execFileSafe("glab", ["--version"], { timeoutMs: 8e3 });
+  if (ver.spawnError) {
+    return {
+      provider: "gitlab",
+      cliInstalled: false,
+      authenticated: false,
+      accounts: [],
+      activeAccount: null,
+      hint: "Install the GitLab CLI (glab) to connect — https://gitlab.com/gitlab-org/cli — then click Connect again."
+    };
+  }
+  const st = await execFileSafe("glab", ["auth", "status"], { timeoutMs: 1e4 });
+  const text = `${st.stdout}
+${st.stderr}`;
+  const accounts = parseGlabAccounts(text);
+  const authenticated = accounts.length > 0 || /Logged in/i.test(text);
+  return {
+    provider: "gitlab",
+    cliInstalled: true,
+    authenticated,
+    accounts,
+    activeAccount: accounts[0] ?? null,
+    hint: authenticated ? null : "You're not signed in to GitLab. Run `glab auth login` in your terminal, then click Connect again."
+  };
+}
+async function switchGitlabAccount(_account) {
+  return { ok: false, message: "Switch GitLab accounts with `glab auth login` in your terminal, then re-check." };
+}
+async function createGitlabRepo(cwd, opts) {
+  const r = await execFileSafe("glab", buildGlabRepoCreateArgs(opts), { cwd, timeoutMs: 12e4 });
+  if (r.spawnError) return { ok: false, message: "The GitLab CLI (glab) isn't installed." };
+  const text = `${r.stdout}
+${r.stderr}`;
+  if (r.code !== 0) return { ok: false, message: r.stderr.trim() || "Could not create the project." };
+  const url = parseGlabUrl(text);
+  if (url) {
+    await stage(cwd, ["."]);
+    await execFileSafe("git", ["remote", "add", "origin", `${url}.git`], { cwd, timeoutMs: 1e4 });
+    await push$1(cwd);
+  }
+  return { ok: true, message: `Created ${opts.name} and pushed.`, url };
+}
+async function createGitlabMR(cwd, opts) {
+  const r = await execFileSafe("glab", buildGlabMrArgs(opts), { cwd, timeoutMs: 6e4 });
+  if (r.spawnError) return { ok: false, message: "The GitLab CLI (glab) isn't installed." };
+  const text = `${r.stdout}
+${r.stderr}`;
+  if (r.code !== 0) return { ok: false, message: r.stderr.trim() || "Could not open the merge request." };
+  return { ok: true, message: "Opened a merge request.", url: parseGlabUrl(text) };
+}
+async function getBitbucketAuth() {
+  return {
+    provider: "bitbucket",
+    cliInstalled: false,
+    authenticated: false,
+    accounts: [],
+    activeAccount: null,
+    hint: "Bitbucket uses your own git credentials for clone/fetch/pull/push (all available here). Creating a repository or PR from VortSpec needs a Bitbucket app password — coming with the credential store; for now create the repo on bitbucket.org and push from Source Control."
+  };
+}
+const notYet = {
+  ok: false,
+  message: "Bitbucket repo/PR creation is coming soon (needs an app password). Push works today via Source Control."
+};
+async function createBitbucketRepo(_cwd, _opts) {
+  return notYet;
+}
+async function createBitbucketPR(_cwd, _opts) {
+  return notYet;
+}
+const github = {
+  id: "github",
+  authStatus: getGithubAuth,
+  switchAccount: switchGithubAccount,
+  createRepo: createGithubRepo,
+  createPR: createGithubPR
+};
+const gitlab = {
+  id: "gitlab",
+  authStatus: getGitlabAuth,
+  switchAccount: switchGitlabAccount,
+  createRepo: createGitlabRepo,
+  createPR: createGitlabMR
+};
+const bitbucket = {
+  id: "bitbucket",
+  authStatus: getBitbucketAuth,
+  switchAccount: async () => ({ ok: false, message: "Bitbucket account switching isn't supported yet." }),
+  createRepo: createBitbucketRepo,
+  createPR: createBitbucketPR
+};
+const REGISTRY = { github, gitlab, bitbucket };
+function providerFor(id) {
+  return REGISTRY[id];
+}
+function providerIdFromUrl(url) {
+  if (/(^|@|\/\/)([\w.-]*\.)?github\.com[/:]/i.test(url) || /github\.com/i.test(url)) return "github";
+  if (/gitlab\.com/i.test(url) || /(^|\/\/)gitlab\./i.test(url)) return "gitlab";
+  if (/bitbucket\.org/i.test(url) || /(^|\/\/)bitbucket\./i.test(url)) return "bitbucket";
+  return null;
+}
+async function resolveProvider(cwd) {
+  const remotes = await getRemotes(cwd);
+  const origin = remotes.find((r) => r.name === "origin")?.url;
+  const id = origin ? providerIdFromUrl(origin) : null;
+  return providerFor(id ?? "github");
+}
+function providerAuth(cwd) {
+  return resolveProvider(cwd).then((p) => p.authStatus());
+}
+function providerSwitchAccount(cwd, account) {
+  return resolveProvider(cwd).then((p) => p.switchAccount(account));
+}
+function providerCreateRepo(cwd, opts) {
+  const p = opts.providerId ? providerFor(opts.providerId) : null;
+  return (p ? Promise.resolve(p) : resolveProvider(cwd)).then(
+    (prov) => prov.createRepo(cwd, { name: opts.name, visibility: opts.visibility, description: opts.description })
+  );
+}
+function providerCreatePR(cwd, opts) {
+  return resolveProvider(cwd).then((p) => p.createPR(cwd, opts));
+}
+async function providerPublish(cwd, opts) {
+  const created = await createBranch(cwd, opts.branch);
+  if (!created.ok) {
+    const sw = await checkout(cwd, opts.branch);
+    if (!sw.ok) return { ok: false, message: `Could not create or switch to ${opts.branch}.` };
+  }
+  const staged = await stage(cwd, ["."]);
+  if (!staged.ok) return staged;
+  const committed = await commit(cwd, opts.title);
+  const pushed = await push$1(cwd);
+  if (!pushed.ok) return pushed;
+  const provider = await resolveProvider(cwd);
+  const pr = await provider.createPR(cwd, { title: opts.title, body: opts.body });
+  if (!pr.ok) return { ok: false, message: `Pushed ${opts.branch}, but opening the PR/MR failed: ${pr.message}` };
+  return {
+    ok: true,
+    message: committed.ok ? `Published to ${opts.branch} and opened a PR/MR.` : `Pushed ${opts.branch} and opened a PR/MR.`,
+    url: pr.url
+  };
+}
+function buildCreateIssueArgs(opts) {
+  const args = ["issue", "create", "-t", opts.type, "-p", opts.project, "-s", opts.summary, "--no-input"];
+  if (opts.description) args.push("-b", opts.description);
+  return args;
+}
+const ISSUE_KEY = /\b([A-Z][A-Z0-9]+-\d+)\b/;
+function parseIssueRef(text) {
+  const url = /https?:\/\/\S+\/browse\/[A-Z][A-Z0-9]+-\d+/.exec(text)?.[0]?.replace(/[.,)]+$/, "") ?? null;
+  const key = (url ? ISSUE_KEY.exec(url) : ISSUE_KEY.exec(text))?.[1] ?? null;
+  return { key, url };
+}
+function parseProjects(text) {
+  const out = [];
+  for (const line of text.split("\n")) {
+    const t = line.trim();
+    if (!t) continue;
+    const m = /^([A-Z][A-Z0-9]+)[\s\t]+(.+?)\s*$/.exec(t);
+    if (m) out.push({ key: m[1], name: m[2].trim() });
+  }
+  return out;
+}
+function parseAccount(text) {
+  const email = /[\w.+-]+@[\w-]+\.[\w.-]+/.exec(text);
+  return email ? email[0] : null;
+}
+function parseIssueStatus(text) {
+  const m = /status[:\s]+([A-Za-z][A-Za-z \-]*)/i.exec(text);
+  return m ? m[1].trim() : null;
+}
+function installCommandFor(os, hasBrew) {
+  if (os === "darwin" && hasBrew) return "brew install ankitpokhrel/jira-cli/jira-cli";
+  if (hasBrew) return "brew install ankitpokhrel/jira-cli/jira-cli";
+  return null;
+}
+async function jira(args) {
+  const r = await execFileSafe("jira", args, { timeoutMs: 3e4 });
+  return { ok: !r.spawnError && r.code === 0, out: `${r.stdout}
+${r.stderr}` };
+}
+async function getJiraAuth() {
+  const ver = await execFileSafe("jira", ["version"], { timeoutMs: 8e3 });
+  const brew = await execFileSafe("brew", ["--version"], { timeoutMs: 6e3 });
+  const hasBrew = !brew.spawnError;
+  const installCommand = installCommandFor(platform(), hasBrew);
+  if (ver.spawnError) {
+    return {
+      provider: "jira",
+      cliInstalled: false,
+      configured: false,
+      account: null,
+      sites: [],
+      installCommand,
+      hint: installCommand ? "The Jira CLI isn't installed. VortSpec can install it for you (with your permission), then run `jira init` to sign in." : "Install the Jira CLI (ankitpokhrel/jira-cli) and run `jira init`, then click Connect again."
+    };
+  }
+  const me = await execFileSafe("jira", ["me"], { timeoutMs: 1e4 });
+  const account = me.spawnError || me.code !== 0 ? null : parseAccount(`${me.stdout}
+${me.stderr}`);
+  return {
+    provider: "jira",
+    cliInstalled: true,
+    configured: Boolean(account),
+    account,
+    sites: account ? [account] : [],
+    installCommand: null,
+    hint: account ? null : "The Jira CLI is installed but not signed in. Run `jira init` in your terminal, then click Connect again."
+  };
+}
+async function installJira() {
+  const brew = await execFileSafe("brew", ["--version"], { timeoutMs: 6e3 });
+  if (brew.spawnError) {
+    return { ok: false, message: "Homebrew isn't available. Install the Jira CLI from ankitpokhrel/jira-cli, then Connect." };
+  }
+  const r = await execFileSafe("brew", ["install", "ankitpokhrel/jira-cli/jira-cli"], { timeoutMs: 3e5 });
+  if (r.spawnError || r.code !== 0) {
+    return { ok: false, message: (r.stderr || r.stdout).trim().slice(0, 240) || "Install failed." };
+  }
+  return { ok: true, message: "Installed the Jira CLI. Now run `jira init` in your terminal to sign in, then Connect." };
+}
+async function listJiraProjects() {
+  const r = await jira(["project", "list", "--plain", "--no-headers", "--columns", "key,name"]);
+  return r.ok ? parseProjects(r.out) : [];
+}
+async function createJiraIssue(opts) {
+  const r = await jira(buildCreateIssueArgs(opts));
+  if (!r.ok) return { ok: false, message: r.out.trim().slice(0, 240) || "Could not create the issue." };
+  const { key, url } = parseIssueRef(r.out);
+  return { ok: true, message: key ? `Created ${key}.` : "Created the issue.", key, url };
+}
+async function getJiraIssue(key) {
+  const r = await jira(["issue", "view", key, "--plain"]);
+  return {
+    key,
+    url: null,
+    summary: null,
+    status: r.ok ? parseIssueStatus(r.out) : null
+  };
+}
+function linksPath(cwd) {
+  return join(cwd, ".vortspec", "jira-links.json");
+}
+async function readLinks(cwd) {
+  const raw = await readFile$1(linksPath(cwd), "utf8").catch(() => null);
+  if (!raw) return {};
+  try {
+    const parsed = issueLinksSchema.safeParse(JSON.parse(raw));
+    return parsed.success ? parsed.data : {};
+  } catch {
+    return {};
+  }
+}
+async function linkIssue(cwd, ref, key) {
+  const links = await readLinks(cwd);
+  links[ref] = key;
+  try {
+    await mkdir(join(cwd, ".vortspec"), { recursive: true });
+    await writeFile$1(linksPath(cwd), JSON.stringify(links, null, 2), "utf8");
+  } catch {
+  }
+}
+async function createIssueFromSpec(req) {
+  const body = await readFile$1(join(req.projectPath, req.specPath), "utf8").catch(() => null);
+  if (body === null) return { ok: false, message: `Couldn't read the spec at ${req.specPath}.` };
+  const summary = `${req.ref} — ${req.type.toLowerCase()} from VortSpec spec`;
+  const created = await createJiraIssue({
+    project: req.project,
+    type: req.type,
+    summary,
+    description: body.slice(0, 3e4)
+  });
+  if (created.ok && created.key) await linkIssue(req.projectPath, req.ref, created.key);
+  return created;
+}
 function profilePath() {
   return join(app.getPath("userData"), "profile.json");
 }
 async function readProfile() {
   try {
-    const raw = await readFile(profilePath(), "utf8");
+    const raw = await readFile$1(profilePath(), "utf8");
     const parsed = profileSchema.safeParse(JSON.parse(raw));
     return parsed.success ? parsed.data : EMPTY_PROFILE;
   } catch {
@@ -2223,7 +3137,7 @@ async function readProfile() {
 async function saveProfile(profile) {
   const next = profileSchema.parse(profile);
   await mkdir(app.getPath("userData"), { recursive: true });
-  await writeFile(profilePath(), JSON.stringify(next, null, 2), "utf8");
+  await writeFile$1(profilePath(), JSON.stringify(next, null, 2), "utf8");
   return next;
 }
 function vortspecDir(projectPath) {
@@ -2245,7 +3159,7 @@ function initialState() {
 }
 async function readState(projectPath) {
   try {
-    const raw = await readFile(flowFile(projectPath), "utf8");
+    const raw = await readFile$1(flowFile(projectPath), "utf8");
     const parsed = flowStateSchema.safeParse(JSON.parse(raw));
     if (parsed.success) return reconcile(parsed.data);
   } catch {
@@ -2270,7 +3184,7 @@ function reconcile(state) {
 }
 async function writeState(projectPath, state) {
   await mkdir(vortspecDir(projectPath), { recursive: true });
-  await writeFile(flowFile(projectPath), JSON.stringify(state, null, 2), "utf8");
+  await writeFile$1(flowFile(projectPath), JSON.stringify(state, null, 2), "utf8");
 }
 function withFlow(state) {
   return { definitions: DEFAULT_FLOW, state };
@@ -2326,7 +3240,7 @@ async function requestChanges(projectPath, stageId, notes) {
 async function saveIntake(projectPath, content) {
   const sddeDir = join(projectPath, ".sdd-de");
   await mkdir(sddeDir, { recursive: true });
-  await writeFile(join(sddeDir, "brief.md"), content, "utf8");
+  await writeFile$1(join(sddeDir, "brief.md"), content, "utf8");
   return approveStage(projectPath, "brief");
 }
 async function findLatestArtifact(projectPath, suffix) {
@@ -2352,7 +3266,7 @@ async function findLatestArtifact(projectPath, suffix) {
   await walk(specsRoot);
   if (!best) return null;
   const chosen = best;
-  const content = await readFile(chosen.path, "utf8");
+  const content = await readFile$1(chosen.path, "utf8");
   return { path: chosen.path.slice(projectPath.length + 1), content };
 }
 async function completeInput(projectPath, stageId) {
@@ -2360,7 +3274,7 @@ async function completeInput(projectPath, stageId) {
 }
 async function readArtifact(projectPath, relPath) {
   try {
-    return await readFile(join(projectPath, relPath), "utf8");
+    return await readFile$1(join(projectPath, relPath), "utf8");
   } catch {
     return null;
   }
@@ -2379,23 +3293,23 @@ function detectManifestFormat(content) {
 }
 async function getManifest(projectPath) {
   for (const rel of CANDIDATES) {
-    const content = await readFile(join(projectPath, rel), "utf8").catch(() => null);
+    const content = await readFile$1(join(projectPath, rel), "utf8").catch(() => null);
     if (content !== null) return { path: rel, content, exists: true, format: detectManifestFormat(content) };
   }
   return { path: DEFAULT_TARGET, content: "", exists: false, format: "empty" };
 }
 async function resolveTarget(projectPath) {
   for (const rel of CANDIDATES) {
-    const ok = await readFile(join(projectPath, rel), "utf8").then(
+    const ok2 = await readFile$1(join(projectPath, rel), "utf8").then(
       () => true,
       () => false
     );
-    if (ok) return rel;
+    if (ok2) return rel;
   }
   return DEFAULT_TARGET;
 }
 async function readIndex(projectPath) {
-  const raw = await readFile(join(projectPath, INDEX_FILE), "utf8").catch(() => null);
+  const raw = await readFile$1(join(projectPath, INDEX_FILE), "utf8").catch(() => null);
   if (!raw) return [];
   try {
     const parsed = JSON.parse(raw);
@@ -2407,7 +3321,7 @@ async function readIndex(projectPath) {
 async function writeIndex(projectPath, metas) {
   const path = join(projectPath, INDEX_FILE);
   await mkdir(join(projectPath, VERSIONS_DIR), { recursive: true }).catch(() => void 0);
-  await writeFile(path, `${JSON.stringify(metas, null, 2)}
+  await writeFile$1(path, `${JSON.stringify(metas, null, 2)}
 `, "utf8").catch(() => void 0);
 }
 async function snapshotManifest(projectPath, opts) {
@@ -2415,7 +3329,7 @@ async function snapshotManifest(projectPath, opts) {
   if (!current.exists || !current.content) return null;
   const id = opts.timestamp.replace(/[:.]/g, "-");
   await mkdir(join(projectPath, VERSIONS_DIR), { recursive: true }).catch(() => void 0);
-  await writeFile(join(projectPath, VERSIONS_DIR, `${id}.md`), current.content, "utf8").catch(
+  await writeFile$1(join(projectPath, VERSIONS_DIR, `${id}.md`), current.content, "utf8").catch(
     () => void 0
   );
   const meta = {
@@ -2436,7 +3350,7 @@ async function saveManifest(projectPath, content, timestamp) {
   const target = await resolveTarget(projectPath);
   const abs = join(projectPath, target);
   await mkdir(dirname(abs), { recursive: true }).catch(() => void 0);
-  await writeFile(abs, content, "utf8");
+  await writeFile$1(abs, content, "utf8");
   return { path: target, content, exists: true };
 }
 async function listManifestVersions(projectPath) {
@@ -2453,14 +3367,14 @@ async function listManifestVersions(projectPath) {
   return { versions };
 }
 async function readManifestVersion(projectPath, id) {
-  return readFile(join(projectPath, VERSIONS_DIR, `${id}.md`), "utf8").catch(() => null);
+  return readFile$1(join(projectPath, VERSIONS_DIR, `${id}.md`), "utf8").catch(() => null);
 }
 async function restoreManifestVersion(projectPath, id, timestamp) {
   const content = await readManifestVersion(projectPath, id);
   if (content === null) return getManifest(projectPath);
   await snapshotManifest(projectPath, { reason: "restore", timestamp });
   const target = await resolveTarget(projectPath);
-  await writeFile(join(projectPath, target), content, "utf8");
+  await writeFile$1(join(projectPath, target), content, "utf8");
   return { path: target, content, exists: true };
 }
 async function currentFlowRun(projectPath) {
@@ -2477,24 +3391,24 @@ async function currentFlowRun(projectPath) {
   const foundationReady = tokenCount > 0 || total > 0;
   const manifestApproved = flow.state.stages.find((s) => s.id === "design-manifest")?.status === "approved";
   const outcome = "in-progress";
-  const stage = (name, decision, status) => ({ name, decision, status });
+  const stage2 = (name, decision, status) => ({ name, decision, status });
   const stages = [
-    stage(
+    stage2(
       "Foundation",
       foundationReady ? `${tokenCount} tokens · ${total} detected` : "not set up",
       foundationReady ? "done" : "pending"
     ),
-    stage(
+    stage2(
       "Components",
       total > 0 ? `${built}/${total} built` : "none yet",
       built === 0 ? "pending" : built < total ? "review" : "done"
     ),
-    stage(
+    stage2(
       "Verification",
       built > 0 ? `${verified}/${built} verified` : "none yet",
       verified === 0 ? "pending" : verified < built ? "review" : "done"
     ),
-    stage(
+    stage2(
       "Design manifest",
       manifestApproved ? "approved" : manifest.exists ? "generated" : "not generated",
       manifestApproved ? "done" : manifest.exists ? "review" : "pending"
@@ -2526,7 +3440,7 @@ async function recordedRuns(projectPath) {
   }
   const runs2 = [];
   for (const name of entries.filter((n) => n.endsWith(".json"))) {
-    const raw = await readFile(join(dir, name), "utf8").catch(() => null);
+    const raw = await readFile$1(join(dir, name), "utf8").catch(() => null);
     if (!raw) continue;
     try {
       const parsed = runSummarySchema.safeParse(JSON.parse(raw));
@@ -2604,8 +3518,9 @@ async function checkForUpdate() {
   }
 }
 const servers = /* @__PURE__ */ new Map();
+const keyOf = (projectPath, kind) => `${projectPath}::${kind}`;
 async function readScripts(projectPath) {
-  const pkg = await readFile(join(projectPath, "package.json"), "utf8").catch(() => null);
+  const pkg = await readFile$1(join(projectPath, "package.json"), "utf8").catch(() => null);
   if (!pkg) return {};
   try {
     return JSON.parse(pkg).scripts ?? {};
@@ -2613,9 +3528,10 @@ async function readScripts(projectPath) {
     return {};
   }
 }
-async function detectScript(projectPath) {
+async function detectScript(projectPath, kind) {
   const scripts = await readScripts(projectPath);
-  for (const name of ["storybook", "dev", "start", "preview"]) {
+  const order = kind === "app" ? ["dev", "start", "preview"] : ["storybook", "dev", "start", "preview"];
+  for (const name of order) {
     if (typeof scripts[name] === "string") return name;
   }
   return null;
@@ -2626,7 +3542,7 @@ async function getPreviewInfo(projectPath) {
   const hasConfig = existsSync(join(projectPath, ".storybook")) || existsSync(join(projectPath, ".storybook/main.ts"));
   return {
     hasStorybook: hasStorybookScript && hasConfig,
-    script: await detectScript(projectPath)
+    script: await detectScript(projectPath, "storybook")
   };
 }
 function detectPackageManager(projectPath) {
@@ -2644,24 +3560,25 @@ function urlFrom(text) {
   if (!m) return null;
   return m[1].replace("0.0.0.0", "localhost").replace(/\/+$/, "") + "/";
 }
-function push(server, projectPath) {
+function push(server, projectPath, kind) {
   if (!server.sender.isDestroyed()) {
-    server.sender.send(DEV_SERVER_UPDATE_CHANNEL, { projectPath, status: server.status });
+    server.sender.send(DEV_SERVER_UPDATE_CHANNEL, { projectPath, kind, status: server.status });
   }
 }
-async function startDevServer(sender, projectPath) {
-  const existing = servers.get(projectPath);
+async function startServer(sender, projectPath, kind) {
+  const key = keyOf(projectPath, kind);
+  const existing = servers.get(key);
   if (existing && (existing.status.state === "starting" || existing.status.state === "running")) {
     existing.sender = sender;
     return existing.status;
   }
-  const script = await detectScript(projectPath);
+  const script = await detectScript(projectPath, kind);
   if (!script) {
     return {
       state: "no-script",
       url: null,
       script: null,
-      message: "No dev / storybook / start script found in package.json."
+      message: kind === "app" ? "No dev / start / preview script found in package.json to run the app." : "No dev / storybook / start script found in package.json."
     };
   }
   const pm = detectPackageManager(projectPath);
@@ -2677,20 +3594,20 @@ async function startDevServer(sender, projectPath) {
     status: { state: "starting", url: null, script, message: null },
     sender
   };
-  servers.set(projectPath, server);
+  servers.set(key, server);
   const onData = (buf) => {
     if (server.status.state !== "starting") return;
     const url = urlFrom(buf.toString());
     if (url) {
       server.status = { state: "running", url, script, message: null };
-      push(server, projectPath);
+      push(server, projectPath, kind);
     }
   };
   child.stdout?.on("data", onData);
   child.stderr?.on("data", onData);
   child.on("error", (err) => {
     server.status = { state: "error", url: null, script, message: err.message };
-    push(server, projectPath);
+    push(server, projectPath, kind);
   });
   child.on("exit", (code) => {
     const clean = server.status.state === "running" && code === null;
@@ -2700,11 +3617,17 @@ async function startDevServer(sender, projectPath) {
       script,
       message: clean ? null : code ? `Preview process exited with code ${code}.` : null
     };
-    push(server, projectPath);
+    push(server, projectPath, kind);
   });
-  push(server, projectPath);
+  push(server, projectPath, kind);
   return server.status;
 }
+const startDevServer = (sender, projectPath) => startServer(sender, projectPath, "storybook");
+const startAppServer = (sender, projectPath) => startServer(sender, projectPath, "app");
+const stopDevServer = (projectPath) => stopServer(projectPath, "storybook");
+const stopAppServer = (projectPath) => stopServer(projectPath, "app");
+const getDevServerStatus = (projectPath) => statusOf(projectPath, "storybook");
+const getAppServerStatus = (projectPath) => statusOf(projectPath, "app");
 async function getStorybookIndex(url) {
   const base = url.replace(/\/+$/, "");
   for (const path of ["/index.json", "/stories.json"]) {
@@ -2726,8 +3649,8 @@ async function getStorybookIndex(url) {
   }
   return [];
 }
-function stopDevServer(projectPath) {
-  const server = servers.get(projectPath);
+function stopServer(projectPath, kind) {
+  const server = servers.get(keyOf(projectPath, kind));
   if (!server) return;
   server.child.kill("SIGTERM");
   const child = server.child;
@@ -2735,8 +3658,8 @@ function stopDevServer(projectPath) {
     if (!child.killed) child.kill("SIGKILL");
   }, 4e3);
 }
-function getDevServerStatus(projectPath) {
-  return servers.get(projectPath)?.status ?? {
+function statusOf(projectPath, kind) {
+  return servers.get(keyOf(projectPath, kind))?.status ?? {
     state: "stopped",
     url: null,
     script: null,
@@ -2764,6 +3687,34 @@ const handlers = {
   }),
   "workspace:refreshProject": ((path) => refreshProject(path)),
   "workspace:createProject": ((req) => createProject(req.path, req.answers)),
+  "workspace:listDir": ((r) => listDir(r.projectPath, r.relPath)),
+  "workspace:readFile": ((r) => readFile(r.projectPath, r.relPath)),
+  "workspace:writeFile": ((r) => writeFile(r.projectPath, r.relPath, r.content)),
+  "workspace:watchStart": ((projectPath, sender) => {
+    startWatch(sender, projectPath);
+    return void 0;
+  }),
+  "workspace:watchStop": ((projectPath) => {
+    stopWatch(projectPath);
+    return void 0;
+  }),
+  "git:fileAtHead": ((r) => getFileAtHead(r.projectPath, r.relPath)),
+  "terminal:create": ((r, sender) => {
+    createSession(sender, { id: r.id, cwd: r.projectPath, cols: r.cols, rows: r.rows });
+    return void 0;
+  }),
+  "terminal:write": ((r) => {
+    writeSession(r.id, r.data);
+    return void 0;
+  }),
+  "terminal:resize": ((r) => {
+    resizeSession(r.id, r.cols, r.rows);
+    return void 0;
+  }),
+  "terminal:kill": ((id) => {
+    killSession(id);
+    return void 0;
+  }),
   "toolkit:status": ((path) => getToolkitStatus(path)),
   "toolkit:install": ((path) => installToolkit(path)),
   "agent:startRun": ((opts, sender) => startRun(sender, opts)),
@@ -2774,6 +3725,32 @@ const handlers = {
   "agent:hasActiveRun": ((projectPath) => hasActiveRun(projectPath)),
   "agent:lastRun": ((projectPath) => getLastRun(projectPath)),
   "usage:get": (() => getUsage()),
+  "git:status": ((p) => getStatus(p)),
+  "git:branches": ((p) => getBranches(p)),
+  "git:remotes": ((p) => getRemotes(p)),
+  "git:log": ((p) => getLog(p)),
+  "git:stage": ((r) => stage(r.projectPath, r.paths)),
+  "git:unstage": ((r) => unstage(r.projectPath, r.paths)),
+  "git:commit": ((r) => commit(r.projectPath, r.message)),
+  "git:checkout": ((r) => checkout(r.projectPath, r.name)),
+  "git:createBranch": ((r) => createBranch(r.projectPath, r.name)),
+  "git:fetch": ((p) => fetch$1(p)),
+  "git:pull": ((p) => pull(p)),
+  "git:push": ((p) => push$1(p)),
+  "git:init": ((p) => init(p)),
+  "provider:auth": ((projectPath) => providerAuth(projectPath)),
+  "provider:switchAccount": ((r) => providerSwitchAccount(r.projectPath, r.account)),
+  "provider:createRepo": ((r) => providerCreateRepo(r.projectPath, { providerId: r.providerId, name: r.name, visibility: r.visibility, description: r.description })),
+  "provider:createPR": ((r) => providerCreatePR(r.projectPath, { base: r.base, title: r.title, body: r.body })),
+  "git:import": ((r) => importInto(r.projectPath, r.url, r.branch)),
+  "provider:publish": ((r) => providerPublish(r.projectPath, { branch: r.branch, title: r.title, body: r.body })),
+  "task:auth": (() => getJiraAuth()),
+  "task:install": (() => installJira()),
+  "task:projects": (() => listJiraProjects()),
+  "task:createIssue": ((r) => createJiraIssue(r)),
+  "task:createFromSpec": ((r) => createIssueFromSpec(r)),
+  "task:links": ((projectPath) => readLinks(projectPath)),
+  "task:issueStatus": ((key) => getJiraIssue(key)),
   "profile:get": (() => readProfile()),
   "profile:save": ((profile) => saveProfile(profile)),
   "flow:get": ((projectPath) => getFlow(projectPath)),
@@ -2799,6 +3776,12 @@ const handlers = {
     return void 0;
   }),
   "devserver:status": ((projectPath) => getDevServerStatus(projectPath)),
+  "appserver:start": ((projectPath, sender) => startAppServer(sender, projectPath)),
+  "appserver:stop": ((projectPath) => {
+    stopAppServer(projectPath);
+    return void 0;
+  }),
+  "appserver:status": ((projectPath) => getAppServerStatus(projectPath)),
   "devserver:previewInfo": ((projectPath) => getPreviewInfo(projectPath)),
   "devserver:storybookIndex": ((url) => getStorybookIndex(url)),
   "flow:setPublishTarget": ((req) => setPublishTarget(req.projectPath, req.repoUrl)),
@@ -2905,9 +3888,11 @@ app.whenReady().then(async () => {
 });
 app.on("before-quit", () => {
   stopAllDevServers();
+  killAllSessions();
 });
 app.on("window-all-closed", () => {
   stopAllDevServers();
+  killAllSessions();
   if (process.platform !== "darwin") {
     app.quit();
   }

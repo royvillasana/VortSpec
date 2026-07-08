@@ -100,10 +100,41 @@ const devServerStatusSchema = z.object({
   /** A human message for error / no-script states. */
   message: z.string().nullable()
 });
+const serverKindSchema = z.enum(["storybook", "app"]);
 const DEV_SERVER_UPDATE_CHANNEL = "devserver:update";
 z.object({
   projectPath: z.string(),
+  kind: serverKindSchema.default("storybook"),
   status: devServerStatusSchema
+});
+z.object({
+  name: z.string(),
+  /** path relative to the workspace root, using "/" separators */
+  path: z.string(),
+  type: z.enum(["file", "dir"])
+});
+z.object({
+  path: z.string(),
+  content: z.string(),
+  /** true when the file was binary or too large to read as text */
+  truncated: z.boolean()
+});
+z.object({
+  ok: z.boolean(),
+  message: z.string()
+});
+const WORKSPACE_CHANGE_CHANNEL = "workspace:change";
+z.object({
+  projectPath: z.string(),
+  path: z.string().nullable(),
+  kind: z.enum(["add", "change", "unlink", "refresh"])
+});
+const TERMINAL_DATA_CHANNEL = "terminal:data";
+z.object({
+  id: z.string(),
+  data: z.string(),
+  /** set on the final event when the shell process exits */
+  exit: z.number().nullable().optional()
 });
 function invoke(channel, request) {
   return ipcRenderer.invoke(channel, request);
@@ -135,6 +166,32 @@ const api = {
   hasActiveRun: (projectPath) => invoke("agent:hasActiveRun", projectPath),
   lastRun: (projectPath) => invoke("agent:lastRun", projectPath),
   getUsage: () => invoke("usage:get", void 0),
+  gitStatus: (projectPath) => invoke("git:status", projectPath),
+  gitBranches: (projectPath) => invoke("git:branches", projectPath),
+  gitRemotes: (projectPath) => invoke("git:remotes", projectPath),
+  gitLog: (projectPath) => invoke("git:log", projectPath),
+  gitStage: (projectPath, paths) => invoke("git:stage", { projectPath, paths }),
+  gitUnstage: (projectPath, paths) => invoke("git:unstage", { projectPath, paths }),
+  gitCommit: (projectPath, message) => invoke("git:commit", { projectPath, message }),
+  gitCheckout: (projectPath, name) => invoke("git:checkout", { projectPath, name }),
+  gitCreateBranch: (projectPath, name) => invoke("git:createBranch", { projectPath, name }),
+  gitFetch: (projectPath) => invoke("git:fetch", projectPath),
+  gitPull: (projectPath) => invoke("git:pull", projectPath),
+  gitPush: (projectPath) => invoke("git:push", projectPath),
+  gitInit: (projectPath) => invoke("git:init", projectPath),
+  providerAuth: (projectPath) => invoke("provider:auth", projectPath),
+  providerSwitchAccount: (projectPath, account) => invoke("provider:switchAccount", { projectPath, account }),
+  providerCreateRepo: (req) => invoke("provider:createRepo", req),
+  providerCreatePR: (req) => invoke("provider:createPR", req),
+  gitImport: (req) => invoke("git:import", req),
+  providerPublish: (req) => invoke("provider:publish", req),
+  taskAuth: () => invoke("task:auth", void 0),
+  taskInstall: () => invoke("task:install", void 0),
+  taskProjects: () => invoke("task:projects", void 0),
+  taskCreateIssue: (req) => invoke("task:createIssue", req),
+  taskCreateFromSpec: (req) => invoke("task:createFromSpec", req),
+  taskLinks: (projectPath) => invoke("task:links", projectPath),
+  taskIssueStatus: (key) => invoke("task:issueStatus", key),
   getProfile: () => invoke("profile:get", void 0),
   saveProfile: (profile) => invoke("profile:save", profile),
   onAgentEvent: (callback) => subscribe(AGENT_EVENT_CHANNEL, callback),
@@ -155,9 +212,26 @@ const api = {
   startDevServer: (projectPath) => invoke("devserver:start", projectPath),
   stopDevServer: (projectPath) => invoke("devserver:stop", projectPath),
   devServerStatus: (projectPath) => invoke("devserver:status", projectPath),
+  startAppServer: (projectPath) => invoke("appserver:start", projectPath),
+  stopAppServer: (projectPath) => invoke("appserver:stop", projectPath),
+  appServerStatus: (projectPath) => invoke("appserver:status", projectPath),
   previewInfo: (projectPath) => invoke("devserver:previewInfo", projectPath),
   storybookIndex: (url) => invoke("devserver:storybookIndex", url),
   onDevServerUpdate: (callback) => subscribe(DEV_SERVER_UPDATE_CHANNEL, callback),
+  // Workspace filesystem (IDE)
+  listDir: (projectPath, relPath) => invoke("workspace:listDir", { projectPath, relPath }),
+  readFile: (projectPath, relPath) => invoke("workspace:readFile", { projectPath, relPath }),
+  writeFile: (projectPath, relPath, content) => invoke("workspace:writeFile", { projectPath, relPath, content }),
+  watchWorkspace: (projectPath) => invoke("workspace:watchStart", projectPath),
+  unwatchWorkspace: (projectPath) => invoke("workspace:watchStop", projectPath),
+  fileAtHead: (projectPath, relPath) => invoke("git:fileAtHead", { projectPath, relPath }),
+  onWorkspaceChange: (callback) => subscribe(WORKSPACE_CHANGE_CHANNEL, callback),
+  // Integrated terminal
+  terminalCreate: (req) => invoke("terminal:create", req),
+  terminalWrite: (id, data) => invoke("terminal:write", { id, data }),
+  terminalResize: (id, cols, rows) => invoke("terminal:resize", { id, cols, rows }),
+  terminalKill: (id) => invoke("terminal:kill", id),
+  onTerminalData: (callback) => subscribe(TERMINAL_DATA_CHANNEL, callback),
   setPublishTarget: (projectPath, repoUrl) => invoke("flow:setPublishTarget", { projectPath, repoUrl }),
   readArtifact: (projectPath, relPath) => invoke("artifact:read", { projectPath, relPath }),
   findLatestArtifact: (projectPath, suffix) => invoke("artifact:findLatest", { projectPath, suffix }),

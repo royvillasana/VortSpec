@@ -43,6 +43,8 @@ export {
   fsWriteResultSchema,
 } from "./fs";
 export type { FsEntry, FsFile, FsWriteResult, WorkspaceChange } from "./fs";
+export { TERMINAL_DATA_CHANNEL, terminalDataSchema } from "./terminal";
+export type { TerminalData } from "./terminal";
 import { setupAnswersSchema, projectConfigSchema } from "./setup";
 import {
   inspectorTokensResultSchema,
@@ -238,6 +240,24 @@ export const ipcContract = {
     request: z.object({ projectPath: z.string(), relPath: z.string() }),
     response: z.string().nullable(),
   },
+  "terminal:create": {
+    request: z.object({
+      id: z.string(),
+      projectPath: z.string(),
+      cols: z.number().optional(),
+      rows: z.number().optional(),
+    }),
+    response: z.void(),
+  },
+  "terminal:write": {
+    request: z.object({ id: z.string(), data: z.string() }),
+    response: z.void(),
+  },
+  "terminal:resize": {
+    request: z.object({ id: z.string(), cols: z.number(), rows: z.number() }),
+    response: z.void(),
+  },
+  "terminal:kill": { request: z.string(), response: z.void() },
 
   "toolkit:status": { request: z.string(), response: toolkitStatusSchema },
   "toolkit:install": { request: z.string(), response: toolkitStatusSchema },

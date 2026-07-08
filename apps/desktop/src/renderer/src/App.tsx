@@ -20,6 +20,7 @@ import { Intake } from "./views/Intake";
 import { NewProjectWizard } from "./views/NewProjectWizard";
 import { Logo } from "@vortspec/ui/Logo";
 import { AssistantDock } from "@vortspec/ui/AssistantDock";
+import { Terminal } from "@vortspec/ui/Terminal";
 
 type View = "env" | "dashboard" | "profile";
 
@@ -95,6 +96,7 @@ export default function App(): React.JSX.Element {
   >("flow");
   const [loading, setLoading] = useState(true);
   const [chatOpen, setChatOpen] = useState(false);
+  const [terminalOpen, setTerminalOpen] = useState(false);
   const [update, setUpdate] = useState<UpdateInfo | null>(null);
   const [profile, setProfile] = useState<ProfileT | null>(null);
 
@@ -201,7 +203,8 @@ export default function App(): React.JSX.Element {
         />
       )}
       <div className="flex min-h-0 flex-1">
-      <main className="min-w-0 flex-1">
+      <div className="flex min-w-0 flex-1 flex-col">
+      <main className="min-h-0 flex-1 overflow-auto">
         {view === "env" ? (
           <EnvironmentCheck
             report={report}
@@ -373,6 +376,38 @@ export default function App(): React.JSX.Element {
           />
         )}
       </main>
+      {activeProject && terminalOpen && (
+        <section className="flex h-56 shrink-0 flex-col border-t border-vs-border-default bg-vs-bg-code">
+          <div className="flex items-center justify-between px-3 py-1 text-[11px] text-vs-text-muted">
+            <span className="font-semibold uppercase tracking-wide">Terminal</span>
+            <button
+              type="button"
+              aria-label="Close terminal"
+              onClick={() => setTerminalOpen(false)}
+              className="hover:text-vs-text-secondary"
+            >
+              ✕
+            </button>
+          </div>
+          <div className="min-h-0 flex-1">
+            <Terminal key={activeProject.path} project={activeProject} />
+          </div>
+        </section>
+      )}
+      {activeProject && (
+        <div className="flex h-6 shrink-0 items-center border-t border-vs-border-default bg-vs-bg-surface px-3 text-[11px] text-vs-text-muted">
+          <button
+            type="button"
+            aria-pressed={terminalOpen}
+            onClick={() => setTerminalOpen((v) => !v)}
+            className={`rounded px-2 py-0.5 ${terminalOpen ? "text-vs-text-primary" : "hover:text-vs-text-secondary"}`}
+            title="Toggle terminal"
+          >
+            Terminal
+          </button>
+        </div>
+      )}
+      </div>
       {activeProject && (
         // Width-animated wrapper: the dock stays mounted (session persists across
         // open/close) while the wrapper animates 0↔360px, so flexbox smoothly

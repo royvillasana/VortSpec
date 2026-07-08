@@ -8,6 +8,7 @@ import { access, mkdir, readFile as readFile$1, writeFile as writeFile$1, cp, co
 import { createHash, randomUUID } from "node:crypto";
 import { createRequire } from "node:module";
 import { watch, promises, existsSync } from "node:fs";
+import { spawn as spawn$1 } from "node-pty";
 import { EventEmitter } from "node:events";
 import { homedir, platform } from "node:os";
 import __cjs_mod__ from "node:module";
@@ -500,6 +501,13 @@ z.object({
   path: z.string().nullable(),
   kind: z.enum(["add", "change", "unlink", "refresh"])
 });
+const TERMINAL_DATA_CHANNEL = "terminal:data";
+z.object({
+  id: z.string(),
+  data: z.string(),
+  /** set on the final event when the shell process exits */
+  exit: z.number().nullable().optional()
+});
 const frameworkSchema = z.enum([
   "react",
   "next",
@@ -811,6 +819,24 @@ const ipcContract = {
     request: z.object({ projectPath: z.string(), relPath: z.string() }),
     response: z.string().nullable()
   },
+  "terminal:create": {
+    request: z.object({
+      id: z.string(),
+      projectPath: z.string(),
+      cols: z.number().optional(),
+      rows: z.number().optional()
+    }),
+    response: z.void()
+  },
+  "terminal:write": {
+    request: z.object({ id: z.string(), data: z.string() }),
+    response: z.void()
+  },
+  "terminal:resize": {
+    request: z.object({ id: z.string(), cols: z.number(), rows: z.number() }),
+    response: z.void()
+  },
+  "terminal:kill": { request: z.string(), response: z.void() },
   "toolkit:status": { request: z.string(), response: toolkitStatusSchema },
   "toolkit:install": { request: z.string(), response: toolkitStatusSchema },
   "agent:startRun": {
@@ -1467,6 +1493,56 @@ function stopWatch(root) {
 function stopAllWatchers() {
   for (const w of watchers.values()) w.close();
   watchers.clear();
+}
+function buildShell(platform2 = process.platform, env = process.env) {
+  if (platform2 === "win32") return { file: env.COMSPEC || "powershell.exe", args: [] };
+  return { file: env.SHELL || "/bin/zsh", args: [] };
+}
+const sessions = /* @__PURE__ */ new Map();
+function createSession(sender, opts) {
+  if (sessions.has(opts.id)) return;
+  const { file, args } = buildShell();
+  const pty = spawn$1(file, args, {
+    name: "xterm-color",
+    cols: opts.cols ?? 80,
+    rows: opts.rows ?? 24,
+    cwd: opts.cwd,
+    env: process.env
+  });
+  pty.onData((data) => sender.send(TERMINAL_DATA_CHANNEL, { id: opts.id, data }));
+  pty.onExit(({ exitCode }) => {
+    sessions.delete(opts.id);
+    sender.send(TERMINAL_DATA_CHANNEL, { id: opts.id, data: "", exit: exitCode });
+  });
+  sessions.set(opts.id, pty);
+}
+function writeSession(id, data) {
+  sessions.get(id)?.write(data);
+}
+function resizeSession(id, cols, rows) {
+  try {
+    sessions.get(id)?.resize(Math.max(1, cols), Math.max(1, rows));
+  } catch {
+  }
+}
+function killSession(id) {
+  const pty = sessions.get(id);
+  if (pty) {
+    try {
+      pty.kill();
+    } catch {
+    }
+    sessions.delete(id);
+  }
+}
+function killAllSessions() {
+  for (const pty of sessions.values()) {
+    try {
+      pty.kill();
+    } catch {
+    }
+  }
+  sessions.clear();
 }
 const KEY_MAP = {
   design_source: "designSource",
@@ -3627,6 +3703,22 @@ const handlers = {
     return void 0;
   }),
   "git:fileAtHead": ((r) => getFileAtHead(r.projectPath, r.relPath)),
+  "terminal:create": ((r, sender) => {
+    createSession(sender, { id: r.id, cwd: r.projectPath, cols: r.cols, rows: r.rows });
+    return void 0;
+  }),
+  "terminal:write": ((r) => {
+    writeSession(r.id, r.data);
+    return void 0;
+  }),
+  "terminal:resize": ((r) => {
+    resizeSession(r.id, r.cols, r.rows);
+    return void 0;
+  }),
+  "terminal:kill": ((id) => {
+    killSession(id);
+    return void 0;
+  }),
   "toolkit:status": ((path) => getToolkitStatus(path)),
   "toolkit:install": ((path) => installToolkit(path)),
   "agent:startRun": ((opts, sender) => startRun(sender, opts)),
@@ -3800,10 +3892,12 @@ app.whenReady().then(async () => {
 app.on("before-quit", () => {
   stopAllDevServers();
   stopAllWatchers();
+  killAllSessions();
 });
 app.on("window-all-closed", () => {
   stopAllDevServers();
   stopAllWatchers();
+  killAllSessions();
   if (process.platform !== "darwin") {
     app.quit();
   }

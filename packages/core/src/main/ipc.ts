@@ -12,6 +12,7 @@ import {
 import { getToolkitStatus, installToolkit } from "./workspace/toolkit-manager";
 import { createProject } from "./workspace/setup-manager";
 import * as fsw from "./workspace/fs-workspace";
+import * as pty from "./terminal/pty-manager";
 import { readProjectConfig } from "./workspace/config-manager";
 import {
   getInspectorTokens,
@@ -121,6 +122,22 @@ const handlers: Record<IpcChannel, Handler> = {
   }) as Handler,
   "git:fileAtHead": ((r: { projectPath: string; relPath: string }) =>
     gitAdapter.getFileAtHead(r.projectPath, r.relPath)) as Handler,
+  "terminal:create": ((r: { id: string; projectPath: string; cols?: number; rows?: number }, sender: WebContents) => {
+    pty.createSession(sender, { id: r.id, cwd: r.projectPath, cols: r.cols, rows: r.rows });
+    return undefined;
+  }) as Handler,
+  "terminal:write": ((r: { id: string; data: string }) => {
+    pty.writeSession(r.id, r.data);
+    return undefined;
+  }) as Handler,
+  "terminal:resize": ((r: { id: string; cols: number; rows: number }) => {
+    pty.resizeSession(r.id, r.cols, r.rows);
+    return undefined;
+  }) as Handler,
+  "terminal:kill": ((id: string) => {
+    pty.killSession(id);
+    return undefined;
+  }) as Handler,
 
   "toolkit:status": ((path: string) => getToolkitStatus(path)) as Handler,
   "toolkit:install": ((path: string) => installToolkit(path)) as Handler,

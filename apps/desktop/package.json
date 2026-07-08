@@ -25,7 +25,8 @@
     "@royvillasana/sdd-de": "^1.8.4",
     "@vortspec/core": "workspace:*",
     "@vortspec/ui": "workspace:*",
-    "zod": "^3.24.1"
+    "zod": "^3.24.1",
+    "node-pty": "^1.0.0"
   },
   "devDependencies": {
     "@playwright/experimental-ct-react": "^1.61.1",
@@ -49,7 +50,8 @@
     "appId": "com.vortspec.desktop",
     "productName": "VortSpec",
     "asarUnpack": [
-      "**/node_modules/@royvillasana/sdd-de/**"
+      "**/node_modules/@royvillasana/sdd-de/**",
+      "**/node_modules/node-pty/**"
     ],
     "mac": {
       "category": "public.app-category.developer-tools",

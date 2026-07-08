@@ -129,6 +129,13 @@ z.object({
   path: z.string().nullable(),
   kind: z.enum(["add", "change", "unlink", "refresh"])
 });
+const TERMINAL_DATA_CHANNEL = "terminal:data";
+z.object({
+  id: z.string(),
+  data: z.string(),
+  /** set on the final event when the shell process exits */
+  exit: z.number().nullable().optional()
+});
 function invoke(channel, request) {
   return ipcRenderer.invoke(channel, request);
 }
@@ -219,6 +226,12 @@ const api = {
   unwatchWorkspace: (projectPath) => invoke("workspace:watchStop", projectPath),
   fileAtHead: (projectPath, relPath) => invoke("git:fileAtHead", { projectPath, relPath }),
   onWorkspaceChange: (callback) => subscribe(WORKSPACE_CHANGE_CHANNEL, callback),
+  // Integrated terminal
+  terminalCreate: (req) => invoke("terminal:create", req),
+  terminalWrite: (id, data) => invoke("terminal:write", { id, data }),
+  terminalResize: (id, cols, rows) => invoke("terminal:resize", { id, cols, rows }),
+  terminalKill: (id) => invoke("terminal:kill", id),
+  onTerminalData: (callback) => subscribe(TERMINAL_DATA_CHANNEL, callback),
   setPublishTarget: (projectPath, repoUrl) => invoke("flow:setPublishTarget", { projectPath, repoUrl }),
   readArtifact: (projectPath, relPath) => invoke("artifact:read", { projectPath, relPath }),
   findLatestArtifact: (projectPath, suffix) => invoke("artifact:findLatest", { projectPath, suffix }),

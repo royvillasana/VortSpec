@@ -1,7 +1,7 @@
 import { app, shell, BrowserWindow } from "electron";
 import { join } from "path";
 import { electronApp, optimizer, is } from "@electron-toolkit/utils";
-import { registerIpc, stopAllDevServers, fixGuiPath } from "@vortspec/core/main";
+import { registerIpc, stopAllDevServers, stopAllTerminals, fixGuiPath } from "@vortspec/core/main";
 
 /**
  * VortSpec desktop — main process (electron-vite).
@@ -74,10 +74,12 @@ app.whenReady().then(async () => {
 
 app.on("before-quit", () => {
   stopAllDevServers();
+  stopAllTerminals();
 });
 
 app.on("window-all-closed", () => {
   stopAllDevServers();
+  stopAllTerminals();
   if (process.platform !== "darwin") {
     app.quit();
   }

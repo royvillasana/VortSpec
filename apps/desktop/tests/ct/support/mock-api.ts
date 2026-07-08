@@ -72,6 +72,8 @@ export interface MockConfig {
   fsFiles?: Record<string, string>;
   /** HEAD contents for git diffs, keyed by relative path. */
   fsHead?: Record<string, string>;
+  /** Text emitted to onTerminalData shortly after a terminal session is created. */
+  terminalGreeting?: string;
 }
 
 const EMPTY_TOKENS: InspectorTokensResult = {
@@ -98,6 +100,7 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
   const eventSubs = new Set<(e: { runId: string; event: RunEvent }) => void>();
   const rawSubs = new Set<(e: { runId: string; line: string }) => void>();
   const devSubs = new Set<(e: { projectPath: string; status: DevServerStatus }) => void>();
+  const termSubs = new Set<(e: { id: string; data: string; exit?: number | null }) => void>();
   let runSeq = 0;
   // Flips true once a run's transcript has been replayed — lets getManifest
   // return the post-generation manifest (mirrors design-doc writing DESIGN.md).
@@ -238,6 +241,23 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
     unwatchWorkspace: async () => undefined,
     fileAtHead: async (_projectPath: string, relPath: string) => cfg.fsHead?.[relPath] ?? null,
     onWorkspaceChange: () => () => undefined,
+
+    // Integrated terminal
+    terminalCreate: async (req: { id: string }) => {
+      if (cfg.terminalGreeting) {
+        setTimeout(() => {
+          for (const cb of termSubs) cb({ id: req.id, data: cfg.terminalGreeting! });
+        }, 0);
+      }
+      return undefined;
+    },
+    terminalWrite: async () => undefined,
+    terminalResize: async () => undefined,
+    terminalKill: async () => undefined,
+    onTerminalData: (cb: (e: { id: string; data: string; exit?: number | null }) => void) => {
+      termSubs.add(cb);
+      return () => termSubs.delete(cb);
+    },
 
     setPublishTarget: async () => null,
     readArtifact: async () => null,

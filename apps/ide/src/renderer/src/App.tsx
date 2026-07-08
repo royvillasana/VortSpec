@@ -7,6 +7,7 @@ import { SourceControl } from "@vortspec/ui/SourceControl";
 import { Inspector } from "@vortspec/ui/Inspector";
 import { Tasks } from "@vortspec/ui/Tasks";
 import { DesignManifest } from "@vortspec/ui/DesignManifest";
+import { Terminal } from "@vortspec/ui/Terminal";
 import { ActivityBar, type ActivityKey } from "./components/ActivityBar";
 import { WorkspacePicker } from "./components/WorkspacePicker";
 import { CodeWorkspace } from "./components/CodeWorkspace";
@@ -25,6 +26,7 @@ export default function App(): JSX.Element {
   const [workspace, setWorkspace] = useState<Project | null>(null);
   const [activity, setActivity] = useState<ActivityKey>("explorer");
   const [chatOpen, setChatOpen] = useState(true);
+  const [terminalOpen, setTerminalOpen] = useState(false);
   const [userName, setUserName] = useState<string | undefined>(undefined);
 
   useEffect(() => {
@@ -32,6 +34,18 @@ export default function App(): JSX.Element {
       .getProfile()
       .then((p) => setUserName(p.name || undefined))
       .catch(() => undefined);
+  }, []);
+
+  // Ctrl-` toggles the integrated terminal (VS Code muscle memory).
+  useEffect(() => {
+    function onKey(e: KeyboardEvent): void {
+      if (e.ctrlKey && e.key === "`") {
+        e.preventDefault();
+        setTerminalOpen((v) => !v);
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
   }, []);
 
   if (!workspace) {
@@ -72,7 +86,8 @@ export default function App(): JSX.Element {
           onToggleChat={() => setChatOpen((v) => !v)}
         />
 
-        <main className="flex min-w-0 flex-1 overflow-hidden">
+        <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+          <main className="flex min-h-0 flex-1 overflow-hidden">
           {activity === "explorer" && <CodeWorkspace project={workspace} />}
           {activity === "source" && (
             <div className="min-w-0 flex-1 overflow-auto">
@@ -127,7 +142,27 @@ export default function App(): JSX.Element {
               />
             </div>
           )}
-        </main>
+          </main>
+
+          {terminalOpen && (
+            <section className="flex h-60 shrink-0 flex-col border-t border-vs-border-default bg-vs-bg-code">
+              <div className="flex items-center justify-between px-3 py-1 text-[11px] text-vs-text-muted">
+                <span className="font-semibold uppercase tracking-wide">Terminal</span>
+                <button
+                  type="button"
+                  aria-label="Close terminal"
+                  onClick={() => setTerminalOpen(false)}
+                  className="hover:text-vs-text-secondary"
+                >
+                  ✕
+                </button>
+              </div>
+              <div className="min-h-0 flex-1">
+                <Terminal project={workspace} />
+              </div>
+            </section>
+          )}
+        </div>
 
         {chatOpen && (
           <div className="flex w-[380px] shrink-0 flex-col border-l border-vs-border-default">
@@ -154,6 +189,15 @@ export default function App(): JSX.Element {
         </button>
         <span className="text-vs-text-muted/60">·</span>
         <span className="capitalize">{activity}</span>
+        <button
+          type="button"
+          aria-pressed={terminalOpen}
+          onClick={() => setTerminalOpen((v) => !v)}
+          className={`ml-auto rounded px-2 py-0.5 ${terminalOpen ? "text-vs-text-primary" : "hover:text-vs-text-secondary"}`}
+          title="Toggle terminal (Ctrl+`)"
+        >
+          Terminal
+        </button>
       </footer>
     </div>
   );

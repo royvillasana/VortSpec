@@ -17,6 +17,7 @@ import {
 } from "@vortspec/core/run-events";
 import { DEV_SERVER_UPDATE_CHANNEL, type DevServerUpdate } from "@vortspec/core/dev-server";
 import { WORKSPACE_CHANGE_CHANNEL, type WorkspaceChange } from "@vortspec/core/fs";
+import { TERMINAL_DATA_CHANNEL, type TerminalData } from "@vortspec/core/terminal";
 import type { VortSpecApi } from "@vortspec/core/api";
 
 /**
@@ -156,6 +157,16 @@ const api: VortSpecApi = {
     invoke("git:fileAtHead", { projectPath, relPath }),
   onWorkspaceChange: (callback: (payload: WorkspaceChange) => void) =>
     subscribe(WORKSPACE_CHANGE_CHANNEL, callback),
+
+  // Integrated terminal
+  terminalCreate: (req: { id: string; projectPath: string; cols?: number; rows?: number }) =>
+    invoke("terminal:create", req),
+  terminalWrite: (id: string, data: string) => invoke("terminal:write", { id, data }),
+  terminalResize: (id: string, cols: number, rows: number) =>
+    invoke("terminal:resize", { id, cols, rows }),
+  terminalKill: (id: string) => invoke("terminal:kill", id),
+  onTerminalData: (callback: (payload: TerminalData) => void) =>
+    subscribe(TERMINAL_DATA_CHANNEL, callback),
   setPublishTarget: (projectPath: string, repoUrl: string) =>
     invoke("flow:setPublishTarget", { projectPath, repoUrl }),
   readArtifact: (projectPath: string, relPath: string) =>
