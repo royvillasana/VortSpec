@@ -16711,6 +16711,20 @@ function newComponentPrompt(name, intent) {
     intent
   ].join("\n");
 }
+function newComponentFromFigmaNodePrompt(name, nodeId) {
+  return [
+    `Build a component from the Figma node the user selected: "${name}" (node id ${nodeId}).`,
+    `1. Read that exact node via the Figma MCP — resolve node id ${nodeId} in the file`,
+    "   `figma_file_url` from .sdd-de/project.yaml (e.g. figma_get_component_details / a node fetch)",
+    "   to get its structure, variants, and styles. Treat that node as authoritative.",
+    `2. Append an entry to .sdd-de/components.json: { "name": "${name}", "level": <atom|molecule|organism>,`,
+    `     "description": <one line>, "figmaNodeId": "${nodeId}" } — do NOT remove existing entries.`,
+    "3. Run /generate-artifacts for it to produce its specs.",
+    "4. Implement it into component_dir in the configured framework and language, using ONLY the",
+    "   extracted design tokens and matching the existing components' conventions.",
+    "Change nothing in Figma; only read."
+  ].join("\n");
+}
 function harnessClause(url) {
   return url ? `The live component is served at ${url} — load it there to inspect it.` : 'No live preview server is available; run the code-level audit (grep for hardcoded hex/px, check every variant/state and a11y in the source, verify spec compliance) and record any browser-only check as "pending" in the report — do NOT ask me to start a server.';
 }
@@ -17493,6 +17507,23 @@ function GuidedFlow({
     }
     flash("Connect figma-cli to read components directly, or use ↻ Re-scan (via the Figma MCP).");
   }
+  async function buildFigmaSelection() {
+    const sel = await api.figmaSelection();
+    if (sel.nodes.length === 0) {
+      flash(sel.message);
+      return;
+    }
+    if (sel.nodes.length > 1) {
+      flash("Select a single Figma node to build.");
+      return;
+    }
+    const node = sel.nodes[0];
+    await op(
+      `Building "${node.name}" from the Figma selection`,
+      newComponentFromFigmaNodePrompt(node.name, node.id),
+      { kind: "build" }
+    );
+  }
   reactExports.useEffect(() => {
     void reload();
     void api.figmaStatus().then(setFigmaCli);
@@ -17806,6 +17837,16 @@ function GuidedFlow({
                   }
                 )
               ] }),
+              figmaCli?.connected && /* @__PURE__ */ jsxRuntimeExports.jsx(
+                Button,
+                {
+                  variant: "default",
+                  disabled: busy,
+                  title: "Build the component/frame currently selected in Figma Desktop — reads your selection via figma-cli and runs the same gated build.",
+                  onClick: () => void buildFigmaSelection(),
+                  children: "Build Figma selection"
+                }
+              ),
               /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "primary", disabled: busy, onClick: () => setAddNew(true), children: "+ New component" })
             ] }),
             addNew && /* @__PURE__ */ jsxRuntimeExports.jsx(

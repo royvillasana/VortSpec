@@ -85,7 +85,11 @@
       .btn-primary:hover { filter: brightness(1.12); }
       .btn-ghost { background: transparent; color: var(--text); border-color: var(--border-strong); }
       .btn-ghost:hover { border-color: var(--accent); }
+      /* IDE download — an outlined accent button so both apps read as first-class */
+      .btn-ide { background: rgba(124,111,240,0.1); color: var(--text); border-color: var(--accent); }
+      .btn-ide:hover { background: rgba(124,111,240,0.18); }
       .btn-sm { padding: 9px 15px; font-size: 14px; border-radius: 8px; }
+      .two-apps-note { font-size: 13px; color: var(--text-3); margin-bottom: 12px; }
 
       /* hero */
       .hero { text-align: center; padding: 92px 0 72px; position: relative; }
@@ -248,17 +252,22 @@
             specifications into production-ready components, Storybook previews, design tokens, and
             AI-ready handoff artifacts — inside your own project, using your own codebase.
           </p>
+          <p class="two-apps-note">Two macOS apps, one engine — download either:</p>
           <div class="cta">
             <a class="btn btn-primary" href="https://github.com/royvillasana/VortSpec/releases/latest/download/VortSpec-mac-universal.dmg">
               <svg class="apple" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M11.18 8.46c-.02-1.6 1.31-2.37 1.37-2.41-.75-1.1-1.91-1.25-2.32-1.26-.99-.1-1.93.58-2.43.58-.5 0-1.28-.57-2.1-.55-1.08.02-2.08.63-2.63 1.6-1.12 1.95-.29 4.83.8 6.41.54.77 1.17 1.64 2 1.6.8-.03 1.11-.52 2.08-.52.97 0 1.24.52 2.09.5.86-.01 1.41-.78 1.94-1.56.61-.9.86-1.76.87-1.8-.02-.01-1.67-.64-1.68-2.55zM9.62 3.9c.44-.53.74-1.27.66-2.01-.63.03-1.4.42-1.86.95-.41.47-.77 1.22-.67 1.94.71.06 1.42-.36 1.87-.88z"/></svg>
-              Download for macOS
+              Download the Cockpit
+            </a>
+            <a class="btn btn-ide" href="https://github.com/royvillasana/VortSpec/releases/latest/download/VortSpec-IDE-mac-universal.dmg">
+              <svg class="apple" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M11.18 8.46c-.02-1.6 1.31-2.37 1.37-2.41-.75-1.1-1.91-1.25-2.32-1.26-.99-.1-1.93.58-2.43.58-.5 0-1.28-.57-2.1-.55-1.08.02-2.08.63-2.63 1.6-1.12 1.95-.29 4.83.8 6.41.54.77 1.17 1.64 2 1.6.8-.03 1.11-.52 2.08-.52.97 0 1.24.52 2.09.5.86-.01 1.41-.78 1.94-1.56.61-.9.86-1.76.87-1.8-.02-.01-1.67-.64-1.68-2.55zM9.62 3.9c.44-.53.74-1.27.66-2.01-.63.03-1.4.42-1.86.95-.41.47-.77 1.22-.67 1.94.71.06 1.42-.36 1.87-.88z"/></svg>
+              Download the IDE
             </a>
             <a class="btn btn-ghost" href="https://github.com/royvillasana/VortSpec" target="_blank" rel="noopener">View on GitHub</a>
           </div>
           <span class="os-note">
-            macOS · Apple Silicon &amp; Intel (universal) · Uses your own Claude Code login — no account, no keys.<br />
+            Both apps: macOS · Apple Silicon &amp; Intel (universal) · your own Claude Code login — no account, no keys.<br />
             Not notarized yet — first launch needs a one-time Gatekeeper bypass
-            (<span class="mono">xattr -cr /Applications/VortSpec.app</span> or System Settings → Privacy &amp; Security → Open Anyway).
+            (<span class="mono">xattr -cr /Applications/VortSpec.app</span> / <span class="mono">VortSpec IDE.app</span>, or System Settings → Privacy &amp; Security → Open Anyway).
             <a href="https://github.com/royvillasana/VortSpec/releases/latest" target="_blank" rel="noopener" style="color: var(--text-2);">Install notes ↗</a>
           </span>
         </div>
@@ -455,7 +464,10 @@
                 <svg class="apple" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M11.18 8.46c-.02-1.6 1.31-2.37 1.37-2.41-.75-1.1-1.91-1.25-2.32-1.26-.99-.1-1.93.58-2.43.58-.5 0-1.28-.57-2.1-.55-1.08.02-2.08.63-2.63 1.6-1.12 1.95-.29 4.83.8 6.41.54.77 1.17 1.64 2 1.6.8-.03 1.11-.52 2.08-.52.97 0 1.24.52 2.09.5.86-.01 1.41-.78 1.94-1.56.61-.9.86-1.76.87-1.8-.02-.01-1.67-.64-1.68-2.55zM9.62 3.9c.44-.53.74-1.27.66-2.01-.63.03-1.4.42-1.86.95-.41.47-.77 1.22-.67 1.94.71.06 1.42-.36 1.87-.88z"/></svg>
                 Get the Cockpit
               </a>
-              <a class="btn btn-ghost" href="https://github.com/royvillasana/VortSpec/releases/latest" target="_blank" rel="noopener">Get the IDE ↗</a>
+              <a class="btn btn-ide" href="https://github.com/royvillasana/VortSpec/releases/latest/download/VortSpec-IDE-mac-universal.dmg">
+                <svg class="apple" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M11.18 8.46c-.02-1.6 1.31-2.37 1.37-2.41-.75-1.1-1.91-1.25-2.32-1.26-.99-.1-1.93.58-2.43.58-.5 0-1.28-.57-2.1-.55-1.08.02-2.08.63-2.63 1.6-1.12 1.95-.29 4.83.8 6.41.54.77 1.17 1.64 2 1.6.8-.03 1.11-.52 2.08-.52.97 0 1.24.52 2.09.5.86-.01 1.41-.78 1.94-1.56.61-.9.86-1.76.87-1.8-.02-.01-1.67-.64-1.68-2.55zM9.62 3.9c.44-.53.74-1.27.66-2.01-.63.03-1.4.42-1.86.95-.41.47-.77 1.22-.67 1.94.71.06 1.42-.36 1.87-.88z"/></svg>
+                Download the IDE
+              </a>
             </div>
           </div>
         </div>

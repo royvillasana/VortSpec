@@ -87,6 +87,27 @@ export function newComponentPrompt(name: string, intent: string): string {
 }
 
 /**
+ * Build a component from a SPECIFIC Figma node the user selected in Figma
+ * Desktop (via figma-cli). Same gated SDD-DE cycle as `newComponentPrompt`, but
+ * grounded in one authoritative node id — the engine reads that exact node
+ * through the Figma MCP so the generated code matches what the user picked.
+ */
+export function newComponentFromFigmaNodePrompt(name: string, nodeId: string): string {
+  return [
+    `Build a component from the Figma node the user selected: "${name}" (node id ${nodeId}).`,
+    `1. Read that exact node via the Figma MCP — resolve node id ${nodeId} in the file`,
+    "   `figma_file_url` from .sdd-de/project.yaml (e.g. figma_get_component_details / a node fetch)",
+    "   to get its structure, variants, and styles. Treat that node as authoritative.",
+    `2. Append an entry to .sdd-de/components.json: { "name": "${name}", "level": <atom|molecule|organism>,`,
+    `     "description": <one line>, "figmaNodeId": "${nodeId}" } — do NOT remove existing entries.`,
+    "3. Run /generate-artifacts for it to produce its specs.",
+    "4. Implement it into component_dir in the configured framework and language, using ONLY the",
+    "   extracted design tokens and matching the existing components' conventions.",
+    "Change nothing in Figma; only read.",
+  ].join("\n");
+}
+
+/**
  * Verify is the CLI's autonomous QA — visual-verify + adversarial-review run
  * as one background agent session. The app provisions everything it needs (a
  * live render harness URL + the Figma MCP) so it never hands the visual-verify

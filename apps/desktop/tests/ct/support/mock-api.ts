@@ -80,6 +80,8 @@ export interface MockConfig {
   figmaSync?: import("@vortspec/core/ipc").FigmaSyncResult;
   /** Result returned by figmaSyncComponents(). */
   figmaSyncComponents?: import("@vortspec/core/ipc").FigmaSyncResult;
+  /** Result returned by figmaSelection(). */
+  figmaSelection?: import("@vortspec/core/ipc").FigmaSelection;
 }
 
 const EMPTY_TOKENS: InspectorTokensResult = {
@@ -307,6 +309,8 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
         mode: "yolo",
         message: "Read 8 Figma components via figma-cli (yolo mode).",
       },
+    figmaSelection: async () =>
+      cfg.figmaSelection ?? { nodes: [], message: "Nothing selected in Figma." },
 
     setPublishTarget: async () => null,
     readArtifact: async () => null,

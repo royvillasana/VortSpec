@@ -50,6 +50,7 @@ import {
   figmaConnectRequestSchema,
   figmaSyncRequestSchema,
   figmaSyncResultSchema,
+  figmaSelectionSchema,
 } from "./figma";
 export {
   figmaConnectionSchema,
@@ -57,8 +58,16 @@ export {
   figmaConnectRequestSchema,
   figmaSyncRequestSchema,
   figmaSyncResultSchema,
+  figmaSelectionSchema,
 } from "./figma";
-export type { FigmaConnection, FigmaCliMode, FigmaSyncResult, FigmaComponent } from "./figma";
+export type {
+  FigmaConnection,
+  FigmaCliMode,
+  FigmaSyncResult,
+  FigmaComponent,
+  FigmaNode,
+  FigmaSelection,
+} from "./figma";
 export { figmaComponentSchema } from "./figma";
 import { setupAnswersSchema, projectConfigSchema } from "./setup";
 import {
@@ -278,6 +287,7 @@ export const ipcContract = {
   "figma:connect": { request: figmaConnectRequestSchema, response: figmaConnectionSchema },
   "figma:syncVariables": { request: figmaSyncRequestSchema, response: figmaSyncResultSchema },
   "figma:syncComponents": { request: figmaSyncRequestSchema, response: figmaSyncResultSchema },
+  "figma:selection": { request: z.void(), response: figmaSelectionSchema },
 
   "toolkit:status": { request: z.string(), response: toolkitStatusSchema },
   "toolkit:install": { request: z.string(), response: toolkitStatusSchema },

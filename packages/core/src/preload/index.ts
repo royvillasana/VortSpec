@@ -175,6 +175,7 @@ const api: VortSpecApi = {
   figmaConnect: (mode: FigmaCliMode) => invoke("figma:connect", { mode }),
   figmaSyncVariables: (projectPath: string) => invoke("figma:syncVariables", { projectPath }),
   figmaSyncComponents: (projectPath: string) => invoke("figma:syncComponents", { projectPath }),
+  figmaSelection: () => invoke("figma:selection", undefined),
   setPublishTarget: (projectPath: string, repoUrl: string) =>
     invoke("flow:setPublishTarget", { projectPath, repoUrl }),
   readArtifact: (projectPath: string, relPath: string) =>

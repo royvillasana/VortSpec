@@ -5,6 +5,7 @@ import {
   dtcgToVariables,
   mapDtcgType,
   parseComponentsEval,
+  parseSelectionEval,
 } from "./figma-cli";
 
 describe("parseFilesJson", () => {
@@ -146,5 +147,32 @@ describe("parseComponentsEval", () => {
     expect(parseComponentsEval("not connected")).toEqual([]);
     expect(parseComponentsEval("[oops")).toEqual([]);
     expect(parseComponentsEval("")).toEqual([]);
+  });
+});
+
+describe("parseSelectionEval", () => {
+  it("parses selected nodes (id/name/type)", () => {
+    const raw = JSON.stringify([{ id: "12:34", name: "Button", type: "COMPONENT_SET" }]);
+    expect(parseSelectionEval(raw)).toEqual([{ id: "12:34", name: "Button", type: "COMPONENT_SET" }]);
+  });
+
+  it("returns [] for an empty selection", () => {
+    expect(parseSelectionEval("[]")).toEqual([]);
+  });
+
+  it("drops rows missing an id or name", () => {
+    const raw = JSON.stringify([
+      { name: "NoId", type: "FRAME" },
+      { id: "9:9", type: "FRAME" },
+      { id: "1:2", name: "Card", type: "FRAME" },
+    ]);
+    expect(parseSelectionEval(raw)).toEqual([{ id: "1:2", name: "Card", type: "FRAME" }]);
+  });
+
+  it("tolerates a banner and malformed output", () => {
+    expect(parseSelectionEval('banner\n[{"id":"1:1","name":"A","type":"FRAME"}]')).toEqual([
+      { id: "1:1", name: "A", type: "FRAME" },
+    ]);
+    expect(parseSelectionEval("nope")).toEqual([]);
   });
 });

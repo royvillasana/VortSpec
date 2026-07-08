@@ -71,3 +71,20 @@ export const figmaComponentSchema = z.object({
   variants: z.array(z.string()).default([]),
 });
 export type FigmaComponent = z.infer<typeof figmaComponentSchema>;
+
+/** A node currently selected in Figma Desktop (Wave 3 convenience). */
+export const figmaNodeSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  /** Figma node type, e.g. COMPONENT / COMPONENT_SET / FRAME / INSTANCE. */
+  type: z.string(),
+});
+export type FigmaNode = z.infer<typeof figmaNodeSchema>;
+
+/** The current Figma selection, read through figma-cli. */
+export const figmaSelectionSchema = z.object({
+  nodes: z.array(figmaNodeSchema),
+  /** a human, next-step message (e.g. "select a node in Figma first"). */
+  message: z.string(),
+});
+export type FigmaSelection = z.infer<typeof figmaSelectionSchema>;

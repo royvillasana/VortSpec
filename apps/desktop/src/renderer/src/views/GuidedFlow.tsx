@@ -14,6 +14,7 @@ import {
   BUILD_REMAINING_PROMPT,
   RESCAN_PROMPT,
   newComponentPrompt,
+  newComponentFromFigmaNodePrompt,
   REFACTOR_PROMPT,
   RESUME_PROMPT,
   verifyPrompt,
@@ -171,6 +172,27 @@ export function GuidedFlow({
       return;
     }
     flash("Connect figma-cli to read components directly, or use ↻ Re-scan (via the Figma MCP).");
+  }
+
+  // Convenience for figma-cli users: build the node currently selected in Figma
+  // Desktop through the same gated build. Reuses op() — the SDD-DE cycle and
+  // gates are unchanged; this only supplies the node the user picked.
+  async function buildFigmaSelection(): Promise<void> {
+    const sel = await api.figmaSelection();
+    if (sel.nodes.length === 0) {
+      flash(sel.message);
+      return;
+    }
+    if (sel.nodes.length > 1) {
+      flash("Select a single Figma node to build.");
+      return;
+    }
+    const node = sel.nodes[0]!;
+    await op(
+      `Building "${node.name}" from the Figma selection`,
+      newComponentFromFigmaNodePrompt(node.name, node.id),
+      { kind: "build" },
+    );
   }
 
   useEffect(() => {
@@ -547,6 +569,16 @@ export function GuidedFlow({
                           Build &amp; verify the rest ({remaining.length})
                         </Button>
                       </>
+                    )}
+                    {figmaCli?.connected && (
+                      <Button
+                        variant="default"
+                        disabled={busy}
+                        title="Build the component/frame currently selected in Figma Desktop — reads your selection via figma-cli and runs the same gated build."
+                        onClick={() => void buildFigmaSelection()}
+                      >
+                        Build Figma selection
+                      </Button>
                     )}
                     <Button variant="primary" disabled={busy} onClick={() => setAddNew(true)}>
                       + New component

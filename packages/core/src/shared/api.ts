@@ -155,6 +155,8 @@ export interface VortSpecApi {
   figmaSyncVariables(projectPath: string): Promise<IpcResponse<"figma:syncVariables">>;
   /** Read design-system components from Figma into the reconcile cache (figma-cli primary). */
   figmaSyncComponents(projectPath: string): Promise<IpcResponse<"figma:syncComponents">>;
+  /** Read the node(s) currently selected in Figma Desktop (figma-cli). */
+  figmaSelection(): Promise<IpcResponse<"figma:selection">>;
 
   // event subscriptions (return an unsubscribe fn)
   onAgentEvent(callback: (payload: AgentEventEnvelope) => void): () => void;

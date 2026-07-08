@@ -138,7 +138,48 @@ test("hides the Figma read button when figma-cli isn't connected", async ({ moun
   });
   // No CLI connection → only the MCP re-scan path is offered.
   await expect(c.getByRole("button", { name: /Figma components/ })).toHaveCount(0);
+  await expect(c.getByRole("button", { name: /Build Figma selection/ })).toHaveCount(0);
   await expect(c.getByRole("button", { name: /Re-scan/ })).toBeVisible();
+});
+
+test("builds the selected Figma node through the gated build (Wave 3 convenience)", async ({ mount }) => {
+  const BUILD_SEL: RunEvent[] = [
+    { kind: "system-init", model: "claude-opus-4-8", sessionId: "sess-s", tools: ["Read", "Write"], mcpServers: [], mcpErrors: [] },
+    { kind: "result", isError: false, text: "done", sessionId: "sess-s" },
+  ];
+  const c = await mount(<GuidedFlow {...props} />, {
+    hooksConfig: {
+      mock: {
+        tokens: TOKENS,
+        components: ROSTER,
+        manifest: MANIFEST,
+        figma: CLI_CONNECTED,
+        runScript: BUILD_SEL,
+        figmaSelection: { nodes: [{ id: "42:7", name: "Toolbar", type: "COMPONENT_SET" }], message: "1 node selected." },
+      },
+    },
+  });
+  const btn = c.getByRole("button", { name: "Build Figma selection" });
+  await expect(btn).toBeVisible();
+  await btn.click();
+  // The gated build run starts, labelled with the selected node.
+  await expect(c.getByText(/Building "Toolbar" from the Figma selection/)).toBeVisible();
+});
+
+test("guides the user when nothing is selected in Figma", async ({ mount }) => {
+  const c = await mount(<GuidedFlow {...props} />, {
+    hooksConfig: {
+      mock: {
+        tokens: TOKENS,
+        components: ROSTER,
+        manifest: MANIFEST,
+        figma: CLI_CONNECTED,
+        figmaSelection: { nodes: [], message: "Nothing selected in Figma — select a component or frame, then try again." },
+      },
+    },
+  });
+  await c.getByRole("button", { name: "Build Figma selection" }).click();
+  await expect(c.getByText(/Nothing selected in Figma/)).toBeVisible();
 });
 
 test("verify shows the outcome, not the raw checklist, and reports issues", async ({ mount }) => {

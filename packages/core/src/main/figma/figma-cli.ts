@@ -10,6 +10,8 @@ import type {
   FigmaCliMode,
   FigmaSyncResult,
   FigmaComponent,
+  FigmaNode,
+  FigmaSelection,
 } from "@vortspec/core/figma";
 import type { FigmaVariable, TokenType } from "@vortspec/core/inspector";
 
@@ -206,6 +208,72 @@ export function dtcgToVariables(dtcg: unknown): FigmaVariable[] {
   };
   walk(dtcg, [], undefined);
   return out;
+}
+
+// ── Reading the current selection (Wave 3 convenience) ───────────────
+
+/** A figma-use `eval` that returns the current page's selected nodes as JSON. */
+export const SELECTION_SCRIPT =
+  '(figma.currentPage.selection || []).map(function (n) { return { id: n.id, name: n.name, type: n.type }; });';
+
+/**
+ * Parse the selection `eval` output (a JSON array, possibly behind a banner)
+ * into FigmaNode rows. Pure + exported for unit testing. Skips malformed rows.
+ */
+export function parseSelectionEval(raw: string): FigmaNode[] {
+  const start = raw.indexOf("[");
+  const end = raw.lastIndexOf("]");
+  if (start === -1 || end === -1 || end < start) return [];
+  let arr: unknown;
+  try {
+    arr = JSON.parse(raw.slice(start, end + 1));
+  } catch {
+    return [];
+  }
+  if (!Array.isArray(arr)) return [];
+  const out: FigmaNode[] = [];
+  for (const row of arr) {
+    if (!row || typeof row !== "object") continue;
+    const r = row as Record<string, unknown>;
+    const id = typeof r.id === "string" ? r.id : "";
+    const name = typeof r.name === "string" ? r.name : "";
+    const type = typeof r.type === "string" ? r.type : "";
+    if (!id || !name) continue;
+    out.push({ id, name, type });
+  }
+  return out;
+}
+
+/**
+ * Read the node(s) currently selected in Figma Desktop through figma-cli, so
+ * the user can build "this frame" straight from their selection. Read-only;
+ * `nodes: []` with a guiding message when the CLI is unavailable or nothing is
+ * selected. Never throws to the caller.
+ */
+export async function getSelection(): Promise<FigmaSelection> {
+  const conn = await getConnection();
+  if (!conn.installed || !conn.connected) {
+    return {
+      nodes: [],
+      message: conn.installed
+        ? "figma-cli isn't connected to Figma Desktop yet."
+        : "figma-cli isn't set up.",
+    };
+  }
+  const tmp = join(tmpdir(), `vortspec-figma-selection-${process.pid}-${Date.now()}.js`);
+  try {
+    await writeFile(tmp, SELECTION_SCRIPT, "utf8");
+    const res = await run(["eval", "--file", tmp], 12000);
+    const nodes = parseSelectionEval(res.stdout);
+    return {
+      nodes,
+      message: nodes.length
+        ? `${nodes.length} node${nodes.length === 1 ? "" : "s"} selected in Figma.`
+        : "Nothing selected in Figma — select a component or frame, then try again.",
+    };
+  } finally {
+    await rm(tmp, { force: true }).catch(() => undefined);
+  }
 }
 
 // ── Reading components (Wave 3) ──────────────────────────────────────

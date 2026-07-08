@@ -548,6 +548,17 @@ const figmaComponentSchema = z.object({
   /** variant axis names (e.g. ["Type", "Size"]); empty for a plain component. */
   variants: z.array(z.string()).default([])
 });
+const figmaNodeSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  /** Figma node type, e.g. COMPONENT / COMPONENT_SET / FRAME / INSTANCE. */
+  type: z.string()
+});
+const figmaSelectionSchema = z.object({
+  nodes: z.array(figmaNodeSchema),
+  /** a human, next-step message (e.g. "select a node in Figma first"). */
+  message: z.string()
+});
 const frameworkSchema = z.enum([
   "react",
   "next",
@@ -890,6 +901,7 @@ const ipcContract = {
   "figma:connect": { request: figmaConnectRequestSchema, response: figmaConnectionSchema },
   "figma:syncVariables": { request: figmaSyncRequestSchema, response: figmaSyncResultSchema },
   "figma:syncComponents": { request: figmaSyncRequestSchema, response: figmaSyncResultSchema },
+  "figma:selection": { request: z.void(), response: figmaSelectionSchema },
   "toolkit:status": { request: z.string(), response: toolkitStatusSchema },
   "toolkit:install": { request: z.string(), response: toolkitStatusSchema },
   "agent:startRun": {
@@ -1837,6 +1849,51 @@ function dtcgToVariables(dtcg) {
   };
   walk(dtcg, [], void 0);
   return out;
+}
+const SELECTION_SCRIPT = "(figma.currentPage.selection || []).map(function (n) { return { id: n.id, name: n.name, type: n.type }; });";
+function parseSelectionEval(raw) {
+  const start = raw.indexOf("[");
+  const end = raw.lastIndexOf("]");
+  if (start === -1 || end === -1 || end < start) return [];
+  let arr;
+  try {
+    arr = JSON.parse(raw.slice(start, end + 1));
+  } catch {
+    return [];
+  }
+  if (!Array.isArray(arr)) return [];
+  const out = [];
+  for (const row of arr) {
+    if (!row || typeof row !== "object") continue;
+    const r = row;
+    const id = typeof r.id === "string" ? r.id : "";
+    const name = typeof r.name === "string" ? r.name : "";
+    const type = typeof r.type === "string" ? r.type : "";
+    if (!id || !name) continue;
+    out.push({ id, name, type });
+  }
+  return out;
+}
+async function getSelection() {
+  const conn = await getConnection();
+  if (!conn.installed || !conn.connected) {
+    return {
+      nodes: [],
+      message: conn.installed ? "figma-cli isn't connected to Figma Desktop yet." : "figma-cli isn't set up."
+    };
+  }
+  const tmp = join(tmpdir(), `vortspec-figma-selection-${process.pid}-${Date.now()}.js`);
+  try {
+    await writeFile$1(tmp, SELECTION_SCRIPT, "utf8");
+    const res = await run(["eval", "--file", tmp], 12e3);
+    const nodes = parseSelectionEval(res.stdout);
+    return {
+      nodes,
+      message: nodes.length ? `${nodes.length} node${nodes.length === 1 ? "" : "s"} selected in Figma.` : "Nothing selected in Figma — select a component or frame, then try again."
+    };
+  } finally {
+    await rm(tmp, { force: true }).catch(() => void 0);
+  }
 }
 const READ_COMPONENTS_SCRIPT = `figma.loadAllPagesAsync().then(function () {
   var ns = figma.root.findAllWithCriteria({ types: ["COMPONENT_SET", "COMPONENT"] });
@@ -4115,6 +4172,7 @@ const handlers = {
   "figma:connect": ((r) => connect(r.mode)),
   "figma:syncVariables": ((r) => syncVariablesToCache(r.projectPath)),
   "figma:syncComponents": ((r) => syncComponentsToCache(r.projectPath)),
+  "figma:selection": (() => getSelection()),
   "toolkit:status": ((path) => getToolkitStatus(path)),
   "toolkit:install": ((path) => installToolkit(path)),
   "agent:startRun": ((opts, sender) => startRun(sender, opts)),
