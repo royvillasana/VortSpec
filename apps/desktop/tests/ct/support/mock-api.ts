@@ -151,8 +151,13 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
     gitPull: async () => ({ ok: true, message: "Pulled." }),
     gitPush: async () => ({ ok: true, message: "Pushed." }),
     gitInit: async () => ({ ok: true, message: "Initialized." }),
-    githubAuth: async () =>
+    providerAuth: async () =>
       cfg.githubAuth ?? { provider: "github", cliInstalled: true, authenticated: false, accounts: [], activeAccount: null, hint: "Run gh auth login." },
+    providerSwitchAccount: async () => ({ ok: true, message: "Switched." }),
+    providerCreateRepo: async () => ({ ok: true, message: "Created.", url: "https://github.com/me/app" }),
+    providerCreatePR: async () => ({ ok: true, message: "Opened a PR.", url: "https://github.com/me/app/pull/1" }),
+    providerPublish: async () => ({ ok: true, message: "Published.", url: "https://github.com/me/app/pull/2" }),
+    gitImport: async () => ({ ok: true, message: "Imported." }),
     getProfile: async () => cfg.profile ?? { name: "", avatarDataUrl: null, preferences: {} },
     saveProfile: async (p: import("../../../src/shared/ipc").Profile) => p,
     onAgentEvent: (cb: (e: { runId: string; event: RunEvent }) => void) => {

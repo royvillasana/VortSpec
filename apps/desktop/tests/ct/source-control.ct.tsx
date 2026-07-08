@@ -58,14 +58,29 @@ test("shows the GitHub connect hint when not authenticated", async ({ mount }) =
 const AUTHED_ONE = { provider: "github" as const, cliInstalled: true, authenticated: true, accounts: ["octocat"], activeAccount: "octocat", hint: null };
 const AUTHED_MULTI = { provider: "github" as const, cliInstalled: true, authenticated: true, accounts: ["octocat", "hubber"], activeAccount: "octocat", hint: null };
 
-test("offers Create repo when connected with no remote (M2)", async ({ mount }) => {
+test("offers Create repo (GitHub/GitLab picker) when connected with no remote (M2/M6)", async ({ mount }) => {
   const c = await mount(<SourceControl {...props} />, {
     hooksConfig: { mock: { gitStatus: DIRTY, gitRemotes: [], githubAuth: AUTHED_ONE } },
   });
   await expect(c.getByText("Connected")).toBeVisible();
-  await c.getByRole("button", { name: /Create GitHub repo/ }).click();
+  await c.getByRole("button", { name: /Create a repo/ }).click();
   await expect(c.getByPlaceholder("new-repo-name")).toBeVisible();
   await expect(c.getByRole("button", { name: "Create & push" })).toBeVisible();
+  // The provider picker offers GitHub and GitLab.
+  await expect(c.getByRole("option", { name: "GitLab" })).toBeAttached();
+});
+
+test("shows the resolved provider name — GitLab (M6)", async ({ mount }) => {
+  const c = await mount(<SourceControl {...props} />, {
+    hooksConfig: {
+      mock: {
+        gitStatus: DIRTY,
+        gitRemotes: [{ name: "origin", url: "https://gitlab.com/me/app.git" }],
+        githubAuth: { provider: "gitlab", cliInstalled: true, authenticated: true, accounts: ["me"], activeAccount: "me", hint: null },
+      },
+    },
+  });
+  await expect(c.getByText("GitLab", { exact: true })).toBeVisible();
 });
 
 test("shows the account picker for multiple accounts (M2)", async ({ mount }) => {

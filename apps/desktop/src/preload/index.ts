@@ -81,15 +81,15 @@ const api = {
   gitPull: (projectPath: string) => invoke("git:pull", projectPath),
   gitPush: (projectPath: string) => invoke("git:push", projectPath),
   gitInit: (projectPath: string) => invoke("git:init", projectPath),
-  githubAuth: () => invoke("github:auth", undefined),
-  githubSwitchAccount: (account: string) => invoke("github:switchAccount", { account }),
-  githubCreateRepo: (req: { projectPath: string; name: string; visibility: "private" | "public" | "internal"; description?: string }) =>
-    invoke("github:createRepo", req),
-  githubCreatePR: (req: { projectPath: string; base?: string; title: string; body?: string }) =>
-    invoke("github:createPR", req),
+  providerAuth: (projectPath: string) => invoke("provider:auth", projectPath),
+  providerSwitchAccount: (projectPath: string, account: string) => invoke("provider:switchAccount", { projectPath, account }),
+  providerCreateRepo: (req: { projectPath: string; providerId?: "github" | "gitlab" | "bitbucket"; name: string; visibility: "private" | "public" | "internal"; description?: string }) =>
+    invoke("provider:createRepo", req),
+  providerCreatePR: (req: { projectPath: string; base?: string; title: string; body?: string }) =>
+    invoke("provider:createPR", req),
   gitImport: (req: { projectPath: string; url: string; branch?: string }) => invoke("git:import", req),
-  githubPublish: (req: { projectPath: string; branch: string; title: string; body?: string }) =>
-    invoke("github:publish", req),
+  providerPublish: (req: { projectPath: string; branch: string; title: string; body?: string }) =>
+    invoke("provider:publish", req),
   getProfile: () => invoke("profile:get", undefined),
   saveProfile: (profile: Profile) => invoke("profile:save", profile),
   onAgentEvent: (callback: (payload: AgentEventEnvelope) => void) =>

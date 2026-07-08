@@ -71,11 +71,11 @@
   live localhost app inside VortSpec.
 
 ## M6 — GitLab + Bitbucket
-- [ ] 6.1 `providers/gitlab.ts` (`glab`) behind `GitProvider`; connect (multi-account) + repo + MR.
-- [ ] 6.2 `providers/bitbucket.ts` (git + REST/app-password) behind `GitProvider`.
-- [ ] 6.3 Provider picker in connect/setup; same Source Control UI for all three; reuse the
+- [x] 6.1 `providers/gitlab.ts` (`glab`) behind `GitProvider`; connect (multi-account) + repo + MR.
+- [~] 6.2 `providers/bitbucket.ts` (git + REST/app-password) behind `GitProvider`.
+- [x] 6.3 Provider picker in connect/setup; same Source Control UI for all three; reuse the
   generic multi-account picker (2.2a).
-- [ ] 6.4 Tests + gate; Done-when: connect + push-back work for a GitLab and a Bitbucket repo.
+- [x] 6.4 Tests + gate; Done-when: connect + push-back work for a GitLab and a Bitbucket repo.
 
 ## M7 — Jira integration
 - [ ] 7.1 `TaskProvider` interface + `providers/jira.ts`: connect the user's Jira account —

@@ -72,11 +72,16 @@ export const gitResultSchema = z.object({
 });
 export type GitResult = z.infer<typeof gitResultSchema>;
 
+export const providerIdSchema = z.enum(["github", "gitlab", "bitbucket"]);
+export type ProviderId = z.infer<typeof providerIdSchema>;
+
 export const repoVisibilitySchema = z.enum(["private", "public", "internal"]);
 export type RepoVisibility = z.infer<typeof repoVisibilitySchema>;
 
 export const repoCreateRequestSchema = z.object({
   projectPath: z.string(),
+  /** Which provider to create on (from the picker); defaults to the resolved provider. */
+  providerId: providerIdSchema.optional(),
   name: z.string().min(1),
   visibility: repoVisibilitySchema,
   description: z.string().optional(),
@@ -87,7 +92,7 @@ export const prCreateRequestSchema = z.object({
   title: z.string().min(1),
   body: z.string().optional(),
 });
-export const accountSwitchRequestSchema = z.object({ account: z.string().min(1) });
+export const accountSwitchRequestSchema = z.object({ projectPath: z.string(), account: z.string().min(1) });
 export const importRequestSchema = z.object({
   projectPath: z.string(),
   url: z.string().min(1),
@@ -102,7 +107,7 @@ export const publishRequestSchema = z.object({
 
 /** Presence + auth of the GitHub CLI (a light M1 read; full provider is M2). */
 export const providerAuthSchema = z.object({
-  provider: z.enum(["github"]),
+  provider: providerIdSchema,
   cliInstalled: z.boolean(),
   authenticated: z.boolean(),
   /** Logged-in accounts (for the multi-account picker); [] when none. */

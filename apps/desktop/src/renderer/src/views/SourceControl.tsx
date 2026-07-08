@@ -52,7 +52,7 @@ export function SourceControl({
   }
   useEffect(() => {
     void reload();
-    void api.githubAuth().then(setAuth);
+    void api.providerAuth(project.path).then(setAuth);
     void api.getManifest(project.path).then((m) => setManifestReady(m.exists));
   }, [project.path]);
 
@@ -162,7 +162,7 @@ export function SourceControl({
                 busy={busy !== null}
                 onChanged={async () => {
                   await reload();
-                  setAuth(await api.githubAuth());
+                  setAuth(await api.providerAuth(project.path));
                 }}
                 flash={flash}
                 setBusy={setBusy}
@@ -303,7 +303,9 @@ function GitHubConnect({
   const [repoName, setRepoName] = useState("");
   const [visibility, setVisibility] = useState<"private" | "public" | "internal">("private");
   const [creating, setCreating] = useState(false);
+  const [createProvider, setCreateProvider] = useState<"github" | "gitlab">("github");
   const origin = remotes.find((r) => r.name === "origin")?.url ?? null;
+  const providerLabel = { github: "GitHub", gitlab: "GitLab", bitbucket: "Bitbucket" }[auth?.provider ?? "github"];
 
   async function run(label: string, fn: () => Promise<{ ok: boolean; message: string; url?: string | null }>): Promise<void> {
     setBusy(label);
@@ -316,7 +318,7 @@ function GitHubConnect({
   return (
     <Card className="flex flex-col gap-2.5 p-4">
       <div className="flex items-center gap-2">
-        <span className="text-[13px] font-semibold uppercase tracking-wide text-vs-text-muted">GitHub</span>
+        <span className="text-[13px] font-semibold uppercase tracking-wide text-vs-text-muted">{providerLabel}</span>
         <span className="flex-1" />
         {auth === null ? (
           <span className="flex items-center gap-1.5 text-xs text-vs-text-muted"><Spinner /> checking…</span>
@@ -347,7 +349,7 @@ function GitHubConnect({
           <select
             value={auth.activeAccount ?? ""}
             disabled={busy}
-            onChange={(e) => void run("switch account", () => api.githubSwitchAccount(e.target.value))}
+            onChange={(e) => void run("switch account", () => api.providerSwitchAccount(projectPath, e.target.value))}
             className="rounded-md border border-vs-border-default bg-vs-bg-primary px-2 py-1 text-xs"
           >
             {auth.accounts.map((a) => (
@@ -362,12 +364,20 @@ function GitHubConnect({
       {auth && auth.authenticated && !origin && (
         creating ? (
           <div className="flex flex-wrap items-center gap-2">
+            <select
+              value={createProvider}
+              onChange={(e) => setCreateProvider(e.target.value as "github" | "gitlab")}
+              className="rounded-md border border-vs-border-default bg-vs-bg-primary px-2 py-1.5 text-xs"
+            >
+              <option value="github">GitHub</option>
+              <option value="gitlab">GitLab</option>
+            </select>
             <input
               autoFocus
               value={repoName}
               onChange={(e) => setRepoName(e.target.value)}
               placeholder="new-repo-name"
-              className="w-48 rounded-md border border-vs-border-default bg-vs-bg-primary px-2.5 py-1.5 text-xs placeholder:text-vs-text-muted"
+              className="w-44 rounded-md border border-vs-border-default bg-vs-bg-primary px-2.5 py-1.5 text-xs placeholder:text-vs-text-muted"
             />
             <select
               value={visibility}
@@ -383,7 +393,7 @@ function GitHubConnect({
               disabled={busy || !repoName.trim()}
               onClick={() =>
                 void run("create repo", () =>
-                  api.githubCreateRepo({ projectPath, name: repoName.trim(), visibility }),
+                  api.providerCreateRepo({ projectPath, providerId: createProvider, name: repoName.trim(), visibility }),
                 ).then(() => setCreating(false))
               }
             >
@@ -394,7 +404,7 @@ function GitHubConnect({
         ) : (
           <div>
             <Button variant="default" disabled={busy} onClick={() => setCreating(true)}>
-              Create GitHub repo &amp; push this folder
+              Create a repo (GitHub / GitLab) &amp; push this folder
             </Button>
           </div>
         )
@@ -408,7 +418,7 @@ function GitHubConnect({
             disabled={busy}
             onClick={() =>
               void run("open PR", () =>
-                api.githubCreatePR({ projectPath, title: `${branch}` }),
+                api.providerCreatePR({ projectPath, title: `${branch}` }),
               )
             }
           >
@@ -425,7 +435,7 @@ function GitHubConnect({
             disabled={busy || !manifestReady}
             onClick={() =>
               void run("publish design system", () =>
-                api.githubPublish({
+                api.providerPublish({
                   projectPath,
                   branch: "vortspec/design-system",
                   title: "VortSpec: design system (tokens, components, DESIGN.md)",

@@ -81,6 +81,7 @@ export type {
   GitLogEntry,
   GitResult,
   ProviderAuth,
+  ProviderId,
 } from "./git";
 export type {
   Flow,
@@ -227,12 +228,12 @@ export const ipcContract = {
   "git:pull": { request: z.string(), response: gitResultSchema },
   "git:push": { request: z.string(), response: gitResultSchema },
   "git:init": { request: z.string(), response: gitResultSchema },
-  "github:auth": { request: z.void(), response: providerAuthSchema },
-  "github:switchAccount": { request: accountSwitchRequestSchema, response: gitResultSchema },
-  "github:createRepo": { request: repoCreateRequestSchema, response: gitResultSchema },
-  "github:createPR": { request: prCreateRequestSchema, response: gitResultSchema },
+  "provider:auth": { request: z.string(), response: providerAuthSchema },
+  "provider:switchAccount": { request: accountSwitchRequestSchema, response: gitResultSchema },
+  "provider:createRepo": { request: repoCreateRequestSchema, response: gitResultSchema },
+  "provider:createPR": { request: prCreateRequestSchema, response: gitResultSchema },
   "git:import": { request: importRequestSchema, response: gitResultSchema },
-  "github:publish": { request: publishRequestSchema, response: gitResultSchema },
+  "provider:publish": { request: publishRequestSchema, response: gitResultSchema },
   "profile:get": { request: z.void(), response: profileSchema },
   "profile:save": { request: profileSchema, response: profileSchema },
 

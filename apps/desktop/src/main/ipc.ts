@@ -28,8 +28,8 @@ import type { SetupAnswers } from "../shared/setup";
 import { startRun, cancelRun, hasActiveRun, getLastRun } from "./agent/run-manager";
 import { getUsage } from "./usage/usage-reader";
 import * as gitAdapter from "./git/git-adapter";
-import { getGithubAuth, switchGithubAccount, createGithubRepo, createGithubPR, publishDesignSystem } from "./git/github";
-import type { RepoVisibility } from "../shared/git";
+import { providerAuth, providerSwitchAccount, providerCreateRepo, providerCreatePR, providerPublish } from "./git/providers";
+import type { RepoVisibility, ProviderId } from "../shared/git";
 import { readProfile, saveProfile } from "./settings/profile-manager";
 import type { Profile } from "../shared/profile";
 import {
@@ -132,16 +132,17 @@ const handlers: Record<IpcChannel, Handler> = {
   "git:pull": ((p: string) => gitAdapter.pull(p)) as Handler,
   "git:push": ((p: string) => gitAdapter.push(p)) as Handler,
   "git:init": ((p: string) => gitAdapter.init(p)) as Handler,
-  "github:auth": (() => getGithubAuth()) as Handler,
-  "github:switchAccount": ((r: { account: string }) => switchGithubAccount(r.account)) as Handler,
-  "github:createRepo": ((r: { projectPath: string; name: string; visibility: RepoVisibility; description?: string }) =>
-    createGithubRepo(r.projectPath, { name: r.name, visibility: r.visibility, description: r.description })) as Handler,
-  "github:createPR": ((r: { projectPath: string; base?: string; title: string; body?: string }) =>
-    createGithubPR(r.projectPath, { base: r.base, title: r.title, body: r.body })) as Handler,
+  "provider:auth": ((projectPath: string) => providerAuth(projectPath)) as Handler,
+  "provider:switchAccount": ((r: { projectPath: string; account: string }) =>
+    providerSwitchAccount(r.projectPath, r.account)) as Handler,
+  "provider:createRepo": ((r: { projectPath: string; providerId?: ProviderId; name: string; visibility: RepoVisibility; description?: string }) =>
+    providerCreateRepo(r.projectPath, { providerId: r.providerId, name: r.name, visibility: r.visibility, description: r.description })) as Handler,
+  "provider:createPR": ((r: { projectPath: string; base?: string; title: string; body?: string }) =>
+    providerCreatePR(r.projectPath, { base: r.base, title: r.title, body: r.body })) as Handler,
   "git:import": ((r: { projectPath: string; url: string; branch?: string }) =>
     gitAdapter.importInto(r.projectPath, r.url, r.branch)) as Handler,
-  "github:publish": ((r: { projectPath: string; branch: string; title: string; body?: string }) =>
-    publishDesignSystem(r.projectPath, { branch: r.branch, title: r.title, body: r.body })) as Handler,
+  "provider:publish": ((r: { projectPath: string; branch: string; title: string; body?: string }) =>
+    providerPublish(r.projectPath, { branch: r.branch, title: r.title, body: r.body })) as Handler,
   "profile:get": (() => readProfile()) as Handler,
   "profile:save": ((profile: Profile) => saveProfile(profile)) as Handler,
 
