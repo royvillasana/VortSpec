@@ -67,8 +67,27 @@ export type GitLogEntry = z.infer<typeof gitLogEntrySchema>;
 export const gitResultSchema = z.object({
   ok: z.boolean(),
   message: z.string(),
+  /** A URL produced by the op (repo/PR), when applicable. */
+  url: z.string().nullable().optional(),
 });
 export type GitResult = z.infer<typeof gitResultSchema>;
+
+export const repoVisibilitySchema = z.enum(["private", "public", "internal"]);
+export type RepoVisibility = z.infer<typeof repoVisibilitySchema>;
+
+export const repoCreateRequestSchema = z.object({
+  projectPath: z.string(),
+  name: z.string().min(1),
+  visibility: repoVisibilitySchema,
+  description: z.string().optional(),
+});
+export const prCreateRequestSchema = z.object({
+  projectPath: z.string(),
+  base: z.string().optional(),
+  title: z.string().min(1),
+  body: z.string().optional(),
+});
+export const accountSwitchRequestSchema = z.object({ account: z.string().min(1) });
 
 /** Presence + auth of the GitHub CLI (a light M1 read; full provider is M2). */
 export const providerAuthSchema = z.object({

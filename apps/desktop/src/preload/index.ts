@@ -82,6 +82,11 @@ const api = {
   gitPush: (projectPath: string) => invoke("git:push", projectPath),
   gitInit: (projectPath: string) => invoke("git:init", projectPath),
   githubAuth: () => invoke("github:auth", undefined),
+  githubSwitchAccount: (account: string) => invoke("github:switchAccount", { account }),
+  githubCreateRepo: (req: { projectPath: string; name: string; visibility: "private" | "public" | "internal"; description?: string }) =>
+    invoke("github:createRepo", req),
+  githubCreatePR: (req: { projectPath: string; base?: string; title: string; body?: string }) =>
+    invoke("github:createPR", req),
   getProfile: () => invoke("profile:get", undefined),
   saveProfile: (profile: Profile) => invoke("profile:save", profile),
   onAgentEvent: (callback: (payload: AgentEventEnvelope) => void) =>

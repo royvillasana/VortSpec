@@ -23,19 +23,19 @@
 - [x] 1.9 Gate green; Done-when: real git state renders; branch/stage/commit/push via UI.
 
 ## M2 — GitHub provider: connect, repo create, push folder, PR
-- [ ] 2.1 `GitProvider` interface + `providers/github.ts` (`gh auth status`,
+- [x] 2.1 `GitProvider` interface + `providers/github.ts` (`gh auth status`,
   `gh repo create`, `gh pr create`); resolve provider by remote/config.
-- [ ] 2.2 Connect flow: detect `gh auth`; signed-out → guide `gh auth login --web` (or
+- [x] 2.2 Connect flow: detect `gh auth`; signed-out → guide `gh auth login --web` (or
   install `gh`), then re-check. Never handle the token.
-- [ ] 2.2a Generic multi-account picker: detect available accounts (`gh auth status`
+- [x] 2.2a Generic multi-account picker: detect available accounts (`gh auth status`
   lists accounts/hosts; `gh auth switch` to select) and, when >1, prompt which to connect;
   remember the choice per project as a reference. Built once here, reused by GitLab,
   Bitbucket, and Jira.
-- [ ] 2.3 Repo-create dialog (name, visibility, description) → `gh repo create` → set
+- [x] 2.3 Repo-create dialog (name, visibility, description) → `gh repo create` → set
   remote → push the folder.
-- [ ] 2.4 Open-PR action (branch → base) via `gh pr create`; degrade to plain-git push
+- [x] 2.4 Open-PR action (branch → base) via `gh pr create`; degrade to plain-git push
   when `gh` is absent.
-- [ ] 2.5 Tests + gate; Done-when: connect → create repo → push a fresh folder.
+- [x] 2.5 Tests + gate; Done-when: connect → create repo → push a fresh folder.
 
 ## M3 — GitHub as a design source (bidirectional)
 - [ ] 3.1 Setup/DesignInput: choose a GitHub repo + branch as the design source; clone/

@@ -115,7 +115,19 @@ export function SourceControl({
           ) : (
             <>
               {/* GitHub connect */}
-              <GitHubConnect auth={auth} remotes={remotes} onRecheck={() => void api.githubAuth().then(setAuth)} />
+              <GitHubConnect
+                auth={auth}
+                remotes={remotes}
+                projectPath={project.path}
+                branch={status.branch}
+                busy={busy !== null}
+                onChanged={async () => {
+                  await reload();
+                  setAuth(await api.githubAuth());
+                }}
+                flash={flash}
+                setBusy={setBusy}
+              />
 
               {/* Branches (create + switch — never delete) */}
               <section className="flex flex-col gap-2">
@@ -231,15 +243,37 @@ export function SourceControl({
 function GitHubConnect({
   auth,
   remotes,
-  onRecheck,
+  projectPath,
+  branch,
+  busy,
+  onChanged,
+  flash,
+  setBusy,
 }: {
   auth: ProviderAuth | null;
   remotes: GitRemote[];
-  onRecheck: () => void;
+  projectPath: string;
+  branch: string | null;
+  busy: boolean;
+  onChanged: () => Promise<void>;
+  flash: (m: string) => void;
+  setBusy: (v: string | null) => void;
 }): React.JSX.Element {
+  const [repoName, setRepoName] = useState("");
+  const [visibility, setVisibility] = useState<"private" | "public" | "internal">("private");
+  const [creating, setCreating] = useState(false);
   const origin = remotes.find((r) => r.name === "origin")?.url ?? null;
+
+  async function run(label: string, fn: () => Promise<{ ok: boolean; message: string; url?: string | null }>): Promise<void> {
+    setBusy(label);
+    const r = await fn();
+    await onChanged();
+    setBusy(null);
+    flash(r.url ? `${r.message} ${r.url}` : r.message);
+  }
+
   return (
-    <Card className="flex flex-col gap-2 p-4">
+    <Card className="flex flex-col gap-2.5 p-4">
       <div className="flex items-center gap-2">
         <span className="text-[13px] font-semibold uppercase tracking-wide text-vs-text-muted">GitHub</span>
         <span className="flex-1" />
@@ -248,23 +282,98 @@ function GitHubConnect({
         ) : auth.authenticated ? (
           <span className="flex items-center gap-1.5 text-xs text-vs-success">
             <span className="inline-block h-1.5 w-1.5 rounded-full bg-vs-success" />
-            Connected as {auth.activeAccount}
-            {auth.accounts.length > 1 && <span className="text-vs-text-muted"> (+{auth.accounts.length - 1} more)</span>}
+            Connected{auth.accounts.length <= 1 && ` as ${auth.activeAccount}`}
           </span>
         ) : (
-          <button onClick={onRecheck} className="text-xs text-vs-accent hover:underline">Connect / re-check</button>
+          <button onClick={() => void onChanged()} className="text-xs text-vs-accent hover:underline">
+            Connect / re-check
+          </button>
         )}
       </div>
+
       {origin && <p className="font-mono text-[11px] text-vs-text-secondary">{origin}</p>}
+
       {auth && !auth.authenticated && auth.hint && (
         <p className="rounded-md border border-vs-warning-border bg-vs-warning-muted px-3 py-2 text-[11px] text-vs-warning">
           {auth.hint}
         </p>
       )}
-      {auth && auth.accounts.length > 1 && (
-        <p className="text-[11px] text-vs-text-muted">
-          Multiple accounts detected — account selection lands with repo actions (M2).
-        </p>
+
+      {/* Multi-account picker */}
+      {auth && auth.authenticated && auth.accounts.length > 1 && (
+        <label className="flex items-center gap-2 text-xs text-vs-text-secondary">
+          Account
+          <select
+            value={auth.activeAccount ?? ""}
+            disabled={busy}
+            onChange={(e) => void run("switch account", () => api.githubSwitchAccount(e.target.value))}
+            className="rounded-md border border-vs-border-default bg-vs-bg-primary px-2 py-1 text-xs"
+          >
+            {auth.accounts.map((a) => (
+              <option key={a} value={a}>{a}</option>
+            ))}
+          </select>
+          <span className="text-vs-text-muted">{auth.accounts.length} accounts — pick which to use</span>
+        </label>
+      )}
+
+      {/* Create repo (authed + no origin) */}
+      {auth && auth.authenticated && !origin && (
+        creating ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              autoFocus
+              value={repoName}
+              onChange={(e) => setRepoName(e.target.value)}
+              placeholder="new-repo-name"
+              className="w-48 rounded-md border border-vs-border-default bg-vs-bg-primary px-2.5 py-1.5 text-xs placeholder:text-vs-text-muted"
+            />
+            <select
+              value={visibility}
+              onChange={(e) => setVisibility(e.target.value as "private" | "public" | "internal")}
+              className="rounded-md border border-vs-border-default bg-vs-bg-primary px-2 py-1.5 text-xs"
+            >
+              <option value="private">Private</option>
+              <option value="public">Public</option>
+              <option value="internal">Internal</option>
+            </select>
+            <Button
+              variant="primary"
+              disabled={busy || !repoName.trim()}
+              onClick={() =>
+                void run("create repo", () =>
+                  api.githubCreateRepo({ projectPath, name: repoName.trim(), visibility }),
+                ).then(() => setCreating(false))
+              }
+            >
+              Create &amp; push
+            </Button>
+            <button onClick={() => setCreating(false)} className="text-xs text-vs-text-muted hover:text-vs-text-primary">Cancel</button>
+          </div>
+        ) : (
+          <div>
+            <Button variant="default" disabled={busy} onClick={() => setCreating(true)}>
+              Create GitHub repo &amp; push this folder
+            </Button>
+          </div>
+        )
+      )}
+
+      {/* Open PR (authed + origin + a branch) */}
+      {auth && auth.authenticated && origin && branch && (
+        <div>
+          <Button
+            variant="default"
+            disabled={busy}
+            onClick={() =>
+              void run("open PR", () =>
+                api.githubCreatePR({ projectPath, title: `${branch}` }),
+              )
+            }
+          >
+            Open pull request for {branch}
+          </Button>
+        </div>
       )}
     </Card>
   );

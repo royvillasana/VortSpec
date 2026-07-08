@@ -28,7 +28,8 @@ import type { SetupAnswers } from "../shared/setup";
 import { startRun, cancelRun, hasActiveRun, getLastRun } from "./agent/run-manager";
 import { getUsage } from "./usage/usage-reader";
 import * as gitAdapter from "./git/git-adapter";
-import { getGithubAuth } from "./git/github";
+import { getGithubAuth, switchGithubAccount, createGithubRepo, createGithubPR } from "./git/github";
+import type { RepoVisibility } from "../shared/git";
 import { readProfile, saveProfile } from "./settings/profile-manager";
 import type { Profile } from "../shared/profile";
 import {
@@ -129,6 +130,11 @@ const handlers: Record<IpcChannel, Handler> = {
   "git:push": ((p: string) => gitAdapter.push(p)) as Handler,
   "git:init": ((p: string) => gitAdapter.init(p)) as Handler,
   "github:auth": (() => getGithubAuth()) as Handler,
+  "github:switchAccount": ((r: { account: string }) => switchGithubAccount(r.account)) as Handler,
+  "github:createRepo": ((r: { projectPath: string; name: string; visibility: RepoVisibility; description?: string }) =>
+    createGithubRepo(r.projectPath, { name: r.name, visibility: r.visibility, description: r.description })) as Handler,
+  "github:createPR": ((r: { projectPath: string; base?: string; title: string; body?: string }) =>
+    createGithubPR(r.projectPath, { base: r.base, title: r.title, body: r.body })) as Handler,
   "profile:get": (() => readProfile()) as Handler,
   "profile:save": ((profile: Profile) => saveProfile(profile)) as Handler,
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { parseStatus, parseBranches, parseLog } from "./git-adapter";
-import { parseGhAccounts } from "./github";
+import { parseGhAccounts, buildRepoCreateArgs, buildPrCreateArgs, parseGithubUrl } from "./github";
 
 describe("parseStatus (porcelain v2)", () => {
   const SAMPLE = [
@@ -89,5 +89,36 @@ describe("parseGhAccounts", () => {
   });
   it("returns none when signed out", () => {
     expect(parseGhAccounts("You are not logged into any GitHub hosts.")).toEqual([]);
+  });
+});
+
+describe("gh provider arg builders (M2)", () => {
+  it("builds repo-create args that push the current folder, name as argv", () => {
+    const args = buildRepoCreateArgs({ name: "my repo", visibility: "private", description: "d" });
+    expect(args).toEqual([
+      "repo", "create", "my repo", "--private", "--source=.", "--remote=origin", "--push", "--description", "d",
+    ]);
+    // No shell metacharacters are escaped/joined — the name is its own argv element.
+    expect(args).toContain("my repo");
+  });
+
+  it("honors visibility and omits description when absent", () => {
+    expect(buildRepoCreateArgs({ name: "r", visibility: "public" })).toEqual([
+      "repo", "create", "r", "--public", "--source=.", "--remote=origin", "--push",
+    ]);
+  });
+
+  it("builds pr-create args with title/body and optional base; never forces", () => {
+    expect(buildPrCreateArgs({ title: "t", body: "b", base: "main" })).toEqual([
+      "pr", "create", "--title", "t", "--body", "b", "--base", "main",
+    ]);
+    expect(buildPrCreateArgs({ title: "t" })).toEqual(["pr", "create", "--title", "t", "--body", ""]);
+    expect(buildPrCreateArgs({ title: "t" }).join(" ")).not.toContain("--force");
+  });
+
+  it("extracts the created repo/PR url and trims trailing punctuation", () => {
+    expect(parseGithubUrl("✓ Created repository me/app\nhttps://github.com/me/app")).toBe("https://github.com/me/app");
+    expect(parseGithubUrl("see https://github.com/me/app/pull/3.")).toBe("https://github.com/me/app/pull/3");
+    expect(parseGithubUrl("no url here")).toBeNull();
   });
 });

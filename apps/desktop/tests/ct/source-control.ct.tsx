@@ -55,6 +55,35 @@ test("shows the GitHub connect hint when not authenticated", async ({ mount }) =
   await expect(c.getByText(/gh auth login/)).toBeVisible();
 });
 
+const AUTHED_ONE = { provider: "github" as const, cliInstalled: true, authenticated: true, accounts: ["octocat"], activeAccount: "octocat", hint: null };
+const AUTHED_MULTI = { provider: "github" as const, cliInstalled: true, authenticated: true, accounts: ["octocat", "hubber"], activeAccount: "octocat", hint: null };
+
+test("offers Create repo when connected with no remote (M2)", async ({ mount }) => {
+  const c = await mount(<SourceControl {...props} />, {
+    hooksConfig: { mock: { gitStatus: DIRTY, gitRemotes: [], githubAuth: AUTHED_ONE } },
+  });
+  await expect(c.getByText("Connected")).toBeVisible();
+  await c.getByRole("button", { name: /Create GitHub repo/ }).click();
+  await expect(c.getByPlaceholder("new-repo-name")).toBeVisible();
+  await expect(c.getByRole("button", { name: "Create & push" })).toBeVisible();
+});
+
+test("shows the account picker for multiple accounts (M2)", async ({ mount }) => {
+  const c = await mount(<SourceControl {...props} />, {
+    hooksConfig: { mock: { gitStatus: DIRTY, githubAuth: AUTHED_MULTI } },
+  });
+  await expect(c.getByText(/2 accounts — pick which to use/)).toBeVisible();
+});
+
+test("offers Open pull request when connected with a remote (M2)", async ({ mount }) => {
+  const c = await mount(<SourceControl {...props} />, {
+    hooksConfig: {
+      mock: { gitStatus: DIRTY, gitRemotes: [{ name: "origin", url: "https://github.com/me/app.git" }], githubAuth: AUTHED_ONE },
+    },
+  });
+  await expect(c.getByRole("button", { name: /Open pull request for feature\/x/ })).toBeVisible();
+});
+
 test("offers to initialize when the folder is not a repo", async ({ mount }) => {
   const c = await mount(<SourceControl {...props} />, {
     hooksConfig: {
