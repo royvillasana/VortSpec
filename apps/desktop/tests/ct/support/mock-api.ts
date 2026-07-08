@@ -76,6 +76,8 @@ export interface MockConfig {
   terminalGreeting?: string;
   /** Figma connection status returned by figmaStatus(). */
   figma?: import("@vortspec/core/ipc").FigmaConnection;
+  /** Result returned by figmaSyncVariables(). */
+  figmaSync?: import("@vortspec/core/ipc").FigmaSyncResult;
 }
 
 const EMPTY_TOKENS: InspectorTokensResult = {
@@ -284,6 +286,14 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
         openFiles: ["Design System"],
         appName: "VortSpec",
         message: "Connected to Figma Desktop (yolo mode).",
+      },
+    figmaSyncVariables: async () =>
+      cfg.figmaSync ?? {
+        ok: true,
+        count: 12,
+        source: "cli",
+        mode: "yolo",
+        message: "Read 12 Figma variables via figma-cli (yolo mode).",
       },
 
     setPublishTarget: async () => null,

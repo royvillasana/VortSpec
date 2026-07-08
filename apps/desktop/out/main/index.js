@@ -4,12 +4,12 @@ import { electronApp, optimizer, is } from "@electron-toolkit/utils";
 import { z } from "zod";
 import { spawn } from "node:child_process";
 import { join, resolve as resolve$1, sep, basename, dirname, extname } from "node:path";
-import { access, mkdir, readFile as readFile$1, writeFile as writeFile$1, cp, copyFile, appendFile, readdir, symlink, stat } from "node:fs/promises";
+import { access, mkdir, readFile as readFile$1, writeFile as writeFile$1, cp, copyFile, appendFile, readdir, symlink, rm, stat } from "node:fs/promises";
 import { createHash, randomUUID } from "node:crypto";
 import { createRequire } from "node:module";
 import { watch, promises, existsSync } from "node:fs";
 import { spawn as spawn$1 } from "node-pty";
-import { homedir, platform } from "node:os";
+import { tmpdir, homedir, platform } from "node:os";
 import { EventEmitter } from "node:events";
 import __cjs_mod__ from "node:module";
 const __filename = import.meta.filename;
@@ -528,6 +528,19 @@ const figmaConnectionSchema = z.object({
   message: z.string()
 });
 const figmaConnectRequestSchema = z.object({ mode: figmaCliModeSchema });
+const figmaSyncRequestSchema = z.object({ projectPath: z.string() });
+const figmaSyncResultSchema = z.object({
+  /** the export succeeded and the cache was written. */
+  ok: z.boolean(),
+  /** how many variables were written. */
+  count: z.number(),
+  /** what produced the export, or null when the CLI was unavailable. */
+  source: z.enum(["cli"]).nullable(),
+  /** the CLI mode the export ran under, if known. */
+  mode: figmaCliModeSchema.nullable(),
+  /** a human, next-step message (e.g. why the CLI couldn't be used). */
+  message: z.string()
+});
 const frameworkSchema = z.enum([
   "react",
   "next",
@@ -860,6 +873,7 @@ const ipcContract = {
   "figma:status": { request: z.void(), response: figmaConnectionSchema },
   "figma:openAppManagement": { request: z.void(), response: z.void() },
   "figma:connect": { request: figmaConnectRequestSchema, response: figmaConnectionSchema },
+  "figma:syncVariables": { request: figmaSyncRequestSchema, response: figmaSyncResultSchema },
   "toolkit:status": { request: z.string(), response: toolkitStatusSchema },
   "toolkit:install": { request: z.string(), response: toolkitStatusSchema },
   "agent:startRun": {
@@ -1563,6 +1577,74 @@ function killAllSessions() {
   }
   sessions.clear();
 }
+const FIGMA_VARS_PATH = ".vortspec/figma-variables.json";
+function normName(name) {
+  return name.replace(/^--/, "").trim().toLowerCase().replace(/[\s/._]+/g, "-").replace(/-+/g, "-");
+}
+function normValue(value) {
+  let s = value.trim().toLowerCase().replace(/\s+/g, " ");
+  const hex = s.match(/^#([0-9a-f]{3,8})$/);
+  if (hex) {
+    let h = hex[1];
+    if (h.length === 3 || h.length === 4) h = h.split("").map((c) => c + c).join("");
+    if (h.length === 8 && h.endsWith("ff")) h = h.slice(0, 6);
+    s = `#${h}`;
+  }
+  return s;
+}
+async function readFigmaVariables(projectPath) {
+  let raw;
+  try {
+    raw = await readFile$1(join(projectPath, FIGMA_VARS_PATH), "utf8");
+  } catch {
+    return null;
+  }
+  let data;
+  try {
+    data = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+  const rows = Array.isArray(data) ? data : data && typeof data === "object" ? Object.entries(data).map(([name, value]) => ({ name, value })) : [];
+  const vars = [];
+  for (const row of rows) {
+    if (!row || typeof row !== "object") continue;
+    const r = row;
+    const name = typeof r.name === "string" ? r.name : null;
+    const value = r.resolvedValue ?? r.value ?? r.resolved ?? r.val;
+    if (!name || value == null) continue;
+    const parsed = figmaVariableSchema.safeParse({
+      name,
+      resolvedValue: String(value),
+      type: r.type,
+      collection: r.collection
+    });
+    if (parsed.success) vars.push(parsed.data);
+  }
+  return vars;
+}
+function reconcile$1(tokens, figmaVars) {
+  const codeByNorm = /* @__PURE__ */ new Map();
+  for (const t of tokens) codeByNorm.set(normName(t.name), t.resolvedValue);
+  const byName = /* @__PURE__ */ new Map();
+  const figmaOnly = [];
+  const seen = /* @__PURE__ */ new Set();
+  for (const v of figmaVars) {
+    const key = normName(v.name);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const codeValue = codeByNorm.get(key);
+    if (codeValue === void 0) {
+      figmaOnly.push(v);
+      continue;
+    }
+    byName.set(key, {
+      figmaValue: v.resolvedValue,
+      drift: normValue(codeValue) === normValue(v.resolvedValue) ? "in-sync" : "drifted"
+    });
+  }
+  return { byName, figmaOnly };
+}
 function figmaCliDir() {
   return process.env.VORTSPEC_FIGMA_CLI_DIR || join(homedir(), "figma-cli");
 }
@@ -1653,6 +1735,113 @@ async function connect(mode) {
   await run(mode === "safe" ? ["connect", "--safe"] : ["connect"], 6e4);
   return getConnection();
 }
+function mapDtcgType($type, name) {
+  const t = ($type ?? "").toLowerCase();
+  if (t === "color" || t === "gradient") return "color";
+  if (t === "shadow" || t === "boxshadow") return "shadow";
+  if (t === "typography" || t === "fontfamily" || t === "fontweight" || t === "fontsize" || t === "lineheight" || t === "letterspacing")
+    return "typography";
+  if (/radius|corner|rounded/i.test(name)) return "radius";
+  if (t === "dimension" || t === "number" || t === "duration") return "spacing";
+  return "other";
+}
+function stringifyValue(value) {
+  if (value == null) return "";
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+}
+function dtcgToVariables(dtcg) {
+  const out = [];
+  const walk = (node, path, inheritedType) => {
+    if (!node || typeof node !== "object") return;
+    const obj = node;
+    const declaredType = typeof obj.$type === "string" ? obj.$type : inheritedType;
+    if ("$value" in obj) {
+      const name = path.join("/");
+      if (name) {
+        out.push({
+          name,
+          resolvedValue: stringifyValue(obj.$value),
+          type: mapDtcgType(declaredType, name)
+        });
+      }
+      return;
+    }
+    for (const [key, child] of Object.entries(obj)) {
+      if (key.startsWith("$")) continue;
+      walk(child, [...path, key], declaredType);
+    }
+  };
+  walk(dtcg, [], void 0);
+  return out;
+}
+async function syncVariablesToCache(projectPath) {
+  const conn = await getConnection();
+  if (!conn.installed) {
+    return {
+      ok: false,
+      count: 0,
+      source: null,
+      mode: null,
+      message: "figma-cli isn't set up. Set it up for the fast path, or sync via the Figma MCP instead."
+    };
+  }
+  if (!conn.connected) {
+    return {
+      ok: false,
+      count: 0,
+      source: null,
+      mode: conn.mode,
+      message: "figma-cli isn't connected to Figma Desktop yet. Connect it, or sync via the Figma MCP instead."
+    };
+  }
+  const tmp = join(tmpdir(), `vortspec-dtcg-${process.pid}-${Date.now()}.json`);
+  try {
+    const res = await run(["export", "dtcg", tmp], 3e4);
+    let raw;
+    try {
+      raw = await readFile$1(tmp, "utf8");
+    } catch {
+      const detail = (res.stderr || res.stdout || "").split("\n").find((l) => l.trim()) ?? "";
+      return {
+        ok: false,
+        count: 0,
+        source: "cli",
+        mode: conn.mode,
+        message: `figma-cli couldn't export variables from the focused file.${detail ? ` (${detail.trim()})` : ""}`
+      };
+    }
+    let vars;
+    try {
+      vars = dtcgToVariables(JSON.parse(raw));
+    } catch {
+      return {
+        ok: false,
+        count: 0,
+        source: "cli",
+        mode: conn.mode,
+        message: "figma-cli returned an export VortSpec couldn't parse."
+      };
+    }
+    await mkdir(join(projectPath, ".vortspec"), { recursive: true });
+    await writeFile$1(join(projectPath, FIGMA_VARS_PATH), `${JSON.stringify(vars, null, 2)}
+`, "utf8");
+    return {
+      ok: true,
+      count: vars.length,
+      source: "cli",
+      mode: conn.mode,
+      message: `Read ${vars.length} Figma variable${vars.length === 1 ? "" : "s"} via figma-cli${conn.mode ? ` (${conn.mode} mode)` : ""}.`
+    };
+  } finally {
+    await rm(tmp, { force: true }).catch(() => void 0);
+  }
+}
 const KEY_MAP = {
   design_source: "designSource",
   figma_file_url: "figmaFileUrl",
@@ -1700,74 +1889,6 @@ async function readProjectConfig(projectPath) {
   }
   const parsed = projectConfigSchema.safeParse(config);
   return parsed.success ? parsed.data : null;
-}
-const FIGMA_VARS_PATH = ".vortspec/figma-variables.json";
-function normName(name) {
-  return name.replace(/^--/, "").trim().toLowerCase().replace(/[\s/._]+/g, "-").replace(/-+/g, "-");
-}
-function normValue(value) {
-  let s = value.trim().toLowerCase().replace(/\s+/g, " ");
-  const hex = s.match(/^#([0-9a-f]{3,8})$/);
-  if (hex) {
-    let h = hex[1];
-    if (h.length === 3 || h.length === 4) h = h.split("").map((c) => c + c).join("");
-    if (h.length === 8 && h.endsWith("ff")) h = h.slice(0, 6);
-    s = `#${h}`;
-  }
-  return s;
-}
-async function readFigmaVariables(projectPath) {
-  let raw;
-  try {
-    raw = await readFile$1(join(projectPath, FIGMA_VARS_PATH), "utf8");
-  } catch {
-    return null;
-  }
-  let data;
-  try {
-    data = JSON.parse(raw);
-  } catch {
-    return null;
-  }
-  const rows = Array.isArray(data) ? data : data && typeof data === "object" ? Object.entries(data).map(([name, value]) => ({ name, value })) : [];
-  const vars = [];
-  for (const row of rows) {
-    if (!row || typeof row !== "object") continue;
-    const r = row;
-    const name = typeof r.name === "string" ? r.name : null;
-    const value = r.resolvedValue ?? r.value ?? r.resolved ?? r.val;
-    if (!name || value == null) continue;
-    const parsed = figmaVariableSchema.safeParse({
-      name,
-      resolvedValue: String(value),
-      type: r.type,
-      collection: r.collection
-    });
-    if (parsed.success) vars.push(parsed.data);
-  }
-  return vars;
-}
-function reconcile$1(tokens, figmaVars) {
-  const codeByNorm = /* @__PURE__ */ new Map();
-  for (const t of tokens) codeByNorm.set(normName(t.name), t.resolvedValue);
-  const byName = /* @__PURE__ */ new Map();
-  const figmaOnly = [];
-  const seen = /* @__PURE__ */ new Set();
-  for (const v of figmaVars) {
-    const key = normName(v.name);
-    if (seen.has(key)) continue;
-    seen.add(key);
-    const codeValue = codeByNorm.get(key);
-    if (codeValue === void 0) {
-      figmaOnly.push(v);
-      continue;
-    }
-    byName.set(key, {
-      figmaValue: v.resolvedValue,
-      drift: normValue(codeValue) === normValue(v.resolvedValue) ? "in-sync" : "drifted"
-    });
-  }
-  return { byName, figmaOnly };
 }
 const CSS_VAR = /--([\w-]+)\s*:\s*([^;]+);/g;
 const HEX = /^#(?:[0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/;
@@ -3831,6 +3952,7 @@ const handlers = {
   "figma:status": (() => getConnection()),
   "figma:openAppManagement": (() => openAppManagementSettings().then(() => void 0)),
   "figma:connect": ((r) => connect(r.mode)),
+  "figma:syncVariables": ((r) => syncVariablesToCache(r.projectPath)),
   "toolkit:status": ((path) => getToolkitStatus(path)),
   "toolkit:install": ((path) => installToolkit(path)),
   "agent:startRun": ((opts, sender) => startRun(sender, opts)),

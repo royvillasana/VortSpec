@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type {
   EnvCheck,
+  FigmaConnection,
   FigmaVariable,
   FileSnapshot,
   InspectorToken,
@@ -114,6 +115,9 @@ export function Inspector({
   const [figmaOnly, setFigmaOnly] = useState<FigmaVariable[]>([]);
   const [figmaSynced, setFigmaSynced] = useState(false);
   const [figmaEnv, setFigmaEnv] = useState<EnvCheck | null>(null);
+  // figma-cli is the PRIMARY reader; the Figma MCP (figmaEnv) is the fallback.
+  const [figmaCli, setFigmaCli] = useState<FigmaConnection | null>(null);
+  const [cliSyncing, setCliSyncing] = useState(false);
 
   // Gated rename/delete via a scoped Claude Code run (touches the token file +
   // component sources); snapshotted before the run so it can be reverted.
@@ -138,13 +142,39 @@ export function Inspector({
   useEffect(() => {
     void reloadTokens();
     void api.verifyFigmaMcp().then(setFigmaEnv);
+    void api.figmaStatus().then(setFigmaCli);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project.path]);
 
+  // Step 1's primary reader: figma-cli (fast, no token). When it isn't
+  // connected, fall back to the scoped-Claude MCP export. VortSpec always
+  // prefers the CLI but keeps the MCP path so users can still sync.
   async function syncFigma(): Promise<void> {
-    await figmaSync.start({ prompt: FIGMA_SYNC_PROMPT, cwd: project.path, bypassPermissions: true });
+    if (figmaCli?.connected) {
+      setCliSyncing(true);
+      try {
+        const r = await api.figmaSyncVariables(project.path);
+        if (r.ok) {
+          await reloadTokens();
+          flash(r.message);
+          return;
+        }
+        // CLI ran but couldn't export — surface why rather than silently
+        // spending Claude usage on the fallback.
+        flash(r.message);
+        return;
+      } finally {
+        setCliSyncing(false);
+      }
+    }
+    // Fallback: the Figma MCP via a scoped Claude Code run.
+    if (figmaEnv?.status === "pass") {
+      await figmaSync.start({ prompt: FIGMA_SYNC_PROMPT, cwd: project.path, bypassPermissions: true });
+      return;
+    }
+    flash("Connect figma-cli (preferred) or the Figma MCP to sync variables.");
   }
-  // When the export run finishes, re-read tokens (now reconciled against Figma).
+  // When the MCP export run finishes, re-read tokens (now reconciled against Figma).
   useEffect(() => {
     if (figmaSync.model.status !== "done") return;
     void reloadTokens().then(() => flash("Reconciled with Figma variables"));
@@ -234,7 +264,11 @@ export function Inspector({
   const selectedToken = tokens?.find((t) => t.name === selected) ?? null;
   const driftCount = tokens?.filter((t) => t.drift === "drifted").length ?? 0;
   const inSyncCount = tokens?.filter((t) => t.drift === "in-sync").length ?? 0;
-  const figmaConnected = figmaEnv?.status === "pass";
+  const cliConnected = figmaCli?.connected ?? false;
+  const mcpConnected = figmaEnv?.status === "pass";
+  // The sync button lights up when EITHER path can run; the CLI is preferred.
+  const figmaConnected = cliConnected || mcpConnected;
+  const syncSource: "cli" | "mcp" | null = cliConnected ? "cli" : mcpConnected ? "mcp" : null;
 
   async function saveValue(name: string, value: string): Promise<void> {
     const r = await api.setTokenValue(project.path, name, value);
@@ -274,7 +308,8 @@ export function Inspector({
             <div className="flex-1" />
             <FigmaSyncButton
               connected={figmaConnected}
-              running={figmaSync.running}
+              source={syncSource}
+              running={figmaSync.running || cliSyncing}
               synced={figmaSynced}
               onSync={() => void syncFigma()}
               onConnect={() => figmaEnv?.fix?.url && void api.openInstall(figmaEnv.fix.url)}
@@ -495,12 +530,15 @@ export function Inspector({
 /** Sync-from-Figma action, gated on the Desktop Bridge being connected. */
 function FigmaSyncButton({
   connected,
+  source,
   running,
   synced,
   onSync,
   onConnect,
 }: {
   connected: boolean;
+  /** which path will run: figma-cli (preferred), the Figma MCP, or neither. */
+  source: "cli" | "mcp" | null;
   running: boolean;
   synced: boolean;
   onSync: () => void;
@@ -510,7 +548,7 @@ function FigmaSyncButton({
     return (
       <button
         onClick={onConnect}
-        title="Figma MCP is not connected — reconciliation needs the Desktop Bridge"
+        title="No Figma connection. Preferred: set up figma-cli (fast, no token). Alternative: connect the Figma MCP / Desktop Bridge."
         className="flex items-center gap-1.5 rounded-full border border-vs-border-default bg-vs-bg-surface px-3 py-1 text-xs text-vs-text-muted hover:border-vs-border-strong hover:text-vs-text-secondary"
       >
         <span className="inline-block h-1.5 w-1.5 rounded-full bg-vs-text-muted" />
@@ -518,14 +556,21 @@ function FigmaSyncButton({
       </button>
     );
   }
+  const via = source === "cli" ? "figma-cli" : "Figma MCP";
   return (
     <button
       onClick={onSync}
       disabled={running}
+      title={
+        source === "cli"
+          ? "Reading variables directly through figma-cli (preferred — fast, no token)."
+          : "figma-cli isn't connected — syncing through the Figma MCP instead."
+      }
       className="flex items-center gap-1.5 rounded-full border border-vs-accent bg-vs-bg-elevated px-3 py-1 text-xs text-vs-text-primary hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
     >
       <span className="inline-block h-1.5 w-1.5 rounded-full bg-vs-success" />
       {running ? "Syncing…" : synced ? "Re-sync from Figma" : "Sync from Figma"}
+      <span className="text-[10px] text-vs-text-muted">· {via}</span>
     </button>
   );
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseFilesJson, parseMode } from "./figma-cli";
+import { parseFilesJson, parseMode, dtcgToVariables, mapDtcgType } from "./figma-cli";
 
 describe("parseFilesJson", () => {
   it("parses a JSON array of file names (string or object)", () => {
@@ -33,5 +33,77 @@ describe("parseMode", () => {
   });
   it("returns null when unknown", () => {
     expect(parseMode("Daemon running on port 3456")).toBeNull();
+  });
+});
+
+describe("mapDtcgType", () => {
+  it("maps color and gradient to color", () => {
+    expect(mapDtcgType("color", "brand/primary")).toBe("color");
+    expect(mapDtcgType("gradient", "hero/bg")).toBe("color");
+  });
+  it("maps shadow types to shadow", () => {
+    expect(mapDtcgType("shadow", "elevation/1")).toBe("shadow");
+  });
+  it("maps font-related types to typography", () => {
+    expect(mapDtcgType("fontFamily", "font/body")).toBe("typography");
+    expect(mapDtcgType("typography", "heading/lg")).toBe("typography");
+  });
+  it("uses the name hint for radius", () => {
+    expect(mapDtcgType("dimension", "radius/md")).toBe("radius");
+    expect(mapDtcgType("dimension", "corner-rounded")).toBe("radius");
+  });
+  it("maps plain dimensions/numbers to spacing", () => {
+    expect(mapDtcgType("dimension", "space/4")).toBe("spacing");
+    expect(mapDtcgType("number", "z-index/modal")).toBe("spacing");
+  });
+  it("falls back to other for unknown types", () => {
+    expect(mapDtcgType("duration", "motion/fast")).toBe("spacing");
+    expect(mapDtcgType(undefined, "misc/thing")).toBe("other");
+  });
+});
+
+describe("dtcgToVariables", () => {
+  it("flattens nested groups into slash-joined names with concrete values", () => {
+    const dtcg = {
+      "brand-primary": {
+        "100": { $type: "color", $value: "#e6f2f4" },
+        "500": { $type: "color", $value: "#087990" },
+      },
+      radius: { md: { $type: "dimension", $value: "8px" } },
+    };
+    expect(dtcgToVariables(dtcg)).toEqual([
+      { name: "brand-primary/100", resolvedValue: "#e6f2f4", type: "color" },
+      { name: "brand-primary/500", resolvedValue: "#087990", type: "color" },
+      { name: "radius/md", resolvedValue: "8px", type: "radius" },
+    ]);
+  });
+
+  it("inherits $type from an ancestor group that declares one", () => {
+    const dtcg = { color: { $type: "color", neutral: { white: { $value: "#ffffff" } } } };
+    expect(dtcgToVariables(dtcg)).toEqual([
+      { name: "color/neutral/white", resolvedValue: "#ffffff", type: "color" },
+    ]);
+  });
+
+  it("stringifies composite ($value objects) and ignores $-meta keys", () => {
+    const dtcg = {
+      $description: "root",
+      shadow: {
+        sm: { $type: "shadow", $value: { color: "#000", offsetX: "0", offsetY: "1px" }, $description: "small" },
+      },
+    };
+    expect(dtcgToVariables(dtcg)).toEqual([
+      {
+        name: "shadow/sm",
+        resolvedValue: JSON.stringify({ color: "#000", offsetX: "0", offsetY: "1px" }),
+        type: "shadow",
+      },
+    ]);
+  });
+
+  it("returns [] for non-object / empty input", () => {
+    expect(dtcgToVariables(null)).toEqual([]);
+    expect(dtcgToVariables("nope")).toEqual([]);
+    expect(dtcgToVariables({})).toEqual([]);
   });
 });

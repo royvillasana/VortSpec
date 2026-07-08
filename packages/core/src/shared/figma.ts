@@ -35,3 +35,25 @@ export const figmaConnectionSchema = z.object({
 export type FigmaConnection = z.infer<typeof figmaConnectionSchema>;
 
 export const figmaConnectRequestSchema = z.object({ mode: figmaCliModeSchema });
+
+/**
+ * Result of reading design variables from Figma into the local reconcile cache
+ * (`.vortspec/figma-variables.json`) — step 1's PRIMARY reader. `source` is
+ * `"cli"` when figma-cli produced the export, or null when the CLI couldn't
+ * (not installed/connected) and the caller should fall back to the MCP path.
+ */
+export const figmaSyncRequestSchema = z.object({ projectPath: z.string() });
+
+export const figmaSyncResultSchema = z.object({
+  /** the export succeeded and the cache was written. */
+  ok: z.boolean(),
+  /** how many variables were written. */
+  count: z.number(),
+  /** what produced the export, or null when the CLI was unavailable. */
+  source: z.enum(["cli"]).nullable(),
+  /** the CLI mode the export ran under, if known. */
+  mode: figmaCliModeSchema.nullable(),
+  /** a human, next-step message (e.g. why the CLI couldn't be used). */
+  message: z.string(),
+});
+export type FigmaSyncResult = z.infer<typeof figmaSyncResultSchema>;

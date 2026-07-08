@@ -22,6 +22,18 @@ const NOT_CONNECTED = {
   },
 };
 
+// figma-cli connected (the PRIMARY reader) — proof of a live Desktop connection.
+const CLI_CONNECTED = {
+  installed: true,
+  cliDir: "/Users/dev/figma-cli",
+  daemonRunning: true,
+  connected: true,
+  mode: "yolo" as const,
+  openFiles: ["Design Engineering System"],
+  appName: "VortSpec",
+  message: "Connected to Figma Desktop (yolo mode).",
+};
+
 const noop = (): void => {};
 const props = {
   project: PROJECT,
@@ -73,6 +85,43 @@ test("shows a Cancel button while a Figma sync is running", async ({ mount }) =>
   // The sync modal is up and offers a way out.
   await expect(c.getByText("Syncing Figma variables")).toBeVisible();
   await expect(c.getByRole("button", { name: "Cancel sync" })).toBeVisible();
+});
+
+test("prefers figma-cli for sync and reads variables without a Claude run", async ({ mount }) => {
+  const c = await mount(<Inspector {...props} />, {
+    hooksConfig: {
+      mock: {
+        tokens: TOKENS,
+        figmaMcp: NOT_CONNECTED, // MCP fallback unavailable — the CLI must carry it
+        figma: CLI_CONNECTED,
+        figmaSync: {
+          ok: true,
+          count: 93,
+          source: "cli",
+          mode: "yolo",
+          message: "Read 93 Figma variables via figma-cli (yolo mode).",
+        },
+      },
+    },
+  });
+  // The button advertises the CLI path even though the MCP isn't connected.
+  const btn = c.getByRole("button", { name: /Sync from Figma|Re-sync from Figma/ });
+  await expect(btn).toBeVisible();
+  await expect(c.getByText("· figma-cli")).toBeVisible();
+  await btn.click();
+  // Fast path: a toast, no scoped-Claude "Syncing Figma variables" modal.
+  await expect(c.getByText("Read 93 Figma variables via figma-cli (yolo mode).")).toBeVisible();
+  await expect(c.getByText("Syncing Figma variables")).toHaveCount(0);
+});
+
+test("falls back to the Figma MCP path when the CLI isn't connected", async ({ mount }) => {
+  const c = await mount(<Inspector {...props} />, {
+    hooksConfig: { mock: { tokens: TOKENS, figmaMcp: CONNECTED, runScript: RUNNING_ONLY } },
+  });
+  // No CLI → the button labels the MCP path.
+  await expect(c.getByText("· Figma MCP")).toBeVisible();
+  await c.getByRole("button", { name: /Sync from Figma|Re-sync from Figma/ }).click();
+  await expect(c.getByText("Syncing Figma variables")).toBeVisible();
 });
 
 test("gates the sync action when the Figma bridge is not connected", async ({ mount }) => {

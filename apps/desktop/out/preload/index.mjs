@@ -236,6 +236,7 @@ const api = {
   figmaStatus: () => invoke("figma:status", void 0),
   figmaOpenAppManagement: () => invoke("figma:openAppManagement", void 0),
   figmaConnect: (mode) => invoke("figma:connect", { mode }),
+  figmaSyncVariables: (projectPath) => invoke("figma:syncVariables", { projectPath }),
   setPublishTarget: (projectPath, repoUrl) => invoke("flow:setPublishTarget", { projectPath, repoUrl }),
   readArtifact: (projectPath, relPath) => invoke("artifact:read", { projectPath, relPath }),
   findLatestArtifact: (projectPath, suffix) => invoke("artifact:findLatest", { projectPath, suffix }),
