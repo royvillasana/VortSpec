@@ -4,14 +4,15 @@ Milestones I0→I5 are strictly ordered. I0 must leave the cockpit fully green b
 
 ## 1. I0 — Extract the shared core (no behavior change)
 
-- [ ] 1.1 Create `packages/core` and `packages/ui` workspace packages (package.json, tsconfig, build via electron-vite/tsup as appropriate); wire pnpm workspaces + Turborepo pipeline + path aliases `@vortspec/core`, `@vortspec/ui`.
-- [ ] 1.2 Move `apps/desktop/src/shared/*` (Zod IPC contracts + types) into `packages/core/src/shared`; re-export the public surface from `@vortspec/core`.
-- [ ] 1.3 Move the headless `main/*` engine into `packages/core/src/main`: AgentAdapter, run-manager/recorder, Git adapter + providers (github/gitlab/bitbucket), tasks/Jira + link-store, readers/parsers (tokens, components, manifest, usage), dev-server, profile/settings. Relocate their Vitest suites alongside.
-- [ ] 1.4 Expose a single `registerIpc(ipcMain, deps)` from `packages/core` that mounts the full handler set; keep it the sole IPC definition.
-- [ ] 1.5 Move the reusable renderer into `packages/ui`: `vs-*` tokens (`globals.css`), shared components (RunPanel, RunProgress, AssistantDock, cards) and shared panels (Source Control, Run app, Tasks, Tokens, Manifest, Profile) + their Playwright CT specs; leave guided-flow *orchestration* screen in `apps/desktop` but move its building-block components to `ui`.
-- [ ] 1.6 Repoint `apps/desktop`: main process calls `registerIpc` from core; renderer imports panels/components/tokens from `@vortspec/ui`; delete the now-duplicated local copies.
-- [ ] 1.7 Verify no React/Electron-renderer/Monaco import leaks into `packages/core` (lint rule or dependency check).
-- [ ] 1.8 Gate: `pnpm build && pnpm test && pnpm lint` green; cockpit end-to-end flow unchanged through the UI.
+- [x] 1.1 Create `packages/core` workspace package (source-only `.ts` exports, tsconfig, Turborepo pipeline, excluded from electron-vite externalize so Vite bundles it). `packages/ui` still to come in 1.5.
+- [x] 1.2 Move `apps/desktop/src/shared/*` (Zod IPC contracts + types) into `packages/core/src/shared`; repoint all 66 import sites to `@vortspec/core/*`.
+- [x] 1.3 Move the headless `main/*` engine into `packages/core/src/main`: AgentAdapter, run-manager/recorder, Git adapter + providers (github/gitlab/bitbucket), tasks/Jira + link-store, readers/parsers (tokens, components, manifest, usage), dev-server, profile/settings, environment, flow — and relocate their 23 Vitest suites alongside.
+- [x] 1.4 Expose `registerIpc` (+`stopAllDevServers`/`fixGuiPath`) from `@vortspec/core/main` as the sole IPC definition; the app's `main/index.ts` is now a thin shell that mounts it.
+- [x] 1.4b Single-source the SDD-DE procedure prompts: extract the build/re-scan/verify/resume/refactor prompt builders from `GuidedFlow` into `@vortspec/core/sdd-prompts`.
+- [ ] 1.5 Move the reusable renderer into `packages/ui`: `vs-*` tokens (`globals.css`), shared components (RunPanel, RunProgress, AssistantDock, cards) and shared panels (Source Control, Run app, Tasks, Tokens, Manifest, Profile) + their Playwright CT specs; leave guided-flow *orchestration* screen in `apps/desktop` but move its building-block components to `ui`. (Requires Tailwind v4 cross-package `@source` content wiring.)
+- [ ] 1.6 Repoint `apps/desktop`: renderer imports panels/components/tokens from `@vortspec/ui`; delete the now-duplicated local copies.
+- [x] 1.7 Verify no React/Electron-renderer/Monaco import leaks into `packages/core` (checked; clean).
+- [x] 1.8 Gate (for work landed so far): `pnpm build && pnpm test && pnpm lint` green — core 128 + desktop 12 = 140 vitest, 54 CT, typecheck (node+web). Re-run after 1.5/1.6.
 
 ## 2. I1 — IDE application shell
 
