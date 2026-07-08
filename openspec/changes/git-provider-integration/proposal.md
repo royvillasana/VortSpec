@@ -57,6 +57,14 @@ never shell-string interpolation of user input).
   they build (distinct from the Storybook component preview).
 - **Provider abstraction (M6)**: GitLab via `glab`, Bitbucket via git + its API,
   behind the same `GitProvider` interface and Source Control UI.
+- **Jira integration (M7)**: connect the user's own Jira (Atlassian) account and
+  **create + write stories** for task management / story tracking — the SDD-DE specs
+  become story content ("the spec is the story"), with specs/components/screens linked to
+  issues. Provider-abstracted (`TaskProvider`) so other trackers can follow.
+- **Multi-account selection (cross-cutting)**: users often have more than one account per
+  tool (multiple GitHub/GitLab logins, multiple Jira sites). Every connect flow **detects
+  the available accounts and, when more than one exists, asks which to connect** — never
+  assuming one; the choice is remembered per project as a reference, never a credential.
 
 ## Impact
 
@@ -72,4 +80,5 @@ never shell-string interpolation of user input).
   + repo create + push folder + PR · **M3** GitHub-as-source scan→build→push-back ·
   **M4** non-destructive parallel refactor of existing screens · **M5** vibe engineering
   (Screen Creation) + live localhost app runtime · **M6** GitLab + Bitbucket via the
-  provider abstraction.
+  provider abstraction · **M7** Jira integration (create/write stories). Multi-account
+  selection is cross-cutting across every connect flow.

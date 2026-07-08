@@ -27,6 +27,8 @@ import { getVerification } from "./inspector/verification-reader";
 import type { SetupAnswers } from "../shared/setup";
 import { startRun, cancelRun, hasActiveRun, getLastRun } from "./agent/run-manager";
 import { getUsage } from "./usage/usage-reader";
+import * as gitAdapter from "./git/git-adapter";
+import { getGithubAuth } from "./git/github";
 import { readProfile, saveProfile } from "./settings/profile-manager";
 import type { Profile } from "../shared/profile";
 import {
@@ -107,6 +109,26 @@ const handlers: Record<IpcChannel, Handler> = {
   "agent:hasActiveRun": ((projectPath: string) => hasActiveRun(projectPath)) as Handler,
   "agent:lastRun": ((projectPath: string) => getLastRun(projectPath)) as Handler,
   "usage:get": (() => getUsage()) as Handler,
+
+  "git:status": ((p: string) => gitAdapter.getStatus(p)) as Handler,
+  "git:branches": ((p: string) => gitAdapter.getBranches(p)) as Handler,
+  "git:remotes": ((p: string) => gitAdapter.getRemotes(p)) as Handler,
+  "git:log": ((p: string) => gitAdapter.getLog(p)) as Handler,
+  "git:stage": ((r: { projectPath: string; paths: string[] }) =>
+    gitAdapter.stage(r.projectPath, r.paths)) as Handler,
+  "git:unstage": ((r: { projectPath: string; paths: string[] }) =>
+    gitAdapter.unstage(r.projectPath, r.paths)) as Handler,
+  "git:commit": ((r: { projectPath: string; message: string }) =>
+    gitAdapter.commit(r.projectPath, r.message)) as Handler,
+  "git:checkout": ((r: { projectPath: string; name: string }) =>
+    gitAdapter.checkout(r.projectPath, r.name)) as Handler,
+  "git:createBranch": ((r: { projectPath: string; name: string }) =>
+    gitAdapter.createBranch(r.projectPath, r.name)) as Handler,
+  "git:fetch": ((p: string) => gitAdapter.fetch(p)) as Handler,
+  "git:pull": ((p: string) => gitAdapter.pull(p)) as Handler,
+  "git:push": ((p: string) => gitAdapter.push(p)) as Handler,
+  "git:init": ((p: string) => gitAdapter.init(p)) as Handler,
+  "github:auth": (() => getGithubAuth()) as Handler,
   "profile:get": (() => readProfile()) as Handler,
   "profile:save": ((profile: Profile) => saveProfile(profile)) as Handler,
 

@@ -1,32 +1,36 @@
 # Tasks — Git provider integration
 
 ## M1 — Core git ops + Source Control panel + fix connect
-- [ ] 1.1 `shared/git.ts`: Zod schemas — `GitStatus` (branch, ahead/behind, staged/
+- [x] 1.1 `shared/git.ts`: Zod schemas — `GitStatus` (branch, ahead/behind, staged/
   unstaged/untracked/conflicts), `GitBranch`, `GitRemote`, `GitLogEntry`, `GitDiff`,
   request types (stage/commit/branch/checkout/push/pull).
-- [ ] 1.2 `main/git/git-adapter.ts`: `run(cmd,args,cwd)` (arg-array, shell:false, typed
+- [x] 1.2 `main/git/git-adapter.ts`: `run(cmd,args,cwd)` (arg-array, shell:false, typed
   errors); inspect (`isRepo`, `status` via porcelain v2, `currentBranch`, `branches`,
   `remotes`, `log`, `diff`); mutate (`init`, `stage`, `unstage`, `commit`, `checkout`,
   `createBranch`, `fetch`, `pull`, `push` w/ `--set-upstream`). NO `deleteBranch` and no
   force-push — the adapter exposes no branch-deletion or history-rewrite capability.
-- [ ] 1.3 Stream long ops (fetch/pull/push) through the run-event model so progress shows
+- [~] 1.3 Stream long ops (fetch/pull/push) through the run-event model so progress shows
   and they're cancelable.
-- [ ] 1.4 IPC: `git:*` channels + handlers + preload + `api.*`. Zod at the boundary.
-- [ ] 1.5 `env-manager`: detect `git` (+ version) and `gh` presence.
-- [ ] 1.6 `renderer/.../views/SourceControl.tsx` + Git rail entry: repo header, branch
+- [x] 1.4 IPC: `git:*` channels + handlers + preload + `api.*`. Zod at the boundary.
+- [x] 1.5 `env-manager`: detect `git` (+ version) and `gh` presence.
+- [x] 1.6 `renderer/.../views/SourceControl.tsx` + Git rail entry: repo header, branch
   switcher + create (NO delete affordance), changes list (stage/unstage/discard),
   commit box, Pull/Push/Fetch; each shows the underlying command + streamed output;
   errors as fix-it cards.
-- [ ] 1.7 Fix the dead "Connect to GitHub" button: wire it to provider `authStatus` +
+- [x] 1.7 Fix the dead "Connect to GitHub" button: wire it to provider `authStatus` +
   the login guidance card.
-- [ ] 1.8 Tests: adapter unit (porcelain parsing, arg-array safety), Source Control CT.
-- [ ] 1.9 Gate green; Done-when: real git state renders; branch/stage/commit/push via UI.
+- [x] 1.8 Tests: adapter unit (porcelain parsing, arg-array safety), Source Control CT.
+- [x] 1.9 Gate green; Done-when: real git state renders; branch/stage/commit/push via UI.
 
 ## M2 — GitHub provider: connect, repo create, push folder, PR
 - [ ] 2.1 `GitProvider` interface + `providers/github.ts` (`gh auth status`,
   `gh repo create`, `gh pr create`); resolve provider by remote/config.
 - [ ] 2.2 Connect flow: detect `gh auth`; signed-out → guide `gh auth login --web` (or
   install `gh`), then re-check. Never handle the token.
+- [ ] 2.2a Generic multi-account picker: detect available accounts (`gh auth status`
+  lists accounts/hosts; `gh auth switch` to select) and, when >1, prompt which to connect;
+  remember the choice per project as a reference. Built once here, reused by GitLab,
+  Bitbucket, and Jira.
 - [ ] 2.3 Repo-create dialog (name, visibility, description) → `gh repo create` → set
   remote → push the folder.
 - [ ] 2.4 Open-PR action (branch → base) via `gh pr create`; degrade to plain-git push
@@ -67,11 +71,27 @@
   live localhost app inside VortSpec.
 
 ## M6 — GitLab + Bitbucket
-- [ ] 6.1 `providers/gitlab.ts` (`glab`) behind `GitProvider`; connect + repo + MR.
+- [ ] 6.1 `providers/gitlab.ts` (`glab`) behind `GitProvider`; connect (multi-account) + repo + MR.
 - [ ] 6.2 `providers/bitbucket.ts` (git + REST/app-password) behind `GitProvider`.
-- [ ] 6.3 Provider picker in connect/setup; same Source Control UI for all three.
+- [ ] 6.3 Provider picker in connect/setup; same Source Control UI for all three; reuse the
+  generic multi-account picker (2.2a).
 - [ ] 6.4 Tests + gate; Done-when: connect + push-back work for a GitLab and a Bitbucket repo.
+
+## M7 — Jira integration
+- [ ] 7.1 `TaskProvider` interface + `providers/jira.ts`: connect the user's Jira account —
+  prefer the user's Atlassian/Jira CLI. If no CLI is present when the user selects Jira,
+  offer to install it **with explicit permission** (confirm prompt showing what/how), then
+  drive its login; only if declined, fall back to an Atlassian API token in the OS keychain
+  (`safeStorage`). Multi-account aware (reuse 2.2a): pick the site/account when >1.
+- [ ] 7.2 `shared/task.ts` Zod contracts + IPC + preload + api; list projects/boards.
+- [ ] 7.3 Create stories/issues; write/update fields (summary, description, acceptance
+  criteria); every write an explicit user action.
+- [ ] 7.4 "The spec is the story": turn a VortSpec spec into a story and link the
+  spec/component/screen ↔ issue; read + display linked story status.
+- [ ] 7.5 A Jira/Tasks panel + rail entry; connect card with account picker; errors as fix-its.
+- [ ] 7.6 Tests + gate; Done-when: connect a chosen Jira account and create a story from a spec.
 
 ## Ship (per milestone)
 - [ ] S.1 Each milestone: `pnpm typecheck && pnpm test && pnpm test:ct && pnpm build &&
   pnpm lint` green, then bump + build + sign + release + verify the site download.
+ (M1: one-shot ops with a busy spinner; full run-event streaming deferred)

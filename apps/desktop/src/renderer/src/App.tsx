@@ -12,6 +12,7 @@ import { Verification } from "./views/Verification";
 import { History } from "./views/History";
 import { DesignManifest } from "./views/DesignManifest";
 import { Profile } from "./views/Profile";
+import { SourceControl } from "./views/SourceControl";
 import { DesignInput } from "./views/DesignInput";
 import { Intake } from "./views/Intake";
 import { NewProjectWizard } from "./views/NewProjectWizard";
@@ -88,7 +89,7 @@ export default function App(): React.JSX.Element {
   const [intakeProject, setIntakeProject] = useState<Project | null>(null);
   const [pendingSource, setPendingSource] = useState<Partial<SetupAnswers> | undefined>(undefined);
   const [projectView, setProjectView] = useState<
-    "flow" | "inspector" | "preview" | "run" | "review" | "verify" | "history" | "manifest"
+    "flow" | "inspector" | "preview" | "run" | "review" | "verify" | "history" | "manifest" | "source"
   >("flow");
   const [loading, setLoading] = useState(true);
   const [chatOpen, setChatOpen] = useState(false);
@@ -312,6 +313,17 @@ export default function App(): React.JSX.Element {
             onOpenInspector={() => setProjectView("inspector")}
             onOpenHistory={() => setProjectView("history")}
           />
+        ) : activeProject && projectView === "source" ? (
+          <SourceControl
+            project={activeProject}
+            onBack={() => setActiveProject(null)}
+            onFlow={() => setProjectView("flow")}
+            onRun={() => setProjectView("run")}
+            onPlayground={() => setProjectView("preview")}
+            onTokens={() => setProjectView("inspector")}
+            onManifest={() => setProjectView("manifest")}
+            onHistory={() => setProjectView("history")}
+          />
         ) : activeProject ? (
           <GuidedFlow
             project={activeProject}
@@ -322,6 +334,7 @@ export default function App(): React.JSX.Element {
             onOpenVerify={() => setProjectView("verify")}
             onOpenHistory={() => setProjectView("history")}
             onOpenManifest={() => setProjectView("manifest")}
+            onOpenSource={() => setProjectView("source")}
           />
         ) : (
           <Dashboard

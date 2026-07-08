@@ -22,6 +22,7 @@ const props = {
   onOpenVerify: noop,
   onOpenHistory: noop,
   onOpenManifest: noop,
+  onOpenSource: noop,
 };
 
 const TOKENS: InspectorTokensResult = {
@@ -197,6 +198,7 @@ test("surfaces outputs: manifest + optional publish, no completion gate", async 
   });
   await expect(c.getByText("Design manifest")).toBeVisible();
   await expect(c.getByRole("button", { name: "Open manifest" })).toBeVisible();
-  await expect(c.getByText("Publish to GitHub")).toBeVisible();
+  await expect(c.getByText("GitHub & source control")).toBeVisible();
+  await expect(c.getByRole("button", { name: "Open Source Control" })).toBeVisible();
   await expect(c.getByText("optional", { exact: true })).toBeVisible();
 });

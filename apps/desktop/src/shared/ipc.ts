@@ -2,6 +2,17 @@ import { z } from "zod";
 import { agentRunOptionsSchema, lastRunSchema } from "./run-events";
 import { usageResultSchema } from "./usage";
 import { profileSchema } from "./profile";
+import {
+  gitStatusSchema,
+  gitBranchSchema,
+  gitRemoteSchema,
+  gitLogEntrySchema,
+  gitResultSchema,
+  providerAuthSchema,
+  gitCommitRequestSchema,
+  gitPathsRequestSchema,
+  gitBranchRequestSchema,
+} from "./git";
 import { flowSchema, stageStatusSchema, runHistoryResultSchema } from "./flow";
 import { devServerStatusSchema } from "./dev-server";
 import { manifestResultSchema, manifestVersionsResultSchema } from "./manifest";
@@ -57,6 +68,15 @@ export type {
 } from "./run-events";
 export type { UsageResult, UsageLimit } from "./usage";
 export type { Profile, ProfilePreferences } from "./profile";
+export type {
+  GitStatus,
+  GitChange,
+  GitBranch,
+  GitRemote,
+  GitLogEntry,
+  GitResult,
+  ProviderAuth,
+} from "./git";
 export type {
   Flow,
   StageDef,
@@ -187,6 +207,22 @@ export const ipcContract = {
   "agent:hasActiveRun": { request: z.string(), response: z.boolean() },
   "agent:lastRun": { request: z.string(), response: lastRunSchema.nullable() },
   "usage:get": { request: z.void(), response: usageResultSchema },
+
+  // Git (M1) — additive only; no delete/force channels exist.
+  "git:status": { request: z.string(), response: gitStatusSchema },
+  "git:branches": { request: z.string(), response: z.array(gitBranchSchema) },
+  "git:remotes": { request: z.string(), response: z.array(gitRemoteSchema) },
+  "git:log": { request: z.string(), response: z.array(gitLogEntrySchema) },
+  "git:stage": { request: gitPathsRequestSchema, response: gitResultSchema },
+  "git:unstage": { request: gitPathsRequestSchema, response: gitResultSchema },
+  "git:commit": { request: gitCommitRequestSchema, response: gitResultSchema },
+  "git:checkout": { request: gitBranchRequestSchema, response: gitResultSchema },
+  "git:createBranch": { request: gitBranchRequestSchema, response: gitResultSchema },
+  "git:fetch": { request: z.string(), response: gitResultSchema },
+  "git:pull": { request: z.string(), response: gitResultSchema },
+  "git:push": { request: z.string(), response: gitResultSchema },
+  "git:init": { request: z.string(), response: gitResultSchema },
+  "github:auth": { request: z.void(), response: providerAuthSchema },
   "profile:get": { request: z.void(), response: profileSchema },
   "profile:save": { request: profileSchema, response: profileSchema },
 

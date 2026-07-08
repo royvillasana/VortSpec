@@ -46,6 +46,11 @@ export interface MockConfig {
   usage?: import("../../../src/shared/ipc").UsageResult;
   /** Profile returned by getProfile(). */
   profile?: import("../../../src/shared/ipc").Profile;
+  /** Git status for the Source Control view. */
+  gitStatus?: import("../../../src/shared/ipc").GitStatus;
+  gitBranches?: import("../../../src/shared/ipc").GitBranch[];
+  gitRemotes?: import("../../../src/shared/ipc").GitRemote[];
+  githubAuth?: import("../../../src/shared/ipc").ProviderAuth;
   /** Versions returned by listManifestVersions(). */
   manifestVersions?: ManifestVersion[];
   /** Flow returned by getFlow() — used by the manifest screen to read approval. */
@@ -126,6 +131,24 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
     lastRun: async () => cfg.lastRun ?? null,
     getUsage: async () =>
       cfg.usage ?? { available: false, headline: null, limits: [], note: null, raw: "", capturedAt: "", error: "no usage" },
+
+    // Git (source control)
+    gitStatus: async () =>
+      cfg.gitStatus ?? { isRepo: true, branch: "main", upstream: null, ahead: 0, behind: 0, staged: [], unstaged: [], untracked: [], conflicts: [], clean: true },
+    gitBranches: async () => cfg.gitBranches ?? [{ name: "main", current: true, remote: false, upstream: null }],
+    gitRemotes: async () => cfg.gitRemotes ?? [],
+    gitLog: async () => [],
+    gitStage: async () => ({ ok: true, message: "Staged." }),
+    gitUnstage: async () => ({ ok: true, message: "Unstaged." }),
+    gitCommit: async () => ({ ok: true, message: "Committed." }),
+    gitCheckout: async () => ({ ok: true, message: "Switched." }),
+    gitCreateBranch: async () => ({ ok: true, message: "Created." }),
+    gitFetch: async () => ({ ok: true, message: "Fetched." }),
+    gitPull: async () => ({ ok: true, message: "Pulled." }),
+    gitPush: async () => ({ ok: true, message: "Pushed." }),
+    gitInit: async () => ({ ok: true, message: "Initialized." }),
+    githubAuth: async () =>
+      cfg.githubAuth ?? { provider: "github", cliInstalled: true, authenticated: false, accounts: [], activeAccount: null, hint: "Run gh auth login." },
     getProfile: async () => cfg.profile ?? { name: "", avatarDataUrl: null, preferences: {} },
     saveProfile: async (p: import("../../../src/shared/ipc").Profile) => p,
     onAgentEvent: (cb: (e: { runId: string; event: RunEvent }) => void) => {

@@ -126,6 +126,43 @@ without leaving VortSpec:
 Reuses the AssistantDock/guided-run plumbing for the conversation and `dev-server.ts` for
 the runtime — no new engine, Claude Code still does the building.
 
+## Account selection (multi-account) — cross-cutting
+
+Users often have more than one account per tool — multiple GitHub logins/hosts, multiple
+GitLab, multiple Atlassian/Jira sites. **Every connect flow SHALL detect the available
+accounts and, when more than one exists, prompt the user to choose which to connect** —
+never silently assuming one. Detection uses each tool's native mechanism: `gh auth status`
+(lists accounts/hosts; `gh auth switch` selects), `glab auth status`, and the Jira sites/
+accounts the user's CLI/token can see. The chosen account is remembered **per project** as
+a reference (login/host/site id) — never a credential. A single generic **account-picker**
+component + a `connect(tool)` flow is built once (in M2) and reused by GitLab, Bitbucket,
+and Jira. This is invariant-safe: VortSpec selects among the user's *own* accounts and
+stores no secret of its own.
+
+## Jira integration (M7)
+
+Connect the user's Jira (Atlassian) account and create/write stories, so specs and screens
+map to tracked work — task management + story tracking, provider-abstracted like git.
+
+- **Auth (the user's own account, multi-account aware).** Prefer the user's own Atlassian/
+  Jira CLI (`acli`, or a community `jira` CLI). **When the user selects Jira connectivity
+  and no CLI is present, VortSpec offers to install it — with the user's explicit
+  permission** (a confirm prompt showing exactly what will be installed and how), then
+  drives the CLI's own login. This keeps Jira on the same "user's own tools" footing as
+  `gh`/`glab`. Only if the user *declines* the install do we fall back to an **Atlassian
+  API token stored in the OS keychain** (Electron `safeStorage`) as their own credential.
+  If multiple Jira sites/accounts are visible, ask which to connect (the cross-cutting rule
+  above). VortSpec provides no Jira account of its own and sends no telemetry.
+- **Capabilities.** List projects/boards; **create stories/issues**; **write/update** story
+  fields (summary, description, acceptance criteria); link a VortSpec spec / component /
+  screen to a story; read status for tracking. Every write is an explicit user action.
+- **Integration point — "the spec is the story."** The SDD-DE artifacts (enriched briefs,
+  component/interaction/page specs) become story content: optionally create a story per
+  component/screen with its spec as the description, and track build/verify status against
+  it. Bidirectional later (read story → seed a brief).
+- **Abstraction.** A `TaskProvider` interface mirrors `GitProvider`, so other trackers
+  (Linear, GitHub Issues) can follow without UI changes.
+
 ## Milestones
 
 - **M1** — GitAdapter core (status/branch/stage/commit/pull/push/fetch/diff) + Source
@@ -147,8 +184,11 @@ the runtime — no new engine, Claude Code still does the building.
   server embedded in VortSpec. *Done when:* a user describes a screen, it's built from the
   components, and it renders in a live localhost app inside the app.
 - **M6** — Provider abstraction realized for GitLab (`glab`) and Bitbucket behind the
-  same interface + UI. *Done when:* connect + push-back work for a GitLab and a Bitbucket
-  repo.
+  same interface + UI, each multi-account aware. *Done when:* connect + push-back work for
+  a GitLab and a Bitbucket repo.
+- **M7** — Jira integration: connect a chosen Jira account (multi-account aware),
+  create/write stories, link specs ↔ stories, read status. *Done when:* the user connects a
+  selected Jira account and creates a story from a VortSpec spec.
 
 ## Risks / decisions
 

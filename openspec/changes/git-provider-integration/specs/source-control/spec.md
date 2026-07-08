@@ -60,6 +60,21 @@ The app SHALL create a repository via the provider CLI and push the project fold
 - **WHEN** the user creates a repo (name/visibility) for an un-pushed project
 - **THEN** the app runs `gh repo create`, sets the remote, and pushes the folder to it
 
+### Requirement: Select among multiple accounts
+Every connect flow SHALL detect the accounts available for a tool and, when more than one
+exists, prompt the user to choose which to connect — never silently assuming one. This
+applies to all connectable tools (GitHub, GitLab, Bitbucket, Jira, and where applicable
+other integrations).
+
+#### Scenario: Multiple accounts detected
+- **WHEN** the user connects a tool and more than one account/host/site is available
+- **THEN** the app presents an account picker and connects only the chosen one, remembering
+  the choice per project as a reference (login/host/site id), not a credential
+
+#### Scenario: Single account
+- **WHEN** exactly one account is available
+- **THEN** it is used without a picker, and the connected account is shown
+
 ### Requirement: Provider abstraction
 Git operations SHALL be provider-agnostic behind a `GitProvider` interface so GitHub,
 GitLab, and Bitbucket share the same Source Control UI.

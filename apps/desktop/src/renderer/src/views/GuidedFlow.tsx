@@ -19,10 +19,6 @@ import { ProjectRail, projectRailItems } from "../components/ProjectRail";
  */
 
 const FOUNDATION_DEF = DEFAULT_FLOW.find((d) => d.kind === "source")!;
-const COMMIT_DEF = DEFAULT_FLOW.find((d) => d.id === "commit");
-const COMMIT_PROMPT =
-  COMMIT_DEF?.promptTemplate ??
-  "/commit\n\nRun the commit skill: commit the changes and open a PR. No direct pushes to main.";
 
 function buildOnePrompt(name: string, level?: string): string {
   return (
@@ -214,6 +210,7 @@ export function GuidedFlow({
   onOpenVerify,
   onOpenHistory,
   onOpenManifest,
+  onOpenSource,
 }: {
   project: Project;
   onBack: () => void;
@@ -223,6 +220,7 @@ export function GuidedFlow({
   onOpenVerify: () => void;
   onOpenHistory: () => void;
   onOpenManifest: () => void;
+  onOpenSource: () => void;
 }): React.JSX.Element {
   const [config, setConfig] = useState<ProjectConfig | null>(null);
   const [components, setComponents] = useState<InspectorComponent[] | null>(null);
@@ -398,6 +396,7 @@ export function GuidedFlow({
           onPlayground: onOpenPreview,
           onTokens: onOpenInspector,
           onManifest: onOpenManifest,
+          onSource: onOpenSource,
           onHistory: onOpenHistory,
         })}
       />
@@ -674,16 +673,11 @@ export function GuidedFlow({
                     onClick={onOpenManifest}
                   />
                   <OutputCard
-                    title="Publish to GitHub"
+                    title="GitHub & source control"
                     optional
-                    desc="Optional. Publish these components, tokens, and DESIGN.md with your own git/gh when you're ready to build screens for your site."
-                    cta="Commit & publish"
-                    onClick={() =>
-                      void op("Committing & publishing with your git/gh", COMMIT_PROMPT, {
-                        tools: ["Read", "Bash"],
-                        kind: "commit",
-                      })
-                    }
+                    desc="Connect GitHub, create/switch branches, and stage · commit · pull · push these components, tokens, and DESIGN.md — all in Source Control."
+                    cta="Open Source Control"
+                    onClick={onOpenSource}
                   />
                 </section>
               </>
