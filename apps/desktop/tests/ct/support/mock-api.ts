@@ -45,23 +45,27 @@ export interface MockConfig {
   /** Whether hasActiveRun() reports an in-flight run for the project (reconnect banner). */
   hasActiveRun?: boolean;
   /** The resumable last run returned by lastRun() — drives the resume card. */
-  lastRun?: import("../../../src/shared/ipc").LastRun | null;
+  lastRun?: import("@vortspec/core/ipc").LastRun | null;
   /** Usage snapshot returned by getUsage() — drives the Profile usage bars. */
-  usage?: import("../../../src/shared/ipc").UsageResult;
+  usage?: import("@vortspec/core/ipc").UsageResult;
   /** Profile returned by getProfile(). */
-  profile?: import("../../../src/shared/ipc").Profile;
+  profile?: import("@vortspec/core/ipc").Profile;
   /** Git status for the Source Control view. */
-  gitStatus?: import("../../../src/shared/ipc").GitStatus;
-  gitBranches?: import("../../../src/shared/ipc").GitBranch[];
-  gitRemotes?: import("../../../src/shared/ipc").GitRemote[];
-  githubAuth?: import("../../../src/shared/ipc").ProviderAuth;
-  taskAuth?: import("../../../src/shared/ipc").TaskAuth;
-  taskProjects?: import("../../../src/shared/ipc").TaskProject[];
-  taskLinks?: import("../../../src/shared/ipc").IssueLinks;
+  gitStatus?: import("@vortspec/core/ipc").GitStatus;
+  gitBranches?: import("@vortspec/core/ipc").GitBranch[];
+  gitRemotes?: import("@vortspec/core/ipc").GitRemote[];
+  githubAuth?: import("@vortspec/core/ipc").ProviderAuth;
+  taskAuth?: import("@vortspec/core/ipc").TaskAuth;
+  taskProjects?: import("@vortspec/core/ipc").TaskProject[];
+  taskLinks?: import("@vortspec/core/ipc").IssueLinks;
   /** Versions returned by listManifestVersions(). */
   manifestVersions?: ManifestVersion[];
   /** Flow returned by getFlow() — used by the manifest screen to read approval. */
   flow?: { state: { currentStageId: string; stages: { id: string; status: string }[] } } | null;
+  /** Projects returned by listProjects() — e.g. the IDE workspace picker's "Recent". */
+  projects?: import("@vortspec/core/ipc").Project[];
+  /** Project returned by pickFolder() — the IDE "Open a folder…" result. */
+  pickFolderResult?: import("@vortspec/core/ipc").Project | null;
 }
 
 const EMPTY_TOKENS: InspectorTokensResult = {
@@ -122,9 +126,9 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
       cfg.figmaMcp ?? { id: "figma-mcp", label: "Figma MCP", status: "unknown", detail: "" },
     openInstall: async () => undefined,
 
-    pickFolder: async () => null,
+    pickFolder: async () => cfg.pickFolderResult ?? null,
     createFolder: async () => null,
-    listProjects: async () => [],
+    listProjects: async () => cfg.projects ?? [],
     openFolder: async () => undefined,
     revealPath: async () => undefined,
     refreshProject: async (path: string) => ({ id: "p", name: "p", path }),
@@ -172,7 +176,7 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
     taskLinks: async () => cfg.taskLinks ?? {},
     taskIssueStatus: async () => ({ key: "DES-1", url: null, summary: null, status: "To Do" }),
     getProfile: async () => cfg.profile ?? { name: "", avatarDataUrl: null, preferences: {} },
-    saveProfile: async (p: import("../../../src/shared/ipc").Profile) => p,
+    saveProfile: async (p: import("@vortspec/core/ipc").Profile) => p,
     onAgentEvent: (cb: (e: { runId: string; event: RunEvent }) => void) => {
       eventSubs.add(cb);
       return () => eventSubs.delete(cb);

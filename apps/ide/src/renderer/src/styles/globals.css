@@ -1,0 +1,6 @@
+/* The VortSpec design system (Tailwind + vs-* tokens + base + animations) is
+   shared with the cockpit via @vortspec/ui. */
+@import "@vortspec/ui/styles/tokens.css";
+
+/* Scan this app's own renderer for utility classes. */
+@source "../";
