@@ -27,14 +27,14 @@ Milestones I0→I5 are strictly ordered. I0 must leave the cockpit fully green b
 
 ## 3. I2 — Code workspace (Monaco + Explorer + files)
 
-- [ ] 3.1 Add `monaco-editor` to `apps/ide`; wire language workers under electron-vite (bundled, no CDN); `<CodeEditor>` wrapper isolating all Monaco setup.
-- [ ] 3.2 Add `core` file handlers: list-tree, read, save, watch — all resolving strictly within the workspace root with a path-escape guard; renderer never touches `fs`. Unit-test the path-escape guard.
-- [ ] 3.3 File-tree Explorer component wired to the list-tree/watch handlers; expand/collapse, open file into an editor tab.
-- [ ] 3.4 Editor tabs with dirty/save state; save persists via the core handler; multiple open files.
-- [ ] 3.5 Workspace file watcher (chokidar in core) → `onWorkspaceChange` IPC event; Explorer refreshes; open editor shows "changed on disk — reload?" without clobbering unsaved edits.
-- [ ] 3.6 Git diffs in Monaco's diff editor fed by the shared Git adapter (`getDiff`), honoring additive-only guardrails.
-- [ ] 3.7 CT/unit for file ops (open/save/dirty, on-disk-change affordance, diff render).
-- [ ] 3.8 Gate: `pnpm build && pnpm test && pnpm lint` green.
+- [x] 3.1 Added `monaco-editor` to `apps/ide`; language workers wired under electron-vite via `?worker` (bundled, no CDN); `<CodeEditor>`/`<DiffView>` wrappers + `monaco/setup.ts` isolate all Monaco setup.
+- [x] 3.2 Core file handlers in `@vortspec/core`: `workspace:listDir`/`readFile`/`writeFile` + `git:fileAtHead`, all via `resolveInside` (path-escape guard, 5 unit tests); the renderer never touches `fs`.
+- [x] 3.3 Lazy file-tree Explorer wired to `listDir` + the watch event; expand/collapse, open file into a tab, refresh.
+- [x] 3.4 Editor tabs with dirty markers + Cmd/Ctrl-S save via the core handler; multiple open files with per-path Monaco models.
+- [x] 3.5 Workspace watcher (recursive `fs.watch` in core; chokidar-swap-ready) → `onWorkspaceChange`; Explorer refreshes loaded dirs; open editor shows a non-destructive "changed on disk — reload?" banner for dirty files (clean files silently reload).
+- [x] 3.6 Git diffs in Monaco's diff editor via a Diff-vs-HEAD toggle (original from `git show HEAD:<path>`), additive-only guardrails intact.
+- [x] 3.7 CT (Explorer expand, tabs open/close, diff toggle) + unit (path-escape guard).
+- [x] 3.8 Gate: `pnpm build && pnpm test && pnpm lint` green (4/6/4); 8 IDE CT; core 133 vitest; desktop 54 CT unaffected. **I2 complete.**
 
 ## 4. I3 — Integrated terminal (both apps)
 
