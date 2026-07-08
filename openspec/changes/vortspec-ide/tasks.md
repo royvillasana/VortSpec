@@ -18,12 +18,12 @@ Milestones I0→I5 are strictly ordered. I0 must leave the cockpit fully green b
 
 ## 2. I1 — IDE application shell
 
-- [ ] 2.1 Scaffold `apps/ide` (electron-vite + React + Tailwind with the shared `vs-*` tokens from `@vortspec/ui`); its `main/index.ts` mounts `registerIpc` from `@vortspec/core`; shared preload exposing the same `window.vortspec` API.
-- [ ] 2.2 Build the four-region layout shell: Activity bar + Explorer sidebar (left), editor group (center), preview pane (center/bottom), assistant chat (right); responsive splitters.
-- [ ] 2.3 Activity bar switches the sidebar among Explorer / Source Control / Tokens / Tasks / Manifest panels reused from `@vortspec/ui`.
-- [ ] 2.4 Workspace open/switch: folder picker + recent workspaces; all actions scoped to the workspace root; raw-form escape hatch (open/reveal file) available from panels.
-- [ ] 2.5 Playwright CT for the IDE shell (regions render, activity-bar switching, workspace-scoped state).
-- [ ] 2.6 Gate: `pnpm build && pnpm test && pnpm lint` green.
+- [x] 2.1 Scaffolded `apps/ide` (electron-vite + React + Tailwind with the shared `vs-*` tokens via `@vortspec/ui/styles/tokens.css`); `main/index.ts` mounts `registerIpc` from `@vortspec/core/main`; preload is the shared `@vortspec/core/preload` bridge (same `window.vortspec`).
+- [x] 2.2 Four-region layout shell: Activity bar (left), working area (Explorer + editor + live-preview placeholders for the code activity), assistant chat (right). Splitters/real editor land in I2/I4.
+- [x] 2.3 Activity bar switches the working area among the code view (Explorer) and the reused `@vortspec/ui` panels — Source Control / Tokens (Inspector) / Tasks / Manifest — their nav wired to the activity switcher. (Compacting the panels into a true narrow sidebar is a later refinement — noted in design open questions.)
+- [x] 2.4 Workspace open/switch via the shared workspace handlers (folder picker + recent projects); all actions scoped to the workspace root; raw-form escape hatch (reveal in Finder) in the Explorer.
+- [x] 2.5 Playwright CT for the IDE shell (picker + recents, four regions render, activity-bar switching, chat collapse) — reuses the cockpit's mock bridge; 4 specs green.
+- [x] 2.6 Gate: `pnpm build && pnpm test && pnpm lint` green across all 4 packages; IDE typecheck + 4 CT; desktop 54 CT unaffected. **I1 complete.**
 
 ## 3. I2 — Code workspace (Monaco + Explorer + files)
 
