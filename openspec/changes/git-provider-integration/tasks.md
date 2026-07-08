@@ -48,14 +48,14 @@
 - [x] 3.4 Tests + gate; Done-when: a repo becomes a built design system pushed back as a PR.
 
 ## M4 — Non-destructive parallel refactor
-- [ ] 4.1 Screen/page discovery: map the repo's existing screens + the UI they compose.
-- [ ] 4.2 Duplicate each screen against the built components as NEW parallel files (route
+- [x] 4.1 Screen/page discovery: map the repo's existing screens + the UI they compose.
+- [x] 4.2 Duplicate each screen against the built components as NEW parallel files (route
   tree / `*.vortspec.tsx` sibling / build flag) — Claude Code re-implements using DESIGN.md;
   originals never edited/moved/deleted.
-- [ ] 4.3 Side-by-side preview (old vs new).
-- [ ] 4.4 Deliver on a new branch + PR (additive; no delete/overwrite) with a generated
+- [~] 4.3 Side-by-side preview (old vs new).
+- [x] 4.4 Deliver on a new branch + PR (additive; no delete/overwrite) with a generated
   `MIGRATION.md` (old screen → new duplicate + switch-over steps); cutover is a human step.
-- [ ] 4.5 Tests + gate; Done-when: existing screens have token-driven duplicates in a PR,
+- [x] 4.5 Tests + gate; Done-when: existing screens have token-driven duplicates in a PR,
   originals byte-for-byte intact.
 
 ## M5 — Vibe engineering (Screen Creation) + live localhost runtime

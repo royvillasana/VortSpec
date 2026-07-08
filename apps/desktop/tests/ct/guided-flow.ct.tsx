@@ -200,5 +200,17 @@ test("surfaces outputs: manifest + optional publish, no completion gate", async 
   await expect(c.getByRole("button", { name: "Open manifest" })).toBeVisible();
   await expect(c.getByText("GitHub & source control")).toBeVisible();
   await expect(c.getByRole("button", { name: "Open Source Control" })).toBeVisible();
-  await expect(c.getByText("optional", { exact: true })).toBeVisible();
+  await expect(c.getByText("optional", { exact: true }).first()).toBeVisible();
+  // Non-destructive refactor (M4) — enabled once the manifest exists.
+  await expect(c.getByText("Refactor existing screens")).toBeVisible();
+  await expect(c.getByRole("button", { name: /Refactor screens/ })).toBeEnabled();
+});
+
+test("gates the refactor action until the manifest exists (M4)", async ({ mount }) => {
+  const c = await mount(<GuidedFlow {...props} />, {
+    hooksConfig: {
+      mock: { tokens: TOKENS, components: ROSTER, manifest: { path: "DESIGN.md", content: "", exists: false } },
+    },
+  });
+  await expect(c.getByRole("button", { name: /Refactor screens/ })).toBeDisabled();
 });

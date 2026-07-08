@@ -119,6 +119,32 @@ const NO_MANUAL_STEPS =
   "Do this entirely yourself, in the background — never tell me to open a browser, open Figma Dev " +
   "Mode, start a server, or run a command. You have the tools; use them.";
 
+/**
+ * Non-destructive parallel refactor (M4): duplicate the repo's existing screens onto
+ * the built design system as NEW parallel files — never edit/move/delete originals.
+ * Delivered additively (publish from Source Control on a new branch + PR).
+ */
+const REFACTOR_PROMPT = [
+  "Non-destructively refactor this project's existing screens/pages onto the built design system",
+  "(the components under the component dir + the design tokens + DESIGN.md). This is ADDITIVE — never",
+  "edit, move, rename, or delete any existing file.",
+  "",
+  "1. Discover the existing screens/pages and the UI they compose (routes, page components, top-level views).",
+  "2. For EACH existing screen, generate a NEW, parallel implementation that renders the same screen using",
+  "   ONLY the built token-driven components (import them from the component dir) and the design tokens — no",
+  "   hardcoded hex/px. Write each as a NEW file in a clearly separated namespace so old and new coexist:",
+  "   prefer a `vortspec/` route/dir tree mirroring the originals, or a `<Screen>.vortspec.<ext>` sibling.",
+  "   Read DESIGN.md as the hand-off. Match each screen's layout and content faithfully.",
+  "3. Do NOT modify, move, or delete the originals, their routes, or their imports — the app must still build",
+  "   and run exactly as before; the new screens are additive and NOT yet wired in.",
+  "4. Write `MIGRATION.md` at the project root: a table mapping each original screen → its new duplicate file,",
+  "   plus the exact switch-over steps (which import/route to change to adopt each new screen). State clearly",
+  "   that the cutover is a deliberate manual step for the team.",
+  "5. End with a one-line summary: how many screens you found and how many parallel duplicates you created.",
+  "",
+  "When done, publish from Source Control on a new branch + PR — never to main; the originals stay intact.",
+].join("\n");
+
 /** Resumes an interrupted run's own Claude Code session (via --resume). */
 const RESUME_PROMPT =
   "Continue exactly where the previous run stopped. Re-check what is already complete from the " +
@@ -673,6 +699,22 @@ export function GuidedFlow({
                     onClick={onOpenManifest}
                   />
                   <OutputCard
+                    title="Refactor existing screens"
+                    optional
+                    disabled={busy || !manifestExists}
+                    desc={
+                      manifestExists
+                        ? "Non-destructive. Duplicate this repo's existing screens onto the built components as new parallel files (originals untouched) + a MIGRATION.md, so your team can switch over on their own timeline. Publish from Source Control."
+                        : "Generate DESIGN.md first — the refactor duplicates your screens onto the built design system."
+                    }
+                    cta="Refactor screens (non-destructive)"
+                    onClick={() =>
+                      void op("Duplicating screens onto the design system (non-destructive)", REFACTOR_PROMPT, {
+                        kind: "build",
+                      })
+                    }
+                  />
+                  <OutputCard
                     title="GitHub & source control"
                     optional
                     desc="Connect GitHub, create/switch branches, and stage · commit · pull · push these components, tokens, and DESIGN.md — all in Source Control."
@@ -925,6 +967,7 @@ function OutputCard({
   cta,
   optional,
   onClick,
+  disabled,
 }: {
   title: string;
   mono?: string;
@@ -932,6 +975,7 @@ function OutputCard({
   cta: string;
   optional?: boolean;
   onClick: () => void;
+  disabled?: boolean;
 }): React.JSX.Element {
   return (
     <Card className="flex items-center gap-4 p-4">
@@ -951,7 +995,7 @@ function OutputCard({
         </div>
         <p className="mt-1 text-xs leading-relaxed text-vs-text-secondary">{desc}</p>
       </div>
-      <Button variant={optional ? "default" : "primary"} onClick={onClick}>
+      <Button variant={optional ? "default" : "primary"} disabled={disabled} onClick={onClick}>
         {cta}
       </Button>
     </Card>
