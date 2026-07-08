@@ -3,8 +3,8 @@ import type {
   Project,
   InspectorTokensResult,
   InspectorComponentsResult,
-} from "../../../src/shared/ipc";
-import type { RunEvent } from "../../../src/shared/run-events";
+} from "@vortspec/core/ipc";
+import type { RunEvent } from "@vortspec/core/run-events";
 
 export const PROJECT: Project = {
   id: "proj-1",

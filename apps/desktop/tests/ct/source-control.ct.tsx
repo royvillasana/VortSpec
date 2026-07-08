@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/experimental-ct-react";
 import { SourceControl } from "../../src/renderer/src/views/SourceControl";
 import { PROJECT } from "./support/fixtures";
-import type { GitStatus } from "../../src/shared/ipc";
+import type { GitStatus } from "@vortspec/core/ipc";
 
 const noop = (): void => {};
 const props = {

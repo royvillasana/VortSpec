@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/experimental-ct-react";
 import { Tasks } from "../../src/renderer/src/views/Tasks";
 import { PROJECT } from "./support/fixtures";
-import type { TaskAuth } from "../../src/shared/ipc";
+import type { TaskAuth } from "@vortspec/core/ipc";
 
 const noop = (): void => {};
 const props = {

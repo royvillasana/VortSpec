@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/experimental-ct-react";
 import { Inspector } from "../../src/renderer/src/views/Inspector";
 import { PROJECT, TOKENS } from "./support/fixtures";
-import type { RunEvent } from "../../src/shared/run-events";
+import type { RunEvent } from "@vortspec/core/run-events";
 
 // A run that starts but never finishes → the sync stays "running" so the Cancel
 // affordance is visible (the transcript has no result/exit event).

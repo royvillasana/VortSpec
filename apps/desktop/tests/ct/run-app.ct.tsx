@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/experimental-ct-react";
 import { RunApp } from "../../src/renderer/src/views/RunApp";
 import { PROJECT } from "./support/fixtures";
-import type { DevServerStatus } from "../../src/shared/ipc";
+import type { DevServerStatus } from "@vortspec/core/ipc";
 
 const noop = (): void => {};
 const props = {

@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/experimental-ct-react";
 import { DesignManifest } from "../../src/renderer/src/views/DesignManifest";
 import { PROJECT } from "./support/fixtures";
-import type { RunEvent } from "../../src/shared/run-events";
+import type { RunEvent } from "@vortspec/core/run-events";
 
 // A recorded design-doc run: init → write DESIGN.md → prose → done.
 const DESIGN_DOC_RUN: RunEvent[] = [

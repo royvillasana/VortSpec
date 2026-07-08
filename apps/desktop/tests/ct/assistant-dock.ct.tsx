@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/experimental-ct-react";
 import { AssistantDock } from "../../src/renderer/src/components/AssistantDock";
 import { PROJECT } from "./support/fixtures";
-import type { RunEvent } from "../../src/shared/run-events";
+import type { RunEvent } from "@vortspec/core/run-events";
 
 // A short assistant reply transcript for the started session.
 const REPLY: RunEvent[] = [

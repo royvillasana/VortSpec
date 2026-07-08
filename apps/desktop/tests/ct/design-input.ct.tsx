@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/experimental-ct-react";
 import { DesignInput } from "../../src/renderer/src/views/DesignInput";
 import { PROJECT } from "./support/fixtures";
-import type { SetupAnswers } from "../../src/shared/ipc";
+import type { SetupAnswers } from "@vortspec/core/ipc";
 
 const noop = (): void => {};
 

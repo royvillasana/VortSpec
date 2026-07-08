@@ -5,7 +5,7 @@
  * Components / Playground views can be driven deterministically without Electron
  * or the real main process. Test-only: loose typing is intentional here.
  */
-import type { RunEvent } from "../../../src/shared/run-events";
+import type { RunEvent } from "@vortspec/core/run-events";
 import type {
   InspectorTokensResult,
   InspectorComponentsResult,
@@ -14,7 +14,7 @@ import type {
   ManifestResult,
   ManifestVersion,
   VerificationResult,
-} from "../../../src/shared/ipc";
+} from "@vortspec/core/ipc";
 
 export interface MockConfig {
   tokens?: InspectorTokensResult;

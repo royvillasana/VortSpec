@@ -1,8 +1,8 @@
 import { test, expect } from "@playwright/experimental-ct-react";
 import { GuidedFlow } from "../../src/renderer/src/views/GuidedFlow";
 import { PROJECT } from "./support/fixtures";
-import type { InspectorComponentsResult, InspectorTokensResult } from "../../src/shared/ipc";
-import type { RunEvent } from "../../src/shared/run-events";
+import type { InspectorComponentsResult, InspectorTokensResult } from "@vortspec/core/ipc";
+import type { RunEvent } from "@vortspec/core/run-events";
 
 // A recorded build run: init → generate-artifacts + implement → done.
 const BUILD_RUN: RunEvent[] = [
