@@ -55,6 +55,9 @@ export interface MockConfig {
   gitBranches?: import("../../../src/shared/ipc").GitBranch[];
   gitRemotes?: import("../../../src/shared/ipc").GitRemote[];
   githubAuth?: import("../../../src/shared/ipc").ProviderAuth;
+  taskAuth?: import("../../../src/shared/ipc").TaskAuth;
+  taskProjects?: import("../../../src/shared/ipc").TaskProject[];
+  taskLinks?: import("../../../src/shared/ipc").IssueLinks;
   /** Versions returned by listManifestVersions(). */
   manifestVersions?: ManifestVersion[];
   /** Flow returned by getFlow() — used by the manifest screen to read approval. */
@@ -158,6 +161,16 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
     providerCreatePR: async () => ({ ok: true, message: "Opened a PR.", url: "https://github.com/me/app/pull/1" }),
     providerPublish: async () => ({ ok: true, message: "Published.", url: "https://github.com/me/app/pull/2" }),
     gitImport: async () => ({ ok: true, message: "Imported." }),
+
+    // Tasks (Jira)
+    taskAuth: async () =>
+      cfg.taskAuth ?? { provider: "jira", cliInstalled: false, configured: false, account: null, sites: [], installCommand: "brew install ankitpokhrel/jira-cli/jira-cli", hint: "Install the Jira CLI." },
+    taskInstall: async () => ({ ok: true, message: "Installed." }),
+    taskProjects: async () => cfg.taskProjects ?? [],
+    taskCreateIssue: async () => ({ ok: true, message: "Created DES-1.", key: "DES-1", url: "https://x.atlassian.net/browse/DES-1" }),
+    taskCreateFromSpec: async () => ({ ok: true, message: "Created DES-2.", key: "DES-2", url: null }),
+    taskLinks: async () => cfg.taskLinks ?? {},
+    taskIssueStatus: async () => ({ key: "DES-1", url: null, summary: null, status: "To Do" }),
     getProfile: async () => cfg.profile ?? { name: "", avatarDataUrl: null, preferences: {} },
     saveProfile: async (p: import("../../../src/shared/ipc").Profile) => p,
     onAgentEvent: (cb: (e: { runId: string; event: RunEvent }) => void) => {

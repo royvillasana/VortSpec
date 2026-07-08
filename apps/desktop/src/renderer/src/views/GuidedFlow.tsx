@@ -238,6 +238,7 @@ export function GuidedFlow({
   onOpenManifest,
   onOpenSource,
   onOpenRunApp,
+  onOpenTasks,
 }: {
   project: Project;
   onBack: () => void;
@@ -249,6 +250,7 @@ export function GuidedFlow({
   onOpenManifest: () => void;
   onOpenSource: () => void;
   onOpenRunApp: () => void;
+  onOpenTasks: () => void;
 }): React.JSX.Element {
   const [config, setConfig] = useState<ProjectConfig | null>(null);
   const [components, setComponents] = useState<InspectorComponent[] | null>(null);
@@ -426,6 +428,7 @@ export function GuidedFlow({
           onManifest: onOpenManifest,
           onSource: onOpenSource,
           onRunApp: onOpenRunApp,
+          onTasks: onOpenTasks,
           onHistory: onOpenHistory,
         })}
       />

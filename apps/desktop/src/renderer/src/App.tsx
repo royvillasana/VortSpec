@@ -14,6 +14,7 @@ import { DesignManifest } from "./views/DesignManifest";
 import { Profile } from "./views/Profile";
 import { SourceControl } from "./views/SourceControl";
 import { RunApp } from "./views/RunApp";
+import { Tasks } from "./views/Tasks";
 import { DesignInput } from "./views/DesignInput";
 import { Intake } from "./views/Intake";
 import { NewProjectWizard } from "./views/NewProjectWizard";
@@ -90,7 +91,7 @@ export default function App(): React.JSX.Element {
   const [intakeProject, setIntakeProject] = useState<Project | null>(null);
   const [pendingSource, setPendingSource] = useState<Partial<SetupAnswers> | undefined>(undefined);
   const [projectView, setProjectView] = useState<
-    "flow" | "inspector" | "preview" | "run" | "review" | "verify" | "history" | "manifest" | "source" | "runapp"
+    "flow" | "inspector" | "preview" | "run" | "review" | "verify" | "history" | "manifest" | "source" | "runapp" | "tasks"
   >("flow");
   const [loading, setLoading] = useState(true);
   const [chatOpen, setChatOpen] = useState(false);
@@ -337,6 +338,18 @@ export default function App(): React.JSX.Element {
             onHistory={() => setProjectView("history")}
             onSource={() => setProjectView("source")}
           />
+        ) : activeProject && projectView === "tasks" ? (
+          <Tasks
+            project={activeProject}
+            onBack={() => setActiveProject(null)}
+            onFlow={() => setProjectView("flow")}
+            onRun={() => setProjectView("run")}
+            onPlayground={() => setProjectView("preview")}
+            onTokens={() => setProjectView("inspector")}
+            onManifest={() => setProjectView("manifest")}
+            onHistory={() => setProjectView("history")}
+            onSource={() => setProjectView("source")}
+          />
         ) : activeProject ? (
           <GuidedFlow
             project={activeProject}
@@ -349,6 +362,7 @@ export default function App(): React.JSX.Element {
             onOpenManifest={() => setProjectView("manifest")}
             onOpenSource={() => setProjectView("source")}
             onOpenRunApp={() => setProjectView("runapp")}
+            onOpenTasks={() => setProjectView("tasks")}
           />
         ) : (
           <Dashboard

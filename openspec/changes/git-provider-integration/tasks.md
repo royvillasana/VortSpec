@@ -78,18 +78,18 @@
 - [x] 6.4 Tests + gate; Done-when: connect + push-back work for a GitLab and a Bitbucket repo.
 
 ## M7 — Jira integration
-- [ ] 7.1 `TaskProvider` interface + `providers/jira.ts`: connect the user's Jira account —
+- [~] 7.1 `TaskProvider` interface + `providers/jira.ts`: connect the user's Jira account —
   prefer the user's Atlassian/Jira CLI. If no CLI is present when the user selects Jira,
   offer to install it **with explicit permission** (confirm prompt showing what/how), then
   drive its login; only if declined, fall back to an Atlassian API token in the OS keychain
   (`safeStorage`). Multi-account aware (reuse 2.2a): pick the site/account when >1.
-- [ ] 7.2 `shared/task.ts` Zod contracts + IPC + preload + api; list projects/boards.
-- [ ] 7.3 Create stories/issues; write/update fields (summary, description, acceptance
+- [x] 7.2 `shared/task.ts` Zod contracts + IPC + preload + api; list projects/boards.
+- [x] 7.3 Create stories/issues; write/update fields (summary, description, acceptance
   criteria); every write an explicit user action.
-- [ ] 7.4 "The spec is the story": turn a VortSpec spec into a story and link the
+- [x] 7.4 "The spec is the story": turn a VortSpec spec into a story and link the
   spec/component/screen ↔ issue; read + display linked story status.
-- [ ] 7.5 A Jira/Tasks panel + rail entry; connect card with account picker; errors as fix-its.
-- [ ] 7.6 Tests + gate; Done-when: connect a chosen Jira account and create a story from a spec.
+- [x] 7.5 A Jira/Tasks panel + rail entry; connect card with account picker; errors as fix-its.
+- [x] 7.6 Tests + gate; Done-when: connect a chosen Jira account and create a story from a spec.
 
 ## Ship (per milestone)
 - [ ] S.1 Each milestone: `pnpm typecheck && pnpm test && pnpm test:ct && pnpm build &&

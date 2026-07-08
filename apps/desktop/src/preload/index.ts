@@ -90,6 +90,16 @@ const api = {
   gitImport: (req: { projectPath: string; url: string; branch?: string }) => invoke("git:import", req),
   providerPublish: (req: { projectPath: string; branch: string; title: string; body?: string }) =>
     invoke("provider:publish", req),
+
+  taskAuth: () => invoke("task:auth", undefined),
+  taskInstall: () => invoke("task:install", undefined),
+  taskProjects: () => invoke("task:projects", undefined),
+  taskCreateIssue: (req: { project: string; type: "Story" | "Task" | "Bug"; summary: string; description?: string }) =>
+    invoke("task:createIssue", req),
+  taskCreateFromSpec: (req: { projectPath: string; project: string; type: "Story" | "Task" | "Bug"; specPath: string; ref: string }) =>
+    invoke("task:createFromSpec", req),
+  taskLinks: (projectPath: string) => invoke("task:links", projectPath),
+  taskIssueStatus: (key: string) => invoke("task:issueStatus", key),
   getProfile: () => invoke("profile:get", undefined),
   saveProfile: (profile: Profile) => invoke("profile:save", profile),
   onAgentEvent: (callback: (payload: AgentEventEnvelope) => void) =>

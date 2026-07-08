@@ -3,6 +3,15 @@ import { agentRunOptionsSchema, lastRunSchema } from "./run-events";
 import { usageResultSchema } from "./usage";
 import { profileSchema } from "./profile";
 import {
+  taskAuthSchema,
+  taskProjectSchema,
+  taskIssueSchema,
+  taskResultSchema,
+  createIssueRequestSchema,
+  createFromSpecRequestSchema,
+  issueLinksSchema,
+} from "./task";
+import {
   gitStatusSchema,
   gitBranchSchema,
   gitRemoteSchema,
@@ -71,6 +80,7 @@ export type {
   AgentRawEnvelope,
   LastRun,
 } from "./run-events";
+export type { TaskAuth, TaskProject, TaskIssue, TaskResult, IssueType, IssueLinks } from "./task";
 export type { UsageResult, UsageLimit } from "./usage";
 export type { Profile, ProfilePreferences } from "./profile";
 export type {
@@ -234,6 +244,15 @@ export const ipcContract = {
   "provider:createPR": { request: prCreateRequestSchema, response: gitResultSchema },
   "git:import": { request: importRequestSchema, response: gitResultSchema },
   "provider:publish": { request: publishRequestSchema, response: gitResultSchema },
+
+  // Tasks (Jira, M7)
+  "task:auth": { request: z.void(), response: taskAuthSchema },
+  "task:install": { request: z.void(), response: taskResultSchema },
+  "task:projects": { request: z.void(), response: z.array(taskProjectSchema) },
+  "task:createIssue": { request: createIssueRequestSchema, response: taskResultSchema },
+  "task:createFromSpec": { request: createFromSpecRequestSchema, response: taskResultSchema },
+  "task:links": { request: z.string(), response: issueLinksSchema },
+  "task:issueStatus": { request: z.string(), response: taskIssueSchema },
   "profile:get": { request: z.void(), response: profileSchema },
   "profile:save": { request: profileSchema, response: profileSchema },
 

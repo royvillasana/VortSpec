@@ -14,7 +14,7 @@ export interface RailItem {
 }
 
 /** The canonical project destinations, in order. `manifest` (DESIGN.md) is the final step. */
-export type RailKey = "flow" | "run" | "playground" | "runapp" | "tokens" | "manifest" | "source" | "history";
+export type RailKey = "flow" | "run" | "playground" | "runapp" | "tokens" | "manifest" | "source" | "tasks" | "history";
 
 export interface RailNav {
   onFlow: () => void;
@@ -27,6 +27,8 @@ export interface RailNav {
   onSource?: () => void;
   /** Run App (live localhost runtime) — optional; appears only where wired. */
   onRunApp?: () => void;
+  /** Tasks (Jira) — optional; appears only where wired. */
+  onTasks?: () => void;
 }
 
 /**
@@ -47,6 +49,7 @@ export function projectRailItems(
     { key: "tokens", label: "Tokens", onClick: nav.onTokens },
     { key: "manifest", label: "Manifest", onClick: nav.onManifest },
     ...(nav.onSource ? [{ key: "source" as const, label: "Source Control", onClick: nav.onSource }] : []),
+    ...(nav.onTasks ? [{ key: "tasks" as const, label: "Tasks (Jira)", onClick: nav.onTasks }] : []),
     { key: "history", label: "History", onClick: nav.onHistory },
   ];
   return defs.map((d) => ({

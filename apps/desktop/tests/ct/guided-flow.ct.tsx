@@ -24,6 +24,7 @@ const props = {
   onOpenManifest: noop,
   onOpenSource: noop,
   onOpenRunApp: noop,
+  onOpenTasks: noop,
 };
 
 const TOKENS: InspectorTokensResult = {

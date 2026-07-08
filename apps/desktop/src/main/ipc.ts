@@ -30,6 +30,10 @@ import { getUsage } from "./usage/usage-reader";
 import * as gitAdapter from "./git/git-adapter";
 import { providerAuth, providerSwitchAccount, providerCreateRepo, providerCreatePR, providerPublish } from "./git/providers";
 import type { RepoVisibility, ProviderId } from "../shared/git";
+import { getJiraAuth, installJira, listJiraProjects, createJiraIssue, getJiraIssue } from "./tasks/jira";
+import { createIssueFromSpec } from "./tasks/manager";
+import { readLinks } from "./tasks/link-store";
+import type { IssueType } from "../shared/task";
 import { readProfile, saveProfile } from "./settings/profile-manager";
 import type { Profile } from "../shared/profile";
 import {
@@ -143,6 +147,16 @@ const handlers: Record<IpcChannel, Handler> = {
     gitAdapter.importInto(r.projectPath, r.url, r.branch)) as Handler,
   "provider:publish": ((r: { projectPath: string; branch: string; title: string; body?: string }) =>
     providerPublish(r.projectPath, { branch: r.branch, title: r.title, body: r.body })) as Handler,
+
+  "task:auth": (() => getJiraAuth()) as Handler,
+  "task:install": (() => installJira()) as Handler,
+  "task:projects": (() => listJiraProjects()) as Handler,
+  "task:createIssue": ((r: { project: string; type: IssueType; summary: string; description?: string }) =>
+    createJiraIssue(r)) as Handler,
+  "task:createFromSpec": ((r: { projectPath: string; project: string; type: IssueType; specPath: string; ref: string }) =>
+    createIssueFromSpec(r)) as Handler,
+  "task:links": ((projectPath: string) => readLinks(projectPath)) as Handler,
+  "task:issueStatus": ((key: string) => getJiraIssue(key)) as Handler,
   "profile:get": (() => readProfile()) as Handler,
   "profile:save": ((profile: Profile) => saveProfile(profile)) as Handler,
 
