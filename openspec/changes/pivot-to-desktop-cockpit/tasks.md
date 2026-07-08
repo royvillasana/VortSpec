@@ -2,6 +2,8 @@
 
 Organized by the PRD's D0→D4 milestones. Each milestone ends with its PRD "Done when" acceptance check. Milestones are strictly ordered; do not start a milestone until the previous one's acceptance check passes end-to-end.
 
+> **Reconciliation note (2026-07-08):** the D3/D4/D5 code shipped across later changes (`vortspec-ide` for the node-pty terminal + live preview; the design-inspector work for the dev server; run-recorder/history in core). Those infra tasks are now checked off with pointers. The tasks that remain open are **not buildable in isolation** — they are (a) **live end-to-end acceptances** that need a logged-in Claude Code + the SDD-DE toolkit + a display (`2.8`, `3.7/3.8`, `4.9`, `5.5`, `7.6`), (b) **release/signing** (`6.1`, `6.6`), (c) **first-run live-auth steps** (`7.2–7.5`, gated on interactive Claude `/login`), and (d) a few **deliberate defers** (`4.6` PTY-fallback routing, `4.8` Electron-display Playwright harness, `4.5` verify-severity cards pending real output, `6.4` Windows/Linux, `6.5` code-signing). No further solo build work; the blockers are the user's machine/login/certs.
+
 ## 0. Launch-gate verification (do first, blocks public ship)
 
 - [x] 0.1 Verify current Anthropic policy on third-party wrappers of Claude Code and the correct wrapper self-identification mechanism in official docs; record findings in `docs/`. Treat an unresolved answer as a blocker for any public build (PRD §13). → `docs/launch-gate-anthropic-policy.md` (compliant path confirmed for local dev: drive user's own non-bare `claude -p`; written Anthropic confirmation still required before public launch).
@@ -54,16 +56,16 @@ Organized by the PRD's D0→D4 milestones. Each milestone ends with its PRD "Don
 
 ## 5. D3 — Dev preview + history
 
-- [ ] 5.1 Implement dev-environment detection from the project's `package.json` scripts and run it in a managed PTY session (`dev-preview`).
-- [ ] 5.2 Render the dev server URL in an embedded preview panel with an open-in-browser escape hatch and server logs in the terminal view; stop the PTY cleanly (`dev-preview`).
-- [ ] 5.3 Implement local run recording as plain files under `.vortspec/runs/` (stages, timestamps, artifacts, approval decisions, outcome), git-ignorable by user choice (`run-history`).
-- [ ] 5.4 Build the run-history timeline reusing v1 history visuals, with openable per-run detail (`run-history`).
+- [x] 5.1 Dev-environment detection from `package.json` scripts — `dev-server.ts` (`readScripts`/`pickScript`: storybook→dev→start→preview) runs it in a managed child-process session (child_process, not node-pty — the managed-process seam is equivalent and simpler for a non-interactive server). Built during the design-inspector work; reconciled 2026-07-08.
+- [x] 5.2 Embedded preview of the dev/app server URL — `DevPreview.tsx` + `<PreviewPane>` (IDE I4) with open-in-browser, status via `devServerStatus`/`appServerStatus`, clean stop. Reconciled 2026-07-08.
+- [x] 5.3 Local run recording under `.vortspec/runs/<id>.json` — `run-recorder.ts` persists stages/timestamps/artifacts/decisions/outcome. Reconciled 2026-07-08.
+- [x] 5.4 Run-history timeline — `History.tsx` + `history-reader.ts` (`flow:getHistory`), openable per-run detail. Reconciled 2026-07-08.
 - [ ] 5.5 **D3 acceptance:** the generated component is visible running locally inside the app.
 
 ## 6. D4 — Distribution
 
 - [ ] 6.1 Produce packaged macOS builds via electron-builder (dmg), reusing the existing icons.
-- [ ] 6.2 Implement opt-in auto-update (update checks are the only network calls VortSpec itself makes).
+- [x] 6.2 Opt-in auto-update — `update-checker.ts` + `system:checkUpdate` IPC/api (`checkUpdate()`); the only network call VortSpec itself makes. Reconciled 2026-07-08.
 - [ ] 6.3 Onboarding polish pass over the environment-check → ready-project flow.
 - [ ] 6.4 Begin Windows/Linux builds: audit node-pty, path handling, and process-signal handling behind the PTY service.
 - [ ] 6.5 Defer code signing (tracked, not done in this milestone unless the launch gate requires it).
@@ -73,7 +75,7 @@ Organized by the PRD's D0→D4 milestones. Each milestone ends with its PRD "Don
 
 > Added per user request: after install + prior milestones, automate the three onboarding steps. Depends on the real PTY (built here / carried from D3) since Claude Code `/login` is interactive-only.
 
-- [ ] 7.1 Build the real node-pty/xterm.js embedded terminal service (the deferred D1/3.5 piece), isolated behind a PTY service so Windows portability is a contained change.
+- [x] 7.1 Real node-pty/xterm.js embedded terminal service — built in the IDE change (I3): `pty-manager.ts` (create/write/resize/kill, login shell in the workspace via an arg array) behind a PTY service + `terminal:*` IPC + `TERMINAL_DATA_CHANNEL`, mounted in both apps. Reconciled 2026-07-08.
 - [ ] 7.2 First-run setup surface: a one-click guided sequence (terminal → Claude auth → Figma MCP) with per-step status, resumable and idempotent (re-detects completed steps).
 - [ ] 7.3 Step 1 — open a terminal session in the embedded PTY as part of setup.
 - [ ] 7.4 Step 2 — run the Claude Code login flow in the PTY (browser OAuth); detect completion and re-verify login with no app restart; store no credentials. Skip when already logged in.
