@@ -38,7 +38,7 @@ test("opening a workspace reveals the four-region shell", async ({ mount }) => {
   // The code activity's Explorer + editor + preview regions.
   await expect(c.getByText("Explorer", { exact: true })).toBeVisible();
   await expect(c.getByText("No file open")).toBeVisible();
-  await expect(c.getByText("Live preview", { exact: true })).toBeVisible();
+  await expect(c.getByRole("button", { name: "Side-by-side" })).toBeVisible();
   // The assistant chat (right rail) toggle.
   await expect(rail.getByRole("button", { name: "Toggle assistant" })).toBeVisible();
 });

@@ -4,6 +4,7 @@ import type { Project } from "@vortspec/core/ipc";
 import { api } from "@vortspec/ui/api";
 import { Explorer } from "./Explorer";
 import { EditorGroup, type OpenFile } from "./EditorGroup";
+import { PreviewPane } from "./PreviewPane";
 
 /**
  * The "code" activity: Explorer (left) + editor group (top) + live-preview
@@ -14,6 +15,8 @@ import { EditorGroup, type OpenFile } from "./EditorGroup";
 export function CodeWorkspace({ project }: { project: Project }): JSX.Element {
   const [files, setFiles] = useState<OpenFile[]>([]);
   const [activePath, setActivePath] = useState<string | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(true);
+  const [layout, setLayout] = useState<"stacked" | "side">("stacked");
   const filesRef = useRef(files);
   filesRef.current = files;
 
@@ -101,25 +104,53 @@ export function CodeWorkspace({ project }: { project: Project }): JSX.Element {
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <EditorGroup
-          files={files}
-          activePath={activePath}
-          onActivate={setActivePath}
-          onClose={close}
-          onChange={change}
-          onSave={(p) => void save(p)}
-          onReload={(p) => void reload(p)}
-          loadHead={(p) => api.fileAtHead(project.path, p)}
-        />
-        <section className="flex h-2/5 items-center justify-center border-t border-vs-border-default bg-vs-bg-primary">
-          <div className="max-w-sm text-center">
-            <p className="text-sm text-vs-text-secondary">Live preview</p>
-            <p className="mt-1 text-xs text-vs-text-muted">
-              The running app / Storybook embeds here in I4 — screens on one side,
-              code on the other.
-            </p>
+        {/* Editor toolbar: layout + preview controls */}
+        <div className="flex flex-none items-center justify-end gap-1 border-b border-vs-border-subtle bg-vs-bg-surface px-2 py-1 text-[11px] text-vs-text-muted">
+          <button
+            type="button"
+            aria-pressed={layout === "side"}
+            onClick={() => setLayout((l) => (l === "stacked" ? "side" : "stacked"))}
+            className="rounded px-2 py-0.5 hover:text-vs-text-secondary"
+            title="Toggle editor/preview layout"
+          >
+            {layout === "stacked" ? "Side-by-side" : "Stacked"}
+          </button>
+          <button
+            type="button"
+            aria-pressed={previewOpen}
+            onClick={() => setPreviewOpen((v) => !v)}
+            className={`rounded px-2 py-0.5 ${previewOpen ? "text-vs-text-primary" : "hover:text-vs-text-secondary"}`}
+            title="Toggle live preview"
+          >
+            Preview
+          </button>
+        </div>
+
+        <div className={`flex min-h-0 min-w-0 flex-1 ${layout === "side" ? "flex-row" : "flex-col"}`}>
+          <div className="flex min-h-0 min-w-0 flex-1">
+            <EditorGroup
+              files={files}
+              activePath={activePath}
+              onActivate={setActivePath}
+              onClose={close}
+              onChange={change}
+              onSave={(p) => void save(p)}
+              onReload={(p) => void reload(p)}
+              loadHead={(p) => api.fileAtHead(project.path, p)}
+            />
           </div>
-        </section>
+          {previewOpen && (
+            <div
+              className={
+                layout === "side"
+                  ? "min-h-0 w-1/2 shrink-0 border-l border-vs-border-default"
+                  : "h-2/5 min-h-0 shrink-0 border-t border-vs-border-default"
+              }
+            >
+              <PreviewPane project={project} />
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
