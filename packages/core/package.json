@@ -12,6 +12,10 @@
       "types": "./src/main/index.ts",
       "default": "./src/main/index.ts"
     },
+    "./preload": {
+      "types": "./src/preload/index.ts",
+      "default": "./src/preload/index.ts"
+    },
     "./*": {
       "types": "./src/shared/*.ts",
       "default": "./src/shared/*.ts"

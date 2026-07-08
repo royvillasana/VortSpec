@@ -1,2 +1,3 @@
 /// <reference types="vite/client" />
-/// <reference types="../../preload/index.d.ts" />
+// Brings the `Window.vortspec` global (declared in @vortspec/core/api) into scope.
+import "@vortspec/core/api";
