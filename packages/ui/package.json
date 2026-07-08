@@ -20,7 +20,8 @@
     "./Tasks": { "types": "./src/views/Tasks.tsx", "default": "./src/views/Tasks.tsx" },
     "./Inspector": { "types": "./src/views/Inspector.tsx", "default": "./src/views/Inspector.tsx" },
     "./DesignManifest": { "types": "./src/views/DesignManifest.tsx", "default": "./src/views/DesignManifest.tsx" },
-    "./Profile": { "types": "./src/views/Profile.tsx", "default": "./src/views/Profile.tsx" }
+    "./Profile": { "types": "./src/views/Profile.tsx", "default": "./src/views/Profile.tsx" },
+    "./styles/tokens.css": "./src/styles/tokens.css"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json --noEmit",
