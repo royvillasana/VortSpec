@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { Project } from "@vortspec/core/ipc";
 import { useAgentRun } from "../lib/useAgentRun";
-import { Spinner } from "./ui";
+import { Spinner } from "@vortspec/ui/ui";
 
 /**
  * A persistent, project-scoped assistant chat. It talks to the user's own Claude

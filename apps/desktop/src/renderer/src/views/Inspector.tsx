@@ -11,9 +11,9 @@ import type {
 } from "@vortspec/core/ipc";
 import { api } from "../lib/api";
 import { useAgentRun } from "../lib/useAgentRun";
-import { Spinner } from "../components/ui";
-import { RunPanel } from "../components/RunPanel";
-import { ProjectRail, projectRailItems } from "../components/ProjectRail";
+import { Spinner } from "@vortspec/ui/ui";
+import { RunPanel } from "@vortspec/ui/RunPanel";
+import { ProjectRail, projectRailItems } from "@vortspec/ui/ProjectRail";
 
 /** Export Figma variables to a cache file so the cockpit can reconcile locally. Read-only w.r.t. code. */
 const FIGMA_SYNC_PROMPT = [

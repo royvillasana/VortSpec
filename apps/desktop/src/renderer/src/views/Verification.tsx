@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import type { Flow, FindingSeverity, Project, VerificationFinding } from "@vortspec/core/ipc";
 import { api } from "../lib/api";
-import { Button, Spinner } from "../components/ui";
-import { ProjectRail, ReviewBadge, projectRailItems } from "../components/ProjectRail";
+import { Button, Spinner } from "@vortspec/ui/ui";
+import { ProjectRail, ReviewBadge, projectRailItems } from "@vortspec/ui/ProjectRail";
 
 type Sev = FindingSeverity | "all";
 const SEV_COLOR: Record<FindingSeverity, string> = {

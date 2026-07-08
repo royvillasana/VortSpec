@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { Project, SetupAnswers } from "@vortspec/core/ipc";
 import { api } from "../lib/api";
-import { Button } from "../components/ui";
+import { Button } from "@vortspec/ui/ui";
 
 type Tab = "zip" | "figma" | "github" | "folder";
 type Mcp = "checking" | "ok" | "unauth" | "unknown";

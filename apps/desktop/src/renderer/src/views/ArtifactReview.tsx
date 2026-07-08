@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
 import type { Flow, Project, StageDef, StageState, StageStatus } from "@vortspec/core/ipc";
 import { api } from "../lib/api";
-import { Button, Spinner } from "../components/ui";
-import { Markdown } from "../components/Markdown";
-import { ProjectRail, ReviewBadge, projectRailItems } from "../components/ProjectRail";
+import { Button, Spinner } from "@vortspec/ui/ui";
+import { Markdown } from "@vortspec/ui/Markdown";
+import { ProjectRail, ReviewBadge, projectRailItems } from "@vortspec/ui/ProjectRail";
 
 /**
  * Artifact Review (design: "Artifact Review.dc.html", adapted to v2) — the

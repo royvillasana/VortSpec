@@ -1,4 +1,9 @@
 @import "tailwindcss";
+/* Shared UI components live in the @vortspec/ui workspace package, which sits
+   under node_modules (excluded from Tailwind's automatic content detection).
+   Point Tailwind at its source so utility classes used only by shared
+   components aren't purged from the build. */
+@source "../../../../../../packages/ui/src";
 /* v1 web-app extras (`tw-animate-css`, `shadcn/tailwind.css`) are re-added
    when shadcn components are introduced in the guided-flow milestones. */
 

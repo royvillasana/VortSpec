@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { Project } from "@vortspec/core/ipc";
 import { api } from "../lib/api";
-import { Button } from "../components/ui";
+import { Button } from "@vortspec/ui/ui";
 
 type FieldKind = "text" | "area" | "chips";
 interface Field {

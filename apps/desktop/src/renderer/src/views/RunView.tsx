@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import type { Project } from "@vortspec/core/ipc";
-import type { Activity, RunModel, RunStatus } from "../lib/run-model";
+import type { Activity, RunModel, RunStatus } from "@vortspec/ui/run-model";
 import { useLatestRun } from "../lib/useAgentRun";
-import { Button, Spinner } from "../components/ui";
-import { ProjectRail, projectRailItems } from "../components/ProjectRail";
+import { Button, Spinner } from "@vortspec/ui/ui";
+import { ProjectRail, projectRailItems } from "@vortspec/ui/ProjectRail";
 
 /**
  * Run View (design: "Run View.dc.html", adapted to v2) — a full-screen live

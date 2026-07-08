@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import type { IssueLinks, Project, TaskAuth, TaskProject } from "@vortspec/core/ipc";
 import { api } from "../lib/api";
-import { Button, Card, Spinner } from "../components/ui";
-import { ProjectRail, projectRailItems } from "../components/ProjectRail";
+import { Button, Card, Spinner } from "@vortspec/ui/ui";
+import { ProjectRail, projectRailItems } from "@vortspec/ui/ProjectRail";
 
 /**
  * Tasks (Jira, M7) — drives the user's own Jira CLI (no VortSpec account). Offers

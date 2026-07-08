@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import type { DevServerStatus, Project } from "@vortspec/core/ipc";
 import { api } from "../lib/api";
-import { Button, Spinner } from "../components/ui";
-import { ProjectRail, projectRailItems } from "../components/ProjectRail";
+import { Button, Spinner } from "@vortspec/ui/ui";
+import { ProjectRail, projectRailItems } from "@vortspec/ui/ProjectRail";
 
 /**
  * Run App (M5) — the live localhost runtime for the project's OWN app (its `dev`

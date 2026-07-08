@@ -13,11 +13,11 @@ import {
 } from "@vortspec/core/sdd-prompts";
 import { api } from "../lib/api";
 import { useAgentRun, useLatestRun } from "../lib/useAgentRun";
-import { deriveProgress, type OpKind } from "../lib/run-progress";
-import { Button, Card, Spinner } from "../components/ui";
-import { RunPanel } from "../components/RunPanel";
-import { RunProgress } from "../components/RunProgress";
-import { ProjectRail, projectRailItems } from "../components/ProjectRail";
+import { deriveProgress, type OpKind } from "@vortspec/ui/run-progress";
+import { Button, Card, Spinner } from "@vortspec/ui/ui";
+import { RunPanel } from "@vortspec/ui/RunPanel";
+import { RunProgress } from "@vortspec/ui/RunProgress";
+import { ProjectRail, projectRailItems } from "@vortspec/ui/ProjectRail";
 
 /**
  * The Design System workspace (design: "Guided Flow.dc.html", reframed to v2).

@@ -2,10 +2,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { ManifestResult, ManifestVersion, Project } from "@vortspec/core/ipc";
 import { api } from "../lib/api";
 import { useAgentRun } from "../lib/useAgentRun";
-import { Button, Spinner } from "../components/ui";
-import { RunPanel } from "../components/RunPanel";
-import { Markdown } from "../components/Markdown";
-import { ProjectRail, projectRailItems } from "../components/ProjectRail";
+import { Button, Spinner } from "@vortspec/ui/ui";
+import { RunPanel } from "@vortspec/ui/RunPanel";
+import { Markdown } from "@vortspec/ui/Markdown";
+import { ProjectRail, projectRailItems } from "@vortspec/ui/ProjectRail";
 
 const STAGE_ID = "design-manifest";
 const GENERATE_PROMPT = [

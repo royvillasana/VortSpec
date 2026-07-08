@@ -2,9 +2,9 @@ import { useEffect, useRef, useState } from "react";
 import type { DevServerStatus, Project } from "@vortspec/core/ipc";
 import { api } from "../lib/api";
 import { useAgentRun } from "../lib/useAgentRun";
-import { Button, Spinner } from "../components/ui";
-import { RunPanel } from "../components/RunPanel";
-import { ProjectRail, projectRailItems } from "../components/ProjectRail";
+import { Button, Spinner } from "@vortspec/ui/ui";
+import { RunPanel } from "@vortspec/ui/RunPanel";
+import { ProjectRail, projectRailItems } from "@vortspec/ui/ProjectRail";
 
 // Additive + idempotent: sets Storybook up if absent, then generates a story only
 // for components that don't already have one — so it doubles as "sync stories" as

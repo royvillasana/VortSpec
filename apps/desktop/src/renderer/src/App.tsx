@@ -18,7 +18,7 @@ import { Tasks } from "./views/Tasks";
 import { DesignInput } from "./views/DesignInput";
 import { Intake } from "./views/Intake";
 import { NewProjectWizard } from "./views/NewProjectWizard";
-import { Logo } from "./components/Logo";
+import { Logo } from "@vortspec/ui/Logo";
 import { AssistantDock } from "./components/AssistantDock";
 
 type View = "env" | "dashboard" | "profile";

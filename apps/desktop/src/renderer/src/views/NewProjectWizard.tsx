@@ -11,7 +11,7 @@ import {
   autoComponentDir,
 } from "@vortspec/core/setup";
 import { api } from "../lib/api";
-import { Button, Card } from "../components/ui";
+import { Button, Card } from "@vortspec/ui/ui";
 
 /**
  * The project setup questionnaire — a GUI of the SDD-DE CLI's init questions,

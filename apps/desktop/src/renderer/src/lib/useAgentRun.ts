@@ -1,7 +1,7 @@
 import { useEffect, useReducer, useRef } from "react";
 import type { AgentRunOptions } from "@vortspec/core/ipc";
 import { api } from "./api";
-import { initialRun, reduceRun, type RunModel } from "./run-model";
+import { initialRun, reduceRun, type RunModel } from "@vortspec/ui/run-model";
 
 /**
  * Drives a single wrapped Claude Code run: subscribes to the agent event/raw

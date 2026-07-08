@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import type { Project, RunStageSummary, RunSummary } from "@vortspec/core/ipc";
 import { api } from "../lib/api";
-import { Spinner } from "../components/ui";
-import { ProjectRail, projectRailItems } from "../components/ProjectRail";
+import { Spinner } from "@vortspec/ui/ui";
+import { ProjectRail, projectRailItems } from "@vortspec/ui/ProjectRail";
 
 const OUTCOME: Record<RunSummary["outcome"], { label: string; color: string; border: string; bg: string }> = {
   passed: { label: "passed", color: "#30A46C", border: "rgba(48,164,108,0.35)", bg: "rgba(48,164,108,0.08)" },

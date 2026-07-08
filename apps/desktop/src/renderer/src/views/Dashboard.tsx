@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { Project } from "@vortspec/core/ipc";
 import { api } from "../lib/api";
-import { Button, Spinner } from "../components/ui";
+import { Button, Spinner } from "@vortspec/ui/ui";
 
 /**
  * Project dashboard (US-03, design: "Projects Dashboard.dc.html") — a two-column

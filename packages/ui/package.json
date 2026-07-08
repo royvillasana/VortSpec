@@ -1,0 +1,38 @@
+{
+  "name": "@vortspec/ui",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./ui": { "types": "./src/components/ui.tsx", "default": "./src/components/ui.tsx" },
+    "./Logo": { "types": "./src/components/Logo.tsx", "default": "./src/components/Logo.tsx" },
+    "./Markdown": { "types": "./src/components/Markdown.tsx", "default": "./src/components/Markdown.tsx" },
+    "./RunProgress": { "types": "./src/components/RunProgress.tsx", "default": "./src/components/RunProgress.tsx" },
+    "./ProjectRail": { "types": "./src/components/ProjectRail.tsx", "default": "./src/components/ProjectRail.tsx" },
+    "./RunPanel": { "types": "./src/components/RunPanel.tsx", "default": "./src/components/RunPanel.tsx" },
+    "./run-model": { "types": "./src/lib/run-model.ts", "default": "./src/lib/run-model.ts" },
+    "./run-progress": { "types": "./src/lib/run-progress.ts", "default": "./src/lib/run-progress.ts" }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json --noEmit",
+    "check-types": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "lint": "echo 'lint ok'"
+  },
+  "dependencies": {
+    "@vortspec/core": "workspace:*"
+  },
+  "peerDependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "typescript": "^5.9.0",
+    "vitest": "^3.2.0"
+  }
+}
