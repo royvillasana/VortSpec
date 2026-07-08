@@ -1,9 +1,7 @@
 import { app, shell, BrowserWindow } from "electron";
 import { join } from "path";
 import { electronApp, optimizer, is } from "@electron-toolkit/utils";
-import { registerIpc } from "./ipc";
-import { stopAllDevServers } from "./workspace/dev-server";
-import { fixGuiPath } from "./util/fix-path";
+import { registerIpc, stopAllDevServers, fixGuiPath } from "@vortspec/core/main";
 
 /**
  * VortSpec desktop — main process (electron-vite).

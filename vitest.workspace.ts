@@ -6,4 +6,7 @@ import { defineWorkspace } from "vitest/config";
  * desktop pivot. The desktop app's main-process unit tests (Vitest) and the
  * AgentAdapter transcript-fixture tests land in D1.
  */
-export default defineWorkspace(["apps/*/vitest.config.ts"]);
+export default defineWorkspace([
+  "apps/*/vitest.config.ts",
+  "packages/*/vitest.config.ts",
+]);

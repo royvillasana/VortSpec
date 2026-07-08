@@ -97,9 +97,21 @@ importers:
         specifier: ^3.24.1
         version: 3.25.76
     devDependencies:
+      '@electron-toolkit/utils':
+        specifier: ^3.0.0
+        version: 3.0.0(electron@36.9.5)
+      '@types/node':
+        specifier: ^22.10.0
+        version: 22.20.0
+      electron:
+        specifier: ^36.4.0
+        version: 36.9.5
       typescript:
         specifier: ^5.9.0
         version: 5.9.3
+      vitest:
+        specifier: ^3.2.0
+        version: 3.2.6(@types/debug@4.1.13)(@types/node@22.20.0)(jiti@2.7.0)(lightningcss@1.32.0)(yaml@2.9.0)
 
 packages:
 
