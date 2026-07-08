@@ -153,6 +153,8 @@ export interface VortSpecApi {
   figmaConnect(mode: FigmaCliMode): Promise<IpcResponse<"figma:connect">>;
   /** Read design variables from Figma into the reconcile cache (figma-cli primary). */
   figmaSyncVariables(projectPath: string): Promise<IpcResponse<"figma:syncVariables">>;
+  /** Read design-system components from Figma into the reconcile cache (figma-cli primary). */
+  figmaSyncComponents(projectPath: string): Promise<IpcResponse<"figma:syncComponents">>;
 
   // event subscriptions (return an unsubscribe fn)
   onAgentEvent(callback: (payload: AgentEventEnvelope) => void): () => void;

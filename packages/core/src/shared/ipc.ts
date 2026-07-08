@@ -58,7 +58,8 @@ export {
   figmaSyncRequestSchema,
   figmaSyncResultSchema,
 } from "./figma";
-export type { FigmaConnection, FigmaCliMode, FigmaSyncResult } from "./figma";
+export type { FigmaConnection, FigmaCliMode, FigmaSyncResult, FigmaComponent } from "./figma";
+export { figmaComponentSchema } from "./figma";
 import { setupAnswersSchema, projectConfigSchema } from "./setup";
 import {
   inspectorTokensResultSchema,
@@ -276,6 +277,7 @@ export const ipcContract = {
   "figma:openAppManagement": { request: z.void(), response: z.void() },
   "figma:connect": { request: figmaConnectRequestSchema, response: figmaConnectionSchema },
   "figma:syncVariables": { request: figmaSyncRequestSchema, response: figmaSyncResultSchema },
+  "figma:syncComponents": { request: figmaSyncRequestSchema, response: figmaSyncResultSchema },
 
   "toolkit:status": { request: z.string(), response: toolkitStatusSchema },
   "toolkit:install": { request: z.string(), response: toolkitStatusSchema },

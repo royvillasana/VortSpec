@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { parseFilesJson, parseMode, dtcgToVariables, mapDtcgType } from "./figma-cli";
+import {
+  parseFilesJson,
+  parseMode,
+  dtcgToVariables,
+  mapDtcgType,
+  parseComponentsEval,
+} from "./figma-cli";
 
 describe("parseFilesJson", () => {
   it("parses a JSON array of file names (string or object)", () => {
@@ -105,5 +111,40 @@ describe("dtcgToVariables", () => {
     expect(dtcgToVariables(null)).toEqual([]);
     expect(dtcgToVariables("nope")).toEqual([]);
     expect(dtcgToVariables({})).toEqual([]);
+  });
+});
+
+describe("parseComponentsEval", () => {
+  it("parses the eval JSON array (sets keep variant axes)", () => {
+    const raw = JSON.stringify([
+      { name: "Button", isSet: true, variants: ["Type", "Size"] },
+      { name: "Logo", isSet: false, variants: [] },
+    ]);
+    expect(parseComponentsEval(raw)).toEqual([
+      { name: "Button", isSet: true, variants: ["Type", "Size"] },
+      { name: "Logo", isSet: false, variants: [] },
+    ]);
+  });
+
+  it("tolerates a banner before the JSON and dedupes by name", () => {
+    const raw = '✨ figma-cli\n[{"name":"Card","isSet":false},{"name":"Card","isSet":true}]';
+    expect(parseComponentsEval(raw)).toEqual([{ name: "Card", isSet: false, variants: [] }]);
+  });
+
+  it("drops malformed rows and non-string variants", () => {
+    const raw = JSON.stringify([
+      { name: "", isSet: true },
+      42,
+      { name: "Input", isSet: true, variants: ["State", 7, null] },
+    ]);
+    expect(parseComponentsEval(raw)).toEqual([
+      { name: "Input", isSet: true, variants: ["State"] },
+    ]);
+  });
+
+  it("returns [] on no JSON / malformed output", () => {
+    expect(parseComponentsEval("not connected")).toEqual([]);
+    expect(parseComponentsEval("[oops")).toEqual([]);
+    expect(parseComponentsEval("")).toEqual([]);
   });
 });

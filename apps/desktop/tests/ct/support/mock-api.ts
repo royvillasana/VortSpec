@@ -78,6 +78,8 @@ export interface MockConfig {
   figma?: import("@vortspec/core/ipc").FigmaConnection;
   /** Result returned by figmaSyncVariables(). */
   figmaSync?: import("@vortspec/core/ipc").FigmaSyncResult;
+  /** Result returned by figmaSyncComponents(). */
+  figmaSyncComponents?: import("@vortspec/core/ipc").FigmaSyncResult;
 }
 
 const EMPTY_TOKENS: InspectorTokensResult = {
@@ -91,6 +93,8 @@ const EMPTY_COMPONENTS: InspectorComponentsResult = {
   componentDir: null,
   previewUrl: null,
   components: [],
+  figmaOnly: [],
+  figmaSynced: false,
 };
 const STOPPED: DevServerStatus = { state: "stopped", url: null, script: null, message: null };
 const RUNNING: DevServerStatus = {
@@ -294,6 +298,14 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
         source: "cli",
         mode: "yolo",
         message: "Read 12 Figma variables via figma-cli (yolo mode).",
+      },
+    figmaSyncComponents: async () =>
+      cfg.figmaSyncComponents ?? {
+        ok: true,
+        count: 8,
+        source: "cli",
+        mode: "yolo",
+        message: "Read 8 Figma components via figma-cli (yolo mode).",
       },
 
     setPublishTarget: async () => null,

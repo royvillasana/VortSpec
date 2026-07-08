@@ -146,6 +146,8 @@ const handlers: Record<IpcChannel, Handler> = {
   "figma:connect": ((r: { mode: FigmaCliMode }) => figmaCli.connect(r.mode)) as Handler,
   "figma:syncVariables": ((r: { projectPath: string }) =>
     figmaCli.syncVariablesToCache(r.projectPath)) as Handler,
+  "figma:syncComponents": ((r: { projectPath: string }) =>
+    figmaCli.syncComponentsToCache(r.projectPath)) as Handler,
 
   "toolkit:status": ((path: string) => getToolkitStatus(path)) as Handler,
   "toolkit:install": ((path: string) => installToolkit(path)) as Handler,

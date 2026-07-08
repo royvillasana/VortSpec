@@ -4,8 +4,13 @@ import { existsSync } from "node:fs";
 import { readFile, writeFile, mkdir, rm } from "node:fs/promises";
 import { app } from "electron";
 import { execFileSafe } from "../util/exec";
-import { FIGMA_VARS_PATH } from "../inspector/figma-reconcile";
-import type { FigmaConnection, FigmaCliMode, FigmaSyncResult } from "@vortspec/core/figma";
+import { FIGMA_VARS_PATH, FIGMA_COMPONENTS_PATH } from "../inspector/figma-reconcile";
+import type {
+  FigmaConnection,
+  FigmaCliMode,
+  FigmaSyncResult,
+  FigmaComponent,
+} from "@vortspec/core/figma";
 import type { FigmaVariable, TokenType } from "@vortspec/core/inspector";
 
 /**
@@ -201,6 +206,125 @@ export function dtcgToVariables(dtcg: unknown): FigmaVariable[] {
   };
   walk(dtcg, [], undefined);
   return out;
+}
+
+// ── Reading components (Wave 3) ──────────────────────────────────────
+
+/**
+ * A figma-use `eval` script that enumerates the design system's real
+ * components — every COMPONENT_SET (with its variant axes) plus top-level
+ * COMPONENTs (parented to a PAGE/SECTION) — and returns them as a JSON array.
+ * Deliberately skips variant children and deeply-nested/icon instances so the
+ * result is the DS roster, not thousands of nodes. Returned as the last
+ * expression (a Promise), which `eval --file` awaits.
+ */
+export const READ_COMPONENTS_SCRIPT = `figma.loadAllPagesAsync().then(function () {
+  var ns = figma.root.findAllWithCriteria({ types: ["COMPONENT_SET", "COMPONENT"] });
+  var seen = {}; var out = [];
+  for (var i = 0; i < ns.length; i++) {
+    var n = ns[i];
+    var pt = n.parent && n.parent.type;
+    if (n.type === "COMPONENT" && !(pt === "PAGE" || pt === "SECTION")) continue;
+    if (seen[n.name]) continue; seen[n.name] = 1;
+    var variants = [];
+    if (n.type === "COMPONENT_SET") { try { variants = Object.keys(n.variantGroupProperties || {}); } catch (e) {} }
+    out.push({ name: n.name, isSet: n.type === "COMPONENT_SET", variants: variants });
+  }
+  return out;
+});`;
+
+/**
+ * Parse the `eval` output (a JSON array, possibly behind a CLI banner) into
+ * FigmaComponent rows. Pure + exported for unit testing. Tolerant of malformed
+ * rows; dedupes by name.
+ */
+export function parseComponentsEval(raw: string): FigmaComponent[] {
+  const start = raw.indexOf("[");
+  const end = raw.lastIndexOf("]");
+  if (start === -1 || end === -1 || end < start) return [];
+  let arr: unknown;
+  try {
+    arr = JSON.parse(raw.slice(start, end + 1));
+  } catch {
+    return [];
+  }
+  if (!Array.isArray(arr)) return [];
+  const out: FigmaComponent[] = [];
+  const seen = new Set<string>();
+  for (const row of arr) {
+    if (!row || typeof row !== "object") continue;
+    const r = row as Record<string, unknown>;
+    const name = typeof r.name === "string" ? r.name.trim() : "";
+    if (!name || seen.has(name)) continue;
+    seen.add(name);
+    const variants = Array.isArray(r.variants)
+      ? r.variants.filter((v): v is string => typeof v === "string")
+      : [];
+    out.push({ name, isSet: Boolean(r.isSet), variants });
+  }
+  return out;
+}
+
+/**
+ * Wave 3 reader: enumerate the connected file's design-system components via
+ * figma-cli and write them to `.vortspec/figma-components.json` (the cache the
+ * Inspector reconciles the code roster against). Symmetric with
+ * `syncVariablesToCache`; `source: null` when the CLI is unavailable.
+ */
+export async function syncComponentsToCache(projectPath: string): Promise<FigmaSyncResult> {
+  const conn = await getConnection();
+  if (!conn.installed) {
+    return {
+      ok: false,
+      count: 0,
+      source: null,
+      mode: null,
+      message: "figma-cli isn't set up. Set it up for the fast path, or sync via the Figma MCP instead.",
+    };
+  }
+  if (!conn.connected) {
+    return {
+      ok: false,
+      count: 0,
+      source: null,
+      mode: conn.mode,
+      message: "figma-cli isn't connected to Figma Desktop yet. Connect it, or sync via the Figma MCP instead.",
+    };
+  }
+
+  const tmp = join(tmpdir(), `vortspec-figma-components-${process.pid}-${Date.now()}.js`);
+  try {
+    await writeFile(tmp, READ_COMPONENTS_SCRIPT, "utf8");
+    const res = await run(["eval", "--file", tmp], 30000);
+    const components = parseComponentsEval(res.stdout);
+    if (components.length === 0 && !res.stdout.includes("[")) {
+      const detail = (res.stderr || res.stdout || "").split("\n").find((l) => l.trim()) ?? "";
+      return {
+        ok: false,
+        count: 0,
+        source: "cli",
+        mode: conn.mode,
+        message: `figma-cli couldn't read components from the focused file.${detail ? ` (${detail.trim()})` : ""}`,
+      };
+    }
+    await mkdir(join(projectPath, ".vortspec"), { recursive: true });
+    await writeFile(
+      join(projectPath, FIGMA_COMPONENTS_PATH),
+      `${JSON.stringify(components, null, 2)}\n`,
+      "utf8",
+    );
+    return {
+      ok: true,
+      count: components.length,
+      source: "cli",
+      mode: conn.mode,
+      message: `Read ${components.length} Figma component${components.length === 1 ? "" : "s"} via figma-cli${
+        conn.mode ? ` (${conn.mode} mode)` : ""
+      }.`,
+    };
+  } finally {
+    await rm(tmp, { force: true }).catch(() => undefined);
+  }
 }
 
 /**

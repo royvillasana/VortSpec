@@ -541,6 +541,13 @@ const figmaSyncResultSchema = z.object({
   /** a human, next-step message (e.g. why the CLI couldn't be used). */
   message: z.string()
 });
+const figmaComponentSchema = z.object({
+  name: z.string(),
+  /** true for a COMPONENT_SET (has variant axes); false for a plain COMPONENT. */
+  isSet: z.boolean(),
+  /** variant axis names (e.g. ["Type", "Size"]); empty for a plain component. */
+  variants: z.array(z.string()).default([])
+});
 const frameworkSchema = z.enum([
   "react",
   "next",
@@ -732,13 +739,21 @@ const inspectorComponentSchema = z.object({
   /** Project-relative path of the component's spec dir/file, if one exists. */
   specPath: z.string().nullable(),
   /** Project-relative path of the visual-verify report, if one exists. */
-  reportPath: z.string().nullable()
+  reportPath: z.string().nullable(),
+  /** Whether a matching component exists in the connected Figma file (Wave 3). */
+  figmaBacked: z.boolean().optional(),
+  /** The matched Figma component's variant axes, when figma-backed. */
+  figmaVariants: z.array(z.string()).optional()
 });
 const inspectorComponentsResultSchema = z.object({
   componentDir: z.string().nullable(),
   /** The dev-server URL to embed for live preview, if one is configured/known. */
   previewUrl: z.string().nullable(),
-  components: z.array(inspectorComponentSchema)
+  components: z.array(inspectorComponentSchema),
+  /** Figma components with no matching code component — designed, not yet built (Wave 3). */
+  figmaOnly: z.array(figmaComponentSchema).default([]),
+  /** Whether a `.vortspec/figma-components.json` export was found and reconciled. */
+  figmaSynced: z.boolean().default(false)
 });
 const fileSnapshotSchema = z.object({ path: z.string(), content: z.string() });
 const fileSnapshotListSchema = z.array(fileSnapshotSchema);
@@ -874,6 +889,7 @@ const ipcContract = {
   "figma:openAppManagement": { request: z.void(), response: z.void() },
   "figma:connect": { request: figmaConnectRequestSchema, response: figmaConnectionSchema },
   "figma:syncVariables": { request: figmaSyncRequestSchema, response: figmaSyncResultSchema },
+  "figma:syncComponents": { request: figmaSyncRequestSchema, response: figmaSyncResultSchema },
   "toolkit:status": { request: z.string(), response: toolkitStatusSchema },
   "toolkit:install": { request: z.string(), response: toolkitStatusSchema },
   "agent:startRun": {
@@ -1578,8 +1594,12 @@ function killAllSessions() {
   sessions.clear();
 }
 const FIGMA_VARS_PATH = ".vortspec/figma-variables.json";
+const FIGMA_COMPONENTS_PATH = ".vortspec/figma-components.json";
 function normName(name) {
   return name.replace(/^--/, "").trim().toLowerCase().replace(/[\s/._]+/g, "-").replace(/-+/g, "-");
+}
+function normComponentName(name) {
+  return name.toLowerCase().replace(/[^a-z0-9]+/g, "");
 }
 function normValue(value) {
   let s = value.trim().toLowerCase().replace(/\s+/g, " ");
@@ -1622,6 +1642,44 @@ async function readFigmaVariables(projectPath) {
     if (parsed.success) vars.push(parsed.data);
   }
   return vars;
+}
+async function readFigmaComponents(projectPath) {
+  let raw;
+  try {
+    raw = await readFile$1(join(projectPath, FIGMA_COMPONENTS_PATH), "utf8");
+  } catch {
+    return null;
+  }
+  let data;
+  try {
+    data = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+  if (!Array.isArray(data)) return [];
+  const comps = [];
+  for (const row of data) {
+    const parsed = figmaComponentSchema.safeParse(row);
+    if (parsed.success) comps.push(parsed.data);
+  }
+  return comps;
+}
+function reconcileComponents(codeNames, figmaComps) {
+  const codeNorms = new Set(codeNames.map(normComponentName));
+  const byName = /* @__PURE__ */ new Map();
+  const figmaOnly = [];
+  const seen = /* @__PURE__ */ new Set();
+  for (const c of figmaComps) {
+    const key = normComponentName(c.name);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    if (codeNorms.has(key)) {
+      byName.set(key, { figmaVariants: c.variants, isSet: c.isSet });
+    } else {
+      figmaOnly.push(c);
+    }
+  }
+  return { byName, figmaOnly };
 }
 function reconcile$1(tokens, figmaVars) {
   const codeByNorm = /* @__PURE__ */ new Map();
@@ -1779,6 +1837,97 @@ function dtcgToVariables(dtcg) {
   };
   walk(dtcg, [], void 0);
   return out;
+}
+const READ_COMPONENTS_SCRIPT = `figma.loadAllPagesAsync().then(function () {
+  var ns = figma.root.findAllWithCriteria({ types: ["COMPONENT_SET", "COMPONENT"] });
+  var seen = {}; var out = [];
+  for (var i = 0; i < ns.length; i++) {
+    var n = ns[i];
+    var pt = n.parent && n.parent.type;
+    if (n.type === "COMPONENT" && !(pt === "PAGE" || pt === "SECTION")) continue;
+    if (seen[n.name]) continue; seen[n.name] = 1;
+    var variants = [];
+    if (n.type === "COMPONENT_SET") { try { variants = Object.keys(n.variantGroupProperties || {}); } catch (e) {} }
+    out.push({ name: n.name, isSet: n.type === "COMPONENT_SET", variants: variants });
+  }
+  return out;
+});`;
+function parseComponentsEval(raw) {
+  const start = raw.indexOf("[");
+  const end = raw.lastIndexOf("]");
+  if (start === -1 || end === -1 || end < start) return [];
+  let arr;
+  try {
+    arr = JSON.parse(raw.slice(start, end + 1));
+  } catch {
+    return [];
+  }
+  if (!Array.isArray(arr)) return [];
+  const out = [];
+  const seen = /* @__PURE__ */ new Set();
+  for (const row of arr) {
+    if (!row || typeof row !== "object") continue;
+    const r = row;
+    const name = typeof r.name === "string" ? r.name.trim() : "";
+    if (!name || seen.has(name)) continue;
+    seen.add(name);
+    const variants = Array.isArray(r.variants) ? r.variants.filter((v) => typeof v === "string") : [];
+    out.push({ name, isSet: Boolean(r.isSet), variants });
+  }
+  return out;
+}
+async function syncComponentsToCache(projectPath) {
+  const conn = await getConnection();
+  if (!conn.installed) {
+    return {
+      ok: false,
+      count: 0,
+      source: null,
+      mode: null,
+      message: "figma-cli isn't set up. Set it up for the fast path, or sync via the Figma MCP instead."
+    };
+  }
+  if (!conn.connected) {
+    return {
+      ok: false,
+      count: 0,
+      source: null,
+      mode: conn.mode,
+      message: "figma-cli isn't connected to Figma Desktop yet. Connect it, or sync via the Figma MCP instead."
+    };
+  }
+  const tmp = join(tmpdir(), `vortspec-figma-components-${process.pid}-${Date.now()}.js`);
+  try {
+    await writeFile$1(tmp, READ_COMPONENTS_SCRIPT, "utf8");
+    const res = await run(["eval", "--file", tmp], 3e4);
+    const components = parseComponentsEval(res.stdout);
+    if (components.length === 0 && !res.stdout.includes("[")) {
+      const detail = (res.stderr || res.stdout || "").split("\n").find((l) => l.trim()) ?? "";
+      return {
+        ok: false,
+        count: 0,
+        source: "cli",
+        mode: conn.mode,
+        message: `figma-cli couldn't read components from the focused file.${detail ? ` (${detail.trim()})` : ""}`
+      };
+    }
+    await mkdir(join(projectPath, ".vortspec"), { recursive: true });
+    await writeFile$1(
+      join(projectPath, FIGMA_COMPONENTS_PATH),
+      `${JSON.stringify(components, null, 2)}
+`,
+      "utf8"
+    );
+    return {
+      ok: true,
+      count: components.length,
+      source: "cli",
+      mode: conn.mode,
+      message: `Read ${components.length} Figma component${components.length === 1 ? "" : "s"} via figma-cli${conn.mode ? ` (${conn.mode} mode)` : ""}.`
+    };
+  } finally {
+    await rm(tmp, { force: true }).catch(() => void 0);
+  }
 }
 async function syncVariablesToCache(projectPath) {
   const conn = await getConnection();
@@ -2255,7 +2404,19 @@ async function getInspectorComponents(projectPath) {
       reportPath
     });
   }
-  return { componentDir, previewUrl: null, components };
+  const figmaComps = await readFigmaComponents(projectPath);
+  const recon = figmaComps ? reconcileComponents(components.map((c) => c.name), figmaComps) : null;
+  const withFigma = components.map((c) => {
+    const match = recon?.byName.get(normComponentName(c.name));
+    return match ? { ...c, figmaBacked: true, figmaVariants: match.figmaVariants } : c;
+  });
+  return {
+    componentDir,
+    previewUrl: null,
+    components: withFigma,
+    figmaOnly: recon?.figmaOnly ?? [],
+    figmaSynced: figmaComps !== null
+  };
 }
 async function snapshotComponent(projectPath, file) {
   const vrel = await variantsSibling(projectPath, file);
@@ -3953,6 +4114,7 @@ const handlers = {
   "figma:openAppManagement": (() => openAppManagementSettings().then(() => void 0)),
   "figma:connect": ((r) => connect(r.mode)),
   "figma:syncVariables": ((r) => syncVariablesToCache(r.projectPath)),
+  "figma:syncComponents": ((r) => syncComponentsToCache(r.projectPath)),
   "toolkit:status": ((path) => getToolkitStatus(path)),
   "toolkit:install": ((path) => installToolkit(path)),
   "agent:startRun": ((opts, sender) => startRun(sender, opts)),

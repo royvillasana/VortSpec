@@ -57,3 +57,17 @@ export const figmaSyncResultSchema = z.object({
   message: z.string(),
 });
 export type FigmaSyncResult = z.infer<typeof figmaSyncResultSchema>;
+
+/**
+ * A component read from the connected Figma file (Wave 3). Scoped to the design
+ * system's real components — every COMPONENT_SET plus top-level COMPONENTs —
+ * not the thousands of nested/icon instances.
+ */
+export const figmaComponentSchema = z.object({
+  name: z.string(),
+  /** true for a COMPONENT_SET (has variant axes); false for a plain COMPONENT. */
+  isSet: z.boolean(),
+  /** variant axis names (e.g. ["Type", "Size"]); empty for a plain component. */
+  variants: z.array(z.string()).default([]),
+});
+export type FigmaComponent = z.infer<typeof figmaComponentSchema>;

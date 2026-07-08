@@ -52,6 +52,29 @@ const EMPTY_TOKENS: InspectorTokensResult = { tokenFile: null, figmaSynced: fals
 const EMPTY_COMPONENTS: InspectorComponentsResult = { componentDir: null, previewUrl: null, components: [] };
 const MANIFEST = { path: "DESIGN.md", content: "# manifest", exists: true };
 
+// figma-cli connected — the primary component reader (Wave 3).
+const CLI_CONNECTED = {
+  installed: true,
+  cliDir: "/Users/dev/figma-cli",
+  daemonRunning: true,
+  connected: true,
+  mode: "yolo" as const,
+  openFiles: ["Design Engineering System"],
+  appName: "VortSpec",
+  message: "Connected to Figma Desktop (yolo mode).",
+};
+
+// A reconciled roster: Button is Figma-backed with variant axes; Tooltip is
+// designed in Figma but not yet built.
+const ROSTER_FIGMA: InspectorComponentsResult = {
+  ...ROSTER,
+  components: ROSTER.components.map((c) =>
+    c.name === "Button" ? { ...c, figmaBacked: true, figmaVariants: ["Type", "Size"] } : c,
+  ),
+  figmaOnly: [{ name: "Tooltip", isSet: true, variants: ["Placement"] }],
+  figmaSynced: true,
+};
+
 test("shows the foundation setup when nothing is extracted yet", async ({ mount }) => {
   const c = await mount(<GuidedFlow {...props} />, {
     hooksConfig: { mock: { tokens: EMPTY_TOKENS, components: EMPTY_COMPONENTS } },
@@ -86,6 +109,35 @@ test("offers build for detected, verify/open for built components", async ({ mou
   await expect(c.getByRole("button", { name: /Build & verify the rest/ })).toBeVisible();
   await expect(c.getByRole("button", { name: "+ New component" })).toBeVisible();
   // Re-scan the design source to reconcile against what's already built.
+  await expect(c.getByRole("button", { name: /Re-scan/ })).toBeVisible();
+});
+
+test("reconciles the roster against Figma components read via figma-cli (Wave 3)", async ({ mount }) => {
+  const c = await mount(<GuidedFlow {...props} />, {
+    hooksConfig: {
+      mock: { tokens: TOKENS, components: ROSTER_FIGMA, manifest: MANIFEST, figma: CLI_CONNECTED },
+    },
+  });
+  // Figma-backed component wears a badge with its variant-axis count (2).
+  await expect(c.getByText("Figma ·2", { exact: true })).toBeVisible();
+  // Header summary reflects the reconciliation.
+  await expect(c.getByText(/1 in Figma · 1 not built/)).toBeVisible();
+  // "Designed in Figma, not yet built" surfaces Tooltip.
+  await expect(c.getByText("In Figma, not yet built")).toBeVisible();
+  await expect(c.getByText("Tooltip", { exact: false })).toBeVisible();
+  // The CLI-primary read button is offered (not the MCP re-scan) and reads on click.
+  const readBtn = c.getByRole("button", { name: /Figma components/ });
+  await expect(readBtn).toBeVisible();
+  await readBtn.click();
+  await expect(c.getByText(/Read 8 Figma components via figma-cli/)).toBeVisible();
+});
+
+test("hides the Figma read button when figma-cli isn't connected", async ({ mount }) => {
+  const c = await mount(<GuidedFlow {...props} />, {
+    hooksConfig: { mock: { tokens: TOKENS, components: ROSTER, manifest: MANIFEST } },
+  });
+  // No CLI connection → only the MCP re-scan path is offered.
+  await expect(c.getByRole("button", { name: /Figma components/ })).toHaveCount(0);
   await expect(c.getByRole("button", { name: /Re-scan/ })).toBeVisible();
 });
 

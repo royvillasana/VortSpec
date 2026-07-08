@@ -2,7 +2,14 @@ import { describe, expect, it, beforeEach, afterEach } from "vitest";
 import { mkdtemp, rm, mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { normName, normValue, reconcile, readFigmaVariables } from "./figma-reconcile";
+import {
+  normName,
+  normValue,
+  reconcile,
+  readFigmaVariables,
+  reconcileComponents,
+  readFigmaComponents,
+} from "./figma-reconcile";
 
 describe("normName", () => {
   it("canonicalizes across separators and casing", () => {
@@ -68,6 +75,37 @@ describe("reconcile", () => {
   });
 });
 
+describe("reconcileComponents", () => {
+  const code = ["Button", "InputField", "Card"];
+
+  it("marks code components figma-backed and carries variant axes", () => {
+    const r = reconcileComponents(code, [
+      { name: "button", isSet: true, variants: ["Type", "Size"] },
+      { name: "input-field", isSet: true, variants: ["State"] },
+    ]);
+    expect(r.byName.get("button")).toEqual({ figmaVariants: ["Type", "Size"], isSet: true });
+    // "InputField" (code) ↔ "input-field" (Figma) both canonicalize to "inputfield".
+    expect(r.byName.get("inputfield")?.figmaVariants).toEqual(["State"]);
+  });
+
+  it("lists Figma components with no code match as figma-only (designed, not built)", () => {
+    const r = reconcileComponents(code, [
+      { name: "Button", isSet: false, variants: [] },
+      { name: "Tooltip", isSet: true, variants: ["Placement"] },
+    ]);
+    expect(r.figmaOnly.map((c) => c.name)).toEqual(["Tooltip"]);
+  });
+
+  it("dedupes repeated Figma names by normalized form", () => {
+    const r = reconcileComponents(code, [
+      { name: "Card", isSet: false, variants: [] },
+      { name: "card", isSet: true, variants: ["Elevated"] },
+    ]);
+    expect(r.byName.get("card")?.isSet).toBe(false); // first wins
+    expect(r.figmaOnly).toEqual([]);
+  });
+});
+
 describe("readFigmaVariables", () => {
   let dir: string;
   beforeEach(async () => {
@@ -80,6 +118,24 @@ describe("readFigmaVariables", () => {
 
   it("returns null when no export exists (→ not synced)", async () => {
     expect(await readFigmaVariables(dir)).toBeNull();
+  });
+
+  it("reads figma-components.json (Wave 3) and skips malformed rows", async () => {
+    await writeFile(
+      join(dir, ".vortspec/figma-components.json"),
+      JSON.stringify([
+        { name: "Button", isSet: true, variants: ["Type"] },
+        { nope: 1 },
+        "garbage",
+      ]),
+      "utf8",
+    );
+    expect(await readFigmaComponents(dir)).toEqual([
+      { name: "Button", isSet: true, variants: ["Type"] },
+    ]);
+    // absent file → null
+    await rm(join(dir, ".vortspec/figma-components.json"));
+    expect(await readFigmaComponents(dir)).toBeNull();
   });
 
   it("parses the array-of-objects shape", async () => {

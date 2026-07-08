@@ -1,6 +1,7 @@
 import { join, dirname, basename } from "node:path";
 import { readFile, readdir, writeFile } from "node:fs/promises";
 import { readProjectConfig } from "../workspace/config-manager";
+import { readFigmaComponents, reconcileComponents, normComponentName } from "./figma-reconcile";
 import { detectedComponentsSchema, type DetectedComponent } from "@vortspec/core/flow";
 import type {
   ComponentStatus,
@@ -220,7 +221,23 @@ export async function getInspectorComponents(
     });
   }
 
-  return { componentDir, previewUrl: null, components };
+  // Figma-authoritative overlay (Wave 3): match the code roster against the
+  // components read from Figma by figma-cli. Absent export → figmaComps is null
+  // and every component stays plain code with no figma badge.
+  const figmaComps = await readFigmaComponents(projectPath);
+  const recon = figmaComps ? reconcileComponents(components.map((c) => c.name), figmaComps) : null;
+  const withFigma: InspectorComponent[] = components.map((c) => {
+    const match = recon?.byName.get(normComponentName(c.name));
+    return match ? { ...c, figmaBacked: true, figmaVariants: match.figmaVariants } : c;
+  });
+
+  return {
+    componentDir,
+    previewUrl: null,
+    components: withFigma,
+    figmaOnly: recon?.figmaOnly ?? [],
+    figmaSynced: figmaComps !== null,
+  };
 }
 
 /**

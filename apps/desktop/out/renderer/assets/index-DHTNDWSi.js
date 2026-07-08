@@ -17441,6 +17441,11 @@ function GuidedFlow({
   const [manifestExists, setManifestExists] = reactExports.useState(false);
   const [foundationOpen, setFoundationOpen] = reactExports.useState(false);
   const [addNew, setAddNew] = reactExports.useState(false);
+  const [figmaOnly, setFigmaOnly] = reactExports.useState([]);
+  const [figmaCompSynced, setFigmaCompSynced] = reactExports.useState(false);
+  const [figmaCli, setFigmaCli] = reactExports.useState(null);
+  const [compSyncing, setCompSyncing] = reactExports.useState(false);
+  const [toast, setToast] = reactExports.useState("");
   const run = useAgentRun();
   const latest = useLatestRun();
   const [runLabel, setRunLabel] = reactExports.useState("");
@@ -17461,11 +17466,36 @@ function GuidedFlow({
     ]);
     setConfig(cfg);
     setComponents(comps.components);
+    setFigmaOnly(comps.figmaOnly ?? []);
+    setFigmaCompSynced(comps.figmaSynced ?? false);
     setTokenCount(toks.tokens.length);
     setManifestExists(man.exists);
   }
+  function flash(msg) {
+    setToast(msg);
+    window.setTimeout(() => setToast(""), 2600);
+  }
+  async function syncComponents() {
+    if (figmaCli?.connected) {
+      setCompSyncing(true);
+      try {
+        const r = await api.figmaSyncComponents(project.path);
+        if (r.ok) {
+          await reload();
+          flash(r.message);
+        } else {
+          flash(r.message);
+        }
+      } finally {
+        setCompSyncing(false);
+      }
+      return;
+    }
+    flash("Connect figma-cli to read components directly, or use ↻ Re-scan (via the Figma MCP).");
+  }
   reactExports.useEffect(() => {
     void reload();
+    void api.figmaStatus().then(setFigmaCli);
     void api.hasActiveRun(project.path).then(setExternalRun);
     void api.lastRun(project.path).then(setResume);
   }, [project.path]);
@@ -17558,6 +17588,7 @@ function GuidedFlow({
   const progress = deriveProgress(run.model, opKind, { total: pipelineTotal });
   const status = !foundationReady ? "Set up the foundation to begin" : `Foundation ready · ${builtCount}/${total} built · ${verifiedCount} verified`;
   return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex h-[calc(100vh-3rem)] w-full overflow-hidden bg-vs-bg-primary text-[13px] text-vs-text-primary", children: [
+    toast && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "fixed bottom-5 left-1/2 z-50 -translate-x-1/2 rounded-lg border border-vs-border-default bg-vs-bg-elevated px-4 py-2 text-[12px] text-vs-text-primary shadow-lg", children: toast }),
     /* @__PURE__ */ jsxRuntimeExports.jsx(
       ProjectRail,
       {
@@ -17707,7 +17738,24 @@ function GuidedFlow({
                   total
                 ] })
               ] }),
+              figmaCompSynced && /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-[11px] text-vs-text-muted", children: [
+                components?.filter((c) => c.figmaBacked).length ?? 0,
+                " in Figma ·",
+                " ",
+                figmaOnly.length,
+                " not built"
+              ] }),
               /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex-1" }),
+              figmaCli?.connected && /* @__PURE__ */ jsxRuntimeExports.jsx(
+                Button,
+                {
+                  variant: "default",
+                  disabled: busy || compSyncing,
+                  title: "Read the design system's components straight from Figma via figma-cli (fast, no token) and reconcile against your code roster.",
+                  onClick: () => void syncComponents(),
+                  children: compSyncing ? "Reading…" : figmaCompSynced ? "↻ Figma components" : "Read Figma components"
+                }
+              ),
               /* @__PURE__ */ jsxRuntimeExports.jsxs(
                 Button,
                 {
@@ -17797,7 +17845,40 @@ function GuidedFlow({
                 },
                 c.name
               ))
-            ] }, g.level)) })
+            ] }, g.level)) }),
+            figmaOnly.length > 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs(Card, { className: "flex flex-col gap-2 p-4", children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2 text-[11px]", children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "inline-block h-1.5 w-1.5 rounded-full bg-vs-accent" }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-semibold uppercase tracking-wide text-vs-text-muted", children: "In Figma, not yet built" }),
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-vs-text-muted", children: [
+                  "· ",
+                  figmaOnly.length
+                ] })
+              ] }),
+              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-wrap gap-1.5", children: [
+                figmaOnly.slice(0, 24).map((c) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                  "span",
+                  {
+                    title: c.variants.length ? `Variant axes: ${c.variants.join(", ")}` : "A Figma component with no matching code component yet",
+                    className: "rounded-full border border-vs-border-default bg-vs-bg-surface px-2 py-0.5 font-mono text-[11px] text-vs-text-secondary",
+                    children: [
+                      c.name,
+                      c.variants.length > 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-vs-text-muted", children: [
+                        " ·",
+                        c.variants.length
+                      ] })
+                    ]
+                  },
+                  c.name
+                )),
+                figmaOnly.length > 24 && /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "px-1 text-[11px] text-vs-text-muted", children: [
+                  "+",
+                  figmaOnly.length - 24,
+                  " more"
+                ] })
+              ] }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-[11px] text-vs-text-muted", children: "Components designed in Figma with no code match. Use “+ New component” to build one." })
+            ] })
           ] }),
           /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: "flex flex-col gap-3", children: [
             /* @__PURE__ */ jsxRuntimeExports.jsx("h2", { className: "text-[13px] font-semibold uppercase tracking-wide text-vs-text-muted", children: "Outputs" }),
@@ -17943,7 +18024,20 @@ function ComponentRow({
   return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-3 border-t border-vs-border-subtle px-4 py-2.5 first:border-t-0", children: [
     /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: `h-1.5 w-1.5 shrink-0 rounded-full ${meta.dot}` }),
     /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "min-w-0 flex-1", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-[13px] text-vs-text-primary", children: component.name }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "flex items-center gap-2 text-[13px] text-vs-text-primary", children: [
+        component.name,
+        component.figmaBacked && /* @__PURE__ */ jsxRuntimeExports.jsxs(
+          "span",
+          {
+            title: component.figmaVariants && component.figmaVariants.length > 0 ? `Backed by a Figma component · variant axes: ${component.figmaVariants.join(", ")}` : "Backed by a Figma component",
+            className: "rounded-full border border-vs-accent/40 bg-vs-accent/10 px-1.5 py-px text-[9px] font-medium uppercase tracking-wide text-vs-accent",
+            children: [
+              "Figma",
+              component.figmaVariants && component.figmaVariants.length > 0 ? ` ·${component.figmaVariants.length}` : ""
+            ]
+          }
+        )
+      ] }),
       component.description && /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "truncate text-[11px] text-vs-text-muted", children: component.description })
     ] }),
     /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: `font-mono text-[10px] ${meta.text}`, children: meta.label }),

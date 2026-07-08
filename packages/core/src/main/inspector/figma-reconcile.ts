@@ -1,6 +1,7 @@
 import { join } from "node:path";
 import { readFile } from "node:fs/promises";
 import { figmaVariableSchema, type FigmaVariable, type TokenDrift } from "@vortspec/core/inspector";
+import { figmaComponentSchema, type FigmaComponent } from "@vortspec/core/figma";
 
 /**
  * Figma-authoritative reconciliation. VortSpec never talks to Figma directly —
@@ -11,6 +12,7 @@ import { figmaVariableSchema, type FigmaVariable, type TokenDrift } from "@vorts
  */
 
 export const FIGMA_VARS_PATH = ".vortspec/figma-variables.json";
+export const FIGMA_COMPONENTS_PATH = ".vortspec/figma-components.json";
 
 /** Canonical token/variable name: no leading `--`, lowercased, `/ . _ space` → `-`. */
 export function normName(name: string): string {
@@ -20,6 +22,16 @@ export function normName(name: string): string {
     .toLowerCase()
     .replace(/[\s/._]+/g, "-")
     .replace(/-+/g, "-");
+}
+
+/**
+ * Canonical component name for cross-convention matching: lowercased with every
+ * non-alphanumeric stripped, so `InputField`, `input-field`, and `Input Field`
+ * all collapse to `inputfield`. Component names vary far more than tokens (code
+ * PascalCase vs Figma kebab/spaced/slashed), so this is stricter than `normName`.
+ */
+export function normComponentName(name: string): string {
+  return name.toLowerCase().replace(/[^a-z0-9]+/g, "");
 }
 
 /** Canonical value for equality: trim/lowercase, collapse space, expand & alpha-strip hex. */
@@ -81,6 +93,61 @@ export async function readFigmaVariables(projectPath: string): Promise<FigmaVari
     if (parsed.success) vars.push(parsed.data);
   }
   return vars;
+}
+
+/**
+ * Parse `.vortspec/figma-components.json` (Wave 3). Returns null when absent or
+ * unparseable (→ "not synced"). Skips malformed rows.
+ */
+export async function readFigmaComponents(projectPath: string): Promise<FigmaComponent[] | null> {
+  let raw: string;
+  try {
+    raw = await readFile(join(projectPath, FIGMA_COMPONENTS_PATH), "utf8");
+  } catch {
+    return null;
+  }
+  let data: unknown;
+  try {
+    data = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+  if (!Array.isArray(data)) return [];
+  const comps: FigmaComponent[] = [];
+  for (const row of data) {
+    const parsed = figmaComponentSchema.safeParse(row);
+    if (parsed.success) comps.push(parsed.data);
+  }
+  return comps;
+}
+
+export interface ComponentReconciliation {
+  /** normName → the matched Figma component's variant axes. */
+  byName: Map<string, { figmaVariants: string[]; isSet: boolean }>;
+  /** Figma components with no matching code component (designed, not yet built). */
+  figmaOnly: FigmaComponent[];
+}
+
+/** Diff code component names against Figma components by canonical name. */
+export function reconcileComponents(
+  codeNames: string[],
+  figmaComps: FigmaComponent[],
+): ComponentReconciliation {
+  const codeNorms = new Set(codeNames.map(normComponentName));
+  const byName = new Map<string, { figmaVariants: string[]; isSet: boolean }>();
+  const figmaOnly: FigmaComponent[] = [];
+  const seen = new Set<string>();
+  for (const c of figmaComps) {
+    const key = normComponentName(c.name);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    if (codeNorms.has(key)) {
+      byName.set(key, { figmaVariants: c.variants, isSet: c.isSet });
+    } else {
+      figmaOnly.push(c);
+    }
+  }
+  return { byName, figmaOnly };
 }
 
 /** Diff parsed code tokens against Figma variables by normalized name. */

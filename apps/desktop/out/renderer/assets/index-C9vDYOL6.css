@@ -1589,6 +1589,10 @@
     background-color: #7c6ff040;
   }
 
+  .bg-vs-accent\/10 {
+    background-color: oklab(61.8515% .0454475 -.181458 / .1);
+  }
+
   .bg-vs-bg-code {
     background-color: #08090b;
   }

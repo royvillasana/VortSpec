@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { figmaComponentSchema } from "./figma";
 
 /**
  * Design System Inspector contracts (change: add-design-system-inspector).
@@ -109,6 +110,10 @@ export const inspectorComponentSchema = z.object({
   specPath: z.string().nullable(),
   /** Project-relative path of the visual-verify report, if one exists. */
   reportPath: z.string().nullable(),
+  /** Whether a matching component exists in the connected Figma file (Wave 3). */
+  figmaBacked: z.boolean().optional(),
+  /** The matched Figma component's variant axes, when figma-backed. */
+  figmaVariants: z.array(z.string()).optional(),
 });
 export type InspectorComponent = z.infer<typeof inspectorComponentSchema>;
 
@@ -117,6 +122,10 @@ export const inspectorComponentsResultSchema = z.object({
   /** The dev-server URL to embed for live preview, if one is configured/known. */
   previewUrl: z.string().nullable(),
   components: z.array(inspectorComponentSchema),
+  /** Figma components with no matching code component — designed, not yet built (Wave 3). */
+  figmaOnly: z.array(figmaComponentSchema).default([]),
+  /** Whether a `.vortspec/figma-components.json` export was found and reconciled. */
+  figmaSynced: z.boolean().default(false),
 });
 export type InspectorComponentsResult = z.infer<typeof inspectorComponentsResultSchema>;
 

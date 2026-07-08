@@ -1,5 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { InspectorComponent, LastRun, Project, ProjectConfig, VerificationResult } from "@vortspec/core/ipc";
+import type {
+  FigmaComponent,
+  FigmaConnection,
+  InspectorComponent,
+  LastRun,
+  Project,
+  ProjectConfig,
+  VerificationResult,
+} from "@vortspec/core/ipc";
 import { DEFAULT_FLOW } from "@vortspec/core/flow";
 import {
   buildOnePrompt,
@@ -104,6 +112,13 @@ export function GuidedFlow({
   const [manifestExists, setManifestExists] = useState(false);
   const [foundationOpen, setFoundationOpen] = useState(false);
   const [addNew, setAddNew] = useState(false);
+  // Figma component reconciliation (Wave 3): figma-cli reads the design system's
+  // components; the cockpit reconciles the code roster against them.
+  const [figmaOnly, setFigmaOnly] = useState<FigmaComponent[]>([]);
+  const [figmaCompSynced, setFigmaCompSynced] = useState(false);
+  const [figmaCli, setFigmaCli] = useState<FigmaConnection | null>(null);
+  const [compSyncing, setCompSyncing] = useState(false);
+  const [toast, setToast] = useState("");
 
   const run = useAgentRun();
   const latest = useLatestRun();
@@ -126,12 +141,41 @@ export function GuidedFlow({
     ]);
     setConfig(cfg);
     setComponents(comps.components);
+    setFigmaOnly(comps.figmaOnly ?? []);
+    setFigmaCompSynced(comps.figmaSynced ?? false);
     setTokenCount(toks.tokens.length);
     setManifestExists(man.exists);
   }
 
+  function flash(msg: string): void {
+    setToast(msg);
+    window.setTimeout(() => setToast(""), 2600);
+  }
+
+  // Prefer figma-cli to read components; fall back to the re-scan (MCP) run when
+  // the CLI isn't connected. Symmetric with the token Inspector's sync.
+  async function syncComponents(): Promise<void> {
+    if (figmaCli?.connected) {
+      setCompSyncing(true);
+      try {
+        const r = await api.figmaSyncComponents(project.path);
+        if (r.ok) {
+          await reload();
+          flash(r.message);
+        } else {
+          flash(r.message);
+        }
+      } finally {
+        setCompSyncing(false);
+      }
+      return;
+    }
+    flash("Connect figma-cli to read components directly, or use ↻ Re-scan (via the Figma MCP).");
+  }
+
   useEffect(() => {
     void reload();
+    void api.figmaStatus().then(setFigmaCli);
     // A run may already be in flight for this project (started here before we
     // navigated away, or from another screen) — reflect it so we don't start a
     // duplicate and the user can go watch it.
@@ -263,6 +307,11 @@ export function GuidedFlow({
 
   return (
     <div className="flex h-[calc(100vh-3rem)] w-full overflow-hidden bg-vs-bg-primary text-[13px] text-vs-text-primary">
+      {toast && (
+        <div className="fixed bottom-5 left-1/2 z-50 -translate-x-1/2 rounded-lg border border-vs-border-default bg-vs-bg-elevated px-4 py-2 text-[12px] text-vs-text-primary shadow-lg">
+          {toast}
+        </div>
+      )}
       <ProjectRail
         project={project}
         onHeaderClick={onBack}
@@ -443,7 +492,23 @@ export function GuidedFlow({
                     <h2 className="text-[13px] font-semibold uppercase tracking-wide text-vs-text-muted">
                       Components <span className="text-vs-border-strong">· {total}</span>
                     </h2>
+                    {figmaCompSynced && (
+                      <span className="text-[11px] text-vs-text-muted">
+                        {components?.filter((c) => c.figmaBacked).length ?? 0} in Figma ·{" "}
+                        {figmaOnly.length} not built
+                      </span>
+                    )}
                     <div className="flex-1" />
+                    {figmaCli?.connected && (
+                      <Button
+                        variant="default"
+                        disabled={busy || compSyncing}
+                        title="Read the design system's components straight from Figma via figma-cli (fast, no token) and reconcile against your code roster."
+                        onClick={() => void syncComponents()}
+                      >
+                        {compSyncing ? "Reading…" : figmaCompSynced ? "↻ Figma components" : "Read Figma components"}
+                      </Button>
+                    )}
                     <Button
                       variant="default"
                       disabled={busy}
@@ -530,6 +595,44 @@ export function GuidedFlow({
                           ))}
                         </div>
                       ))}
+                    </Card>
+                  )}
+
+                  {figmaOnly.length > 0 && (
+                    <Card className="flex flex-col gap-2 p-4">
+                      <div className="flex items-center gap-2 text-[11px]">
+                        <span className="inline-block h-1.5 w-1.5 rounded-full bg-vs-accent" />
+                        <span className="font-semibold uppercase tracking-wide text-vs-text-muted">
+                          In Figma, not yet built
+                        </span>
+                        <span className="text-vs-text-muted">· {figmaOnly.length}</span>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {figmaOnly.slice(0, 24).map((c) => (
+                          <span
+                            key={c.name}
+                            title={
+                              c.variants.length
+                                ? `Variant axes: ${c.variants.join(", ")}`
+                                : "A Figma component with no matching code component yet"
+                            }
+                            className="rounded-full border border-vs-border-default bg-vs-bg-surface px-2 py-0.5 font-mono text-[11px] text-vs-text-secondary"
+                          >
+                            {c.name}
+                            {c.variants.length > 0 && (
+                              <span className="text-vs-text-muted"> ·{c.variants.length}</span>
+                            )}
+                          </span>
+                        ))}
+                        {figmaOnly.length > 24 && (
+                          <span className="px-1 text-[11px] text-vs-text-muted">
+                            +{figmaOnly.length - 24} more
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[11px] text-vs-text-muted">
+                        Components designed in Figma with no code match. Use “+ New component” to build one.
+                      </p>
                     </Card>
                   )}
                 </section>
@@ -716,7 +819,21 @@ function ComponentRow({
     <div className="flex items-center gap-3 border-t border-vs-border-subtle px-4 py-2.5 first:border-t-0">
       <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${meta.dot}`} />
       <div className="min-w-0 flex-1">
-        <p className="text-[13px] text-vs-text-primary">{component.name}</p>
+        <p className="flex items-center gap-2 text-[13px] text-vs-text-primary">
+          {component.name}
+          {component.figmaBacked && (
+            <span
+              title={
+                component.figmaVariants && component.figmaVariants.length > 0
+                  ? `Backed by a Figma component · variant axes: ${component.figmaVariants.join(", ")}`
+                  : "Backed by a Figma component"
+              }
+              className="rounded-full border border-vs-accent/40 bg-vs-accent/10 px-1.5 py-px text-[9px] font-medium uppercase tracking-wide text-vs-accent"
+            >
+              Figma{component.figmaVariants && component.figmaVariants.length > 0 ? ` ·${component.figmaVariants.length}` : ""}
+            </span>
+          )}
+        </p>
         {component.description && (
           <p className="truncate text-[11px] text-vs-text-muted">{component.description}</p>
         )}
