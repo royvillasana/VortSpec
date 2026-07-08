@@ -9,8 +9,10 @@ Milestones I0→I5 are strictly ordered. I0 must leave the cockpit fully green b
 - [x] 1.3 Move the headless `main/*` engine into `packages/core/src/main`: AgentAdapter, run-manager/recorder, Git adapter + providers (github/gitlab/bitbucket), tasks/Jira + link-store, readers/parsers (tokens, components, manifest, usage), dev-server, profile/settings, environment, flow — and relocate their 23 Vitest suites alongside.
 - [x] 1.4 Expose `registerIpc` (+`stopAllDevServers`/`fixGuiPath`) from `@vortspec/core/main` as the sole IPC definition; the app's `main/index.ts` is now a thin shell that mounts it.
 - [x] 1.4b Single-source the SDD-DE procedure prompts: extract the build/re-scan/verify/resume/refactor prompt builders from `GuidedFlow` into `@vortspec/core/sdd-prompts`.
-- [ ] 1.5 Move the reusable renderer into `packages/ui`: `vs-*` tokens (`globals.css`), shared components (RunPanel, RunProgress, AssistantDock, cards) and shared panels (Source Control, Run app, Tasks, Tokens, Manifest, Profile) + their Playwright CT specs; leave guided-flow *orchestration* screen in `apps/desktop` but move its building-block components to `ui`. (Requires Tailwind v4 cross-package `@source` content wiring.)
-- [ ] 1.6 Repoint `apps/desktop`: renderer imports panels/components/tokens from `@vortspec/ui`; delete the now-duplicated local copies.
+- [x] 1.5a Move the reusable UI **foundation** into `packages/ui`: shared primitives (ui.tsx Button/Card/Spinner, Logo, Markdown), RunProgress, RunPanel, ProjectRail, and the pure `run-model`/`run-progress` libs (+12 vitest). Wire Tailwind v4 cross-package content scanning via `@source` (A/B-verified necessary).
+- [ ] 1.5b Move the **api-coupled** surfaces into `packages/ui`: first lift the `VortSpecApi` type into `@vortspec/core` (renderer-safe, derived from the IPC contract) so the app's preload and `ui` share one source of truth; then move `api.ts`, `useAgentRun`, `AssistantDock`, and the shared panels (Source Control, Run app, Tasks, Tokens/Inspector, Manifest, Profile) + their CT specs into `ui`.
+- [x] 1.6a Repoint `apps/desktop` renderer to import the UI foundation + `vs-*` scanning from `@vortspec/ui`; local copies deleted.
+- [ ] 1.6b Repoint the remaining panels once 1.5b lands.
 - [x] 1.7 Verify no React/Electron-renderer/Monaco import leaks into `packages/core` (checked; clean).
 - [x] 1.8 Gate (for work landed so far): `pnpm build && pnpm test && pnpm lint` green — core 128 + desktop 12 = 140 vitest, 54 CT, typecheck (node+web). Re-run after 1.5/1.6.
 
