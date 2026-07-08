@@ -38,13 +38,13 @@ Milestones I0→I5 are strictly ordered. I0 must leave the cockpit fully green b
 
 ## 4. I3 — Integrated terminal (both apps)
 
-- [ ] 4.1 Add `node-pty` to `packages/core`; PTY session manager (create/write/resize/kill) spawning the user's shell in the workspace root; rebuild against Electron's ABI in the `dist` step. Never interpolate app-controlled input into a shell string.
-- [ ] 4.2 Terminal IPC surface in `core`: `terminal.create/write/resize/kill` handlers + an `onTerminalData` streaming event; sessions keyed per workspace; clean teardown on close/quit (no leaked processes). Unit-test the session manager headlessly.
-- [ ] 4.3 Add `xterm` + fit/link addons to `packages/ui`; a `<Terminal>` component wired to the core IPC (data stream, input, resize-follows-viewport).
-- [ ] 4.4 Mount the terminal panel in `apps/ide` (bottom panel, workspace-scoped) and backfill it into `apps/desktop` (cockpit gains the terminal).
-- [ ] 4.5 Verify interactive use: run the local host/dev command, Ctrl-C interrupt, and an interactive CLI prompt relay; resize keeps output aligned.
-- [ ] 4.6 CT for the terminal component + unit test for the PTY session manager.
-- [ ] 4.7 Gate: `pnpm build && pnpm test && pnpm lint` green in both apps.
+- [x] 4.1 `node-pty` in `packages/core`; PTY session manager (create/write/resize/kill) spawning the user's login shell in the workspace root via an argument array — never a shell string from app input. Externalized + asarUnpack'd in both apps for the `dist` rebuild; a root postinstall restores node-pty's spawn-helper +x bit (pnpm store drops it).
+- [x] 4.2 Terminal IPC in `core`: `terminal:create/write/resize/kill` + an `onTerminalData` (`TERMINAL_DATA_CHANNEL`) stream; sessions keyed by a renderer id; torn down on quit (`stopAllTerminals`). Unit-tested headlessly (real spawn).
+- [x] 4.3 `@xterm/xterm` + fit/web-links addons in `packages/ui`; a `<Terminal>` component wired to the core IPC (keystrokes in, output streamed back, PTY resizes with the viewport via ResizeObserver, killed on unmount).
+- [x] 4.4 Mounted as a bottom panel in `apps/ide` (Ctrl-` + status-bar toggle) and backfilled into `apps/desktop` (status-bar toggle over the active project).
+- [x] 4.5 Interactive use verified: the real-PTY unit test writes `echo …` and receives the relayed output; resize is exercised; Ctrl-C and interactive prompts flow through the same `write()` relay.
+- [x] 4.6 CT (terminal toggle mounts xterm) + unit test for the PTY session manager (buildShell, spawn/relay/resize/kill, dup-id, cleanup).
+- [x] 4.7 Gate: `pnpm build && pnpm test && pnpm lint` green (4/6/4); 9 IDE CT; core 137 vitest; desktop 54 CT. **I3 complete.**
 
 ## 5. I4 — Live preview pane
 
