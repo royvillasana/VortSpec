@@ -174,6 +174,15 @@ export async function getDiff(cwd: string, path?: string, staged = false): Promi
   return r.stdout;
 }
 
+/**
+ * The file's committed contents at HEAD, or null when it is new (not tracked).
+ * Used to feed Monaco's diff editor (original = HEAD, modified = working copy).
+ */
+export async function getFileAtHead(cwd: string, path: string): Promise<string | null> {
+  const r = await git(cwd, ["show", `HEAD:${path}`]);
+  return r.ok ? r.stdout : null;
+}
+
 // ── Mutate (additive only — no delete, no force) ─────────────────────
 
 function ok(message: string): GitResult {

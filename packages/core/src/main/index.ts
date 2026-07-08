@@ -9,4 +9,5 @@
  */
 export { registerIpc } from "./ipc";
 export { stopAllDevServers } from "./workspace/dev-server";
+export { stopAllWatchers } from "./workspace/fs-workspace";
 export { fixGuiPath } from "./util/fix-path";

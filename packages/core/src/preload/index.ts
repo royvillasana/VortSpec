@@ -16,6 +16,7 @@ import {
   type AgentRunOptions,
 } from "@vortspec/core/run-events";
 import { DEV_SERVER_UPDATE_CHANNEL, type DevServerUpdate } from "@vortspec/core/dev-server";
+import { WORKSPACE_CHANGE_CHANNEL, type WorkspaceChange } from "@vortspec/core/fs";
 import type { VortSpecApi } from "@vortspec/core/api";
 
 /**
@@ -141,6 +142,20 @@ const api: VortSpecApi = {
   storybookIndex: (url: string) => invoke("devserver:storybookIndex", url),
   onDevServerUpdate: (callback: (payload: DevServerUpdate) => void) =>
     subscribe(DEV_SERVER_UPDATE_CHANNEL, callback),
+
+  // Workspace filesystem (IDE)
+  listDir: (projectPath: string, relPath: string) =>
+    invoke("workspace:listDir", { projectPath, relPath }),
+  readFile: (projectPath: string, relPath: string) =>
+    invoke("workspace:readFile", { projectPath, relPath }),
+  writeFile: (projectPath: string, relPath: string, content: string) =>
+    invoke("workspace:writeFile", { projectPath, relPath, content }),
+  watchWorkspace: (projectPath: string) => invoke("workspace:watchStart", projectPath),
+  unwatchWorkspace: (projectPath: string) => invoke("workspace:watchStop", projectPath),
+  fileAtHead: (projectPath: string, relPath: string) =>
+    invoke("git:fileAtHead", { projectPath, relPath }),
+  onWorkspaceChange: (callback: (payload: WorkspaceChange) => void) =>
+    subscribe(WORKSPACE_CHANGE_CHANNEL, callback),
   setPublishTarget: (projectPath: string, repoUrl: string) =>
     invoke("flow:setPublishTarget", { projectPath, repoUrl }),
   readArtifact: (projectPath: string, relPath: string) =>

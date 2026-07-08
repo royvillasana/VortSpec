@@ -66,6 +66,12 @@ export interface MockConfig {
   projects?: import("@vortspec/core/ipc").Project[];
   /** Project returned by pickFolder() — the IDE "Open a folder…" result. */
   pickFolderResult?: import("@vortspec/core/ipc").Project | null;
+  /** Workspace file tree for the IDE Explorer, keyed by relative dir ("" = root). */
+  fsTree?: Record<string, import("@vortspec/core/ipc").FsEntry[]>;
+  /** File contents for the IDE editor, keyed by relative path. */
+  fsFiles?: Record<string, string>;
+  /** HEAD contents for git diffs, keyed by relative path. */
+  fsHead?: Record<string, string>;
 }
 
 const EMPTY_TOKENS: InspectorTokensResult = {
@@ -219,6 +225,20 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
       devSubs.add(cb);
       return () => devSubs.delete(cb);
     },
+
+    // Workspace filesystem (IDE Explorer / editor)
+    listDir: async (_projectPath: string, relPath: string) => cfg.fsTree?.[relPath] ?? [],
+    readFile: async (_projectPath: string, relPath: string) => ({
+      path: relPath,
+      content: cfg.fsFiles?.[relPath] ?? "",
+      truncated: false,
+    }),
+    writeFile: async () => ({ ok: true, message: "Saved." }),
+    watchWorkspace: async () => undefined,
+    unwatchWorkspace: async () => undefined,
+    fileAtHead: async (_projectPath: string, relPath: string) => cfg.fsHead?.[relPath] ?? null,
+    onWorkspaceChange: () => () => undefined,
+
     setPublishTarget: async () => null,
     readArtifact: async () => null,
     findLatestArtifact: async () => null,

@@ -11,6 +11,7 @@ import {
 } from "./workspace/workspace-manager";
 import { getToolkitStatus, installToolkit } from "./workspace/toolkit-manager";
 import { createProject } from "./workspace/setup-manager";
+import * as fsw from "./workspace/fs-workspace";
 import { readProjectConfig } from "./workspace/config-manager";
 import {
   getInspectorTokens,
@@ -104,6 +105,22 @@ const handlers: Record<IpcChannel, Handler> = {
   "workspace:refreshProject": ((path: string) => refreshProject(path)) as Handler,
   "workspace:createProject": ((req: { path: string; answers: SetupAnswers }) =>
     createProject(req.path, req.answers)) as Handler,
+  "workspace:listDir": ((r: { projectPath: string; relPath: string }) =>
+    fsw.listDir(r.projectPath, r.relPath)) as Handler,
+  "workspace:readFile": ((r: { projectPath: string; relPath: string }) =>
+    fsw.readFile(r.projectPath, r.relPath)) as Handler,
+  "workspace:writeFile": ((r: { projectPath: string; relPath: string; content: string }) =>
+    fsw.writeFile(r.projectPath, r.relPath, r.content)) as Handler,
+  "workspace:watchStart": ((projectPath: string, sender: WebContents) => {
+    fsw.startWatch(sender, projectPath);
+    return undefined;
+  }) as Handler,
+  "workspace:watchStop": ((projectPath: string) => {
+    fsw.stopWatch(projectPath);
+    return undefined;
+  }) as Handler,
+  "git:fileAtHead": ((r: { projectPath: string; relPath: string }) =>
+    gitAdapter.getFileAtHead(r.projectPath, r.relPath)) as Handler,
 
   "toolkit:status": ((path: string) => getToolkitStatus(path)) as Handler,
   "toolkit:install": ((path: string) => installToolkit(path)) as Handler,

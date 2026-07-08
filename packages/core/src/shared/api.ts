@@ -11,6 +11,7 @@
 import type { IpcResponse, StageStatus, SetupAnswers, FileSnapshot, Profile } from "./ipc";
 import type { AgentRunOptions, AgentEventEnvelope, AgentRawEnvelope } from "./run-events";
 import type { DevServerUpdate } from "./dev-server";
+import type { WorkspaceChange } from "./fs";
 import type { ProviderId, RepoVisibility } from "./git";
 import type { IssueType } from "./task";
 import type { SnapshotReason } from "./manifest";
@@ -130,10 +131,19 @@ export interface VortSpecApi {
   snapshotTokenScope(projectPath: string): Promise<IpcResponse<"inspector:snapshotTokenScope">>;
   restoreFiles(projectPath: string, files: FileSnapshot[]): Promise<IpcResponse<"inspector:restoreFiles">>;
 
+  // workspace filesystem (IDE)
+  listDir(projectPath: string, relPath: string): Promise<IpcResponse<"workspace:listDir">>;
+  readFile(projectPath: string, relPath: string): Promise<IpcResponse<"workspace:readFile">>;
+  writeFile(projectPath: string, relPath: string, content: string): Promise<IpcResponse<"workspace:writeFile">>;
+  watchWorkspace(projectPath: string): Promise<IpcResponse<"workspace:watchStart">>;
+  unwatchWorkspace(projectPath: string): Promise<IpcResponse<"workspace:watchStop">>;
+  fileAtHead(projectPath: string, relPath: string): Promise<IpcResponse<"git:fileAtHead">>;
+
   // event subscriptions (return an unsubscribe fn)
   onAgentEvent(callback: (payload: AgentEventEnvelope) => void): () => void;
   onAgentRaw(callback: (payload: AgentRawEnvelope) => void): () => void;
   onDevServerUpdate(callback: (payload: DevServerUpdate) => void): () => void;
+  onWorkspaceChange(callback: (payload: WorkspaceChange) => void): () => void;
 }
 
 declare global {

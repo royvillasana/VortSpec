@@ -34,6 +34,15 @@ import { updateInfoSchema } from "./update";
 
 export type { DevServerStatus, DevServerState, DevServerUpdate } from "./dev-server";
 export { DEV_SERVER_UPDATE_CHANNEL, devServerUpdateSchema } from "./dev-server";
+import { fsEntrySchema, fsFileSchema, fsWriteResultSchema } from "./fs";
+export {
+  WORKSPACE_CHANGE_CHANNEL,
+  workspaceChangeSchema,
+  fsEntrySchema,
+  fsFileSchema,
+  fsWriteResultSchema,
+} from "./fs";
+export type { FsEntry, FsFile, FsWriteResult, WorkspaceChange } from "./fs";
 import { setupAnswersSchema, projectConfigSchema } from "./setup";
 import {
   inspectorTokensResultSchema,
@@ -210,6 +219,24 @@ export const ipcContract = {
   "workspace:createProject": {
     request: z.object({ path: z.string(), answers: setupAnswersSchema }),
     response: projectSchema,
+  },
+  "workspace:listDir": {
+    request: z.object({ projectPath: z.string(), relPath: z.string() }),
+    response: z.array(fsEntrySchema),
+  },
+  "workspace:readFile": {
+    request: z.object({ projectPath: z.string(), relPath: z.string() }),
+    response: fsFileSchema,
+  },
+  "workspace:writeFile": {
+    request: z.object({ projectPath: z.string(), relPath: z.string(), content: z.string() }),
+    response: fsWriteResultSchema,
+  },
+  "workspace:watchStart": { request: z.string(), response: z.void() },
+  "workspace:watchStop": { request: z.string(), response: z.void() },
+  "git:fileAtHead": {
+    request: z.object({ projectPath: z.string(), relPath: z.string() }),
+    response: z.string().nullable(),
   },
 
   "toolkit:status": { request: z.string(), response: toolkitStatusSchema },
