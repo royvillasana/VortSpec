@@ -38,12 +38,13 @@ export function StatusBranch({
   const [open, setOpen] = useState(false);
   const [branches, setBranches] = useState<GitBranch[] | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
-  const [err, setErr] = useState("");
+  // An inline notice (checkout error, or the dirty-tree block with a git link).
+  const [notice, setNotice] = useState<{ text: string; goToGit?: boolean } | null>(null);
 
   useEffect(() => {
     if (!open) return;
     let alive = true;
-    setErr("");
+    setNotice(null);
     setBranches(null);
     void api
       .gitBranches(project.path)
@@ -56,14 +57,22 @@ export function StatusBranch({
 
   async function checkout(name: string): Promise<void> {
     setBusy(name);
-    setErr("");
+    setNotice(null);
+    // Guard: a dirty working tree can block or lose changes on checkout — send the
+    // user to commit/stash in Source Control instead of switching silently.
+    const status = await api.gitStatus(project.path).catch(() => null);
+    if (status?.isRepo && status.clean === false) {
+      setBusy(null);
+      setNotice({ text: "You have uncommitted changes — commit or stash them before switching branches.", goToGit: true });
+      return;
+    }
     const res = await api.gitCheckout(project.path, name).catch(() => ({ ok: false, message: "Checkout failed." }));
     setBusy(null);
     if (res.ok) {
       onCheckout?.(name);
       setOpen(false);
     } else {
-      setErr(res.message);
+      setNotice({ text: res.message });
     }
   }
 
@@ -123,7 +132,23 @@ export function StatusBranch({
                 >
                   ＋ Create new branch…
                 </button>
-                {err && <div className="px-3 py-1 text-[10px] text-vs-error">{err}</div>}
+                {notice && (
+                  <div className="border-t border-vs-border-subtle px-3 py-1.5 text-[10px] text-vs-warning">
+                    {notice.text}
+                    {notice.goToGit && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setOpen(false);
+                          onCreate();
+                        }}
+                        className="mt-1 block text-vs-accent hover:underline"
+                      >
+                        Open Source Control →
+                      </button>
+                    )}
+                  </div>
+                )}
               </>
             )}
           </div>

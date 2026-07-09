@@ -167,6 +167,29 @@ test("the branch is a menu to switch branches and to create one in Source Contro
   ).toHaveAttribute("aria-pressed", "true");
 });
 
+test("switching branches is blocked when the working tree is dirty", async ({ mount }) => {
+  const mock = {
+    ...base,
+    gitStatus: { isRepo: true, branch: "main", upstream: null, ahead: 0, behind: 0, staged: [], unstaged: ["a.ts"], untracked: [], conflicts: [], clean: false },
+    gitBranches: [
+      { name: "main", current: true, remote: false, upstream: null },
+      { name: "feature/x", current: false, remote: false, upstream: null },
+    ],
+  };
+  const c = await mount(<App />, { hooksConfig: { mock } });
+  await open(c);
+  const footer = c.locator("footer");
+  await footer.getByRole("button", { name: /main/ }).click();
+  await c.getByRole("menuitem", { name: /feature\/x/ }).click();
+  // Not switched — the branch is still main, and a warning offers to open SCM.
+  await expect(c.getByText(/uncommitted changes/i)).toBeVisible();
+  await expect(footer.getByRole("button", { name: /main/ })).toBeVisible();
+  await c.getByRole("button", { name: /Open Source Control/ }).click();
+  await expect(
+    c.getByRole("navigation", { name: "Activity bar" }).getByRole("button", { name: "Source Control" }),
+  ).toHaveAttribute("aria-pressed", "true");
+});
+
 test("can collapse the assistant chat", async ({ mount }) => {
   const c = await mount(<App />, { hooksConfig: { mock: base } });
   await open(c);
