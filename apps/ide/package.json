@@ -50,6 +50,7 @@
   "build": {
     "appId": "com.vortspec.ide",
     "productName": "VortSpec IDE",
+    "npmRebuild": false,
     "asarUnpack": [
       "**/node_modules/@royvillasana/sdd-de/**",
       "**/node_modules/node-pty/**"
