@@ -1,4 +1,4 @@
-import { shell, dialog, app, ipcMain, BrowserWindow } from "electron";
+import { shell, dialog, app, clipboard, ipcMain, BrowserWindow } from "electron";
 import { join as join$1 } from "path";
 import { electronApp, optimizer, is } from "@electron-toolkit/utils";
 import os, { tmpdir, homedir, platform } from "node:os";
@@ -8,7 +8,7 @@ import path, { join, resolve as resolve$1, sep, basename, dirname, extname } fro
 import { access, mkdir, readFile as readFile$1, writeFile as writeFile$1, cp, copyFile, appendFile, readdir, symlink, rm, stat } from "node:fs/promises";
 import crypto, { createHash, randomUUID } from "node:crypto";
 import { createRequire } from "node:module";
-import fs, { watch, promises, existsSync } from "node:fs";
+import fs, { watch, promises, mkdirSync, writeFileSync, existsSync } from "node:fs";
 import { spawn as spawn$1 } from "node-pty";
 import net from "node:net";
 import { EventEmitter } from "node:events";
@@ -891,6 +891,10 @@ const ipcContract = {
   "system:isElectron": { request: z.void(), response: z.boolean() },
   "system:getVersion": { request: z.void(), response: z.string() },
   "system:homeDir": { request: z.void(), response: z.string() },
+  "system:clipboardImage": {
+    request: z.void(),
+    response: z.object({ path: z.string(), dataUrl: z.string() }).nullable()
+  },
   "system:checkUpdate": { request: z.void(), response: updateInfoSchema },
   "env:check": { request: z.void(), response: envReportSchema },
   "env:verifyLogin": { request: z.void(), response: envCheckSchema },
@@ -2052,6 +2056,18 @@ function resolveIdeAction(result) {
     resolve2({ ok: result.ok, message: result.message });
   }
   return { ok: true };
+}
+let seq = 0;
+function readClipboardImage() {
+  const img = clipboard.readImage();
+  if (img.isEmpty()) return null;
+  const dir = join(tmpdir(), "vortspec-paste");
+  mkdirSync(dir, { recursive: true });
+  const path2 = join(dir, `paste-${Date.now()}-${seq++}.png`);
+  writeFileSync(path2, img.toPNG());
+  const { width } = img.getSize();
+  const thumb = width > 220 ? img.resize({ width: 220 }) : img;
+  return { path: path2, dataUrl: thumb.toDataURL() };
 }
 const FIGMA_VARS_PATH = ".vortspec/figma-variables.json";
 const FIGMA_COMPONENTS_PATH = ".vortspec/figma-components.json";
@@ -3347,17 +3363,17 @@ async function recordRun(opts, acc, exitCode) {
   } catch {
     return;
   }
-  let seq = 1;
+  let seq2 = 1;
   try {
-    seq = (await readdir(dir)).filter((n) => n.endsWith(".json")).length + 1;
+    seq2 = (await readdir(dir)).filter((n) => n.endsWith(".json")).length + 1;
   } catch {
   }
   const cancelled = exitCode === null;
   const failed = !cancelled && (acc.isError || exitCode !== 0);
   const title = runTitle(opts.prompt);
   const summary = {
-    id: `run-${Date.now()}-${seq}`,
-    label: `#${seq}`,
+    id: `run-${Date.now()}-${seq2}`,
+    label: `#${seq2}`,
     title,
     outcome: cancelled ? "cancelled" : failed ? "failed" : "passed",
     updatedAt: (/* @__PURE__ */ new Date()).toISOString(),
@@ -4631,6 +4647,7 @@ const handlers = {
   "system:isElectron": () => true,
   "system:getVersion": () => app.getVersion(),
   "system:homeDir": () => homedir(),
+  "system:clipboardImage": (() => readClipboardImage()),
   "system:checkUpdate": () => checkForUpdate(),
   "env:check": () => checkEnvironment(),
   "env:verifyLogin": () => verifyClaudeLogin(),

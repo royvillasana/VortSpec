@@ -152,6 +152,28 @@ test("attaching a folder lets you preview its file tree", async ({ mount }) => {
   expect(prompts[0]).toContain("@src/index.ts");
 });
 
+test("pasting a screenshot attaches it as an image and sends its path", async ({ mount }) => {
+  const mock = {
+    ...base,
+    clipboardImage: { path: "/tmp/vortspec-paste/shot.png", dataUrl: "data:image/png;base64,iVBORw0KGgo=" },
+  };
+  const c = await mount(<App />, { hooksConfig: { mock } });
+  await open(c);
+  const input = c.getByPlaceholder(/@ a file/);
+  // Simulate pasting an image (e.g. a macOS screenshot) into the composer.
+  await input.evaluate((el) => {
+    const dt = new DataTransfer();
+    dt.items.add(new File([new Uint8Array([137, 80, 78, 71])], "shot.png", { type: "image/png" }));
+    el.dispatchEvent(new ClipboardEvent("paste", { clipboardData: dt, bubbles: true, cancelable: true }));
+  });
+  await expect(c.getByTestId("attachment-chip")).toContainText("pasted image");
+  // Sending references the saved image path so Claude can read it.
+  await input.fill("what is in this screenshot");
+  await c.getByRole("button", { name: "Send" }).click();
+  const prompts = await c.page().evaluate(() => (window as unknown as { __runPrompts: string[] }).__runPrompts);
+  expect(prompts[prompts.length - 1]).toContain("/tmp/vortspec-paste/shot.png");
+});
+
 test("mounts a modify-capable assistant grounded in the workspace", async ({ mount }) => {
   const c = await mount(<App />, { hooksConfig: { mock: base } });
   await open(c);

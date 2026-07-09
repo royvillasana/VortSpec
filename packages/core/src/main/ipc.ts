@@ -15,6 +15,7 @@ import { createProject } from "./workspace/setup-manager";
 import * as fsw from "./workspace/fs-workspace";
 import * as pty from "./terminal/pty-manager";
 import { ideMcpConfigPath, reportIdeState, resolveIdeAction } from "./ide-mcp/host";
+import { readClipboardImage } from "./system/clipboard";
 import type { IdeState, IdeActionResult } from "@vortspec/core/ide-mcp";
 import * as figmaCli from "./figma/figma-cli";
 import type { FigmaCliMode } from "@vortspec/core/figma";
@@ -92,6 +93,7 @@ const handlers: Record<IpcChannel, Handler> = {
   "system:isElectron": () => true,
   "system:getVersion": () => app.getVersion(),
   "system:homeDir": () => homedir(),
+  "system:clipboardImage": (() => readClipboardImage()) as Handler,
   "system:checkUpdate": () => checkForUpdate(),
 
   "env:check": () => checkEnvironment(),

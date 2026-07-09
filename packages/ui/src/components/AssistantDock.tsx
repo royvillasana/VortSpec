@@ -474,6 +474,16 @@ export function AssistantDock({
               setMenuIndex(0);
               setMentionIndex(0);
             }}
+            onPaste={(e) => {
+              // A pasted image (e.g. a macOS screenshot) is captured from the OS
+              // clipboard and attached; text still pastes into the textarea.
+              const hasImage = Array.from(e.clipboardData?.items ?? []).some((it) => it.type.startsWith("image/"));
+              if (!hasImage) return;
+              e.preventDefault();
+              void api.clipboardImage().then((img) => {
+                if (img) addAttachment({ kind: "image", path: img.path, dataUrl: img.dataUrl, label: "pasted image" });
+              });
+            }}
             onKeyDown={(e) => {
               if (mentionOpen && mentionItems.length > 0) {
                 const len = mentionItems.length;

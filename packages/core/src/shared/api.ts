@@ -25,6 +25,8 @@ export interface VortSpecApi {
   getVersion(): Promise<IpcResponse<"system:getVersion">>;
   /** The user's home directory — a default cwd for a no-workspace assistant chat. */
   homeDir(): Promise<IpcResponse<"system:homeDir">>;
+  /** Read an image from the OS clipboard → temp PNG path + thumbnail (or null). */
+  clipboardImage(): Promise<IpcResponse<"system:clipboardImage">>;
   checkUpdate(): Promise<IpcResponse<"system:checkUpdate">>;
 
   // environment

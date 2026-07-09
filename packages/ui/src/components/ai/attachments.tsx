@@ -13,8 +13,8 @@ import { FileTree } from "./FileTree";
  */
 export interface ChatAttachment {
   id: string;
-  kind: "file" | "dir" | "selection" | "conversation" | "text";
-  /** Workspace-relative path (file/dir/selection). */
+  kind: "file" | "dir" | "selection" | "conversation" | "text" | "image";
+  /** Workspace-relative path (file/dir/selection), or absolute temp path (image). */
   path?: string;
   /** For a selection: the 1-based line range and the selected text. */
   startLine?: number;
@@ -22,8 +22,10 @@ export interface ChatAttachment {
   text?: string;
   /** For a conversation reference: the target id. */
   convId?: string;
-  /** Display label + source (conversation/text). */
+  /** Display label + source (conversation/text/image). */
   label?: string;
+  /** For a pasted image: a small data-URL thumbnail for the chip. */
+  dataUrl?: string;
 }
 
 /** Read-only access to the other open conversations (for @-refs + expansion). */
@@ -46,6 +48,7 @@ export interface PendingSelectionRef {
 export function attachmentLabel(a: ChatAttachment): string {
   if (a.kind === "conversation") return a.label ?? "conversation";
   if (a.kind === "text") return a.label ? `${a.label} ⧉` : "snippet";
+  if (a.kind === "image") return a.label ?? "image";
   const base = (a.path ?? "").split("/").pop() || (a.path ?? "");
   if (a.kind === "selection" && a.startLine) {
     return a.startLine === a.endLine ? `${base}:${a.startLine}` : `${base}:${a.startLine}-${a.endLine}`;
@@ -81,6 +84,9 @@ export function expandAttachments(atts: ChatAttachment[], registry?: Conversatio
     if (a.kind === "text") {
       return `[From ${a.label ?? "another conversation"}]\n\`\`\`\n${a.text ?? ""}\n\`\`\``;
     }
+    if (a.kind === "image") {
+      return `[Attached image — a pasted screenshot saved at ${a.path}. Use the Read tool to view it.]`;
+    }
     if (a.kind === "selection" && a.startLine) {
       const range = a.startLine === a.endLine ? `L${a.startLine}` : `L${a.startLine}-L${a.endLine}`;
       const snippet = a.text ? `\n\`\`\`\n${a.text}\n\`\`\`` : "";
@@ -97,6 +103,7 @@ const ICON: Record<ChatAttachment["kind"], string> = {
   selection: "⧉",
   conversation: "💬",
   text: "❝",
+  image: "🖼️",
 };
 
 export function AttachmentChips({
@@ -144,7 +151,11 @@ export function AttachmentChips({
                 className={cn("flex min-w-0 items-center gap-1", canPreview && "hover:text-vs-text-primary")}
                 title={canPreview ? "Preview folder" : a.path}
               >
-                <span aria-hidden>{ICON[a.kind]}</span>
+                {a.kind === "image" && a.dataUrl ? (
+                  <img src={a.dataUrl} alt="" className="h-4 w-4 shrink-0 rounded-sm object-cover" />
+                ) : (
+                  <span aria-hidden>{ICON[a.kind]}</span>
+                )}
                 <span className="truncate font-mono">{attachmentLabel(a)}</span>
               </button>
               <button

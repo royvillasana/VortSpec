@@ -233,6 +233,10 @@ export const ipcContract = {
   "system:isElectron": { request: z.void(), response: z.boolean() },
   "system:getVersion": { request: z.void(), response: z.string() },
   "system:homeDir": { request: z.void(), response: z.string() },
+  "system:clipboardImage": {
+    request: z.void(),
+    response: z.object({ path: z.string(), dataUrl: z.string() }).nullable(),
+  },
   "system:checkUpdate": { request: z.void(), response: updateInfoSchema },
 
   "env:check": { request: z.void(), response: envReportSchema },

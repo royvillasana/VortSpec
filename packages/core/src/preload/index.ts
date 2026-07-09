@@ -48,6 +48,7 @@ const api: VortSpecApi = {
   isElectron: () => invoke("system:isElectron"),
   getVersion: () => invoke("system:getVersion"),
   homeDir: () => invoke("system:homeDir"),
+  clipboardImage: () => invoke("system:clipboardImage"),
   checkUpdate: () => invoke("system:checkUpdate"),
 
   checkEnvironment: () => invoke("env:check"),

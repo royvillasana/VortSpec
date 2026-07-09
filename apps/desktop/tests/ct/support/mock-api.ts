@@ -76,6 +76,8 @@ export interface MockConfig {
   fsFiles?: Record<string, string>;
   /** Entries returned by searchFiles() — the @-mention picker (filtered by query). */
   searchResults?: import("@vortspec/core/ipc").FsEntry[];
+  /** Result of clipboardImage() — a pasted-image path + thumbnail, or null. */
+  clipboardImage?: { path: string; dataUrl: string } | null;
   /** HEAD contents for git diffs, keyed by relative path. */
   fsHead?: Record<string, string>;
   /** Text emitted to onTerminalData shortly after a terminal session is created. */
@@ -151,6 +153,7 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
     isElectron: async () => true,
     getVersion: async () => "test",
     homeDir: async () => "/Users/dev",
+    clipboardImage: async () => cfg.clipboardImage ?? null,
     checkUpdate: async () => ({
       current: "0.1.0",
       latest: null,
