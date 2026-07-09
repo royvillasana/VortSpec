@@ -35,6 +35,6 @@ Phased so each phase ships value and stays green (`pnpm build && pnpm test && pn
 
 ## 5. Verification & docs
 
-- [ ] 5.1 Full gate green across packages; cockpit (desktop CT) unaffected; no keys stored; loopback-only + gated state changes verified.
-- [ ] 5.2 Update docs (launch-gate + the two-app site) to note the IDE integration; confirm the Anthropic launch-gate policy still holds (non-bare, user login, IDE MCP is local).
-- [ ] 5.3 End-to-end in the running IDE: model/skills/status visible, assistant sees the selection, opens/clones a folder on request (gated).
+- [x] 5.1 Full gate green across packages; cockpit (desktop CT) unaffected; no keys stored; local unix-socket + token + gated state changes verified.
+- [x] 5.2 Launch-gate policy doc notes the IDE integration (local stdio MCP via `--mcp-config`, non-bare, user-confirmed actions).
+- [ ] 5.3 End-to-end in the running IDE (user's review): model/skills/status visible, assistant sees the selection, opens/clones a folder on request (gated).
