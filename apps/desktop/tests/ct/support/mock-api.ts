@@ -128,11 +128,13 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
   // return the post-generation manifest (mirrors design-doc writing DESIGN.md).
   let generated = false;
 
-  // Records the prompt of every startRun so tests can assert what was actually
-  // sent to Claude (e.g. injected IDE grounding) vs. what shows in the bubble.
+  // Records the prompt (and full options) of every startRun so tests can assert
+  // what was sent to Claude (injected grounding, agent tools/system prompt, …).
   const runPrompts: string[] = [];
+  const runOpts: Record<string, unknown>[] = [];
   const startRun = async (opts?: { prompt?: string }): Promise<{ runId: string }> => {
     if (typeof opts?.prompt === "string") runPrompts.push(opts.prompt);
+    if (opts) runOpts.push(opts as Record<string, unknown>);
     const runId = `run-${runSeq++}`;
     // Replay AFTER useAgentRun stores runIdRef (a microtask after this resolves),
     // so its `runId === runIdRef.current` filter passes — hence a macrotask.
@@ -379,6 +381,7 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
 
   (window as unknown as { vortspec: unknown }).vortspec = api;
   (window as unknown as { __runPrompts: string[] }).__runPrompts = runPrompts;
+  (window as unknown as { __runOpts: Record<string, unknown>[] }).__runOpts = runOpts;
   // Let tests drive an IDE action (as if Claude called a tool) and inspect replies.
   (window as unknown as { __pushIdeAction: (a: IdeAction) => void }).__pushIdeAction = (a) => {
     for (const cb of ideActionSubs) cb(a);

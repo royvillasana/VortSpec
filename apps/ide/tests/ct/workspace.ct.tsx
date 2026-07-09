@@ -129,13 +129,14 @@ test("Open Browser opens the selected preview tab's own server (App vs Storybook
 test("opening a file adds a tab; opening a second adds another", async ({ mount }) => {
   const c = await mount(<App />, { hooksConfig: { mock: base } });
   await open(c);
+  const etabs = c.getByRole("tablist", { name: "Editor tabs" });
   await c.getByRole("button", { name: "README.md" }).click();
-  await expect(c.getByRole("tab", { name: /README\.md/ })).toBeVisible();
+  await expect(etabs.getByRole("tab", { name: /README\.md/ })).toBeVisible();
   // Expand src and open index.ts → a second tab.
   await c.getByRole("button", { name: "src", exact: true }).click();
   await c.getByRole("button", { name: "index.ts" }).click();
-  await expect(c.getByRole("tab", { name: /index\.ts/ })).toBeVisible();
-  await expect(c.getByRole("tab")).toHaveCount(2);
+  await expect(etabs.getByRole("tab", { name: /index\.ts/ })).toBeVisible();
+  await expect(etabs.getByRole("tab")).toHaveCount(2);
 });
 
 test("offers a diff-vs-HEAD toggle for the open file", async ({ mount }) => {
@@ -157,16 +158,17 @@ test("editor tabs can be dragged to reorder them", async ({ mount }) => {
   await c.getByRole("button", { name: "README.md" }).click();
   await c.getByRole("button", { name: "src", exact: true }).click();
   await c.getByRole("button", { name: "index.ts" }).click();
+  const etabs = c.getByRole("tablist", { name: "Editor tabs" });
   // Two tabs, in open order: README.md then index.ts.
-  await expect(c.getByRole("tab")).toHaveCount(2);
-  await expect(c.getByRole("tab").nth(0)).toContainText("README.md");
+  await expect(etabs.getByRole("tab")).toHaveCount(2);
+  await expect(etabs.getByRole("tab").nth(0)).toContainText("README.md");
   // Drag index.ts before README.md → it becomes the first tab.
-  await c
+  await etabs
     .getByRole("tab")
     .filter({ hasText: "index.ts" })
-    .dragTo(c.getByRole("tab").filter({ hasText: "README.md" }));
-  await expect(c.getByRole("tab").nth(0)).toContainText("index.ts");
-  await expect(c.getByRole("tab").nth(1)).toContainText("README.md");
+    .dragTo(etabs.getByRole("tab").filter({ hasText: "README.md" }));
+  await expect(etabs.getByRole("tab").nth(0)).toContainText("index.ts");
+  await expect(etabs.getByRole("tab").nth(1)).toContainText("README.md");
 });
 
 test("a file can be closed", async ({ mount }) => {

@@ -23,20 +23,20 @@ import {
   SlashCard,
   matchCommands,
   isMeta,
-  KNOWN_MODELS,
   type SlashCommand,
 } from "./ai/slash-commands";
+import { AgentPicker } from "./ai/AgentPicker";
+import { READ_TOOLS, MODIFY_TOOLS, buildAgentList, type Agent } from "./ai/agents";
 
 /**
- * A persistent, project-scoped assistant chat. It talks to the user's own Claude
- * Code with the active project as cwd. By default it uses a read-oriented toolset
- * (Read / Grep / Glob) so it advises without mutating — spec-first gates own all
- * writes. With `allowModify`, it may also edit files (Write / Edit / Bash) so the
- * user can request component changes (Storybook reloads live). The session starts
- * only on the first user message (no usage on mount) and resets on project change.
+ * A persistent, project-scoped assistant **conversation**. It talks to the user's
+ * own Claude Code with the active project as cwd. By default it uses a read-only
+ * toolset (Read / Grep / Glob); with `allowModify` it may also edit files. When an
+ * `agent` is supplied (by `ConversationTabs`), the agent's system prompt / model /
+ * toolset shape the run instead. The session starts only on the first user message
+ * (no usage on mount) and resets on project change. Used both standalone (the
+ * cockpit's single dock) and as each tab inside `ConversationTabs`.
  */
-const READ_TOOLS = ["Read", "Grep", "Glob"];
-const MODIFY_TOOLS = ["Read", "Grep", "Glob", "Write", "Edit", "Bash"];
 
 export function AssistantDock({
   project,
@@ -50,6 +50,9 @@ export function AssistantDock({
   mcpConfigPath,
   extraAllowedTools,
   pendingRef,
+  agent,
+  onAgentChange,
+  presets,
 }: {
   project: Project;
   /** Optional one-line context the dock mentions to Claude on the first message. */
@@ -76,6 +79,12 @@ export function AssistantDock({
   fill?: boolean;
   /** Show the model chip + expandable session panel (skills/agents/MCP status). */
   showSession?: boolean;
+  /** The agent shaping this conversation's runs (system prompt / model / tools). */
+  agent?: Agent;
+  /** When provided (with `presets`), an agent picker shows in the header. */
+  onAgentChange?: (agent: Agent) => void;
+  /** Preset agents available to pick (defaults + user); enables the agent picker. */
+  presets?: Agent[];
 }): React.JSX.Element {
   const run = useAgentRun();
   const [draft, setDraft] = useState("");
@@ -223,25 +232,35 @@ export function AssistantDock({
     const grounding = [expandAttachments(attachments), liveContext].filter(Boolean).join("\n\n");
     const withLive = grounding ? `${grounding}\n\n${text}` : text;
     setAttachments([]);
+    // Resolve the run options from the agent (if any) — its toolset, model, and
+    // system prompt take precedence, merged with the user-name preamble.
+    const baseTools = agent?.allowedTools ?? (allowModify ? MODIFY_TOOLS : READ_TOOLS);
+    const appendSystemPrompt =
+      [
+        userName ? `The user's name is ${userName}. Address them as ${userName} when appropriate.` : null,
+        agent?.systemPrompt ?? null,
+      ]
+        .filter(Boolean)
+        .join("\n\n") || undefined;
+    const runOpts = {
+      allowedTools: [...baseTools, ...(extraAllowedTools ?? [])],
+      model: selectedModel ?? agent?.model,
+      appendSystemPrompt,
+    };
     if (!started) {
       setFirstPrompt(text);
       const prompt = seedContext ? `${seedContext}\n\n${withLive}` : withLive;
       void run.start({
         prompt,
         cwd: project.path,
-        allowedTools: [...(allowModify ? MODIFY_TOOLS : READ_TOOLS), ...(extraAllowedTools ?? [])],
         bypassPermissions: true,
         mcpConfigPath,
-        model: selectedModel,
-        // Persisted across the whole session (send() spreads the base opts), so
-        // the assistant addresses the user by name for every turn.
-        appendSystemPrompt: userName
-          ? `The user's name is ${userName}. Address them as ${userName} when appropriate.`
-          : undefined,
+        ...runOpts,
       });
     } else {
-      // Send the grounded prompt but show only the user's own text in the bubble.
-      void run.send(withLive, text, selectedModel ? { model: selectedModel } : undefined);
+      // Send the grounded prompt but show only the user's own text in the bubble;
+      // re-apply the agent options so a switched agent takes effect on follow-ups.
+      void run.send(withLive, text, runOpts);
     }
   }
 
@@ -252,7 +271,11 @@ export function AssistantDock({
       }`}
     >
       <div className="flex flex-none items-center gap-2 border-b border-vs-border-default px-4 py-3">
-        <span className="text-sm font-semibold">{allowModify ? "Modify with Claude" : "Assistant"}</span>
+        {agent && onAgentChange && presets ? (
+          <AgentPicker agents={buildAgentList(run.model.session?.agents, presets)} selected={agent} onSelect={onAgentChange} />
+        ) : (
+          <span className="text-sm font-semibold">{allowModify ? "Modify with Claude" : "Assistant"}</span>
+        )}
         <span className="font-mono text-[10px] text-vs-text-muted">· {project.name}</span>
         <div className="flex-1" />
         {showSession && run.model.session?.model && (

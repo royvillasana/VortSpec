@@ -48,6 +48,10 @@
       "types": "./src/components/AssistantDock.tsx",
       "default": "./src/components/AssistantDock.tsx"
     },
+    "./ConversationTabs": {
+      "types": "./src/components/ConversationTabs.tsx",
+      "default": "./src/components/ConversationTabs.tsx"
+    },
     "./SourceControl": {
       "types": "./src/views/SourceControl.tsx",
       "default": "./src/views/SourceControl.tsx"

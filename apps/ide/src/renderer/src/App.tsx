@@ -4,6 +4,7 @@ import type { Project } from "@vortspec/core/ipc";
 import type { IdeState } from "@vortspec/core/ide-mcp";
 import { api } from "@vortspec/ui/api";
 import { AssistantDock, type PendingSelectionRef } from "@vortspec/ui/AssistantDock";
+import { ConversationTabs } from "@vortspec/ui/ConversationTabs";
 import { SourceControl } from "@vortspec/ui/SourceControl";
 import { Inspector } from "@vortspec/ui/Inspector";
 import { PipelinePanel } from "@vortspec/ui/PipelinePanel";
@@ -366,9 +367,8 @@ export default function App(): JSX.Element {
                   )}
                 </div>
                 <div className="min-h-0 flex-1">
-                  <AssistantDock
+                  <ConversationTabs
                     project={workspace}
-                    fill
                     showSession
                     allowModify
                     userName={userName}

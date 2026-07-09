@@ -11,12 +11,12 @@ Phased so each phase ships value and stays green (`pnpm build && pnpm test && pn
 
 ## 2. Phase 2 — Conversation tabs + per-tab agents
 
-- [ ] 2.1 Extract the `AssistantDock` body into a `Conversation` component (one `useAgentRun`; owns transcript, composer, attachments, ai/* rendering). `AssistantDock` becomes a thin single-`Conversation` wrapper with the identical public props (cockpit unaffected).
-- [ ] 2.2 `ConversationTabs` shell: a tab strip (＋ new, rename via double-click, close) that renders **all** conversations and toggles visibility (`hidden`) so inactive sessions/transcripts persist. Cap open conversations (~8) with a friendly limit message. IDE renders this in the assistant sidebar.
-- [ ] 2.3 Agent model: an `Agent` type + a picker (Model-Selector-style) listing **custom presets** (shipped defaults: Build / Review / Plan; plus any from profile prefs) and the session's **subagents** (`run.model.session.agents`). Selecting an agent sets the conversation's `appendSystemPrompt` (merged with the user-name preamble), `model`, and `allowedTools`.
-- [ ] 2.4 New conversations default to the Build preset (or last-used); each tab shows its agent in its header.
-- [ ] 2.5 CT: open a 2nd conversation, send in each, switch back and forth — each transcript persists and is isolated; selecting an agent applies its system prompt/tools to that conversation's run (assert via the recorded prompt/options); close removes a tab.
-- [ ] 2.6 Gate green; cockpit (desktop CT) unaffected.
+- [x] 2.1 `AssistantDock` (already a single conversation) gains optional agent props (`agent`/`onAgentChange`/`presets`) — backward-compatible, so it doubles as both the cockpit's standalone dock and each tab inside `ConversationTabs`. (No rename needed; lower-risk than a file move.)
+- [x] 2.2 `ConversationTabs` shell: a tab strip (＋ new, double-click rename, close, an optional close-panel ×) that renders **all** conversations and toggles visibility (`hidden`) so inactive sessions/transcripts persist. Capped at 8. The IDE renders this in the assistant sidebar (cockpit still uses `AssistantDock` directly).
+- [x] 2.3 Agent model (`ai/agents.ts` + `AgentPicker`): shipped presets (Build / Review / Plan) + the session's **subagents** (`run.model.session.agents`), grouped in one picker. Selecting an agent sets that conversation's `appendSystemPrompt` (merged with the user-name preamble), `model`, and `allowedTools` — on the first run and, re-applied via the send override, on follow-ups.
+- [x] 2.4 New conversations default to the Build preset; the agent picker shows in each conversation's header.
+- [x] 2.5 CT: two conversations with persistent, isolated transcripts (hidden-but-mounted); Review agent applies a read-only toolset + reviewer system prompt (asserted via recorded run options); rename + close a tab.
+- [x] 2.6 Gate green; cockpit (desktop CT) unaffected.
 
 ## 3. Phase 3 — Cross-conversation context
 

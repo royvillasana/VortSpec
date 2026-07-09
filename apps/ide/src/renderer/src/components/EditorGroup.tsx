@@ -105,6 +105,7 @@ export function EditorGroup({
       {/* Tab bar — tabs are drag-reorderable within the strip. */}
       <div
         role="tablist"
+        aria-label="Editor tabs"
         className="flex shrink-0 items-stretch overflow-x-auto border-b border-vs-border-default bg-vs-bg-surface"
         onDragOver={(e) => {
           // Allow dropping past the last tab → move to the end.
