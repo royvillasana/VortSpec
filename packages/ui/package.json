@@ -92,6 +92,22 @@
     "./FigmaConnection": {
       "types": "./src/views/FigmaConnection.tsx",
       "default": "./src/views/FigmaConnection.tsx"
+    },
+    "./DesignPanel": {
+      "types": "./src/components/run-canvas/DesignPanel.tsx",
+      "default": "./src/components/run-canvas/DesignPanel.tsx"
+    },
+    "./NodeTree": {
+      "types": "./src/components/run-canvas/NodeTree.tsx",
+      "default": "./src/components/run-canvas/NodeTree.tsx"
+    },
+    "./RunCanvas": {
+      "types": "./src/components/run-canvas/RunCanvas.tsx",
+      "default": "./src/components/run-canvas/RunCanvas.tsx"
+    },
+    "./useInspectorBridge": {
+      "types": "./src/lib/useInspectorBridge.ts",
+      "default": "./src/lib/useInspectorBridge.ts"
     }
   },
   "scripts": {

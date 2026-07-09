@@ -13,7 +13,22 @@ export default defineConfig({
     plugins: [externalizeDepsPlugin({ exclude: INTERNAL })],
   },
   preload: {
-    plugins: [externalizeDepsPlugin({ exclude: INTERNAL })],
+    // Bundle `zod` (not just the internal packages) so the guest <webview>
+    // preload is self-contained — a file:// ESM preload can't reliably resolve
+    // bare deps from node_modules (esp. packaged/asar). `electron` stays external.
+    plugins: [externalizeDepsPlugin({ exclude: [...INTERNAL, "zod"] })],
+    build: {
+      rollupOptions: {
+        input: {
+          // The main window preload (window.vortspec bridge).
+          index: resolve("src/preload/index.ts"),
+          // The Run-Canvas <webview> guest preload (inspector bridge) — a
+          // separate, isolated bundle injected into the project's dev-server
+          // page. See the run-canvas-visual-editor change (design D1/D4).
+          guest: resolve("src/preload/guest.ts"),
+        },
+      },
+    },
   },
   renderer: {
     resolve: {

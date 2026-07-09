@@ -109,6 +109,25 @@ export type {
 } from "./inspector";
 export type { FileSnapshot } from "./inspector";
 export type {
+  BridgeNode,
+  BridgeTree,
+  Rect,
+  NodeReadout,
+  FieldKind,
+  SectionField,
+  DesignSectionId,
+  DesignSection,
+  VariantControl,
+  Selection,
+  BridgeCommand,
+  BridgeEvent,
+} from "./inspector-bridge";
+export {
+  INSPECTOR_BRIDGE_CHANNEL,
+  bridgeCommandSchema,
+  bridgeEventSchema,
+} from "./inspector-bridge";
+export type {
   ManifestResult,
   ManifestVersion,
   ManifestVersionsResult,
@@ -233,6 +252,8 @@ export const ipcContract = {
   "system:isElectron": { request: z.void(), response: z.boolean() },
   "system:getVersion": { request: z.void(), response: z.string() },
   "system:homeDir": { request: z.void(), response: z.string() },
+  // file:// URL of the Run-Canvas <webview> guest preload (inspector bridge).
+  "system:guestPreloadUrl": { request: z.void(), response: z.string() },
   "system:clipboardImage": {
     request: z.void(),
     response: z.object({ path: z.string(), dataUrl: z.string() }).nullable(),

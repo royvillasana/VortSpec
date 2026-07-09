@@ -1,5 +1,7 @@
 import { ipcMain, shell, app, type WebContents } from "electron";
 import { homedir } from "node:os";
+import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { ipcContract, type IpcChannel } from "@vortspec/core/ipc";
 import { checkEnvironment, verifyClaudeLogin, verifyFigmaMcp } from "./environment/env-manager";
 import {
@@ -93,6 +95,9 @@ const handlers: Record<IpcChannel, Handler> = {
   "system:isElectron": () => true,
   "system:getVersion": () => app.getVersion(),
   "system:homeDir": () => homedir(),
+  // Core is bundled into the app's main process, so __dirname is the app's
+  // out/main; the IDE emits the guest preload beside it at out/preload/guest.mjs.
+  "system:guestPreloadUrl": () => pathToFileURL(join(__dirname, "../preload/guest.mjs")).href,
   "system:clipboardImage": (() => readClipboardImage()) as Handler,
   "system:checkUpdate": () => checkForUpdate(),
 

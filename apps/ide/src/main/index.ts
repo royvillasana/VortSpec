@@ -26,6 +26,11 @@ function createWindow(): void {
       sandbox: false,
       contextIsolation: true,
       nodeIntegration: false,
+      // Enable <webview> so the Run Canvas can embed the project's dev server and
+      // instrument it via a guest preload (the inspector bridge) — an <iframe>
+      // to a cross-origin localhost port cannot expose its DOM. See the
+      // run-canvas-visual-editor change (design D1).
+      webviewTag: true,
     },
   });
 

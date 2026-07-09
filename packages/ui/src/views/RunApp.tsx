@@ -1,8 +1,20 @@
-import { useEffect, useRef, useState } from "react";
-import type { DevServerStatus, Project } from "@vortspec/core/ipc";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { DevServerStatus, Project, InspectorToken, InspectorComponent, FileSnapshot } from "@vortspec/core/ipc";
+import { buildSelection, alignToCss } from "@vortspec/core/selection-builder";
 import { api } from "../lib/api";
 import { Button, Spinner } from "@vortspec/ui/ui";
 import { ProjectRail, projectRailItems } from "@vortspec/ui/ProjectRail";
+import { DesignPanel } from "../components/run-canvas/DesignPanel";
+import { RunCanvas } from "../components/run-canvas/RunCanvas";
+import { resolveComponent, cssForField } from "../components/run-canvas/compose";
+import {
+  classifyFieldEdit,
+  classifyVariantEdit,
+  buildEditPrompt,
+  type PendingEdit,
+} from "../components/run-canvas/pending";
+import { useInspectorBridge } from "../lib/useInspectorBridge";
+import { useAgentRun } from "../lib/useAgentRun";
 
 /**
  * Run App (M5) — the live localhost runtime for the project's OWN app (its `dev`
@@ -15,6 +27,7 @@ export function RunApp({
   project,
   kind = "app",
   hideRail = false,
+  canvas = false,
   onBack,
   onFlow,
   onRun,
@@ -29,6 +42,8 @@ export function RunApp({
   kind?: "app" | "storybook";
   /** Hide the internal ProjectRail (the IDE supplies its own activity-bar navigation). */
   hideRail?: boolean;
+  /** Enable the Run Canvas (Figma-style visual editing) — IDE only (needs `webviewTag`). */
+  canvas?: boolean;
   onBack: () => void;
   onFlow: () => void;
   onRun: () => void;
@@ -52,6 +67,219 @@ export function RunApp({
     isApp ? api.stopAppServer(project.path) : api.stopDevServer(project.path);
 
   const embedUrl = dev.url ? dev.url.replace(/\/+$/, "") + "/" : "";
+  const canvasReady = canvas && isApp && !!embedUrl;
+
+  // ── Run Canvas (visual editing) state — only used when `canvas` is on ──────
+  const bridge = useInspectorBridge();
+  const [guestPreload, setGuestPreload] = useState<string | null>(null);
+  const [tokens, setTokens] = useState<InspectorToken[]>([]);
+  const [components, setComponents] = useState<InspectorComponent[]>([]);
+  // Canvas controls now live in the sidebar (Layers header + footer), so their
+  // state is lifted here where both the Design panel and the canvas can read it.
+  const [mode, setMode] = useState<"inspect" | "interact">("inspect");
+  const [zoom, setZoom] = useState(1);
+  const zoomBy = useCallback((f: number) => setZoom((z) => Math.min(4, Math.max(0.25, z * f))), []);
+  const resetZoom = useCallback(() => setZoom(1), []);
+  // Project color tokens for the Figma-style color picker (Libraries tab).
+  const colorTokens = useMemo(
+    () => tokens.filter((t) => t.type === "color").map((t) => ({ name: t.name, value: t.resolvedValue })),
+    [tokens],
+  );
+
+  useEffect(() => {
+    if (!canvas) return;
+    void api.guestPreloadUrl().then(setGuestPreload).catch(() => setGuestPreload(null));
+  }, [canvas]);
+
+  useEffect(() => {
+    if (!canvas) return;
+    void api.inspectorTokens(project.path).then((r) => setTokens(r.tokens)).catch(() => setTokens([]));
+    void api
+      .inspectorComponents(project.path)
+      .then((r) => setComponents(r.components))
+      .catch(() => setComponents([]));
+  }, [canvas, project.path]);
+
+  // Compose the Design-panel selection from the guest readout + project tokens/components.
+  const selection = useMemo(() => {
+    if (!bridge.readout) return null;
+    const node = bridge.tree?.nodes[bridge.readout.nodeId];
+    const component = resolveComponent(node, components);
+    return buildSelection(bridge.readout, { tokens, component, tag: node?.tag });
+  }, [bridge.readout, bridge.tree, tokens, components]);
+
+  // Design-panel (left sidebar) width — resizable like the IDE's Explorer rail.
+  const [panelW, setPanelW] = useState(288);
+  function startPanelResize(e: React.PointerEvent): void {
+    e.preventDefault();
+    const startX = e.clientX;
+    const base = panelW;
+    const move = (ev: PointerEvent): void =>
+      setPanelW(Math.min(460, Math.max(220, base + (ev.clientX - startX))));
+    const up = (): void => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+  }
+
+  // ── Pending edits + gated commit ──────────────────────────────────────────
+  const [pending, setPending] = useState<Record<string, PendingEdit>>({});
+  const [applying, setApplying] = useState(false);
+  const [review, setReview] = useState(false);
+  const [snapshot, setSnapshot] = useState<FileSnapshot[] | null>(null);
+  const structuralMod = useAgentRun();
+
+  // Stable methods (the hook memoizes these) + refs to current state, so the
+  // Design-panel callbacks keep a stable identity across the 60fps geometry
+  // echoes during a drag — that's what lets the memoized sections skip work.
+  const { applyOverride, select, hover, setMode: setGuestMode } = bridge;
+
+  // Push the current mode to the guest whenever it (or readiness) changes.
+  useEffect(() => {
+    if (bridge.ready) setGuestMode(mode === "inspect" ? "inspect" : "interact");
+  }, [mode, bridge.ready, setGuestMode]);
+  const selectedIdRef = useRef(bridge.selectedId);
+  selectedIdRef.current = bridge.selectedId;
+  const selectionRef = useRef(selection);
+  selectionRef.current = selection;
+  const readoutRef = useRef(bridge.readout);
+  readoutRef.current = bridge.readout;
+  const tokensRef = useRef(tokens);
+  tokensRef.current = tokens;
+
+  // Apply a CSS override live to the selected node (no file written) — used by
+  // both field edits and, per animation frame, handle dragging.
+  const applyLive = useCallback(
+    (css: Record<string, string>) => {
+      const id = selectedIdRef.current;
+      if (id) applyOverride(id, css);
+    },
+    [applyOverride],
+  );
+
+  // Record pending edits once (e.g. on drag end), never per frame.
+  const commitEdits = useCallback(
+    (edits: { key: string; value: string; cssProps: string[] }[], forceStyle = false) => {
+      const sel = selectionRef.current;
+      if (!sel) return;
+      const uses = (n: string): number => tokensRef.current.find((t) => t.name === n)?.uses ?? 0;
+      setPending((p) => {
+        const next = { ...p };
+        for (const e of edits) {
+          const edit = classifyFieldEdit(sel, e.key, e.value, e.cssProps, uses, forceStyle);
+          next[edit.key] = edit;
+        }
+        return next;
+      });
+    },
+    [],
+  );
+
+  // Canvas drags (resize / padding / gap / margin) commit as per-element style
+  // edits — Figma detaches to a literal rather than editing a shared token.
+  const commitStyleEdits = useCallback(
+    (edits: { key: string; value: string; cssProps: string[] }[]) => commitEdits(edits, true),
+    [commitEdits],
+  );
+
+  // A Design-panel field edit → live override + a recorded pending edit.
+  const onFieldChange = useCallback(
+    (key: string, value: string) => {
+      if (key === "align") {
+        const dir = readoutRef.current?.computed["flex-direction"] ?? "row";
+        const css = alignToCss(value, dir);
+        applyLive(css);
+        commitEdits([
+          { key, value: `${css["justify-content"]}, ${css["align-items"]}`, cssProps: ["justify-content", "align-items"] },
+        ]);
+        return;
+      }
+      const css = cssForField(key, value);
+      applyLive(css);
+      // Choosing a color for an element is a per-element decision (Figma applies
+      // the style / token reference to the element, not a rewrite of the token).
+      const kind = selectionRef.current?.sections.flatMap((s) => s.fields).find((f) => f.key === key)?.kind;
+      commitEdits([{ key, value, cssProps: Object.keys(css) }], kind === "color");
+    },
+    [applyLive, commitEdits],
+  );
+
+  // A variant switch — recorded for a gated source edit (no live CSS preview in v1).
+  const onVariantChange = useCallback((key: string, value: string) => {
+    setPending((p) => ({ ...p, [`variant:${key}`]: classifyVariantEdit(key, value) }));
+  }, []);
+
+  const onSelectNode = useCallback((id: string) => select(id), [select]);
+  const onHoverNode = useCallback((id: string | null) => hover(id), [hover]);
+
+  // Apply — the ONLY path to disk (spec-first gate). Token values commit
+  // deterministically; style/variant edits go through a gated Claude Code run.
+  async function applyEdits(): Promise<void> {
+    const edits = Object.values(pending);
+    if (edits.length === 0) return;
+    const tokenEdits = edits.filter((e) => e.kind === "token" && e.token);
+    const structural = edits.filter((e) => e.kind !== "token");
+    setApplying(true);
+    try {
+      for (const e of tokenEdits) {
+        const r = await api.setTokenValue(project.path, e.token!, e.value);
+        setTokens(r.tokens);
+      }
+      if (structural.length > 0) {
+        const snap = selection?.file
+          ? await api.snapshotComponent(project.path, selection.file)
+          : await api.snapshotTokenScope(project.path);
+        setSnapshot(snap);
+        await structuralMod.start({
+          prompt: buildEditPrompt(selection?.file ?? null, selection?.component ?? null, structural),
+          cwd: project.path,
+          allowedTools: ["Read", "Edit", "Write"],
+          bypassPermissions: true,
+        });
+        // Completion (reload + review) is handled by the effect below.
+      } else {
+        // Token-only apply: reflect the committed files, drop the ephemeral overrides.
+        bridge.clearOverride();
+        bridge.reload();
+        setPending({});
+        setApplying(false);
+      }
+    } catch {
+      setApplying(false);
+    }
+  }
+
+  // When the structural (gated) run finishes, reload the preview and enter review.
+  useEffect(() => {
+    if (structuralMod.model.status !== "done") return;
+    bridge.reload();
+    setApplying(false);
+    setReview(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [structuralMod.model.status]);
+
+  function discardEdits(): void {
+    bridge.clearOverride();
+    setPending({});
+  }
+  function keepEdits(): void {
+    setReview(false);
+    setSnapshot(null);
+    setPending({});
+    bridge.clearOverride();
+    structuralMod.reset();
+  }
+  async function revertEdits(): Promise<void> {
+    if (snapshot) await api.restoreFiles(project.path, snapshot);
+    setReview(false);
+    setSnapshot(null);
+    setPending({});
+    bridge.clearOverride();
+    bridge.reload();
+    structuralMod.reset();
+  }
 
   useEffect(() => {
     void statusFor().then(setDev);
@@ -128,6 +356,55 @@ export function RunApp({
             <Centered>
               <Spinner /> Starting {isApp ? "your app's dev server" : "Storybook"}…
             </Centered>
+          ) : canvasReady ? (
+            // Run Canvas: Figma-style Design panel (left) + instrumented preview (right).
+            <div className="flex h-full min-h-0">
+              <aside
+                style={{ width: panelW }}
+                className="flex-none overflow-hidden border-r border-vs-border-default bg-vs-bg-surface"
+              >
+                <DesignPanel
+                  selection={selection}
+                  tree={bridge.tree}
+                  hoveredId={bridge.hoveredId}
+                  onSelectNode={onSelectNode}
+                  onHoverNode={onHoverNode}
+                  onFieldChange={onFieldChange}
+                  onVariantChange={onVariantChange}
+                  pending={Object.values(pending)}
+                  applying={applying}
+                  review={review}
+                  onApply={() => void applyEdits()}
+                  onDiscard={discardEdits}
+                  onKeep={keepEdits}
+                  onRevert={() => void revertEdits()}
+                  mode={mode}
+                  onModeChange={setMode}
+                  zoom={zoom}
+                  onZoomBy={zoomBy}
+                  onZoomReset={resetZoom}
+                  colorTokens={colorTokens}
+                />
+              </aside>
+              {/* Resize the Design panel (like the IDE Explorer rail). */}
+              <div
+                role="separator"
+                aria-label="Resize Design panel"
+                onPointerDown={startPanelResize}
+                className="w-1 flex-none cursor-col-resize bg-vs-border-default/40 hover:bg-vs-accent"
+              />
+              <div className="min-w-0 flex-1">
+                <RunCanvas
+                  src={embedUrl}
+                  guestPreloadUrl={guestPreload}
+                  bridge={bridge}
+                  mode={mode}
+                  zoom={zoom}
+                  onLiveEdit={applyLive}
+                  onCommitEdit={commitStyleEdits}
+                />
+              </div>
+            </div>
           ) : embedUrl ? (
             <div className="relative h-full min-h-[340px]">
               <iframe

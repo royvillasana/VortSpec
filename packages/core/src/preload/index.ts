@@ -48,6 +48,7 @@ const api: VortSpecApi = {
   isElectron: () => invoke("system:isElectron"),
   getVersion: () => invoke("system:getVersion"),
   homeDir: () => invoke("system:homeDir"),
+  guestPreloadUrl: () => invoke("system:guestPreloadUrl"),
   clipboardImage: () => invoke("system:clipboardImage"),
   // Resolve the absolute path of a File dropped from the OS (Electron 32+ removed
   // File.path). Not an IPC call — runs in the preload with webUtils.

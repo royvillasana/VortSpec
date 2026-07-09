@@ -155,6 +155,9 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
     isElectron: async () => true,
     getVersion: async () => "test",
     homeDir: async () => "/Users/dev",
+    // Empty → the Run Canvas shows its "Preparing…" state instead of mounting a
+    // real Electron <webview> (which doesn't exist in the CT browser).
+    guestPreloadUrl: async () => "",
     clipboardImage: async () => cfg.clipboardImage ?? null,
     getPathForFile: (file: File) => (file as unknown as { __path?: string }).__path ?? file.name,
     checkUpdate: async () => ({
