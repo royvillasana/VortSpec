@@ -147,6 +147,7 @@ function subscribe(channel, callback) {
 const api = {
   isElectron: () => invoke("system:isElectron"),
   getVersion: () => invoke("system:getVersion"),
+  homeDir: () => invoke("system:homeDir"),
   checkUpdate: () => invoke("system:checkUpdate"),
   checkEnvironment: () => invoke("env:check"),
   verifyLogin: () => invoke("env:verifyLogin"),

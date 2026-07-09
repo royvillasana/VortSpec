@@ -223,6 +223,7 @@ export const projectListSchema = z.array(projectSchema);
 export const ipcContract = {
   "system:isElectron": { request: z.void(), response: z.boolean() },
   "system:getVersion": { request: z.void(), response: z.string() },
+  "system:homeDir": { request: z.void(), response: z.string() },
   "system:checkUpdate": { request: z.void(), response: updateInfoSchema },
 
   "env:check": { request: z.void(), response: envReportSchema },

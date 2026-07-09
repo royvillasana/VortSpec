@@ -1,6 +1,7 @@
 import { shell, dialog, app, ipcMain, BrowserWindow } from "electron";
 import { join as join$1 } from "path";
 import { electronApp, optimizer, is } from "@electron-toolkit/utils";
+import { tmpdir, homedir, platform } from "node:os";
 import { z } from "zod";
 import { spawn } from "node:child_process";
 import { join, resolve as resolve$1, sep, basename, dirname, extname } from "node:path";
@@ -9,7 +10,6 @@ import { createHash, randomUUID } from "node:crypto";
 import { createRequire } from "node:module";
 import { watch, promises, existsSync } from "node:fs";
 import { spawn as spawn$1 } from "node-pty";
-import { tmpdir, homedir, platform } from "node:os";
 import { EventEmitter } from "node:events";
 import __cjs_mod__ from "node:module";
 const __filename = import.meta.filename;
@@ -839,6 +839,7 @@ const projectListSchema = z.array(projectSchema);
 const ipcContract = {
   "system:isElectron": { request: z.void(), response: z.boolean() },
   "system:getVersion": { request: z.void(), response: z.string() },
+  "system:homeDir": { request: z.void(), response: z.string() },
   "system:checkUpdate": { request: z.void(), response: updateInfoSchema },
   "env:check": { request: z.void(), response: envReportSchema },
   "env:verifyLogin": { request: z.void(), response: envCheckSchema },
@@ -4125,6 +4126,7 @@ function stopAllDevServers() {
 const handlers = {
   "system:isElectron": () => true,
   "system:getVersion": () => app.getVersion(),
+  "system:homeDir": () => homedir(),
   "system:checkUpdate": () => checkForUpdate(),
   "env:check": () => checkEnvironment(),
   "env:verifyLogin": () => verifyClaudeLogin(),

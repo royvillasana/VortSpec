@@ -1,4 +1,5 @@
 import { ipcMain, shell, app, type WebContents } from "electron";
+import { homedir } from "node:os";
 import { ipcContract, type IpcChannel } from "@vortspec/core/ipc";
 import { checkEnvironment, verifyClaudeLogin, verifyFigmaMcp } from "./environment/env-manager";
 import {
@@ -88,6 +89,7 @@ type Handler = (req: never, sender: WebContents) => unknown;
 const handlers: Record<IpcChannel, Handler> = {
   "system:isElectron": () => true,
   "system:getVersion": () => app.getVersion(),
+  "system:homeDir": () => homedir(),
   "system:checkUpdate": () => checkForUpdate(),
 
   "env:check": () => checkEnvironment(),

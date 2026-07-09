@@ -34,6 +34,9 @@ export default function App(): JSX.Element {
   const [layout, dispatch] = useLayout();
   const [userName, setUserName] = useState<string | undefined>(undefined);
   const [previewUrl] = useState<string | null>(null);
+  const [homeDir, setHomeDir] = useState<string | null>(null);
+  // Which welcome view is showing when no workspace is open.
+  const [welcomeView, setWelcomeView] = useState<"start" | "settings">("start");
   const [winW, setWinW] = useState<number>(() =>
     typeof window === "undefined" ? 1440 : window.innerWidth,
   );
@@ -42,6 +45,7 @@ export default function App(): JSX.Element {
 
   useEffect(() => {
     void api.getProfile().then((p) => setUserName(p.name || undefined)).catch(() => undefined);
+    void api.homeDir().then(setHomeDir).catch(() => undefined);
   }, []);
   useEffect(() => {
     const onResize = (): void => setWinW(window.innerWidth);
@@ -63,6 +67,19 @@ export default function App(): JSX.Element {
   const go = (activity: Activity) => (): void => dispatch({ type: "setActivity", activity });
 
   if (!workspace) {
+    // A synthetic "Home" project gives the welcome-screen assistant a cwd so the
+    // user can chat with the AI before opening a project (ask it to set up, clone,
+    // scaffold, etc. — it runs in your home directory).
+    const homeProject: Project | null = homeDir
+      ? {
+          id: "home",
+          name: "Home",
+          path: homeDir,
+          toolkit: { present: false, version: null, updateAvailable: false },
+          lastRunStatus: "none",
+          addedAt: "",
+        }
+      : null;
     return (
       <div className="flex h-screen w-screen flex-col overflow-hidden bg-vs-bg-primary text-vs-text-primary">
         <header
@@ -72,17 +89,56 @@ export default function App(): JSX.Element {
           VortSpec IDE
         </header>
         <div className="flex min-h-0 flex-1 overflow-hidden">
-          <ActivityBar active="explorer" onSelect={() => {}} chatOpen={layout.secondaryOpen} onToggleChat={() => dispatch({ type: "toggleSecondary" })} />
-          <aside className="flex w-60 shrink-0 flex-col border-r border-vs-border-default bg-vs-bg-surface">
-            <div className="px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-vs-text-muted">Explorer</div>
-            <p className="px-3 text-[12px] leading-relaxed text-vs-text-muted">No folder open. Open or clone a workspace to see its files here.</p>
-          </aside>
+          <ActivityBar
+            active={welcomeView === "settings" ? "settings" : "explorer"}
+            onSelect={(a) => setWelcomeView(a === "settings" ? "settings" : "start")}
+            chatOpen={layout.secondaryOpen}
+            onToggleChat={() => dispatch({ type: "toggleSecondary" })}
+          />
+          {welcomeView === "start" && (
+            <aside className="flex w-60 shrink-0 flex-col border-r border-vs-border-default bg-vs-bg-surface">
+              <div className="px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-vs-text-muted">Explorer</div>
+              <p className="px-3 text-[12px] leading-relaxed text-vs-text-muted">No folder open. Open or clone a workspace to see its files here.</p>
+            </aside>
+          )}
           <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-            <WorkspacePicker onOpen={(p) => setWorkspace(p)} />
+            {welcomeView === "settings" ? (
+              <div className="min-w-0 flex-1 overflow-auto">
+                <Profile onBack={() => setWelcomeView("start")} onSaved={(p) => setUserName(p.name || undefined)} />
+              </div>
+            ) : (
+              <WorkspacePicker onOpen={(p) => setWorkspace(p)} />
+            )}
           </div>
+          {layout.secondaryOpen && (
+            <div className="flex w-[380px] shrink-0 flex-col border-l border-vs-border-default">
+              {homeProject ? (
+                <AssistantDock
+                  project={homeProject}
+                  fill
+                  allowModify
+                  userName={userName}
+                  onClose={() => dispatch({ type: "toggleSecondary" })}
+                />
+              ) : (
+                <div className="flex flex-1 items-center justify-center p-4 text-center text-xs text-vs-text-muted">
+                  Loading the assistant…
+                </div>
+              )}
+            </div>
+          )}
         </div>
         <footer className="flex h-6 shrink-0 items-center gap-3 border-t border-vs-border-default bg-vs-bg-surface px-3 text-[11px] text-vs-text-muted">
           <span>No folder open</span>
+          <button
+            type="button"
+            aria-pressed={layout.secondaryOpen}
+            onClick={() => dispatch({ type: "toggleSecondary" })}
+            className={`ml-auto rounded px-2 py-0.5 ${layout.secondaryOpen ? "text-vs-text-primary" : "hover:text-vs-text-secondary"}`}
+            title="Toggle assistant"
+          >
+            Assistant
+          </button>
         </footer>
       </div>
     );

@@ -37,6 +37,19 @@ test("the Clone Repository link reveals a repo-URL input", async ({ mount }) => 
   await expect(c.getByRole("button", { name: /Choose folder & clone/ })).toBeVisible();
 });
 
+test("Settings is reachable from the initial (no-workspace) screen", async ({ mount }) => {
+  const c = await mount(<App />, { hooksConfig: { mock: base } });
+  await c.getByRole("navigation", { name: "Activity bar" }).getByRole("button", { name: "Settings (profile)" }).click();
+  await expect(c.getByRole("heading", { name: "Profile", exact: true })).toBeVisible();
+});
+
+test("the assistant is available on the initial screen (grounded in Home)", async ({ mount }) => {
+  const c = await mount(<App />, { hooksConfig: { mock: base } });
+  // The assistant dock renders on the welcome screen so the user can chat before
+  // opening a project (its empty-state prompt is shown).
+  await expect(c.getByText(/Change a component|Ask about this project/)).toBeVisible();
+});
+
 test("opening a workspace reveals the four-region shell", async ({ mount }) => {
   const c = await mount(<App />, { hooksConfig: { mock: base } });
   await open(c);

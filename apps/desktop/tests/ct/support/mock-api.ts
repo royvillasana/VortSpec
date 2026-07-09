@@ -132,6 +132,7 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
   const api = {
     isElectron: async () => true,
     getVersion: async () => "test",
+    homeDir: async () => "/Users/dev",
     checkUpdate: async () => ({
       current: "0.1.0",
       latest: null,

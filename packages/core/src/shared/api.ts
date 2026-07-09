@@ -22,6 +22,8 @@ export interface VortSpecApi {
   // system / updates
   isElectron(): Promise<IpcResponse<"system:isElectron">>;
   getVersion(): Promise<IpcResponse<"system:getVersion">>;
+  /** The user's home directory — a default cwd for a no-workspace assistant chat. */
+  homeDir(): Promise<IpcResponse<"system:homeDir">>;
   checkUpdate(): Promise<IpcResponse<"system:checkUpdate">>;
 
   // environment
