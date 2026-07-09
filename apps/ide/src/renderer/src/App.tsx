@@ -341,7 +341,12 @@ export default function App(): JSX.Element {
       ) : a === "flow" ? (
         <PipelinePanel project={p} onOpenManifest={go("manifest")} onOpenTokens={go("tokens")} />
       ) : a === "run" ? (
-        <RunApp project={p} kind="app" hideRail canvas onBack={go("explorer")} onFlow={go("flow")} onRun={go("run")} onPlayground={go("play")} onTokens={go("tokens")} onManifest={go("manifest")} onHistory={go("explorer")} onSource={go("source")} />
+        <RunApp project={p} kind="app" hideRail canvas onBack={go("explorer")} onFlow={go("flow")} onRun={go("run")} onPlayground={go("play")} onTokens={go("tokens")} onManifest={go("manifest")} onHistory={go("explorer")} onSource={go("source")}
+          onSendToChat={(text, file) => {
+            if (!layout.secondaryOpen) dispatch({ type: "toggleSecondary" });
+            setPendingRef({ path: file ?? "Run canvas selection", startLine: 1, endLine: 1, text, nonce: ++refNonce.current });
+          }}
+        />
       ) : a === "play" ? (
         <RunApp project={p} kind="storybook" hideRail onBack={go("explorer")} onFlow={go("flow")} onRun={go("run")} onPlayground={go("play")} onTokens={go("tokens")} onManifest={go("manifest")} onHistory={go("explorer")} onSource={go("source")} />
       ) : a === "tokens" ? (

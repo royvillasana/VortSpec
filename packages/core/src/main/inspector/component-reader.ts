@@ -70,18 +70,27 @@ export function parseProps(src: string): PropControl[] {
   for (const m of vb.body.matchAll(/([A-Za-z_$][\w$]*)\s*:\s*\{([^{}]*)\}/g)) {
     const key = m[1];
     const options: string[] = [];
+    const classes: Record<string, string> = {};
     for (const om of stripStrings(m[2]).matchAll(
       /(['"]?)([A-Za-z_$][\w$-]*|true|false)\1\s*:/g,
     )) {
       options.push(om[2]);
     }
     if (options.length === 0) continue;
+    // Recover each option's class string (a string literal / template) for live preview.
+    for (const opt of options) {
+      const cm = m[2].match(
+        new RegExp(`(['"]?)${opt}\\1\\s*:\\s*(['"\`])([^'"\`]*)\\2`),
+      );
+      if (cm) classes[opt] = cm[3].replace(/\s+/g, " ").trim();
+    }
     const isBool = options.every((o) => o === "true" || o === "false");
     props.push({
       key,
       kind: isBool ? "boolean" : "enum",
       options,
       defaultValue: defaults.get(key),
+      classes,
     });
   }
   return props;

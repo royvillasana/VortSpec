@@ -42,6 +42,9 @@ export function DesignPanel({
   onZoomBy,
   onZoomReset,
   colorTokens = [],
+  resembles = null,
+  onUseComponent,
+  onExtractComponent,
 }: {
   selection: Selection | null;
   tree: BridgeTree | null;
@@ -71,6 +74,12 @@ export function DesignPanel({
   onZoomReset?: () => void;
   /** Project color tokens for the Figma-style color picker (Libraries tab). */
   colorTokens?: ColorToken[];
+  /** A component this element resembles but isn't using (suggest reuse), or null. */
+  resembles?: { name: string; file: string | null } | null;
+  /** Ask the assistant to refactor this element to use the resembled component. */
+  onUseComponent?: () => void;
+  /** Ask the assistant to extract this element as a new reusable component. */
+  onExtractComponent?: () => void;
 }): JSX.Element {
   return (
     <div className="flex h-full min-h-0 flex-col bg-vs-bg-primary text-vs-text-primary">
@@ -97,6 +106,34 @@ export function DesignPanel({
         ) : (
           <>
             <SelectionHeader selection={selection} />
+            {resembles && (
+              <div className="border-b border-vs-border-subtle bg-vs-accent-subtle/40 px-3 py-2.5">
+                <p className="text-[11px] leading-relaxed text-vs-text-primary">
+                  Looks like your <b>{resembles.name}</b> component, but this is hand-written markup — reuse
+                  the component so its variants and tokens stay connected.
+                </p>
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {onUseComponent && (
+                    <button
+                      type="button"
+                      onClick={onUseComponent}
+                      className="rounded bg-vs-accent px-2 py-1 text-[11px] font-medium text-white hover:brightness-110"
+                    >
+                      Use &lt;{resembles.name}&gt;
+                    </button>
+                  )}
+                  {onExtractComponent && (
+                    <button
+                      type="button"
+                      onClick={onExtractComponent}
+                      className="rounded border border-vs-border-default px-2 py-1 text-[11px] text-vs-text-secondary hover:bg-vs-bg-hover"
+                    >
+                      Extract as component
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
             {selection.variants.length > 0 && (
               <VariantSection variants={selection.variants} onChange={onVariantChange} />
             )}

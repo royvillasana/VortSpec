@@ -25,6 +25,7 @@ export function RunCanvas({
   zoom,
   onLiveEdit,
   onCommitEdit,
+  onSendToChat,
 }: {
   src: string;
   guestPreloadUrl: string | null;
@@ -37,6 +38,8 @@ export function RunCanvas({
   onLiveEdit?: (css: Record<string, string>) => void;
   /** Record the final edit(s) once, on drag end. */
   onCommitEdit?: (edits: { key: string; value: string; cssProps: string[] }[]) => void;
+  /** Send the current selection to the assistant chat (from the right-click menu). */
+  onSendToChat?: () => void;
 }): JSX.Element {
   // Optimistic rectangle while dragging a handle — drives the overlay instantly
   // instead of waiting for the guest's geometry echo (the source of the lag).
@@ -132,6 +135,28 @@ export function RunCanvas({
           )}
         </div>
       </div>
+
+      {/* Right-click context menu on an element (Send to chat, …). */}
+      {bridge.contextMenu && (
+        <div className="absolute inset-0 z-30" onClick={() => bridge.clearContextMenu()}>
+          <div
+            className="absolute min-w-[160px] overflow-hidden rounded-md border border-vs-border-default bg-vs-bg-elevated py-1 text-[12px] shadow-2xl"
+            style={{ left: bridge.contextMenu.x * zoom, top: bridge.contextMenu.y * zoom }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={() => {
+                onSendToChat?.();
+                bridge.clearContextMenu();
+              }}
+              className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-vs-text-secondary hover:bg-vs-bg-hover hover:text-vs-text-primary"
+            >
+              💬 Send to chat
+            </button>
+          </div>
+        </div>
+      )}
 
       {bridge.error && (
         <div className="absolute bottom-3 left-1/2 -translate-x-1/2 rounded-md border border-vs-border-default bg-vs-bg-elevated px-3 py-1.5 text-[11px] text-vs-text-secondary shadow">

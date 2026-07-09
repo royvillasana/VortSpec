@@ -46,6 +46,11 @@ describe("parseProps (CVA)", () => {
     expect(byKey.get("size")?.defaultValue).toBe("medium");
   });
 
+  it("captures each option's class string (for live variant preview)", () => {
+    expect(byKey.get("variant")?.classes.primary).toBe("bg-primary text-white hover:bg-primary-hover");
+    expect(byKey.get("variant")?.classes.base).toBe("bg-neutral-600 text-white hover:brightness-95");
+  });
+
   it("returns nothing when there is no variants block", () => {
     expect(parseProps("export const x = 1;")).toEqual([]);
   });

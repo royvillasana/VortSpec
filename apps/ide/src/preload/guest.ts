@@ -70,6 +70,8 @@ let registry: Element[] = [];
 let elementIds = new WeakMap<Element, string>();
 /** Ephemeral overrides: element → the inline-style text it had before we touched it. */
 const overrides = new Map<Element, string>();
+/** Ephemeral class overrides: element → the `class` attribute it had before we swapped variants. */
+const classOverrides = new Map<Element, string>();
 let selectedId: string | null = null;
 /** Input mode: `interact` lets the app work; `inspect` intercepts hover/click to select. */
 let mode: "inspect" | "interact" = "inspect";
@@ -164,7 +166,16 @@ function readoutOf(el: Element, id: string): NodeReadout {
     children: Array.from(el.children)
       .filter((c) => !SKIP_TAGS.has(c.tagName) && !c.hasAttribute("data-vs-overlay"))
       .map((c) => rectOf(c)),
+    text: textLeaf(el),
   };
+}
+
+/** The element's visible text when it is a text leaf (no element children), else undefined. */
+function textLeaf(el: Element): string | undefined {
+  const hasElementChild = Array.from(el.children).some((c) => !SKIP_TAGS.has(c.tagName));
+  if (hasElementChild) return undefined;
+  const t = (el.textContent ?? "").trim();
+  return t ? t.slice(0, 2000) : undefined;
 }
 
 function applyOverride(id: string, css: Record<string, string>): void {
@@ -176,17 +187,23 @@ function applyOverride(id: string, css: Record<string, string>): void {
 
 function clearOverride(id?: string): void {
   const restore = (el: Element): void => {
-    const original = overrides.get(el);
-    if (original === undefined) return;
-    if (original) el.setAttribute("style", original);
-    else el.removeAttribute("style");
-    overrides.delete(el);
+    const style = overrides.get(el);
+    if (style !== undefined) {
+      if (style) el.setAttribute("style", style);
+      else el.removeAttribute("style");
+      overrides.delete(el);
+    }
+    const cls = classOverrides.get(el);
+    if (cls !== undefined) {
+      el.setAttribute("class", cls);
+      classOverrides.delete(el);
+    }
   };
   if (id !== undefined) {
     const el = registry[Number(id)];
     if (el) restore(el);
   } else {
-    for (const el of Array.from(overrides.keys())) restore(el);
+    for (const el of new Set([...overrides.keys(), ...classOverrides.keys()])) restore(el);
   }
 }
 
@@ -220,6 +237,24 @@ function handleCommand(cmd: BridgeCommand): void {
       clearOverride(cmd.nodeId);
       if (selectedId) emitGeometry(selectedId);
       return;
+    case "setText": {
+      const el = registry[Number(cmd.nodeId)] as HTMLElement | undefined;
+      if (el && !Array.from(el.children).some((c) => !SKIP_TAGS.has(c.tagName))) {
+        el.textContent = cmd.text;
+        emitGeometry(cmd.nodeId);
+      }
+      return;
+    }
+    case "setClass": {
+      const el = registry[Number(cmd.nodeId)];
+      if (el) {
+        if (!classOverrides.has(el)) classOverrides.set(el, el.getAttribute("class") ?? "");
+        for (const c of cmd.remove) if (c) el.classList.remove(c);
+        for (const c of cmd.add) if (c) el.classList.add(c);
+        emitGeometry(cmd.nodeId);
+      }
+      return;
+    }
   }
 }
 
@@ -276,6 +311,58 @@ function attach(): void {
         e.preventDefault();
         e.stopPropagation();
       }
+    },
+    { capture: true },
+  );
+
+  // Right-click an element in inspect mode → select it and ask the host to open
+  // its context menu (Send to chat, etc.) at the cursor.
+  window.addEventListener(
+    "contextmenu",
+    (e: MouseEvent) => {
+      if (mode !== "inspect") return;
+      const id = idUnder(e.target);
+      if (id === null) return;
+      e.preventDefault();
+      e.stopPropagation();
+      selectedId = id;
+      const el = registry[Number(id)];
+      if (el) send({ t: "readout", readout: readoutOf(el, id) });
+      send({ t: "contextMenu", nodeId: id, x: e.clientX, y: e.clientY });
+    },
+    { capture: true },
+  );
+
+  // Double-click a text leaf to edit its content inline; commit on blur / Enter.
+  window.addEventListener(
+    "dblclick",
+    (e: MouseEvent) => {
+      if (mode !== "inspect") return;
+      const id = idUnder(e.target);
+      if (id === null) return;
+      const el = registry[Number(id)] as HTMLElement | undefined;
+      if (!el || Array.from(el.children).some((c) => !SKIP_TAGS.has(c.tagName))) return; // not a text leaf
+      e.preventDefault();
+      e.stopPropagation();
+      selectedId = id;
+      send({ t: "readout", readout: readoutOf(el, id) });
+      el.setAttribute("contenteditable", "true");
+      el.focus();
+      const onKey = (ev: KeyboardEvent): void => {
+        if (ev.key === "Enter" && !ev.shiftKey) {
+          ev.preventDefault();
+          el.blur();
+        } else if (ev.key === "Escape") {
+          el.blur();
+        }
+      };
+      const finish = (): void => {
+        el.removeAttribute("contenteditable");
+        el.removeEventListener("keydown", onKey);
+        send({ t: "textEdited", nodeId: id, text: (el.textContent ?? "").trim() });
+      };
+      el.addEventListener("blur", finish, { once: true });
+      el.addEventListener("keydown", onKey);
     },
     { capture: true },
   );

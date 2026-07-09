@@ -77,6 +77,8 @@ export const nodeReadoutSchema = z.object({
   className: z.string().default(""),
   /** Direct element children's border-boxes (guest coords) — used to place gap bands. */
   children: z.array(rectSchema).default([]),
+  /** The element's editable text when it is a text leaf (no element children), else undefined. */
+  text: z.string().optional(),
 });
 export type NodeReadout = z.infer<typeof nodeReadoutSchema>;
 
@@ -119,6 +121,7 @@ export type SectionField = z.infer<typeof sectionFieldSchema>;
 /** The Figma-style sections, in the order the Design panel renders them (design D8). */
 export const designSectionIdSchema = z.enum([
   "variant", // Current variant (component variant switchers)
+  "content", // Editable text content (text leaf elements)
   "position", // Position: alignment, X/Y, constraints, rotation
   "size", // Width / Height
   "layout", // Auto/outer layout: flow, resizing, alignment, gap, padding
@@ -159,6 +162,8 @@ export const selectionSchema = z.object({
   component: z.string().nullable().default(null),
   /** Project-relative source file of that component, when known. */
   file: z.string().nullable().default(null),
+  /** A component this element *resembles* by class signature but isn't using (suggest reuse). */
+  resembles: z.object({ name: z.string(), file: z.string().nullable() }).nullable().default(null),
   rect: rectSchema,
   /** Variant controls for the Current-variant section (empty for non-components). */
   variants: z.array(variantControlSchema).default([]),
@@ -187,6 +192,15 @@ export const bridgeCommandSchema = z.discriminatedUnion("t", [
   }),
   /** Clear overrides for one node, or all when `nodeId` is omitted. */
   z.object({ t: z.literal("clearOverride"), nodeId: z.string().optional() }),
+  /** Set the visible text of a node (live text-content edit). */
+  z.object({ t: z.literal("setText"), nodeId: z.string(), text: z.string() }),
+  /** Swap classes on a node for a live variant preview (remove old, add new). */
+  z.object({
+    t: z.literal("setClass"),
+    nodeId: z.string(),
+    remove: z.array(z.string()).default([]),
+    add: z.array(z.string()).default([]),
+  }),
 ]);
 export type BridgeCommand = z.infer<typeof bridgeCommandSchema>;
 
@@ -208,6 +222,10 @@ export const bridgeEventSchema = z.discriminatedUnion("t", [
     line: z.number().optional(),
     stack: z.string().optional(),
   }),
+  /** The user edited an element's text inline on the canvas (double-click). */
+  z.object({ t: z.literal("textEdited"), nodeId: z.string(), text: z.string() }),
+  /** Right-click on an element — the host shows a context menu at (x,y) guest coords. */
+  z.object({ t: z.literal("contextMenu"), nodeId: z.string(), x: z.number(), y: z.number() }),
 ]);
 export type BridgeEvent = z.infer<typeof bridgeEventSchema>;
 

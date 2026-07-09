@@ -20,13 +20,25 @@ export interface ComponentBinding {
 
 export function buildSelection(
   readout: NodeReadout,
-  opts: { tokens?: InspectorToken[]; component?: ComponentBinding | null; tag?: string } = {},
+  opts: {
+    tokens?: InspectorToken[];
+    component?: ComponentBinding | null;
+    tag?: string;
+    /** A component this element resembles but isn't using (from class-signature match). */
+    resembles?: { name: string; file: string | null } | null;
+  } = {},
 ): Selection {
   const bind = makeTokenBinder(readout, opts.tokens ?? []);
   const c = readout.computed;
   const label = opts.component?.name ?? opts.tag ?? "element";
 
   const sections: DesignSection[] = [
+    // Content — editable text for a text-leaf element.
+    section("content", "Content", [
+      readout.text !== undefined
+        ? { key: "content", label: "Text", kind: "text", value: readout.text, token: null, options: [] }
+        : null,
+    ]),
     section("position", "Position", [
       literal("x", "X", "number", String(Math.round(readout.rect.x))),
       literal("y", "Y", "number", String(Math.round(readout.rect.y))),
@@ -95,15 +107,40 @@ export function buildSelection(
     section("layoutGuide", "Layout guide", []),
   ];
 
+  // Detect each variant's CURRENT value from the element's rendered classes
+  // (falls back to the component's default) so the dropdowns reflect the instance.
+  const variants = (opts.component?.variants ?? []).map((v) => ({
+    ...v,
+    current: detectVariant(readout.className, v.classes) ?? v.current ?? v.defaultValue,
+  }));
+
   return {
     nodeId: readout.nodeId,
     label,
     component: opts.component?.name ?? null,
     file: opts.component?.file ?? null,
+    resembles: opts.component ? null : (opts.resembles ?? null),
     rect: readout.rect,
-    variants: opts.component?.variants ?? [],
+    variants,
     sections: sections.filter((s) => s.fields.length > 0),
   };
+}
+
+/** The variant option whose CVA classes are all present in the element's className. */
+function detectVariant(className: string, classes: Record<string, string> | undefined): string | undefined {
+  const have = new Set(className.split(/\s+/).filter(Boolean));
+  let best: string | undefined;
+  let bestScore = 0;
+  for (const [opt, cls] of Object.entries(classes ?? {})) {
+    const parts = String(cls).split(/\s+/).filter(Boolean);
+    if (parts.length === 0) continue;
+    const matched = parts.filter((p) => have.has(p)).length;
+    if (matched === parts.length && matched > bestScore) {
+      best = opt;
+      bestScore = matched;
+    }
+  }
+  return best;
 }
 
 /**

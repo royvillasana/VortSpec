@@ -2,8 +2,26 @@ import type {
   BridgeNode,
   InspectorComponent,
   VariantControl,
+  Selection,
 } from "@vortspec/core/ipc";
 import type { ComponentBinding } from "@vortspec/core/selection-builder";
+
+/** A readable text summary of a selection, to seed the assistant chat as context. */
+export function buildSelectionContext(selection: Selection): string {
+  const head = `Selected in the Run canvas: ${selection.label}${
+    selection.component ? ` (component ${selection.component})` : ""
+  }${selection.file ? ` — ${selection.file}` : ""}`;
+  const variants = selection.variants.length
+    ? `Variants — ${selection.variants.map((v) => `${v.key}: ${v.current ?? v.defaultValue ?? ""}`).join(", ")}`
+    : "";
+  const body = selection.sections
+    .map((s) => {
+      const fields = s.fields.map((f) => `${f.label}: ${f.value}${f.token ? ` [token ${f.token}]` : ""}`);
+      return fields.length ? `${s.title} — ${fields.join(", ")}` : "";
+    })
+    .filter(Boolean);
+  return [head, variants, ...body].filter(Boolean).join("\n");
+}
 
 /**
  * Run-Canvas composition helpers (change: run-canvas-visual-editor).
@@ -12,6 +30,38 @@ import type { ComponentBinding } from "@vortspec/core/selection-builder";
  * node to a project component (for the Current-variant section) and translate a
  * Design-panel field edit into the CSS the guest applies as an ephemeral override.
  */
+
+/**
+ * When an element is NOT a component instance, detect whether it *resembles* one
+ * by class signature — its classes fully contain one of a component's CVA variant
+ * option class sets (a raw `<div>` styled exactly like your Button's `primary`).
+ * That's the "should be using the component" case the Design panel surfaces.
+ */
+export function resembleComponent(
+  className: string,
+  components: InspectorComponent[],
+): { name: string; file: string | null } | null {
+  const have = new Set(className.split(/\s+/).filter(Boolean));
+  if (have.size === 0) return null;
+  let best: { name: string; file: string | null } | null = null;
+  let bestScore = 0;
+  for (const c of components) {
+    let score = 0;
+    for (const p of c.props) {
+      for (const cls of Object.values(p.classes ?? {})) {
+        const parts = String(cls).split(/\s+/).filter(Boolean);
+        // A variant option counts only if its full (≥2-class) set is present — avoids
+        // matching on a single generic utility like `text-white`.
+        if (parts.length >= 2 && parts.every((x) => have.has(x))) score += parts.length;
+      }
+    }
+    if (score >= 2 && score > bestScore) {
+      best = { name: c.name, file: c.file };
+      bestScore = score;
+    }
+  }
+  return best;
+}
 
 /** Resolve a selected node to a project component via `data-component` / tag heuristics. */
 export function resolveComponent(

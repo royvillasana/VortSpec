@@ -49,7 +49,7 @@ export function buildSeedContext(previewUrl: string | null): string {
   return [
     "Working in the VortSpec IDE.",
     previewUrl ? `A live preview is running at ${previewUrl}.` : null,
-    "When changing code, edit the relevant source directly, keep values token-referenced (never hardcode hex/px), follow the SDD-DE approach (a short spec/plan before implementing a new component or screen), and match the surrounding style. The dev server hot-reloads, so changes appear in the preview.",
+    "When building or changing UI, ALWAYS prefer the project's existing design-system components (with their variants and tokens) over hand-written markup: check the component library first (the component dir and .sdd-de/components.json) and reuse a component if one fits, using its variant props rather than re-styling. Only write raw markup when no component matches — and if that markup resembles a reusable pattern (button, card, badge, input, etc.), propose extracting it as a new spec-first component instead of duplicating styles, so it stays connected to the design system. When you use a component's root element, keep/emit a data-component=\"Name\" attribute so it is recognizable in the visual editor. Keep values token-referenced (never hardcode hex/px), follow the SDD-DE approach (a short spec/plan before a new component or screen), and match the surrounding style. The dev server hot-reloads, so changes appear in the preview.",
   ]
     .filter(Boolean)
     .join(" ");

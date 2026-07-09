@@ -6,7 +6,12 @@ import { Button, Spinner } from "@vortspec/ui/ui";
 import { ProjectRail, projectRailItems } from "@vortspec/ui/ProjectRail";
 import { DesignPanel } from "../components/run-canvas/DesignPanel";
 import { RunCanvas } from "../components/run-canvas/RunCanvas";
-import { resolveComponent, cssForField } from "../components/run-canvas/compose";
+import {
+  resolveComponent,
+  resembleComponent,
+  cssForField,
+  buildSelectionContext,
+} from "../components/run-canvas/compose";
 import {
   classifyFieldEdit,
   classifyVariantEdit,
@@ -38,6 +43,7 @@ export function RunApp({
   onManifest,
   onHistory,
   onSource,
+  onSendToChat,
 }: {
   project: Project;
   /** Which server to run: the project's own `app` (default) or its `storybook`. */
@@ -54,6 +60,8 @@ export function RunApp({
   onManifest: () => void;
   onHistory: () => void;
   onSource: () => void;
+  /** Send the current canvas selection to the assistant chat as context (IDE). */
+  onSendToChat?: (text: string, file?: string | null) => void;
 }): React.JSX.Element {
   const [dev, setDev] = useState<DevServerStatus>({ state: "stopped", url: null, script: null, message: null });
   const [frameLoading, setFrameLoading] = useState(true);
@@ -205,9 +213,17 @@ export function RunApp({
   // Compose the Design-panel selection from the guest readout + project tokens/components.
   const selection = useMemo(() => {
     if (!bridge.readout) return null;
-    const node = bridge.tree?.nodes[bridge.readout.nodeId];
-    const component = resolveComponent(node, components);
-    return buildSelection(bridge.readout, { tokens, component, tag: node?.tag });
+    try {
+      const node = bridge.tree?.nodes[bridge.readout.nodeId];
+      const component = resolveComponent(node, components);
+      // If it's not a component instance, see whether it *resembles* one (should reuse it).
+      const resembles = component ? null : resembleComponent(bridge.readout.className, components);
+      return buildSelection(bridge.readout, { tokens, component, resembles, tag: node?.tag });
+    } catch (err) {
+      // Never let a selection-building error blank the whole Run view.
+      console.error("[run-canvas] failed to build selection:", err);
+      return buildSelection(bridge.readout, { tokens, tag: bridge.tree?.nodes[bridge.readout.nodeId]?.tag });
+    }
   }, [bridge.readout, bridge.tree, tokens, components]);
 
   // Design-panel (left sidebar) width — resizable like the IDE's Explorer rail.
@@ -236,7 +252,7 @@ export function RunApp({
   // Stable methods (the hook memoizes these) + refs to current state, so the
   // Design-panel callbacks keep a stable identity across the 60fps geometry
   // echoes during a drag — that's what lets the memoized sections skip work.
-  const { applyOverride, select, hover, setMode: setGuestMode } = bridge;
+  const { applyOverride, select, hover, setMode: setGuestMode, setText, setClass } = bridge;
 
   // Push the current mode to the guest whenever it (or readiness) changes.
   useEffect(() => {
@@ -250,6 +266,11 @@ export function RunApp({
   readoutRef.current = bridge.readout;
   const tokensRef = useRef(tokens);
   tokensRef.current = tokens;
+  // Last-applied variant value per key, so chained switches remove the right classes.
+  const variantDraftRef = useRef<Record<string, string>>({});
+  useEffect(() => {
+    variantDraftRef.current = {};
+  }, [bridge.selectedId]);
 
   // Apply a CSS override live to the selected node (no file written) — used by
   // both field edits and, per animation frame, handle dragging.
@@ -289,6 +310,12 @@ export function RunApp({
   // A Design-panel field edit → live override + a recorded pending edit.
   const onFieldChange = useCallback(
     (key: string, value: string) => {
+      if (key === "content") {
+        const id = selectedIdRef.current;
+        if (id) setText(id, value); // live text preview
+        commitEdits([{ key, value, cssProps: [] }], true); // source edit (gated)
+        return;
+      }
       if (key === "align") {
         const dir = readoutRef.current?.computed["flex-direction"] ?? "row";
         const css = alignToCss(value, dir);
@@ -305,13 +332,37 @@ export function RunApp({
       const kind = selectionRef.current?.sections.flatMap((s) => s.fields).find((f) => f.key === key)?.kind;
       commitEdits([{ key, value, cssProps: Object.keys(css) }], kind === "color");
     },
-    [applyLive, commitEdits],
+    [applyLive, commitEdits, setText],
   );
 
-  // A variant switch — recorded for a gated source edit (no live CSS preview in v1).
-  const onVariantChange = useCallback((key: string, value: string) => {
-    setPending((p) => ({ ...p, [`variant:${key}`]: classifyVariantEdit(key, value) }));
-  }, []);
+  // An inline text edit on the canvas (double-click) — the guest already applied
+  // it live; record it as a pending source edit for the gated commit.
+  useEffect(() => {
+    const te = bridge.textEdited;
+    if (!te) return;
+    commitEdits([{ key: "content", value: te.text, cssProps: [] }], true);
+    bridge.clearTextEdited();
+  }, [bridge.textEdited, bridge, commitEdits]);
+
+  // A variant switch — preview live by swapping the CVA classes on the element,
+  // then record it for the gated source edit.
+  const onVariantChange = useCallback(
+    (key: string, value: string) => {
+      const sel = selectionRef.current;
+      const id = selectedIdRef.current;
+      const variant = sel?.variants.find((v) => v.key === key);
+      if (id && variant) {
+        const prev = variantDraftRef.current[key] ?? variant.current ?? variant.defaultValue;
+        const words = (s?: string): string[] => (s ? s.split(/\s+/).filter(Boolean) : []);
+        const remove = prev ? words(variant.classes?.[prev]) : [];
+        const add = words(variant.classes?.[value]);
+        if (remove.length || add.length) setClass(id, remove, add);
+        variantDraftRef.current[key] = value;
+      }
+      setPending((p) => ({ ...p, [`variant:${key}`]: classifyVariantEdit(key, value) }));
+    },
+    [setClass],
+  );
 
   const onSelectNode = useCallback((id: string) => select(id), [select]);
   const onHoverNode = useCallback((id: string | null) => hover(id), [hover]);
@@ -524,6 +575,25 @@ export function RunApp({
                   onZoomBy={zoomBy}
                   onZoomReset={resetZoom}
                   colorTokens={colorTokens}
+                  resembles={selection?.resembles ?? null}
+                  onUseComponent={
+                    onSendToChat && selection?.resembles
+                      ? () =>
+                          onSendToChat(
+                            `Refactor the selected element to use the existing "${selection.resembles!.name}" design-system component instead of hand-written markup, picking the variant that matches its current appearance. Preserve look and behavior and remove the duplicated styles.\n\n${buildSelectionContext(selection)}`,
+                            selection.resembles!.file,
+                          )
+                      : undefined
+                  }
+                  onExtractComponent={
+                    onSendToChat && selection
+                      ? () =>
+                          onSendToChat(
+                            `The selected element is hand-written markup that resembles a reusable pattern. Extract it into a new reusable component in the design system (with variants + tokens), then replace this usage with the new component.\n\n${buildSelectionContext(selection)}`,
+                            selection.file,
+                          )
+                      : undefined
+                  }
                 />
               </aside>
               {/* Resize the Design panel (like the IDE Explorer rail). */}
@@ -542,6 +612,11 @@ export function RunApp({
                   zoom={zoom}
                   onLiveEdit={applyLive}
                   onCommitEdit={commitStyleEdits}
+                  onSendToChat={
+                    onSendToChat && selection
+                      ? () => onSendToChat(buildSelectionContext(selection), selection.file)
+                      : undefined
+                  }
                 />
               </div>
               {bridge.runtimeError && !doctorDismissed && (

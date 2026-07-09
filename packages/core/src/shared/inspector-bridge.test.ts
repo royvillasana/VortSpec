@@ -95,6 +95,30 @@ describe("inspector-bridge contracts", () => {
     expect(h).toMatchObject({ t: "hovered", nodeId: "n2" });
   });
 
+  it("parses setText commands and textEdited events", () => {
+    expect(bridgeCommandSchema.parse({ t: "setText", nodeId: "n1", text: "Hi" })).toMatchObject({
+      t: "setText",
+      text: "Hi",
+    });
+    expect(bridgeEventSchema.parse({ t: "textEdited", nodeId: "n1", text: "Hi" })).toMatchObject({
+      t: "textEdited",
+      text: "Hi",
+    });
+    expect(bridgeEventSchema.parse({ t: "contextMenu", nodeId: "n1", x: 10, y: 20 })).toMatchObject({
+      t: "contextMenu",
+      x: 10,
+    });
+  });
+
+  it("parses a readout carrying editable text", () => {
+    const r = nodeReadoutSchema.parse({
+      nodeId: "n1",
+      rect: { x: 0, y: 0, width: 10, height: 10 },
+      text: "Click me",
+    });
+    expect(r.text).toBe("Click me");
+  });
+
   it("rejects an unknown command discriminant", () => {
     expect(() => bridgeCommandSchema.parse({ t: "nope" })).toThrow();
   });

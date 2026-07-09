@@ -32,6 +32,16 @@ export interface InspectorBridge {
   /** The most recent uncaught error in the previewed app (for the Run Doctor), or null. */
   runtimeError: { message: string; source?: string; line?: number; stack?: string } | null;
   clearRuntimeError: () => void;
+  /** The most recent inline text edit on the canvas ({nodeId, text}), consumed by the host. */
+  textEdited: { nodeId: string; text: string } | null;
+  clearTextEdited: () => void;
+  /** A pending context-menu request from a right-click ({nodeId, x, y} in guest coords), or null. */
+  contextMenu: { nodeId: string; x: number; y: number } | null;
+  clearContextMenu: () => void;
+  /** Set an element's visible text live (from the sidebar Content input). */
+  setText: (id: string, text: string) => void;
+  /** Swap classes on an element for a live variant preview. */
+  setClass: (id: string, remove: string[], add: string[]) => void;
   select: (id: string | null) => void;
   hover: (id: string | null) => void;
   /** Toggle guest input handling between selecting (inspect) and using the app (interact). */
@@ -62,6 +72,8 @@ export function useInspectorBridge(): InspectorBridge {
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [rects, setRects] = useState<Record<string, Rect>>({});
   const [runtimeError, setRuntimeError] = useState<InspectorBridge["runtimeError"]>(null);
+  const [textEdited, setTextEdited] = useState<InspectorBridge["textEdited"]>(null);
+  const [contextMenu, setContextMenu] = useState<InspectorBridge["contextMenu"]>(null);
 
   const send = useCallback((cmd: BridgeCommand) => {
     webviewRef.current?.send(INSPECTOR_BRIDGE_CHANNEL, cmd);
@@ -98,6 +110,12 @@ export function useInspectorBridge(): InspectorBridge {
         return;
       case "runtimeError":
         setRuntimeError({ message: event.message, source: event.source, line: event.line, stack: event.stack });
+        return;
+      case "textEdited":
+        setTextEdited({ nodeId: event.nodeId, text: event.text });
+        return;
+      case "contextMenu":
+        setContextMenu({ nodeId: event.nodeId, x: event.x, y: event.y });
         return;
     }
   }, []);
@@ -155,6 +173,12 @@ export function useInspectorBridge(): InspectorBridge {
     [send],
   );
 
+  const setText = useCallback((id: string, text: string) => send({ t: "setText", nodeId: id, text }), [send]);
+  const setClass = useCallback(
+    (id: string, remove: string[], add: string[]) => send({ t: "setClass", nodeId: id, remove, add }),
+    [send],
+  );
+
   const applyOverride = useCallback(
     (id: string, css: Record<string, string>) => send({ t: "applyOverride", nodeId: id, css }),
     [send],
@@ -174,6 +198,12 @@ export function useInspectorBridge(): InspectorBridge {
     rects,
     runtimeError,
     clearRuntimeError: useCallback(() => setRuntimeError(null), []),
+    textEdited,
+    clearTextEdited: useCallback(() => setTextEdited(null), []),
+    contextMenu,
+    clearContextMenu: useCallback(() => setContextMenu(null), []),
+    setText,
+    setClass,
     select,
     hover,
     setMode,

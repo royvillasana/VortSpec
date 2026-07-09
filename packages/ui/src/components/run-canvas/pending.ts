@@ -78,6 +78,9 @@ export function buildEditPrompt(
       const prop = e.key.replace(/^variant:/, "");
       return `- Change the \`${prop}\` variant to \`${e.value}\`.`;
     }
+    if (e.key === "content") {
+      return `- Change the element's visible text to \`${e.value}\`.`;
+    }
     const props = e.cssProps.length ? e.cssProps.join(", ") : e.label.toLowerCase();
     return `- Set ${props} to \`${e.value}\`.`;
   });

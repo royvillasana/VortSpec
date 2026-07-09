@@ -7,6 +7,7 @@ const selection: Selection = {
   label: "Button",
   component: "Button",
   file: "src/components/Button.tsx",
+  resembles: null,
   rect: { x: 0, y: 0, width: 108, height: 38 },
   variants: [],
   sections: [
@@ -50,6 +51,13 @@ describe("pending-edit classification", () => {
 });
 
 describe("gated-run prompt", () => {
+  it("phrases a content edit as changing the visible text", () => {
+    const prompt = buildEditPrompt(null, null, [
+      { key: "content", label: "Text", kind: "style", value: "New label", token: null, shared: false, cssProps: [] },
+    ]);
+    expect(prompt).toContain("Change the element's visible text to `New label`.");
+  });
+
   it("names the component file and lists the structural edits", () => {
     const prompt = buildEditPrompt("src/components/Button.tsx", "Button", [
       classifyFieldEdit(selection, "opacity", "0.5", ["opacity"], () => 1),

@@ -32,6 +32,7 @@ function readout(over: Partial<NodeReadout> = {}): NodeReadout {
     dataComponent: over.dataComponent ?? "button",
     className: over.className ?? "btn",
     children: over.children ?? [],
+    text: over.text,
     ...(over.rect ? { rect: over.rect } : {}),
   };
 }
@@ -82,7 +83,9 @@ describe("buildSelection", () => {
       component: {
         name: "Button",
         file: "src/components/Button.tsx",
-        variants: [{ key: "size", kind: "enum", options: ["small", "medium", "large"], current: "medium" }],
+        variants: [
+          { key: "size", kind: "enum", options: ["small", "medium", "large"], current: "medium", classes: {} },
+        ],
       },
       tag: "button",
     });
@@ -95,6 +98,38 @@ describe("buildSelection", () => {
     const sel = buildSelection(readout({ computed: { transform: "matrix(0, 1, -1, 0, 0, 0)" } }), { tag: "div" });
     const rot = sel.sections.find((s) => s.id === "position")!.fields.find((f) => f.key === "rotation")!;
     expect(rot.value).toBe("90");
+  });
+
+  it("detects the current variant from the element's classes", () => {
+    const sel = buildSelection(readout({ className: "btn bg-teal-500 text-white" }), {
+      component: {
+        name: "Button",
+        file: "src/components/Button.tsx",
+        variants: [
+          {
+            key: "variant",
+            kind: "enum",
+            options: ["primary", "secondary"],
+            defaultValue: "primary",
+            classes: { primary: "bg-blue-500 text-white", secondary: "bg-teal-500 text-white" },
+          },
+        ],
+      },
+      tag: "button",
+    });
+    // Matches the "secondary" classes, not the "primary" default.
+    expect(sel.variants[0].current).toBe("secondary");
+  });
+
+  it("adds a Content section for a text-leaf element", () => {
+    const sel = buildSelection(readout({ text: "Click me" }), { tag: "button" });
+    const content = sel.sections.find((s) => s.id === "content")!;
+    expect(content.fields[0]).toMatchObject({ key: "content", kind: "text", value: "Click me" });
+  });
+
+  it("has no Content section when the element has no text", () => {
+    const sel = buildSelection(readout(), { tag: "div" });
+    expect(sel.sections.find((s) => s.id === "content")).toBeUndefined();
   });
 
   it("always exposes a Size section with width and height", () => {

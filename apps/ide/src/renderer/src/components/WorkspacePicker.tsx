@@ -69,8 +69,10 @@ export function WorkspacePicker({
   }
 
   return (
-    <div className="flex h-full w-full items-center justify-center bg-vs-bg-primary">
-      <div className="w-full max-w-md px-8">
+    <div className="flex h-full w-full items-center justify-center bg-vs-bg-primary py-8">
+      {/* max-h-full caps the block to the viewport so a long workspaces list
+          scrolls inside its own container instead of cropping the logo. */}
+      <div className="flex max-h-full w-full max-w-md flex-col px-8">
         <div className="flex flex-col items-center text-center">
           <Logo size={56} className="drop-shadow-[0_8px_24px_rgba(124,111,240,0.35)]" />
           <h1 className="mt-4 text-2xl font-bold tracking-[-0.01em] text-vs-text-primary">
@@ -179,8 +181,8 @@ export function WorkspacePicker({
           )}
         </div>
 
-        <div className="mt-7">
-          <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-vs-text-muted">
+        <div className="mt-7 flex min-h-0 flex-1 flex-col">
+          <p className="mb-2 flex-none text-[11px] font-semibold uppercase tracking-wide text-vs-text-muted">
             Workspaces
           </p>
           {recent === null ? (
@@ -190,7 +192,7 @@ export function WorkspacePicker({
           ) : recent.length === 0 ? (
             <p className="text-sm text-vs-text-muted">No recent projects yet.</p>
           ) : (
-            <ul className="flex flex-col gap-1">
+            <ul className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto pr-1">
               {recent.map((p) => (
                 <li key={p.path}>
                   <button
