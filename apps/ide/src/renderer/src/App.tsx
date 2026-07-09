@@ -12,6 +12,7 @@ import { Tasks } from "@vortspec/ui/Tasks";
 import { DesignManifest } from "@vortspec/ui/DesignManifest";
 import { RunApp } from "@vortspec/ui/RunApp";
 import { Profile } from "@vortspec/ui/Profile";
+import { NewProjectWizard } from "@vortspec/ui/NewProjectWizard";
 import { ActivityBar } from "./components/ActivityBar";
 import { WorkspacePicker } from "./components/WorkspacePicker";
 import { Explorer } from "./components/Explorer";
@@ -49,6 +50,8 @@ export default function App(): JSX.Element {
   const refNonce = useRef(0);
   // Which welcome view is showing when no workspace is open.
   const [welcomeView, setWelcomeView] = useState<"start" | "settings">("start");
+  // The destination folder for a new project being set up (Create New Project flow).
+  const [newProject, setNewProject] = useState<Project | null>(null);
   const [winW, setWinW] = useState<number>(() =>
     typeof window === "undefined" ? 1440 : window.innerWidth,
   );
@@ -131,6 +134,30 @@ export default function App(): JSX.Element {
   const go = (activity: Activity) => (): void => dispatch({ type: "setActivity", activity });
 
   if (!workspace) {
+    // Create New Project — pick/create an empty folder, then run the SDD-DE setup
+    // wizard (the same flow as the cockpit); on finish, open the created project.
+    if (newProject) {
+      return (
+        <div className="flex h-screen w-screen flex-col overflow-hidden bg-vs-bg-primary text-vs-text-primary">
+          <header
+            className="flex h-9 shrink-0 items-center justify-center border-b border-vs-border-default bg-vs-bg-surface text-xs text-vs-text-muted"
+            style={{ WebkitAppRegion: "drag" } as unknown as CSSProperties}
+          >
+            <span className="font-bold text-vs-text-secondary">VortSpec</span>
+          </header>
+          <div className="min-h-0 flex-1 overflow-auto">
+            <NewProjectWizard
+              project={newProject}
+              onCreated={(p) => {
+                setNewProject(null);
+                setWorkspace(p);
+              }}
+              onCancel={() => setNewProject(null)}
+            />
+          </div>
+        </div>
+      );
+    }
     // A synthetic "Home" project gives the welcome-screen assistant a cwd so the
     // user can chat with the AI before opening a project (ask it to set up, clone,
     // scaffold, etc. — it runs in your home directory).
@@ -150,7 +177,7 @@ export default function App(): JSX.Element {
           className="flex h-9 shrink-0 items-center justify-center border-b border-vs-border-default bg-vs-bg-surface text-xs text-vs-text-muted"
           style={{ WebkitAppRegion: "drag" } as unknown as CSSProperties}
         >
-          VortSpec IDE
+          <span className="font-bold text-vs-text-secondary">VortSpec</span>
         </header>
         <div className="flex min-h-0 flex-1 overflow-hidden">
           <ActivityBar
@@ -171,7 +198,14 @@ export default function App(): JSX.Element {
                 <Profile onBack={() => setWelcomeView("start")} onSaved={(p) => setUserName(p.name || undefined)} />
               </div>
             ) : (
-              <WorkspacePicker onOpen={(p) => setWorkspace(p)} />
+              <WorkspacePicker
+                onOpen={(p) => setWorkspace(p)}
+                onCreateProject={() => {
+                  void api.createFolder().then((dest) => {
+                    if (dest) setNewProject(dest);
+                  });
+                }}
+              />
             )}
           </div>
           {layout.secondaryOpen && (
@@ -331,7 +365,7 @@ export default function App(): JSX.Element {
           className="flex h-9 shrink-0 items-center justify-center border-b border-vs-border-default bg-vs-bg-surface text-xs text-vs-text-muted"
           style={{ WebkitAppRegion: "drag" } as unknown as CSSProperties}
         >
-          {workspace.name} — VortSpec IDE
+          {workspace.name} — <span className="ml-1 font-bold text-vs-text-secondary">VortSpec</span>
         </header>
 
         <div className="flex min-h-0 flex-1 overflow-hidden">

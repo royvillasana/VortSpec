@@ -70,6 +70,8 @@ export interface MockConfig {
   projects?: import("@vortspec/core/ipc").Project[];
   /** Project returned by pickFolder() — the IDE "Open a folder…" result. */
   pickFolderResult?: import("@vortspec/core/ipc").Project | null;
+  /** Folder returned by createFolder() — the destination for a new project. */
+  createFolderResult?: import("@vortspec/core/ipc").Project | null;
   /** Workspace file tree for the IDE Explorer, keyed by relative dir ("" = root). */
   fsTree?: Record<string, import("@vortspec/core/ipc").FsEntry[]>;
   /** File contents for the IDE editor, keyed by relative path. */
@@ -172,7 +174,7 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
     },
 
     pickFolder: async () => cfg.pickFolderResult ?? null,
-    createFolder: async () => null,
+    createFolder: async () => cfg.createFolderResult ?? null,
     listProjects: async () => cfg.projects ?? [],
     openFolder: async () => undefined,
     revealPath: async () => undefined,

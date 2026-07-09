@@ -17,7 +17,7 @@ import { RunApp } from "@vortspec/ui/RunApp";
 import { Tasks } from "@vortspec/ui/Tasks";
 import { DesignInput } from "./views/DesignInput";
 import { Intake } from "./views/Intake";
-import { NewProjectWizard } from "./views/NewProjectWizard";
+import { NewProjectWizard } from "@vortspec/ui/NewProjectWizard";
 import { Logo } from "@vortspec/ui/Logo";
 import { AssistantDock } from "@vortspec/ui/AssistantDock";
 import { Terminal } from "@vortspec/ui/Terminal";

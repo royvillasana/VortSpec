@@ -22,12 +22,23 @@ async function open(c: import("@playwright/test").Locator): Promise<void> {
 
 test("opens on the workspace picker and lists recent projects", async ({ mount }) => {
   const c = await mount(<App />, { hooksConfig: { mock: base } });
-  await expect(c.getByRole("heading", { name: "VortSpec IDE" })).toBeVisible();
+  await expect(c.getByRole("heading", { name: "VortSpec", exact: true })).toBeVisible();
   // VS Code–style Start links (not solid buttons) + the brand mark.
   await expect(c.getByRole("img", { name: "VortSpec" })).toBeVisible();
   await expect(c.getByRole("button", { name: /Open Folder/ })).toBeVisible();
   await expect(c.getByRole("button", { name: /Clone Repository/ })).toBeVisible();
   await expect(c.getByRole("button", { name: /acme-design-system/ })).toBeVisible();
+});
+
+test("Create New Project opens the setup wizard for a fresh folder", async ({ mount }) => {
+  const mock = {
+    ...base,
+    createFolderResult: { id: "np", name: "new-app", path: "/Users/dev/new-app", toolkit: { present: false, version: null, updateAvailable: false } } as Project,
+  };
+  const c = await mount(<App />, { hooksConfig: { mock } });
+  await c.getByRole("button", { name: "Create New Project" }).click();
+  // The shared SDD-DE setup wizard (same as the cockpit) takes over.
+  await expect(c.getByRole("heading", { name: "Set up project" })).toBeVisible();
 });
 
 test("the Clone Repository link reveals a repo-URL input", async ({ mount }) => {
@@ -121,7 +132,7 @@ test("the breadcrumb Home returns to the workspace picker", async ({ mount }) =>
   await expect(crumb.getByText(/acme-design-system/)).toBeVisible();
   await crumb.getByRole("button", { name: "Home" }).click();
   // Back to the picker.
-  await expect(c.getByRole("heading", { name: "VortSpec IDE" })).toBeVisible();
+  await expect(c.getByRole("heading", { name: "VortSpec", exact: true })).toBeVisible();
   await expect(c.getByRole("button", { name: /Open Folder/ })).toBeVisible();
 });
 

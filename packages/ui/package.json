@@ -80,6 +80,10 @@
       "types": "./src/views/Profile.tsx",
       "default": "./src/views/Profile.tsx"
     },
+    "./NewProjectWizard": {
+      "types": "./src/views/NewProjectWizard.tsx",
+      "default": "./src/views/NewProjectWizard.tsx"
+    },
     "./styles/tokens.css": "./src/styles/tokens.css",
     "./Terminal": {
       "types": "./src/components/Terminal.tsx",

@@ -12,7 +12,14 @@ import { Logo } from "@vortspec/ui/Logo";
  * shared workspace handlers (same as the cockpit); cloning reuses createFolder
  * + git import. No IDE-specific engine logic.
  */
-export function WorkspacePicker({ onOpen }: { onOpen: (project: Project) => void }): JSX.Element {
+export function WorkspacePicker({
+  onOpen,
+  onCreateProject,
+}: {
+  onOpen: (project: Project) => void;
+  /** Start the "Create New Project" flow (folder pick → setup wizard). */
+  onCreateProject: () => void;
+}): JSX.Element {
   const [recent, setRecent] = useState<Project[] | null>(null);
   const [busy, setBusy] = useState(false);
   // Clone: an inline URL input (VS Code opens a quick-input for the repo URL).
@@ -66,32 +73,50 @@ export function WorkspacePicker({ onOpen }: { onOpen: (project: Project) => void
       <div className="w-full max-w-md px-8">
         <div className="flex flex-col items-center text-center">
           <Logo size={56} className="drop-shadow-[0_8px_24px_rgba(124,111,240,0.35)]" />
-          <h1 className="mt-4 text-2xl font-semibold tracking-[-0.01em] text-vs-text-primary">
-            VortSpec IDE
+          <h1 className="mt-4 text-2xl font-bold tracking-[-0.01em] text-vs-text-primary">
+            VortSpec
           </h1>
           <p className="mt-1.5 text-sm text-vs-text-secondary">
-            Open a project to create components, document them, and vibe-engineer against a live preview.
+            Create, open, or clone a project to design components, document them, and vibe-engineer against a live preview.
           </p>
         </div>
 
         <div className="mt-8">
-          <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-vs-text-muted">
-            Start
-          </p>
-          <div className="flex flex-col gap-0.5">
-            <StartLink onClick={() => void openFolder()} disabled={busy} icon={FolderIcon}>
-              {busy ? "Opening…" : "Open Folder…"}
-            </StartLink>
-            <StartLink
+          {/* Primary action — start a new project from scratch (SDD-DE setup). */}
+          <button
+            type="button"
+            onClick={onCreateProject}
+            className="flex w-full items-center justify-center gap-2 rounded-md bg-vs-accent px-3 py-2.5 text-sm font-medium text-white hover:brightness-110"
+          >
+            <PlusIcon />
+            Create New Project
+          </button>
+          {/* Secondary actions — open a folder or clone a repo. */}
+          <div className="mt-2 grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => void openFolder()}
+              disabled={busy}
+              className="flex items-center justify-center gap-2 rounded-md border border-vs-border-default bg-vs-bg-surface px-3 py-2 text-[13px] text-vs-text-secondary hover:bg-vs-bg-hover disabled:opacity-50"
+            >
+              <FolderIcon />
+              {busy ? "Opening…" : "Open Folder"}
+            </button>
+            <button
+              type="button"
               onClick={() => {
                 setCloneErr("");
                 setCloneOpen((v) => !v);
               }}
               disabled={cloneBusy}
-              icon={CloneIcon}
+              aria-pressed={cloneOpen}
+              className={`flex items-center justify-center gap-2 rounded-md border px-3 py-2 text-[13px] hover:bg-vs-bg-hover disabled:opacity-50 ${
+                cloneOpen ? "border-vs-accent bg-vs-bg-elevated text-vs-text-primary" : "border-vs-border-default bg-vs-bg-surface text-vs-text-secondary"
+              }`}
             >
-              Clone Repository…
-            </StartLink>
+              <CloneIcon />
+              Clone Repository
+            </button>
           </div>
 
           {cloneOpen && (
@@ -131,7 +156,7 @@ export function WorkspacePicker({ onOpen }: { onOpen: (project: Project) => void
 
         <div className="mt-7">
           <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-vs-text-muted">
-            Recent
+            Workspaces
           </p>
           {recent === null ? (
             <div className="flex items-center gap-2 text-sm text-vs-text-muted">
@@ -161,28 +186,11 @@ export function WorkspacePicker({ onOpen }: { onOpen: (project: Project) => void
   );
 }
 
-/** A VS Code–style Start action: an accent text link with a leading icon. */
-function StartLink({
-  onClick,
-  disabled,
-  icon: Icon,
-  children,
-}: {
-  onClick: () => void;
-  disabled?: boolean;
-  icon: () => JSX.Element;
-  children: React.ReactNode;
-}): JSX.Element {
+function PlusIcon(): JSX.Element {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      className="flex w-fit items-center gap-2 rounded px-1 py-0.5 text-left text-sm text-vs-accent hover:underline disabled:cursor-not-allowed disabled:opacity-50"
-    >
-      <Icon />
-      {children}
-    </button>
+    <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M10 4v12M4 10h12" />
+    </svg>
   );
 }
 
