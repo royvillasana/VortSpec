@@ -39,6 +39,8 @@ export default function App(): JSX.Element {
   const [userName, setUserName] = useState<string | undefined>(undefined);
   const [previewUrl] = useState<string | null>(null);
   const [homeDir, setHomeDir] = useState<string | null>(null);
+  // The current git branch, shown in the status bar beside the project name.
+  const [branch, setBranch] = useState<string | null>(null);
   // The live editor selection, surfaced to the assistant as grounding context.
   const [selection, setSelection] = useState<EditorSelection | null>(null);
   // "Open in Chat" — the selection the user pushed to the assistant (nonce re-adds).
@@ -57,6 +59,23 @@ export default function App(): JSX.Element {
   useEffect(() => {
     setSelection(null);
   }, [wf.activePath]);
+
+  // Current git branch for the status bar. Re-read on activity change so a
+  // checkout in the Source Control view is reflected on return.
+  useEffect(() => {
+    if (!workspace) {
+      setBranch(null);
+      return;
+    }
+    let alive = true;
+    void api
+      .gitStatus(workspace.path)
+      .then((s) => alive && setBranch(s.isRepo && s.branch ? s.branch : null))
+      .catch(() => alive && setBranch(null));
+    return () => {
+      alive = false;
+    };
+  }, [workspace?.path, layout.activity]);
 
   // The editor state the assistant's IDE tools read (via the MCP bridge).
   const ideState = useMemo<IdeState>(
@@ -385,29 +404,65 @@ export default function App(): JSX.Element {
           )}
         </div>
 
-        <footer className="flex h-6 shrink-0 items-center gap-3 border-t border-vs-border-default bg-vs-bg-surface px-3 text-[11px] text-vs-text-muted">
+        <footer className="flex h-6 shrink-0 items-center gap-2 border-t border-vs-border-default bg-vs-bg-surface px-3 text-[11px] text-vs-text-muted">
           <button type="button" onClick={() => setWorkspace(null)} className="hover:text-vs-text-secondary" title="Switch workspace">
             {workspace.name}
           </button>
-          <span className="text-vs-text-muted/60">·</span>
-          <button type="button" aria-pressed={showPrimary} onClick={() => dispatch({ type: "togglePrimary" })} className={`rounded px-2 py-0.5 ${showPrimary ? "text-vs-text-primary" : "hover:text-vs-text-secondary"}`} title="Toggle sidebar">
-            Sidebar
-          </button>
-          <button type="button" aria-pressed={layout.editorOpen} onClick={() => dispatch({ type: "toggleEditor" })} className={`rounded px-2 py-0.5 ${layout.editorOpen ? "text-vs-text-primary" : "hover:text-vs-text-secondary"}`} title="Toggle editor">
-            Editor
-          </button>
-          <span className="capitalize">{layout.activity}</span>
-          <button type="button" aria-pressed={layout.panelOpen} onClick={() => dispatch({ type: "togglePanel" })} className={`ml-auto rounded px-2 py-0.5 ${layout.panelOpen ? "text-vs-text-primary" : "hover:text-vs-text-secondary"}`} title="Toggle terminal panel (Ctrl+`)">
-            Terminal
-          </button>
-          <button type="button" aria-pressed={layout.secondaryOpen} onClick={() => dispatch({ type: "toggleSecondary" })} className={`rounded px-2 py-0.5 ${layout.secondaryOpen ? "text-vs-text-primary" : "hover:text-vs-text-secondary"}`} title="Toggle assistant">
-            Assistant
-          </button>
+          {branch && (
+            <span className="flex items-center gap-1 text-vs-text-muted" title={`Git branch: ${branch}`}>
+              <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                <circle cx="4" cy="3.5" r="1.5" />
+                <circle cx="4" cy="12.5" r="1.5" />
+                <circle cx="12" cy="4.5" r="1.5" />
+                <path d="M4 5v6M12 6a4 4 0 0 1-4 4H6.5" />
+              </svg>
+              <span className="font-mono">{branch}</span>
+            </span>
+          )}
+          <div className="flex-1" />
+          {/* Region toggles apply to the Explorer/editor view only. */}
+          {isExplorer && (
+            <div className="flex items-center gap-1">
+              <FooterToggle label="Explorer" active={showPrimary} title="Toggle the Explorer sidebar" onClick={() => dispatch({ type: "togglePrimary" })} />
+              <FooterToggle label="Editor" active={layout.editorOpen} title="Toggle the editor" onClick={() => dispatch({ type: "toggleEditor" })} />
+              <FooterToggle label="Terminal" active={layout.panelOpen} title="Toggle the terminal panel (Ctrl+`)" onClick={() => dispatch({ type: "togglePanel" })} />
+              <FooterToggle label="Assistant" active={layout.secondaryOpen} title="Toggle the assistant" onClick={() => dispatch({ type: "toggleSecondary" })} />
+            </div>
+          )}
         </footer>
       </div>
       {ideMcp.pending && (
         <IdeActionDialog pending={ideMcp.pending} onConfirm={ideMcp.confirm} onCancel={ideMcp.cancel} />
       )}
     </IdeContext.Provider>
+  );
+}
+
+/** A status-bar region toggle: highlighted when its region is visible. */
+function FooterToggle({
+  label,
+  active,
+  title,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  title: string;
+  onClick: () => void;
+}): JSX.Element {
+  return (
+    <button
+      type="button"
+      aria-pressed={active}
+      onClick={onClick}
+      title={title}
+      className={`rounded px-2 py-0.5 transition-colors ${
+        active
+          ? "bg-vs-bg-elevated text-vs-text-primary"
+          : "text-vs-text-muted hover:bg-vs-bg-hover hover:text-vs-text-secondary"
+      }`}
+    >
+      {label}
+    </button>
   );
 }
