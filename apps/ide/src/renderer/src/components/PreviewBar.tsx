@@ -32,7 +32,6 @@ export function PreviewBar({ project }: { project: Project }): JSX.Element {
   const [dev, setDev] = useState<DevServerStatus | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
-  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     let live = true;
@@ -71,30 +70,6 @@ export function PreviewBar({ project }: { project: Project }): JSX.Element {
     }
   }
 
-  /** Companion to Open Browser: copy the dev server's URL (starting it if needed). */
-  async function copyLink(): Promise<void> {
-    setBusy(true);
-    setErr("");
-    try {
-      let s = await statusFor(kind, project.path);
-      if (s.state !== "running" || !s.url) {
-        s = await startFor(kind, project.path);
-      }
-      setDev(s);
-      if (s.url) {
-        await navigator.clipboard?.writeText(s.url);
-        setCopied(true);
-        setTimeout(() => setCopied(false), 1500);
-      } else {
-        setErr(s.message ?? `Couldn't start the ${kind === "app" ? "app" : "Storybook"} server for this project.`);
-      }
-    } catch {
-      setErr("Couldn't copy the link.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
   const url = dev?.url ?? null;
   const state = dev?.state ?? "stopped";
 
@@ -123,28 +98,14 @@ export function PreviewBar({ project }: { project: Project }): JSX.Element {
           onClick={() => void openBrowser()}
           disabled={busy}
           title="Open the dev server in your browser (starts it if needed)"
-          className="rounded px-2 py-0.5 text-vs-text-secondary hover:text-vs-text-primary disabled:opacity-50"
+          className="flex items-center gap-1 rounded px-2 py-0.5 text-vs-text-secondary hover:text-vs-text-primary disabled:opacity-50"
         >
           {busy ? "Opening…" : "Open Browser"}
-        </button>
-        <button
-          type="button"
-          onClick={() => void copyLink()}
-          disabled={busy}
-          aria-label="Copy link"
-          title={copied ? "Copied!" : "Copy the dev server link (starts it if needed)"}
-          className="rounded p-0.5 text-vs-text-secondary hover:text-vs-text-primary disabled:opacity-50"
-        >
-          {copied ? (
-            <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-              <path d="M5 10.5l3.5 3.5L15 6.5" />
-            </svg>
-          ) : (
-            <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-              <path d="M8.5 11.5a3 3 0 0 0 4.24 0l2.5-2.5a3 3 0 0 0-4.24-4.24l-1 1" />
-              <path d="M11.5 8.5a3 3 0 0 0-4.24 0l-2.5 2.5a3 3 0 0 0 4.24 4.24l1-1" />
-            </svg>
-          )}
+          <svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <path d="M11 4h5v5" />
+            <path d="M16 4l-7 7" />
+            <path d="M8 5H5.5A1.5 1.5 0 0 0 4 6.5v8A1.5 1.5 0 0 0 5.5 16h8A1.5 1.5 0 0 0 15 14.5V12" />
+          </svg>
         </button>
         <button
           type="button"

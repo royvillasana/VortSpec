@@ -82,27 +82,6 @@ test("the Storybook activity shows the Storybook runtime on localhost", async ({
   await expect(c.getByText("localhost", { exact: true })).toBeVisible();
 });
 
-test("the preview bar's Copy link companion copies the current tab's dev URL", async ({ mount }) => {
-  const mock = {
-    ...base,
-    appStatus: { state: "running", url: "http://localhost:4000", script: "dev", message: null },
-  } as typeof base & Record<string, unknown>;
-  const c = await mount(<App />, { hooksConfig: { mock } });
-  await open(c);
-  // Stub the clipboard to capture the copied text.
-  await c.page().evaluate(() => {
-    Object.defineProperty(navigator, "clipboard", {
-      configurable: true,
-      value: { writeText: (t: string) => ((window as unknown as { __copied: string }).__copied = t) && Promise.resolve() },
-    });
-  });
-  const bar = c.getByTestId("preview-bar");
-  await bar.getByRole("button", { name: "Copy link" }).click();
-  await expect
-    .poll(() => c.page().evaluate(() => (window as unknown as { __copied?: string }).__copied))
-    .toBe("http://localhost:4000");
-});
-
 test("activity-bar icons expose hover tooltips (accessible names)", async ({ mount }) => {
   const c = await mount(<App />, { hooksConfig: { mock: base } });
   await open(c);
