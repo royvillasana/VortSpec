@@ -32,7 +32,7 @@ test("Source Control shows the Commit Graph with stats and commits", async ({ mo
   await c.getByRole("button", { name: /acme-design-system/ }).click();
   await c.getByRole("navigation", { name: "Activity bar" }).getByRole("button", { name: "Source Control" }).click();
 
-  await expect(c.getByRole("heading", { name: "Commit Graph" })).toBeVisible();
+  // The graph sits below the controls, expanded by default.
   // Stats (value + label rendered together in a pill).
   await expect(c.getByText("commits")).toBeVisible();
   await expect(c.getByText("merges")).toBeVisible();

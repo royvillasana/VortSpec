@@ -57,7 +57,9 @@ export function GitGraph({ project, refreshKey = 0 }: { project: Project; refres
         <Stat label="merges" value={data.stats.merges} />
         {data.stats.tags > 0 && <Stat label="tags" value={data.stats.tags} />}
       </div>
-      <div className="max-h-[46vh] overflow-auto rounded-md border border-vs-border-default bg-vs-bg-surface">
+      {/* Horizontal scroll only (wide graphs); vertical flows in the page's single
+          scroll container so there is at most one scrollbar. */}
+      <div className="overflow-x-auto rounded-md border border-vs-border-default bg-vs-bg-surface">
         {rows.map((row) => (
           <GraphRowView key={row.commit.hash} row={row} graphW={graphW} />
         ))}

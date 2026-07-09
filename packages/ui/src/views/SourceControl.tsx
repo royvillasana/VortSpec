@@ -45,6 +45,9 @@ export function SourceControl({
   const [importBranch, setImportBranch] = useState("");
   // Bumped on every reload so the Commit Graph refetches after commits/branch ops.
   const [graphKey, setGraphKey] = useState(0);
+  // The Commit Graph sits below the git controls, expanded by default; collapse it
+  // when a long history would otherwise bury the controls.
+  const [graphOpen, setGraphOpen] = useState(true);
 
   async function reload(): Promise<void> {
     const [s, b, r] = await Promise.all([
@@ -79,7 +82,14 @@ export function SourceControl({
   const notRepo = status && !status.isRepo;
 
   return (
-    <div className="flex h-[calc(100vh-3rem)] w-full overflow-hidden bg-vs-bg-primary text-[13px] text-vs-text-primary">
+    <div
+      className={`flex w-full overflow-hidden bg-vs-bg-primary text-[13px] text-vs-text-primary ${
+        // In the IDE (hideRail) fill the work panel so only <main> scrolls — the
+        // panel already wraps us in overflow-auto, and a fixed 100vh height would
+        // overflow it and create a second scrollbar. Standalone (cockpit) keeps 100vh.
+        hideRail ? "h-full min-h-0" : "h-[calc(100vh-3rem)]"
+      }`}
+    >
       {!hideRail && (
         <ProjectRail
         project={project}
@@ -97,7 +107,7 @@ export function SourceControl({
       )}
 
       <main className="flex min-w-0 flex-1 flex-col overflow-y-auto bg-vs-bg-primary">
-        <header className="flex flex-none items-center gap-3 border-b border-vs-border-default px-8 py-4">
+        <header className="sticky top-0 z-20 flex flex-none items-center gap-3 border-b border-vs-border-default bg-vs-bg-primary px-8 py-4">
           <h1 className="text-xl font-semibold tracking-[-0.01em]">Source Control</h1>
           {status?.isRepo && (
             <>
@@ -114,19 +124,6 @@ export function SourceControl({
             ↻ Refresh
           </button>
         </header>
-
-        {status?.isRepo && (
-          <section className="flex-none border-b border-vs-border-default py-5">
-            {/* Constrained to the same max width as the content below, so the graph
-                rows don't span the whole (wide) SCM panel — GitHub-style. */}
-            <div className="mx-auto w-full max-w-[760px] px-8">
-              <h2 className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-vs-text-muted">
-                Commit Graph
-              </h2>
-              <GitGraph project={project} refreshKey={graphKey} />
-            </div>
-          </section>
-        )}
 
         <div className="mx-auto flex w-full max-w-[760px] flex-col gap-5 px-8 py-6">
           {status === null ? (
@@ -290,6 +287,29 @@ export function SourceControl({
             </>
           )}
         </div>
+
+        {/* Commit Graph — below the git controls, collapsed by default so a long
+            history doesn't push the controls off-screen. */}
+        {status?.isRepo && (
+          <section className="border-t border-vs-border-default">
+            <div className="mx-auto w-full max-w-[760px] px-8 py-5">
+              <button
+                type="button"
+                onClick={() => setGraphOpen((o) => !o)}
+                aria-expanded={graphOpen}
+                className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-vs-text-secondary hover:text-vs-text-primary"
+              >
+                <span className="text-[9px] text-vs-text-muted">{graphOpen ? "▾" : "▸"}</span>
+                Commit Graph
+              </button>
+              {graphOpen && (
+                <div className="mt-3">
+                  <GitGraph project={project} refreshKey={graphKey} />
+                </div>
+              )}
+            </div>
+          </section>
+        )}
       </main>
 
       {toast && (
