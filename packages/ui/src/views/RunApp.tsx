@@ -186,7 +186,8 @@ export function RunApp({
   const [components, setComponents] = useState<InspectorComponent[]>([]);
   // Canvas controls now live in the sidebar (Layers header + footer), so their
   // state is lifted here where both the Design panel and the canvas can read it.
-  const [mode, setMode] = useState<"inspect" | "interact">("inspect");
+  // Default to Interact so the app just works; switch to Inspect to edit.
+  const [mode, setMode] = useState<"inspect" | "interact">("interact");
   const [zoom, setZoom] = useState(1);
   const zoomBy = useCallback((f: number) => setZoom((z) => Math.min(4, Math.max(0.25, z * f))), []);
   const resetZoom = useCallback(() => setZoom(1), []);

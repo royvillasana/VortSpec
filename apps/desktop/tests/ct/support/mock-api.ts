@@ -59,6 +59,7 @@ export interface MockConfig {
   gitBranches?: import("@vortspec/core/ipc").GitBranch[];
   gitGraph?: import("@vortspec/core/ipc").GitGraphResult;
   envStatus?: { hasEnv: boolean; examples: string[]; placeholders: string[] };
+  openWalkthrough?: { ok: boolean; message: string };
   gitRemotes?: import("@vortspec/core/ipc").GitRemote[];
   githubAuth?: import("@vortspec/core/ipc").ProviderAuth;
   taskAuth?: import("@vortspec/core/ipc").TaskAuth;
@@ -202,6 +203,7 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
     gitRemotes: async () => cfg.gitRemotes ?? [],
     envStatus: async () => cfg.envStatus ?? { hasEnv: true, examples: [], placeholders: [] },
     createEnv: async () => ({ ok: true, message: "Created .env" }),
+    openWalkthrough: async () => cfg.openWalkthrough ?? { ok: true, message: "Walk-through ready." },
     gitLog: async () => [],
     gitGraph: async () =>
       cfg.gitGraph ?? {

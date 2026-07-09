@@ -68,6 +68,12 @@
     "files": [
       "out/**/*"
     ],
+    "extraResources": [
+      {
+        "from": "resources",
+        "to": "."
+      }
+    ],
     "directories": {
       "output": "release"
     }

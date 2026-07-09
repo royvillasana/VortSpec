@@ -27,6 +27,9 @@ export function WorkspacePicker({
   const [cloneUrl, setCloneUrl] = useState("");
   const [cloneBusy, setCloneBusy] = useState(false);
   const [cloneErr, setCloneErr] = useState("");
+  // Walk-through: extract the bundled SDD-DE reference project into a chosen folder.
+  const [walkBusy, setWalkBusy] = useState(false);
+  const [walkErr, setWalkErr] = useState("");
 
   useEffect(() => {
     void api
@@ -42,6 +45,27 @@ export function WorkspacePicker({
       if (project) onOpen(project);
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function openWalkthrough(): Promise<void> {
+    setWalkBusy(true);
+    setWalkErr("");
+    try {
+      // Pick an empty folder, extract the bundled SDD-DE reference into it, open it.
+      const dest = await api.createFolder();
+      if (!dest) return; // user cancelled the folder picker
+      const r = await api.openWalkthrough(dest.path);
+      if (!r.ok) {
+        setWalkErr(r.message);
+        return;
+      }
+      const fresh = await api.refreshProject(dest.path);
+      onOpen(fresh ?? dest);
+    } catch {
+      setWalkErr("Couldn't set up the walk-through project.");
+    } finally {
+      setWalkBusy(false);
     }
   }
 
@@ -179,6 +203,19 @@ export function WorkspacePicker({
               {cloneErr && <p className="text-[11px] text-vs-error">{cloneErr}</p>}
             </div>
           )}
+
+          {/* Learn: open the bundled SDD-DE reference (walk-through) project. */}
+          <button
+            type="button"
+            onClick={() => void openWalkthrough()}
+            disabled={walkBusy}
+            title="Copy a complete, correctly-structured SDD-DE reference project into a folder and open it"
+            className="mt-2 flex w-full items-center justify-center gap-2 rounded-md border border-dashed border-vs-border-default bg-vs-bg-surface px-3 py-2 text-[13px] text-vs-text-secondary hover:bg-vs-bg-hover disabled:opacity-50"
+          >
+            {walkBusy ? <Spinner /> : <BookIcon />}
+            {walkBusy ? "Setting up the walk-through…" : "Open the walk-through project"}
+          </button>
+          {walkErr && <p className="mt-1 text-[11px] text-vs-error">{walkErr}</p>}
         </div>
 
         <div className="mt-7 flex min-h-0 flex-1 flex-col">
@@ -225,6 +262,16 @@ function FolderIcon(): JSX.Element {
   return (
     <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
       <path d="M3 4.5A1.5 1.5 0 0 1 4.5 3h4l2 2.5h5A1.5 1.5 0 0 1 17 7v8.5A1.5 1.5 0 0 1 15.5 17h-11A1.5 1.5 0 0 1 3 15.5v-11Z" />
+    </svg>
+  );
+}
+
+function BookIcon(): JSX.Element {
+  return (
+    <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 4.5A1.5 1.5 0 0 1 5.5 3H16v11H5.5A1.5 1.5 0 0 0 4 15.5V4.5Z" />
+      <path d="M4 15.5A1.5 1.5 0 0 1 5.5 14H16v3H5.5A1.5 1.5 0 0 1 4 15.5Z" />
+      <path d="M8 6.5h5M8 9h4" />
     </svg>
   );
 }

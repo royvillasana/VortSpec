@@ -70,6 +70,7 @@ const api: VortSpecApi = {
   envStatus: (projectPath: string) => invoke("workspace:envStatus", projectPath),
   createEnv: (projectPath: string, example: string) =>
     invoke("workspace:createEnv", { projectPath, example }),
+  openWalkthrough: (destPath: string) => invoke("workspace:openWalkthrough", destPath),
   createProject: (path: string, answers: SetupAnswers) =>
     invoke("workspace:createProject", { path, answers }),
 

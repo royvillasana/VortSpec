@@ -47,6 +47,7 @@ export interface VortSpecApi {
   refreshProject(path: string): Promise<IpcResponse<"workspace:refreshProject">>;
   envStatus(projectPath: string): Promise<IpcResponse<"workspace:envStatus">>;
   createEnv(projectPath: string, example: string): Promise<IpcResponse<"workspace:createEnv">>;
+  openWalkthrough(destPath: string): Promise<IpcResponse<"workspace:openWalkthrough">>;
   createProject(path: string, answers: SetupAnswers): Promise<IpcResponse<"workspace:createProject">>;
 
   toolkitStatus(path: string): Promise<IpcResponse<"toolkit:status">>;

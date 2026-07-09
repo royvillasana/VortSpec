@@ -102,10 +102,11 @@ export function RunCanvas({
           </div>
         )}
 
-        {/* Overlay lives inside the stage → boxes use guest coords directly. */}
+        {/* Overlay lives inside the stage → boxes use guest coords directly.
+            Only shown in Inspect mode — Interact leaves the app untouched. */}
         <div data-vs-overlay className="pointer-events-none absolute inset-0">
-          {hovRect && <Box rect={hovRect} kind="hover" />}
-          {showSpacing && selRect && readout && (
+          {mode === "inspect" && hovRect && <Box rect={hovRect} kind="hover" />}
+          {mode === "inspect" && showSpacing && selRect && readout && (
             <SpacingOverlay
               key={bridge.selectedId ?? ""}
               rect={selRect}
@@ -119,11 +120,11 @@ export function RunCanvas({
               onCommit={(edit) => onCommitEdit?.([edit])}
             />
           )}
-          {selRect && (
+          {mode === "inspect" && selRect && (
             <Box
               rect={selRect}
               kind="select"
-              showHandles={mode === "inspect"}
+              showHandles
               zoom={zoom}
               onLiveEdit={onLiveEdit}
               onCommitEdit={onCommitEdit}

@@ -293,6 +293,7 @@ export const ipcContract = {
     request: z.object({ projectPath: z.string(), example: z.string() }),
     response: gitResultSchema,
   },
+  "workspace:openWalkthrough": { request: z.string(), response: gitResultSchema },
   "workspace:createProject": {
     request: z.object({ path: z.string(), answers: setupAnswersSchema }),
     response: projectSchema,

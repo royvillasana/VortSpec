@@ -73,8 +73,8 @@ const overrides = new Map<Element, string>();
 /** Ephemeral class overrides: element → the `class` attribute it had before we swapped variants. */
 const classOverrides = new Map<Element, string>();
 let selectedId: string | null = null;
-/** Input mode: `interact` lets the app work; `inspect` intercepts hover/click to select. */
-let mode: "inspect" | "interact" = "inspect";
+/** Input mode: `interact` (default) lets the app work; `inspect` intercepts hover/click to select. */
+let mode: "inspect" | "interact" = "interact";
 
 function send(event: BridgeEvent): void {
   ipcRenderer.sendToHost(INSPECTOR_BRIDGE_CHANNEL, event);

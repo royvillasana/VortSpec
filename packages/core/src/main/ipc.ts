@@ -23,6 +23,7 @@ import * as figmaCli from "./figma/figma-cli";
 import type { FigmaCliMode } from "@vortspec/core/figma";
 import { readProjectConfig } from "./workspace/config-manager";
 import { getEnvStatus, createEnvFromExample } from "./workspace/env-files";
+import { extractWalkthrough } from "./workspace/walkthrough";
 import {
   getInspectorTokens,
   setInspectorTokenValue,
@@ -121,6 +122,7 @@ const handlers: Record<IpcChannel, Handler> = {
   "workspace:envStatus": ((path: string) => getEnvStatus(path)) as Handler,
   "workspace:createEnv": ((req: { projectPath: string; example: string }) =>
     createEnvFromExample(req.projectPath, req.example)) as Handler,
+  "workspace:openWalkthrough": ((destPath: string) => extractWalkthrough(destPath)) as Handler,
   "workspace:createProject": ((req: { path: string; answers: SetupAnswers }) =>
     createProject(req.path, req.answers)) as Handler,
   "workspace:listDir": ((r: { projectPath: string; relPath: string }) =>
