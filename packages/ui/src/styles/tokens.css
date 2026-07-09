@@ -210,3 +210,9 @@
   0%, 49% { opacity: 1; }
   50%, 100% { opacity: 0; }
 }
+
+/* Shimmer sweep for streaming placeholders (shadcn/ai Shimmer) */
+@keyframes vsShimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}

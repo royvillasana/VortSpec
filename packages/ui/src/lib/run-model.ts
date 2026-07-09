@@ -16,6 +16,14 @@ export interface ChatMessage {
   text: string;
 }
 
+/** A tool call Claude made, paired with its result — rendered as a Tool card. */
+export interface ToolStep {
+  id: string;
+  name: string;
+  detail?: string;
+  status: "running" | "ok" | "error";
+}
+
 export interface RunModel {
   status: RunStatus;
   model?: string;
@@ -25,6 +33,7 @@ export interface RunModel {
   messages: ChatMessage[];
   streamingText: string;
   activity: Activity[];
+  steps: ToolStep[];
   files: string[];
   raw: string[];
   mcpErrors: string[];
@@ -47,6 +56,7 @@ export const initialRun: RunModel = {
   messages: [],
   streamingText: "",
   activity: [],
+  steps: [],
   files: [],
   raw: [],
   mcpErrors: [],
@@ -143,12 +153,21 @@ function applyEvent(state: RunModel, event: RunEvent): RunModel {
         event.path && !state.files.includes(event.path)
           ? [...state.files, event.path]
           : state.files;
-      return pushActivity({ ...state, files }, label, "tool");
+      const step: ToolStep = { id: `s${activitySeq}`, name: event.name, detail: event.path, status: "running" };
+      return pushActivity({ ...state, files, steps: [...state.steps, step] }, label, "tool");
     }
-    case "tool-result":
-      return event.isError
-        ? pushActivity(state, "Tool reported an error", "error")
-        : state;
+    case "tool-result": {
+      // Resolve the most recent still-running step.
+      const steps = [...state.steps];
+      for (let i = steps.length - 1; i >= 0; i--) {
+        if (steps[i].status === "running") {
+          steps[i] = { ...steps[i], status: event.isError ? "error" : "ok" };
+          break;
+        }
+      }
+      const next = { ...state, steps };
+      return event.isError ? pushActivity(next, "Tool reported an error", "error") : next;
+    }
     case "api-retry":
       return pushActivity(
         state,

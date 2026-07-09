@@ -17,6 +17,17 @@ const REPLY: RunEvent[] = [
   { kind: "result", isError: false, text: "done", sessionId: "sess-a1" },
 ];
 
+// A run that uses tools, so the Tool cards render.
+const TOOLRUN: RunEvent[] = [
+  { kind: "system-init", model: "claude-opus-4-8", sessionId: "s", tools: ["Read", "Bash"], mcpServers: [], mcpErrors: [] },
+  { kind: "tool-use", name: "Read", path: "src/Button.tsx" },
+  { kind: "tool-result", isError: false },
+  { kind: "tool-use", name: "Bash", path: "npm test" },
+  { kind: "tool-result", isError: true },
+  { kind: "assistant-text", text: "All set." },
+  { kind: "result", isError: false, text: "done", sessionId: "s" },
+];
+
 const noop = (): void => {};
 
 test("shows the empty prompt state and spends no usage until first send", async ({ mount }) => {
@@ -54,6 +65,21 @@ test("an Open-in-Chat selection ref becomes a chip and rides in the prompt", asy
   const prompts = await c.page().evaluate(() => (window as unknown as { __runPrompts: string[] }).__runPrompts);
   expect(prompts[0]).toContain("src/Button.tsx:L2-L5");
   expect(prompts[0]).toContain("const x = 1;");
+});
+
+test("tool calls render as Tool cards with per-tool status", async ({ mount }) => {
+  const c = await mount(<AssistantDock project={PROJECT} onClose={noop} />, {
+    hooksConfig: { mock: { runScript: TOOLRUN } },
+  });
+  await c.getByPlaceholder(/@ a file/).fill("do the thing");
+  await c.getByRole("button", { name: "Send" }).click();
+  // The tool activity is grouped and surfaced (previously invisible).
+  await expect(c.getByText(/Worked · 2 steps/)).toBeVisible();
+  await expect(c.getByText("Read", { exact: true })).toBeVisible();
+  await expect(c.getByText("src/Button.tsx")).toBeVisible();
+  await expect(c.getByText("Bash", { exact: true })).toBeVisible();
+  // The final answer still renders.
+  await expect(c.getByText("All set.")).toBeVisible();
 });
 
 test("close button fires onClose", async ({ mount }) => {
