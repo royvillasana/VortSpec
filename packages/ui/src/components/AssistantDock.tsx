@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { Project, FsEntry } from "@vortspec/core/ipc";
 import { api } from "@vortspec/ui/api";
 import { useAgentRun } from "../lib/useAgentRun";
+import type { ChatMessage } from "@vortspec/ui/run-model";
 import { Spinner } from "@vortspec/ui/ui";
 import { Response } from "./ai/Response";
 import { Shimmer } from "./ai/Shimmer";
@@ -15,6 +16,8 @@ import {
   expandAttachments,
   type ChatAttachment,
   type PendingSelectionRef,
+  type ConversationRegistry,
+  type MentionOption,
 } from "./ai/attachments";
 
 export type { PendingSelectionRef } from "./ai/attachments";
@@ -53,6 +56,10 @@ export function AssistantDock({
   agent,
   onAgentChange,
   presets,
+  conversations,
+  onTranscript,
+  incomingText,
+  onSendSelection,
 }: {
   project: Project;
   /** Optional one-line context the dock mentions to Claude on the first message. */
@@ -85,6 +92,14 @@ export function AssistantDock({
   onAgentChange?: (agent: Agent) => void;
   /** Preset agents available to pick (defaults + user); enables the agent picker. */
   presets?: Agent[];
+  /** Other open conversations — enables `@`-references + their transcript injection. */
+  conversations?: ConversationRegistry;
+  /** Report this conversation's committed transcript up (for cross-references). */
+  onTranscript?: (messages: ChatMessage[]) => void;
+  /** A highlighted selection handed in from another conversation ("Send to"). */
+  incomingText?: { text: string; from: string; nonce: number };
+  /** Called when the user sends a highlighted message selection to a conversation. */
+  onSendSelection?: (targetConvId: string, text: string) => void;
 }): React.JSX.Element {
   const run = useAgentRun();
   const [draft, setDraft] = useState("");
@@ -103,6 +118,8 @@ export function AssistantDock({
   const attachSeq = useRef(0);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  // A highlighted range in the transcript → the "Send to another conversation" control.
+  const [sendSel, setSendSel] = useState<{ text: string; top: number; left: number } | null>(null);
 
   // New project → fresh session.
   useEffect(() => {
@@ -172,10 +189,57 @@ export function AssistantDock({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingRef?.nonce]);
 
-  function pickMention(entry: FsEntry): void {
+  // Report the transcript up (first prompt + committed turns) so other
+  // conversations can @-reference it.
+  useEffect(() => {
+    const full: ChatMessage[] = firstPrompt
+      ? [{ id: "first", role: "user", text: firstPrompt }, ...run.model.messages]
+      : run.model.messages;
+    onTranscript?.(full);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [run.model.messages, firstPrompt]);
+
+  // A highlighted selection handed in from another conversation → attach it here.
+  useEffect(() => {
+    if (!incomingText) return;
+    addAttachment({ kind: "text", text: incomingText.text, label: incomingText.from });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [incomingText?.nonce]);
+
+  // `@`-menu items: other conversations (by label) first, then workspace files.
+  const mentionItems: MentionOption[] =
+    mentionQuery === null
+      ? []
+      : [
+          ...(conversations?.list() ?? [])
+            .filter((c) => c.label.toLowerCase().includes(mentionQuery.toLowerCase()))
+            .map((c) => ({ kind: "conversation" as const, id: c.id, label: c.label })),
+          ...mentionResults.map((e) => ({ kind: "file" as const, entry: e })),
+        ];
+
+  // Highlighting text in the transcript surfaces a "Send to" control (if there
+  // are other conversations to send it to).
+  function onTranscriptMouseUp(): void {
+    if (!onSendSelection || !conversations || conversations.list().length === 0) return;
+    const sel = window.getSelection();
+    const text = sel?.toString().trim() ?? "";
+    const anchor = sel?.anchorNode;
+    if (!text || !anchor || !scrollRef.current?.contains(anchor)) {
+      setSendSel(null);
+      return;
+    }
+    const rect = sel!.getRangeAt(0).getBoundingClientRect();
+    setSendSel({ text, top: rect.bottom + 4, left: rect.left });
+  }
+
+  function pickMention(option: MentionOption): void {
     // Strip the trailing `@query` from the draft, then attach.
     setDraft((d) => d.replace(/(?:^|\s)@[^\s@]*$/, (m) => (m.startsWith(" ") ? " " : "")));
-    addAttachment({ path: entry.path, kind: entry.type === "dir" ? "dir" : "file" });
+    if (option.kind === "conversation") {
+      addAttachment({ kind: "conversation", convId: option.id, label: option.label });
+    } else {
+      addAttachment({ path: option.entry.path, kind: option.entry.type === "dir" ? "dir" : "file" });
+    }
     setMentionIndex(0);
     textareaRef.current?.focus();
   }
@@ -229,7 +293,7 @@ export function AssistantDock({
     setDraft("");
     // Referenced attachments (@-mentions, dragged files, selections) + the live
     // grounding (open file / selection) ride along so the assistant sees them.
-    const grounding = [expandAttachments(attachments), liveContext].filter(Boolean).join("\n\n");
+    const grounding = [expandAttachments(attachments, conversations), liveContext].filter(Boolean).join("\n\n");
     const withLive = grounding ? `${grounding}\n\n${text}` : text;
     setAttachments([]);
     // Resolve the run options from the agent (if any) — its toolset, model, and
@@ -303,7 +367,7 @@ export function AssistantDock({
         <SessionPanel session={run.model.session} />
       )}
 
-      <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
+      <div ref={scrollRef} onMouseUp={onTranscriptMouseUp} className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
         {!started && cards.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center gap-2 text-center">
             <p className="text-sm font-medium text-vs-text-secondary">
@@ -389,8 +453,8 @@ export function AssistantDock({
         )}
         {mentionOpen && (
           <MentionMenu
-            results={mentionResults}
-            activeIndex={Math.min(mentionIndex, Math.max(0, mentionResults.length - 1))}
+            items={mentionItems}
+            activeIndex={Math.min(mentionIndex, Math.max(0, mentionItems.length - 1))}
             onPick={pickMention}
           />
         )}
@@ -411,8 +475,8 @@ export function AssistantDock({
               setMentionIndex(0);
             }}
             onKeyDown={(e) => {
-              if (mentionOpen && mentionResults.length > 0) {
-                const len = mentionResults.length;
+              if (mentionOpen && mentionItems.length > 0) {
+                const len = mentionItems.length;
                 if (e.key === "ArrowDown") {
                   e.preventDefault();
                   setMentionIndex((i) => (Math.min(i, len - 1) + 1) % len);
@@ -425,7 +489,7 @@ export function AssistantDock({
                 }
                 if (e.key === "Enter" || e.key === "Tab") {
                   e.preventDefault();
-                  pickMention(mentionResults[Math.min(mentionIndex, len - 1)]);
+                  pickMention(mentionItems[Math.min(mentionIndex, len - 1)]);
                   return;
                 }
               }
@@ -488,6 +552,19 @@ export function AssistantDock({
           </button>
         </div>
       </div>
+      {sendSel && conversations && onSendSelection && (
+        <SendToControl
+          top={sendSel.top}
+          left={sendSel.left}
+          targets={conversations.list()}
+          onPick={(id) => {
+            onSendSelection(id, sendSel.text);
+            setSendSel(null);
+            window.getSelection()?.removeAllRanges();
+          }}
+          onDismiss={() => setSendSel(null)}
+        />
+      )}
     </aside>
   );
 }
@@ -495,6 +572,44 @@ export function AssistantDock({
 /** Trim a model id like "claude-opus-4-8[1m]" to a compact chip label. */
 function shortModel(model: string): string {
   return model.replace(/^claude-/, "").replace(/-\d{8}$/, "");
+}
+
+/** Floating "Send to ▾" control for a highlighted transcript selection. */
+function SendToControl({
+  top,
+  left,
+  targets,
+  onPick,
+  onDismiss,
+}: {
+  top: number;
+  left: number;
+  targets: { id: string; label: string }[];
+  onPick: (id: string) => void;
+  onDismiss: () => void;
+}): React.JSX.Element {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <div className="fixed inset-0 z-40" onMouseDown={onDismiss} />
+      <div data-testid="send-to" style={{ position: "fixed", top, left }} className="z-50 rounded-md border border-vs-border-strong bg-vs-bg-elevated text-[11px] shadow-lg">
+        {!open ? (
+          <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => setOpen(true)} className="px-2 py-1 text-vs-text-primary hover:bg-vs-bg-hover">
+            ⧉ Send to ▾
+          </button>
+        ) : (
+          <div className="min-w-[150px] py-1">
+            <div className="px-3 pb-1 text-[9px] uppercase tracking-wide text-vs-text-muted/70">Send selection to</div>
+            {targets.map((t) => (
+              <button key={t.id} type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => onPick(t.id)} className="block w-full truncate px-3 py-1 text-left text-vs-text-secondary hover:bg-vs-bg-hover">
+                {t.label}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </>
+  );
 }
 
 const MCP_STATUS_STYLE: Record<string, string> = {

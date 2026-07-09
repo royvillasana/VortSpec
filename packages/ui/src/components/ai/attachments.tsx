@@ -1,24 +1,35 @@
 import { useState } from "react";
 import type { FsEntry } from "@vortspec/core/ipc";
+import type { ChatMessage } from "@vortspec/ui/run-model";
 import { cn } from "../../lib/cn";
 import { FileTree } from "./FileTree";
 
 /**
- * Chat context attachments — files, folders, and code selections the user pulls
- * into the conversation the way the Claude Code extension does: type `@` to pick
- * a file, drag one in from the Explorer, or "Open in Chat" from an editor
- * selection. Each becomes a removable chip above the composer and is expanded
- * into the prompt so Claude reads it.
+ * Chat context attachments — files, folders, code selections, AND other
+ * conversations the user pulls in the way the Claude Code extension does: type
+ * `@` to pick a file or a conversation, drag a file in from the Explorer, "Open
+ * in Chat" an editor selection, or send a highlighted selection from another
+ * conversation. Each becomes a removable chip and is expanded into the prompt.
  */
 export interface ChatAttachment {
   id: string;
-  /** Workspace-relative path. */
-  path: string;
-  kind: "file" | "dir" | "selection";
+  kind: "file" | "dir" | "selection" | "conversation" | "text";
+  /** Workspace-relative path (file/dir/selection). */
+  path?: string;
   /** For a selection: the 1-based line range and the selected text. */
   startLine?: number;
   endLine?: number;
   text?: string;
+  /** For a conversation reference: the target id. */
+  convId?: string;
+  /** Display label + source (conversation/text). */
+  label?: string;
+}
+
+/** Read-only access to the other open conversations (for @-refs + expansion). */
+export interface ConversationRegistry {
+  list: () => { id: string; label: string }[];
+  transcript: (id: string) => ChatMessage[];
 }
 
 /** An "Open in Chat" request from the editor — a selection to attach. `nonce`
@@ -31,19 +42,45 @@ export interface PendingSelectionRef {
   nonce: number;
 }
 
-/** A short label for a chip (basename, plus a line range for selections). */
+/** A short label for a chip (basename, line range, or conversation label). */
 export function attachmentLabel(a: ChatAttachment): string {
-  const base = a.path.split("/").pop() || a.path;
+  if (a.kind === "conversation") return a.label ?? "conversation";
+  if (a.kind === "text") return a.label ? `${a.label} ⧉` : "snippet";
+  const base = (a.path ?? "").split("/").pop() || (a.path ?? "");
   if (a.kind === "selection" && a.startLine) {
     return a.startLine === a.endLine ? `${base}:${a.startLine}` : `${base}:${a.startLine}-${a.endLine}`;
   }
   return base;
 }
 
-/** Expand attachments into a prompt context block prepended to the message. */
-export function expandAttachments(atts: ChatAttachment[]): string {
+/** Format a conversation transcript newest-first, capped to `maxChars`. */
+export function capTranscript(messages: ChatMessage[], maxChars = 2500): string {
+  const parts: string[] = [];
+  let total = 0;
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const m = messages[i];
+    const line = `${m.role === "user" ? "User" : "Assistant"}: ${m.text}`;
+    if (total + line.length > maxChars && parts.length > 0) break;
+    parts.push(line);
+    total += line.length;
+  }
+  return parts.join("\n\n");
+}
+
+/**
+ * Expand attachments into a prompt context block. `registry` resolves a
+ * referenced conversation's (capped, most-recent-first) transcript.
+ */
+export function expandAttachments(atts: ChatAttachment[], registry?: ConversationRegistry): string {
   if (atts.length === 0) return "";
-  const lines = atts.map((a) => {
+  const blocks = atts.map((a) => {
+    if (a.kind === "conversation" && a.convId) {
+      const body = registry ? capTranscript(registry.transcript(a.convId)) : "";
+      return `[Referenced conversation "${a.label ?? a.convId}" — most recent first]\n${body || "(no messages yet)"}`;
+    }
+    if (a.kind === "text") {
+      return `[From ${a.label ?? "another conversation"}]\n\`\`\`\n${a.text ?? ""}\n\`\`\``;
+    }
     if (a.kind === "selection" && a.startLine) {
       const range = a.startLine === a.endLine ? `L${a.startLine}` : `L${a.startLine}-L${a.endLine}`;
       const snippet = a.text ? `\n\`\`\`\n${a.text}\n\`\`\`` : "";
@@ -51,10 +88,16 @@ export function expandAttachments(atts: ChatAttachment[]): string {
     }
     return `- @${a.path} (${a.kind === "dir" ? "folder" : "file"})`;
   });
-  return `[Referenced context — read these as needed]\n${lines.join("\n")}`;
+  return `[Referenced context — read these as needed]\n${blocks.join("\n\n")}`;
 }
 
-const ICON: Record<ChatAttachment["kind"], string> = { file: "📄", dir: "📁", selection: "⧉" };
+const ICON: Record<ChatAttachment["kind"], string> = {
+  file: "📄",
+  dir: "📁",
+  selection: "⧉",
+  conversation: "💬",
+  text: "❝",
+};
 
 export function AttachmentChips({
   attachments,
@@ -119,7 +162,7 @@ export function AttachmentChips({
           );
         })}
       </div>
-      {previewAtt && loadDir && (
+      {previewAtt?.path && loadDir && (
         <div className="rounded-md border border-vs-border-subtle bg-vs-bg-primary" data-testid="folder-preview">
           <div className="flex items-center justify-between border-b border-vs-border-subtle px-2 py-1 text-[10px] text-vs-text-muted">
             <span>
@@ -141,39 +184,49 @@ export function AttachmentChips({
   );
 }
 
-/** The `@`-mention file picker shown while typing `@query`. */
+/** A `@`-mention candidate: an open conversation or a workspace file/folder. */
+export type MentionOption =
+  | { kind: "conversation"; id: string; label: string }
+  | { kind: "file"; entry: FsEntry };
+
+/** The `@`-mention picker shown while typing `@query` (conversations + files). */
 export function MentionMenu({
-  results,
+  items,
   activeIndex,
   onPick,
 }: {
-  results: FsEntry[];
+  items: MentionOption[];
   activeIndex: number;
-  onPick: (entry: FsEntry) => void;
+  onPick: (option: MentionOption) => void;
 }): React.JSX.Element {
   return (
     <div
       data-testid="mention-menu"
       className="mb-2 max-h-56 overflow-y-auto rounded-md border border-vs-border-default bg-vs-bg-elevated py-1 shadow-lg"
     >
-      {results.length === 0 ? (
-        <div className="px-3 py-1.5 text-[11px] text-vs-text-muted">No matching files.</div>
+      {items.length === 0 ? (
+        <div className="px-3 py-1.5 text-[11px] text-vs-text-muted">No matches.</div>
       ) : (
-        results.map((e, i) => (
-          <button
-            key={e.path}
-            type="button"
-            onMouseDown={(ev) => ev.preventDefault()}
-            onClick={() => onPick(e)}
-            className={cn(
-              "flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs",
-              i === activeIndex ? "bg-vs-accent-muted text-vs-text-primary" : "text-vs-text-secondary hover:bg-vs-bg-hover",
-            )}
-          >
-            <span aria-hidden>{e.type === "dir" ? "📁" : "📄"}</span>
-            <span className="truncate font-mono text-[11px]">{e.path}</span>
-          </button>
-        ))
+        items.map((o, i) => {
+          const key = o.kind === "conversation" ? `c:${o.id}` : `f:${o.entry.path}`;
+          const icon = o.kind === "conversation" ? "💬" : o.entry.type === "dir" ? "📁" : "📄";
+          const text = o.kind === "conversation" ? o.label : o.entry.path;
+          return (
+            <button
+              key={key}
+              type="button"
+              onMouseDown={(ev) => ev.preventDefault()}
+              onClick={() => onPick(o)}
+              className={cn(
+                "flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs",
+                i === activeIndex ? "bg-vs-accent-muted text-vs-text-primary" : "text-vs-text-secondary hover:bg-vs-bg-hover",
+              )}
+            >
+              <span aria-hidden>{icon}</span>
+              <span className="truncate font-mono text-[11px]">{text}</span>
+            </button>
+          );
+        })
       )}
     </div>
   );

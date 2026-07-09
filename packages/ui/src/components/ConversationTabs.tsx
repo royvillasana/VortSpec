@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import type { Project } from "@vortspec/core/ipc";
+import type { ChatMessage } from "@vortspec/ui/run-model";
 import { AssistantDock, type PendingSelectionRef } from "./AssistantDock";
 import { DEFAULT_PRESETS, type Agent } from "./ai/agents";
 
@@ -42,6 +43,15 @@ export function ConversationTabs({
   const [active, setActive] = useState("c1");
   const [renaming, setRenaming] = useState<string | null>(null);
   const seq = useRef(2);
+  // Each conversation's committed transcript (for cross-conversation @-references).
+  const [transcripts, setTranscripts] = useState<Record<string, ChatMessage[]>>({});
+  // A highlighted selection routed into a conversation ("Send to"), keyed by target.
+  const [incoming, setIncoming] = useState<Record<string, { text: string; from: string; nonce: number }>>({});
+
+  function sendSelectionTo(targetId: string, text: string, from: string): void {
+    setIncoming((prev) => ({ ...prev, [targetId]: { text, from, nonce: (prev[targetId]?.nonce ?? 0) + 1 } }));
+    setActive(targetId); // reveal the target so the user sees the handed-off context
+  }
 
   function addConv(): void {
     if (convs.length >= MAX) return;
@@ -146,6 +156,13 @@ export function ConversationTabs({
               presets={presets}
               onAgentChange={(a) => setConvs((cs) => cs.map((x) => (x.id === c.id ? { ...x, agent: a } : x)))}
               pendingRef={c.id === active ? pendingRef : undefined}
+              onTranscript={(msgs) => setTranscripts((t) => ({ ...t, [c.id]: msgs }))}
+              conversations={{
+                list: () => convs.filter((x) => x.id !== c.id).map((x) => ({ id: x.id, label: x.label })),
+                transcript: (id) => transcripts[id] ?? [],
+              }}
+              incomingText={incoming[c.id]}
+              onSendSelection={(targetId, text) => sendSelectionTo(targetId, text, c.label)}
             />
           </div>
         ))}

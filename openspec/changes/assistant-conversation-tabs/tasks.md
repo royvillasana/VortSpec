@@ -20,12 +20,17 @@ Phased so each phase ships value and stays green (`pnpm build && pnpm test && pn
 
 ## 3. Phase 3 — Cross-conversation context
 
-- [ ] 3.1 A conversation registry from `ConversationTabs` (`list(): {id,label}[]`, `transcript(id): ChatMessage[]`), passed to each `Conversation`.
-- [ ] 3.2 `ChatAttachment` gains a `conversation` kind (`{ kind:"conversation", convId, label }`); the `@`-menu lists open conversations (by label) alongside files; picking one adds the chip.
-- [ ] 3.3 `expandAttachments`: a `conversation` attachment injects the referenced conversation's **capped, most-recent-first** transcript (hard char cap) as a labelled context block.
-- [ ] 3.4 Highlight → "Send to ▾": selecting text inside a message shows a floating control; picking a target conversation appends a `selection`-kind attachment (the text, labelled with the source conversation) to that conversation via a manager `sendSelectionTo(target, {text, from})`; the target shows the chip on activation.
-- [ ] 3.5 CT: `@Conversation 1` in conversation 2 injects conversation 1's recent transcript into the sent prompt (capped); highlighting text in one conversation and sending it to another adds the attachment there and it rides in that conversation's next prompt.
-- [ ] 3.6 Gate green; docs (this change) updated to reflect the shipped behavior.
+- [x] 3.1 Each `AssistantDock` reports its transcript up (`onTranscript`); `ConversationTabs` holds a `transcripts` map and hands each conversation a registry (`list()` = other conversations, `transcript(id)`).
+- [x] 3.2 `ChatAttachment` gains `conversation` (and `text`) kinds; the `@`-menu (`MentionOption` = conversation | file) lists open conversations by label alongside files; picking one adds a chip.
+- [x] 3.3 `expandAttachments(atts, registry)` injects a referenced conversation's **capped, most-recent-first** transcript (`capTranscript`, ~2.5k-char cap) as a labelled block.
+- [x] 3.4 Highlight → "Send to": selecting text in the transcript surfaces a floating `SendToControl` listing the other conversations; picking one routes the snippet via `sendSelectionTo(target, {text, from})` (a `text` attachment with the source label) and switches to the target so the chip is visible.
+- [x] 3.5 CT: `@Conv…` in conversation 2 injects conversation 1's transcript into the sent prompt; highlighting text in one conversation and sending it to another adds the snippet there and it rides in that conversation's next prompt.
+- [x] 3.6 Gate green.
+
+## 4. Verification
+
+- [x] 4.1 Full gate green (build/test/lint); cockpit unaffected; own `claude`, no keys.
+- [ ] 4.2 End-to-end in the running IDE (user's review): multiple conversations with different agents, referencing one from another, highlight→send between tabs, and dragging editor tabs into a new order.
 
 ## 4. Verification
 
