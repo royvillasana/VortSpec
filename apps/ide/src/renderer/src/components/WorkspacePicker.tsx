@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { JSX } from "react";
+import type { JSX, CSSProperties } from "react";
 import type { Project } from "@vortspec/core/ipc";
 import { api } from "@vortspec/ui/api";
 import { Spinner } from "@vortspec/ui/ui";
@@ -82,14 +82,39 @@ export function WorkspacePicker({
         </div>
 
         <div className="mt-8">
-          {/* Primary action — start a new project from scratch (SDD-DE setup). */}
+          {/* Primary action — start a new project from scratch (SDD-DE setup).
+              Filled with the brand logo gradient (blue → purple → magenta) and a
+              spotlight glow that follows the cursor on hover. */}
           <button
             type="button"
             onClick={onCreateProject}
-            className="flex w-full items-center justify-center gap-2 rounded-md bg-vs-accent px-3 py-2.5 text-sm font-medium text-white hover:brightness-110"
+            onPointerMove={(e) => {
+              const r = e.currentTarget.getBoundingClientRect();
+              e.currentTarget.style.setProperty("--x", `${e.clientX - r.left}px`);
+              e.currentTarget.style.setProperty("--y", `${e.clientY - r.top}px`);
+            }}
+            style={
+              {
+                "--x": "50%",
+                "--y": "50%",
+                backgroundImage: "linear-gradient(120deg, #2563EB 0%, #7C6FF0 50%, #B84DEE 100%)",
+              } as CSSProperties
+            }
+            className="group relative flex w-full items-center justify-center gap-2 overflow-hidden rounded-md px-3 py-2.5 text-sm font-semibold text-white shadow-[0_6px_24px_-6px_rgba(124,111,240,0.6)] transition-shadow hover:shadow-[0_10px_32px_-6px_rgba(124,111,240,0.75)]"
           >
-            <PlusIcon />
-            Create New Project
+            {/* Cursor-following spotlight (revealed on hover). */}
+            <span
+              aria-hidden
+              className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-200 group-hover:opacity-100"
+              style={{
+                background:
+                  "radial-gradient(140px circle at var(--x) var(--y), rgba(255,255,255,0.45), transparent 65%)",
+              }}
+            />
+            <span className="relative flex items-center gap-2">
+              <PlusIcon />
+              Create New Project
+            </span>
           </button>
           {/* Secondary actions — open a folder or clone a repo. */}
           <div className="mt-2 grid grid-cols-2 gap-2">
