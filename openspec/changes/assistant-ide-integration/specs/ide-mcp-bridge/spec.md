@@ -1,18 +1,18 @@
 ## ADDED Requirements
 
-### Requirement: Local IDE MCP server discoverable by Claude Code
-The IDE SHALL run a local WebSocket MCP server (JSON-RPC 2.0, MCP 2024-11-05) bound to `127.0.0.1` and write a lockfile to `~/.claude/ide/<port>.lock` (mode 0600) containing the pid, workspace folders, an IDE name, `transport: "ws"`, and a random auth token — the discovery contract Claude Code uses. The AgentAdapter SHALL pass `--ide` for IDE-originated runs so `claude` connects; cockpit runs SHALL NOT pass `--ide`.
+### Requirement: Local IDE MCP server loaded by headless Claude
+The interactive `claude --ide` WebSocket/lockfile bridge is unavailable to VortSpec's headless assistant — a real-run spike proved `claude -p --ide` never connects. The IDE SHALL instead run a **local stdio MCP server** that Claude loads via `--mcp-config` (which does load headless). Claude spawns the server (`server.mjs`), which connects back to the main-process bridge over a **local unix socket** authenticated with a per-run token; the AgentAdapter SHALL pass `--mcp-config <file>` for IDE-originated runs. Cockpit runs SHALL NOT pass it.
 
-#### Scenario: Claude connects to the running IDE
+#### Scenario: Claude loads the IDE MCP server
 - **WHEN** a workspace is open and the user sends an assistant message
-- **THEN** the IDE MCP server is running with a valid lockfile, `claude -p --ide` connects to it over `127.0.0.1`, and the connection is accepted only with the matching auth token (unauthenticated connections are rejected)
+- **THEN** the run includes `--mcp-config`, Claude spawns and lists the `vortspec-ide` server (shown `connected` in `init.mcp_servers`), and it can call the server's tools; the server↔bridge socket accepts only the matching token
 
-#### Scenario: The server lifecycle is bound to the workspace
-- **WHEN** the workspace changes or the app quits
-- **THEN** the previous lockfile is removed and its socket closed, and a fresh server/lockfile is created for the new workspace
+#### Scenario: The server lifecycle is bound to the app
+- **WHEN** the app quits
+- **THEN** the bridge closes its socket and removes its temp files
 
 ### Requirement: Editor context tools
-The bridge SHALL expose tools that let Claude read the editor state: the current text selection, the open editors, the workspace folders, and language diagnostics; and act on the editor: open a file (optionally at a line range) and show a diff.
+The bridge SHALL expose tools that let Claude read the editor state — `get_selection` (current text selection), `get_open_editors`, `get_workspace_folders` — and act on the editor via `open_file` (optionally at a line range). Reads are answered from a cache the renderer keeps fresh.
 
 #### Scenario: Claude reads the current selection
 - **WHEN** Claude calls the selection tool while the user has text selected in the editor
@@ -23,7 +23,7 @@ The bridge SHALL expose tools that let Claude read the editor state: the current
 - **THEN** the IDE opens that file in the editor (path-guarded to the workspace root)
 
 ### Requirement: IDE-control tools (open / clone / switch project)
-The bridge SHALL expose VortSpec IDE-control tools so the user can ask the assistant to change the workspace: **openFolder** (open a folder as the workspace), **cloneRepo** (clone a git URL then open it), and **switchProject** (open a known/recent project). These actions change application state and SHALL be confirmed by the user (not performed silently).
+The bridge SHALL expose VortSpec IDE-control tools so the user can ask the assistant to change the workspace: **open_folder** (open a folder as the workspace), **clone_repo** (clone a git URL then open it), and **switch_project** (open a known/recent project). These actions change application state and SHALL be confirmed by the user (not performed silently).
 
 #### Scenario: The assistant opens a cloned repo on request
 - **WHEN** the user asks the assistant to clone a repository and the assistant calls cloneRepo with the URL
@@ -34,8 +34,8 @@ The bridge SHALL expose VortSpec IDE-control tools so the user can ask the assis
 - **THEN** the IDE surfaces a confirmation the user must accept before the action runs; declining leaves the workspace unchanged
 
 ### Requirement: Security of the bridge
-The server SHALL bind only to `127.0.0.1`, require the per-session auth token on every connection, write the lockfile with owner-only permissions, and confine every file/path tool to the open workspace root. No provider keys are stored or proxied.
+The bridge SHALL use a **local unix socket** (not a network port), require the per-run auth token on every connection, write its temp files (server script + config) with owner-only permissions (0600), and confine every file/path tool to the open workspace root. No provider keys are stored or proxied.
 
-#### Scenario: Remote and unauthenticated access is refused
-- **WHEN** a connection arrives without the auth token or from a non-loopback address
+#### Scenario: Unauthenticated access is refused
+- **WHEN** a connection to the bridge socket arrives without the matching token
 - **THEN** it is rejected

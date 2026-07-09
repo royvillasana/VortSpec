@@ -68,8 +68,18 @@ Everything is opt-in: the cockpit's AgentAdapter calls omit `--ide`; the bridge 
 1. **Phase A — Session status (no bridge).** Extend init parsing + run-event; add the model chip + session panel to AssistantDock. ✅ Shipped.
 2. **Phase B — Bridge feasibility spike.** ✅ Done, with a *negative* result: headless `--ide` does not connect (see finding). The WS bridge is abandoned; B pivots to the read side.
 3. **Phase B′ (was C, read side) — Active-file/selection context via prompt injection.** Live per-turn grounding + context chip. Works headless, no MCP server. ← implemented in this pass.
-4. **Phase C′ (was D, control side) — VortSpec stdio MCP server via `--mcp-config`.** `open_folder`/`clone_repo`/`switch_project` (gated) + editor-read tools, bridged to the main process. Larger; pending go-ahead.
-- **Rollback:** each phase is additive and opt-in; the read-side grounding is off unless the host passes `liveContext`; the control server is off unless `--mcp-config` is added.
+4. **Phase C′ (was D, control side) — VortSpec stdio MCP server via `--mcp-config`.** `open_folder`/`clone_repo`/`switch_project` (gated) + editor-read tools, bridged to the main process. ✅ Shipped + verified with real Claude.
+5. **Phase 6 — Slash-command palette.** ✅ `/` menu; meta commands render locally from `init`; real slash commands insert into the input; model switch via `--model`.
+6. **Phase 7 — shadcn/ai chat rendering.** ✅ Response (Streamdown), Tool cards + Terminal-style output, Reasoning (thinking), Plan (TodoWrite), Shimmer, Model Selector, Snippet, File Tree. Parser extended for `thinking-delta`, tool input/result text, and `plan` events.
+7. **Phase 8 — Context references.** ✅ `@`-mentions (`searchFiles`), drag-in, Open-in-Chat editor overlay, selectable folder File Tree; all expanded into the prompt on send.
+8. **Phase 9 — Explorer file operations.** ✅ create/rename/move/trash, workspace-root-guarded; reversible delete (OS Trash); inline error surfacing.
+- **Rollback:** each phase is additive and opt-in; the render/context/palette additions are behind `AssistantDock` props (cockpit passes none); the control server is off unless `--mcp-config` is added.
+
+### Decisions for the expanded scope
+- **Meta slash commands render locally, not via Claude.** `/mcp`, `/model`, `/context`, `/skills`… are interactive-only in the CLI (no headless equivalent), but we already parse their data from `init` — so they render as local cards with no model round-trip. The session's *real* slash commands are inserted into the input to run through Claude.
+- **shadcn/ai components are hand-authored into `@vortspec/ui/components/ai/`, not pulled via `npx shadcn add`.** The shadcn.io registry is a client-rendered SPA (source not fetchable) and its CLI would fight this Tailwind-v4 monorepo; authoring the components (with the AI-Elements API, `streamdown` for markdown/Shiki, `lucide-react`, `cn`) keeps one source of truth and themes to the existing vs-* tokens (the shadcn token layer was already present).
+- **Context references are prompt-expanded, not bridge-pushed.** Attachments (`@`/drag/Open-in-Chat/tree selection) are expanded into the message text on send (files as `@path`, selections inline), so Claude reads them with its own tools — no dependence on the MCP bridge.
+- **Delete is reversible.** Explorer delete uses `shell.trashItem` (OS Trash), never a hard delete, honoring the safety invariant; all fs ops are workspace-root-guarded and refresh the tree explicitly (the macOS fs watcher is unreliable for programmatic changes).
 
 ## Open Questions
 
