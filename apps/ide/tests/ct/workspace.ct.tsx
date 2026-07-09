@@ -151,6 +151,24 @@ test("offers a diff-vs-HEAD toggle for the open file", async ({ mount }) => {
   await expect(c.getByRole("button", { name: "Editing" })).toBeVisible();
 });
 
+test("editor tabs can be dragged to reorder them", async ({ mount }) => {
+  const c = await mount(<App />, { hooksConfig: { mock: base } });
+  await open(c);
+  await c.getByRole("button", { name: "README.md" }).click();
+  await c.getByRole("button", { name: "src", exact: true }).click();
+  await c.getByRole("button", { name: "index.ts" }).click();
+  // Two tabs, in open order: README.md then index.ts.
+  await expect(c.getByRole("tab")).toHaveCount(2);
+  await expect(c.getByRole("tab").nth(0)).toContainText("README.md");
+  // Drag index.ts before README.md → it becomes the first tab.
+  await c
+    .getByRole("tab")
+    .filter({ hasText: "index.ts" })
+    .dragTo(c.getByRole("tab").filter({ hasText: "README.md" }));
+  await expect(c.getByRole("tab").nth(0)).toContainText("index.ts");
+  await expect(c.getByRole("tab").nth(1)).toContainText("README.md");
+});
+
 test("a file can be closed", async ({ mount }) => {
   const c = await mount(<App />, { hooksConfig: { mock: base } });
   await open(c);

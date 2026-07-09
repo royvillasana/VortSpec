@@ -41,6 +41,7 @@ export function EditorArea({
           relayoutKey={relayoutKey}
           onSelection={onSelection}
           onOpenInChat={onOpenInChat}
+          onReorder={wf.reorder}
         />
       </div>
       <PreviewBar project={project} />

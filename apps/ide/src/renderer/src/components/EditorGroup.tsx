@@ -1,6 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { JSX } from "react";
 import { CodeEditor, DiffView, type CodeSelection } from "./CodeEditor";
+
+/** Drag mime for reordering editor tabs — distinct from the chat-attach drag. */
+const TAB_MIME = "application/vortspec-tab";
 
 export interface OpenFile {
   path: string;
@@ -28,6 +31,7 @@ export function EditorGroup({
   relayoutKey,
   onSelection,
   onOpenInChat,
+  onReorder,
 }: {
   files: OpenFile[];
   activePath: string | null;
@@ -44,10 +48,15 @@ export function EditorGroup({
   onSelection?: (selection: CodeSelection | null) => void;
   /** "Open in Chat" — attach the selection to the assistant. */
   onOpenInChat?: (selection: CodeSelection) => void;
+  /** Reorder the tabs: move `fromPath` before `toPath` (`null` = to the end). */
+  onReorder?: (fromPath: string, toPath: string | null) => void;
 }): JSX.Element {
   const active = files.find((f) => f.path === activePath) ?? null;
   const [diff, setDiff] = useState(false);
   const [head, setHead] = useState<string | null>(null);
+  // Drag-to-reorder tabs: the dragged tab's path, and the tab we'd drop before.
+  const dragTabRef = useRef<string | null>(null);
+  const [dropBefore, setDropBefore] = useState<string | null>(null);
 
   // Reset the diff view when the active file changes.
   useEffect(() => {
@@ -93,8 +102,27 @@ export function EditorGroup({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-vs-bg-code">
-      {/* Tab bar */}
-      <div role="tablist" className="flex shrink-0 items-stretch overflow-x-auto border-b border-vs-border-default bg-vs-bg-surface">
+      {/* Tab bar — tabs are drag-reorderable within the strip. */}
+      <div
+        role="tablist"
+        className="flex shrink-0 items-stretch overflow-x-auto border-b border-vs-border-default bg-vs-bg-surface"
+        onDragOver={(e) => {
+          // Allow dropping past the last tab → move to the end.
+          if (onReorder && dragTabRef.current && e.dataTransfer.types.includes(TAB_MIME)) {
+            e.preventDefault();
+            setDropBefore("__end__");
+          }
+        }}
+        onDrop={(e) => {
+          const from = dragTabRef.current;
+          dragTabRef.current = null;
+          setDropBefore(null);
+          if (onReorder && from && e.dataTransfer.types.includes(TAB_MIME)) {
+            e.preventDefault();
+            onReorder(from, null);
+          }
+        }}
+      >
         {files.map((f) => {
           const name = f.path.slice(f.path.lastIndexOf("/") + 1);
           const on = f.path === activePath;
@@ -103,9 +131,35 @@ export function EditorGroup({
               key={f.path}
               role="tab"
               aria-selected={on}
+              draggable={Boolean(onReorder)}
+              onDragStart={(e) => {
+                dragTabRef.current = f.path;
+                e.dataTransfer.setData(TAB_MIME, f.path);
+                e.dataTransfer.effectAllowed = "move";
+              }}
+              onDragEnd={() => {
+                dragTabRef.current = null;
+                setDropBefore(null);
+              }}
+              onDragOver={(e) => {
+                if (!onReorder || !dragTabRef.current || dragTabRef.current === f.path) return;
+                if (!e.dataTransfer.types.includes(TAB_MIME)) return;
+                e.preventDefault();
+                e.stopPropagation();
+                setDropBefore(f.path);
+              }}
+              onDrop={(e) => {
+                const from = dragTabRef.current;
+                dragTabRef.current = null;
+                setDropBefore(null);
+                if (!onReorder || !from || !e.dataTransfer.types.includes(TAB_MIME)) return;
+                e.preventDefault();
+                e.stopPropagation();
+                onReorder(from, f.path);
+              }}
               className={`group flex items-center gap-2 border-r border-vs-border-default px-3 py-1.5 text-[13px] ${
-                on ? "bg-vs-bg-code text-vs-text-primary" : "text-vs-text-secondary hover:bg-vs-bg-hover"
-              }`}
+                dropBefore === f.path ? "border-l-2 border-l-vs-accent" : ""
+              } ${on ? "bg-vs-bg-code text-vs-text-primary" : "text-vs-text-secondary hover:bg-vs-bg-hover"}`}
             >
               <button type="button" onClick={() => onActivate(f.path)} className="flex items-center gap-1.5">
                 <span className="truncate">{name}</span>
@@ -122,6 +176,7 @@ export function EditorGroup({
             </div>
           );
         })}
+        {dropBefore === "__end__" && <div className="w-0.5 self-stretch bg-vs-accent" aria-hidden />}
       </div>
 
       {/* Stale-on-disk banner (non-destructive) */}

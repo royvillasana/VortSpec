@@ -4,10 +4,10 @@ Phased so each phase ships value and stays green (`pnpm build && pnpm test && pn
 
 ## 1. Phase 1 — Reorderable editor tabs
 
-- [ ] 1.1 `useWorkspaceFiles`: add `reorder(fromPath, toPath)` that moves `fromPath` to before `toPath` in `files` (no-op for same path; keeps `activePath` + dirty state, which are keyed by path).
-- [ ] 1.2 `EditorGroup` tab strip: make each tab `draggable` (mime `application/vortspec-tab` carrying the path); on drag-over show an insertion indicator; on drop call `reorder`. Guard against dropping a non-tab payload; don't collide with the chat-attach drag.
-- [ ] 1.3 CT: with several tabs open, dragging one before another reorders the strip (assert the new tab order); active/dirty state preserved.
-- [ ] 1.4 Gate green.
+- [x] 1.1 `useWorkspaceFiles`: add `reorder(fromPath, toPath)` that moves `fromPath` to before `toPath` in `files` (no-op for same path; keeps `activePath` + dirty state, which are keyed by path).
+- [x] 1.2 `EditorGroup` tab strip: each tab is `draggable` (mime `application/vortspec-tab` carrying the path); drag-over shows an insertion indicator (left border / end bar); drop calls `reorder`. Distinct mime from the chat-attach drag, so tabs and chat attachments never cross.
+- [x] 1.3 CT: with two tabs open, dragging one before another reorders the strip (asserts the new order); active/dirty state preserved (keyed by path).
+- [x] 1.4 Gate green.
 
 ## 2. Phase 2 — Conversation tabs + per-tab agents
 

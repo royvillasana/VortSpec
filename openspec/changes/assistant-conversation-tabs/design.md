@@ -65,7 +65,7 @@ Selecting text within a rendered message shows a small floating "Send to ▾" co
 3. **Phase 3 — Cross-conversation context**: `conversation` attachment kind + `@`-menu conversation entries + capped-transcript injection; highlight→"Send to" action + manager routing.
 - **Rollback:** all additive; the IDE opts into `ConversationTabs`, the cockpit keeps single-conversation `AssistantDock`; tab reorder is a no-op if never dragged.
 
-## Open Questions
-- Should agent presets persist in profile prefs now, or ship with fixed defaults and add user-defined presets in a follow-up? (Lean: ship defaults + read from prefs if present.)
-- Rename UX: inline-edit the tab label vs. a small dialog. (Lean: double-click inline, like the Explorer.)
-- Do we persist conversation *labels/agents* (not transcripts) across restarts? (Lean: defer.)
+## Resolved Questions
+- **Agent presets** → ship fixed defaults **and** read user-defined presets from profile prefs; a full preset editor is deferred.
+- **Rename UX** → inline double-click on the tab label, like the Explorer.
+- **Persist conversation labels/agents across restarts** → deferred (session-scoped for v1).

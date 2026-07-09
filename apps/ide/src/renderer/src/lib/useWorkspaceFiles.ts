@@ -19,6 +19,8 @@ export interface WorkspaceFiles {
   save: (path: string) => Promise<void>;
   close: (path: string) => void;
   reload: (path: string) => Promise<void>;
+  /** Move `fromPath` before `toPath` in the tab strip (`toPath: null` = to the end). */
+  reorder: (fromPath: string, toPath: string | null) => void;
 }
 
 export function useWorkspaceFiles(projectPath: string | null): WorkspaceFiles {
@@ -89,6 +91,19 @@ export function useWorkspaceFiles(projectPath: string | null): WorkspaceFiles {
     [projectPath],
   );
 
+  const reorder = useCallback((fromPath: string, toPath: string | null): void => {
+    if (fromPath === toPath) return;
+    setFiles((prev) => {
+      const moved = prev.find((f) => f.path === fromPath);
+      if (!moved) return prev;
+      const without = prev.filter((f) => f.path !== fromPath);
+      if (toPath === null) return [...without, moved];
+      const to = without.findIndex((f) => f.path === toPath);
+      if (to < 0) return prev;
+      return [...without.slice(0, to), moved, ...without.slice(to)];
+    });
+  }, []);
+
   // Reconcile open files with on-disk changes: silently reload clean files,
   // flag dirty ones as stale (never clobber unsaved edits).
   useEffect(() => {
@@ -106,5 +121,5 @@ export function useWorkspaceFiles(projectPath: string | null): WorkspaceFiles {
     return () => off();
   }, [projectPath, reload]);
 
-  return { files, activePath, setActivePath, openFile, change, save, close, reload };
+  return { files, activePath, setActivePath, openFile, change, save, close, reload, reorder };
 }
