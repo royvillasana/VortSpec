@@ -61,7 +61,8 @@
           "target": "dmg",
           "arch": "universal"
         }
-      ]
+      ],
+      "x64ArchFiles": "**/node_modules/node-pty/**"
     },
     "files": [
       "out/**/*"
