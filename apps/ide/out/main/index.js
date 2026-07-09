@@ -919,6 +919,22 @@ const ipcContract = {
     request: z.object({ projectPath: z.string(), relPath: z.string(), content: z.string() }),
     response: fsWriteResultSchema
   },
+  "workspace:createFile": {
+    request: z.object({ projectPath: z.string(), relPath: z.string() }),
+    response: fsWriteResultSchema
+  },
+  "workspace:createDir": {
+    request: z.object({ projectPath: z.string(), relPath: z.string() }),
+    response: fsWriteResultSchema
+  },
+  "workspace:rename": {
+    request: z.object({ projectPath: z.string(), from: z.string(), to: z.string() }),
+    response: fsWriteResultSchema
+  },
+  "workspace:trash": {
+    request: z.object({ projectPath: z.string(), relPath: z.string() }),
+    response: fsWriteResultSchema
+  },
   "workspace:watchStart": { request: z.string(), response: z.void() },
   "workspace:watchStop": { request: z.string(), response: z.void() },
   "git:fileAtHead": {
@@ -1619,6 +1635,54 @@ async function writeFile(root, rel, content) {
     return { ok: true, message: "Saved." };
   } catch (err) {
     return { ok: false, message: err instanceof Error ? err.message : "Could not save the file." };
+  }
+}
+async function createFile(root, rel) {
+  try {
+    const abs = resolveInside(root, rel);
+    await promises.mkdir(resolve$1(abs, ".."), { recursive: true });
+    const fh = await promises.open(abs, "wx");
+    await fh.close();
+    return { ok: true, message: "Created." };
+  } catch (err) {
+    const msg = err instanceof Error && "code" in err && err.code === "EEXIST" ? "That file already exists." : err instanceof Error ? err.message : "Could not create the file.";
+    return { ok: false, message: msg };
+  }
+}
+async function createDir(root, rel) {
+  try {
+    const abs = resolveInside(root, rel);
+    await promises.mkdir(abs, { recursive: true });
+    return { ok: true, message: "Created." };
+  } catch (err) {
+    return { ok: false, message: err instanceof Error ? err.message : "Could not create the folder." };
+  }
+}
+async function renamePath(root, from, to) {
+  try {
+    const src = resolveInside(root, from);
+    const dst = resolveInside(root, to);
+    if (src === dst) return { ok: true, message: "No change." };
+    try {
+      await promises.access(dst);
+      return { ok: false, message: "A file with that name already exists there." };
+    } catch {
+    }
+    await promises.mkdir(resolve$1(dst, ".."), { recursive: true });
+    await promises.rename(src, dst);
+    return { ok: true, message: "Moved." };
+  } catch (err) {
+    return { ok: false, message: err instanceof Error ? err.message : "Could not move it." };
+  }
+}
+async function trashPath(root, rel) {
+  try {
+    const abs = resolveInside(root, rel);
+    const { shell: shell2 } = await import("electron");
+    await shell2.trashItem(abs);
+    return { ok: true, message: "Moved to Trash." };
+  } catch (err) {
+    return { ok: false, message: err instanceof Error ? err.message : "Could not delete it." };
   }
 }
 const watchers = /* @__PURE__ */ new Map();
@@ -4549,6 +4613,10 @@ const handlers = {
   "workspace:listDir": ((r) => listDir(r.projectPath, r.relPath)),
   "workspace:readFile": ((r) => readFile(r.projectPath, r.relPath)),
   "workspace:searchFiles": ((r) => searchFiles(r.projectPath, r.query, r.limit)),
+  "workspace:createFile": ((r) => createFile(r.projectPath, r.relPath)),
+  "workspace:createDir": ((r) => createDir(r.projectPath, r.relPath)),
+  "workspace:rename": ((r) => renamePath(r.projectPath, r.from, r.to)),
+  "workspace:trash": ((r) => trashPath(r.projectPath, r.relPath)),
   "workspace:writeFile": ((r) => writeFile(r.projectPath, r.relPath, r.content)),
   "workspace:watchStart": ((projectPath, sender2) => {
     startWatch(sender2, projectPath);

@@ -45,6 +45,50 @@ test("Explorer lists the workspace root and lazily expands folders", async ({ mo
   await expect(c.getByRole("button", { name: "index.ts" })).toBeVisible();
 });
 
+async function fsOps(c: import("@playwright/test").Locator): Promise<Array<{ op: string; path: string; to?: string }>> {
+  return c.page().evaluate(() => (window as unknown as { __fsOps: Array<{ op: string; path: string; to?: string }> }).__fsOps);
+}
+
+test("New File creates a file at the root and opens it", async ({ mount }) => {
+  const c = await mount(<App />, { hooksConfig: { mock: base } });
+  await open(c);
+  await c.getByRole("button", { name: "New File" }).click();
+  const input = c.locator('input[autofocus], input:focus').first();
+  await input.fill("notes.md");
+  await input.press("Enter");
+  await expect.poll(async () => (await fsOps(c)).find((o) => o.op === "createFile")?.path).toBe("notes.md");
+});
+
+test("New Folder creates a folder at the root", async ({ mount }) => {
+  const c = await mount(<App />, { hooksConfig: { mock: base } });
+  await open(c);
+  await c.getByRole("button", { name: "New Folder" }).click();
+  const input = c.locator("input:focus").first();
+  await input.fill("lib");
+  await input.press("Enter");
+  await expect.poll(async () => (await fsOps(c)).find((o) => o.op === "createDir")?.path).toBe("lib");
+});
+
+test("context menu renames and deletes an entry", async ({ mount }) => {
+  const c = await mount(<App />, { hooksConfig: { mock: base } });
+  await open(c);
+  // Rename README.md → CHANGES.md.
+  await c.getByRole("button", { name: "README.md" }).click({ button: "right" });
+  await c.getByRole("button", { name: "Rename" }).click();
+  const input = c.locator("input:focus").first();
+  await input.fill("CHANGES.md");
+  await input.press("Enter");
+  await expect.poll(async () => (await fsOps(c)).find((o) => o.op === "rename")).toEqual({
+    op: "rename",
+    path: "README.md",
+    to: "CHANGES.md",
+  });
+  // Delete src via the context menu → trash.
+  await c.getByRole("button", { name: "src", exact: true }).click({ button: "right" });
+  await c.getByRole("button", { name: "Delete" }).click();
+  await expect.poll(async () => (await fsOps(c)).find((o) => o.op === "trash")?.path).toBe("src");
+});
+
 test("opening a file adds a tab; opening a second adds another", async ({ mount }) => {
   const c = await mount(<App />, { hooksConfig: { mock: base } });
   await open(c);

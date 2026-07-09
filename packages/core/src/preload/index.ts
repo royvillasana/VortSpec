@@ -154,6 +154,14 @@ const api: VortSpecApi = {
     invoke("workspace:readFile", { projectPath, relPath }),
   searchFiles: (projectPath: string, query: string, limit?: number) =>
     invoke("workspace:searchFiles", { projectPath, query, limit }),
+  createFile: (projectPath: string, relPath: string) =>
+    invoke("workspace:createFile", { projectPath, relPath }),
+  createDir: (projectPath: string, relPath: string) =>
+    invoke("workspace:createDir", { projectPath, relPath }),
+  renamePath: (projectPath: string, from: string, to: string) =>
+    invoke("workspace:rename", { projectPath, from, to }),
+  trashPath: (projectPath: string, relPath: string) =>
+    invoke("workspace:trash", { projectPath, relPath }),
   writeFile: (projectPath: string, relPath: string, content: string) =>
     invoke("workspace:writeFile", { projectPath, relPath, content }),
   watchWorkspace: (projectPath: string) => invoke("workspace:watchStart", projectPath),

@@ -131,6 +131,65 @@ export async function writeFile(root: string, rel: string, content: string): Pro
   }
 }
 
+/** Create an empty file at `rel` (creating parent dirs). Fails if it exists. */
+export async function createFile(root: string, rel: string): Promise<FsWriteResult> {
+  try {
+    const abs = resolveInside(root, rel);
+    await fsp.mkdir(resolve(abs, ".."), { recursive: true });
+    // Exclusive flag → error if the path already exists (don't clobber).
+    const fh = await fsp.open(abs, "wx");
+    await fh.close();
+    return { ok: true, message: "Created." };
+  } catch (err) {
+    const msg = err instanceof Error && "code" in err && err.code === "EEXIST" ? "That file already exists." : err instanceof Error ? err.message : "Could not create the file.";
+    return { ok: false, message: msg };
+  }
+}
+
+/** Create a directory at `rel` (recursively). */
+export async function createDir(root: string, rel: string): Promise<FsWriteResult> {
+  try {
+    const abs = resolveInside(root, rel);
+    await fsp.mkdir(abs, { recursive: true });
+    return { ok: true, message: "Created." };
+  } catch (err) {
+    return { ok: false, message: err instanceof Error ? err.message : "Could not create the folder." };
+  }
+}
+
+/** Rename or move `from` → `to` (both workspace-relative, both guarded). */
+export async function renamePath(root: string, from: string, to: string): Promise<FsWriteResult> {
+  try {
+    const src = resolveInside(root, from);
+    const dst = resolveInside(root, to);
+    if (src === dst) return { ok: true, message: "No change." };
+    // Don't overwrite an existing target.
+    try {
+      await fsp.access(dst);
+      return { ok: false, message: "A file with that name already exists there." };
+    } catch {
+      // target free — proceed
+    }
+    await fsp.mkdir(resolve(dst, ".."), { recursive: true });
+    await fsp.rename(src, dst);
+    return { ok: true, message: "Moved." };
+  } catch (err) {
+    return { ok: false, message: err instanceof Error ? err.message : "Could not move it." };
+  }
+}
+
+/** Send `rel` to the OS trash (reversible — never a hard delete). */
+export async function trashPath(root: string, rel: string): Promise<FsWriteResult> {
+  try {
+    const abs = resolveInside(root, rel);
+    const { shell } = await import("electron");
+    await shell.trashItem(abs);
+    return { ok: true, message: "Moved to Trash." };
+  } catch (err) {
+    return { ok: false, message: err instanceof Error ? err.message : "Could not delete it." };
+  }
+}
+
 // ── File watching ────────────────────────────────────────────────────
 // One recursive watcher per workspace root, emitting coalesced change events.
 // Recursive fs.watch is supported on macOS (the first target); if it isn't

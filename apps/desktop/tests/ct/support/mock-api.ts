@@ -119,6 +119,8 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
   const termSubs = new Set<(e: { id: string; data: string; exit?: number | null }) => void>();
   const ideActionSubs = new Set<(a: IdeAction) => void>();
   const ideResolutions: IdeActionResult[] = [];
+  // Records Explorer file operations (create/rename/trash) for assertions.
+  const fsOps: { op: string; path: string; to?: string }[] = [];
   let runSeq = 0;
   // Flips true once a run's transcript has been replayed — lets getManifest
   // return the post-generation manifest (mirrors design-doc writing DESIGN.md).
@@ -261,6 +263,22 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
     }),
     searchFiles: async (_projectPath: string, query: string) =>
       (cfg.searchResults ?? []).filter((e) => e.path.toLowerCase().includes(query.toLowerCase())),
+    createFile: async (_p: string, relPath: string) => {
+      fsOps.push({ op: "createFile", path: relPath });
+      return { ok: true, message: "Created." };
+    },
+    createDir: async (_p: string, relPath: string) => {
+      fsOps.push({ op: "createDir", path: relPath });
+      return { ok: true, message: "Created." };
+    },
+    renamePath: async (_p: string, from: string, to: string) => {
+      fsOps.push({ op: "rename", path: from, to });
+      return { ok: true, message: "Moved." };
+    },
+    trashPath: async (_p: string, relPath: string) => {
+      fsOps.push({ op: "trash", path: relPath });
+      return { ok: true, message: "Moved to Trash." };
+    },
     writeFile: async () => ({ ok: true, message: "Saved." }),
     watchWorkspace: async () => undefined,
     unwatchWorkspace: async () => undefined,
@@ -361,4 +379,5 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
     for (const cb of ideActionSubs) cb(a);
   };
   (window as unknown as { __ideResolutions: IdeActionResult[] }).__ideResolutions = ideResolutions;
+  (window as unknown as { __fsOps: typeof fsOps }).__fsOps = fsOps;
 }

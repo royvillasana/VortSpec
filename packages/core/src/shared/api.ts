@@ -141,6 +141,14 @@ export interface VortSpecApi {
   readFile(projectPath: string, relPath: string): Promise<IpcResponse<"workspace:readFile">>;
   /** Fuzzy-search workspace files + folders (for the composer's @-mention picker). */
   searchFiles(projectPath: string, query: string, limit?: number): Promise<IpcResponse<"workspace:searchFiles">>;
+  /** Create an empty file (Explorer "New File"). */
+  createFile(projectPath: string, relPath: string): Promise<IpcResponse<"workspace:createFile">>;
+  /** Create a folder (Explorer "New Folder"). */
+  createDir(projectPath: string, relPath: string): Promise<IpcResponse<"workspace:createDir">>;
+  /** Rename or move a file/folder (Explorer rename + drag-to-move). */
+  renamePath(projectPath: string, from: string, to: string): Promise<IpcResponse<"workspace:rename">>;
+  /** Send a file/folder to the OS trash (reversible). */
+  trashPath(projectPath: string, relPath: string): Promise<IpcResponse<"workspace:trash">>;
   writeFile(projectPath: string, relPath: string, content: string): Promise<IpcResponse<"workspace:writeFile">>;
   watchWorkspace(projectPath: string): Promise<IpcResponse<"workspace:watchStart">>;
   unwatchWorkspace(projectPath: string): Promise<IpcResponse<"workspace:watchStop">>;

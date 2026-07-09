@@ -272,6 +272,22 @@ export const ipcContract = {
     request: z.object({ projectPath: z.string(), relPath: z.string(), content: z.string() }),
     response: fsWriteResultSchema,
   },
+  "workspace:createFile": {
+    request: z.object({ projectPath: z.string(), relPath: z.string() }),
+    response: fsWriteResultSchema,
+  },
+  "workspace:createDir": {
+    request: z.object({ projectPath: z.string(), relPath: z.string() }),
+    response: fsWriteResultSchema,
+  },
+  "workspace:rename": {
+    request: z.object({ projectPath: z.string(), from: z.string(), to: z.string() }),
+    response: fsWriteResultSchema,
+  },
+  "workspace:trash": {
+    request: z.object({ projectPath: z.string(), relPath: z.string() }),
+    response: fsWriteResultSchema,
+  },
   "workspace:watchStart": { request: z.string(), response: z.void() },
   "workspace:watchStop": { request: z.string(), response: z.void() },
   "git:fileAtHead": {

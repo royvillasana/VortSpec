@@ -2,7 +2,8 @@ import { describe, expect, it, beforeEach, afterEach } from "vitest";
 import { mkdtemp, rm, mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { resolveInside, readFile, searchFiles } from "./fs-workspace";
+import { resolveInside, readFile, searchFiles, createFile, createDir, renamePath } from "./fs-workspace";
+import { readFile as fsRead } from "node:fs/promises";
 
 describe("resolveInside (workspace-root path guard)", () => {
   const root = "/Users/dev/project";
@@ -94,5 +95,47 @@ describe("searchFiles (@-mention picker)", () => {
     expect(all.length).toBeLessThanOrEqual(2);
     const dirs = await searchFiles(dir, "components");
     expect(dirs.some((e) => e.type === "dir" && e.path === "src/components")).toBe(true);
+  });
+});
+
+describe("file operations (Explorer)", () => {
+  let dir: string;
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), "vortspec-ops-"));
+  });
+  afterEach(async () => {
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  it("createFile makes an empty file (creating parents) and refuses to clobber", async () => {
+    const r = await createFile(dir, "a/b/note.md");
+    expect(r.ok).toBe(true);
+    expect(await fsRead(join(dir, "a/b/note.md"), "utf8")).toBe("");
+    const dup = await createFile(dir, "a/b/note.md");
+    expect(dup.ok).toBe(false);
+    expect(dup.message).toMatch(/already exists/);
+  });
+
+  it("createDir makes a directory", async () => {
+    const r = await createDir(dir, "lib/util");
+    expect(r.ok).toBe(true);
+    expect((await searchFiles(dir, "lib/util")).some((e) => e.type === "dir")).toBe(true);
+  });
+
+  it("renamePath renames and moves, but won't overwrite", async () => {
+    await createFile(dir, "old.txt");
+    await createDir(dir, "sub");
+    const moved = await renamePath(dir, "old.txt", "sub/new.txt");
+    expect(moved.ok).toBe(true);
+    expect(await fsRead(join(dir, "sub/new.txt"), "utf8")).toBe("");
+    await createFile(dir, "keep.txt");
+    const clash = await renamePath(dir, "keep.txt", "sub/new.txt");
+    expect(clash.ok).toBe(false);
+    expect(clash.message).toMatch(/already exists/);
+  });
+
+  it("guards the workspace root", async () => {
+    const r = await createFile(dir, "../escape.txt");
+    expect(r.ok).toBe(false);
   });
 });
