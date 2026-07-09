@@ -21,6 +21,8 @@ export interface ToolStep {
   id: string;
   name: string;
   detail?: string;
+  /** The tool's output text (from its result), shown when the card expands. */
+  output?: string;
   status: "running" | "ok" | "error";
 }
 
@@ -34,6 +36,8 @@ export interface RunModel {
   streamingText: string;
   activity: Activity[];
   steps: ToolStep[];
+  /** Accumulated extended-thinking text for the current turn (Reasoning block). */
+  reasoning: string;
   files: string[];
   raw: string[];
   mcpErrors: string[];
@@ -57,6 +61,7 @@ export const initialRun: RunModel = {
   streamingText: "",
   activity: [],
   steps: [],
+  reasoning: "",
   files: [],
   raw: [],
   mcpErrors: [],
@@ -85,6 +90,7 @@ export function reduceRun(state: RunModel, action: RunAction): RunModel {
         ...state,
         status: "running",
         streamingText: "",
+        reasoning: "",
         result: undefined,
         messages: [
           ...state.messages,
@@ -136,6 +142,9 @@ function applyEvent(state: RunModel, event: RunEvent): RunModel {
     case "text-delta":
       // Live preview of the message currently being generated.
       return { ...state, streamingText: state.streamingText + event.text };
+    case "thinking-delta":
+      // Extended-thinking preview → the collapsible Reasoning block.
+      return { ...state, reasoning: state.reasoning + event.text };
     case "assistant-text":
       // A finalized assistant message → its own bubble. Supersedes the streamed
       // preview (which was the same text), so clear it to avoid duplication.
@@ -153,7 +162,7 @@ function applyEvent(state: RunModel, event: RunEvent): RunModel {
         event.path && !state.files.includes(event.path)
           ? [...state.files, event.path]
           : state.files;
-      const step: ToolStep = { id: `s${activitySeq}`, name: event.name, detail: event.path, status: "running" };
+      const step: ToolStep = { id: `s${activitySeq}`, name: event.name, detail: event.path ?? event.input, status: "running" };
       return pushActivity({ ...state, files, steps: [...state.steps, step] }, label, "tool");
     }
     case "tool-result": {
@@ -161,7 +170,7 @@ function applyEvent(state: RunModel, event: RunEvent): RunModel {
       const steps = [...state.steps];
       for (let i = steps.length - 1; i >= 0; i--) {
         if (steps[i].status === "running") {
-          steps[i] = { ...steps[i], status: event.isError ? "error" : "ok" };
+          steps[i] = { ...steps[i], status: event.isError ? "error" : "ok", output: event.text };
           break;
         }
       }

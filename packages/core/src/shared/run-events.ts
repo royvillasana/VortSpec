@@ -24,17 +24,22 @@ export const runEventSchema = z.discriminatedUnion("kind", [
     mcpStatuses: z.array(z.object({ name: z.string(), status: z.string() })).optional(),
   }),
   z.object({ kind: z.literal("text-delta"), text: z.string() }),
+  z.object({ kind: z.literal("thinking-delta"), text: z.string() }),
   z.object({ kind: z.literal("assistant-text"), text: z.string() }),
   z.object({
     kind: z.literal("tool-use"),
     id: z.string(),
     name: z.string(),
     path: z.string().optional(),
+    /** A short summary of the tool input (e.g. a Bash command). */
+    input: z.string().optional(),
   }),
   z.object({
     kind: z.literal("tool-result"),
     toolUseId: z.string(),
     isError: z.boolean(),
+    /** The tool's output text (trimmed), for richer result rendering. */
+    text: z.string().optional(),
   }),
   z.object({
     kind: z.literal("api-retry"),

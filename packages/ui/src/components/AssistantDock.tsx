@@ -6,6 +6,7 @@ import { Spinner } from "@vortspec/ui/ui";
 import { Response } from "./ai/Response";
 import { Shimmer } from "./ai/Shimmer";
 import { ToolSteps } from "./ai/Tool";
+import { Reasoning } from "./ai/Reasoning";
 import {
   AttachmentChips,
   MentionMenu,
@@ -302,9 +303,12 @@ export function AssistantDock({
             {run.model.messages.map((m) => (
               <Bubble key={m.id} role={m.role} text={m.text} />
             ))}
+            {run.model.reasoning && (
+              <Reasoning text={run.model.reasoning} streaming={run.running && !run.model.streamingText} />
+            )}
             {run.model.steps.length > 0 && <ToolSteps steps={run.model.steps} />}
             {run.model.streamingText && <Bubble role="assistant" text={run.model.streamingText} />}
-            {run.running && !run.model.streamingText && (
+            {run.running && !run.model.streamingText && !run.model.reasoning && (
               <div className="flex items-center gap-2 text-xs">
                 <Spinner />
                 <Shimmer>Thinking…</Shimmer>

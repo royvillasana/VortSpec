@@ -17,13 +17,14 @@ const REPLY: RunEvent[] = [
   { kind: "result", isError: false, text: "done", sessionId: "sess-a1" },
 ];
 
-// A run that uses tools, so the Tool cards render.
+// A run with thinking + tools (with output), so Reasoning + Tool cards render.
 const TOOLRUN: RunEvent[] = [
   { kind: "system-init", model: "claude-opus-4-8", sessionId: "s", tools: ["Read", "Bash"], mcpServers: [], mcpErrors: [] },
-  { kind: "tool-use", name: "Read", path: "src/Button.tsx" },
-  { kind: "tool-result", isError: false },
-  { kind: "tool-use", name: "Bash", path: "npm test" },
-  { kind: "tool-result", isError: true },
+  { kind: "thinking-delta", text: "I should read the button first." },
+  { kind: "tool-use", id: "t1", name: "Read", path: "src/Button.tsx" },
+  { kind: "tool-result", toolUseId: "t1", isError: false },
+  { kind: "tool-use", id: "t2", name: "Bash", input: "npm test" },
+  { kind: "tool-result", toolUseId: "t2", isError: true, text: "1 failing test" },
   { kind: "assistant-text", text: "All set." },
   { kind: "result", isError: false, text: "done", sessionId: "s" },
 ];
@@ -78,6 +79,11 @@ test("tool calls render as Tool cards with per-tool status", async ({ mount }) =
   await expect(c.getByText("Read", { exact: true })).toBeVisible();
   await expect(c.getByText("src/Button.tsx")).toBeVisible();
   await expect(c.getByText("Bash", { exact: true })).toBeVisible();
+  // Extended thinking is captured in a Reasoning block.
+  await expect(c.getByText("Reasoning")).toBeVisible();
+  // The Bash card expands to its output.
+  await c.getByText("Bash", { exact: true }).click();
+  await expect(c.getByText("1 failing test")).toBeVisible();
   // The final answer still renders.
   await expect(c.getByText("All set.")).toBeVisible();
 });

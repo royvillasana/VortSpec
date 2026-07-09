@@ -106,6 +106,28 @@ describe("parseStreamLine", () => {
     });
   });
 
+  it("captures a Bash command as the tool input and the result text", () => {
+    const use = parseStreamLine(
+      JSON.stringify({ type: "assistant", message: { content: [{ type: "tool_use", id: "t1", name: "Bash", input: { command: "npm test" } }] } }),
+    );
+    expect(use[0]).toMatchObject({ kind: "tool-use", name: "Bash", input: "npm test" });
+    const res = parseStreamLine(
+      JSON.stringify({ type: "user", message: { content: [{ type: "tool_result", tool_use_id: "t1", is_error: false, content: "3 passed" }] } }),
+    );
+    expect(res[0]).toMatchObject({ kind: "tool-result", isError: false, text: "3 passed" });
+  });
+
+  it("captures extended-thinking as thinking-delta (streamed and finalized)", () => {
+    const streamed = parseStreamLine(
+      JSON.stringify({ type: "stream_event", event: { delta: { type: "thinking_delta", thinking: "Let me consider…" } } }),
+    );
+    expect(streamed[0]).toMatchObject({ kind: "thinking-delta", text: "Let me consider…" });
+    const finalized = parseStreamLine(
+      JSON.stringify({ type: "assistant", message: { content: [{ type: "thinking", thinking: "Planning the change." }] } }),
+    );
+    expect(finalized[0]).toMatchObject({ kind: "thinking-delta", text: "Planning the change." });
+  });
+
   it("turns a malformed line into an adapter error rather than throwing", () => {
     const errors = events.filter((e) => e.kind === "error");
     expect(errors).toHaveLength(1);

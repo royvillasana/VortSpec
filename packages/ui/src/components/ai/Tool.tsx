@@ -30,20 +30,42 @@ function prettyName(name: string): string {
 
 export function Tool({ step }: { step: ToolStep }): React.JSX.Element {
   const Icon = iconFor(step.name);
+  const [open, setOpen] = useState(false);
+  const isBash = step.name.toLowerCase() === "bash";
+  const hasOutput = Boolean(step.output && step.output.trim());
   return (
-    <div className="flex items-center gap-2 rounded-md border border-vs-border-subtle bg-vs-bg-primary px-2 py-1 text-[11px]">
-      <Icon size={13} className="shrink-0 text-vs-text-muted" />
-      <span className="font-mono text-vs-text-secondary">{prettyName(step.name)}</span>
-      {step.detail && <span className="truncate font-mono text-vs-text-muted">{step.detail}</span>}
-      <span className="ml-auto shrink-0">
-        {step.status === "running" ? (
-          <Loader2 size={12} className="animate-spin text-vs-text-muted" />
-        ) : step.status === "error" ? (
-          <X size={12} className="text-vs-error" />
-        ) : (
-          <Check size={12} className="text-vs-success" />
-        )}
-      </span>
+    <div className="rounded-md border border-vs-border-subtle bg-vs-bg-primary text-[11px]">
+      <button
+        type="button"
+        disabled={!hasOutput}
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center gap-2 px-2 py-1 text-left disabled:cursor-default"
+      >
+        <Icon size={13} className="shrink-0 text-vs-text-muted" />
+        <span className="font-mono text-vs-text-secondary">{prettyName(step.name)}</span>
+        {step.detail && <span className="truncate font-mono text-vs-text-muted">{step.detail}</span>}
+        <span className="ml-auto flex shrink-0 items-center gap-1">
+          {hasOutput && <ChevronDown size={11} className={cn("text-vs-text-muted transition-transform", open ? "" : "-rotate-90")} />}
+          {step.status === "running" ? (
+            <Loader2 size={12} className="animate-spin text-vs-text-muted" />
+          ) : step.status === "error" ? (
+            <X size={12} className="text-vs-error" />
+          ) : (
+            <Check size={12} className="text-vs-success" />
+          )}
+        </span>
+      </button>
+      {open && hasOutput && (
+        // Bash output reads as a terminal; other tool output as a plain result.
+        <pre
+          className={cn(
+            "max-h-56 overflow-auto whitespace-pre-wrap break-words border-t border-vs-border-subtle px-2 py-1.5 font-mono text-[10px] leading-relaxed",
+            isBash ? "bg-vs-bg-code text-vs-text-secondary" : "text-vs-text-muted",
+          )}
+        >
+          {step.output}
+        </pre>
+      )}
     </div>
   );
 }

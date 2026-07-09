@@ -34,17 +34,22 @@ const runEventSchema = z.discriminatedUnion("kind", [
     mcpStatuses: z.array(z.object({ name: z.string(), status: z.string() })).optional()
   }),
   z.object({ kind: z.literal("text-delta"), text: z.string() }),
+  z.object({ kind: z.literal("thinking-delta"), text: z.string() }),
   z.object({ kind: z.literal("assistant-text"), text: z.string() }),
   z.object({
     kind: z.literal("tool-use"),
     id: z.string(),
     name: z.string(),
-    path: z.string().optional()
+    path: z.string().optional(),
+    /** A short summary of the tool input (e.g. a Bash command). */
+    input: z.string().optional()
   }),
   z.object({
     kind: z.literal("tool-result"),
     toolUseId: z.string(),
-    isError: z.boolean()
+    isError: z.boolean(),
+    /** The tool's output text (trimmed), for richer result rendering. */
+    text: z.string().optional()
   }),
   z.object({
     kind: z.literal("api-retry"),
@@ -3025,6 +3030,24 @@ function toolPath(input) {
   }
   return void 0;
 }
+function toolInputSummary(name, input) {
+  if (typeof input !== "object" || input === null) return void 0;
+  const r = input;
+  const n = typeof name === "string" ? name.toLowerCase() : "";
+  if (n === "bash" && typeof r.command === "string") return r.command;
+  if (typeof r.pattern === "string") return r.pattern;
+  if (typeof r.description === "string") return r.description;
+  return void 0;
+}
+function toolResultText(content) {
+  let text = "";
+  if (typeof content === "string") text = content;
+  else if (Array.isArray(content)) {
+    text = content.map((b) => typeof b === "object" && b !== null && typeof b.text === "string" ? b.text : "").join("");
+  }
+  text = text.trim();
+  return text ? text.slice(0, 4e3) : void 0;
+}
 function mapAssistant(message) {
   if (typeof message !== "object" || message === null) return [];
   const content = message.content;
@@ -3035,12 +3058,15 @@ function mapAssistant(message) {
     const b = block;
     if (b.type === "text" && typeof b.text === "string" && b.text.trim()) {
       events.push({ kind: "assistant-text", text: b.text });
+    } else if (b.type === "thinking" && typeof b.thinking === "string" && b.thinking.trim()) {
+      events.push({ kind: "thinking-delta", text: b.thinking });
     } else if (b.type === "tool_use") {
       events.push({
         kind: "tool-use",
         id: typeof b.id === "string" ? b.id : "",
         name: typeof b.name === "string" ? b.name : "tool",
-        path: toolPath(b.input)
+        path: toolPath(b.input),
+        input: toolInputSummary(b.name, b.input)
       });
     }
   }
@@ -3058,7 +3084,8 @@ function mapToolResults(message) {
       events.push({
         kind: "tool-result",
         toolUseId: typeof b.tool_use_id === "string" ? b.tool_use_id : "",
-        isError: b.is_error === true
+        isError: b.is_error === true,
+        text: toolResultText(b.content)
       });
     }
   }
@@ -3129,6 +3156,9 @@ function mapObject(obj) {
       const delta = event?.delta;
       if (delta?.type === "text_delta" && typeof delta.text === "string") {
         return [{ kind: "text-delta", text: delta.text }];
+      }
+      if (delta?.type === "thinking_delta" && typeof delta.thinking === "string") {
+        return [{ kind: "thinking-delta", text: delta.thinking }];
       }
       return [];
     }

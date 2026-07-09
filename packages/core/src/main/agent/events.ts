@@ -28,6 +28,30 @@ function toolPath(input: unknown): string | undefined {
   return undefined;
 }
 
+/** A short, human summary of a tool's input for the Tool card (e.g. the command). */
+function toolInputSummary(name: unknown, input: unknown): string | undefined {
+  if (typeof input !== "object" || input === null) return undefined;
+  const r = input as Record<string, unknown>;
+  const n = typeof name === "string" ? name.toLowerCase() : "";
+  if (n === "bash" && typeof r.command === "string") return r.command;
+  if (typeof r.pattern === "string") return r.pattern; // Grep/Glob
+  if (typeof r.description === "string") return r.description;
+  return undefined;
+}
+
+/** Flatten a tool_result content (string or block array) to trimmed text. */
+function toolResultText(content: unknown): string | undefined {
+  let text = "";
+  if (typeof content === "string") text = content;
+  else if (Array.isArray(content)) {
+    text = content
+      .map((b) => (typeof b === "object" && b !== null && typeof (b as Record<string, unknown>).text === "string" ? (b as Record<string, unknown>).text : ""))
+      .join("");
+  }
+  text = text.trim();
+  return text ? text.slice(0, 4000) : undefined;
+}
+
 function mapAssistant(message: unknown): RunEvent[] {
   if (typeof message !== "object" || message === null) return [];
   const content = (message as { content?: unknown }).content;
@@ -38,12 +62,15 @@ function mapAssistant(message: unknown): RunEvent[] {
     const b = block as Record<string, unknown>;
     if (b.type === "text" && typeof b.text === "string" && b.text.trim()) {
       events.push({ kind: "assistant-text", text: b.text });
+    } else if (b.type === "thinking" && typeof b.thinking === "string" && b.thinking.trim()) {
+      events.push({ kind: "thinking-delta", text: b.thinking });
     } else if (b.type === "tool_use") {
       events.push({
         kind: "tool-use",
         id: typeof b.id === "string" ? b.id : "",
         name: typeof b.name === "string" ? b.name : "tool",
         path: toolPath(b.input),
+        input: toolInputSummary(b.name, b.input),
       });
     }
   }
@@ -63,6 +90,7 @@ function mapToolResults(message: unknown): RunEvent[] {
         kind: "tool-result",
         toolUseId: typeof b.tool_use_id === "string" ? b.tool_use_id : "",
         isError: b.is_error === true,
+        text: toolResultText(b.content),
       });
     }
   }
@@ -152,6 +180,9 @@ function mapObject(obj: Record<string, unknown>): RunEvent[] {
       const delta = event?.delta as Record<string, unknown> | undefined;
       if (delta?.type === "text_delta" && typeof delta.text === "string") {
         return [{ kind: "text-delta", text: delta.text }];
+      }
+      if (delta?.type === "thinking_delta" && typeof delta.thinking === "string") {
+        return [{ kind: "thinking-delta", text: delta.thinking }];
       }
       return [];
     }
