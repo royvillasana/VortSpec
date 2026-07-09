@@ -24,6 +24,7 @@ import { effectiveWidths, isSidebarView, type Activity } from "./lib/layout";
 import { IdeContext, buildSeedContext, buildLiveContext, type EditorSelection } from "./lib/ide-context";
 import { useIdeMcp, IDE_MCP_TOOL_GROUP } from "./lib/useIdeMcp";
 import { IdeActionDialog } from "./components/IdeActionDialog";
+import { StatusBranch } from "./components/StatusBranch";
 
 /**
  * VortSpec IDE — a VS Code–style workbench driven by a layout store.
@@ -409,15 +410,12 @@ export default function App(): JSX.Element {
             {workspace.name}
           </button>
           {branch && (
-            <span className="flex items-center gap-1 text-vs-text-muted" title={`Git branch: ${branch}`}>
-              <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                <circle cx="4" cy="3.5" r="1.5" />
-                <circle cx="4" cy="12.5" r="1.5" />
-                <circle cx="12" cy="4.5" r="1.5" />
-                <path d="M4 5v6M12 6a4 4 0 0 1-4 4H6.5" />
-              </svg>
-              <span className="font-mono">{branch}</span>
-            </span>
+            <StatusBranch
+              project={workspace}
+              branch={branch}
+              onCheckout={(name) => setBranch(name)}
+              onCreate={() => dispatch({ type: "setActivity", activity: "source" })}
+            />
           )}
           <div className="flex-1" />
           {/* Region toggles apply to the Explorer/editor view only. */}

@@ -144,6 +144,29 @@ test("the status bar shows the git branch and Explorer-only region toggles", asy
   await expect(footer.getByText("main")).toBeVisible();
 });
 
+test("the branch is a menu to switch branches and to create one in Source Control", async ({ mount }) => {
+  const mock = {
+    ...base,
+    gitBranches: [
+      { name: "main", current: true, remote: false, upstream: null },
+      { name: "feature/x", current: false, remote: false, upstream: null },
+    ],
+  };
+  const c = await mount(<App />, { hooksConfig: { mock } });
+  await open(c);
+  const footer = c.locator("footer");
+  // Open the branch menu → the other branch is listed; picking it checks it out.
+  await footer.getByRole("button", { name: /main/ }).click();
+  await c.getByRole("menuitem", { name: /feature\/x/ }).click();
+  await expect(footer.getByRole("button", { name: /feature\/x/ })).toBeVisible();
+  // Reopen → "Create new branch…" takes you to the Source Control section.
+  await footer.getByRole("button", { name: /feature\/x/ }).click();
+  await c.getByRole("menuitem", { name: /Create new branch/ }).click();
+  await expect(
+    c.getByRole("navigation", { name: "Activity bar" }).getByRole("button", { name: "Source Control" }),
+  ).toHaveAttribute("aria-pressed", "true");
+});
+
 test("can collapse the assistant chat", async ({ mount }) => {
   const c = await mount(<App />, { hooksConfig: { mock: base } });
   await open(c);
