@@ -4,11 +4,11 @@ Phased so each phase ships value and stays green (`pnpm build && pnpm test && pn
 
 ## 1. Phase A — Session status from the init event
 
-- [ ] 1.1 Extend the `system-init` run-event (Zod in `run-events`) + `events.ts` parser to carry `model`, `skills`, `agents`, `mcpServers[].status`, `plugins`, `permissionMode`, `slashCommands` — all optional/defensive; existing consumers unaffected.
-- [ ] 1.2 Unit-test the parser against a recorded real init fixture (model/skills/agents/mcp status/plugins present) and a minimal legacy init (missing fields).
-- [ ] 1.3 `AssistantDock`: show the active **model** inline in the header; add an expandable **Session** panel listing skills, agents, MCP servers (with status pills), tools, plugins, permission mode. Behind a prop so the cockpit opts out.
-- [ ] 1.4 CT: the session panel renders model/skills/agents and shows an MCP server's failed/needs-auth status distinctly.
-- [ ] 1.5 Gate green.
+- [x] 1.1 Extend the `system-init` run-event (Zod in `run-events`) + `events.ts` parser to carry `model`, `skills`, `agents`, `mcpServers[].status`, `plugins`, `permissionMode`, `slashCommands` — all optional/defensive; existing consumers unaffected.
+- [x] 1.2 Unit-test the parser against a recorded real init fixture (model/skills/agents/mcp status/plugins present) and a minimal legacy init (missing fields).
+- [x] 1.3 `AssistantDock`: show the active **model** inline in the header; add an expandable **Session** panel listing skills, agents, MCP servers (with status pills), tools, plugins, permission mode. Behind a prop so the cockpit opts out.
+- [x] 1.4 CT: the session panel renders model/skills/agents and shows an MCP server's failed/needs-auth status distinctly.
+- [x] 1.5 Gate green.
 
 ## 2. Phase B — IDE MCP bridge handshake
 

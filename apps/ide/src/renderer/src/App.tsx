@@ -116,6 +116,7 @@ export default function App(): JSX.Element {
                 <AssistantDock
                   project={homeProject}
                   fill
+                  showSession
                   allowModify
                   userName={userName}
                   onClose={() => dispatch({ type: "toggleSecondary" })}
@@ -304,7 +305,7 @@ export default function App(): JSX.Element {
                   )}
                 </div>
                 <div className="min-h-0 flex-1">
-                  <AssistantDock project={workspace} fill allowModify userName={userName} seedContext={buildSeedContext(wf.activePath, previewUrl)} onClose={() => dispatch({ type: "toggleSecondary" })} />
+                  <AssistantDock project={workspace} fill showSession allowModify userName={userName} seedContext={buildSeedContext(wf.activePath, previewUrl)} onClose={() => dispatch({ type: "toggleSecondary" })} />
                 </div>
               </div>
             </>

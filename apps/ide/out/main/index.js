@@ -22,7 +22,15 @@ const runEventSchema = z.discriminatedUnion("kind", [
     model: z.string().optional(),
     tools: z.array(z.string()),
     mcpServers: z.array(z.string()),
-    mcpErrors: z.array(z.string())
+    mcpErrors: z.array(z.string()),
+    // Extended session status (Claude Code parity) — all optional/defensive.
+    skills: z.array(z.string()).optional(),
+    agents: z.array(z.string()).optional(),
+    plugins: z.array(z.string()).optional(),
+    slashCommands: z.array(z.string()).optional(),
+    permissionMode: z.string().optional(),
+    /** MCP servers with their connection status (connected/pending/failed/needs-auth). */
+    mcpStatuses: z.array(z.object({ name: z.string(), status: z.string() })).optional()
   }),
   z.object({ kind: z.literal("text-delta"), text: z.string() }),
   z.object({ kind: z.literal("assistant-text"), text: z.string() }),
@@ -2637,18 +2645,32 @@ function mapObject(obj) {
       if (obj.subtype === "init") {
         const mcp = Array.isArray(obj.mcp_servers) ? obj.mcp_servers : [];
         const pluginErrors = Array.isArray(obj.plugin_errors) ? obj.plugin_errors : [];
+        const strList = (v) => (Array.isArray(v) ? v : []).map(String).filter(Boolean);
+        const nameList = (v) => (Array.isArray(v) ? v : []).map(
+          (x) => typeof x === "object" && x !== null ? String(x.name ?? "") : String(x)
+        ).filter(Boolean);
+        const mcpStatuses = mcp.map(
+          (m) => typeof m === "object" && m !== null ? {
+            name: String(m.name ?? ""),
+            status: String(m.status ?? "unknown")
+          } : { name: String(m), status: "unknown" }
+        ).filter((m) => m.name);
         return [
           {
             kind: "system-init",
             sessionId: typeof obj.session_id === "string" ? obj.session_id : void 0,
             model: typeof obj.model === "string" ? obj.model : void 0,
-            tools: (Array.isArray(obj.tools) ? obj.tools : []).map(String),
-            mcpServers: mcp.map(
-              (m) => typeof m === "object" && m !== null ? String(m.name ?? "") : String(m)
-            ).filter(Boolean),
+            tools: strList(obj.tools),
+            mcpServers: mcpStatuses.map((m) => m.name),
             mcpErrors: pluginErrors.map(
               (e) => typeof e === "object" && e !== null ? String(e.message ?? "plugin error") : String(e)
-            )
+            ),
+            skills: strList(obj.skills),
+            agents: strList(obj.agents),
+            plugins: nameList(obj.plugins),
+            slashCommands: strList(obj.slash_commands),
+            permissionMode: typeof obj.permissionMode === "string" ? obj.permissionMode : typeof obj.permission_mode === "string" ? obj.permission_mode : void 0,
+            mcpStatuses
           }
         ];
       }

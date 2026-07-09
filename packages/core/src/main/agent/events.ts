@@ -75,24 +75,49 @@ function mapObject(obj: Record<string, unknown>): RunEvent[] {
       if (obj.subtype === "init") {
         const mcp = Array.isArray(obj.mcp_servers) ? obj.mcp_servers : [];
         const pluginErrors = Array.isArray(obj.plugin_errors) ? obj.plugin_errors : [];
+        const strList = (v: unknown): string[] =>
+          (Array.isArray(v) ? v : []).map(String).filter(Boolean);
+        const nameList = (v: unknown): string[] =>
+          (Array.isArray(v) ? v : [])
+            .map((x) =>
+              typeof x === "object" && x !== null
+                ? String((x as Record<string, unknown>).name ?? "")
+                : String(x),
+            )
+            .filter(Boolean);
+        const mcpStatuses = mcp
+          .map((m) =>
+            typeof m === "object" && m !== null
+              ? {
+                  name: String((m as Record<string, unknown>).name ?? ""),
+                  status: String((m as Record<string, unknown>).status ?? "unknown"),
+                }
+              : { name: String(m), status: "unknown" },
+          )
+          .filter((m) => m.name);
         return [
           {
             kind: "system-init",
             sessionId: typeof obj.session_id === "string" ? obj.session_id : undefined,
             model: typeof obj.model === "string" ? obj.model : undefined,
-            tools: (Array.isArray(obj.tools) ? obj.tools : []).map(String),
-            mcpServers: mcp
-              .map((m) =>
-                typeof m === "object" && m !== null
-                  ? String((m as Record<string, unknown>).name ?? "")
-                  : String(m),
-              )
-              .filter(Boolean),
+            tools: strList(obj.tools),
+            mcpServers: mcpStatuses.map((m) => m.name),
             mcpErrors: pluginErrors.map((e) =>
               typeof e === "object" && e !== null
                 ? String((e as Record<string, unknown>).message ?? "plugin error")
                 : String(e),
             ),
+            skills: strList(obj.skills),
+            agents: strList(obj.agents),
+            plugins: nameList(obj.plugins),
+            slashCommands: strList(obj.slash_commands),
+            permissionMode:
+              typeof obj.permissionMode === "string"
+                ? obj.permissionMode
+                : typeof obj.permission_mode === "string"
+                  ? obj.permission_mode
+                  : undefined,
+            mcpStatuses,
           },
         ];
       }

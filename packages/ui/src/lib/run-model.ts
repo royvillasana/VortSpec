@@ -28,6 +28,16 @@ export interface RunModel {
   files: string[];
   raw: string[];
   mcpErrors: string[];
+  /** Extended session status from the init event (Claude Code parity). */
+  session?: {
+    model?: string;
+    skills: string[];
+    agents: string[];
+    tools: string[];
+    plugins: string[];
+    permissionMode?: string;
+    mcpStatuses: { name: string; status: string }[];
+  };
   result?: { isError: boolean; text?: string; costUsd?: number };
 }
 
@@ -101,6 +111,15 @@ function applyEvent(state: RunModel, event: RunEvent): RunModel {
         model: event.model,
         mcpErrors: event.mcpErrors,
         sessionId: event.sessionId ?? state.sessionId,
+        session: {
+          model: event.model,
+          skills: event.skills ?? [],
+          agents: event.agents ?? [],
+          tools: event.tools,
+          plugins: event.plugins ?? [],
+          permissionMode: event.permissionMode,
+          mcpStatuses: event.mcpStatuses ?? [],
+        },
       };
     case "text-delta":
       // Live preview of the message currently being generated.

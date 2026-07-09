@@ -14,6 +14,14 @@ export const runEventSchema = z.discriminatedUnion("kind", [
     tools: z.array(z.string()),
     mcpServers: z.array(z.string()),
     mcpErrors: z.array(z.string()),
+    // Extended session status (Claude Code parity) — all optional/defensive.
+    skills: z.array(z.string()).optional(),
+    agents: z.array(z.string()).optional(),
+    plugins: z.array(z.string()).optional(),
+    slashCommands: z.array(z.string()).optional(),
+    permissionMode: z.string().optional(),
+    /** MCP servers with their connection status (connected/pending/failed/needs-auth). */
+    mcpStatuses: z.array(z.object({ name: z.string(), status: z.string() })).optional(),
   }),
   z.object({ kind: z.literal("text-delta"), text: z.string() }),
   z.object({ kind: z.literal("assistant-text"), text: z.string() }),

@@ -21,6 +21,7 @@ export function AssistantDock({
   onClose,
   userName,
   fill = false,
+  showSession = false,
 }: {
   project: Project;
   /** Optional one-line context the dock mentions to Claude on the first message. */
@@ -34,10 +35,13 @@ export function AssistantDock({
   /** Fill the parent (the host owns width + border) instead of the fixed 360px
    *  panel. Use in a resizable host like the IDE's right sidebar. */
   fill?: boolean;
+  /** Show the model chip + expandable session panel (skills/agents/MCP status). */
+  showSession?: boolean;
 }): React.JSX.Element {
   const run = useAgentRun();
   const [draft, setDraft] = useState("");
   const [firstPrompt, setFirstPrompt] = useState<string | null>(null);
+  const [sessionOpen, setSessionOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
   // New project → fresh session.
@@ -88,6 +92,21 @@ export function AssistantDock({
         <span className="text-sm font-semibold">{allowModify ? "Modify with Claude" : "Assistant"}</span>
         <span className="font-mono text-[10px] text-vs-text-muted">· {project.name}</span>
         <div className="flex-1" />
+        {showSession && run.model.session?.model && (
+          <button
+            type="button"
+            aria-pressed={sessionOpen}
+            onClick={() => setSessionOpen((v) => !v)}
+            title="Session: model, skills, MCP servers"
+            className={`rounded-full border px-2 py-0.5 font-mono text-[10px] ${
+              sessionOpen
+                ? "border-vs-accent text-vs-text-primary"
+                : "border-vs-border-default text-vs-text-muted hover:text-vs-text-secondary"
+            }`}
+          >
+            {shortModel(run.model.session.model)}
+          </button>
+        )}
         {onClose && (
           <button
             onClick={onClose}
@@ -98,6 +117,9 @@ export function AssistantDock({
           </button>
         )}
       </div>
+      {showSession && sessionOpen && run.model.session && (
+        <SessionPanel session={run.model.session} />
+      )}
 
       <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
         {!started ? (
@@ -166,6 +188,64 @@ export function AssistantDock({
       </div>
     </aside>
   );
+}
+
+/** Trim a model id like "claude-opus-4-8[1m]" to a compact chip label. */
+function shortModel(model: string): string {
+  return model.replace(/^claude-/, "").replace(/-\d{8}$/, "");
+}
+
+const MCP_STATUS_STYLE: Record<string, string> = {
+  connected: "text-vs-success",
+  pending: "text-vs-warning",
+  failed: "text-vs-error",
+  "needs-auth": "text-vs-warning",
+};
+
+function SessionPanel({
+  session,
+}: {
+  session: NonNullable<import("@vortspec/ui/run-model").RunModel["session"]>;
+}): React.JSX.Element {
+  return (
+    <div className="flex-none space-y-2 border-b border-vs-border-subtle bg-vs-bg-primary px-4 py-2.5 text-[11px] text-vs-text-muted">
+      {session.model && (
+        <Row label="Model">
+          <span className="font-mono text-vs-text-secondary">{session.model}</span>
+          {session.permissionMode && <span className="text-vs-text-muted"> · {session.permissionMode}</span>}
+        </Row>
+      )}
+      {session.mcpStatuses.length > 0 && (
+        <Row label="MCP">
+          <span className="flex flex-wrap gap-x-2 gap-y-0.5">
+            {session.mcpStatuses.map((m) => (
+              <span key={m.name} className="font-mono">
+                {m.name}
+                <span className={MCP_STATUS_STYLE[m.status] ?? "text-vs-text-muted"}> ·{m.status}</span>
+              </span>
+            ))}
+          </span>
+        </Row>
+      )}
+      {session.skills.length > 0 && <Row label={`Skills (${session.skills.length})`}>{preview(session.skills)}</Row>}
+      {session.agents.length > 0 && <Row label={`Agents (${session.agents.length})`}>{preview(session.agents)}</Row>}
+      {session.tools.length > 0 && <Row label={`Tools (${session.tools.length})`}>{preview(session.tools)}</Row>}
+      {session.plugins.length > 0 && <Row label={`Plugins (${session.plugins.length})`}>{preview(session.plugins)}</Row>}
+    </div>
+  );
+}
+
+function Row({ label, children }: { label: string; children: React.ReactNode }): React.JSX.Element {
+  return (
+    <div className="flex gap-2">
+      <span className="w-[92px] shrink-0 font-semibold uppercase tracking-wide text-vs-text-muted/80">{label}</span>
+      <span className="min-w-0 flex-1 text-vs-text-secondary">{children}</span>
+    </div>
+  );
+}
+
+function preview(items: string[]): string {
+  return items.slice(0, 12).join(", ") + (items.length > 12 ? ` +${items.length - 12}` : "");
 }
 
 function Bubble({ role, text }: { role: "user" | "assistant"; text: string }): React.JSX.Element {

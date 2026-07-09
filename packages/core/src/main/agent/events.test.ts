@@ -31,6 +31,46 @@ describe("parseStreamLine", () => {
     expect(init && "tools" in init && init.tools).toContain("Edit");
   });
 
+  it("parses the extended init fields (skills, agents, plugins, mcp status, permission mode)", () => {
+    const raw = JSON.stringify({
+      type: "system",
+      subtype: "init",
+      session_id: "s1",
+      model: "claude-opus-4-8[1m]",
+      tools: ["Read", "Bash"],
+      mcp_servers: [
+        { name: "figma-console", status: "pending" },
+        { name: "pencil", status: "connected" },
+      ],
+      skills: ["commit", "storybook"],
+      agents: ["Explore", "Plan"],
+      plugins: [{ name: "vercel", path: "/x", source: "y" }],
+      slash_commands: ["init", "review"],
+      permissionMode: "default",
+    });
+    const [init] = parseStreamLine(raw);
+    expect(init).toMatchObject({
+      kind: "system-init",
+      model: "claude-opus-4-8[1m]",
+      skills: ["commit", "storybook"],
+      agents: ["Explore", "Plan"],
+      plugins: ["vercel"],
+      slashCommands: ["init", "review"],
+      permissionMode: "default",
+      mcpStatuses: [
+        { name: "figma-console", status: "pending" },
+        { name: "pencil", status: "connected" },
+      ],
+    });
+    expect(() => runEventSchema.parse(init)).not.toThrow();
+  });
+
+  it("tolerates a legacy init with no extended fields", () => {
+    const [init] = parseStreamLine(JSON.stringify({ type: "system", subtype: "init", tools: [], mcp_servers: [] }));
+    expect(init.kind).toBe("system-init");
+    expect(() => runEventSchema.parse(init)).not.toThrow();
+  });
+
   it("coalesces partial text deltas in order", () => {
     const deltas = events.filter((e) => e.kind === "text-delta");
     expect(deltas.map((d) => (d.kind === "text-delta" ? d.text : ""))).toEqual([

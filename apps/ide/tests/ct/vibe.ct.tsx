@@ -1,6 +1,7 @@
 import { test, expect } from "@playwright/experimental-ct-react";
 import App from "../../src/renderer/src/App";
 import type { DevServerStatus, FsEntry, Project } from "@vortspec/core/ipc";
+import type { RunEvent } from "@vortspec/core/run-events";
 
 const PROJECT = {
   id: "p1",
@@ -25,6 +26,37 @@ const base = {
 async function open(c: import("@playwright/test").Locator): Promise<void> {
   await c.getByRole("button", { name: /acme-design-system/ }).click();
 }
+
+test("the assistant session panel shows model, skills, and MCP status", async ({ mount }) => {
+  const INIT_RUN: RunEvent[] = [
+    {
+      kind: "system-init",
+      sessionId: "s",
+      model: "claude-opus-4-8[1m]",
+      tools: ["Read", "Bash"],
+      mcpServers: ["figma-console"],
+      mcpErrors: [],
+      skills: ["commit", "storybook"],
+      agents: ["Explore"],
+      plugins: ["vercel"],
+      slashCommands: ["init"],
+      permissionMode: "default",
+      mcpStatuses: [{ name: "figma-console", status: "failed" }],
+    },
+    { kind: "result", isError: false, text: "done", sessionId: "s" },
+  ];
+  const c = await mount(<App />, { hooksConfig: { mock: { ...base, runScript: INIT_RUN } } });
+  await open(c);
+  await c.getByPlaceholder(/tighten Button/).fill("hi");
+  await c.getByRole("button", { name: "Send" }).click();
+  // The model chip appears; open the session panel.
+  const chip = c.getByRole("button", { name: /opus-4-8/ });
+  await expect(chip).toBeVisible();
+  await chip.click();
+  await expect(c.getByText(/Skills \(2\)/)).toBeVisible();
+  await expect(c.getByText(/commit, storybook/)).toBeVisible();
+  await expect(c.getByText(/·failed/)).toBeVisible();
+});
 
 test("mounts a modify-capable assistant grounded in the workspace", async ({ mount }) => {
   const c = await mount(<App />, { hooksConfig: { mock: base } });
