@@ -6,6 +6,9 @@
 @source "../components";
 @source "../lib";
 @source "../views";
+/* Streamdown (shadcn/ai chat rendering) ships Tailwind utility classes in its
+   dist; point Tailwind at them so the assistant's markdown/code blocks style. */
+@source "../../node_modules/streamdown/dist";
 
 /* The VortSpec design system — tokens, base layer, and animations shared by
    every app shell (the cockpit and the IDE). Import this from an app's

@@ -16,8 +16,9 @@ export function useAgentRun(): {
   start: (opts: AgentRunOptions) => Promise<void>;
   /** Send a chat follow-up: a new run resuming the captured session. `display`
    *  overrides the text shown in the user bubble (when the prompt carries hidden
-   *  grounding the user shouldn't see echoed back). */
-  send: (text: string, display?: string) => Promise<void>;
+   *  grounding the user shouldn't see echoed back). `override` patches the run
+   *  options (e.g. a switched `model`). */
+  send: (text: string, display?: string, override?: Partial<AgentRunOptions>) => Promise<void>;
   cancel: () => Promise<void>;
   reset: () => void;
 } {
@@ -51,14 +52,18 @@ export function useAgentRun(): {
     runIdRef.current = runId;
   }
 
-  async function send(text: string, display?: string): Promise<void> {
+  async function send(text: string, display?: string, override?: Partial<AgentRunOptions>): Promise<void> {
     const base = baseOptsRef.current;
     const sessionId = sessionIdRef.current;
     const trimmed = text.trim();
     if (!base || !sessionId || !trimmed || model.status === "running") return;
     dispatch({ type: "send", text: (display ?? text).trim() });
+    // Persist an override (e.g. a switched model) onto the base opts so it sticks
+    // for later turns too.
+    const merged = override ? { ...base, ...override } : base;
+    baseOptsRef.current = merged;
     const { runId } = await api.startRun({
-      ...base,
+      ...merged,
       prompt: trimmed,
       resumeSessionId: sessionId,
     });

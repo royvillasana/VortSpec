@@ -58,6 +58,51 @@ test("the assistant session panel shows model, skills, and MCP status", async ({
   await expect(c.getByText(/·failed/)).toBeVisible();
 });
 
+test("slash menu opens from the composer and /model runs a model card", async ({ mount }) => {
+  const c = await mount(<App />, { hooksConfig: { mock: base } });
+  await open(c);
+  const input = c.getByPlaceholder(/tighten Button/);
+  // Typing a slash token opens the command menu.
+  await input.fill("/mo");
+  await expect(c.getByRole("button", { name: /\/model/ })).toBeVisible();
+  // Enter picks the highlighted command → an inline model card with the models.
+  await input.press("Enter");
+  await expect(c.getByText(/\/model — model/)).toBeVisible();
+  await expect(c.getByText("Claude Opus 4.8")).toBeVisible();
+  await expect(c.getByText("Claude Haiku 4.5")).toBeVisible();
+});
+
+test("/mcp card reflects the session's MCP server status", async ({ mount }) => {
+  const INIT_RUN: RunEvent[] = [
+    {
+      kind: "system-init",
+      sessionId: "s",
+      model: "claude-opus-4-8[1m]",
+      tools: ["Read"],
+      mcpServers: ["figma-console"],
+      mcpErrors: [],
+      skills: [],
+      agents: [],
+      plugins: [],
+      slashCommands: ["commit"],
+      permissionMode: "default",
+      mcpStatuses: [{ name: "figma-console", status: "failed" }],
+    },
+    { kind: "result", isError: false, text: "done", sessionId: "s" },
+  ];
+  const c = await mount(<App />, { hooksConfig: { mock: { ...base, runScript: INIT_RUN } } });
+  await open(c);
+  // Start a session so the /mcp card has data.
+  await c.getByPlaceholder(/tighten Button/).fill("hi");
+  await c.getByRole("button", { name: "Send" }).click();
+  // Now call /mcp.
+  await c.getByPlaceholder(/tighten Button/).fill("/mcp");
+  await c.getByPlaceholder(/tighten Button/).press("Enter");
+  await expect(c.getByText(/\/mcp — MCP servers/)).toBeVisible();
+  await expect(c.getByText("figma-console")).toBeVisible();
+  await expect(c.getByText("failed", { exact: true })).toBeVisible();
+});
+
 test("mounts a modify-capable assistant grounded in the workspace", async ({ mount }) => {
   const c = await mount(<App />, { hooksConfig: { mock: base } });
   await open(c);

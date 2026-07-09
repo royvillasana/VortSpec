@@ -71,6 +71,8 @@ export const agentRunOptionsSchema = z.object({
    * each stage; the run is confined to the project folder.
    */
   bypassPermissions: z.boolean().optional(),
+  /** Model alias/id for this run (`--model`, e.g. "opus"/"sonnet"/"haiku"). */
+  model: z.string().optional(),
   /**
    * Path to a Claude Code `--mcp-config` JSON file to load for this run (e.g. the
    * VortSpec IDE MCP server, so the assistant can open/clone/switch the workspace

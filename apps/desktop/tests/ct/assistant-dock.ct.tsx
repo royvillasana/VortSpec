@@ -33,7 +33,7 @@ test("first message starts a session and streams the reply", async ({ mount }) =
   const c = await mount(<AssistantDock project={PROJECT} onClose={noop} />, {
     hooksConfig: { mock: { runScript: REPLY } },
   });
-  await c.getByPlaceholder(/Ask about tokens/).fill("What tokens does this use?");
+  await c.getByPlaceholder(/Ask about the project/).fill("What tokens does this use?");
   await c.getByRole("button", { name: "Send" }).click();
 
   // The user's message appears as a bubble…

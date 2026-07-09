@@ -36,6 +36,9 @@ export class AgentAdapter extends EventEmitter {
     if (opts.allowedTools && opts.allowedTools.length > 0) {
       args.push("--allowedTools", opts.allowedTools.join(","));
     }
+    if (opts.model) {
+      args.push("--model", opts.model);
+    }
     if (opts.mcpConfigPath) {
       // Load extra MCP servers (e.g. the VortSpec IDE control/read server) for
       // this run. Non-strict: the user's globally configured servers still load.

@@ -2,6 +2,15 @@ import { useEffect, useRef, useState } from "react";
 import type { Project } from "@vortspec/core/ipc";
 import { useAgentRun } from "../lib/useAgentRun";
 import { Spinner } from "@vortspec/ui/ui";
+import { Response } from "./ai/Response";
+import {
+  SlashMenu,
+  SlashCard,
+  matchCommands,
+  isMeta,
+  KNOWN_MODELS,
+  type SlashCommand,
+} from "./ai/slash-commands";
 
 /**
  * A persistent, project-scoped assistant chat. It talks to the user's own Claude
@@ -54,26 +63,69 @@ export function AssistantDock({
   const [draft, setDraft] = useState("");
   const [firstPrompt, setFirstPrompt] = useState<string | null>(null);
   const [sessionOpen, setSessionOpen] = useState(false);
+  // Meta-command result cards (/mcp, /model, /context…) shown inline.
+  const [cards, setCards] = useState<{ id: number; name: string }[]>([]);
+  const cardSeq = useRef(0);
+  const [selectedModel, setSelectedModel] = useState<string | undefined>(undefined);
+  // `/`-command menu state.
+  const [menuIndex, setMenuIndex] = useState(0);
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   // New project → fresh session.
   useEffect(() => {
     run.reset();
     setFirstPrompt(null);
     setDraft("");
+    setCards([]);
+    setSelectedModel(undefined);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project.path]);
 
   // Keep the transcript scrolled to the latest.
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
-  }, [run.model.messages, run.model.streamingText]);
+  }, [run.model.messages, run.model.streamingText, cards]);
 
   const started = firstPrompt !== null || run.model.messages.length > 0 || Boolean(run.model.sessionId);
+
+  // The `/` command menu is open when the draft is a lone slash-token.
+  const slashQuery = /^\/\S*$/.test(draft) ? draft : null;
+  const menuMatches = slashQuery !== null ? matchCommands(slashQuery, run.model.session) : [];
+  const menuOpen = menuMatches.length > 0;
+
+  function runMeta(name: string): void {
+    if (name === "clear") {
+      run.reset();
+      setFirstPrompt(null);
+      setCards([]);
+      return;
+    }
+    setCards((cs) => [...cs, { id: cardSeq.current++, name }]);
+  }
+
+  function pickCommand(c: SlashCommand): void {
+    if (c.kind === "meta") {
+      runMeta(c.name);
+      setDraft("");
+    } else {
+      // Real Claude command → insert it so the user can add args, then send.
+      setDraft(`/${c.name} `);
+    }
+    setMenuIndex(0);
+    textareaRef.current?.focus();
+  }
 
   function submit(): void {
     const text = draft.trim();
     if (!text || run.running) return;
+    // A bare meta command (e.g. "/mcp") renders a local panel instead of a run.
+    const metaName = text.startsWith("/") ? text.slice(1).split(/\s+/)[0] : null;
+    if (metaName && isMeta(metaName) && text.split(/\s+/).length === 1) {
+      runMeta(metaName);
+      setDraft("");
+      return;
+    }
     setDraft("");
     // The live grounding (open file / selection) rides on every message so the
     // assistant always sees what the user is looking at right now.
@@ -87,6 +139,7 @@ export function AssistantDock({
         allowedTools: [...(allowModify ? MODIFY_TOOLS : READ_TOOLS), ...(extraAllowedTools ?? [])],
         bypassPermissions: true,
         mcpConfigPath,
+        model: selectedModel,
         // Persisted across the whole session (send() spreads the base opts), so
         // the assistant addresses the user by name for every turn.
         appendSystemPrompt: userName
@@ -95,7 +148,7 @@ export function AssistantDock({
       });
     } else {
       // Send the grounded prompt but show only the user's own text in the bubble.
-      void run.send(withLive, text);
+      void run.send(withLive, text, selectedModel ? { model: selectedModel } : undefined);
     }
   }
 
@@ -114,14 +167,14 @@ export function AssistantDock({
             type="button"
             aria-pressed={sessionOpen}
             onClick={() => setSessionOpen((v) => !v)}
-            title="Session: model, skills, MCP servers"
+            title="Session: model, skills, MCP servers · type /mcp, /model, /context…"
             className={`rounded-full border px-2 py-0.5 font-mono text-[10px] ${
               sessionOpen
                 ? "border-vs-accent text-vs-text-primary"
                 : "border-vs-border-default text-vs-text-muted hover:text-vs-text-secondary"
             }`}
           >
-            {shortModel(run.model.session.model)}
+            {selectedModel ?? shortModel(run.model.session.model)}
           </button>
         )}
         {onClose && (
@@ -139,7 +192,7 @@ export function AssistantDock({
       )}
 
       <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
-        {!started ? (
+        {!started && cards.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center gap-2 text-center">
             <p className="text-sm font-medium text-vs-text-secondary">
               {allowModify ? "Change a component" : "Ask about this project"}
@@ -148,6 +201,9 @@ export function AssistantDock({
               {allowModify
                 ? "Describe a change to a component you see in Storybook — Claude Code edits it and Storybook reloads live. No usage until you send."
                 : "Claude Code reads your project (read-only) to answer. It spends no usage until you send a message."}
+            </p>
+            <p className="text-[10px] text-vs-text-muted/80">
+              Type <span className="font-mono text-vs-accent">/</span> for models, MCP, context, skills…
             </p>
           </div>
         ) : (
@@ -167,15 +223,74 @@ export function AssistantDock({
                 MCP issue: {run.model.mcpErrors.join("; ")}
               </div>
             )}
+            {cards.map((card) => (
+              <div key={card.id} className="group relative">
+                <button
+                  type="button"
+                  onClick={() => setCards((cs) => cs.filter((c) => c.id !== card.id))}
+                  title="Dismiss"
+                  className="absolute right-1.5 top-1.5 z-10 hidden rounded px-1 text-vs-text-muted hover:text-vs-text-primary group-hover:block"
+                >
+                  ×
+                </button>
+                <SlashCard
+                  name={card.name}
+                  session={run.model.session}
+                  context={{
+                    cwd: project.path,
+                    live: liveContext ?? "",
+                    costUsd: run.model.result?.costUsd,
+                  }}
+                  selectedModel={selectedModel}
+                  onPickModel={(alias) =>
+                    setSelectedModel((cur) => (cur === alias ? undefined : alias))
+                  }
+                />
+              </div>
+            ))}
           </div>
         )}
       </div>
 
       <div className="flex-none border-t border-vs-border-default p-3">
+        {menuOpen && (
+          <SlashMenu
+            commands={menuMatches}
+            activeIndex={Math.min(menuIndex, menuMatches.length - 1)}
+            onPick={pickCommand}
+          />
+        )}
         <textarea
+          ref={textareaRef}
           value={draft}
-          onChange={(e) => setDraft(e.target.value)}
+          onChange={(e) => {
+            setDraft(e.target.value);
+            setMenuIndex(0);
+          }}
           onKeyDown={(e) => {
+            if (menuOpen) {
+              const len = menuMatches.length;
+              if (e.key === "ArrowDown") {
+                e.preventDefault();
+                setMenuIndex((i) => (Math.min(i, len - 1) + 1) % len);
+                return;
+              }
+              if (e.key === "ArrowUp") {
+                e.preventDefault();
+                setMenuIndex((i) => (Math.min(i, len - 1) - 1 + len) % len);
+                return;
+              }
+              if (e.key === "Enter" || e.key === "Tab") {
+                e.preventDefault();
+                pickCommand(menuMatches[Math.min(menuIndex, len - 1)]);
+                return;
+              }
+              if (e.key === "Escape") {
+                e.preventDefault();
+                setDraft("");
+                return;
+              }
+            }
             if (e.key === "Enter" && !e.shiftKey) {
               e.preventDefault();
               submit();
@@ -186,14 +301,16 @@ export function AssistantDock({
             run.running
               ? "Claude is working…"
               : allowModify
-                ? "e.g. tighten Button's padding, add a loading state…"
-                : "Ask about tokens, components, the spec…"
+                ? "e.g. tighten Button's padding…  ( / for commands )"
+                : "Ask about the project…  ( / for commands )"
           }
           disabled={run.running}
           className="w-full resize-none rounded-md border border-vs-border-default bg-vs-bg-primary px-3 py-2 text-xs text-vs-text-primary placeholder:text-vs-text-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-vs-accent-subtle disabled:opacity-60"
         />
         <div className="mt-2 flex items-center gap-2">
-          <span className="flex-1 text-[10px] text-vs-text-muted">Enter to send · Shift+Enter for a new line</span>
+          <span className="flex-1 text-[10px] text-vs-text-muted">
+            {menuOpen ? "↑↓ to navigate · Enter to pick" : "Enter to send · / for commands"}
+          </span>
           <button
             onClick={submit}
             disabled={run.running || draft.trim().length === 0}
@@ -270,15 +387,16 @@ function Bubble({ role, text }: { role: "user" | "assistant"; text: string }): R
   return (
     <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
       <div
-        className={`min-w-0 whitespace-pre-wrap break-words rounded-lg px-3 py-2 text-xs leading-relaxed ${
-          // Assistant replies (which carry code) fill the panel so they reflow to
-          // whatever width the sidebar is dragged to; user prompts stay compact.
+        className={`min-w-0 break-words rounded-lg px-3 py-2 text-xs leading-relaxed ${
+          // Assistant replies (which carry code/markdown) fill the panel so they
+          // reflow to whatever width the sidebar is dragged to and render via
+          // Streamdown; user prompts stay compact and plain.
           isUser
-            ? "max-w-[85%] bg-vs-accent text-white"
+            ? "max-w-[85%] whitespace-pre-wrap bg-vs-accent text-white"
             : "w-full border border-vs-border-default bg-vs-bg-primary text-vs-text-secondary"
         }`}
       >
-        {text}
+        {isUser ? text : <Response>{text}</Response>}
       </div>
     </div>
   );

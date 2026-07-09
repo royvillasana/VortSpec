@@ -35,6 +35,7 @@ export interface RunModel {
     agents: string[];
     tools: string[];
     plugins: string[];
+    slashCommands: string[];
     permissionMode?: string;
     mcpStatuses: { name: string; status: string }[];
   };
@@ -117,6 +118,7 @@ function applyEvent(state: RunModel, event: RunEvent): RunModel {
           agents: event.agents ?? [],
           tools: event.tools,
           plugins: event.plugins ?? [],
+          slashCommands: event.slashCommands ?? [],
           permissionMode: event.permissionMode,
           mcpStatuses: event.mcpStatuses ?? [],
         },
