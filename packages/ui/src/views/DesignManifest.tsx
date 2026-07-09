@@ -42,6 +42,7 @@ type View = "rendered" | "markdown";
  */
 export function DesignManifest({
   project,
+  hideRail = false,
   onBack,
   onOpenRun,
   onOpenPreview,
@@ -49,6 +50,8 @@ export function DesignManifest({
   onOpenHistory,
 }: {
   project: Project;
+  /** Hide the internal ProjectRail (the IDE supplies its own activity-bar navigation). */
+  hideRail?: boolean;
   onBack: () => void;
   onOpenRun: () => void;
   onOpenPreview: () => void;
@@ -169,7 +172,8 @@ export function DesignManifest({
 
   return (
     <div className="flex h-[calc(100vh-3rem)] w-full overflow-hidden bg-vs-bg-primary text-[13px] text-vs-text-primary">
-      <ProjectRail
+      {!hideRail && (
+        <ProjectRail
         project={project}
         onHeaderClick={onBack}
         items={projectRailItems("manifest", {
@@ -181,6 +185,7 @@ export function DesignManifest({
           onHistory: onOpenHistory,
         })}
       />
+      )}
 
       <main className="flex min-w-0 flex-1 flex-col bg-vs-bg-primary">
         {/* Header */}

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { JSX } from "react";
 import type { Project, FsEntry } from "@vortspec/core/ipc";
 import { api } from "@vortspec/ui/api";
+import { FileIcon } from "./FileIcon";
 
 /**
  * A lazy file-tree Explorer for the workspace. Directories load their children
@@ -13,10 +14,13 @@ export function Explorer({
   project,
   activePath,
   onOpen,
+  onCollapse,
 }: {
   project: Project;
   activePath: string | null;
   onOpen: (path: string) => void;
+  /** Collapse the whole Explorer sidebar (shown as a header chevron). */
+  onCollapse?: () => void;
 }): JSX.Element {
   const [tree, setTree] = useState<Record<string, FsEntry[]>>({});
   const [expanded, setExpanded] = useState<Set<string>>(new Set([""]));
@@ -84,9 +88,10 @@ export function Explorer({
           }`}
           style={{ paddingLeft: `${6 + depth * 12}px` }}
         >
-          <span className="w-3 shrink-0 text-vs-text-muted">
+          <span className="w-3 shrink-0 text-[10px] text-vs-text-muted">
             {isDir ? (open ? "▾" : "▸") : ""}
           </span>
+          <FileIcon name={entry.name} isDir={isDir} open={open} />
           <span className="truncate">{entry.name}</span>
         </button>
       );
@@ -123,6 +128,19 @@ export function Explorer({
               <path d="M3 6.5A1.5 1.5 0 0 1 4.5 5h3l1.5 2h6A1.5 1.5 0 0 1 16.5 8.5v5A1.5 1.5 0 0 1 15 15H4.5A1.5 1.5 0 0 1 3 13.5v-7Z" />
             </svg>
           </button>
+          {onCollapse && (
+            <button
+              type="button"
+              aria-label="Collapse Explorer"
+              title="Collapse Explorer"
+              onClick={onCollapse}
+              className="text-vs-text-muted hover:text-vs-text-secondary"
+            >
+              <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 5l-4 5 4 5" />
+              </svg>
+            </button>
+          )}
         </div>
       </div>
       <div className="min-h-0 flex-1 overflow-auto px-1 pb-2">{renderDir("", 0)}</div>

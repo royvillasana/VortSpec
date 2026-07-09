@@ -146,10 +146,10 @@ export function WorkspacePicker({ onOpen }: { onOpen: (project: Project) => void
                   <button
                     type="button"
                     onClick={() => onOpen(p)}
-                    className="flex w-full flex-col items-start rounded-md border border-vs-border-subtle bg-vs-bg-surface px-3 py-2 text-left transition-colors hover:bg-vs-bg-hover"
+                    className="flex w-full min-w-0 flex-col items-start rounded-md border border-vs-border-subtle bg-vs-bg-surface px-3 py-2 text-left transition-colors hover:bg-vs-bg-hover"
                   >
                     <span className="text-sm text-vs-text-primary">{p.name}</span>
-                    <span className="truncate font-mono text-[11px] text-vs-text-muted">{p.path}</span>
+                    <span className="w-full break-all font-mono text-[11px] text-vs-text-muted">{p.path}</span>
                   </button>
                 </li>
               ))}

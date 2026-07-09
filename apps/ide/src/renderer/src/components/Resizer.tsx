@@ -79,3 +79,48 @@ export function usePersistentNumber(
 export function clamp(n: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, n));
 }
+
+/** A boolean persisted to localStorage (editor/panel toggles survive reloads). */
+export function usePersistentBool(
+  key: string,
+  initial: boolean,
+): [boolean, Dispatch<SetStateAction<boolean>>] {
+  const [value, setValue] = useState<boolean>(() => {
+    try {
+      const raw = localStorage.getItem(key);
+      return raw == null ? initial : raw === "true";
+    } catch {
+      return initial;
+    }
+  });
+  useEffect(() => {
+    try {
+      localStorage.setItem(key, String(value));
+    } catch {
+      /* ignore */
+    }
+  }, [key, value]);
+  return [value, setValue];
+}
+
+/** A string persisted to localStorage (e.g. the preview target). */
+export function usePersistentString<T extends string>(
+  key: string,
+  initial: T,
+): [T, Dispatch<SetStateAction<T>>] {
+  const [value, setValue] = useState<T>(() => {
+    try {
+      return (localStorage.getItem(key) as T) || initial;
+    } catch {
+      return initial;
+    }
+  });
+  useEffect(() => {
+    try {
+      localStorage.setItem(key, value);
+    } catch {
+      /* ignore */
+    }
+  }, [key, value]);
+  return [value, setValue];
+}

@@ -7,5 +7,12 @@ import { installMockVortspec, type MockConfig } from "../../desktop/tests/ct/sup
 export type HooksConfig = { mock?: MockConfig };
 
 beforeMount<HooksConfig>(async ({ hooksConfig }) => {
+  // Isolate persisted UI state (the layout store, preview toggles) between tests
+  // so one test's region changes don't leak into the next.
+  try {
+    localStorage.clear();
+  } catch {
+    /* ignore */
+  }
   installMockVortspec(hooksConfig?.mock ?? {});
 });

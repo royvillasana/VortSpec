@@ -13,6 +13,8 @@ import { ProjectRail, projectRailItems } from "@vortspec/ui/ProjectRail";
  */
 export function RunApp({
   project,
+  kind = "app",
+  hideRail = false,
   onBack,
   onFlow,
   onRun,
@@ -23,6 +25,10 @@ export function RunApp({
   onSource,
 }: {
   project: Project;
+  /** Which server to run: the project's own `app` (default) or its `storybook`. */
+  kind?: "app" | "storybook";
+  /** Hide the internal ProjectRail (the IDE supplies its own activity-bar navigation). */
+  hideRail?: boolean;
   onBack: () => void;
   onFlow: () => void;
   onRun: () => void;
@@ -36,35 +42,47 @@ export function RunApp({
   const [frameLoading, setFrameLoading] = useState(true);
   const autoRef = useRef(false);
 
+  const isApp = kind === "app";
+  const noun = isApp ? "app" : "Storybook";
+  const statusFor = (): Promise<DevServerStatus> =>
+    isApp ? api.appServerStatus(project.path) : api.devServerStatus(project.path);
+  const startFor = (): Promise<DevServerStatus> =>
+    isApp ? api.startAppServer(project.path) : api.startDevServer(project.path);
+  const stopFor = (): Promise<void> =>
+    isApp ? api.stopAppServer(project.path) : api.stopDevServer(project.path);
+
   const embedUrl = dev.url ? dev.url.replace(/\/+$/, "") + "/" : "";
 
   useEffect(() => {
-    void api.appServerStatus(project.path).then(setDev);
-    return api.onDevServerUpdate(({ projectPath, kind, status }) => {
-      if (projectPath === project.path && kind === "app") setDev(status);
+    void statusFor().then(setDev);
+    return api.onDevServerUpdate(({ projectPath, kind: k, status }) => {
+      if (projectPath === project.path && k === (isApp ? "app" : "storybook")) setDev(status);
     });
-  }, [project.path]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project.path, kind]);
 
-  // Auto-start the app runtime on entry.
+  // Auto-start the runtime on entry.
   useEffect(() => {
     if (autoRef.current) return;
     autoRef.current = true;
     void (async () => {
-      const s = await api.appServerStatus(project.path);
+      const s = await statusFor();
       if (s.url) setDev(s);
-      else setDev(await api.startAppServer(project.path));
+      else setDev(await startFor());
     })();
-  }, [project.path]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project.path, kind]);
 
   useEffect(() => setFrameLoading(true), [embedUrl]);
 
   async function start(): Promise<void> {
-    setDev(await api.startAppServer(project.path));
+    setDev(await startFor());
   }
 
   return (
     <div className="flex h-[calc(100vh-3rem)] w-full overflow-hidden bg-vs-bg-primary text-[13px] text-vs-text-primary">
-      <ProjectRail
+      {!hideRail && (
+        <ProjectRail
         project={project}
         onHeaderClick={onBack}
         items={projectRailItems("runapp", {
@@ -78,26 +96,29 @@ export function RunApp({
           onRunApp: () => undefined,
         })}
       />
+      )}
 
       <main className="flex min-w-0 flex-1 flex-col bg-vs-bg-primary">
         <header className="flex flex-none items-center gap-3 border-b border-vs-border-default px-5 py-3">
-          <span className="text-[15px] font-semibold">Run app</span>
+          <span className="text-[15px] font-semibold">{isApp ? "Run app" : "Storybook"}</span>
           <span className="rounded border border-vs-border-default px-1.5 py-px text-[10px] uppercase tracking-wide text-vs-text-muted">
             localhost
           </span>
           <span className="text-xs text-vs-text-muted">
-            Describe a screen in Chat — it's built from your components and appears here live.
+            {isApp
+              ? "Describe a screen in Chat — it's built from your components and appears here live."
+              : "Your component library, running live from Storybook."}
           </span>
           <div className="flex-1" />
           {dev.state === "running" && dev.url ? (
             <>
               <span className="font-mono text-[11px] text-vs-text-secondary">{dev.url.replace(/^https?:\/\//, "")}</span>
               <Button variant="ghost" onClick={() => void api.openInstall(dev.url!)}>Open in browser</Button>
-              <Button variant="ghost" onClick={() => api.stopAppServer(project.path)}>Stop</Button>
+              <Button variant="ghost" onClick={() => void stopFor()}>Stop</Button>
             </>
           ) : (
             <Button variant="default" disabled={dev.state === "starting"} onClick={() => void start()}>
-              {dev.state === "starting" ? "Starting…" : "Start app"}
+              {dev.state === "starting" ? "Starting…" : isApp ? "Start app" : "Start Storybook"}
             </Button>
           )}
         </header>
@@ -105,36 +126,41 @@ export function RunApp({
         <div className="min-h-0 flex-1 overflow-hidden bg-vs-bg-primary">
           {dev.state === "starting" ? (
             <Centered>
-              <Spinner /> Starting your app's dev server…
+              <Spinner /> Starting {isApp ? "your app's dev server" : "Storybook"}…
             </Centered>
           ) : embedUrl ? (
             <div className="relative h-full min-h-[340px]">
               <iframe
                 key={embedUrl}
-                title="app"
+                title={noun}
                 src={embedUrl}
                 onLoad={() => setFrameLoading(false)}
                 className="h-full min-h-[340px] w-full border-0 bg-white"
               />
               {frameLoading && (
                 <div className="absolute inset-0 grid place-items-center bg-vs-bg-primary/60 text-xs text-vs-text-secondary">
-                  Loading the app…
+                  Loading {noun}…
                 </div>
               )}
             </div>
           ) : dev.state === "no-script" ? (
             <Centered>
               <div className="max-w-md text-center">
-                <p className="text-sm font-semibold text-vs-text-primary">No app dev script found</p>
+                <p className="text-sm font-semibold text-vs-text-primary">
+                  {isApp ? "No app dev script found" : "No Storybook script found"}
+                </p>
                 <p className="mt-1 text-xs text-vs-text-muted">
-                  {dev.message ?? "Add a `dev` (or `start`/`preview`) script to package.json to run the app here."}
+                  {dev.message ??
+                    (isApp
+                      ? "Add a `dev` (or `start`/`preview`) script to package.json to run the app here."
+                      : "Add a `storybook` script to package.json to run your component library here.")}
                 </p>
               </div>
             </Centered>
           ) : dev.state === "error" ? (
             <Centered>
               <div className="max-w-md text-center">
-                <p className="text-sm font-semibold text-vs-error">The app failed to start</p>
+                <p className="text-sm font-semibold text-vs-error">{noun} failed to start</p>
                 <p className="mt-1 text-xs text-vs-text-muted">{dev.message}</p>
                 <Button variant="default" className="mt-3" onClick={() => void start()}>Try again</Button>
               </div>
@@ -142,8 +168,12 @@ export function RunApp({
           ) : (
             <Centered>
               <div className="text-center">
-                <p className="text-sm text-vs-text-secondary">Run your project's app to preview it live.</p>
-                <Button variant="primary" className="mt-3" onClick={() => void start()}>Start app</Button>
+                <p className="text-sm text-vs-text-secondary">
+                  {isApp ? "Run your project's app to preview it live." : "Run Storybook to browse your components live."}
+                </p>
+                <Button variant="primary" className="mt-3" onClick={() => void start()}>
+                  {isApp ? "Start app" : "Start Storybook"}
+                </Button>
               </div>
             </Centered>
           )}

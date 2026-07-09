@@ -21,43 +21,34 @@ async function open(c: import("@playwright/test").Locator): Promise<void> {
   await c.getByRole("button", { name: /acme-design-system/ }).click();
 }
 
-test("attaches to an already-running app server (no double-start)", async ({ mount }) => {
-  const c = await mount(<App />, { hooksConfig: { mock: { ...base, appStatus: RUNNING } } });
-  await open(c);
-  // The preview reflects the running server without the user pressing Start.
-  await expect(c.getByText(/localhost:5199/).first()).toBeVisible();
-  await expect(c.getByTitle("preview", { exact: true })).toBeVisible();
-});
-
-test("offers start-on-demand when nothing is running", async ({ mount }) => {
+test("the preview bar renders collapsed with App/Storybook and Open Browser", async ({ mount }) => {
   const c = await mount(<App />, { hooksConfig: { mock: base } });
   await open(c);
-  await expect(c.getByRole("button", { name: "Start app" })).toBeVisible();
+  const bar = c.getByTestId("preview-bar");
+  await expect(c.getByText("Preview", { exact: true })).toBeVisible();
+  await expect(bar.getByRole("button", { name: "App", exact: true })).toBeVisible();
+  await expect(bar.getByRole("button", { name: "Storybook" })).toBeVisible();
+  await expect(bar.getByRole("button", { name: "Open Browser" })).toBeVisible();
+  // Collapsed by default → the env details aren't shown.
+  await expect(c.getByText(/^URL:/)).toHaveCount(0);
 });
 
-test("renders a fix-it card when there is no dev script", async ({ mount }) => {
-  const c = await mount(<App />, {
-    hooksConfig: {
-      mock: {
-        ...base,
-        appStatus: { state: "no-script", url: null, script: null, message: "Add a dev script." } as DevServerStatus,
-      },
-    },
-  });
-  await open(c);
-  await expect(c.getByText("No app dev script found")).toBeVisible();
-  await expect(c.getByText("Add a dev script.")).toBeVisible();
-});
-
-test("toggles editor/preview layout and can hide the preview", async ({ mount }) => {
+test("expanding the preview bar shows the localhost URL and state", async ({ mount }) => {
   const c = await mount(<App />, { hooksConfig: { mock: { ...base, appStatus: RUNNING } } });
   await open(c);
-  // Layout toggle flips its label.
-  const layout = c.getByRole("button", { name: "Side-by-side" });
-  await expect(layout).toBeVisible();
-  await layout.click();
-  await expect(c.getByRole("button", { name: "Stacked" })).toBeVisible();
-  // Hiding the preview removes the App/Storybook kind toggle.
-  await c.getByTitle("Toggle live preview").click();
-  await expect(c.getByRole("button", { name: "Storybook" })).toHaveCount(0);
+  await c.getByRole("button", { name: /preview details/i }).click();
+  await expect(c.getByText(/localhost:5199/)).toBeVisible();
+  await expect(c.getByText(/running/)).toBeVisible();
+});
+
+test("the App/Storybook selector switches the preview target", async ({ mount }) => {
+  const c = await mount(<App />, { hooksConfig: { mock: base } });
+  await open(c);
+  const bar = c.getByTestId("preview-bar");
+  const app = bar.getByRole("button", { name: "App", exact: true });
+  const storybook = bar.getByRole("button", { name: "Storybook" });
+  await expect(app).toHaveAttribute("aria-pressed", "true");
+  await storybook.click();
+  await expect(storybook).toHaveAttribute("aria-pressed", "true");
+  await expect(app).toHaveAttribute("aria-pressed", "false");
 });

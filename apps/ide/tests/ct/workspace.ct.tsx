@@ -81,3 +81,44 @@ test("a file can be closed", async ({ mount }) => {
   // lowercase "no file open" shouldn't be matched too).
   await expect(c.getByText("No file open", { exact: true })).toBeVisible();
 });
+
+test("shows full-color, distinct file-type icons", async ({ mount }) => {
+  const tree: Record<string, import("@vortspec/core/ipc").FsEntry[]> = {
+    "": [
+      { name: "App.tsx", path: "App.tsx", type: "file" },
+      { name: "tokens.css", path: "tokens.css", type: "file" },
+      { name: "package.json", path: "package.json", type: "file" },
+      { name: "assets", path: "assets", type: "dir" },
+    ],
+  };
+  const c = await mount(<App />, { hooksConfig: { mock: { ...base, fsTree: tree } } });
+  await open(c);
+  // Each file type resolves a distinct icon (data-icon = its glyph/label).
+  await expect(c.locator('[data-icon="⚛"]')).toHaveCount(1); // App.tsx → react
+  await expect(c.locator('[data-icon="#"]')).toHaveCount(1); // tokens.css → css
+  await expect(c.locator('[data-icon="{ }"]')).toHaveCount(1); // package.json → json
+  // Folder icon reflects open/closed state.
+  const folder = c.getByRole("button", { name: "assets", exact: true });
+  await expect(folder.locator('[data-icon="folder-closed"]')).toHaveCount(1);
+  await folder.click();
+  await expect(folder.locator('[data-icon="folder-open"]')).toHaveCount(1);
+});
+
+test("editor tracks its container both directions when the assistant toggles", async ({ mount }) => {
+  const c = await mount(<App />, { hooksConfig: { mock: base } });
+  await open(c);
+  await c.getByRole("button", { name: "README.md" }).click();
+  const host = c.getByTestId("code-editor");
+  await expect(host).toBeVisible();
+  const width = async (): Promise<number> => (await host.boundingBox())!.width;
+  const toggle = c.getByRole("navigation", { name: "Activity bar" }).getByRole("button", { name: "Toggle assistant" });
+
+  const w0 = await width();
+  // Close the assistant → the editor's container grows → Monaco re-lays out wider.
+  await toggle.click();
+  await expect.poll(width).toBeGreaterThan(w0);
+  const w1 = await width();
+  // Reopen it → the editor shrinks back (the bug was: it didn't re-layout on grow).
+  await toggle.click();
+  await expect.poll(width).toBeLessThan(w1);
+});

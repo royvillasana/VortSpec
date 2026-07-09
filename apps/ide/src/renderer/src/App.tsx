@@ -8,66 +8,61 @@ import { Inspector } from "@vortspec/ui/Inspector";
 import { PipelinePanel } from "@vortspec/ui/PipelinePanel";
 import { Tasks } from "@vortspec/ui/Tasks";
 import { DesignManifest } from "@vortspec/ui/DesignManifest";
-import { Terminal } from "@vortspec/ui/Terminal";
-import { ActivityBar, type ActivityKey } from "./components/ActivityBar";
+import { RunApp } from "@vortspec/ui/RunApp";
+import { Profile } from "@vortspec/ui/Profile";
+import { ActivityBar } from "./components/ActivityBar";
 import { WorkspacePicker } from "./components/WorkspacePicker";
 import { Explorer } from "./components/Explorer";
 import { EditorArea } from "./components/EditorArea";
-import { Resizer, usePersistentNumber, clamp } from "./components/Resizer";
+import { PanelGroup } from "./components/PanelGroup";
+import { Resizer } from "./components/Resizer";
 import { useWorkspaceFiles } from "./lib/useWorkspaceFiles";
+import { useLayout } from "./lib/useLayout";
+import { effectiveWidths, isSidebarView, type Activity } from "./lib/layout";
 import { IdeContext, buildSeedContext } from "./lib/ide-context";
 
 /**
- * VortSpec IDE shell — a VS Code–style workbench.
- *
- * Regions: the Activity bar (far left), a persistent primary sidebar (Explorer),
- * the center editor/panel area with a bottom terminal panel, and a secondary
- * sidebar (the assistant). Each sidebar and the terminal panel is collapsible
- * and drag-resizable (sizes persist). The activity bar switches the center
- * between the code editor and the reused @vortspec/ui panels; open editor tabs
- * survive the switch because their state lives in `useWorkspaceFiles` above both.
- * No engine logic here — every panel is driven by the same core IPC as the cockpit.
+ * VortSpec IDE — a VS Code–style workbench driven by a layout store.
+ * Regions: activity bar · primary sidebar (Explorer) · center (editor group +
+ * preview bar + a dockable Terminal panel, or a full work panel) · secondary
+ * sidebar (assistant). Everything else (Source Control, Settings, and the SDD-DE
+ * panels) reuses the chromeless `@vortspec/ui` panels — one navigation, the
+ * activity bar. No engine logic here.
  */
 export default function App(): JSX.Element {
   const [workspace, setWorkspace] = useState<Project | null>(null);
-  const [activity, setActivity] = useState<ActivityKey>("explorer");
-  const [explorerOpen, setExplorerOpen] = useState(true);
-  const [chatOpen, setChatOpen] = useState(true);
-  const [terminalOpen, setTerminalOpen] = useState(false);
+  const [layout, dispatch] = useLayout();
   const [userName, setUserName] = useState<string | undefined>(undefined);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewUrl] = useState<string | null>(null);
+  const [winW, setWinW] = useState<number>(() =>
+    typeof window === "undefined" ? 1440 : window.innerWidth,
+  );
 
-  // Persisted, drag-resizable region sizes (VS Code muscle memory).
-  const [sidebarWidth, setSidebarWidth] = usePersistentNumber("vs.ide.sidebarWidth", 248);
-  const [chatWidth, setChatWidth] = usePersistentNumber("vs.ide.chatWidth", 380);
-  const [termHeight, setTermHeight] = usePersistentNumber("vs.ide.termHeight", 240);
-
-  // Open-file/tab state, lifted so the Explorer (sidebar) and editor (center)
-  // are independent regions sharing it. No-ops until a workspace is open.
   const wf = useWorkspaceFiles(workspace?.path ?? null);
 
   useEffect(() => {
-    void api
-      .getProfile()
-      .then((p) => setUserName(p.name || undefined))
-      .catch(() => undefined);
+    void api.getProfile().then((p) => setUserName(p.name || undefined)).catch(() => undefined);
   }, []);
-
-  // Ctrl-` toggles the integrated terminal (VS Code muscle memory).
+  useEffect(() => {
+    const onResize = (): void => setWinW(window.innerWidth);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+  // Ctrl-` toggles the Terminal panel (opens the terminal tab).
   useEffect(() => {
     function onKey(e: KeyboardEvent): void {
       if (e.ctrlKey && e.key === "`") {
         e.preventDefault();
-        setTerminalOpen((v) => !v);
+        dispatch({ type: "togglePanel" });
       }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  }, [dispatch]);
+
+  const go = (activity: Activity) => (): void => dispatch({ type: "setActivity", activity });
 
   if (!workspace) {
-    // The full VS Code chrome from the start — activity bar, a left (primary)
-    // sidebar, and a right (secondary) sidebar — empty until a folder is open.
     return (
       <div className="flex h-screen w-screen flex-col overflow-hidden bg-vs-bg-primary text-vs-text-primary">
         <header
@@ -76,30 +71,15 @@ export default function App(): JSX.Element {
         >
           VortSpec IDE
         </header>
-        <div className="flex min-h-0 flex-1">
-          <ActivityBar active={activity} onSelect={setActivity} chatOpen={chatOpen} onToggleChat={() => setChatOpen((v) => !v)} />
+        <div className="flex min-h-0 flex-1 overflow-hidden">
+          <ActivityBar active="explorer" onSelect={() => {}} chatOpen={layout.secondaryOpen} onToggleChat={() => dispatch({ type: "toggleSecondary" })} />
           <aside className="flex w-60 shrink-0 flex-col border-r border-vs-border-default bg-vs-bg-surface">
             <div className="px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-vs-text-muted">Explorer</div>
-            <p className="px-3 text-[12px] leading-relaxed text-vs-text-muted">
-              No folder open. Open or clone a workspace to see its files here.
-            </p>
+            <p className="px-3 text-[12px] leading-relaxed text-vs-text-muted">No folder open. Open or clone a workspace to see its files here.</p>
           </aside>
           <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-            <WorkspacePicker
-              onOpen={(project) => {
-                setWorkspace(project);
-                setActivity("explorer");
-              }}
-            />
+            <WorkspacePicker onOpen={(p) => setWorkspace(p)} />
           </div>
-          {chatOpen && (
-            <aside className="flex w-[380px] shrink-0 flex-col border-l border-vs-border-default bg-vs-bg-surface">
-              <div className="border-b border-vs-border-subtle px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-vs-text-muted">Assistant</div>
-              <p className="px-3 py-2 text-[12px] leading-relaxed text-vs-text-muted">
-                Open a workspace to vibe-engineer against your code and a live preview.
-              </p>
-            </aside>
-          )}
         </div>
         <footer className="flex h-6 shrink-0 items-center gap-3 border-t border-vs-border-default bg-vs-bg-surface px-3 text-[11px] text-vs-text-muted">
           <span>No folder open</span>
@@ -108,26 +88,103 @@ export default function App(): JSX.Element {
     );
   }
 
-  // Reused cockpit panels expect navigation callbacks; map them onto the IDE's
-  // activity switcher so their internal rail stays consistent with ours.
-  const goExplorer = (): void => setActivity("explorer");
-  const goPipeline = (): void => setActivity("pipeline");
-  const goTokens = (): void => setActivity("tokens");
-  const goManifest = (): void => setActivity("manifest");
-  const goSource = (): void => setActivity("source");
+  const eff = effectiveWidths(layout, winW);
+  const showPrimary = isSidebarView(layout.activity) && layout.primaryOpen;
+  const isExplorer = layout.activity === "explorer";
+  // Forces an editor relayout whenever a region size/visibility changes.
+  const relayoutKey =
+    Math.round(eff.primary + eff.secondary + eff.panelSide) +
+    (layout.editorOpen ? 1 : 0) * 7 +
+    (layout.panelOpen ? layout.panelSize : 0);
 
-  // Opening a file from the Explorer brings the editor to the front.
   const openFromExplorer = (path: string): void => {
     void wf.openFile(path);
-    setActivity("explorer");
+    // Opening a file must not touch the sidebar (activity is already Explorer);
+    // just make sure the editor is on screen.
+    if (!layout.editorOpen) dispatch({ type: "setEditorOpen", open: true });
   };
 
+  const panelGroup = (
+    <PanelGroup
+      project={workspace}
+      tabs={layout.panelTabs}
+      selected={layout.panelSelected}
+      dock={layout.panelDock}
+      onSelect={(t) => dispatch({ type: "selectPanelTab", tab: t })}
+      onClose={(t) => dispatch({ type: "closePanelTab", tab: t })}
+      onToggleDock={() => dispatch({ type: "setPanelDock", dock: layout.panelDock === "bottom" ? "right" : "bottom" })}
+      onClosePanel={() => dispatch({ type: "togglePanel" })}
+    />
+  );
+
+  function centerForExplorer(): JSX.Element {
+    if (!layout.editorOpen && !layout.panelOpen) {
+      return (
+        <div className="flex flex-1 items-center justify-center text-sm text-vs-text-muted">
+          Editor and panel are closed. Reopen from the status bar.
+        </div>
+      );
+    }
+    if (!layout.editorOpen && layout.panelOpen) {
+      return <div className="min-h-0 min-w-0 flex-1">{panelGroup}</div>;
+    }
+    // Editor open (+ optional panel docked bottom or right).
+    const bottomPanel = layout.panelOpen && layout.panelDock === "bottom";
+    const rightPanel = layout.panelOpen && layout.panelDock === "right";
+    return (
+      <div className="flex min-h-0 min-w-0 flex-1">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+          <EditorArea project={workspace!} wf={wf} relayoutKey={relayoutKey} />
+          {bottomPanel && (
+            <>
+              <Resizer orientation="horizontal" ariaLabel="Resize panel" onDelta={(d) => dispatch({ type: "nudgePanel", delta: -d })} />
+              <div style={{ height: layout.panelSize }} className="min-h-0 flex-none">
+                {panelGroup}
+              </div>
+            </>
+          )}
+        </div>
+        {rightPanel && (
+          <>
+            <Resizer orientation="vertical" ariaLabel="Resize panel" onDelta={(d) => dispatch({ type: "nudgePanel", delta: -d })} />
+            <div style={{ width: eff.panelSide }} className="min-w-0 flex-none">
+              {panelGroup}
+            </div>
+          </>
+        )}
+      </div>
+    );
+  }
+
+  function workPanel(): JSX.Element {
+    const p = workspace!;
+    const a = layout.activity;
+    const inner =
+      a === "source" ? (
+        <SourceControl project={p} hideRail onBack={go("explorer")} onFlow={go("flow")} onRun={go("run")} onPlayground={go("explorer")} onTokens={go("tokens")} onManifest={go("manifest")} onHistory={go("explorer")} />
+      ) : a === "flow" ? (
+        <PipelinePanel project={p} onOpenManifest={go("manifest")} onOpenTokens={go("tokens")} />
+      ) : a === "run" ? (
+        <RunApp project={p} kind="app" hideRail onBack={go("explorer")} onFlow={go("flow")} onRun={go("run")} onPlayground={go("play")} onTokens={go("tokens")} onManifest={go("manifest")} onHistory={go("explorer")} onSource={go("source")} />
+      ) : a === "play" ? (
+        <RunApp project={p} kind="storybook" hideRail onBack={go("explorer")} onFlow={go("flow")} onRun={go("run")} onPlayground={go("play")} onTokens={go("tokens")} onManifest={go("manifest")} onHistory={go("explorer")} onSource={go("source")} />
+      ) : a === "tokens" ? (
+        <Inspector project={p} hideRail onBack={go("explorer")} onOpenPreview={go("explorer")} onOpenRun={go("run")} onOpenHistory={go("explorer")} onOpenManifest={go("manifest")} />
+      ) : a === "tasks" ? (
+        <Tasks project={p} hideRail onBack={go("explorer")} onFlow={go("flow")} onRun={go("run")} onPlayground={go("explorer")} onTokens={go("tokens")} onManifest={go("manifest")} onHistory={go("explorer")} onSource={go("source")} />
+      ) : a === "manifest" ? (
+        <DesignManifest project={p} hideRail onBack={go("explorer")} onOpenRun={go("run")} onOpenPreview={go("explorer")} onOpenInspector={go("tokens")} onOpenHistory={go("explorer")} />
+      ) : a === "settings" ? (
+        <Profile onBack={go("explorer")} />
+      ) : (
+        <div className="flex flex-1 items-center justify-center text-sm text-vs-text-muted">This view isn’t available in the IDE yet.</div>
+      );
+    return <div className="min-w-0 flex-1 overflow-auto">{inner}</div>;
+  }
+
   return (
-    <IdeContext.Provider
-      value={{ activeFile: wf.activePath, previewUrl, setActiveFile: () => {}, setPreviewUrl }}
-    >
+    <IdeContext.Provider value={{ activeFile: wf.activePath, previewUrl, setActiveFile: () => {}, setPreviewUrl: () => {} }}>
       <div className="flex h-screen w-screen flex-col overflow-hidden bg-vs-bg-primary text-vs-text-primary">
-        {/* Draggable title bar (hiddenInset) */}
         <header
           className="flex h-9 shrink-0 items-center justify-center border-b border-vs-border-default bg-vs-bg-surface text-xs text-vs-text-muted"
           style={{ WebkitAppRegion: "drag" } as unknown as CSSProperties}
@@ -135,210 +192,85 @@ export default function App(): JSX.Element {
           {workspace.name} — VortSpec IDE
         </header>
 
-        <div className="flex min-h-0 flex-1">
-          <ActivityBar
-            active={activity}
-            onSelect={(k) => {
-              setActivity(k);
-              if (k === "explorer") setExplorerOpen(true);
-            }}
-            chatOpen={chatOpen}
-            onToggleChat={() => setChatOpen((v) => !v)}
-          />
+        <div className="flex min-h-0 flex-1 overflow-hidden">
+          <ActivityBar active={layout.activity} onSelect={(a) => dispatch({ type: "setActivity", activity: a })} chatOpen={layout.secondaryOpen} onToggleChat={() => dispatch({ type: "toggleSecondary" })} />
 
-          {/* LEFT primary sidebar — the persistent Explorer (collapsible + resizable) */}
-          {explorerOpen && (
+          {showPrimary && (
             <>
-              <aside
-                style={{ width: sidebarWidth }}
-                className="flex shrink-0 flex-col overflow-auto border-r border-vs-border-default bg-vs-bg-surface"
-              >
-                <Explorer project={workspace} activePath={wf.activePath} onOpen={openFromExplorer} />
+              <aside style={{ width: eff.primary }} className="flex shrink-0 flex-col overflow-auto border-r border-vs-border-default bg-vs-bg-surface transition-[width] duration-150 ease-out">
+                <Explorer project={workspace} activePath={wf.activePath} onOpen={openFromExplorer} onCollapse={() => dispatch({ type: "togglePrimary" })} />
               </aside>
-              <Resizer
-                orientation="vertical"
-                ariaLabel="Resize sidebar"
-                onDelta={(d) => setSidebarWidth((w) => clamp(w + d, 180, 640))}
-              />
+              <Resizer orientation="vertical" ariaLabel="Resize sidebar" onDelta={(d) => dispatch({ type: "nudgePrimary", delta: d })} />
             </>
           )}
 
-          {/* CENTER — the activity's main view + a bottom terminal panel */}
           <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-            <main className="flex min-h-0 flex-1 overflow-hidden">
-              {activity === "explorer" && <EditorArea project={workspace} wf={wf} />}
-              {activity === "pipeline" && (
-                <div className="min-w-0 flex-1 overflow-auto">
-                  <PipelinePanel project={workspace} onOpenManifest={goManifest} onOpenTokens={goTokens} />
-                </div>
-              )}
-              {activity === "source" && (
-                <div className="min-w-0 flex-1 overflow-auto">
-                  <SourceControl
-                    project={workspace}
-                    onBack={goExplorer}
-                    onFlow={goPipeline}
-                    onRun={goExplorer}
-                    onPlayground={goExplorer}
-                    onTokens={goTokens}
-                    onManifest={goManifest}
-                    onHistory={goExplorer}
-                  />
-                </div>
-              )}
-              {activity === "tokens" && (
-                <div className="min-w-0 flex-1 overflow-auto">
-                  <Inspector
-                    project={workspace}
-                    onBack={goExplorer}
-                    onOpenPreview={goExplorer}
-                    onOpenRun={goExplorer}
-                    onOpenHistory={goExplorer}
-                    onOpenManifest={goManifest}
-                  />
-                </div>
-              )}
-              {activity === "tasks" && (
-                <div className="min-w-0 flex-1 overflow-auto">
-                  <Tasks
-                    project={workspace}
-                    onBack={goExplorer}
-                    onFlow={goPipeline}
-                    onRun={goExplorer}
-                    onPlayground={goExplorer}
-                    onTokens={goTokens}
-                    onManifest={goManifest}
-                    onHistory={goExplorer}
-                    onSource={goSource}
-                  />
-                </div>
-              )}
-              {activity === "manifest" && (
-                <div className="min-w-0 flex-1 overflow-auto">
-                  <DesignManifest
-                    project={workspace}
-                    onBack={goExplorer}
-                    onOpenRun={goExplorer}
-                    onOpenPreview={goExplorer}
-                    onOpenInspector={goTokens}
-                    onOpenHistory={goExplorer}
-                  />
-                </div>
-              )}
-            </main>
-
-            {terminalOpen && (
-              <>
-                <Resizer
-                  orientation="horizontal"
-                  ariaLabel="Resize terminal"
-                  onDelta={(d) => setTermHeight((h) => clamp(h - d, 120, 600))}
-                />
-                <section
-                  style={{ height: termHeight }}
-                  className="flex shrink-0 flex-col border-t border-vs-border-default bg-vs-bg-code"
-                >
-                  <div className="flex items-center justify-between px-3 py-1 text-[11px] text-vs-text-muted">
-                    <span className="font-semibold uppercase tracking-wide">Terminal</span>
-                    <button
-                      type="button"
-                      aria-label="Close terminal"
-                      onClick={() => setTerminalOpen(false)}
-                      className="hover:text-vs-text-secondary"
-                    >
-                      ✕
-                    </button>
-                  </div>
-                  <div className="min-h-0 flex-1">
-                    <Terminal project={workspace} />
-                  </div>
-                </section>
-              </>
-            )}
+            {/* Breadcrumb — close/change the project (back to Home), above the editor tabs. */}
+            <nav
+              aria-label="Breadcrumb"
+              className="flex flex-none items-center gap-1.5 border-b border-vs-border-subtle bg-vs-bg-surface px-3 py-1 text-[11px] text-vs-text-muted"
+            >
+              <button
+                type="button"
+                onClick={() => setWorkspace(null)}
+                title="Close project — back to Home"
+                className="hover:text-vs-text-primary"
+              >
+                Home
+              </button>
+              <span className="text-vs-text-muted/50">/</span>
+              <button
+                type="button"
+                onClick={() => setWorkspace(null)}
+                title="Change project"
+                className="max-w-[220px] truncate text-vs-text-secondary hover:text-vs-text-primary"
+              >
+                {workspace.name}
+              </button>
+              <span className="text-vs-text-muted/50">/</span>
+              <span className="capitalize text-vs-text-secondary">{layout.activity}</span>
+            </nav>
+            <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
+              {isExplorer ? centerForExplorer() : workPanel()}
+            </div>
           </div>
 
-          {/* RIGHT secondary sidebar — the assistant (collapsible + resizable) */}
-          {chatOpen && (
+          {layout.secondaryOpen && (
             <>
-              <Resizer
-                orientation="vertical"
-                ariaLabel="Resize assistant"
-                onDelta={(d) => setChatWidth((w) => clamp(w - d, 300, 720))}
-              />
-              <div
-                style={{ width: chatWidth }}
-                className="flex shrink-0 flex-col border-l border-vs-border-default"
-              >
-                {/* Context chip: what the assistant is grounded in (transparency). */}
-                <div
-                  data-testid="assistant-context"
-                  className="flex flex-none flex-wrap items-center gap-1.5 border-b border-vs-border-subtle bg-vs-bg-surface px-3 py-1.5 text-[11px] text-vs-text-muted"
-                >
+              <Resizer orientation="vertical" ariaLabel="Resize assistant" onDelta={(d) => dispatch({ type: "nudgeSecondary", delta: -d })} />
+              <div style={{ width: eff.secondary }} className="flex min-w-0 shrink-0 flex-col overflow-hidden border-l border-vs-border-default transition-[width] duration-150 ease-out">
+                <div data-testid="assistant-context" className="flex flex-none flex-wrap items-center gap-1.5 border-b border-vs-border-subtle bg-vs-bg-surface px-3 py-1.5 text-[11px] text-vs-text-muted">
                   <span className="uppercase tracking-wide">Context</span>
                   {wf.activePath ? (
-                    <span className="rounded bg-vs-bg-elevated px-1.5 py-0.5 font-mono text-vs-text-secondary">
-                      {wf.activePath}
-                    </span>
+                    <span className="truncate rounded bg-vs-bg-elevated px-1.5 py-0.5 font-mono text-vs-text-secondary">{wf.activePath}</span>
                   ) : (
                     <span>no file open</span>
                   )}
-                  {previewUrl && (
-                    <span className="rounded bg-vs-bg-elevated px-1.5 py-0.5 font-mono text-vs-text-secondary">
-                      {previewUrl.replace(/^https?:\/\//, "")}
-                    </span>
-                  )}
                 </div>
                 <div className="min-h-0 flex-1">
-                  <AssistantDock
-                    project={workspace}
-                    allowModify
-                    userName={userName}
-                    seedContext={buildSeedContext(wf.activePath, previewUrl)}
-                    onClose={() => setChatOpen(false)}
-                  />
+                  <AssistantDock project={workspace} fill allowModify userName={userName} seedContext={buildSeedContext(wf.activePath, previewUrl)} onClose={() => dispatch({ type: "toggleSecondary" })} />
                 </div>
               </div>
             </>
           )}
         </div>
 
-        {/* Status bar */}
         <footer className="flex h-6 shrink-0 items-center gap-3 border-t border-vs-border-default bg-vs-bg-surface px-3 text-[11px] text-vs-text-muted">
-          <button
-            type="button"
-            onClick={() => setWorkspace(null)}
-            className="hover:text-vs-text-secondary"
-            title="Switch workspace"
-          >
+          <button type="button" onClick={() => setWorkspace(null)} className="hover:text-vs-text-secondary" title="Switch workspace">
             {workspace.name}
           </button>
           <span className="text-vs-text-muted/60">·</span>
-          <button
-            type="button"
-            aria-pressed={explorerOpen}
-            onClick={() => setExplorerOpen((v) => !v)}
-            className={`rounded px-2 py-0.5 ${explorerOpen ? "text-vs-text-primary" : "hover:text-vs-text-secondary"}`}
-            title="Toggle sidebar"
-          >
+          <button type="button" aria-pressed={showPrimary} onClick={() => dispatch({ type: "togglePrimary" })} className={`rounded px-2 py-0.5 ${showPrimary ? "text-vs-text-primary" : "hover:text-vs-text-secondary"}`} title="Toggle sidebar">
             Sidebar
           </button>
-          <span className="capitalize">{activity}</span>
-          <button
-            type="button"
-            aria-pressed={terminalOpen}
-            onClick={() => setTerminalOpen((v) => !v)}
-            className={`ml-auto rounded px-2 py-0.5 ${terminalOpen ? "text-vs-text-primary" : "hover:text-vs-text-secondary"}`}
-            title="Toggle terminal (Ctrl+`)"
-          >
+          <button type="button" aria-pressed={layout.editorOpen} onClick={() => dispatch({ type: "toggleEditor" })} className={`rounded px-2 py-0.5 ${layout.editorOpen ? "text-vs-text-primary" : "hover:text-vs-text-secondary"}`} title="Toggle editor">
+            Editor
+          </button>
+          <span className="capitalize">{layout.activity}</span>
+          <button type="button" aria-pressed={layout.panelOpen} onClick={() => dispatch({ type: "togglePanel" })} className={`ml-auto rounded px-2 py-0.5 ${layout.panelOpen ? "text-vs-text-primary" : "hover:text-vs-text-secondary"}`} title="Toggle terminal panel (Ctrl+`)">
             Terminal
           </button>
-          <button
-            type="button"
-            aria-pressed={chatOpen}
-            onClick={() => setChatOpen((v) => !v)}
-            className={`rounded px-2 py-0.5 ${chatOpen ? "text-vs-text-primary" : "hover:text-vs-text-secondary"}`}
-            title="Toggle assistant"
-          >
+          <button type="button" aria-pressed={layout.secondaryOpen} onClick={() => dispatch({ type: "toggleSecondary" })} className={`rounded px-2 py-0.5 ${layout.secondaryOpen ? "text-vs-text-primary" : "hover:text-vs-text-secondary"}`} title="Toggle assistant">
             Assistant
           </button>
         </footer>

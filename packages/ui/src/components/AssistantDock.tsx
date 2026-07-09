@@ -20,6 +20,7 @@ export function AssistantDock({
   allowModify = false,
   onClose,
   userName,
+  fill = false,
 }: {
   project: Project;
   /** Optional one-line context the dock mentions to Claude on the first message. */
@@ -30,6 +31,9 @@ export function AssistantDock({
   onClose?: () => void;
   /** The user's profile name — the assistant addresses them by it, if set. */
   userName?: string;
+  /** Fill the parent (the host owns width + border) instead of the fixed 360px
+   *  panel. Use in a resizable host like the IDE's right sidebar. */
+  fill?: boolean;
 }): React.JSX.Element {
   const run = useAgentRun();
   const [draft, setDraft] = useState("");
@@ -75,7 +79,11 @@ export function AssistantDock({
   }
 
   return (
-    <aside className="flex h-full w-[360px] shrink-0 flex-col border-l border-vs-border-default bg-vs-bg-surface">
+    <aside
+      className={`flex h-full min-w-0 flex-col bg-vs-bg-surface ${
+        fill ? "w-full" : "w-[360px] shrink-0 border-l border-vs-border-default"
+      }`}
+    >
       <div className="flex flex-none items-center gap-2 border-b border-vs-border-default px-4 py-3">
         <span className="text-sm font-semibold">{allowModify ? "Modify with Claude" : "Assistant"}</span>
         <span className="font-mono text-[10px] text-vs-text-muted">· {project.name}</span>
@@ -97,7 +105,7 @@ export function AssistantDock({
             <p className="text-sm font-medium text-vs-text-secondary">
               {allowModify ? "Change a component" : "Ask about this project"}
             </p>
-            <p className="max-w-[240px] text-xs leading-relaxed text-vs-text-muted">
+            <p className="max-w-[46ch] text-xs leading-relaxed text-vs-text-muted">
               {allowModify
                 ? "Describe a change to a component you see in Storybook — Claude Code edits it and Storybook reloads live. No usage until you send."
                 : "Claude Code reads your project (read-only) to answer. It spends no usage until you send a message."}
@@ -165,10 +173,12 @@ function Bubble({ role, text }: { role: "user" | "assistant"; text: string }): R
   return (
     <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
       <div
-        className={`max-w-[85%] whitespace-pre-wrap break-words rounded-lg px-3 py-2 text-xs leading-relaxed ${
+        className={`min-w-0 whitespace-pre-wrap break-words rounded-lg px-3 py-2 text-xs leading-relaxed ${
+          // Assistant replies (which carry code) fill the panel so they reflow to
+          // whatever width the sidebar is dragged to; user prompts stay compact.
           isUser
-            ? "bg-vs-accent text-white"
-            : "border border-vs-border-default bg-vs-bg-primary text-vs-text-secondary"
+            ? "max-w-[85%] bg-vs-accent text-white"
+            : "w-full border border-vs-border-default bg-vs-bg-primary text-vs-text-secondary"
         }`}
       >
         {text}

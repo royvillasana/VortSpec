@@ -11,6 +11,7 @@ import { ProjectRail, projectRailItems } from "@vortspec/ui/ProjectRail";
  */
 export function Tasks({
   project,
+  hideRail = false,
   onBack,
   onFlow,
   onRun,
@@ -21,6 +22,8 @@ export function Tasks({
   onSource,
 }: {
   project: Project;
+  /** Hide the internal ProjectRail (the IDE supplies its own activity-bar navigation). */
+  hideRail?: boolean;
   onBack: () => void;
   onFlow: () => void;
   onRun: () => void;
@@ -70,7 +73,8 @@ export function Tasks({
 
   return (
     <div className="flex h-[calc(100vh-3rem)] w-full overflow-hidden bg-vs-bg-primary text-[13px] text-vs-text-primary">
-      <ProjectRail
+      {!hideRail && (
+        <ProjectRail
         project={project}
         onHeaderClick={onBack}
         items={projectRailItems("tasks", {
@@ -84,6 +88,7 @@ export function Tasks({
           onTasks: () => undefined,
         })}
       />
+      )}
 
       <main className="flex min-w-0 flex-1 flex-col overflow-y-auto bg-vs-bg-primary">
         <header className="flex flex-none items-center gap-3 border-b border-vs-border-default px-8 py-4">

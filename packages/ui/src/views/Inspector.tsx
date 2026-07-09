@@ -91,6 +91,7 @@ const SOURCE: Record<TokenSource, { label: string; dot: string; text: string; li
  */
 export function Inspector({
   project,
+  hideRail = false,
   onBack,
   onOpenPreview,
   onOpenRun,
@@ -98,6 +99,8 @@ export function Inspector({
   onOpenManifest,
 }: {
   project: Project;
+  /** Hide the internal ProjectRail (the IDE supplies its own activity-bar navigation). */
+  hideRail?: boolean;
   onBack: () => void;
   onOpenPreview: () => void;
   onOpenRun: () => void;
@@ -279,7 +282,8 @@ export function Inspector({
 
   return (
     <div className="flex h-[calc(100vh-3rem)] w-full overflow-hidden bg-vs-bg-primary text-[13px] text-vs-text-primary">
-      <ProjectRail
+      {!hideRail && (
+        <ProjectRail
         project={project}
         onHeaderClick={onBack}
         items={projectRailItems(
@@ -295,6 +299,7 @@ export function Inspector({
           { tokens: <span className="font-mono text-[11px] text-vs-text-muted">{total}</span> },
         )}
       />
+      )}
 
       {/* Main */}
       <main className="flex min-w-0 flex-1 flex-col bg-vs-bg-primary">

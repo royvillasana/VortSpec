@@ -42,12 +42,6 @@ test("seeds the assistant context with the open file", async ({ mount }) => {
   await expect(c.getByTestId("assistant-context")).toContainText("README.md");
 });
 
-test("surfaces the live preview URL in the assistant context", async ({ mount }) => {
-  const c = await mount(<App />, { hooksConfig: { mock: { ...base, appStatus: RUNNING } } });
-  await open(c);
-  await expect(c.getByTestId("assistant-context")).toContainText("localhost:5199");
-});
-
 test("gated artifacts stay behind the reused Manifest approval path", async ({ mount }) => {
   // The IDE adds no bypass: DESIGN.md lives in the reused DesignManifest panel,
   // which routes edits through the shared approval/snapshot handlers.

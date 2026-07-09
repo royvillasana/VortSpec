@@ -25,6 +25,7 @@ export function EditorGroup({
   onSave,
   onReload,
   loadHead,
+  relayoutKey,
 }: {
   files: OpenFile[];
   activePath: string | null;
@@ -35,6 +36,8 @@ export function EditorGroup({
   onReload: (path: string) => void;
   /** Fetch the file's committed contents at HEAD (null when untracked). */
   loadHead: (path: string) => Promise<string | null>;
+  /** Bump to force an editor relayout when the container is shown/re-docked. */
+  relayoutKey?: number;
 }): JSX.Element {
   const active = files.find((f) => f.path === activePath) ?? null;
   const [diff, setDiff] = useState(false);
@@ -144,14 +147,21 @@ export function EditorGroup({
         </div>
       )}
 
-      {/* Editor / diff */}
-      <div className="min-h-0 flex-1">
+      {/* Editor / diff — positioned so the absolute-filling editor gets a
+          definite size regardless of the flexbox percentage-height quirk. */}
+      <div className="relative min-h-0 flex-1">
         {active && diff ? (
-          <DiffView path={active.path} original={head ?? ""} modified={active.content} />
+          <DiffView
+            path={active.path}
+            original={head ?? ""}
+            modified={active.content}
+            relayoutKey={relayoutKey}
+          />
         ) : active ? (
           <CodeEditor
             path={active.path}
             value={active.content}
+            relayoutKey={relayoutKey}
             onChange={(v) => onChange(active.path, v)}
           />
         ) : null}

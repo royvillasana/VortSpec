@@ -45,10 +45,11 @@ test("opening a workspace reveals the four-region shell", async ({ mount }) => {
   await expect(rail.getByRole("button", { name: "Explorer" })).toBeVisible();
   await expect(rail.getByRole("button", { name: "Source Control" })).toBeVisible();
   await expect(rail.getByRole("button", { name: "Design tokens" })).toBeVisible();
-  // The code activity's Explorer + editor + preview regions.
+  // The code activity's Explorer + editor + preview bar regions.
   await expect(c.getByText("Explorer", { exact: true })).toBeVisible();
   await expect(c.getByText("No file open", { exact: true })).toBeVisible();
-  await expect(c.getByRole("button", { name: "Side-by-side" })).toBeVisible();
+  await expect(c.getByText("Preview", { exact: true })).toBeVisible(); // the preview bar
+  await expect(c.getByRole("button", { name: "Open Browser" })).toBeVisible();
   // The assistant chat (right rail) toggle.
   await expect(rail.getByRole("button", { name: "Toggle assistant" })).toBeVisible();
 });
@@ -64,17 +65,51 @@ test("the activity bar switches to a reused @vortspec/ui panel", async ({ mount 
   await expect(c.getByText("No file open", { exact: true })).toHaveCount(0);
 });
 
-test("the Explorer sidebar persists when switching to a panel, and collapses", async ({ mount }) => {
+test("switching to a work panel hides the Explorer; Explorer restores it", async ({ mount }) => {
   const c = await mount(<App />, { hooksConfig: { mock: base } });
   await open(c);
   const rail = c.getByRole("navigation", { name: "Activity bar" });
-  // Switch to a panel — the editor gives way, but the Explorer sidebar stays.
+  await expect(c.getByText("Explorer", { exact: true })).toBeVisible();
+  // Switch to a work panel — the editor and the Explorer sidebar give way to it.
   await rail.getByRole("button", { name: "Design tokens" }).click();
   await expect(c.getByText("No file open", { exact: true })).toHaveCount(0);
-  await expect(c.getByText("Explorer", { exact: true })).toBeVisible();
-  // The status-bar Sidebar toggle collapses it.
-  await c.getByRole("button", { name: "Sidebar", exact: true }).click();
   await expect(c.getByText("Explorer", { exact: true })).toHaveCount(0);
+  // Back to Explorer restores the sidebar.
+  await rail.getByRole("button", { name: "Explorer" }).click();
+  await expect(c.getByText("Explorer", { exact: true })).toBeVisible();
+});
+
+test("the Explorer header chevron collapses the sidebar; the activity reopens it", async ({ mount }) => {
+  const c = await mount(<App />, { hooksConfig: { mock: base } });
+  await open(c);
+  await expect(c.getByText("Explorer", { exact: true })).toBeVisible();
+  await c.getByRole("button", { name: "Collapse Explorer" }).click();
+  await expect(c.getByText("Explorer", { exact: true })).toHaveCount(0);
+  // Reopen via the Explorer activity icon.
+  await c.getByRole("navigation", { name: "Activity bar" }).getByRole("button", { name: "Explorer" }).click();
+  await expect(c.getByText("Explorer", { exact: true })).toBeVisible();
+});
+
+test("re-clicking the active Explorer activity collapses the sidebar", async ({ mount }) => {
+  const c = await mount(<App />, { hooksConfig: { mock: base } });
+  await open(c);
+  const explorer = c.getByRole("navigation", { name: "Activity bar" }).getByRole("button", { name: "Explorer" });
+  await expect(c.getByText("Explorer", { exact: true })).toBeVisible();
+  await explorer.click(); // active → collapse
+  await expect(c.getByText("Explorer", { exact: true })).toHaveCount(0);
+  await explorer.click(); // reopen
+  await expect(c.getByText("Explorer", { exact: true })).toBeVisible();
+});
+
+test("the breadcrumb Home returns to the workspace picker", async ({ mount }) => {
+  const c = await mount(<App />, { hooksConfig: { mock: base } });
+  await open(c);
+  const crumb = c.getByRole("navigation", { name: "Breadcrumb" });
+  await expect(crumb.getByText(/acme-design-system/)).toBeVisible();
+  await crumb.getByRole("button", { name: "Home" }).click();
+  // Back to the picker.
+  await expect(c.getByRole("heading", { name: "VortSpec IDE" })).toBeVisible();
+  await expect(c.getByRole("button", { name: /Open Folder/ })).toBeVisible();
 });
 
 test("can collapse the assistant chat", async ({ mount }) => {
