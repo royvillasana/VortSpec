@@ -15,12 +15,15 @@ export function Explorer({
   activePath,
   onOpen,
   onCollapse,
+  openCount = 0,
 }: {
   project: Project;
   activePath: string | null;
   onOpen: (path: string) => void;
   /** Collapse the whole Explorer sidebar (shown as a header chevron). */
   onCollapse?: () => void;
+  /** Number of currently-open files — shown as a badge by the "Explorer" header. */
+  openCount?: number;
 }): JSX.Element {
   const [tree, setTree] = useState<Record<string, FsEntry[]>>({});
   // Inline new-file/new-folder input under a parent dir ("" = root).
@@ -283,8 +286,16 @@ export function Explorer({
   return (
     <div className="flex h-full flex-col">
       <div className="flex items-center justify-between px-3 py-2">
-        <span className="text-[11px] font-semibold uppercase tracking-wide text-vs-text-muted">
+        <span className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-vs-text-muted">
           Explorer
+          {openCount > 0 && (
+            <span
+              title={`${openCount} open file${openCount === 1 ? "" : "s"}`}
+              className="inline-flex min-w-[1.1rem] items-center justify-center rounded-full bg-vs-bg-elevated px-1 text-[10px] font-medium tabular-nums text-vs-text-secondary"
+            >
+              {openCount}
+            </span>
+          )}
         </span>
         <div className="flex items-center gap-2">
           <button

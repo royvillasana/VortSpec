@@ -327,7 +327,7 @@ export default function App(): JSX.Element {
           {showPrimary && (
             <>
               <aside style={{ width: eff.primary }} className="flex shrink-0 flex-col overflow-auto border-r border-vs-border-default bg-vs-bg-surface transition-[width] duration-150 ease-out">
-                <Explorer project={workspace} activePath={wf.activePath} onOpen={openFromExplorer} onCollapse={() => dispatch({ type: "togglePrimary" })} />
+                <Explorer project={workspace} activePath={wf.activePath} onOpen={openFromExplorer} onCollapse={() => dispatch({ type: "togglePrimary" })} openCount={wf.files.length} />
               </aside>
               <Resizer orientation="vertical" ariaLabel="Resize sidebar" onDelta={(d) => dispatch({ type: "nudgePrimary", delta: d })} />
             </>

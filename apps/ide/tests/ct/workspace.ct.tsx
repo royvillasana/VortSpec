@@ -126,6 +126,19 @@ test("Open Browser opens the selected preview tab's own server (App vs Storybook
   await expect.poll(async () => (await opens()).filter((u) => u === "http://localhost:4000").length).toBeGreaterThanOrEqual(2);
 });
 
+test("the Explorer header shows a badge counting the open files", async ({ mount }) => {
+  const c = await mount(<App />, { hooksConfig: { mock: base } });
+  await open(c);
+  // No badge until a file is open.
+  await expect(c.getByTitle(/open file/)).toHaveCount(0);
+  await c.getByRole("button", { name: "README.md" }).click();
+  await expect(c.getByTitle("1 open file")).toBeVisible();
+  // Opening a second file bumps the count.
+  await c.getByRole("button", { name: "src", exact: true }).click();
+  await c.getByRole("button", { name: "index.ts" }).click();
+  await expect(c.getByTitle("2 open files")).toBeVisible();
+});
+
 test("opening a file adds a tab; opening a second adds another", async ({ mount }) => {
   const c = await mount(<App />, { hooksConfig: { mock: base } });
   await open(c);
