@@ -59,7 +59,7 @@ export function AgentPicker({
       {open && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div role="listbox" className="absolute left-0 top-full z-50 mt-1 min-w-[220px] rounded-md border border-vs-border-default bg-vs-bg-elevated py-1 shadow-xl">
+          <div role="listbox" className="absolute bottom-full left-0 z-50 mb-1 max-h-72 min-w-[220px] overflow-y-auto rounded-md border border-vs-border-default bg-vs-bg-elevated py-1 shadow-xl">
             <div className="px-3 py-1 text-[9px] uppercase tracking-wide text-vs-text-muted/70">Presets</div>
             {presets.map(item)}
             {subagents.length > 0 && (

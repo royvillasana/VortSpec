@@ -271,11 +271,7 @@ export function AssistantDock({
       }`}
     >
       <div className="flex flex-none items-center gap-2 border-b border-vs-border-default px-4 py-3">
-        {agent && onAgentChange && presets ? (
-          <AgentPicker agents={buildAgentList(run.model.session?.agents, presets)} selected={agent} onSelect={onAgentChange} />
-        ) : (
-          <span className="text-sm font-semibold">{allowModify ? "Modify with Claude" : "Assistant"}</span>
-        )}
+        <span className="text-sm font-semibold">{allowModify ? "Modify with Claude" : "Assistant"}</span>
         <span className="font-mono text-[10px] text-vs-text-muted">· {project.name}</span>
         <div className="flex-1" />
         {showSession && run.model.session?.model && (
@@ -467,14 +463,21 @@ export function AssistantDock({
             className="w-full resize-none bg-transparent px-1 py-1 text-xs text-vs-text-primary placeholder:text-vs-text-muted focus:outline-none disabled:opacity-60"
           />
         </div>
-        <div className="mt-2 flex items-center gap-2">
+        <div className="mt-2 flex items-center gap-1.5">
+          {agent && onAgentChange && presets && (
+            <AgentPicker
+              agents={buildAgentList(run.model.session?.agents, presets)}
+              selected={agent}
+              onSelect={onAgentChange}
+            />
+          )}
           <ModelSelector
             active={run.model.session?.model}
             selected={selectedModel}
             onSelect={setSelectedModel}
           />
-          <span className="flex-1 truncate text-[10px] text-vs-text-muted">
-            {mentionOpen ? "↑↓ · Enter to attach" : menuOpen ? "↑↓ · Enter to pick" : "Enter to send · / · @"}
+          <span className="min-w-0 flex-1 truncate text-[10px] text-vs-text-muted">
+            {mentionOpen ? "↑↓ attach" : menuOpen ? "↑↓ pick" : "Enter · / · @"}
           </span>
           <button
             onClick={submit}

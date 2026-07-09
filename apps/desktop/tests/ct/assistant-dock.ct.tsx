@@ -92,19 +92,23 @@ test("tool calls render as Tool cards with per-tool status", async ({ mount }) =
   await expect(c.getByText("All set.")).toBeVisible();
 });
 
-test("the model selector shows the active model and switches", async ({ mount }) => {
+test("the model selector shows the ACTUAL model and switching applies next message", async ({ mount }) => {
   const c = await mount(<AssistantDock project={PROJECT} onClose={noop} />, {
     hooksConfig: { mock: { runScript: TOOLRUN } },
   });
-  // Before a session, the selector shows a generic label; after init it shows the model.
+  // After a run, the selector shows the model Claude actually used (from init).
   await c.getByPlaceholder(/@ a file/).fill("hi");
   await c.getByRole("button", { name: "Send" }).click();
   const selector = c.getByRole("button", { name: /opus-4-8/ });
   await expect(selector).toBeVisible();
+  // Switch to Haiku — the label keeps showing the in-use model; the pick applies
+  // to the next message.
   await selector.click();
   await c.getByRole("option", { name: /Claude Haiku 4.5/ }).click();
-  // The picked model is now reflected on the selector.
-  await expect(c.getByRole("button", { name: /Claude Haiku 4\.5/ })).toBeVisible();
+  await c.getByPlaceholder(/@ a file/).fill("again");
+  await c.getByRole("button", { name: "Send" }).click();
+  const opts = await c.page().evaluate(() => (window as unknown as { __runOpts: Array<Record<string, unknown>> }).__runOpts);
+  expect(opts[opts.length - 1].model).toBe("haiku");
 });
 
 test("close button fires onClose", async ({ mount }) => {

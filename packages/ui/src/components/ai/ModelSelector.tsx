@@ -3,10 +3,11 @@ import { ChevronsUpDown, Check } from "lucide-react";
 import { KNOWN_MODELS } from "./slash-commands";
 import { cn } from "../../lib/cn";
 
-/** Compact label for a model id like "claude-opus-4-8[1m]". */
+/** Compact label for a model id like "claude-opus-4-8[1m]" → "opus-4-8[1m]"
+ *  (keeps the variant tag so the real model in use is visible). */
 function short(model?: string): string {
   if (!model) return "model";
-  return model.replace(/^claude-/, "").replace(/-\d{8}$/, "").replace(/\[.*\]$/, "");
+  return model.replace(/^claude-/, "").replace(/-\d{8}(?=\[|$)/, "");
 }
 
 /**
@@ -26,7 +27,13 @@ export function ModelSelector({
   onSelect: (alias: string | undefined) => void;
 }): React.JSX.Element {
   const [open, setOpen] = useState(false);
-  const label = selected ? KNOWN_MODELS.find((m) => m.alias === selected)?.label ?? selected : short(active);
+  // Show the model Claude is ACTUALLY using (from the session's init event) once a
+  // run exists; before that, fall back to the user's picked model or a placeholder.
+  const label = active
+    ? short(active)
+    : selected
+      ? KNOWN_MODELS.find((m) => m.alias === selected)?.label ?? selected
+      : "model";
   return (
     <div className="relative">
       <button

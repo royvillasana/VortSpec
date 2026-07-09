@@ -36,6 +36,15 @@ export const DEFAULT_PRESETS: Agent[] = [
     allowedTools: MODIFY_TOOLS,
   },
   {
+    id: "yolo",
+    label: "YOLO",
+    source: "preset",
+    description: "Acts autonomously — no questions",
+    systemPrompt:
+      "Operate fully autonomously: do NOT ask for permission or clarification. Make reasonable assumptions, proceed directly, edit files as needed, and only stop if genuinely blocked. Prefer action over questions.",
+    allowedTools: MODIFY_TOOLS,
+  },
+  {
     id: "review",
     label: "Review",
     source: "preset",
