@@ -14,6 +14,8 @@ import { getToolkitStatus, installToolkit } from "./workspace/toolkit-manager";
 import { createProject } from "./workspace/setup-manager";
 import * as fsw from "./workspace/fs-workspace";
 import * as pty from "./terminal/pty-manager";
+import { ideMcpConfigPath, reportIdeState, resolveIdeAction } from "./ide-mcp/host";
+import type { IdeState, IdeActionResult } from "@vortspec/core/ide-mcp";
 import * as figmaCli from "./figma/figma-cli";
 import type { FigmaCliMode } from "@vortspec/core/figma";
 import { readProjectConfig } from "./workspace/config-manager";
@@ -142,6 +144,12 @@ const handlers: Record<IpcChannel, Handler> = {
     pty.killSession(id);
     return undefined;
   }) as Handler,
+
+  "ide:mcpConfigPath": ((_r: { projectPath: string }, sender: WebContents) =>
+    ideMcpConfigPath(sender)) as Handler,
+  "ide:reportState": ((r: IdeState) => reportIdeState(r)) as Handler,
+  "ide:resolveAction": ((r: IdeActionResult) => resolveIdeAction(r)) as Handler,
+
   "figma:status": (() => figmaCli.getConnection()) as Handler,
   "figma:openAppManagement": (() =>
     figmaCli.openAppManagementSettings().then(() => undefined)) as Handler,

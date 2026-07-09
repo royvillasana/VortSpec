@@ -45,6 +45,15 @@ export {
 export type { FsEntry, FsFile, FsWriteResult, WorkspaceChange } from "./fs";
 export { TERMINAL_DATA_CHANNEL, terminalDataSchema } from "./terminal";
 export type { TerminalData } from "./terminal";
+import { ideStateSchema, ideActionResultSchema, ideConfigResultSchema, ideOkSchema } from "./ide-mcp";
+export {
+  IDE_ACTION_CHANNEL,
+  ideStateSchema,
+  ideActionSchema,
+  ideActionResultSchema,
+  ideSelectionSchema,
+} from "./ide-mcp";
+export type { IdeState, IdeAction, IdeActionResult, IdeSelection } from "./ide-mcp";
 import {
   figmaConnectionSchema,
   figmaConnectRequestSchema,
@@ -283,6 +292,12 @@ export const ipcContract = {
     response: z.void(),
   },
   "terminal:kill": { request: z.string(), response: z.void() },
+
+  // IDE MCP integration (IDE app only; cockpit never calls these)
+  "ide:mcpConfigPath": { request: z.object({ projectPath: z.string() }), response: ideConfigResultSchema },
+  "ide:reportState": { request: ideStateSchema, response: ideOkSchema },
+  "ide:resolveAction": { request: ideActionResultSchema, response: ideOkSchema },
+
   "figma:status": { request: z.void(), response: figmaConnectionSchema },
   "figma:openAppManagement": { request: z.void(), response: z.void() },
   "figma:connect": { request: figmaConnectRequestSchema, response: figmaConnectionSchema },

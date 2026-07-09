@@ -72,6 +72,12 @@ export const agentRunOptionsSchema = z.object({
    */
   bypassPermissions: z.boolean().optional(),
   /**
+   * Path to a Claude Code `--mcp-config` JSON file to load for this run (e.g. the
+   * VortSpec IDE MCP server, so the assistant can open/clone/switch the workspace
+   * and read editor state). The file is written and owned by the caller.
+   */
+  mcpConfigPath: z.string().optional(),
+  /**
    * Renderer-supplied labels persisted with the run so an interrupted run can be
    * resumed later with its original stage view (kind) and scope (total). Opaque
    * to the main process except for persistence.

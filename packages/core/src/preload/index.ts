@@ -18,6 +18,7 @@ import {
 import { DEV_SERVER_UPDATE_CHANNEL, type DevServerUpdate } from "@vortspec/core/dev-server";
 import { WORKSPACE_CHANGE_CHANNEL, type WorkspaceChange } from "@vortspec/core/fs";
 import { TERMINAL_DATA_CHANNEL, type TerminalData } from "@vortspec/core/terminal";
+import { IDE_ACTION_CHANNEL, type IdeState, type IdeAction, type IdeActionResult } from "@vortspec/core/ide-mcp";
 import type { FigmaCliMode } from "@vortspec/core/figma";
 import type { VortSpecApi } from "@vortspec/core/api";
 
@@ -169,6 +170,12 @@ const api: VortSpecApi = {
   terminalKill: (id: string) => invoke("terminal:kill", id),
   onTerminalData: (callback: (payload: TerminalData) => void) =>
     subscribe(TERMINAL_DATA_CHANNEL, callback),
+
+  // IDE MCP integration
+  ideMcpConfigPath: (projectPath: string) => invoke("ide:mcpConfigPath", { projectPath }),
+  reportIdeState: (state: IdeState) => invoke("ide:reportState", state),
+  resolveIdeAction: (result: IdeActionResult) => invoke("ide:resolveAction", result),
+  onIdeMcpAction: (callback: (payload: IdeAction) => void) => subscribe(IDE_ACTION_CHANNEL, callback),
 
   // Figma connection (figma-cli)
   figmaStatus: () => invoke("figma:status", undefined),

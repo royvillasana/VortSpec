@@ -14,6 +14,8 @@ import type {
   ManifestResult,
   ManifestVersion,
   VerificationResult,
+  IdeAction,
+  IdeActionResult,
 } from "@vortspec/core/ipc";
 
 export interface MockConfig {
@@ -42,6 +44,8 @@ export interface MockConfig {
   componentsAfterRun?: InspectorComponentsResult;
   /** Verification report returned by getVerification() — drives the verify outcome card. */
   verification?: VerificationResult;
+  /** `--mcp-config` path returned by ideMcpConfigPath() (null keeps the bridge off). */
+  ideMcpConfig?: { path: string } | null;
   /** Whether hasActiveRun() reports an in-flight run for the project (reconnect banner). */
   hasActiveRun?: boolean;
   /** The resumable last run returned by lastRun() — drives the resume card. */
@@ -111,6 +115,8 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
   const rawSubs = new Set<(e: { runId: string; line: string }) => void>();
   const devSubs = new Set<(e: { projectPath: string; status: DevServerStatus }) => void>();
   const termSubs = new Set<(e: { id: string; data: string; exit?: number | null }) => void>();
+  const ideActionSubs = new Set<(a: IdeAction) => void>();
+  const ideResolutions: IdeActionResult[] = [];
   let runSeq = 0;
   // Flips true once a run's transcript has been replayed — lets getManifest
   // return the post-generation manifest (mirrors design-doc writing DESIGN.md).
@@ -274,6 +280,18 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
       return () => termSubs.delete(cb);
     },
 
+    // IDE MCP integration
+    ideMcpConfigPath: async () => cfg.ideMcpConfig ?? null,
+    reportIdeState: async () => ({ ok: true }),
+    resolveIdeAction: async (r: IdeActionResult) => {
+      ideResolutions.push(r);
+      return { ok: true };
+    },
+    onIdeMcpAction: (cb: (a: IdeAction) => void) => {
+      ideActionSubs.add(cb);
+      return () => ideActionSubs.delete(cb);
+    },
+
     // Figma connection (figma-cli)
     figmaStatus: async () =>
       cfg.figma ?? {
@@ -334,4 +352,9 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
 
   (window as unknown as { vortspec: unknown }).vortspec = api;
   (window as unknown as { __runPrompts: string[] }).__runPrompts = runPrompts;
+  // Let tests drive an IDE action (as if Claude called a tool) and inspect replies.
+  (window as unknown as { __pushIdeAction: (a: IdeAction) => void }).__pushIdeAction = (a) => {
+    for (const cb of ideActionSubs) cb(a);
+  };
+  (window as unknown as { __ideResolutions: IdeActionResult[] }).__ideResolutions = ideResolutions;
 }

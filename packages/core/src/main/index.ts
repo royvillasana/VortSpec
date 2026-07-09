@@ -11,4 +11,5 @@ export { registerIpc } from "./ipc";
 export { stopAllDevServers } from "./workspace/dev-server";
 export { stopAllWatchers } from "./workspace/fs-workspace";
 export { killAllSessions as stopAllTerminals } from "./terminal/pty-manager";
+export { stopIdeMcp } from "./ide-mcp/host";
 export { fixGuiPath } from "./util/fix-path";

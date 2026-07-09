@@ -23,6 +23,8 @@ export function AssistantDock({
   userName,
   fill = false,
   showSession = false,
+  mcpConfigPath,
+  extraAllowedTools,
 }: {
   project: Project;
   /** Optional one-line context the dock mentions to Claude on the first message. */
@@ -31,6 +33,11 @@ export function AssistantDock({
    *  message — the Claude Code extension's active-context behaviour. Recomputed
    *  by the host as focus/selection changes; empty string means nothing to add. */
   liveContext?: string;
+  /** A Claude `--mcp-config` file to load (e.g. the VortSpec IDE control server),
+   *  enabling the assistant to open/clone/switch the workspace + read editor state. */
+  mcpConfigPath?: string;
+  /** Extra tool allow-list groups to enable for the run (e.g. `mcp__vortspec-ide`). */
+  extraAllowedTools?: string[];
   /** When true, the assistant may edit files (component changes), not just read. */
   allowModify?: boolean;
   /** When provided, a close button is shown; omit for a permanent panel. */
@@ -77,8 +84,9 @@ export function AssistantDock({
       void run.start({
         prompt,
         cwd: project.path,
-        allowedTools: allowModify ? MODIFY_TOOLS : READ_TOOLS,
+        allowedTools: [...(allowModify ? MODIFY_TOOLS : READ_TOOLS), ...(extraAllowedTools ?? [])],
         bypassPermissions: true,
+        mcpConfigPath,
         // Persisted across the whole session (send() spreads the base opts), so
         // the assistant addresses the user by name for every turn.
         appendSystemPrompt: userName

@@ -13,6 +13,7 @@ import type { AgentRunOptions, AgentEventEnvelope, AgentRawEnvelope } from "./ru
 import type { DevServerUpdate } from "./dev-server";
 import type { WorkspaceChange } from "./fs";
 import type { TerminalData } from "./terminal";
+import type { IdeState, IdeAction, IdeActionResult } from "./ide-mcp";
 import type { FigmaCliMode } from "./figma";
 import type { ProviderId, RepoVisibility } from "./git";
 import type { IssueType } from "./task";
@@ -159,6 +160,16 @@ export interface VortSpecApi {
   figmaSyncComponents(projectPath: string): Promise<IpcResponse<"figma:syncComponents">>;
   /** Read the node(s) currently selected in Figma Desktop (figma-cli). */
   figmaSelection(): Promise<IpcResponse<"figma:selection">>;
+
+  // IDE MCP integration (IDE app only)
+  /** Start (once) the IDE MCP bridge and get the `--mcp-config` path for runs. */
+  ideMcpConfigPath(projectPath: string): Promise<IpcResponse<"ide:mcpConfigPath">>;
+  /** Mirror the current editor state (workspace, open tabs, selection) to the bridge. */
+  reportIdeState(state: IdeState): Promise<IpcResponse<"ide:reportState">>;
+  /** Reply to an action Claude requested (after running or declining it). */
+  resolveIdeAction(result: IdeActionResult): Promise<IpcResponse<"ide:resolveAction">>;
+  /** Subscribe to IDE actions Claude requests (open/clone/switch/open-file). */
+  onIdeMcpAction(callback: (payload: IdeAction) => void): () => void;
 
   // event subscriptions (return an unsubscribe fn)
   onAgentEvent(callback: (payload: AgentEventEnvelope) => void): () => void;

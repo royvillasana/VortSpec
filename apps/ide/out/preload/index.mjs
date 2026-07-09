@@ -63,6 +63,12 @@ z.object({
    */
   bypassPermissions: z.boolean().optional(),
   /**
+   * Path to a Claude Code `--mcp-config` JSON file to load for this run (e.g. the
+   * VortSpec IDE MCP server, so the assistant can open/clone/switch the workspace
+   * and read editor state). The file is written and owned by the caller.
+   */
+  mcpConfigPath: z.string().optional(),
+  /**
    * Renderer-supplied labels persisted with the run so an interrupted run can be
    * resumed later with its original stage view (kind) and scope (total). Opaque
    * to the main process except for persistence.
@@ -144,6 +150,31 @@ z.object({
   /** set on the final event when the shell process exits */
   exit: z.number().nullable().optional()
 });
+const IDE_ACTION_CHANNEL = "ide:action";
+const ideSelectionSchema = z.object({
+  path: z.string(),
+  startLine: z.number(),
+  endLine: z.number(),
+  text: z.string()
+});
+z.object({
+  workspaceRoot: z.string().nullable(),
+  activeFile: z.string().nullable(),
+  openEditors: z.array(z.string()),
+  selection: ideSelectionSchema.nullable()
+});
+z.object({
+  requestId: z.string(),
+  tool: z.string(),
+  args: z.record(z.unknown())
+});
+z.object({
+  requestId: z.string(),
+  ok: z.boolean(),
+  message: z.string()
+});
+z.object({ path: z.string() }).nullable();
+z.object({ ok: z.boolean() });
 function invoke(channel, request) {
   return ipcRenderer.invoke(channel, request);
 }
@@ -241,6 +272,11 @@ const api = {
   terminalResize: (id, cols, rows) => invoke("terminal:resize", { id, cols, rows }),
   terminalKill: (id) => invoke("terminal:kill", id),
   onTerminalData: (callback) => subscribe(TERMINAL_DATA_CHANNEL, callback),
+  // IDE MCP integration
+  ideMcpConfigPath: (projectPath) => invoke("ide:mcpConfigPath", { projectPath }),
+  reportIdeState: (state) => invoke("ide:reportState", state),
+  resolveIdeAction: (result) => invoke("ide:resolveAction", result),
+  onIdeMcpAction: (callback) => subscribe(IDE_ACTION_CHANNEL, callback),
   // Figma connection (figma-cli)
   figmaStatus: () => invoke("figma:status", void 0),
   figmaOpenAppManagement: () => invoke("figma:openAppManagement", void 0),

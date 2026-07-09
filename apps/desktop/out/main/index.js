@@ -1,15 +1,16 @@
 import { shell, dialog, app, ipcMain, BrowserWindow } from "electron";
 import { join as join$1 } from "path";
 import { electronApp, optimizer, is } from "@electron-toolkit/utils";
-import { tmpdir, homedir, platform } from "node:os";
+import os, { tmpdir, homedir, platform } from "node:os";
 import { z } from "zod";
 import { spawn } from "node:child_process";
-import { join, resolve as resolve$1, sep, basename, dirname, extname } from "node:path";
+import path, { join, resolve as resolve$1, sep, basename, dirname, extname } from "node:path";
 import { access, mkdir, readFile as readFile$1, writeFile as writeFile$1, cp, copyFile, appendFile, readdir, symlink, rm, stat } from "node:fs/promises";
-import { createHash, randomUUID } from "node:crypto";
+import crypto, { createHash, randomUUID } from "node:crypto";
 import { createRequire } from "node:module";
-import { watch, promises, existsSync } from "node:fs";
+import fs, { watch, promises, existsSync } from "node:fs";
 import { spawn as spawn$1 } from "node-pty";
+import net from "node:net";
 import { EventEmitter } from "node:events";
 import __cjs_mod__ from "node:module";
 const __filename = import.meta.filename;
@@ -77,6 +78,12 @@ const agentRunOptionsSchema = z.object({
    * each stage; the run is confined to the project folder.
    */
   bypassPermissions: z.boolean().optional(),
+  /**
+   * Path to a Claude Code `--mcp-config` JSON file to load for this run (e.g. the
+   * VortSpec IDE MCP server, so the assistant can open/clone/switch the workspace
+   * and read editor state). The file is written and owned by the caller.
+   */
+  mcpConfigPath: z.string().optional(),
   /**
    * Renderer-supplied labels persisted with the run so an interrupted run can be
    * resumed later with its original stage view (kind) and scope (total). Opaque
@@ -516,6 +523,31 @@ z.object({
   /** set on the final event when the shell process exits */
   exit: z.number().nullable().optional()
 });
+const IDE_ACTION_CHANNEL = "ide:action";
+const ideSelectionSchema = z.object({
+  path: z.string(),
+  startLine: z.number(),
+  endLine: z.number(),
+  text: z.string()
+});
+const ideStateSchema = z.object({
+  workspaceRoot: z.string().nullable(),
+  activeFile: z.string().nullable(),
+  openEditors: z.array(z.string()),
+  selection: ideSelectionSchema.nullable()
+});
+z.object({
+  requestId: z.string(),
+  tool: z.string(),
+  args: z.record(z.unknown())
+});
+const ideActionResultSchema = z.object({
+  requestId: z.string(),
+  ok: z.boolean(),
+  message: z.string()
+});
+const ideConfigResultSchema = z.object({ path: z.string() }).nullable();
+const ideOkSchema = z.object({ ok: z.boolean() });
 const figmaCliModeSchema = z.enum(["yolo", "safe"]);
 const figmaConnectionSchema = z.object({
   /** figma-cli is present on disk (cloned + installed). */
@@ -905,6 +937,10 @@ const ipcContract = {
     response: z.void()
   },
   "terminal:kill": { request: z.string(), response: z.void() },
+  // IDE MCP integration (IDE app only; cockpit never calls these)
+  "ide:mcpConfigPath": { request: z.object({ projectPath: z.string() }), response: ideConfigResultSchema },
+  "ide:reportState": { request: ideStateSchema, response: ideOkSchema },
+  "ide:resolveAction": { request: ideActionResultSchema, response: ideOkSchema },
   "figma:status": { request: z.void(), response: figmaConnectionSchema },
   "figma:openAppManagement": { request: z.void(), response: z.void() },
   "figma:connect": { request: figmaConnectRequestSchema, response: figmaConnectionSchema },
@@ -1317,9 +1353,9 @@ async function checkEnvironment() {
   return { checks, ready };
 }
 const SDD_DE_INSTALL_CMD = "npx @royvillasana/sdd-de";
-async function exists$1(path) {
+async function exists$1(path2) {
   try {
-    await access(path);
+    await access(path2);
     return true;
   } catch {
     return false;
@@ -1349,8 +1385,8 @@ async function installToolkit(projectPath) {
 function registryPath() {
   return join(app.getPath("userData"), "projects.json");
 }
-function projectId(path) {
-  return createHash("sha1").update(path).digest("hex").slice(0, 12);
+function projectId(path2) {
+  return createHash("sha1").update(path2).digest("hex").slice(0, 12);
 }
 async function readRegistry() {
   try {
@@ -1404,23 +1440,23 @@ async function createFolder() {
   await mkdir(result.filePath, { recursive: true });
   return registerPath(result.filePath);
 }
-async function registerPath(path) {
+async function registerPath(path2) {
   const entries = await readRegistry();
-  const existing = entries.find((e) => e.path === path);
-  const entry = existing ?? { id: projectId(path), path, addedAt: (/* @__PURE__ */ new Date()).toISOString() };
+  const existing = entries.find((e) => e.path === path2);
+  const entry = existing ?? { id: projectId(path2), path: path2, addedAt: (/* @__PURE__ */ new Date()).toISOString() };
   if (!existing) {
     entries.push(entry);
     await writeRegistry(entries);
   }
   return hydrate(entry);
 }
-async function refreshProject(path) {
+async function refreshProject(path2) {
   const entries = await readRegistry();
-  const entry = entries.find((e) => e.path === path) ?? { id: projectId(path), path, addedAt: (/* @__PURE__ */ new Date()).toISOString() };
+  const entry = entries.find((e) => e.path === path2) ?? { id: projectId(path2), path: path2, addedAt: (/* @__PURE__ */ new Date()).toISOString() };
   return hydrate(entry);
 }
-async function openFolder(path) {
-  await shell.openPath(path);
+async function openFolder(path2) {
+  await shell.openPath(path2);
 }
 function revealPath(projectPath, relPath) {
   const target = resolve$1(projectPath, relPath);
@@ -1436,9 +1472,9 @@ function toUnpacked(p) {
 function packageDir() {
   return toUnpacked(dirname(require$1.resolve("@royvillasana/sdd-de/package.json")));
 }
-async function exists(path) {
+async function exists(path2) {
   try {
-    await access(path);
+    await access(path2);
     return true;
   } catch {
     return false;
@@ -1538,17 +1574,17 @@ async function writeFile(root, rel, content) {
   }
 }
 const watchers = /* @__PURE__ */ new Map();
-function startWatch(sender, root) {
+function startWatch(sender2, root) {
   if (watchers.has(root)) return;
   try {
     const w = watch(root, { recursive: true }, (event, filename) => {
       if (!filename) {
-        sender.send(WORKSPACE_CHANGE_CHANNEL, { projectPath: root, path: null, kind: "refresh" });
+        sender2.send(WORKSPACE_CHANGE_CHANNEL, { projectPath: root, path: null, kind: "refresh" });
         return;
       }
       const rel = filename.toString();
       if (rel.split(sep)[0] === ".git") return;
-      sender.send(WORKSPACE_CHANGE_CHANNEL, {
+      sender2.send(WORKSPACE_CHANGE_CHANNEL, {
         projectPath: root,
         path: toPosix(rel),
         kind: event === "rename" ? "add" : "change"
@@ -1570,7 +1606,7 @@ function buildShell(platform2 = process.platform, env = process.env) {
   return { file: env.SHELL || "/bin/zsh", args: [] };
 }
 const sessions = /* @__PURE__ */ new Map();
-function createSession(sender, opts) {
+function createSession(sender2, opts) {
   if (sessions.has(opts.id)) return;
   const { file, args } = buildShell();
   const pty = spawn$1(file, args, {
@@ -1580,10 +1616,10 @@ function createSession(sender, opts) {
     cwd: opts.cwd,
     env: process.env
   });
-  pty.onData((data) => sender.send(TERMINAL_DATA_CHANNEL, { id: opts.id, data }));
+  pty.onData((data) => sender2.send(TERMINAL_DATA_CHANNEL, { id: opts.id, data }));
   pty.onExit(({ exitCode }) => {
     sessions.delete(opts.id);
-    sender.send(TERMINAL_DATA_CHANNEL, { id: opts.id, data: "", exit: exitCode });
+    sender2.send(TERMINAL_DATA_CHANNEL, { id: opts.id, data: "", exit: exitCode });
   });
   sessions.set(opts.id, pty);
 }
@@ -1614,6 +1650,287 @@ function killAllSessions() {
     }
   }
   sessions.clear();
+}
+const serverSource = '// VortSpec IDE MCP server — a generic stdio↔bridge forwarder.\n//\n// Claude Code spawns this (via `--mcp-config`) as its own child and speaks MCP\n// over stdio (newline-delimited JSON-RPC 2.0). This process owns NO IDE logic:\n// it connects to the VortSpec main-process bridge over a local unix socket\n// (endpoint + token from env), pulls the tool catalog from the bridge, and\n// forwards each `tools/call` to it. All editor reads and gated actions happen in\n// the main process; keeping this a dumb pipe means one source of truth (the\n// bridge\'s catalog) and nothing here to drift.\n//\n// Node built-ins only — it runs under the Electron binary with\n// ELECTRON_RUN_AS_NODE=1 (or plain `node`), so it must not import anything that\n// needs bundling.\nimport net from "node:net";\nimport readline from "node:readline";\n\nconst ENDPOINT = process.env.VORTSPEC_IDE_ENDPOINT || "";\nconst TOKEN = process.env.VORTSPEC_IDE_TOKEN || "";\nconst PROTOCOL_VERSION = "2024-11-05";\n\nfunction out(msg) {\n  process.stdout.write(JSON.stringify(msg) + "\\n");\n}\n\nlet sock = null;\nlet bridgeBuf = "";\nlet catalog = [];\nlet nextId = 1;\nconst pending = new Map();\n\nfunction connectBridge() {\n  return new Promise((resolve, reject) => {\n    if (!ENDPOINT) {\n      reject(new Error("no bridge endpoint"));\n      return;\n    }\n    const s = net.createConnection(ENDPOINT, () => {\n      s.write(JSON.stringify({ type: "hello", token: TOKEN }) + "\\n");\n    });\n    s.setEncoding("utf8");\n    s.on("data", (chunk) => {\n      bridgeBuf += chunk;\n      let i = bridgeBuf.indexOf("\\n");\n      while (i >= 0) {\n        const line = bridgeBuf.slice(0, i);\n        bridgeBuf = bridgeBuf.slice(i + 1);\n        if (line.trim()) {\n          let msg;\n          try {\n            msg = JSON.parse(line);\n          } catch {\n            i = bridgeBuf.indexOf("\\n");\n            continue;\n          }\n          if (msg.type === "welcome") {\n            catalog = Array.isArray(msg.catalog) ? msg.catalog : [];\n            resolve();\n          } else if (msg.type === "denied") {\n            reject(new Error(msg.message || "bridge denied the connection"));\n          } else if (msg.type === "result") {\n            const p = pending.get(msg.id);\n            if (p) {\n              pending.delete(msg.id);\n              p(msg);\n            }\n          }\n        }\n        i = bridgeBuf.indexOf("\\n");\n      }\n    });\n    s.on("error", (e) => reject(e));\n    s.on("close", () => {\n      for (const p of pending.values()) p({ ok: false, message: "The IDE connection closed." });\n      pending.clear();\n    });\n    sock = s;\n  });\n}\n\nfunction callBridge(tool, args) {\n  return new Promise((resolve) => {\n    if (!sock || sock.destroyed) {\n      resolve({ ok: false, message: "The IDE is not connected." });\n      return;\n    }\n    const id = nextId++;\n    pending.set(id, resolve);\n    sock.write(JSON.stringify({ type: "call", id, tool, args }) + "\\n");\n  });\n}\n\n// Connect once; tools/list and tools/call await this before answering.\nconst ready = connectBridge().catch(() => undefined);\n\nconst rl = readline.createInterface({ input: process.stdin });\nrl.on("line", (line) => {\n  if (!line.trim()) return;\n  let msg;\n  try {\n    msg = JSON.parse(line);\n  } catch {\n    return;\n  }\n  void handle(msg);\n});\n\nasync function handle(msg) {\n  const { id, method } = msg;\n  if (method === "initialize") {\n    out({\n      jsonrpc: "2.0",\n      id,\n      result: {\n        protocolVersion: PROTOCOL_VERSION,\n        capabilities: { tools: {} },\n        serverInfo: { name: "vortspec-ide", version: "0.1.0" },\n      },\n    });\n    return;\n  }\n  if (method === "tools/list") {\n    await ready;\n    out({\n      jsonrpc: "2.0",\n      id,\n      result: {\n        tools: catalog.map((t) => ({ name: t.name, description: t.description, inputSchema: t.inputSchema })),\n      },\n    });\n    return;\n  }\n  if (method === "tools/call") {\n    await ready;\n    const name = msg.params && msg.params.name;\n    const args = (msg.params && msg.params.arguments) || {};\n    const res = await callBridge(name, args);\n    const ok = Boolean(res && res.ok);\n    const text = (res && res.message) || (ok ? "Done." : "The IDE could not complete that action.");\n    out({ jsonrpc: "2.0", id, result: { content: [{ type: "text", text }], isError: !ok } });\n    return;\n  }\n  // Any other request with an id gets an empty ack; notifications are ignored.\n  if (id !== undefined && method) out({ jsonrpc: "2.0", id, result: {} });\n}\n';
+const noArgs = { type: "object", properties: {}, additionalProperties: false };
+const IDE_TOOLS = [
+  {
+    name: "get_workspace_folders",
+    description: "List the folders open in the VortSpec IDE (the active project root).",
+    inputSchema: noArgs,
+    stateChanging: false
+  },
+  {
+    name: "get_open_editors",
+    description: "List the files currently open as tabs in the IDE editor, and which is active.",
+    inputSchema: noArgs,
+    stateChanging: false
+  },
+  {
+    name: "get_selection",
+    description: "Get the user's current editor selection (active file, 1-based line range, and the selected text), if any.",
+    inputSchema: noArgs,
+    stateChanging: false
+  },
+  {
+    name: "open_file",
+    description: "Open a file in the IDE editor and optionally reveal a line range. Path is relative to the project root.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        path: { type: "string", description: "Project-relative path to open." },
+        startLine: { type: "number", description: "Optional 1-based line to reveal." },
+        endLine: { type: "number", description: "Optional 1-based end line to select through." }
+      },
+      required: ["path"],
+      additionalProperties: false
+    },
+    stateChanging: false
+  },
+  {
+    name: "open_folder",
+    description: "Open a folder as the IDE workspace. Prompts the user to confirm (or to pick a folder if no path is given) before switching.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        path: { type: "string", description: "Absolute path to open. Omit to let the user pick." }
+      },
+      additionalProperties: false
+    },
+    stateChanging: true
+  },
+  {
+    name: "clone_repo",
+    description: "Clone a Git repository and open it as the IDE workspace. Prompts the user to confirm before cloning.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        url: { type: "string", description: "The repository URL to clone (https or ssh)." }
+      },
+      required: ["url"],
+      additionalProperties: false
+    },
+    stateChanging: true
+  },
+  {
+    name: "switch_project",
+    description: "Switch the IDE to one of the user's recent projects. Prompts the user to confirm before switching.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        path: { type: "string", description: "Absolute path of the recent project to switch to." },
+        name: { type: "string", description: "Or the project name, if the path is unknown." }
+      },
+      additionalProperties: false
+    },
+    stateChanging: true
+  }
+];
+class IdeMcpBridge {
+  constructor(host2) {
+    this.host = host2;
+  }
+  server = null;
+  socketPath = "";
+  serverEntry = "";
+  mcpConfig = "";
+  token = crypto.randomBytes(32).toString("hex");
+  tmpFiles = [];
+  /** Start the socket server and materialise the spawnable server script. */
+  async start() {
+    if (this.server) return;
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "vortspec-ide-"));
+    this.socketPath = path.join(dir, "bridge.sock");
+    this.serverEntry = path.join(dir, "server.mjs");
+    fs.writeFileSync(this.serverEntry, serverSource, { mode: 384 });
+    this.tmpFiles.push(this.serverEntry);
+    const server = net.createServer((socket) => this.onConnection(socket));
+    this.server = server;
+    await new Promise((resolve2, reject) => {
+      server.once("error", reject);
+      server.listen(this.socketPath, () => {
+        server.off("error", reject);
+        try {
+          fs.chmodSync(this.socketPath, 384);
+        } catch {
+        }
+        resolve2();
+      });
+    });
+  }
+  onConnection(socket) {
+    socket.setEncoding("utf8");
+    let buf = "";
+    let authed = false;
+    const send = (msg) => {
+      socket.write(JSON.stringify(msg) + "\n");
+    };
+    socket.on("data", (chunk) => {
+      buf += chunk;
+      let i = buf.indexOf("\n");
+      while (i >= 0) {
+        const line = buf.slice(0, i);
+        buf = buf.slice(i + 1);
+        if (line.trim()) {
+          let msg = null;
+          try {
+            msg = JSON.parse(line);
+          } catch {
+            msg = null;
+          }
+          if (msg) void this.handle(msg, () => authed, (v) => authed = v, send, socket);
+        }
+        i = buf.indexOf("\n");
+      }
+    });
+    socket.on("error", () => void 0);
+  }
+  async handle(msg, isAuthed, setAuthed, send, socket) {
+    if (msg.type === "hello") {
+      const ok2 = msg.token.length === this.token.length && crypto.timingSafeEqual(Buffer.from(msg.token), Buffer.from(this.token));
+      if (!ok2) {
+        send({ type: "denied", message: "bad token" });
+        socket.destroy();
+        return;
+      }
+      setAuthed(true);
+      send({ type: "welcome", catalog: this.host.catalog() });
+      return;
+    }
+    if (msg.type === "call") {
+      if (!isAuthed()) {
+        socket.destroy();
+        return;
+      }
+      const known = this.host.catalog().some((t) => t.name === msg.tool);
+      if (!known) {
+        send({ type: "result", id: msg.id, ok: false, message: `Unknown IDE tool: ${msg.tool}.` });
+        return;
+      }
+      try {
+        const result = await this.host.invoke(msg.tool, msg.args ?? {});
+        send({ type: "result", id: msg.id, ok: result.ok, message: result.message });
+      } catch (err) {
+        send({
+          type: "result",
+          id: msg.id,
+          ok: false,
+          message: `The IDE hit an error: ${err.message}`
+        });
+      }
+    }
+  }
+  /** Write (once) and return the `--mcp-config` file path for a run. */
+  mcpConfigPath() {
+    if (this.mcpConfig) return this.mcpConfig;
+    const cfg = {
+      mcpServers: {
+        "vortspec-ide": {
+          // Spawn under the Electron binary as plain Node so a runtime is always
+          // present, packaged or not.
+          command: process.execPath,
+          args: [this.serverEntry],
+          env: {
+            ELECTRON_RUN_AS_NODE: "1",
+            VORTSPEC_IDE_ENDPOINT: this.socketPath,
+            VORTSPEC_IDE_TOKEN: this.token
+          }
+        }
+      }
+    };
+    this.mcpConfig = path.join(path.dirname(this.serverEntry), "mcp-config.json");
+    fs.writeFileSync(this.mcpConfig, JSON.stringify(cfg), { mode: 384 });
+    this.tmpFiles.push(this.mcpConfig);
+    return this.mcpConfig;
+  }
+  /** The Claude Code allow-list group that enables our tools for a run. */
+  static allowedToolGroup() {
+    return "mcp__vortspec-ide";
+  }
+  catalog() {
+    return this.host.catalog();
+  }
+  close() {
+    this.server?.close();
+    this.server = null;
+    for (const f of [...this.tmpFiles, this.socketPath]) {
+      try {
+        fs.rmSync(f, { force: true });
+      } catch {
+      }
+    }
+    this.tmpFiles.length = 0;
+  }
+}
+const READ_TOOLS = /* @__PURE__ */ new Set(["get_workspace_folders", "get_open_editors", "get_selection"]);
+const ACTION_TIMEOUT_MS = 12e4;
+let bridge = null;
+let sender = null;
+let state = { workspaceRoot: null, activeFile: null, openEditors: [], selection: null };
+const pending = /* @__PURE__ */ new Map();
+function readTool(tool) {
+  if (tool === "get_workspace_folders") {
+    return {
+      ok: true,
+      message: state.workspaceRoot ? `Open workspace folder: ${state.workspaceRoot}` : "No folder is open in the IDE."
+    };
+  }
+  if (tool === "get_open_editors") {
+    if (state.openEditors.length === 0) return { ok: true, message: "No files are open in the editor." };
+    const active = state.activeFile ? ` (active: ${state.activeFile})` : "";
+    return { ok: true, message: `Open editor tabs: ${state.openEditors.join(", ")}${active}` };
+  }
+  const s = state.selection;
+  if (!s) {
+    return {
+      ok: true,
+      message: state.activeFile ? `No selection. The active file is ${state.activeFile}.` : "No selection; no file is open."
+    };
+  }
+  const range = s.startLine === s.endLine ? `line ${s.startLine}` : `lines ${s.startLine}–${s.endLine}`;
+  return { ok: true, message: `Selection in ${s.path}, ${range}:
+${s.text}` };
+}
+const host = {
+  catalog: () => IDE_TOOLS,
+  invoke: async (tool, args) => {
+    if (READ_TOOLS.has(tool)) return readTool(tool);
+    if (!sender || sender.isDestroyed()) {
+      return { ok: false, message: "The IDE window is not available to perform that action." };
+    }
+    const requestId = crypto.randomUUID();
+    return await new Promise((resolve2) => {
+      const timer = setTimeout(() => {
+        pending.delete(requestId);
+        resolve2({ ok: false, message: "The IDE did not respond to the action in time." });
+      }, ACTION_TIMEOUT_MS);
+      pending.set(requestId, (r) => {
+        clearTimeout(timer);
+        resolve2(r);
+      });
+      sender.send(IDE_ACTION_CHANNEL, { requestId, tool, args });
+    });
+  }
+};
+async function ideMcpConfigPath(webContents) {
+  sender = webContents;
+  if (!bridge) {
+    bridge = new IdeMcpBridge(host);
+    await bridge.start();
+  }
+  return { path: bridge.mcpConfigPath() };
+}
+function reportIdeState(next) {
+  state = next;
+  return { ok: true };
+}
+function resolveIdeAction(result) {
+  const resolve2 = pending.get(result.requestId);
+  if (resolve2) {
+    pending.delete(result.requestId);
+    resolve2({ ok: result.ok, message: result.message });
+  }
+  return { ok: true };
 }
 const FIGMA_VARS_PATH = ".vortspec/figma-variables.json";
 const FIGMA_COMPONENTS_PATH = ".vortspec/figma-components.json";
@@ -1837,12 +2154,12 @@ function stringifyValue(value) {
 }
 function dtcgToVariables(dtcg) {
   const out = [];
-  const walk = (node, path, inheritedType) => {
+  const walk = (node, path2, inheritedType) => {
     if (!node || typeof node !== "object") return;
     const obj = node;
     const declaredType = typeof obj.$type === "string" ? obj.$type : inheritedType;
     if ("$value" in obj) {
-      const name = path.join("/");
+      const name = path2.join("/");
       if (name) {
         out.push({
           name,
@@ -1854,7 +2171,7 @@ function dtcgToVariables(dtcg) {
     }
     for (const [key, child] of Object.entries(obj)) {
       if (key.startsWith("$")) continue;
-      walk(child, [...path, key], declaredType);
+      walk(child, [...path2, key], declaredType);
     }
   };
   walk(dtcg, [], void 0);
@@ -2214,9 +2531,9 @@ async function readOverrides(projectPath) {
 async function markOverridden(projectPath, name) {
   const set = await readOverrides(projectPath);
   set.add(name);
-  const path = join(projectPath, OVERRIDES_PATH);
-  await mkdir(dirname(path), { recursive: true }).catch(() => void 0);
-  await writeFile$1(path, `${JSON.stringify([...set].sort(), null, 2)}
+  const path2 = join(projectPath, OVERRIDES_PATH);
+  await mkdir(dirname(path2), { recursive: true }).catch(() => void 0);
+  await writeFile$1(path2, `${JSON.stringify([...set].sort(), null, 2)}
 `, "utf8").catch(
     () => void 0
   );
@@ -2263,12 +2580,12 @@ async function setInspectorTokenValue(projectPath, name, value) {
   const config = await readProjectConfig(projectPath);
   const tokenFile = config?.tokenFile;
   if (tokenFile) {
-    const path = join(projectPath, tokenFile);
-    const css = await readFile$1(path, "utf8").catch(() => null);
+    const path2 = join(projectPath, tokenFile);
+    const css = await readFile$1(path2, "utf8").catch(() => null);
     if (css) {
       const re = new RegExp(`(--${name}\\s*:\\s*)([^;]*)(;)`);
       if (re.test(css)) {
-        await writeFile$1(path, css.replace(re, `$1${value.trim()}$3`), "utf8");
+        await writeFile$1(path2, css.replace(re, `$1${value.trim()}$3`), "utf8");
         await markOverridden(projectPath, name);
       }
     }
@@ -2574,11 +2891,11 @@ async function getVerification(projectPath) {
   const specsRoot = join(projectPath, "specs");
   const reports = await findReports(specsRoot);
   const findings = [];
-  for (const { path, group } of reports) {
-    const md = await readFile$1(path, "utf8").catch(() => "");
+  for (const { path: path2, group } of reports) {
+    const md = await readFile$1(path2, "utf8").catch(() => "");
     if (!md) continue;
-    const rel = path.slice(projectPath.length + 1);
-    const dir = dirname(path);
+    const rel = path2.slice(projectPath.length + 1);
+    const dir = dirname(path2);
     const component = dir === specsRoot ? "system" : basename(dir);
     findings.push(...parseFindings(md, group, component, rel));
   }
@@ -2748,6 +3065,9 @@ class AgentAdapter extends EventEmitter {
     if (opts.allowedTools && opts.allowedTools.length > 0) {
       args.push("--allowedTools", opts.allowedTools.join(","));
     }
+    if (opts.mcpConfigPath) {
+      args.push("--mcp-config", opts.mcpConfigPath);
+    }
     if (opts.resumeSessionId) {
       args.push("--resume", opts.resumeSessionId);
     }
@@ -2897,7 +3217,7 @@ function hasActiveRun(projectPath) {
   for (const { cwd } of runs.values()) if (cwd === projectPath) return true;
   return false;
 }
-function startRun(sender, opts) {
+function startRun(sender2, opts) {
   const runId = randomUUID();
   const adapter = new AgentAdapter();
   runs.set(runId, { adapter, cwd: opts.cwd });
@@ -2921,8 +3241,8 @@ function startRun(sender, opts) {
         void patchLastRun(opts.cwd, { sessionId: event.sessionId });
       }
     }
-    if (!sender.isDestroyed()) {
-      sender.send(AGENT_EVENT_CHANNEL, { runId, event });
+    if (!sender2.isDestroyed()) {
+      sender2.send(AGENT_EVENT_CHANNEL, { runId, event });
     }
     if (event.kind === "exit") {
       runs.delete(runId);
@@ -2932,8 +3252,8 @@ function startRun(sender, opts) {
     }
   });
   adapter.on("raw", (line) => {
-    if (!sender.isDestroyed()) {
-      sender.send(AGENT_RAW_CHANNEL, { runId, line });
+    if (!sender2.isDestroyed()) {
+      sender2.send(AGENT_RAW_CHANNEL, { runId, line });
     }
   });
   adapter.start(opts);
@@ -3091,11 +3411,11 @@ function parseStatus(raw, isRepo2) {
       const xy = fields[1];
       const rename = line.startsWith("2 ");
       const rest = fields.slice(rename ? 9 : 8).join(" ");
-      const path = rename ? rest.split("	")[0] : rest;
+      const path2 = rename ? rest.split("	")[0] : rest;
       const x = xy[0];
       const y = xy[1];
-      if (x !== ".") status.staged.push({ path, status: toStatus(x) });
-      if (y !== ".") status.unstaged.push({ path, status: toStatus(y) });
+      if (x !== ".") status.staged.push({ path: path2, status: toStatus(x) });
+      if (y !== ".") status.unstaged.push({ path: path2, status: toStatus(y) });
     } else if (line.startsWith("u ")) {
       const fields = line.split(" ");
       status.conflicts.push(fields.slice(10).join(" "));
@@ -3163,8 +3483,8 @@ async function getLog(cwd, limit = 20) {
   const withRs = r.stdout.split("\n").join("");
   return parseLog(withRs + "");
 }
-async function getFileAtHead(cwd, path) {
-  const r = await git(cwd, ["show", `HEAD:${path}`]);
+async function getFileAtHead(cwd, path2) {
+  const r = await git(cwd, ["show", `HEAD:${path2}`]);
   return r.ok ? r.stdout : null;
 }
 function ok(message) {
@@ -3494,8 +3814,8 @@ function parseIssueStatus(text) {
   const m = /status[:\s]+([A-Za-z][A-Za-z \-]*)/i.exec(text);
   return m ? m[1].trim() : null;
 }
-function installCommandFor(os, hasBrew) {
-  if (os === "darwin" && hasBrew) return "brew install ankitpokhrel/jira-cli/jira-cli";
+function installCommandFor(os2, hasBrew) {
+  if (os2 === "darwin" && hasBrew) return "brew install ankitpokhrel/jira-cli/jira-cli";
   if (hasBrew) return "brew install ankitpokhrel/jira-cli/jira-cli";
   return null;
 }
@@ -3642,8 +3962,8 @@ async function readState(projectPath) {
   }
   return initialState();
 }
-function reconcile(state) {
-  const byId = new Map(state.stages.map((s) => [s.id, s]));
+function reconcile(state2) {
+  const byId = new Map(state2.stages.map((s) => [s.id, s]));
   const stages = DEFAULT_FLOW.map(
     (def) => byId.get(def.id) ?? {
       id: def.id,
@@ -3651,24 +3971,24 @@ function reconcile(state) {
       updatedAt: (/* @__PURE__ */ new Date()).toISOString()
     }
   );
-  const currentValid = DEFAULT_FLOW.some((d) => d.id === state.currentStageId);
+  const currentValid = DEFAULT_FLOW.some((d) => d.id === state2.currentStageId);
   return {
-    currentStageId: currentValid ? state.currentStageId : DEFAULT_FLOW[0].id,
+    currentStageId: currentValid ? state2.currentStageId : DEFAULT_FLOW[0].id,
     stages,
-    publishRepoUrl: state.publishRepoUrl
+    publishRepoUrl: state2.publishRepoUrl
   };
 }
-async function writeState(projectPath, state) {
+async function writeState(projectPath, state2) {
   await mkdir(vortspecDir(projectPath), { recursive: true });
-  await writeFile$1(flowFile(projectPath), JSON.stringify(state, null, 2), "utf8");
+  await writeFile$1(flowFile(projectPath), JSON.stringify(state2, null, 2), "utf8");
 }
-function withFlow(state) {
-  return { definitions: DEFAULT_FLOW, state };
+function withFlow(state2) {
+  return { definitions: DEFAULT_FLOW, state: state2 };
 }
-function patchStage(state, stageId, patch) {
+function patchStage(state2, stageId, patch) {
   return {
-    ...state,
-    stages: state.stages.map(
+    ...state2,
+    stages: state2.stages.map(
       (s) => s.id === stageId ? { ...s, ...patch, updatedAt: (/* @__PURE__ */ new Date()).toISOString() } : s
     )
   };
@@ -3687,23 +4007,23 @@ async function setStageStatus(projectPath, stageId, status) {
   return withFlow(next);
 }
 async function setPublishTarget(projectPath, repoUrl) {
-  const state = await readState(projectPath);
+  const state2 = await readState(projectPath);
   const next = {
-    ...state,
+    ...state2,
     publishRepoUrl: repoUrl.trim() || void 0
   };
   await writeState(projectPath, next);
   return withFlow(next);
 }
 async function approveStage(projectPath, stageId) {
-  let state = patchStage(await readState(projectPath), stageId, {
+  let state2 = patchStage(await readState(projectPath), stageId, {
     status: "approved",
     decisionNotes: void 0
   });
   const next = nextStageId(stageId);
-  if (next) state = { ...state, currentStageId: next };
-  await writeState(projectPath, state);
-  return withFlow(state);
+  if (next) state2 = { ...state2, currentStageId: next };
+  await writeState(projectPath, state2);
+  return withFlow(state2);
 }
 async function requestChanges(projectPath, stageId, notes) {
   const next = patchStage(await readState(projectPath), stageId, {
@@ -3795,9 +4115,9 @@ async function readIndex(projectPath) {
   }
 }
 async function writeIndex(projectPath, metas) {
-  const path = join(projectPath, INDEX_FILE);
+  const path2 = join(projectPath, INDEX_FILE);
   await mkdir(join(projectPath, VERSIONS_DIR), { recursive: true }).catch(() => void 0);
-  await writeFile$1(path, `${JSON.stringify(metas, null, 2)}
+  await writeFile$1(path2, `${JSON.stringify(metas, null, 2)}
 `, "utf8").catch(() => void 0);
 }
 async function snapshotManifest(projectPath, opts) {
@@ -4041,11 +4361,11 @@ function push(server, projectPath, kind) {
     server.sender.send(DEV_SERVER_UPDATE_CHANNEL, { projectPath, kind, status: server.status });
   }
 }
-async function startServer(sender, projectPath, kind) {
+async function startServer(sender2, projectPath, kind) {
   const key = keyOf(projectPath, kind);
   const existing = servers.get(key);
   if (existing && (existing.status.state === "starting" || existing.status.state === "running")) {
-    existing.sender = sender;
+    existing.sender = sender2;
     return existing.status;
   }
   const script = await detectScript(projectPath, kind);
@@ -4068,7 +4388,7 @@ async function startServer(sender, projectPath, kind) {
   const server = {
     child,
     status: { state: "starting", url: null, script, message: null },
-    sender
+    sender: sender2
   };
   servers.set(key, server);
   const onData = (buf) => {
@@ -4098,17 +4418,17 @@ async function startServer(sender, projectPath, kind) {
   push(server, projectPath, kind);
   return server.status;
 }
-const startDevServer = (sender, projectPath) => startServer(sender, projectPath, "storybook");
-const startAppServer = (sender, projectPath) => startServer(sender, projectPath, "app");
+const startDevServer = (sender2, projectPath) => startServer(sender2, projectPath, "storybook");
+const startAppServer = (sender2, projectPath) => startServer(sender2, projectPath, "app");
 const stopDevServer = (projectPath) => stopServer(projectPath, "storybook");
 const stopAppServer = (projectPath) => stopServer(projectPath, "app");
 const getDevServerStatus = (projectPath) => statusOf(projectPath, "storybook");
 const getAppServerStatus = (projectPath) => statusOf(projectPath, "app");
 async function getStorybookIndex(url) {
   const base = url.replace(/\/+$/, "");
-  for (const path of ["/index.json", "/stories.json"]) {
+  for (const path2 of ["/index.json", "/stories.json"]) {
     try {
-      const res = await fetch(`${base}${path}`);
+      const res = await fetch(`${base}${path2}`);
       if (!res.ok) continue;
       const json = await res.json();
       const map = json.entries ?? json.stories;
@@ -4157,18 +4477,18 @@ const handlers = {
   "workspace:pickFolder": ((req) => pickFolder(req ?? { create: false })),
   "workspace:createFolder": (() => createFolder()),
   "workspace:listProjects": () => listProjects(),
-  "workspace:openFolder": ((path) => openFolder(path)),
+  "workspace:openFolder": ((path2) => openFolder(path2)),
   "workspace:revealPath": ((req) => {
     revealPath(req.projectPath, req.relPath);
     return void 0;
   }),
-  "workspace:refreshProject": ((path) => refreshProject(path)),
+  "workspace:refreshProject": ((path2) => refreshProject(path2)),
   "workspace:createProject": ((req) => createProject(req.path, req.answers)),
   "workspace:listDir": ((r) => listDir(r.projectPath, r.relPath)),
   "workspace:readFile": ((r) => readFile(r.projectPath, r.relPath)),
   "workspace:writeFile": ((r) => writeFile(r.projectPath, r.relPath, r.content)),
-  "workspace:watchStart": ((projectPath, sender) => {
-    startWatch(sender, projectPath);
+  "workspace:watchStart": ((projectPath, sender2) => {
+    startWatch(sender2, projectPath);
     return void 0;
   }),
   "workspace:watchStop": ((projectPath) => {
@@ -4176,8 +4496,8 @@ const handlers = {
     return void 0;
   }),
   "git:fileAtHead": ((r) => getFileAtHead(r.projectPath, r.relPath)),
-  "terminal:create": ((r, sender) => {
-    createSession(sender, { id: r.id, cwd: r.projectPath, cols: r.cols, rows: r.rows });
+  "terminal:create": ((r, sender2) => {
+    createSession(sender2, { id: r.id, cwd: r.projectPath, cols: r.cols, rows: r.rows });
     return void 0;
   }),
   "terminal:write": ((r) => {
@@ -4192,15 +4512,18 @@ const handlers = {
     killSession(id);
     return void 0;
   }),
+  "ide:mcpConfigPath": ((_r, sender2) => ideMcpConfigPath(sender2)),
+  "ide:reportState": ((r) => reportIdeState(r)),
+  "ide:resolveAction": ((r) => resolveIdeAction(r)),
   "figma:status": (() => getConnection()),
   "figma:openAppManagement": (() => openAppManagementSettings().then(() => void 0)),
   "figma:connect": ((r) => connect(r.mode)),
   "figma:syncVariables": ((r) => syncVariablesToCache(r.projectPath)),
   "figma:syncComponents": ((r) => syncComponentsToCache(r.projectPath)),
   "figma:selection": (() => getSelection()),
-  "toolkit:status": ((path) => getToolkitStatus(path)),
-  "toolkit:install": ((path) => installToolkit(path)),
-  "agent:startRun": ((opts, sender) => startRun(sender, opts)),
+  "toolkit:status": ((path2) => getToolkitStatus(path2)),
+  "toolkit:install": ((path2) => installToolkit(path2)),
+  "agent:startRun": ((opts, sender2) => startRun(sender2, opts)),
   "agent:cancelRun": ((runId) => {
     cancelRun(runId);
     return void 0;
@@ -4253,13 +4576,13 @@ const handlers = {
     runId: req.runId,
     timestamp: (/* @__PURE__ */ new Date()).toISOString()
   }).then(() => getManifest(req.projectPath))),
-  "devserver:start": ((projectPath, sender) => startDevServer(sender, projectPath)),
+  "devserver:start": ((projectPath, sender2) => startDevServer(sender2, projectPath)),
   "devserver:stop": ((projectPath) => {
     stopDevServer(projectPath);
     return void 0;
   }),
   "devserver:status": ((projectPath) => getDevServerStatus(projectPath)),
-  "appserver:start": ((projectPath, sender) => startAppServer(sender, projectPath)),
+  "appserver:start": ((projectPath, sender2) => startAppServer(sender2, projectPath)),
   "appserver:stop": ((projectPath) => {
     stopAppServer(projectPath);
     return void 0;

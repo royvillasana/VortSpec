@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { JSX, CSSProperties } from "react";
 import type { Project } from "@vortspec/core/ipc";
+import type { IdeState } from "@vortspec/core/ide-mcp";
 import { api } from "@vortspec/ui/api";
 import { AssistantDock } from "@vortspec/ui/AssistantDock";
 import { SourceControl } from "@vortspec/ui/SourceControl";
@@ -20,6 +21,8 @@ import { useWorkspaceFiles } from "./lib/useWorkspaceFiles";
 import { useLayout } from "./lib/useLayout";
 import { effectiveWidths, isSidebarView, type Activity } from "./lib/layout";
 import { IdeContext, buildSeedContext, buildLiveContext, type EditorSelection } from "./lib/ide-context";
+import { useIdeMcp, IDE_MCP_TOOL_GROUP } from "./lib/useIdeMcp";
+import { IdeActionDialog } from "./components/IdeActionDialog";
 
 /**
  * VortSpec IDE — a VS Code–style workbench driven by a layout store.
@@ -50,6 +53,22 @@ export default function App(): JSX.Element {
   useEffect(() => {
     setSelection(null);
   }, [wf.activePath]);
+
+  // The editor state the assistant's IDE tools read (via the MCP bridge).
+  const ideState = useMemo<IdeState>(
+    () => ({
+      workspaceRoot: workspace?.path ?? null,
+      activeFile: wf.activePath,
+      openEditors: wf.files.map((f) => f.path),
+      selection,
+    }),
+    [workspace?.path, wf.activePath, wf.files, selection],
+  );
+  const ideMcp = useIdeMcp({
+    state: ideState,
+    onOpenFile: (path) => void wf.openFile(path),
+    onOpenWorkspace: (p) => setWorkspace(p),
+  });
 
   useEffect(() => {
     void api.getProfile().then((p) => setUserName(p.name || undefined)).catch(() => undefined);
@@ -340,6 +359,8 @@ export default function App(): JSX.Element {
                     userName={userName}
                     seedContext={buildSeedContext(previewUrl)}
                     liveContext={buildLiveContext(wf.activePath, selection)}
+                    mcpConfigPath={ideMcp.configPath}
+                    extraAllowedTools={ideMcp.configPath ? [IDE_MCP_TOOL_GROUP] : undefined}
                     onClose={() => dispatch({ type: "toggleSecondary" })}
                   />
                 </div>
@@ -368,6 +389,9 @@ export default function App(): JSX.Element {
           </button>
         </footer>
       </div>
+      {ideMcp.pending && (
+        <IdeActionDialog pending={ideMcp.pending} onConfirm={ideMcp.confirm} onCancel={ideMcp.cancel} />
+      )}
     </IdeContext.Provider>
   );
 }

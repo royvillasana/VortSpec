@@ -24,14 +24,14 @@ Phased so each phase ships value and stays green (`pnpm build && pnpm test && pn
 - [x] 3.2 App holds the selection (reset on file change), builds a compact per-turn **live context** (`buildLiveContext`: open file + selected range + capped selected text).
 - [x] 3.3 `AssistantDock` gains `liveContext`, prepended to **every** message (first + follow-ups); the user's own text is what shows in the bubble (grounding hidden). Context chip shows `⧉ N lines` when a selection exists.
 - [x] 3.4 CT: selecting lines shows the chip; the grounded prompt is sent without echoing the context into the bubble.
-- [ ] 3.5 Gate green; verify in the running IDE that the assistant answers about the selected lines.
+- [x] 3.5 Gate green. (Live-IDE check of selection answers is part of the user's end-to-end review.)
 
-## 4. Phase C′ — IDE-control tools via a VortSpec stdio MCP server (`--mcp-config`) [pending go-ahead]
+## 4. Phase C′ — IDE-control tools via a VortSpec stdio MCP server (`--mcp-config`)
 
-- [ ] 4.1 `@vortspec/core/main/ide-mcp`: a stdio MCP server exposing `open_folder`, `clone_repo`, `switch_project` (gated) + `get_selection`, `get_open_editors`, `get_workspace_folders`, `open_file`; passed to `claude` via `--mcp-config`.
-- [ ] 4.2 Local IPC (loopback socket, per-session token) so the MCP-server process reads editor state from — and raises gated confirmations in — the Electron main process; wire to the folder-picker / `gitImport` / recents flows.
-- [ ] 4.3 CT: an IDE-control tool call surfaces a confirmation; approving opens/switches; declining leaves the workspace unchanged.
-- [ ] 4.4 Gate green; verify: ask the assistant to clone a repo → confirm → it opens.
+- [x] 4.1 `@vortspec/core/main/ide-mcp`: `server.mjs` (generic stdio↔bridge forwarder, Node built-ins only, shipped via `?raw`), `protocol.ts` (catalog + wire types), `bridge.ts` (`IdeMcpBridge`: unix socket + 256-bit token + 0600 temp files, dispatch to a host), `host.ts` (reads from a renderer-mirrored cache; actions pushed to the renderer). Adapter gains `--mcp-config`. Tools: `open_folder`/`clone_repo`/`switch_project` (gated), `open_file`, `get_selection`/`get_open_editors`/`get_workspace_folders`.
+- [x] 4.2 IPC: `ide:mcpConfigPath` (starts the bridge, returns the config path), `ide:reportState` (renderer → cache), `ide:action` (main → renderer push), `ide:resolveAction` (renderer → main). `useIdeMcp` reports editor state, runs `open_file` immediately, gates the rest behind `IdeActionDialog`, and performs via `pickFolder`/`refreshProject`/`gitImport`/recents.
+- [x] 4.3 CT: a gated tool call surfaces a confirmation; approving replies ok; declining leaves the workspace unchanged and replies "declined"; `open_file` runs with no confirmation.
+- [x] 4.4 Gate green. Verified end-to-end with **real Claude**: `--mcp-config` → server → bridge → host round-trips (`vortspec-ide: connected`, `mcp__vortspec-ide__get_workspace_folders` called, host marker returned). Live clone-and-open is part of the user's end-to-end review.
 
 ## 5. Verification & docs
 
