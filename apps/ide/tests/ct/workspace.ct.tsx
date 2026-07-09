@@ -69,6 +69,19 @@ test("New Folder creates a folder at the root", async ({ mount }) => {
   await expect.poll(async () => (await fsOps(c)).find((o) => o.op === "createDir")?.path).toBe("lib");
 });
 
+test("dragging a file onto a folder moves it into that folder", async ({ mount }) => {
+  const c = await mount(<App />, { hooksConfig: { mock: base } });
+  await open(c);
+  await c
+    .getByRole("button", { name: "README.md" })
+    .dragTo(c.getByRole("button", { name: "src", exact: true }));
+  await expect.poll(async () => (await fsOps(c)).find((o) => o.op === "rename")).toEqual({
+    op: "rename",
+    path: "README.md",
+    to: "src/README.md",
+  });
+});
+
 test("context menu renames and deletes an entry", async ({ mount }) => {
   const c = await mount(<App />, { hooksConfig: { mock: base } });
   await open(c);

@@ -31,8 +31,12 @@ export function Explorer({
   const [menu, setMenu] = useState<{ path: string; type: "file" | "dir"; x: number; y: number } | null>(null);
   // Folder highlighted as a drop target during a move.
   const [dragOver, setDragOver] = useState<string | null>(null);
+  // A short-lived error banner when a file op fails.
+  const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set([""]));
   const treeRef = useRef(tree);
+  // The entry currently being dragged (for reliable Explorer moves).
+  const dragItemRef = useRef<{ path: string; type: "file" | "dir" } | null>(null);
   treeRef.current = tree;
 
   const loadDir = useCallback(
@@ -81,8 +85,36 @@ export function Explorer({
   const dirOf = (path: string): string => (path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "");
   const baseOf = (path: string): string => path.split("/").pop() ?? path;
 
+  // Explicitly re-read a directory after an op (don't rely only on the fs watch,
+  // which is unreliable for programmatic changes on macOS).
+  const refresh = useCallback(
+    async (rel: string): Promise<void> => {
+      await loadDir(rel);
+    },
+    [loadDir],
+  );
+
+  /** Run a file op; on failure surface the message instead of failing silently. */
+  async function guard(fn: () => Promise<{ ok: boolean; message: string }>): Promise<boolean> {
+    try {
+      const res = await fn();
+      if (!res.ok) setError(res.message);
+      return res.ok;
+    } catch (e) {
+      setError(
+        e instanceof Error && /No handler registered/i.test(e.message)
+          ? "Restart the IDE dev app — the new file-ops aren't loaded in the running main process yet."
+          : e instanceof Error
+            ? e.message
+            : "That file operation failed.",
+      );
+      return false;
+    }
+  }
+
   function startCreate(parent: string, type: "file" | "dir"): void {
     setMenu(null);
+    setError(null);
     if (parent) setExpanded((p) => new Set(p).add(parent));
     setCreating({ parent, type });
   }
@@ -93,9 +125,13 @@ export function Explorer({
     const trimmed = name.trim();
     if (!c || !trimmed) return;
     const rel = c.parent ? `${c.parent}/${trimmed}` : trimmed;
-    const res = c.type === "file" ? await api.createFile(project.path, rel) : await api.createDir(project.path, rel);
-    if (res.ok && c.type === "file") onOpen(rel);
-    // The fs watcher refreshes the tree.
+    const ok = await guard(() =>
+      c.type === "file" ? api.createFile(project.path, rel) : api.createDir(project.path, rel),
+    );
+    if (!ok) return;
+    if (c.parent) setExpanded((p) => new Set(p).add(c.parent));
+    await refresh(c.parent);
+    if (c.type === "file") onOpen(rel);
   }
 
   async function commitRename(from: string, name: string): Promise<void> {
@@ -104,31 +140,47 @@ export function Explorer({
     if (!trimmed || trimmed === baseOf(from)) return;
     const parent = dirOf(from);
     const to = parent ? `${parent}/${trimmed}` : trimmed;
-    await api.renamePath(project.path, from, to);
+    if (await guard(() => api.renamePath(project.path, from, to))) await refresh(parent);
   }
 
   async function move(from: string, toDir: string): Promise<void> {
     const to = toDir ? `${toDir}/${baseOf(from)}` : baseOf(from);
     // Don't move into itself, its own dir, or a descendant.
     if (from === to || dirOf(from) === toDir || toDir === from || toDir.startsWith(`${from}/`)) return;
-    await api.renamePath(project.path, from, to);
+    if (await guard(() => api.renamePath(project.path, from, to))) {
+      if (toDir) setExpanded((p) => new Set(p).add(toDir));
+      await refresh(dirOf(from));
+      await refresh(toDir);
+    }
   }
 
-  /** Inline text input for create/rename. */
+  async function deleteEntry(path: string): Promise<void> {
+    setMenu(null);
+    if (await guard(() => api.trashPath(project.path, path))) await refresh(dirOf(path));
+  }
+
+  /** Inline text input for create/rename. Commits exactly once (Enter or blur). */
   function NameInput({ initial, depth, onCommit }: { initial: string; depth: number; onCommit: (v: string) => void }): JSX.Element {
     const [v, setV] = useState(initial);
+    const done = useRef(false);
+    const commit = (val: string): void => {
+      if (done.current) return;
+      done.current = true;
+      onCommit(val);
+    };
     return (
       <input
         autoFocus
         value={v}
         onChange={(e) => setV(e.target.value)}
-        onBlur={() => onCommit(v)}
+        onBlur={() => commit(v)}
         onKeyDown={(e) => {
           if (e.key === "Enter") {
             e.preventDefault();
-            onCommit(v);
+            commit(v);
           } else if (e.key === "Escape") {
             e.preventDefault();
+            done.current = true;
             setCreating(null);
             setRenaming(null);
           }
@@ -150,6 +202,9 @@ export function Explorer({
           <NameInput key={entry.path} initial={entry.name} depth={depth} onCommit={(v) => void commitRename(entry.path, v)} />,
         ];
       }
+      // Dropping onto a folder moves into it; dropping onto a file moves into
+      // that file's folder — so "reorganizing" is forgiving about the exact target.
+      const dropDir = isDir ? entry.path : dirOf(entry.path);
       const row = (
         <button
           key={entry.path}
@@ -157,44 +212,43 @@ export function Explorer({
           aria-label={entry.name}
           draggable
           onDragStart={(e) => {
+            dragItemRef.current = { path: entry.path, type: entry.type };
             // Same transfer powers both chat-attach and Explorer move.
-            e.dataTransfer.setData(
-              "application/vortspec-path",
-              JSON.stringify({ path: entry.path, type: entry.type }),
-            );
+            const payload = JSON.stringify({ path: entry.path, type: entry.type });
+            e.dataTransfer.setData("application/vortspec-path", payload);
+            e.dataTransfer.setData("text/plain", entry.path);
             e.dataTransfer.effectAllowed = "copyMove";
+          }}
+          onDragEnd={() => {
+            dragItemRef.current = null;
+            setDragOver(null);
           }}
           onContextMenu={(e) => {
             e.preventDefault();
             setMenu({ path: entry.path, type: entry.type, x: e.clientX, y: e.clientY });
           }}
           onDoubleClick={() => setRenaming(entry.path)}
-          {...(isDir && {
-            onDragOver: (e: React.DragEvent) => {
-              if (e.dataTransfer.types.includes("application/vortspec-path")) {
-                e.preventDefault();
-                e.dataTransfer.dropEffect = "move";
-                setDragOver(entry.path);
-              }
-            },
-            onDragLeave: () => setDragOver((d) => (d === entry.path ? null : d)),
-            onDrop: (e: React.DragEvent) => {
-              const raw = e.dataTransfer.getData("application/vortspec-path");
-              setDragOver(null);
-              if (!raw) return;
-              e.preventDefault();
-              e.stopPropagation();
-              try {
-                const { path } = JSON.parse(raw) as { path: string };
-                void move(path, entry.path);
-              } catch {
-                /* ignore malformed */
-              }
-            },
-          })}
+          onDragOver={(e) => {
+            // Accept the drop only for an in-flight internal drag onto a new dir.
+            const item = dragItemRef.current;
+            if (!item || item.path === entry.path || dirOf(item.path) === dropDir) return;
+            e.preventDefault();
+            e.dataTransfer.dropEffect = "move";
+            setDragOver(dropDir || "__root__");
+          }}
+          onDragLeave={() => setDragOver((d) => (d === (dropDir || "__root__") ? null : d))}
+          onDrop={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setDragOver(null);
+            const item = dragItemRef.current;
+            const raw = item?.path ?? e.dataTransfer.getData("text/plain");
+            dragItemRef.current = null;
+            if (raw) void move(raw, dropDir);
+          }}
           onClick={() => (isDir ? toggle(entry.path) : onOpen(entry.path))}
           className={`flex w-full items-center gap-1 rounded px-1.5 py-[3px] text-left text-[13px] transition-colors ${
-            dragOver === entry.path
+            dragOver === (dropDir || "__root__")
               ? "bg-vs-accent-muted text-vs-text-primary ring-1 ring-vs-accent"
               : activePath === entry.path
                 ? "bg-vs-bg-elevated text-vs-text-primary"
@@ -294,22 +348,30 @@ export function Explorer({
           )}
         </div>
       </div>
+      {error && (
+        <div className="mx-2 mb-1 flex items-start gap-2 rounded border border-vs-error/40 bg-vs-error/10 px-2 py-1 text-[11px] text-vs-error">
+          <span className="min-w-0 flex-1">{error}</span>
+          <button type="button" onClick={() => setError(null)} className="shrink-0 hover:text-vs-text-primary">
+            ×
+          </button>
+        </div>
+      )}
       <div
         className="min-h-0 flex-1 overflow-auto px-1 pb-2"
         onDragOver={(e) => {
-          if (e.dataTransfer.types.includes("application/vortspec-path")) {
+          // Drop on empty space → move to the workspace root.
+          if (dragItemRef.current && dirOf(dragItemRef.current.path) !== "") {
             e.preventDefault();
             e.dataTransfer.dropEffect = "move";
           }
         }}
         onDrop={(e) => {
-          const raw = e.dataTransfer.getData("application/vortspec-path");
-          if (!raw) return;
-          try {
-            const { path } = JSON.parse(raw) as { path: string };
-            void move(path, "");
-          } catch {
-            /* ignore */
+          const item = dragItemRef.current;
+          const raw = item?.path ?? e.dataTransfer.getData("text/plain");
+          dragItemRef.current = null;
+          if (raw) {
+            e.preventDefault();
+            void move(raw, "");
           }
         }}
       >
@@ -333,7 +395,7 @@ export function Explorer({
             <MenuItem label="Rename" onClick={() => { setRenaming(menu.path); setMenu(null); }} />
             <MenuItem label="Reveal in Finder" onClick={() => { void api.revealPath(project.path, menu.path); setMenu(null); }} />
             <div className="my-1 border-t border-vs-border-subtle" />
-            <MenuItem label="Delete" destructive onClick={() => { void api.trashPath(project.path, menu.path); setMenu(null); }} />
+            <MenuItem label="Delete" destructive onClick={() => void deleteEntry(menu.path)} />
           </div>
         </>
       )}
