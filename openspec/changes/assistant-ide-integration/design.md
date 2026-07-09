@@ -9,6 +9,15 @@ Empirically verified against the installed CLI (2.1.204):
 
 So the whole thing is feasible without the SDK or `--bare`: run the same WebSocket MCP server VS Code runs, pass `--ide`, and parse more of `init`.
 
+### Feasibility finding (Phase B spike, 2026-07) — the `--ide` bridge does NOT work headless
+
+Verified empirically with a standalone raw-WebSocket server + a real `claude -p` run (CLI 2.1.204): **`claude -p --ide` never opens a connection to our lockfile's port** — no TCP upgrade attempt, and no `ide` entry in `init.mcp_servers`. This held in three configurations:
+- `--ide` with our lockfile present alongside the user's VS Code lockfiles;
+- `--ide` with our lockfile as the *only* valid IDE (VS Code lockfiles moved aside);
+- `--ide` **plus** `CLAUDE_CODE_SSE_PORT=<port>` + `ENABLE_IDE_INTEGRATION=true` in Claude's env.
+
+Conclusion: the `--ide` WebSocket/lockfile integration is an **interactive-mode** feature. Our assistant runs headless (`-p`), so **Decision 1 (reproduce the WS+lockfile IDE server) is not viable** for this product. What *does* load in headless mode is confirmed by the same `init` event: MCP servers passed via `--mcp-config` (figma-console, pencil, etc. all appear). So the pivot is: **deliver the extension's features through headless-supported mechanisms** — prompt-injected context for the read side, and a VortSpec **stdio MCP server via `--mcp-config`** for the tool/control side. See revised Decisions 1a/1b below.
+
 ## Goals / Non-Goals
 
 **Goals:**
@@ -24,8 +33,14 @@ So the whole thing is feasible without the SDK or `--bare`: run the same WebSock
 
 ## Decisions
 
-### 1. Reproduce the Claude Code IDE MCP server (WS + lockfile), don't invent a protocol
-Run a WebSocket server on `127.0.0.1:<port>` speaking JSON-RPC 2.0 / MCP 2024-11-05, and write `~/.claude/ide/<port>.lock` with our token + `ideName: "VortSpec IDE"`. The AgentAdapter adds `--ide` for IDE runs. This is exactly what the extension does, so the *user's own* `claude` connects with no config. Lives in `@vortspec/core/main/ide-bridge` with IPC to (a) start/stop bound to the workspace and (b) register renderer-side handlers for the tools (selection, open-file, openFolder…). **Why not a stdio `--mcp-config` server?** The IDE integration Claude expects (selection/at-mention notifications, `mcp__ide__*`) is the WS+lockfile channel; matching it gives us the extension's UX (the `⧉ selected N lines` behavior) for free and avoids diverging.
+### 1. ~~Reproduce the Claude Code IDE MCP server (WS + lockfile)~~ — SUPERSEDED
+~~Run a WebSocket server on `127.0.0.1:<port>`…~~ **Disproven by the Phase B spike above: headless `claude -p --ide` does not connect.** Kept here for history; replaced by 1a + 1b.
+
+### 1a. Read side (active file / selection) → prompt injection, no bridge
+The assistant already seeds the open-file path. Extend that to a compact, per-turn **live context** — the active file plus, when present, the selected line range and the selected text — prepended to *every* message the dock sends (not just the first), matching how the extension keeps Claude aware of the current selection. The renderer already owns `wf.activePath`; Monaco's `onDidChangeCursorSelection` supplies the range/text. A visible context chip (`⧉ N lines`) surfaces the grounding. This needs no MCP server and works headlessly today. The user's own text is what shows in the chat bubble; the grounding is hidden from the transcript but sent in the prompt.
+
+### 1b. Tool / control side (open/clone/switch, editor reads) → VortSpec stdio MCP server via `--mcp-config`
+For tools Claude actively *calls*, ship a small VortSpec MCP server (stdio) and pass it with `--mcp-config` (confirmed to load in headless `-p`). It exposes `open_folder`, `clone_repo`, `switch_project` (state-changing → gated), plus `get_selection`, `get_open_editors`, `get_workspace_folders`, `open_file` (reads/nav). The server process bridges to the Electron main process over a local IPC channel (loopback socket the main process owns, per-session token) to read editor state and to raise the gated confirmations. This replaces the `mcp__ide__*` WS channel with a channel that actually works headless, at the cost of implementing our own tool names (`mcp__vortspec-ide__*`) instead of mirroring `mcp__ide__*`. **Status: designed, not yet built — pending user go-ahead (larger architecture than the read side).**
 
 ### 2. Editor context flows both ways
 Claude pulls via tools (`getCurrentSelection`, `getOpenEditors`, `getWorkspaceFolders`, `getDiagnostics`) and the IDE pushes `selection_changed` notifications as focus/selection changes — the renderer already owns `wf.activePath` and can report Monaco's selection. The visible context chip is driven from the same state.
@@ -50,14 +65,14 @@ Everything is opt-in: the cockpit's AgentAdapter calls omit `--ide`; the bridge 
 
 ## Migration Plan
 
-1. **Phase A — Session status (no bridge).** Extend init parsing + run-event; add the model chip + session panel to AssistantDock. Ships immediately, low risk.
-2. **Phase B — Bridge handshake.** Implement the WS+lockfile server + `--ide`; prove a real `claude -p --ide` connects and lists our server in `init.mcp_servers`. Gate before B+.
-3. **Phase C — Editor context + tools.** getCurrentSelection/getOpenEditors/getWorkspaceFolders/getDiagnostics/openFile/openDiff + selection push + the context chip.
-4. **Phase D — IDE-control tools.** openFolder/cloneRepo/switchProject with confirmations.
-- **Rollback:** each phase is additive and opt-in; revert the AssistantDock/adapter opt-in to disable.
+1. **Phase A — Session status (no bridge).** Extend init parsing + run-event; add the model chip + session panel to AssistantDock. ✅ Shipped.
+2. **Phase B — Bridge feasibility spike.** ✅ Done, with a *negative* result: headless `--ide` does not connect (see finding). The WS bridge is abandoned; B pivots to the read side.
+3. **Phase B′ (was C, read side) — Active-file/selection context via prompt injection.** Live per-turn grounding + context chip. Works headless, no MCP server. ← implemented in this pass.
+4. **Phase C′ (was D, control side) — VortSpec stdio MCP server via `--mcp-config`.** `open_folder`/`clone_repo`/`switch_project` (gated) + editor-read tools, bridged to the main process. Larger; pending go-ahead.
+- **Rollback:** each phase is additive and opt-in; the read-side grounding is off unless the host passes `liveContext`; the control server is off unless `--mcp-config` is added.
 
 ## Open Questions
 
-- Exact `mcp__ide__*` method names + selection/at-mention notification schemas — pin from a captured session or the extension source.
-- Does `claude -p --ide` connect when multiple lockfiles exist (the flag says "exactly one valid IDE")? We may need to ensure ours is the sole/selected one, or use `--mcp-config` targeting for determinism.
+- Confirm interactively (VS Code ↔ CLI) that the `--ide` bridge is genuinely interactive-only (vs. some undocumented headless handshake flag) — the spike strongly indicates so, but a definitive Anthropic doc reference would close it.
+- For the control server: loopback socket vs. named pipe for the MCP-server↔main IPC; how to render the gated confirmation (reuse the folder-picker / `gitImport` / recents flows).
 - Should the session panel also allow switching the model (`--model`) per session, or just display it?

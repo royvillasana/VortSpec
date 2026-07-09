@@ -2,6 +2,7 @@ import type { JSX } from "react";
 import type { Project } from "@vortspec/core/ipc";
 import { api } from "@vortspec/ui/api";
 import { EditorGroup } from "./EditorGroup";
+import type { CodeSelection } from "./CodeEditor";
 import { PreviewBar } from "./PreviewBar";
 import type { WorkspaceFiles } from "../lib/useWorkspaceFiles";
 
@@ -14,10 +15,13 @@ export function EditorArea({
   project,
   wf,
   relayoutKey,
+  onSelection,
 }: {
   project: Project;
   wf: WorkspaceFiles;
   relayoutKey?: number;
+  /** Reports the active editor selection up for assistant grounding. */
+  onSelection?: (selection: CodeSelection | null) => void;
 }): JSX.Element {
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
@@ -32,6 +36,7 @@ export function EditorArea({
           onReload={(p) => void wf.reload(p)}
           loadHead={(p) => api.fileAtHead(project.path, p)}
           relayoutKey={relayoutKey}
+          onSelection={onSelection}
         />
       </div>
       <PreviewBar project={project} />

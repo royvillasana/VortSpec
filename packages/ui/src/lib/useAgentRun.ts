@@ -14,8 +14,10 @@ export function useAgentRun(): {
   /** True once a session exists and no run is in flight — the Chat tab can reply. */
   canChat: boolean;
   start: (opts: AgentRunOptions) => Promise<void>;
-  /** Send a chat follow-up: a new run resuming the captured session. */
-  send: (text: string) => Promise<void>;
+  /** Send a chat follow-up: a new run resuming the captured session. `display`
+   *  overrides the text shown in the user bubble (when the prompt carries hidden
+   *  grounding the user shouldn't see echoed back). */
+  send: (text: string, display?: string) => Promise<void>;
   cancel: () => Promise<void>;
   reset: () => void;
 } {
@@ -49,12 +51,12 @@ export function useAgentRun(): {
     runIdRef.current = runId;
   }
 
-  async function send(text: string): Promise<void> {
+  async function send(text: string, display?: string): Promise<void> {
     const base = baseOptsRef.current;
     const sessionId = sessionIdRef.current;
     const trimmed = text.trim();
     if (!base || !sessionId || !trimmed || model.status === "running") return;
-    dispatch({ type: "send", text: trimmed });
+    dispatch({ type: "send", text: (display ?? text).trim() });
     const { runId } = await api.startRun({
       ...base,
       prompt: trimmed,

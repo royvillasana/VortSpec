@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { JSX } from "react";
-import { CodeEditor, DiffView } from "./CodeEditor";
+import { CodeEditor, DiffView, type CodeSelection } from "./CodeEditor";
 
 export interface OpenFile {
   path: string;
@@ -26,6 +26,7 @@ export function EditorGroup({
   onReload,
   loadHead,
   relayoutKey,
+  onSelection,
 }: {
   files: OpenFile[];
   activePath: string | null;
@@ -38,6 +39,8 @@ export function EditorGroup({
   loadHead: (path: string) => Promise<string | null>;
   /** Bump to force an editor relayout when the container is shown/re-docked. */
   relayoutKey?: number;
+  /** Reports the active editor selection up for assistant grounding. */
+  onSelection?: (selection: CodeSelection | null) => void;
 }): JSX.Element {
   const active = files.find((f) => f.path === activePath) ?? null;
   const [diff, setDiff] = useState(false);
@@ -163,6 +166,7 @@ export function EditorGroup({
             value={active.content}
             relayoutKey={relayoutKey}
             onChange={(v) => onChange(active.path, v)}
+            onSelection={onSelection}
           />
         ) : null}
       </div>

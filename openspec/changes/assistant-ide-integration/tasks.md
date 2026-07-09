@@ -10,26 +10,26 @@ Phased so each phase ships value and stays green (`pnpm build && pnpm test && pn
 - [x] 1.4 CT: the session panel renders model/skills/agents and shows an MCP server's failed/needs-auth status distinctly.
 - [x] 1.5 Gate green.
 
-## 2. Phase B — IDE MCP bridge handshake
+## 2. Phase B — IDE MCP bridge feasibility spike (NEGATIVE RESULT)
 
-- [ ] 2.1 `@vortspec/core/main/ide-bridge`: a WebSocket server (127.0.0.1, JSON-RPC 2.0, MCP 2024-11-05 handshake: initialize/tools_list) + lockfile writer/remover in `~/.claude/ide/<port>.lock` (`{pid, workspaceFolders, ideName:"VortSpec IDE", transport:"ws", authToken}`, mode 0600); reject unauthenticated/non-loopback connections.
-- [ ] 2.2 IPC to start/stop the bridge bound to the workspace (start on open, swap on change, stop on quit); `AgentAdapter` gains an opt-in `ide` flag that adds `--ide`.
-- [ ] 2.3 **Verify end-to-end**: a real `claude -p --ide` (IDE run) connects to our lockfile and our server appears in `init.mcp_servers`. Pin the exact `mcp__ide__*` method names + selection/at-mention notification schemas from a captured session; record fixtures.
-- [ ] 2.4 Unit-test the server (handshake, auth accept/reject, tools/list, lockfile lifecycle) headlessly.
-- [ ] 2.5 Gate green.
+- [x] 2.1 Built a standalone raw-WebSocket server + lockfile writer to test the handshake without adding a `ws` dependency prematurely.
+- [x] 2.2 Spawned a real `claude -p --ide` against our lockfile (three configs: alongside VS Code, sole valid IDE, and with `CLAUDE_CODE_SSE_PORT`/`ENABLE_IDE_INTEGRATION`).
+- [x] 2.3 **Finding: headless `claude -p --ide` never connects** — no upgrade attempt, no `ide` server in `init.mcp_servers`. The WS/lockfile IDE integration is interactive-only. → **Abandon the bridge; pivot** (design Decisions 1a/1b). What loads headless: `--mcp-config` MCP servers (confirmed in `init`).
+- [x] 2.4 Spike cleaned up (no `ws` dep added, no lockfiles leaked); VS Code lockfiles restored.
+- [x] 2.5 Finding recorded in design.md.
 
-## 3. Phase C — Editor context + read/open tools
+## 3. Phase B′ — Active-file / selection context via prompt injection (read side)
 
-- [ ] 3.1 Implement bridge tools: `getCurrentSelection`/`getLatestSelection`, `getOpenEditors`, `getWorkspaceFolders`, `getDiagnostics`, `openFile` (line range), `openDiff` — wired to the IDE (Monaco selection, open tabs, workspace root; all path-guarded).
-- [ ] 3.2 Push `selection_changed` notifications from the renderer as the active file/selection changes (from the layout/editor state).
-- [ ] 3.3 `AssistantDock` context chip shows the active file and `⧉ <N> lines from <file>` when a selection exists; updates as focus/selection changes.
-- [ ] 3.4 CT + unit: selection tool returns path+text+range; openFile opens the tab; the chip reflects file/selection changes.
-- [ ] 3.5 Gate green; verify in the running IDE that the assistant can read the selected file.
+- [x] 3.1 `CodeEditor` reports the live selection (`onDidChangeCursorSelection` → `{startLine,endLine,text}`, null when empty); threaded through `EditorGroup`/`EditorArea`.
+- [x] 3.2 App holds the selection (reset on file change), builds a compact per-turn **live context** (`buildLiveContext`: open file + selected range + capped selected text).
+- [x] 3.3 `AssistantDock` gains `liveContext`, prepended to **every** message (first + follow-ups); the user's own text is what shows in the bubble (grounding hidden). Context chip shows `⧉ N lines` when a selection exists.
+- [x] 3.4 CT: selecting lines shows the chip; the grounded prompt is sent without echoing the context into the bubble.
+- [ ] 3.5 Gate green; verify in the running IDE that the assistant answers about the selected lines.
 
-## 4. Phase D — IDE-control tools (open / clone / switch)
+## 4. Phase C′ — IDE-control tools via a VortSpec stdio MCP server (`--mcp-config`) [pending go-ahead]
 
-- [ ] 4.1 Bridge tools `openFolder`, `cloneRepo` (reuse `createFolder` + `gitImport`), `switchProject` (recents) — each dispatches a **confirmation** in the IDE; the action runs only on approval, else no-op.
-- [ ] 4.2 Wire the confirmations to the workspace open/clone flow (open the result as the workspace).
+- [ ] 4.1 `@vortspec/core/main/ide-mcp`: a stdio MCP server exposing `open_folder`, `clone_repo`, `switch_project` (gated) + `get_selection`, `get_open_editors`, `get_workspace_folders`, `open_file`; passed to `claude` via `--mcp-config`.
+- [ ] 4.2 Local IPC (loopback socket, per-session token) so the MCP-server process reads editor state from — and raises gated confirmations in — the Electron main process; wire to the folder-picker / `gitImport` / recents flows.
 - [ ] 4.3 CT: an IDE-control tool call surfaces a confirmation; approving opens/switches; declining leaves the workspace unchanged.
 - [ ] 4.4 Gate green; verify: ask the assistant to clone a repo → confirm → it opens.
 

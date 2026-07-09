@@ -19,7 +19,7 @@ import { Resizer } from "./components/Resizer";
 import { useWorkspaceFiles } from "./lib/useWorkspaceFiles";
 import { useLayout } from "./lib/useLayout";
 import { effectiveWidths, isSidebarView, type Activity } from "./lib/layout";
-import { IdeContext, buildSeedContext } from "./lib/ide-context";
+import { IdeContext, buildSeedContext, buildLiveContext, type EditorSelection } from "./lib/ide-context";
 
 /**
  * VortSpec IDE — a VS Code–style workbench driven by a layout store.
@@ -35,6 +35,8 @@ export default function App(): JSX.Element {
   const [userName, setUserName] = useState<string | undefined>(undefined);
   const [previewUrl] = useState<string | null>(null);
   const [homeDir, setHomeDir] = useState<string | null>(null);
+  // The live editor selection, surfaced to the assistant as grounding context.
+  const [selection, setSelection] = useState<EditorSelection | null>(null);
   // Which welcome view is showing when no workspace is open.
   const [welcomeView, setWelcomeView] = useState<"start" | "settings">("start");
   const [winW, setWinW] = useState<number>(() =>
@@ -42,6 +44,12 @@ export default function App(): JSX.Element {
   );
 
   const wf = useWorkspaceFiles(workspace?.path ?? null);
+
+  // Clear the selection when the active file changes (a fresh file has no
+  // carried-over highlight); the editor re-reports as the user selects.
+  useEffect(() => {
+    setSelection(null);
+  }, [wf.activePath]);
 
   useEffect(() => {
     void api.getProfile().then((p) => setUserName(p.name || undefined)).catch(() => undefined);
@@ -191,7 +199,16 @@ export default function App(): JSX.Element {
     return (
       <div className="flex min-h-0 min-w-0 flex-1">
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-          <EditorArea project={workspace!} wf={wf} relayoutKey={relayoutKey} />
+          <EditorArea
+            project={workspace!}
+            wf={wf}
+            relayoutKey={relayoutKey}
+            onSelection={(s) =>
+              setSelection(
+                s && wf.activePath ? { path: wf.activePath, startLine: s.startLine, endLine: s.endLine, text: s.text } : null,
+              )
+            }
+          />
           {bottomPanel && (
             <>
               <Resizer orientation="horizontal" ariaLabel="Resize panel" onDelta={(d) => dispatch({ type: "nudgePanel", delta: -d })} />
@@ -303,9 +320,28 @@ export default function App(): JSX.Element {
                   ) : (
                     <span>no file open</span>
                   )}
+                  {selection && (
+                    <span
+                      title="Selected lines are sent to the assistant as context"
+                      className="rounded bg-vs-accent-subtle px-1.5 py-0.5 font-mono text-vs-accent"
+                    >
+                      ⧉ {selection.startLine === selection.endLine
+                        ? `line ${selection.startLine}`
+                        : `${selection.endLine - selection.startLine + 1} lines`}
+                    </span>
+                  )}
                 </div>
                 <div className="min-h-0 flex-1">
-                  <AssistantDock project={workspace} fill showSession allowModify userName={userName} seedContext={buildSeedContext(wf.activePath, previewUrl)} onClose={() => dispatch({ type: "toggleSecondary" })} />
+                  <AssistantDock
+                    project={workspace}
+                    fill
+                    showSession
+                    allowModify
+                    userName={userName}
+                    seedContext={buildSeedContext(previewUrl)}
+                    liveContext={buildLiveContext(wf.activePath, selection)}
+                    onClose={() => dispatch({ type: "toggleSecondary" })}
+                  />
                 </div>
               </div>
             </>

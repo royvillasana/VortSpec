@@ -17,6 +17,7 @@ const MODIFY_TOOLS = ["Read", "Grep", "Glob", "Write", "Edit", "Bash"];
 export function AssistantDock({
   project,
   seedContext,
+  liveContext,
   allowModify = false,
   onClose,
   userName,
@@ -26,6 +27,10 @@ export function AssistantDock({
   project: Project;
   /** Optional one-line context the dock mentions to Claude on the first message. */
   seedContext?: string;
+  /** Fresh, per-turn grounding (active file / selection) prepended to EVERY
+   *  message — the Claude Code extension's active-context behaviour. Recomputed
+   *  by the host as focus/selection changes; empty string means nothing to add. */
+  liveContext?: string;
   /** When true, the assistant may edit files (component changes), not just read. */
   allowModify?: boolean;
   /** When provided, a close button is shown; omit for a permanent panel. */
@@ -63,9 +68,12 @@ export function AssistantDock({
     const text = draft.trim();
     if (!text || run.running) return;
     setDraft("");
+    // The live grounding (open file / selection) rides on every message so the
+    // assistant always sees what the user is looking at right now.
+    const withLive = liveContext ? `${liveContext}\n\n${text}` : text;
     if (!started) {
       setFirstPrompt(text);
-      const prompt = seedContext ? `${seedContext}\n\n${text}` : text;
+      const prompt = seedContext ? `${seedContext}\n\n${withLive}` : withLive;
       void run.start({
         prompt,
         cwd: project.path,
@@ -78,7 +86,8 @@ export function AssistantDock({
           : undefined,
       });
     } else {
-      void run.send(text);
+      // Send the grounded prompt but show only the user's own text in the bubble.
+      void run.send(withLive, text);
     }
   }
 

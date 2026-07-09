@@ -16,12 +16,20 @@ import { languageForPath } from "../monaco/setup";
  * forces a relayout even when the size didn't change (e.g. the editor was hidden
  * then shown, or the panel dock moved).
  */
+/** A resolved text selection reported up to the assistant grounding. */
+export interface CodeSelection {
+  startLine: number;
+  endLine: number;
+  text: string;
+}
+
 export function CodeEditor({
   path,
   value,
   readOnly = false,
   relayoutKey,
   onChange,
+  onSelection,
 }: {
   path: string | null;
   value: string;
@@ -29,6 +37,9 @@ export function CodeEditor({
   /** Bump to force a relayout when the container is shown/re-docked. */
   relayoutKey?: number;
   onChange: (value: string) => void;
+  /** Reports the active selection (or null when empty) so the assistant can be
+   *  grounded in what the user has highlighted, like the Claude Code extension. */
+  onSelection?: (selection: CodeSelection | null) => void;
 }): JSX.Element {
   const wrapRef = useRef<HTMLDivElement>(null);
   const hostRef = useRef<HTMLDivElement>(null);
@@ -36,6 +47,8 @@ export function CodeEditor({
   const modelsRef = useRef<Map<string, monaco.editor.ITextModel>>(new Map());
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
+  const onSelectionRef = useRef(onSelection);
+  onSelectionRef.current = onSelection;
 
   // Create the editor once.
   useEffect(() => {
@@ -60,6 +73,21 @@ export function CodeEditor({
       const model = editor.getModel();
       if (model) onChangeRef.current(model.getValue());
     });
+    const selSub = editor.onDidChangeCursorSelection((e) => {
+      const report = onSelectionRef.current;
+      if (!report) return;
+      const model = editor.getModel();
+      const sel = e.selection;
+      if (!model || sel.isEmpty()) {
+        report(null);
+        return;
+      }
+      report({
+        startLine: sel.startLineNumber,
+        endLine: sel.endLineNumber,
+        text: model.getValueInRange(sel),
+      });
+    });
     // Observe the stable wrapper and lay out with the exact observed box, so the
     // wrap re-computes reliably as neighboring regions resize — both directions.
     const relayout = (): void => {
@@ -80,6 +108,7 @@ export function CodeEditor({
       cancelAnimationFrame(raf);
       ro.disconnect();
       sub.dispose();
+      selSub.dispose();
       editor.dispose();
       models.forEach((m) => m.dispose());
       models.clear();

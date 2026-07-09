@@ -74,6 +74,22 @@ test("seeds the assistant context with the open file", async ({ mount }) => {
   await expect(c.getByTestId("assistant-context")).toContainText("README.md");
 });
 
+test("sends the open file as hidden grounding without echoing it in the bubble", async ({ mount }) => {
+  const c = await mount(<App />, { hooksConfig: { mock: base } });
+  await open(c);
+  await c.getByRole("button", { name: "README.md" }).click();
+  await c.getByPlaceholder(/tighten Button/).fill("explain this");
+  await c.getByRole("button", { name: "Send" }).click();
+  // The prompt actually sent to Claude carries the live IDE grounding…
+  const prompts = await c.page().evaluate(() => (window as unknown as { __runPrompts: string[] }).__runPrompts);
+  expect(prompts[0]).toContain("[IDE context] The open file is README.md.");
+  expect(prompts[0]).toContain("explain this");
+  // …but the visible user bubble shows only what the user typed.
+  const bubble = c.getByText("explain this", { exact: true });
+  await expect(bubble).toBeVisible();
+  await expect(c.getByText(/\[IDE context\]/)).toHaveCount(0);
+});
+
 test("gated artifacts stay behind the reused Manifest approval path", async ({ mount }) => {
   // The IDE adds no bypass: DESIGN.md lives in the reused DesignManifest panel,
   // which routes edits through the shared approval/snapshot handlers.
