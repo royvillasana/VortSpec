@@ -35,6 +35,10 @@ export function PreviewBar({ project }: { project: Project }): JSX.Element {
 
   useEffect(() => {
     let live = true;
+    // Clear immediately so a stale App/Storybook status never lingers across a
+    // tab switch (its URL must not be reused by Open Browser).
+    setDev(null);
+    setErr("");
     void statusFor(kind, project.path).then((s) => live && setDev(s));
     const off = api.onDevServerUpdate(({ projectPath, kind: k, status }) => {
       const wanted = kind === "app" ? "app" : "storybook";
@@ -50,13 +54,15 @@ export function PreviewBar({ project }: { project: Project }): JSX.Element {
     setBusy(true);
     setErr("");
     try {
-      let s = dev;
-      if (!s || s.state !== "running" || !s.url) {
+      // Resolve the CURRENT tab's server fresh — `dev` can lag a tab switch, so
+      // trusting it here would open the other server's URL (App vs Storybook).
+      let s = await statusFor(kind, project.path);
+      if (s.state !== "running" || !s.url) {
         s = await startFor(kind, project.path);
-        setDev(s);
       }
+      setDev(s);
       if (s.url) await api.openInstall(s.url);
-      else setErr(s.message ?? "Couldn't start the dev server for this project.");
+      else setErr(s.message ?? `Couldn't start the ${kind === "app" ? "app" : "Storybook"} server for this project.`);
     } catch {
       setErr("Couldn't open the browser.");
     } finally {

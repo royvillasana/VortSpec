@@ -121,6 +121,8 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
   const ideResolutions: IdeActionResult[] = [];
   // Records Explorer file operations (create/rename/trash) for assertions.
   const fsOps: { op: string; path: string; to?: string }[] = [];
+  // Records URLs passed to openInstall (e.g. the Preview bar's Open Browser).
+  const installOpens: string[] = [];
   let runSeq = 0;
   // Flips true once a run's transcript has been replayed — lets getManifest
   // return the post-generation manifest (mirrors design-doc writing DESIGN.md).
@@ -158,7 +160,10 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
     verifyLogin: async () => ({ id: "claude-login", label: "Claude", status: "pass" }),
     verifyFigmaMcp: async () =>
       cfg.figmaMcp ?? { id: "figma-mcp", label: "Figma MCP", status: "unknown", detail: "" },
-    openInstall: async () => undefined,
+    openInstall: async (url: string) => {
+      installOpens.push(url);
+      return undefined;
+    },
 
     pickFolder: async () => cfg.pickFolderResult ?? null,
     createFolder: async () => null,
@@ -380,4 +385,5 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
   };
   (window as unknown as { __ideResolutions: IdeActionResult[] }).__ideResolutions = ideResolutions;
   (window as unknown as { __fsOps: typeof fsOps }).__fsOps = fsOps;
+  (window as unknown as { __openInstalls: string[] }).__openInstalls = installOpens;
 }
