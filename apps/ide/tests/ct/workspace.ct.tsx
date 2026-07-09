@@ -139,6 +139,16 @@ test("the Explorer header shows a badge counting the open files", async ({ mount
   await expect(c.getByTitle("2 open files")).toBeVisible();
 });
 
+test("the breadcrumb appends the active editor tab after the activity", async ({ mount }) => {
+  const c = await mount(<App />, { hooksConfig: { mock: base } });
+  await open(c);
+  const crumb = c.getByRole("navigation", { name: "Breadcrumb" });
+  await expect(crumb).toContainText("explorer");
+  await expect(crumb.getByText("README.md")).toHaveCount(0); // no file yet
+  await c.getByRole("button", { name: "README.md" }).click();
+  await expect(crumb.getByText("README.md")).toBeVisible(); // …/explorer/README.md
+});
+
 test("opening a file adds a tab; opening a second adds another", async ({ mount }) => {
   const c = await mount(<App />, { hooksConfig: { mock: base } });
   await open(c);

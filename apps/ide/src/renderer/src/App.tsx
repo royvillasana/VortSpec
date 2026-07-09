@@ -358,6 +358,15 @@ export default function App(): JSX.Element {
               </button>
               <span className="text-vs-text-muted/50">/</span>
               <span className="capitalize text-vs-text-secondary">{layout.activity}</span>
+              {/* The active editor tab, appended when a file is open in the Explorer view. */}
+              {isExplorer && wf.activePath && (
+                <>
+                  <span className="text-vs-text-muted/50">/</span>
+                  <span className="truncate font-mono text-vs-text-secondary" title={wf.activePath}>
+                    {wf.activePath.split("/").pop()}
+                  </span>
+                </>
+              )}
             </nav>
             <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
               {isExplorer ? centerForExplorer() : workPanel()}
