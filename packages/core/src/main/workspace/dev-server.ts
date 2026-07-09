@@ -13,7 +13,7 @@ import { DEV_SERVER_UPDATE_CHANNEL, type DevServerStatus, type ServerKind } from
  */
 
 interface Server {
-  child: ChildProcess;
+  child: ChildProcess | null;
   status: DevServerStatus;
   sender: WebContents;
 }
@@ -87,6 +87,71 @@ function push(server: Server, projectPath: string, kind: ServerKind): void {
   }
 }
 
+const ANSI = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*[A-Za-z]`, "g");
+
+/** An actionable error message: a prefix plus the last few (ANSI-stripped) output lines. */
+function tailMessage(prefix: string, raw: string): string {
+  const lines = raw
+    .replace(ANSI, "")
+    .split("\n")
+    .map((l) => l.trimEnd())
+    .filter(Boolean);
+  const tail = lines.slice(-8).join("\n");
+  return tail ? `${prefix}:\n${tail}` : `${prefix}.`;
+}
+
+// NO_COLOR asks tools (picocolors/vite) not to emit ANSI; urlFrom still strips
+// any that slip through. CI keeps installs/servers non-interactive.
+const STEP_ENV: NodeJS.ProcessEnv = { ...process.env, NO_COLOR: "1", FORCE_COLOR: "0", BROWSER: "none", CI: "1" };
+
+/**
+ * Spawn one step — a dependency install or the dev script — streaming its
+ * output. For the server step we watch for the localhost URL and flip to
+ * "running"; `onDone` fires on exit/error with the code + a tail of output so
+ * failures are diagnosable instead of a bare "exited with code 1".
+ */
+function runStep(
+  server: Server,
+  projectPath: string,
+  kind: ServerKind,
+  script: string,
+  cmd: string,
+  args: string[],
+  isServer: boolean,
+  onDone: (r: { code: number | null; signal: boolean; tail: string; url: string | null }) => void,
+): void {
+  let tail = "";
+  let url: string | null = null;
+  let child: ChildProcess;
+  try {
+    child = spawn(cmd, args, { cwd: projectPath, shell: false, env: STEP_ENV });
+  } catch (err) {
+    onDone({ code: -1, signal: false, tail: err instanceof Error ? err.message : String(err), url: null });
+    return;
+  }
+  server.child = child;
+
+  const onData = (buf: Buffer): void => {
+    const s = buf.toString();
+    tail = (tail + s).slice(-8000);
+    if (isServer && !url && server.status.state === "starting") {
+      const found = urlFrom(s);
+      if (found) {
+        url = found;
+        server.status = { state: "running", url, script, message: null };
+        push(server, projectPath, kind);
+      }
+    }
+  };
+  child.stdout?.on("data", onData);
+  child.stderr?.on("data", onData);
+  child.on("error", (err: Error) => {
+    const enoent = (err as NodeJS.ErrnoException).code === "ENOENT";
+    onDone({ code: -1, signal: false, tail: enoent ? `${cmd} is not installed or not on your PATH.` : err.message, url });
+  });
+  child.on("exit", (code, sig) => onDone({ code, signal: sig !== null, tail, url }));
+}
+
 export async function startServer(
   sender: WebContents,
   projectPath: string,
@@ -113,46 +178,49 @@ export async function startServer(
   }
 
   const pm = detectPackageManager(projectPath);
-  const child = spawn(pm, ["run", script], {
-    cwd: projectPath,
-    shell: false,
-    // NO_COLOR asks tools (picocolors/vite) not to emit ANSI; urlFrom still
-    // strips any that slip through. CI keeps them non-interactive.
-    env: { ...process.env, NO_COLOR: "1", FORCE_COLOR: "0", BROWSER: "none", CI: "1" },
-  });
+  const noun = kind === "app" ? "app" : "Storybook";
   const server: Server = {
-    child,
+    child: null,
     status: { state: "starting", url: null, script, message: null },
     sender,
   };
   servers.set(key, server);
 
-  const onData = (buf: Buffer): void => {
-    if (server.status.state !== "starting") return;
-    const url = urlFrom(buf.toString());
-    if (url) {
-      server.status = { state: "running", url, script, message: null };
+  const runDev = (): void => {
+    runStep(server, projectPath, kind, script, pm, ["run", script], true, ({ code, signal, tail, url }) => {
+      if (url !== null || server.status.state === "running" || signal) {
+        // Reached the URL then exited, or we stopped it (SIGTERM) — a clean stop.
+        server.status = { state: "stopped", url: null, script, message: null };
+      } else if (code && code !== 0) {
+        server.status = {
+          state: "error",
+          url: null,
+          script,
+          message: tailMessage(`The ${noun} dev server (\`${pm} run ${script}\`) exited with code ${code}`, tail),
+        };
+      } else {
+        server.status = { state: "stopped", url: null, script, message: null };
+      }
       push(server, projectPath, kind);
-    }
+    });
   };
-  child.stdout?.on("data", onData);
-  child.stderr?.on("data", onData);
 
-  child.on("error", (err: Error) => {
-    server.status = { state: "error", url: null, script, message: err.message };
+  // A freshly cloned repo has no node_modules — install first, then run, so the
+  // preview actually starts instead of failing with "command not found".
+  if (!existsSync(join(projectPath, "node_modules"))) {
+    server.status = { state: "starting", url: null, script, message: `Installing dependencies with ${pm}… (first run)` };
     push(server, projectPath, kind);
-  });
-  child.on("exit", (code) => {
-    // A running server that exits with null code was stopped by us (SIGTERM).
-    const clean = server.status.state === "running" && code === null;
-    server.status = {
-      state: clean ? "stopped" : code && code !== 0 ? "error" : "stopped",
-      url: null,
-      script,
-      message: clean ? null : code ? `Preview process exited with code ${code}.` : null,
-    };
-    push(server, projectPath, kind);
-  });
+    runStep(server, projectPath, kind, script, pm, ["install"], false, ({ code, tail }) => {
+      if (code !== 0) {
+        server.status = { state: "error", url: null, script, message: tailMessage(`Couldn't install dependencies with ${pm}`, tail) };
+        push(server, projectPath, kind);
+        return;
+      }
+      runDev();
+    });
+  } else {
+    runDev();
+  }
 
   push(server, projectPath, kind);
   return server.status;
@@ -212,10 +280,10 @@ export async function getStorybookIndex(url: string): Promise<StorybookEntry[]> 
 function stopServer(projectPath: string, kind: ServerKind): void {
   const server = servers.get(keyOf(projectPath, kind));
   if (!server) return;
-  server.child.kill("SIGTERM");
   const child = server.child;
+  child?.kill("SIGTERM");
   setTimeout(() => {
-    if (!child.killed) child.kill("SIGKILL");
+    if (child && !child.killed) child.kill("SIGKILL");
   }, 4000);
 }
 
@@ -232,5 +300,5 @@ function statusOf(projectPath: string, kind: ServerKind): DevServerStatus {
 
 /** Kill every managed dev server (called on app quit). */
 export function stopAllDevServers(): void {
-  for (const server of servers.values()) server.child.kill("SIGTERM");
+  for (const server of servers.values()) server.child?.kill("SIGTERM");
 }

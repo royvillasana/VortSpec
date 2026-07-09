@@ -29,6 +29,9 @@ export interface InspectorBridge {
   hoveredId: string | null;
   /** Live rectangles keyed by node id (updated on readout/geometry) for the overlay. */
   rects: Record<string, Rect>;
+  /** The most recent uncaught error in the previewed app (for the Run Doctor), or null. */
+  runtimeError: { message: string; source?: string; line?: number; stack?: string } | null;
+  clearRuntimeError: () => void;
   select: (id: string | null) => void;
   hover: (id: string | null) => void;
   /** Toggle guest input handling between selecting (inspect) and using the app (interact). */
@@ -58,6 +61,7 @@ export function useInspectorBridge(): InspectorBridge {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [rects, setRects] = useState<Record<string, Rect>>({});
+  const [runtimeError, setRuntimeError] = useState<InspectorBridge["runtimeError"]>(null);
 
   const send = useCallback((cmd: BridgeCommand) => {
     webviewRef.current?.send(INSPECTOR_BRIDGE_CHANNEL, cmd);
@@ -92,6 +96,9 @@ export function useInspectorBridge(): InspectorBridge {
           setRects((r) => ({ ...r, [event.nodeId as string]: rect }));
         }
         return;
+      case "runtimeError":
+        setRuntimeError({ message: event.message, source: event.source, line: event.line, stack: event.stack });
+        return;
     }
   }, []);
 
@@ -103,7 +110,10 @@ export function useInspectorBridge(): InspectorBridge {
         el.addEventListener("ipc-message", onIpcMessage);
         // Reset on load START (before the guest re-attaches) so we don't clobber
         // the guest's `ready`/`tree` that arrive right after DOMContentLoaded.
-        el.addEventListener("did-start-loading", () => setReady(false));
+        el.addEventListener("did-start-loading", () => {
+          setReady(false);
+          setRuntimeError(null);
+        });
         // Once the guest DOM is ready, ask for the tree (belt-and-suspenders vs
         // the guest's own auto-send).
         el.addEventListener("dom-ready", () => el.send(INSPECTOR_BRIDGE_CHANNEL, { t: "requestTree" }));
@@ -162,6 +172,8 @@ export function useInspectorBridge(): InspectorBridge {
     selectedId,
     hoveredId,
     rects,
+    runtimeError,
+    clearRuntimeError: useCallback(() => setRuntimeError(null), []),
     select,
     hover,
     setMode,

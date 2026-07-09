@@ -57,6 +57,8 @@ export interface MockConfig {
   /** Git status for the Source Control view. */
   gitStatus?: import("@vortspec/core/ipc").GitStatus;
   gitBranches?: import("@vortspec/core/ipc").GitBranch[];
+  gitGraph?: import("@vortspec/core/ipc").GitGraphResult;
+  envStatus?: { hasEnv: boolean; examples: string[]; placeholders: string[] };
   gitRemotes?: import("@vortspec/core/ipc").GitRemote[];
   githubAuth?: import("@vortspec/core/ipc").ProviderAuth;
   taskAuth?: import("@vortspec/core/ipc").TaskAuth;
@@ -198,7 +200,15 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
       cfg.gitStatus ?? { isRepo: true, branch: "main", upstream: null, ahead: 0, behind: 0, staged: [], unstaged: [], untracked: [], conflicts: [], clean: true },
     gitBranches: async () => cfg.gitBranches ?? [{ name: "main", current: true, remote: false, upstream: null }],
     gitRemotes: async () => cfg.gitRemotes ?? [],
+    envStatus: async () => cfg.envStatus ?? { hasEnv: true, examples: [], placeholders: [] },
+    createEnv: async () => ({ ok: true, message: "Created .env" }),
     gitLog: async () => [],
+    gitGraph: async () =>
+      cfg.gitGraph ?? {
+        commits: [],
+        stats: { commits: 0, branches: 1, remoteBranches: 0, merges: 0, tags: 0 },
+        truncated: false,
+      },
     gitStage: async () => ({ ok: true, message: "Staged." }),
     gitUnstage: async () => ({ ok: true, message: "Unstaged." }),
     gitCommit: async () => ({ ok: true, message: "Committed." }),

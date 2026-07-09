@@ -6,6 +6,8 @@ import type {
   GitBranch,
   GitRemote,
   GitLogEntry,
+  GitGraphCommit,
+  GitGraphResult,
   GitResult,
 } from "@vortspec/core/git";
 
@@ -164,6 +166,64 @@ export async function getLog(cwd: string, limit = 20): Promise<GitLogEntry[]> {
   const r = await git(cwd, ["log", `-${limit}`, "--pretty=format:%H%x1f%h%x1f%s%x1f%an%x1f%ad", "--date=short"]);
   const withRs = r.stdout.split("\n").join("\x1e");
   return parseLog(withRs + "\x1e");
+}
+
+/** Parse the graph log (fields split by \x1f, records by \x1e). */
+export function parseGraph(raw: string): GitGraphCommit[] {
+  return raw
+    .split("\x1e")
+    .map((r) => r.trim())
+    .filter(Boolean)
+    .map((rec) => {
+      const [hash, shortHash, parents, author, date, subject, refs] = rec.split("\x1f");
+      return {
+        hash,
+        shortHash,
+        parents: parents ? parents.trim().split(/\s+/).filter(Boolean) : [],
+        author,
+        date,
+        subject: subject ?? "",
+        refs: refs ? refs.split(",").map((s) => s.trim()).filter(Boolean) : [],
+      };
+    });
+}
+
+const EMPTY_GRAPH: GitGraphResult = {
+  commits: [],
+  stats: { commits: 0, branches: 0, remoteBranches: 0, merges: 0, tags: 0 },
+  truncated: false,
+};
+
+/**
+ * The Commit Graph across all refs — commits (with parents + decorations) in
+ * topological/date order, plus repo-wide counts. Capped at `limit` for the UI.
+ */
+export async function getGraph(cwd: string, limit = 300): Promise<GitGraphResult> {
+  if (!(await isRepo(cwd))) return EMPTY_GRAPH;
+  const fmt = ["%H", "%h", "%P", "%an", "%ar", "%s", "%D"].join("%x1f");
+  const [log, countAll, countMerges, heads, remoteHeads, tags] = await Promise.all([
+    git(cwd, ["log", "--all", "--date-order", `-${limit}`, `--pretty=format:${fmt}%x1e`]),
+    git(cwd, ["rev-list", "--all", "--count"]),
+    git(cwd, ["rev-list", "--all", "--merges", "--count"]),
+    git(cwd, ["for-each-ref", "--format=%(refname)", "refs/heads"]),
+    git(cwd, ["for-each-ref", "--format=%(refname)", "refs/remotes"]),
+    git(cwd, ["tag"]),
+  ]);
+  const commits = parseGraph(log.stdout);
+  const num = (s: string): number => parseInt(s.trim() || "0", 10) || 0;
+  const lines = (s: string): number => s.split("\n").map((l) => l.trim()).filter(Boolean).length;
+  const total = num(countAll.stdout);
+  return {
+    commits,
+    stats: {
+      commits: total,
+      branches: lines(heads.stdout),
+      remoteBranches: lines(remoteHeads.stdout),
+      merges: num(countMerges.stdout),
+      tags: lines(tags.stdout),
+    },
+    truncated: total > commits.length,
+  };
 }
 
 export async function getDiff(cwd: string, path?: string, staged = false): Promise<string> {

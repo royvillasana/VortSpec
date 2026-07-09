@@ -15,6 +15,8 @@ import {
 } from "../components/run-canvas/pending";
 import { useInspectorBridge } from "../lib/useInspectorBridge";
 import { useAgentRun } from "../lib/useAgentRun";
+import { RunDoctor, type DoctorState } from "../components/run-canvas/RunDoctor";
+import { buildDoctorPrompt, relFileFromSource } from "../components/run-canvas/doctor";
 
 /**
  * Run App (M5) — the live localhost runtime for the project's OWN app (its `dev`
@@ -56,6 +58,106 @@ export function RunApp({
   const [dev, setDev] = useState<DevServerStatus>({ state: "stopped", url: null, script: null, message: null });
   const [frameLoading, setFrameLoading] = useState(true);
   const autoRef = useRef(false);
+
+  // Missing-.env helper: a cloned repo often ships a `.env.example` but not the
+  // real `.env`, so the app boots then crashes at runtime. Detect that and offer
+  // a one-click "Create .env from example".
+  const [envStatus, setEnvStatus] = useState<{ hasEnv: boolean; examples: string[]; placeholders: string[] } | null>(
+    null,
+  );
+  const [envDismissed, setEnvDismissed] = useState(false);
+  const [envCreated, setEnvCreated] = useState(false);
+  const [envBusy, setEnvBusy] = useState(false);
+
+  const refetchEnv = useCallback(async (): Promise<void> => {
+    if (kind !== "app") return;
+    try {
+      setEnvStatus(await api.envStatus(project.path));
+    } catch {
+      setEnvStatus(null);
+    }
+  }, [kind, project.path]);
+
+  useEffect(() => {
+    setEnvDismissed(false);
+    setEnvCreated(false);
+    void refetchEnv();
+  }, [refetchEnv]);
+
+  async function createEnvFile(): Promise<void> {
+    const example = envStatus?.examples[0];
+    if (!example) return;
+    setEnvBusy(true);
+    const r = await api.createEnv(project.path, example);
+    setEnvBusy(false);
+    await refetchEnv();
+    if (r.ok) setEnvCreated(true);
+  }
+  const envMissing = !!envStatus && !envStatus.hasEnv && envStatus.examples.length > 0;
+
+  // ── Run Doctor: gated "Fix with Claude" for startup / runtime failures ──────
+  const doctorMod = useAgentRun();
+  const [doctorState, setDoctorState] = useState<DoctorState>("idle");
+  const [doctorSnap, setDoctorSnap] = useState<FileSnapshot[] | null>(null);
+  const [doctorDismissed, setDoctorDismissed] = useState(false);
+
+  useEffect(() => {
+    setDoctorDismissed(false);
+    setDoctorState("idle");
+  }, [project.path]);
+
+  async function fixWithClaude(mode: "startup" | "runtime"): Promise<void> {
+    const file = mode === "runtime" ? relFileFromSource(bridge.runtimeError?.source) : null;
+    const error =
+      mode === "startup"
+        ? (dev.message ?? "The dev server exited.")
+        : `${bridge.runtimeError?.message ?? "Runtime error"}\n${bridge.runtimeError?.stack ?? ""}`;
+    // Best-effort snapshot of the failing file so the fix is revertable.
+    let snap: FileSnapshot[] = [];
+    if (file) {
+      try {
+        snap = await api.snapshotComponent(project.path, file);
+      } catch {
+        /* file may not be snapshottable; the run is still gated by the click */
+      }
+    }
+    setDoctorSnap(snap);
+    setDoctorState("running");
+    await doctorMod.start({
+      prompt: buildDoctorPrompt({ kind: mode, error, file, script: dev.script }),
+      cwd: project.path,
+      allowedTools: ["Read", "Edit", "Write"],
+      bypassPermissions: true,
+    });
+  }
+
+  useEffect(() => {
+    if (doctorMod.model.status === "done") setDoctorState("done");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [doctorMod.model.status]);
+
+  function doctorKeep(): void {
+    setDoctorState("idle");
+    setDoctorSnap(null);
+    setDoctorDismissed(true);
+    doctorMod.reset();
+    bridge.clearRuntimeError();
+  }
+  async function doctorRevert(): Promise<void> {
+    if (doctorSnap && doctorSnap.length) await api.restoreFiles(project.path, doctorSnap);
+    setDoctorState("idle");
+    setDoctorSnap(null);
+    setDoctorDismissed(true);
+    doctorMod.reset();
+  }
+  async function doctorRestart(): Promise<void> {
+    setDoctorState("idle");
+    setDoctorDismissed(true);
+    doctorMod.reset();
+    bridge.clearRuntimeError();
+    await stopFor();
+    setDev(await startFor());
+  }
 
   const isApp = kind === "app";
   const noun = isApp ? "app" : "Storybook";
@@ -351,14 +453,52 @@ export function RunApp({
           )}
         </header>
 
+        {kind === "app" && !envDismissed && (envCreated || envMissing) && (
+          <div
+            className={`flex flex-none items-start gap-3 border-b px-5 py-2.5 text-[12px] ${
+              envCreated ? "border-vs-success/40 bg-vs-success/10" : "border-vs-warning/40 bg-vs-warning/10"
+            }`}
+          >
+            <span className={envCreated ? "text-vs-success" : "text-vs-warning"}>{envCreated ? "✓" : "⚠"}</span>
+            <div className="min-w-0 flex-1 leading-relaxed">
+              {envCreated ? (
+                <p className="text-vs-text-primary">
+                  Created <code className="font-mono">.env</code> from{" "}
+                  <code className="font-mono">{envStatus?.examples[0]}</code>. Open it, fill in the values, then{" "}
+                  <b>Stop</b> and <b>Start app</b> so the dev server reloads them.
+                </p>
+              ) : (
+                <p className="text-vs-text-primary">
+                  This project has <code className="font-mono">{envStatus?.examples[0]}</code> but no{" "}
+                  <code className="font-mono">.env</code> — the app may fail at runtime without its environment
+                  variables.
+                </p>
+              )}
+            </div>
+            {!envCreated && (
+              <Button variant="default" disabled={envBusy} onClick={() => void createEnvFile()}>
+                {envBusy ? "Creating…" : `Create .env from ${envStatus?.examples[0]}`}
+              </Button>
+            )}
+            <button
+              type="button"
+              onClick={() => setEnvDismissed(true)}
+              aria-label="Dismiss"
+              className="flex-none text-vs-text-muted hover:text-vs-text-secondary"
+            >
+              ✕
+            </button>
+          </div>
+        )}
+
         <div className="min-h-0 flex-1 overflow-hidden bg-vs-bg-primary">
           {dev.state === "starting" ? (
             <Centered>
-              <Spinner /> Starting {isApp ? "your app's dev server" : "Storybook"}…
+              <Spinner /> {dev.message ?? `Starting ${isApp ? "your app's dev server" : "Storybook"}…`}
             </Centered>
           ) : canvasReady ? (
             // Run Canvas: Figma-style Design panel (left) + instrumented preview (right).
-            <div className="flex h-full min-h-0">
+            <div className="relative flex h-full min-h-0">
               <aside
                 style={{ width: panelW }}
                 className="flex-none overflow-hidden border-r border-vs-border-default bg-vs-bg-surface"
@@ -404,6 +544,27 @@ export function RunApp({
                   onCommitEdit={commitStyleEdits}
                 />
               </div>
+              {bridge.runtimeError && !doctorDismissed && (
+                <div className="pointer-events-none absolute inset-0 flex items-end justify-center p-4">
+                  <div className="pointer-events-auto w-full max-w-xl">
+                    <RunDoctor
+                      kind="runtime"
+                      error={`${bridge.runtimeError.message}${bridge.runtimeError.stack ? `\n${bridge.runtimeError.stack}` : ""}`}
+                      file={relFileFromSource(bridge.runtimeError.source)}
+                      env={envStatus}
+                      envBusy={envBusy}
+                      onCreateEnv={() => void createEnvFile()}
+                      state={doctorState}
+                      onFix={() => void fixWithClaude("runtime")}
+                      onKeep={doctorKeep}
+                      onRevert={() => void doctorRevert()}
+                      onOpenSource={onSource}
+                      onRestart={() => void doctorRestart()}
+                      onDismiss={() => bridge.clearRuntimeError()}
+                    />
+                  </div>
+                </div>
+              )}
             </div>
           ) : embedUrl ? (
             <div className="relative h-full min-h-[340px]">
@@ -436,11 +597,20 @@ export function RunApp({
             </Centered>
           ) : dev.state === "error" ? (
             <Centered>
-              <div className="max-w-md text-center">
-                <p className="text-sm font-semibold text-vs-error">{noun} failed to start</p>
-                <p className="mt-1 text-xs text-vs-text-muted">{dev.message}</p>
-                <Button variant="default" className="mt-3" onClick={() => void start()}>Try again</Button>
-              </div>
+              <RunDoctor
+                kind="startup"
+                error={dev.message ?? "The dev server exited."}
+                env={envStatus}
+                envBusy={envBusy}
+                onCreateEnv={() => void createEnvFile()}
+                state={doctorState}
+                onFix={() => void fixWithClaude("startup")}
+                onKeep={doctorKeep}
+                onRevert={() => void doctorRevert()}
+                onOpenSource={onSource}
+                onRestart={() => void doctorRestart()}
+                onDismiss={() => void start()}
+              />
             </Centered>
           ) : (
             <Centered>

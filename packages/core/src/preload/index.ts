@@ -67,6 +67,9 @@ const api: VortSpecApi = {
   revealPath: (projectPath: string, relPath: string) =>
     invoke("workspace:revealPath", { projectPath, relPath }),
   refreshProject: (path: string) => invoke("workspace:refreshProject", path),
+  envStatus: (projectPath: string) => invoke("workspace:envStatus", projectPath),
+  createEnv: (projectPath: string, example: string) =>
+    invoke("workspace:createEnv", { projectPath, example }),
   createProject: (path: string, answers: SetupAnswers) =>
     invoke("workspace:createProject", { path, answers }),
 
@@ -83,6 +86,7 @@ const api: VortSpecApi = {
   gitBranches: (projectPath: string) => invoke("git:branches", projectPath),
   gitRemotes: (projectPath: string) => invoke("git:remotes", projectPath),
   gitLog: (projectPath: string) => invoke("git:log", projectPath),
+  gitGraph: (projectPath: string) => invoke("git:graph", projectPath),
   gitStage: (projectPath: string, paths: string[]) => invoke("git:stage", { projectPath, paths }),
   gitUnstage: (projectPath: string, paths: string[]) => invoke("git:unstage", { projectPath, paths }),
   gitCommit: (projectPath: string, message: string) => invoke("git:commit", { projectPath, message }),

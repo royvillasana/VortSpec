@@ -200,6 +200,14 @@ export const bridgeEventSchema = z.discriminatedUnion("t", [
   z.object({ t: z.literal("geometry"), nodeId: z.string(), rect: rectSchema }),
   /** The element under the pointer in inspect mode (null when the pointer leaves). */
   z.object({ t: z.literal("hovered"), nodeId: z.string().nullable(), rect: rectSchema.optional() }),
+  /** An uncaught error / unhandled rejection in the previewed app (for the Run Doctor). */
+  z.object({
+    t: z.literal("runtimeError"),
+    message: z.string(),
+    source: z.string().optional(),
+    line: z.number().optional(),
+    stack: z.string().optional(),
+  }),
 ]);
 export type BridgeEvent = z.infer<typeof bridgeEventSchema>;
 

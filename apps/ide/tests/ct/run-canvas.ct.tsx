@@ -40,6 +40,14 @@ test("the Layers tree shows an empty state until the app renders", async ({ moun
   await expect(c.getByText(/No elements yet/)).toBeVisible();
 });
 
+test("the Run view offers to create a missing .env", async ({ mount }) => {
+  const mock = { ...base, envStatus: { hasEnv: false, examples: [".env.example"] } };
+  const c = await mount(<App />, { hooksConfig: { mock } });
+  await openRun(c);
+  await expect(c.getByText(/may fail at runtime without its environment variables/)).toBeVisible();
+  await expect(c.getByRole("button", { name: /Create \.env from \.env\.example/ })).toBeVisible();
+});
+
 test("the Layers header carries the mode toggle and a zoom control at the bottom", async ({ mount }) => {
   const c = await mount(<App />, { hooksConfig: { mock: base } });
   await openRun(c);

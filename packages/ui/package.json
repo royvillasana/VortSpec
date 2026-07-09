@@ -28,6 +28,10 @@
       "types": "./src/components/RunPanel.tsx",
       "default": "./src/components/RunPanel.tsx"
     },
+    "./GitGraph": {
+      "types": "./src/components/GitGraph.tsx",
+      "default": "./src/components/GitGraph.tsx"
+    },
     "./run-model": {
       "types": "./src/lib/run-model.ts",
       "default": "./src/lib/run-model.ts"

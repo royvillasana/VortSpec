@@ -45,6 +45,8 @@ export interface VortSpecApi {
   openFolder(path: string): Promise<IpcResponse<"workspace:openFolder">>;
   revealPath(projectPath: string, relPath: string): Promise<IpcResponse<"workspace:revealPath">>;
   refreshProject(path: string): Promise<IpcResponse<"workspace:refreshProject">>;
+  envStatus(projectPath: string): Promise<IpcResponse<"workspace:envStatus">>;
+  createEnv(projectPath: string, example: string): Promise<IpcResponse<"workspace:createEnv">>;
   createProject(path: string, answers: SetupAnswers): Promise<IpcResponse<"workspace:createProject">>;
 
   toolkitStatus(path: string): Promise<IpcResponse<"toolkit:status">>;
@@ -62,6 +64,7 @@ export interface VortSpecApi {
   gitBranches(projectPath: string): Promise<IpcResponse<"git:branches">>;
   gitRemotes(projectPath: string): Promise<IpcResponse<"git:remotes">>;
   gitLog(projectPath: string): Promise<IpcResponse<"git:log">>;
+  gitGraph(projectPath: string): Promise<IpcResponse<"git:graph">>;
   gitStage(projectPath: string, paths: string[]): Promise<IpcResponse<"git:stage">>;
   gitUnstage(projectPath: string, paths: string[]): Promise<IpcResponse<"git:unstage">>;
   gitCommit(projectPath: string, message: string): Promise<IpcResponse<"git:commit">>;

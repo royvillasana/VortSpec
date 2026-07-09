@@ -3,6 +3,7 @@ import type { GitStatus, GitBranch, GitRemote, ProviderAuth, Project } from "@vo
 import { api } from "../lib/api";
 import { Button, Card, Spinner } from "@vortspec/ui/ui";
 import { ProjectRail, projectRailItems } from "@vortspec/ui/ProjectRail";
+import { GitGraph } from "../components/GitGraph";
 
 /**
  * Source Control (git) — M1. Drives the user's own `git`/`gh` through the
@@ -42,6 +43,8 @@ export function SourceControl({
   const [manifestReady, setManifestReady] = useState(false);
   const [importUrl, setImportUrl] = useState("");
   const [importBranch, setImportBranch] = useState("");
+  // Bumped on every reload so the Commit Graph refetches after commits/branch ops.
+  const [graphKey, setGraphKey] = useState(0);
 
   async function reload(): Promise<void> {
     const [s, b, r] = await Promise.all([
@@ -52,6 +55,7 @@ export function SourceControl({
     setStatus(s);
     setBranches(b);
     setRemotes(r);
+    setGraphKey((k) => k + 1);
   }
   useEffect(() => {
     void reload();
@@ -110,6 +114,19 @@ export function SourceControl({
             ↻ Refresh
           </button>
         </header>
+
+        {status?.isRepo && (
+          <section className="flex-none border-b border-vs-border-default py-5">
+            {/* Constrained to the same max width as the content below, so the graph
+                rows don't span the whole (wide) SCM panel — GitHub-style. */}
+            <div className="mx-auto w-full max-w-[760px] px-8">
+              <h2 className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-vs-text-muted">
+                Commit Graph
+              </h2>
+              <GitGraph project={project} refreshKey={graphKey} />
+            </div>
+          </section>
+        )}
 
         <div className="mx-auto flex w-full max-w-[760px] flex-col gap-5 px-8 py-6">
           {status === null ? (

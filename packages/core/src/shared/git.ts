@@ -63,6 +63,39 @@ export const gitLogEntrySchema = z.object({
 });
 export type GitLogEntry = z.infer<typeof gitLogEntrySchema>;
 
+/** A commit for the Commit Graph — carries parents (for lanes) and ref names. */
+export const gitGraphCommitSchema = z.object({
+  hash: z.string(),
+  shortHash: z.string(),
+  /** Parent hashes (2+ ⇒ a merge). */
+  parents: z.array(z.string()).default([]),
+  author: z.string(),
+  /** Relative date (e.g. "4 hours ago"). */
+  date: z.string(),
+  subject: z.string(),
+  /** Decoration ref names (e.g. "HEAD -> main", "origin/main", "tag: v1"). */
+  refs: z.array(z.string()).default([]),
+});
+export type GitGraphCommit = z.infer<typeof gitGraphCommitSchema>;
+
+/** Repo-wide counts shown atop the Commit Graph. */
+export const gitGraphStatsSchema = z.object({
+  commits: z.number(),
+  branches: z.number(),
+  remoteBranches: z.number(),
+  merges: z.number(),
+  tags: z.number(),
+});
+export type GitGraphStats = z.infer<typeof gitGraphStatsSchema>;
+
+export const gitGraphResultSchema = z.object({
+  commits: z.array(gitGraphCommitSchema),
+  stats: gitGraphStatsSchema,
+  /** True when the log was capped (more commits exist than were returned). */
+  truncated: z.boolean().default(false),
+});
+export type GitGraphResult = z.infer<typeof gitGraphResultSchema>;
+
 /** Result of a mutating op (stage/commit/push/…): a human message + ok flag. */
 export const gitResultSchema = z.object({
   ok: z.boolean(),

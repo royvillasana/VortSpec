@@ -290,6 +290,25 @@ function attach(): void {
     if (selectedId) emitGeometry(selectedId);
   }).observe(document.documentElement, { attributes: true, childList: true, subtree: true });
 
+  // Report uncaught errors / rejections so the host's Run Doctor can diagnose them.
+  window.addEventListener("error", (e: ErrorEvent) => {
+    send({
+      t: "runtimeError",
+      message: e.message || String(e.error ?? "Error"),
+      source: e.filename || undefined,
+      line: typeof e.lineno === "number" ? e.lineno : undefined,
+      stack: e.error instanceof Error ? e.error.stack : undefined,
+    });
+  });
+  window.addEventListener("unhandledrejection", (e: PromiseRejectionEvent) => {
+    const reason = e.reason;
+    send({
+      t: "runtimeError",
+      message: reason instanceof Error ? reason.message : String(reason),
+      stack: reason instanceof Error ? reason.stack : undefined,
+    });
+  });
+
   send({ t: "ready", ok: true });
   send({ t: "tree", tree: buildTree() });
 }

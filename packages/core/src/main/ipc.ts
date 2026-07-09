@@ -22,6 +22,7 @@ import type { IdeState, IdeActionResult } from "@vortspec/core/ide-mcp";
 import * as figmaCli from "./figma/figma-cli";
 import type { FigmaCliMode } from "@vortspec/core/figma";
 import { readProjectConfig } from "./workspace/config-manager";
+import { getEnvStatus, createEnvFromExample } from "./workspace/env-files";
 import {
   getInspectorTokens,
   setInspectorTokenValue,
@@ -117,6 +118,9 @@ const handlers: Record<IpcChannel, Handler> = {
     return undefined;
   }) as Handler,
   "workspace:refreshProject": ((path: string) => refreshProject(path)) as Handler,
+  "workspace:envStatus": ((path: string) => getEnvStatus(path)) as Handler,
+  "workspace:createEnv": ((req: { projectPath: string; example: string }) =>
+    createEnvFromExample(req.projectPath, req.example)) as Handler,
   "workspace:createProject": ((req: { path: string; answers: SetupAnswers }) =>
     createProject(req.path, req.answers)) as Handler,
   "workspace:listDir": ((r: { projectPath: string; relPath: string }) =>
@@ -194,6 +198,7 @@ const handlers: Record<IpcChannel, Handler> = {
   "git:branches": ((p: string) => gitAdapter.getBranches(p)) as Handler,
   "git:remotes": ((p: string) => gitAdapter.getRemotes(p)) as Handler,
   "git:log": ((p: string) => gitAdapter.getLog(p)) as Handler,
+  "git:graph": ((p: string) => gitAdapter.getGraph(p)) as Handler,
   "git:stage": ((r: { projectPath: string; paths: string[] }) =>
     gitAdapter.stage(r.projectPath, r.paths)) as Handler,
   "git:unstage": ((r: { projectPath: string; paths: string[] }) =>
