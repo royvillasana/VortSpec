@@ -103,6 +103,19 @@ export default function App(): JSX.Element {
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
   }, []);
+  // Prevent Electron from navigating to a dropped OS file when it lands outside a
+  // drop target (the composer/Explorer handle their own drops); only guard file drags.
+  useEffect(() => {
+    const guard = (e: DragEvent): void => {
+      if (e.dataTransfer?.types.includes("Files")) e.preventDefault();
+    };
+    window.addEventListener("dragover", guard);
+    window.addEventListener("drop", guard);
+    return () => {
+      window.removeEventListener("dragover", guard);
+      window.removeEventListener("drop", guard);
+    };
+  }, []);
   // Ctrl-` toggles the Terminal panel (opens the terminal tab).
   useEffect(() => {
     function onKey(e: KeyboardEvent): void {

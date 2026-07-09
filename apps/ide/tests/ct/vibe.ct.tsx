@@ -174,6 +174,25 @@ test("pasting a screenshot attaches it as an image and sends its path", async ({
   expect(prompts[prompts.length - 1]).toContain("/tmp/vortspec-paste/shot.png");
 });
 
+test("dragging a file from the OS into the chat attaches it as context", async ({ mount }) => {
+  const c = await mount(<App />, { hooksConfig: { mock: base } });
+  await open(c);
+  const input = c.getByPlaceholder(/@ a file/);
+  // Simulate dropping a Finder file onto the composer.
+  await input.evaluate((el) => {
+    const file = new File(["x"], "notes.txt", { type: "text/plain" });
+    (file as unknown as { __path: string }).__path = "/Users/me/Desktop/notes.txt";
+    const dt = new DataTransfer();
+    dt.items.add(file);
+    el.dispatchEvent(new DragEvent("drop", { dataTransfer: dt, bubbles: true, cancelable: true }));
+  });
+  await expect(c.getByTestId("attachment-chip")).toContainText("notes.txt");
+  await input.fill("summarize this");
+  await c.getByRole("button", { name: "Send" }).click();
+  const prompts = await c.page().evaluate(() => (window as unknown as { __runPrompts: string[] }).__runPrompts);
+  expect(prompts[prompts.length - 1]).toContain("/Users/me/Desktop/notes.txt");
+});
+
 test("mounts a modify-capable assistant grounded in the workspace", async ({ mount }) => {
   const c = await mount(<App />, { hooksConfig: { mock: base } });
   await open(c);

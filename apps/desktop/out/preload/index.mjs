@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from "electron";
+import { contextBridge, webUtils, ipcRenderer } from "electron";
 import { z } from "zod";
 const runEventSchema = z.discriminatedUnion("kind", [
   z.object({
@@ -199,6 +199,9 @@ const api = {
   getVersion: () => invoke("system:getVersion"),
   homeDir: () => invoke("system:homeDir"),
   clipboardImage: () => invoke("system:clipboardImage"),
+  // Resolve the absolute path of a File dropped from the OS (Electron 32+ removed
+  // File.path). Not an IPC call — runs in the preload with webUtils.
+  getPathForFile: (file) => webUtils.getPathForFile(file),
   checkUpdate: () => invoke("system:checkUpdate"),
   checkEnvironment: () => invoke("env:check"),
   verifyLogin: () => invoke("env:verifyLogin"),

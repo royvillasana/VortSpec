@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer, type IpcRendererEvent } from "electron";
+import { contextBridge, ipcRenderer, webUtils, type IpcRendererEvent } from "electron";
 import type {
   IpcChannel,
   IpcRequest,
@@ -49,6 +49,9 @@ const api: VortSpecApi = {
   getVersion: () => invoke("system:getVersion"),
   homeDir: () => invoke("system:homeDir"),
   clipboardImage: () => invoke("system:clipboardImage"),
+  // Resolve the absolute path of a File dropped from the OS (Electron 32+ removed
+  // File.path). Not an IPC call — runs in the preload with webUtils.
+  getPathForFile: (file: File) => webUtils.getPathForFile(file),
   checkUpdate: () => invoke("system:checkUpdate"),
 
   checkEnvironment: () => invoke("env:check"),

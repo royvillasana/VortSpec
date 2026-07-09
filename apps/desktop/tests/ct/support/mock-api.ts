@@ -154,6 +154,7 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
     getVersion: async () => "test",
     homeDir: async () => "/Users/dev",
     clipboardImage: async () => cfg.clipboardImage ?? null,
+    getPathForFile: (file: File) => (file as unknown as { __path?: string }).__path ?? file.name,
     checkUpdate: async () => ({
       current: "0.1.0",
       latest: null,

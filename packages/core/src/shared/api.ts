@@ -27,6 +27,8 @@ export interface VortSpecApi {
   homeDir(): Promise<IpcResponse<"system:homeDir">>;
   /** Read an image from the OS clipboard → temp PNG path + thumbnail (or null). */
   clipboardImage(): Promise<IpcResponse<"system:clipboardImage">>;
+  /** Absolute path of a File dragged in from the OS (Finder). Synchronous. */
+  getPathForFile(file: File): string;
   checkUpdate(): Promise<IpcResponse<"system:checkUpdate">>;
 
   // environment

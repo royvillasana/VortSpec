@@ -244,7 +244,15 @@ export function AssistantDock({
     textareaRef.current?.focus();
   }
 
-  // Drag a file/folder from the Explorer into the chat → attach it.
+  /** Attach an OS-dropped absolute path (relative if inside the workspace). */
+  function attachOsPath(abs: string): void {
+    const rel = abs.startsWith(`${project.path}/`) ? abs.slice(project.path.length + 1) : abs;
+    const isImage = /\.(png|jpe?g|gif|webp|bmp|svg|heic)$/i.test(rel);
+    addAttachment(isImage ? { kind: "image", path: rel, label: rel.split("/").pop() } : { path: rel, kind: "file" });
+  }
+
+  // Drag a file/folder into the chat → attach it. Handles both an Explorer entry
+  // (internal transfer) and files dragged in from the OS (Finder).
   function onDrop(e: React.DragEvent): void {
     const internal = e.dataTransfer.getData("application/vortspec-path");
     if (internal) {
@@ -254,6 +262,19 @@ export function AssistantDock({
         addAttachment({ path, kind: type === "dir" ? "dir" : "file" });
       } catch {
         addAttachment({ path: internal, kind: "file" });
+      }
+      return;
+    }
+    const files = e.dataTransfer.files;
+    if (files && files.length > 0) {
+      e.preventDefault();
+      for (const f of Array.from(files)) {
+        try {
+          const abs = api.getPathForFile(f);
+          if (abs) attachOsPath(abs);
+        } catch {
+          /* ignore files we can't resolve a path for */
+        }
       }
     }
   }
@@ -437,7 +458,8 @@ export function AssistantDock({
       <div
         className="flex-none border-t border-vs-border-default p-3"
         onDragOver={(e) => {
-          if (e.dataTransfer.types.includes("application/vortspec-path")) {
+          const t = e.dataTransfer.types;
+          if (t.includes("application/vortspec-path") || t.includes("Files")) {
             e.preventDefault();
             e.dataTransfer.dropEffect = "copy";
           }
