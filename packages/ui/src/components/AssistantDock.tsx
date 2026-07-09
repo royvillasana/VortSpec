@@ -7,6 +7,8 @@ import { Response } from "./ai/Response";
 import { Shimmer } from "./ai/Shimmer";
 import { ToolSteps } from "./ai/Tool";
 import { Reasoning } from "./ai/Reasoning";
+import { ModelSelector } from "./ai/ModelSelector";
+import { Plan } from "./ai/Plan";
 import {
   AttachmentChips,
   MentionMenu,
@@ -303,6 +305,7 @@ export function AssistantDock({
             {run.model.messages.map((m) => (
               <Bubble key={m.id} role={m.role} text={m.text} />
             ))}
+            {run.model.plan.length > 0 && <Plan items={run.model.plan} />}
             {run.model.reasoning && (
               <Reasoning text={run.model.reasoning} streaming={run.running && !run.model.streamingText} />
             )}
@@ -437,8 +440,13 @@ export function AssistantDock({
           />
         </div>
         <div className="mt-2 flex items-center gap-2">
-          <span className="flex-1 text-[10px] text-vs-text-muted">
-            {mentionOpen ? "↑↓ to navigate · Enter to attach" : menuOpen ? "↑↓ to navigate · Enter to pick" : "Enter to send · / commands · @ files"}
+          <ModelSelector
+            active={run.model.session?.model}
+            selected={selectedModel}
+            onSelect={setSelectedModel}
+          />
+          <span className="flex-1 truncate text-[10px] text-vs-text-muted">
+            {mentionOpen ? "↑↓ · Enter to attach" : menuOpen ? "↑↓ · Enter to pick" : "Enter to send · / · @"}
           </span>
           <button
             onClick={submit}

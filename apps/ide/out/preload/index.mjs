@@ -42,6 +42,10 @@ const runEventSchema = z.discriminatedUnion("kind", [
     errorCategory: z.string(),
     retryDelayMs: z.number().optional()
   }),
+  z.object({
+    kind: z.literal("plan"),
+    items: z.array(z.object({ content: z.string(), status: z.string() }))
+  }),
   z.object({ kind: z.literal("notice"), text: z.string() }),
   z.object({
     kind: z.literal("result"),

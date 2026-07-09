@@ -20,6 +20,7 @@ const REPLY: RunEvent[] = [
 // A run with thinking + tools (with output), so Reasoning + Tool cards render.
 const TOOLRUN: RunEvent[] = [
   { kind: "system-init", model: "claude-opus-4-8", sessionId: "s", tools: ["Read", "Bash"], mcpServers: [], mcpErrors: [] },
+  { kind: "plan", items: [{ content: "Read the button", status: "completed" }, { content: "Run tests", status: "in_progress" }] },
   { kind: "thinking-delta", text: "I should read the button first." },
   { kind: "tool-use", id: "t1", name: "Read", path: "src/Button.tsx" },
   { kind: "tool-result", toolUseId: "t1", isError: false },
@@ -79,6 +80,9 @@ test("tool calls render as Tool cards with per-tool status", async ({ mount }) =
   await expect(c.getByText("Read", { exact: true })).toBeVisible();
   await expect(c.getByText("src/Button.tsx")).toBeVisible();
   await expect(c.getByText("Bash", { exact: true })).toBeVisible();
+  // The TodoWrite plan renders as a checklist.
+  await expect(c.getByText(/Plan · 1\/2/)).toBeVisible();
+  await expect(c.getByText("Run tests")).toBeVisible();
   // Extended thinking is captured in a Reasoning block.
   await expect(c.getByText("Reasoning")).toBeVisible();
   // The Bash card expands to its output.
@@ -86,6 +90,21 @@ test("tool calls render as Tool cards with per-tool status", async ({ mount }) =
   await expect(c.getByText("1 failing test")).toBeVisible();
   // The final answer still renders.
   await expect(c.getByText("All set.")).toBeVisible();
+});
+
+test("the model selector shows the active model and switches", async ({ mount }) => {
+  const c = await mount(<AssistantDock project={PROJECT} onClose={noop} />, {
+    hooksConfig: { mock: { runScript: TOOLRUN } },
+  });
+  // Before a session, the selector shows a generic label; after init it shows the model.
+  await c.getByPlaceholder(/@ a file/).fill("hi");
+  await c.getByRole("button", { name: "Send" }).click();
+  const selector = c.getByRole("button", { name: /opus-4-8/ });
+  await expect(selector).toBeVisible();
+  await selector.click();
+  await c.getByRole("option", { name: /Claude Haiku 4.5/ }).click();
+  // The picked model is now reflected on the selector.
+  await expect(c.getByRole("button", { name: /Claude Haiku 4\.5/ })).toBeVisible();
 });
 
 test("close button fires onClose", async ({ mount }) => {

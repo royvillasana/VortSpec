@@ -28,6 +28,20 @@ function toolPath(input: unknown): string | undefined {
   return undefined;
 }
 
+/** Turn a TodoWrite tool input into a `plan` event (its checklist), or null. */
+function todoPlan(input: unknown): RunEvent | null {
+  if (typeof input !== "object" || input === null) return null;
+  const todos = (input as Record<string, unknown>).todos;
+  if (!Array.isArray(todos) || todos.length === 0) return null;
+  const items = todos
+    .map((t) => {
+      const r = t as Record<string, unknown>;
+      return { content: String(r.content ?? ""), status: String(r.status ?? "pending") };
+    })
+    .filter((i) => i.content);
+  return items.length ? { kind: "plan", items } : null;
+}
+
 /** A short, human summary of a tool's input for the Tool card (e.g. the command). */
 function toolInputSummary(name: unknown, input: unknown): string | undefined {
   if (typeof input !== "object" || input === null) return undefined;
@@ -64,6 +78,10 @@ function mapAssistant(message: unknown): RunEvent[] {
       events.push({ kind: "assistant-text", text: b.text });
     } else if (b.type === "thinking" && typeof b.thinking === "string" && b.thinking.trim()) {
       events.push({ kind: "thinking-delta", text: b.thinking });
+    } else if (b.type === "tool_use" && b.name === "TodoWrite") {
+      // Represent the plan as a checklist rather than a bare tool card.
+      const plan = todoPlan(b.input);
+      if (plan) events.push(plan);
     } else if (b.type === "tool_use") {
       events.push({
         kind: "tool-use",

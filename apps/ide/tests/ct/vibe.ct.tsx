@@ -49,8 +49,8 @@ test("the assistant session panel shows model, skills, and MCP status", async ({
   await open(c);
   await c.getByPlaceholder(/@ a file/).fill("hi");
   await c.getByRole("button", { name: "Send" }).click();
-  // The model chip appears; open the session panel.
-  const chip = c.getByRole("button", { name: /opus-4-8/ });
+  // The session chip appears (distinct from the composer's model selector); open it.
+  const chip = c.locator('button[title^="Session"]');
   await expect(chip).toBeVisible();
   await chip.click();
   await expect(c.getByText(/Skills \(2\)/)).toBeVisible();

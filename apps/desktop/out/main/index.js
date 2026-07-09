@@ -58,6 +58,10 @@ const runEventSchema = z.discriminatedUnion("kind", [
     errorCategory: z.string(),
     retryDelayMs: z.number().optional()
   }),
+  z.object({
+    kind: z.literal("plan"),
+    items: z.array(z.object({ content: z.string(), status: z.string() }))
+  }),
   z.object({ kind: z.literal("notice"), text: z.string() }),
   z.object({
     kind: z.literal("result"),
@@ -3030,6 +3034,16 @@ function toolPath(input) {
   }
   return void 0;
 }
+function todoPlan(input) {
+  if (typeof input !== "object" || input === null) return null;
+  const todos = input.todos;
+  if (!Array.isArray(todos) || todos.length === 0) return null;
+  const items = todos.map((t) => {
+    const r = t;
+    return { content: String(r.content ?? ""), status: String(r.status ?? "pending") };
+  }).filter((i) => i.content);
+  return items.length ? { kind: "plan", items } : null;
+}
 function toolInputSummary(name, input) {
   if (typeof input !== "object" || input === null) return void 0;
   const r = input;
@@ -3060,6 +3074,9 @@ function mapAssistant(message) {
       events.push({ kind: "assistant-text", text: b.text });
     } else if (b.type === "thinking" && typeof b.thinking === "string" && b.thinking.trim()) {
       events.push({ kind: "thinking-delta", text: b.thinking });
+    } else if (b.type === "tool_use" && b.name === "TodoWrite") {
+      const plan = todoPlan(b.input);
+      if (plan) events.push(plan);
     } else if (b.type === "tool_use") {
       events.push({
         kind: "tool-use",

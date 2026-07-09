@@ -117,6 +117,30 @@ describe("parseStreamLine", () => {
     expect(res[0]).toMatchObject({ kind: "tool-result", isError: false, text: "3 passed" });
   });
 
+  it("maps a TodoWrite tool call to a plan checklist (not a tool card)", () => {
+    const events = parseStreamLine(
+      JSON.stringify({
+        type: "assistant",
+        message: {
+          content: [
+            { type: "tool_use", id: "t", name: "TodoWrite", input: { todos: [
+              { content: "Write the spec", status: "completed" },
+              { content: "Implement it", status: "in_progress" },
+            ] } },
+          ],
+        },
+      }),
+    );
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({
+      kind: "plan",
+      items: [
+        { content: "Write the spec", status: "completed" },
+        { content: "Implement it", status: "in_progress" },
+      ],
+    });
+  });
+
   it("captures extended-thinking as thinking-delta (streamed and finalized)", () => {
     const streamed = parseStreamLine(
       JSON.stringify({ type: "stream_event", event: { delta: { type: "thinking_delta", thinking: "Let me consider…" } } }),

@@ -16,6 +16,12 @@ export interface ChatMessage {
   text: string;
 }
 
+/** One item of Claude's plan (its TodoWrite checklist). */
+export interface PlanItem {
+  content: string;
+  status: string;
+}
+
 /** A tool call Claude made, paired with its result — rendered as a Tool card. */
 export interface ToolStep {
   id: string;
@@ -38,6 +44,8 @@ export interface RunModel {
   steps: ToolStep[];
   /** Accumulated extended-thinking text for the current turn (Reasoning block). */
   reasoning: string;
+  /** Claude's latest plan checklist (from TodoWrite), if any. */
+  plan: PlanItem[];
   files: string[];
   raw: string[];
   mcpErrors: string[];
@@ -62,6 +70,7 @@ export const initialRun: RunModel = {
   activity: [],
   steps: [],
   reasoning: "",
+  plan: [],
   files: [],
   raw: [],
   mcpErrors: [],
@@ -145,6 +154,9 @@ function applyEvent(state: RunModel, event: RunEvent): RunModel {
     case "thinking-delta":
       // Extended-thinking preview → the collapsible Reasoning block.
       return { ...state, reasoning: state.reasoning + event.text };
+    case "plan":
+      // TodoWrite → the latest plan checklist (each call replaces the prior state).
+      return { ...state, plan: event.items };
     case "assistant-text":
       // A finalized assistant message → its own bubble. Supersedes the streamed
       // preview (which was the same text), so clear it to avoid duplication.

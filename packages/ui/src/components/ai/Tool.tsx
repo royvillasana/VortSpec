@@ -2,6 +2,7 @@ import { FileText, Pencil, TerminalSquare, Search, Plug, Wrench, Check, X, Loade
 import { useState } from "react";
 import type { ToolStep } from "@vortspec/ui/run-model";
 import { cn } from "../../lib/cn";
+import { Snippet } from "./Snippet";
 
 /**
  * The shadcn/ai **Tool** — a compact card for a tool call Claude made (Read,
@@ -56,15 +57,19 @@ export function Tool({ step }: { step: ToolStep }): React.JSX.Element {
         </span>
       </button>
       {open && hasOutput && (
-        // Bash output reads as a terminal; other tool output as a plain result.
-        <pre
-          className={cn(
-            "max-h-56 overflow-auto whitespace-pre-wrap break-words border-t border-vs-border-subtle px-2 py-1.5 font-mono text-[10px] leading-relaxed",
-            isBash ? "bg-vs-bg-code text-vs-text-secondary" : "text-vs-text-muted",
-          )}
-        >
-          {step.output}
-        </pre>
+        <div className="space-y-1 border-t border-vs-border-subtle p-1.5">
+          {/* Show the exact Bash command as a copyable snippet. */}
+          {isBash && step.detail && <Snippet code={step.detail} />}
+          {/* Bash output reads as a terminal; other tool output as a plain result. */}
+          <pre
+            className={cn(
+              "max-h-56 overflow-auto whitespace-pre-wrap break-words rounded px-2 py-1.5 font-mono text-[10px] leading-relaxed",
+              isBash ? "bg-vs-bg-code text-vs-text-secondary" : "text-vs-text-muted",
+            )}
+          >
+            {step.output}
+          </pre>
+        </div>
       )}
     </div>
   );
