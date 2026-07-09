@@ -59,16 +59,29 @@ const ICON: Record<ChatAttachment["kind"], string> = { file: "📄", dir: "📁"
 export function AttachmentChips({
   attachments,
   onRemove,
+  onAdd,
   loadDir,
 }: {
   attachments: ChatAttachment[];
   onRemove: (id: string) => void;
+  /** Add an attachment — used when selecting a file/folder inside the tree preview. */
+  onAdd?: (att: Omit<ChatAttachment, "id">) => void;
   /** Fetch a folder's children — enables the File Tree preview on `@folder` chips. */
   loadDir?: (path: string) => Promise<FsEntry[]>;
 }): React.JSX.Element | null {
   const [preview, setPreview] = useState<string | null>(null);
   if (attachments.length === 0) return null;
   const previewAtt = attachments.find((a) => a.id === preview && a.kind === "dir");
+
+  // Which file/folder paths are currently attached (for tree selection state).
+  const isSelected = (path: string): boolean =>
+    attachments.some((a) => a.path === path && a.kind !== "selection");
+  // Toggle a tree entry in/out of the context attachments.
+  const toggleSelect = (entry: FsEntry): void => {
+    const existing = attachments.find((a) => a.path === entry.path && a.kind !== "selection");
+    if (existing) onRemove(existing.id);
+    else onAdd?.({ path: entry.path, kind: entry.type === "dir" ? "dir" : "file" });
+  };
   return (
     <div className="mb-2 space-y-1.5">
       <div className="flex flex-wrap gap-1.5">
@@ -108,7 +121,20 @@ export function AttachmentChips({
       </div>
       {previewAtt && loadDir && (
         <div className="rounded-md border border-vs-border-subtle bg-vs-bg-primary" data-testid="folder-preview">
-          <FileTree root={previewAtt.path} loadDir={loadDir} />
+          <div className="flex items-center justify-between border-b border-vs-border-subtle px-2 py-1 text-[10px] text-vs-text-muted">
+            <span>
+              <span className="font-mono text-vs-text-secondary">{previewAtt.path}</span> — click items to add them, or keep the whole folder
+            </span>
+            <button
+              type="button"
+              onClick={() => onRemove(previewAtt.id)}
+              className="shrink-0 rounded px-1 hover:text-vs-text-primary"
+              title="Remove the whole folder"
+            >
+              whole folder ✓
+            </button>
+          </div>
+          <FileTree root={previewAtt.path} loadDir={loadDir} onSelect={onAdd ? toggleSelect : undefined} isSelected={isSelected} />
         </div>
       )}
     </div>

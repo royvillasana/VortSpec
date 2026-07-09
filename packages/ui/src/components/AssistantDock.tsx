@@ -380,6 +380,7 @@ export function AssistantDock({
           <AttachmentChips
             attachments={attachments}
             onRemove={(id) => setAttachments((a) => a.filter((x) => x.id !== id))}
+            onAdd={addAttachment}
             loadDir={(p) => api.listDir(project.path, p)}
           />
           <textarea

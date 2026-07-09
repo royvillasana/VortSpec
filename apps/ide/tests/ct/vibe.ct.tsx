@@ -139,7 +139,17 @@ test("attaching a folder lets you preview its file tree", async ({ mount }) => {
   await expect(c.getByTestId("attachment-chip")).toContainText("src");
   // Expanding the folder chip previews its contents as a File Tree.
   await c.getByTitle("Preview folder").click();
-  await expect(c.getByTestId("folder-preview")).toContainText("index.ts");
+  const preview = c.getByTestId("folder-preview");
+  await expect(preview).toContainText("index.ts");
+  // Selecting a file inside the tree adds it as its own attachment.
+  await preview.getByText("index.ts").click();
+  await expect(c.getByTestId("attachment-chip").filter({ hasText: "index.ts" })).toBeVisible();
+  // Sending includes both the folder and the picked file.
+  await input.fill("review these");
+  await c.getByRole("button", { name: "Send" }).click();
+  const prompts = await c.page().evaluate(() => (window as unknown as { __runPrompts: string[] }).__runPrompts);
+  expect(prompts[0]).toContain("@src");
+  expect(prompts[0]).toContain("@src/index.ts");
 });
 
 test("mounts a modify-capable assistant grounded in the workspace", async ({ mount }) => {
