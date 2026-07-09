@@ -124,6 +124,24 @@ test("@-mention attaches a workspace file and includes it in the sent prompt", a
   expect(prompts[0]).toContain("summarize it");
 });
 
+test("attaching a folder lets you preview its file tree", async ({ mount }) => {
+  const mock = {
+    ...base,
+    searchResults: [{ name: "src", path: "src", type: "dir" } as FsEntry],
+    fsTree: { "": fsTree[""], src: [{ name: "index.ts", path: "src/index.ts", type: "file" }] } as Record<string, FsEntry[]>,
+  };
+  const c = await mount(<App />, { hooksConfig: { mock } });
+  await open(c);
+  const input = c.getByPlaceholder(/@ a file/);
+  await input.fill("@src");
+  await expect(c.getByTestId("mention-menu").getByText("src")).toBeVisible();
+  await input.press("Enter");
+  await expect(c.getByTestId("attachment-chip")).toContainText("src");
+  // Expanding the folder chip previews its contents as a File Tree.
+  await c.getByTitle("Preview folder").click();
+  await expect(c.getByTestId("folder-preview")).toContainText("index.ts");
+});
+
 test("mounts a modify-capable assistant grounded in the workspace", async ({ mount }) => {
   const c = await mount(<App />, { hooksConfig: { mock: base } });
   await open(c);

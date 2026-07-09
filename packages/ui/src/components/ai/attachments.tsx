@@ -1,5 +1,7 @@
+import { useState } from "react";
 import type { FsEntry } from "@vortspec/core/ipc";
 import { cn } from "../../lib/cn";
+import { FileTree } from "./FileTree";
 
 /**
  * Chat context attachments — files, folders, and code selections the user pulls
@@ -57,32 +59,58 @@ const ICON: Record<ChatAttachment["kind"], string> = { file: "📄", dir: "📁"
 export function AttachmentChips({
   attachments,
   onRemove,
+  loadDir,
 }: {
   attachments: ChatAttachment[];
   onRemove: (id: string) => void;
+  /** Fetch a folder's children — enables the File Tree preview on `@folder` chips. */
+  loadDir?: (path: string) => Promise<FsEntry[]>;
 }): React.JSX.Element | null {
+  const [preview, setPreview] = useState<string | null>(null);
   if (attachments.length === 0) return null;
+  const previewAtt = attachments.find((a) => a.id === preview && a.kind === "dir");
   return (
-    <div className="mb-2 flex flex-wrap gap-1.5">
-      {attachments.map((a) => (
-        <span
-          key={a.id}
-          title={a.path}
-          data-testid="attachment-chip"
-          className="inline-flex max-w-full items-center gap-1 rounded-md border border-vs-border-default bg-vs-bg-elevated px-1.5 py-0.5 text-[11px] text-vs-text-secondary"
-        >
-          <span aria-hidden>{ICON[a.kind]}</span>
-          <span className="truncate font-mono">{attachmentLabel(a)}</span>
-          <button
-            type="button"
-            onClick={() => onRemove(a.id)}
-            title="Remove"
-            className="ml-0.5 rounded px-0.5 leading-none text-vs-text-muted hover:text-vs-text-primary"
-          >
-            ×
-          </button>
-        </span>
-      ))}
+    <div className="mb-2 space-y-1.5">
+      <div className="flex flex-wrap gap-1.5">
+        {attachments.map((a) => {
+          const canPreview = a.kind === "dir" && Boolean(loadDir);
+          return (
+            <span
+              key={a.id}
+              title={a.path}
+              data-testid="attachment-chip"
+              className="inline-flex max-w-full items-center gap-1 rounded-md border border-vs-border-default bg-vs-bg-elevated px-1.5 py-0.5 text-[11px] text-vs-text-secondary"
+            >
+              <button
+                type="button"
+                disabled={!canPreview}
+                onClick={() => setPreview((p) => (p === a.id ? null : a.id))}
+                className={cn("flex min-w-0 items-center gap-1", canPreview && "hover:text-vs-text-primary")}
+                title={canPreview ? "Preview folder" : a.path}
+              >
+                <span aria-hidden>{ICON[a.kind]}</span>
+                <span className="truncate font-mono">{attachmentLabel(a)}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  onRemove(a.id);
+                  setPreview((p) => (p === a.id ? null : p));
+                }}
+                title="Remove"
+                className="ml-0.5 rounded px-0.5 leading-none text-vs-text-muted hover:text-vs-text-primary"
+              >
+                ×
+              </button>
+            </span>
+          );
+        })}
+      </div>
+      {previewAtt && loadDir && (
+        <div className="rounded-md border border-vs-border-subtle bg-vs-bg-primary" data-testid="folder-preview">
+          <FileTree root={previewAtt.path} loadDir={loadDir} />
+        </div>
+      )}
     </div>
   );
 }

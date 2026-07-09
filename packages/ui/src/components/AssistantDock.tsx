@@ -377,7 +377,11 @@ export function AssistantDock({
         )}
         {/* A shadcn/ai PromptInput-style shell: attachments + textarea in one box. */}
         <div className="rounded-lg border border-vs-border-default bg-vs-bg-primary p-2 focus-within:ring-2 focus-within:ring-vs-accent-subtle">
-          <AttachmentChips attachments={attachments} onRemove={(id) => setAttachments((a) => a.filter((x) => x.id !== id))} />
+          <AttachmentChips
+            attachments={attachments}
+            onRemove={(id) => setAttachments((a) => a.filter((x) => x.id !== id))}
+            loadDir={(p) => api.listDir(project.path, p)}
+          />
           <textarea
             ref={textareaRef}
             value={draft}
