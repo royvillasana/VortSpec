@@ -474,15 +474,16 @@ export function AssistantDock({
               setMenuIndex(0);
               setMentionIndex(0);
             }}
-            onPaste={(e) => {
-              // A pasted image (e.g. a macOS screenshot) is captured from the OS
-              // clipboard and attached; text still pastes into the textarea.
-              const hasImage = Array.from(e.clipboardData?.items ?? []).some((it) => it.type.startsWith("image/"));
-              if (!hasImage) return;
-              e.preventDefault();
-              void api.clipboardImage().then((img) => {
-                if (img) addAttachment({ kind: "image", path: img.path, dataUrl: img.dataUrl, label: "pasted image" });
-              });
+            onPaste={() => {
+              // Always ask the main process for a clipboard image — macOS screenshots
+              // don't reliably show up in `clipboardData.items`, so we can't gate on
+              // that. Returns null for text/empty clipboards (text pastes natively).
+              void api
+                .clipboardImage()
+                .then((img) => {
+                  if (img) addAttachment({ kind: "image", path: img.path, dataUrl: img.dataUrl, label: "pasted image" });
+                })
+                .catch(() => undefined);
             }}
             onKeyDown={(e) => {
               if (mentionOpen && mentionItems.length > 0) {
