@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { JSX, CSSProperties } from "react";
 import type { Project } from "@vortspec/core/ipc";
 import type { IdeState } from "@vortspec/core/ide-mcp";
 import { api } from "@vortspec/ui/api";
-import { AssistantDock } from "@vortspec/ui/AssistantDock";
+import { AssistantDock, type PendingSelectionRef } from "@vortspec/ui/AssistantDock";
 import { SourceControl } from "@vortspec/ui/SourceControl";
 import { Inspector } from "@vortspec/ui/Inspector";
 import { PipelinePanel } from "@vortspec/ui/PipelinePanel";
@@ -40,6 +40,9 @@ export default function App(): JSX.Element {
   const [homeDir, setHomeDir] = useState<string | null>(null);
   // The live editor selection, surfaced to the assistant as grounding context.
   const [selection, setSelection] = useState<EditorSelection | null>(null);
+  // "Open in Chat" — the selection the user pushed to the assistant (nonce re-adds).
+  const [pendingRef, setPendingRef] = useState<PendingSelectionRef | undefined>(undefined);
+  const refNonce = useRef(0);
   // Which welcome view is showing when no workspace is open.
   const [welcomeView, setWelcomeView] = useState<"start" | "settings">("start");
   const [winW, setWinW] = useState<number>(() =>
@@ -227,6 +230,18 @@ export default function App(): JSX.Element {
                 s && wf.activePath ? { path: wf.activePath, startLine: s.startLine, endLine: s.endLine, text: s.text } : null,
               )
             }
+            onOpenInChat={(s) => {
+              if (!wf.activePath) return;
+              // Ensure the assistant is visible, then attach the selection.
+              if (!layout.secondaryOpen) dispatch({ type: "toggleSecondary" });
+              setPendingRef({
+                path: wf.activePath,
+                startLine: s.startLine,
+                endLine: s.endLine,
+                text: s.text,
+                nonce: ++refNonce.current,
+              });
+            }}
           />
           {bottomPanel && (
             <>
@@ -361,6 +376,7 @@ export default function App(): JSX.Element {
                     liveContext={buildLiveContext(wf.activePath, selection)}
                     mcpConfigPath={ideMcp.configPath}
                     extraAllowedTools={ideMcp.configPath ? [IDE_MCP_TOOL_GROUP] : undefined}
+                    pendingRef={pendingRef}
                     onClose={() => dispatch({ type: "toggleSecondary" })}
                   />
                 </div>

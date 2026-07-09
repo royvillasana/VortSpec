@@ -74,6 +74,8 @@ export interface MockConfig {
   fsTree?: Record<string, import("@vortspec/core/ipc").FsEntry[]>;
   /** File contents for the IDE editor, keyed by relative path. */
   fsFiles?: Record<string, string>;
+  /** Entries returned by searchFiles() — the @-mention picker (filtered by query). */
+  searchResults?: import("@vortspec/core/ipc").FsEntry[];
   /** HEAD contents for git diffs, keyed by relative path. */
   fsHead?: Record<string, string>;
   /** Text emitted to onTerminalData shortly after a terminal session is created. */
@@ -257,6 +259,8 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
       content: cfg.fsFiles?.[relPath] ?? "",
       truncated: false,
     }),
+    searchFiles: async (_projectPath: string, query: string) =>
+      (cfg.searchResults ?? []).filter((e) => e.path.toLowerCase().includes(query.toLowerCase())),
     writeFile: async () => ({ ok: true, message: "Saved." }),
     watchWorkspace: async () => undefined,
     unwatchWorkspace: async () => undefined,

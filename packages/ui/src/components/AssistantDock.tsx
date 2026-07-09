@@ -1,8 +1,18 @@
 import { useEffect, useRef, useState } from "react";
-import type { Project } from "@vortspec/core/ipc";
+import type { Project, FsEntry } from "@vortspec/core/ipc";
+import { api } from "@vortspec/ui/api";
 import { useAgentRun } from "../lib/useAgentRun";
 import { Spinner } from "@vortspec/ui/ui";
 import { Response } from "./ai/Response";
+import {
+  AttachmentChips,
+  MentionMenu,
+  expandAttachments,
+  type ChatAttachment,
+  type PendingSelectionRef,
+} from "./ai/attachments";
+
+export type { PendingSelectionRef } from "./ai/attachments";
 import {
   SlashMenu,
   SlashCard,
@@ -34,6 +44,7 @@ export function AssistantDock({
   showSession = false,
   mcpConfigPath,
   extraAllowedTools,
+  pendingRef,
 }: {
   project: Project;
   /** Optional one-line context the dock mentions to Claude on the first message. */
@@ -47,6 +58,8 @@ export function AssistantDock({
   mcpConfigPath?: string;
   /** Extra tool allow-list groups to enable for the run (e.g. `mcp__vortspec-ide`). */
   extraAllowedTools?: string[];
+  /** An editor selection to attach as context ("Open in Chat"); re-adds on nonce. */
+  pendingRef?: PendingSelectionRef;
   /** When true, the assistant may edit files (component changes), not just read. */
   allowModify?: boolean;
   /** When provided, a close button is shown; omit for a permanent panel. */
@@ -69,6 +82,11 @@ export function AssistantDock({
   const [selectedModel, setSelectedModel] = useState<string | undefined>(undefined);
   // `/`-command menu state.
   const [menuIndex, setMenuIndex] = useState(0);
+  // Context attachments (@-mentions, dragged files, "Open in Chat" selections).
+  const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
+  const [mentionResults, setMentionResults] = useState<FsEntry[]>([]);
+  const [mentionIndex, setMentionIndex] = useState(0);
+  const attachSeq = useRef(0);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
@@ -79,6 +97,7 @@ export function AssistantDock({
     setDraft("");
     setCards([]);
     setSelectedModel(undefined);
+    setAttachments([]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project.path]);
 
@@ -93,6 +112,73 @@ export function AssistantDock({
   const slashQuery = /^\/\S*$/.test(draft) ? draft : null;
   const menuMatches = slashQuery !== null ? matchCommands(slashQuery, run.model.session) : [];
   const menuOpen = menuMatches.length > 0;
+
+  // The `@`-mention menu is open when the draft ends with an `@token`.
+  const mentionMatch = draft.match(/(?:^|\s)@([^\s@]*)$/);
+  const mentionQuery = mentionMatch ? mentionMatch[1] : null;
+  const mentionOpen = mentionQuery !== null;
+
+  // Look up workspace files for the current @-query (lightly debounced).
+  useEffect(() => {
+    if (mentionQuery === null) {
+      setMentionResults([]);
+      return;
+    }
+    let alive = true;
+    const t = setTimeout(() => {
+      void api
+        .searchFiles(project.path, mentionQuery, 30)
+        .then((r) => alive && setMentionResults(r))
+        .catch(() => alive && setMentionResults([]));
+    }, 120);
+    return () => {
+      alive = false;
+      clearTimeout(t);
+    };
+  }, [mentionQuery, project.path]);
+
+  function addAttachment(att: Omit<ChatAttachment, "id">): void {
+    setAttachments((cur) => {
+      // De-dupe identical file/dir refs; always add distinct selections.
+      if (att.kind !== "selection" && cur.some((a) => a.kind === att.kind && a.path === att.path)) return cur;
+      return [...cur, { ...att, id: `att-${attachSeq.current++}` }];
+    });
+  }
+
+  // "Open in Chat" from the editor → attach the selection.
+  useEffect(() => {
+    if (!pendingRef) return;
+    addAttachment({
+      path: pendingRef.path,
+      kind: "selection",
+      startLine: pendingRef.startLine,
+      endLine: pendingRef.endLine,
+      text: pendingRef.text,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingRef?.nonce]);
+
+  function pickMention(entry: FsEntry): void {
+    // Strip the trailing `@query` from the draft, then attach.
+    setDraft((d) => d.replace(/(?:^|\s)@[^\s@]*$/, (m) => (m.startsWith(" ") ? " " : "")));
+    addAttachment({ path: entry.path, kind: entry.type === "dir" ? "dir" : "file" });
+    setMentionIndex(0);
+    textareaRef.current?.focus();
+  }
+
+  // Drag a file/folder from the Explorer into the chat → attach it.
+  function onDrop(e: React.DragEvent): void {
+    const internal = e.dataTransfer.getData("application/vortspec-path");
+    if (internal) {
+      e.preventDefault();
+      try {
+        const { path, type } = JSON.parse(internal) as { path: string; type: "file" | "dir" };
+        addAttachment({ path, kind: type === "dir" ? "dir" : "file" });
+      } catch {
+        addAttachment({ path: internal, kind: "file" });
+      }
+    }
+  }
 
   function runMeta(name: string): void {
     if (name === "clear") {
@@ -127,9 +213,11 @@ export function AssistantDock({
       return;
     }
     setDraft("");
-    // The live grounding (open file / selection) rides on every message so the
-    // assistant always sees what the user is looking at right now.
-    const withLive = liveContext ? `${liveContext}\n\n${text}` : text;
+    // Referenced attachments (@-mentions, dragged files, selections) + the live
+    // grounding (open file / selection) ride along so the assistant sees them.
+    const grounding = [expandAttachments(attachments), liveContext].filter(Boolean).join("\n\n");
+    const withLive = grounding ? `${grounding}\n\n${text}` : text;
+    setAttachments([]);
     if (!started) {
       setFirstPrompt(text);
       const prompt = seedContext ? `${seedContext}\n\n${withLive}` : withLive;
@@ -252,7 +340,16 @@ export function AssistantDock({
         )}
       </div>
 
-      <div className="flex-none border-t border-vs-border-default p-3">
+      <div
+        className="flex-none border-t border-vs-border-default p-3"
+        onDragOver={(e) => {
+          if (e.dataTransfer.types.includes("application/vortspec-path")) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = "copy";
+          }
+        }}
+        onDrop={onDrop}
+      >
         {menuOpen && (
           <SlashMenu
             commands={menuMatches}
@@ -260,56 +357,80 @@ export function AssistantDock({
             onPick={pickCommand}
           />
         )}
-        <textarea
-          ref={textareaRef}
-          value={draft}
-          onChange={(e) => {
-            setDraft(e.target.value);
-            setMenuIndex(0);
-          }}
-          onKeyDown={(e) => {
-            if (menuOpen) {
-              const len = menuMatches.length;
-              if (e.key === "ArrowDown") {
-                e.preventDefault();
-                setMenuIndex((i) => (Math.min(i, len - 1) + 1) % len);
-                return;
+        {mentionOpen && (
+          <MentionMenu
+            results={mentionResults}
+            activeIndex={Math.min(mentionIndex, Math.max(0, mentionResults.length - 1))}
+            onPick={pickMention}
+          />
+        )}
+        {/* A shadcn/ai PromptInput-style shell: attachments + textarea in one box. */}
+        <div className="rounded-lg border border-vs-border-default bg-vs-bg-primary p-2 focus-within:ring-2 focus-within:ring-vs-accent-subtle">
+          <AttachmentChips attachments={attachments} onRemove={(id) => setAttachments((a) => a.filter((x) => x.id !== id))} />
+          <textarea
+            ref={textareaRef}
+            value={draft}
+            onChange={(e) => {
+              setDraft(e.target.value);
+              setMenuIndex(0);
+              setMentionIndex(0);
+            }}
+            onKeyDown={(e) => {
+              if (mentionOpen && mentionResults.length > 0) {
+                const len = mentionResults.length;
+                if (e.key === "ArrowDown") {
+                  e.preventDefault();
+                  setMentionIndex((i) => (Math.min(i, len - 1) + 1) % len);
+                  return;
+                }
+                if (e.key === "ArrowUp") {
+                  e.preventDefault();
+                  setMentionIndex((i) => (Math.min(i, len - 1) - 1 + len) % len);
+                  return;
+                }
+                if (e.key === "Enter" || e.key === "Tab") {
+                  e.preventDefault();
+                  pickMention(mentionResults[Math.min(mentionIndex, len - 1)]);
+                  return;
+                }
               }
-              if (e.key === "ArrowUp") {
-                e.preventDefault();
-                setMenuIndex((i) => (Math.min(i, len - 1) - 1 + len) % len);
-                return;
+              if (menuOpen) {
+                const len = menuMatches.length;
+                if (e.key === "ArrowDown") {
+                  e.preventDefault();
+                  setMenuIndex((i) => (Math.min(i, len - 1) + 1) % len);
+                  return;
+                }
+                if (e.key === "ArrowUp") {
+                  e.preventDefault();
+                  setMenuIndex((i) => (Math.min(i, len - 1) - 1 + len) % len);
+                  return;
+                }
+                if (e.key === "Enter" || e.key === "Tab") {
+                  e.preventDefault();
+                  pickCommand(menuMatches[Math.min(menuIndex, len - 1)]);
+                  return;
+                }
+                if (e.key === "Escape") {
+                  e.preventDefault();
+                  setDraft("");
+                  return;
+                }
               }
-              if (e.key === "Enter" || e.key === "Tab") {
+              if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
-                pickCommand(menuMatches[Math.min(menuIndex, len - 1)]);
-                return;
+                submit();
               }
-              if (e.key === "Escape") {
-                e.preventDefault();
-                setDraft("");
-                return;
-              }
-            }
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault();
-              submit();
-            }
-          }}
-          rows={2}
-          placeholder={
-            run.running
-              ? "Claude is working…"
-              : allowModify
-                ? "e.g. tighten Button's padding…  ( / for commands )"
-                : "Ask about the project…  ( / for commands )"
-          }
-          disabled={run.running}
-          className="w-full resize-none rounded-md border border-vs-border-default bg-vs-bg-primary px-3 py-2 text-xs text-vs-text-primary placeholder:text-vs-text-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-vs-accent-subtle disabled:opacity-60"
-        />
+            }}
+            rows={2}
+            placeholder={run.running ? "Claude is working…" : "Ask, or @ a file…  ( / for commands )"}
+            disabled={run.running}
+            className="w-full resize-none bg-transparent px-1 py-1 text-xs text-vs-text-primary placeholder:text-vs-text-muted focus:outline-none disabled:opacity-60"
+          />
+        </div>
         <div className="mt-2 flex items-center gap-2">
           <span className="flex-1 text-[10px] text-vs-text-muted">
-            {menuOpen ? "↑↓ to navigate · Enter to pick" : "Enter to send · / for commands"}
+            {mentionOpen ? "↑↓ to navigate · Enter to attach" : menuOpen ? "↑↓ to navigate · Enter to pick" : "Enter to send · / commands · @ files"}
           </span>
           <button
             onClick={submit}

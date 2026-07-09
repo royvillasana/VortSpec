@@ -47,7 +47,7 @@ test("the assistant session panel shows model, skills, and MCP status", async ({
   ];
   const c = await mount(<App />, { hooksConfig: { mock: { ...base, runScript: INIT_RUN } } });
   await open(c);
-  await c.getByPlaceholder(/tighten Button/).fill("hi");
+  await c.getByPlaceholder(/@ a file/).fill("hi");
   await c.getByRole("button", { name: "Send" }).click();
   // The model chip appears; open the session panel.
   const chip = c.getByRole("button", { name: /opus-4-8/ });
@@ -61,7 +61,7 @@ test("the assistant session panel shows model, skills, and MCP status", async ({
 test("slash menu opens from the composer and /model runs a model card", async ({ mount }) => {
   const c = await mount(<App />, { hooksConfig: { mock: base } });
   await open(c);
-  const input = c.getByPlaceholder(/tighten Button/);
+  const input = c.getByPlaceholder(/@ a file/);
   // Typing a slash token opens the command menu.
   await input.fill("/mo");
   await expect(c.getByRole("button", { name: /\/model/ })).toBeVisible();
@@ -93,21 +93,42 @@ test("/mcp card reflects the session's MCP server status", async ({ mount }) => 
   const c = await mount(<App />, { hooksConfig: { mock: { ...base, runScript: INIT_RUN } } });
   await open(c);
   // Start a session so the /mcp card has data.
-  await c.getByPlaceholder(/tighten Button/).fill("hi");
+  await c.getByPlaceholder(/@ a file/).fill("hi");
   await c.getByRole("button", { name: "Send" }).click();
   // Now call /mcp.
-  await c.getByPlaceholder(/tighten Button/).fill("/mcp");
-  await c.getByPlaceholder(/tighten Button/).press("Enter");
+  await c.getByPlaceholder(/@ a file/).fill("/mcp");
+  await c.getByPlaceholder(/@ a file/).press("Enter");
   await expect(c.getByText(/\/mcp — MCP servers/)).toBeVisible();
   await expect(c.getByText("figma-console")).toBeVisible();
   await expect(c.getByText("failed", { exact: true })).toBeVisible();
+});
+
+test("@-mention attaches a workspace file and includes it in the sent prompt", async ({ mount }) => {
+  const c = await mount(<App />, {
+    hooksConfig: { mock: { ...base, searchResults: [{ name: "README.md", path: "README.md", type: "file" }] } },
+  });
+  await open(c);
+  const input = c.getByPlaceholder(/@ a file/);
+  await input.fill("@READ");
+  // The @-picker lists the matching file.
+  const menu = c.getByTestId("mention-menu");
+  await expect(menu.getByText("README.md")).toBeVisible();
+  await input.press("Enter");
+  // It becomes a removable attachment chip.
+  await expect(c.getByTestId("attachment-chip")).toContainText("README.md");
+  // Sending expands the attachment into the prompt.
+  await input.fill("summarize it");
+  await c.getByRole("button", { name: "Send" }).click();
+  const prompts = await c.page().evaluate(() => (window as unknown as { __runPrompts: string[] }).__runPrompts);
+  expect(prompts[0]).toContain("@README.md");
+  expect(prompts[0]).toContain("summarize it");
 });
 
 test("mounts a modify-capable assistant grounded in the workspace", async ({ mount }) => {
   const c = await mount(<App />, { hooksConfig: { mock: base } });
   await open(c);
   // The dock's modify-mode composer is present (vibe-engineering).
-  await expect(c.getByPlaceholder(/tighten Button/)).toBeVisible();
+  await expect(c.getByPlaceholder(/@ a file/)).toBeVisible();
   // Context starts with no open file.
   await expect(c.getByTestId("assistant-context")).toContainText("no file open");
 });
@@ -123,7 +144,7 @@ test("sends the open file as hidden grounding without echoing it in the bubble",
   const c = await mount(<App />, { hooksConfig: { mock: base } });
   await open(c);
   await c.getByRole("button", { name: "README.md" }).click();
-  await c.getByPlaceholder(/tighten Button/).fill("explain this");
+  await c.getByPlaceholder(/@ a file/).fill("explain this");
   await c.getByRole("button", { name: "Send" }).click();
   // The prompt actually sent to Claude carries the live IDE grounding…
   const prompts = await c.page().evaluate(() => (window as unknown as { __runPrompts: string[] }).__runPrompts);

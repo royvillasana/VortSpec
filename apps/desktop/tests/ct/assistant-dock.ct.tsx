@@ -33,13 +33,27 @@ test("first message starts a session and streams the reply", async ({ mount }) =
   const c = await mount(<AssistantDock project={PROJECT} onClose={noop} />, {
     hooksConfig: { mock: { runScript: REPLY } },
   });
-  await c.getByPlaceholder(/Ask about the project/).fill("What tokens does this use?");
+  await c.getByPlaceholder(/@ a file/).fill("What tokens does this use?");
   await c.getByRole("button", { name: "Send" }).click();
 
   // The user's message appears as a bubble…
   await expect(c.getByText("What tokens does this use?")).toBeVisible();
   // …and the assistant's reply streams in from the transcript.
   await expect(c.getByText("Your project uses 45 design tokens.")).toBeVisible();
+});
+
+test("an Open-in-Chat selection ref becomes a chip and rides in the prompt", async ({ mount }) => {
+  const ref = { path: "src/Button.tsx", startLine: 2, endLine: 5, text: "const x = 1;", nonce: 1 };
+  const c = await mount(<AssistantDock project={PROJECT} pendingRef={ref} onClose={noop} />, {
+    hooksConfig: { mock: { runScript: REPLY } },
+  });
+  // The selection shows as an attachment chip with its line range.
+  await expect(c.getByTestId("attachment-chip")).toContainText("Button.tsx:2-5");
+  await c.getByPlaceholder(/@ a file/).fill("explain this selection");
+  await c.getByRole("button", { name: "Send" }).click();
+  const prompts = await c.page().evaluate(() => (window as unknown as { __runPrompts: string[] }).__runPrompts);
+  expect(prompts[0]).toContain("src/Button.tsx:L2-L5");
+  expect(prompts[0]).toContain("const x = 1;");
 });
 
 test("close button fires onClose", async ({ mount }) => {

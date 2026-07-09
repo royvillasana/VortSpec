@@ -27,6 +27,7 @@ export function EditorGroup({
   loadHead,
   relayoutKey,
   onSelection,
+  onOpenInChat,
 }: {
   files: OpenFile[];
   activePath: string | null;
@@ -41,6 +42,8 @@ export function EditorGroup({
   relayoutKey?: number;
   /** Reports the active editor selection up for assistant grounding. */
   onSelection?: (selection: CodeSelection | null) => void;
+  /** "Open in Chat" — attach the selection to the assistant. */
+  onOpenInChat?: (selection: CodeSelection) => void;
 }): JSX.Element {
   const active = files.find((f) => f.path === activePath) ?? null;
   const [diff, setDiff] = useState(false);
@@ -167,6 +170,7 @@ export function EditorGroup({
             relayoutKey={relayoutKey}
             onChange={(v) => onChange(active.path, v)}
             onSelection={onSelection}
+            onOpenInChat={onOpenInChat}
           />
         ) : null}
       </div>

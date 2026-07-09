@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { JSX } from "react";
 import * as monaco from "monaco-editor";
 import { languageForPath } from "../monaco/setup";
@@ -30,6 +30,7 @@ export function CodeEditor({
   relayoutKey,
   onChange,
   onSelection,
+  onOpenInChat,
 }: {
   path: string | null;
   value: string;
@@ -40,6 +41,8 @@ export function CodeEditor({
   /** Reports the active selection (or null when empty) so the assistant can be
    *  grounded in what the user has highlighted, like the Claude Code extension. */
   onSelection?: (selection: CodeSelection | null) => void;
+  /** "Open in Chat" — attach the current selection to the assistant. */
+  onOpenInChat?: (selection: CodeSelection) => void;
 }): JSX.Element {
   const wrapRef = useRef<HTMLDivElement>(null);
   const hostRef = useRef<HTMLDivElement>(null);
@@ -49,6 +52,11 @@ export function CodeEditor({
   onChangeRef.current = onChange;
   const onSelectionRef = useRef(onSelection);
   onSelectionRef.current = onSelection;
+  const onOpenInChatRef = useRef(onOpenInChat);
+  onOpenInChatRef.current = onOpenInChat;
+  // The floating "Open in Chat" button, positioned under the live selection.
+  const [chatBtn, setChatBtn] = useState<{ top: number; left: number } | null>(null);
+  const selRef = useRef<CodeSelection | null>(null);
 
   // Create the editor once.
   useEffect(() => {
@@ -73,20 +81,38 @@ export function CodeEditor({
       const model = editor.getModel();
       if (model) onChangeRef.current(model.getValue());
     });
+    const placeButton = (sel: monaco.Selection): void => {
+      const pos = editor.getScrolledVisiblePosition(sel.getEndPosition());
+      if (!pos) {
+        setChatBtn(null);
+        return;
+      }
+      const lineHeight = editor.getOption(monaco.editor.EditorOption.lineHeight);
+      setChatBtn({ top: pos.top + lineHeight + 2, left: Math.max(4, pos.left) });
+    };
     const selSub = editor.onDidChangeCursorSelection((e) => {
-      const report = onSelectionRef.current;
-      if (!report) return;
       const model = editor.getModel();
       const sel = e.selection;
       if (!model || sel.isEmpty()) {
-        report(null);
+        selRef.current = null;
+        setChatBtn(null);
+        onSelectionRef.current?.(null);
         return;
       }
-      report({
+      const resolved: CodeSelection = {
         startLine: sel.startLineNumber,
         endLine: sel.endLineNumber,
         text: model.getValueInRange(sel),
-      });
+      };
+      selRef.current = resolved;
+      onSelectionRef.current?.(resolved);
+      if (onOpenInChatRef.current) placeButton(sel);
+    });
+    // Keep the button pinned to the selection as the editor scrolls.
+    const scrollSub = editor.onDidScrollChange(() => {
+      const sel = editor.getSelection();
+      if (sel && !sel.isEmpty() && onOpenInChatRef.current) placeButton(sel);
+      else setChatBtn(null);
     });
     // Observe the stable wrapper and lay out with the exact observed box, so the
     // wrap re-computes reliably as neighboring regions resize — both directions.
@@ -109,6 +135,7 @@ export function CodeEditor({
       ro.disconnect();
       sub.dispose();
       selSub.dispose();
+      scrollSub.dispose();
       editor.dispose();
       models.forEach((m) => m.dispose());
       models.clear();
@@ -147,6 +174,20 @@ export function CodeEditor({
   return (
     <div ref={wrapRef} className="absolute inset-0 overflow-hidden">
       <div ref={hostRef} data-testid="code-editor" className="absolute inset-0" />
+      {chatBtn && onOpenInChat && (
+        <button
+          type="button"
+          data-testid="open-in-chat"
+          style={{ top: chatBtn.top, left: chatBtn.left }}
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => {
+            if (selRef.current) onOpenInChat(selRef.current);
+          }}
+          className="absolute z-20 flex items-center gap-1 rounded-md border border-vs-border-strong bg-vs-bg-elevated px-2 py-1 text-[11px] font-medium text-vs-text-primary shadow-lg hover:bg-vs-bg-hover"
+        >
+          <span aria-hidden>⧉</span> Open in Chat
+        </button>
+      )}
     </div>
   );
 }

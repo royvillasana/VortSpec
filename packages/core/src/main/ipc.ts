@@ -116,6 +116,8 @@ const handlers: Record<IpcChannel, Handler> = {
     fsw.listDir(r.projectPath, r.relPath)) as Handler,
   "workspace:readFile": ((r: { projectPath: string; relPath: string }) =>
     fsw.readFile(r.projectPath, r.relPath)) as Handler,
+  "workspace:searchFiles": ((r: { projectPath: string; query: string; limit?: number }) =>
+    fsw.searchFiles(r.projectPath, r.query, r.limit)) as Handler,
   "workspace:writeFile": ((r: { projectPath: string; relPath: string; content: string }) =>
     fsw.writeFile(r.projectPath, r.relPath, r.content)) as Handler,
   "workspace:watchStart": ((projectPath: string, sender: WebContents) => {

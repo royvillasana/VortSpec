@@ -263,6 +263,7 @@ const api = {
   // Workspace filesystem (IDE)
   listDir: (projectPath, relPath) => invoke("workspace:listDir", { projectPath, relPath }),
   readFile: (projectPath, relPath) => invoke("workspace:readFile", { projectPath, relPath }),
+  searchFiles: (projectPath, query, limit) => invoke("workspace:searchFiles", { projectPath, query, limit }),
   writeFile: (projectPath, relPath, content) => invoke("workspace:writeFile", { projectPath, relPath, content }),
   watchWorkspace: (projectPath) => invoke("workspace:watchStart", projectPath),
   unwatchWorkspace: (projectPath) => invoke("workspace:watchStop", projectPath),

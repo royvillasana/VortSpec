@@ -264,6 +264,10 @@ export const ipcContract = {
     request: z.object({ projectPath: z.string(), relPath: z.string() }),
     response: fsFileSchema,
   },
+  "workspace:searchFiles": {
+    request: z.object({ projectPath: z.string(), query: z.string(), limit: z.number().optional() }),
+    response: z.array(fsEntrySchema),
+  },
   "workspace:writeFile": {
     request: z.object({ projectPath: z.string(), relPath: z.string(), content: z.string() }),
     response: fsWriteResultSchema,

@@ -52,6 +52,62 @@ export async function listDir(root: string, rel: string): Promise<FsEntry[]> {
   return entries;
 }
 
+/** Directories skipped when searching for `@`-mentions (build noise/vendored). */
+const SEARCH_SKIP = new Set([".git", "node_modules", "dist", "out", "build", ".next", ".turbo", ".cache", "coverage"]);
+
+/**
+ * Walk the workspace and return files + folders whose relative path matches
+ * `query` (case-insensitive substring, or every char in order for a fuzzy feel).
+ * Powers the composer's `@`-mention picker. Bounded: caps the result count and
+ * the number of directories visited so a huge tree can't stall the UI.
+ */
+export async function searchFiles(root: string, query: string, limit = 30): Promise<FsEntry[]> {
+  const q = query.toLowerCase();
+  const matches = (rel: string): boolean => {
+    if (!q) return true;
+    const hay = rel.toLowerCase();
+    if (hay.includes(q)) return true;
+    // Subsequence match (e.g. "btncss" → "components/Button.css").
+    let i = 0;
+    for (const ch of hay) if (ch === q[i]) i++;
+    return i === q.length;
+  };
+  const results: FsEntry[] = [];
+  let visited = 0;
+  const MAX_DIRS = 4000;
+
+  async function walk(rel: string): Promise<void> {
+    if (results.length >= limit || visited >= MAX_DIRS) return;
+    visited++;
+    let dirents;
+    try {
+      dirents = await fsp.readdir(resolveInside(root, rel), { withFileTypes: true });
+    } catch {
+      return;
+    }
+    // Sort so files/dirs list stably; shallow entries surface first.
+    dirents.sort((a, b) => a.name.localeCompare(b.name));
+    for (const d of dirents) {
+      if (results.length >= limit) return;
+      if (d.name.startsWith(".") && rel === "") {
+        if (SEARCH_SKIP.has(d.name)) continue;
+      }
+      if (SEARCH_SKIP.has(d.name)) continue;
+      const childRel = rel ? `${rel}/${d.name}` : d.name;
+      const isDir = d.isDirectory();
+      if (matches(childRel)) {
+        results.push({ name: d.name, path: childRel, type: isDir ? "dir" : "file" });
+      }
+      if (isDir) await walk(childRel);
+    }
+  }
+
+  await walk("");
+  // Shorter paths first — usually the more relevant match.
+  results.sort((a, b) => a.path.length - b.path.length);
+  return results.slice(0, limit);
+}
+
 export async function readFile(root: string, rel: string): Promise<FsFile> {
   const abs = resolveInside(root, rel);
   const stat = await fsp.stat(abs);

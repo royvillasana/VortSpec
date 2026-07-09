@@ -16,12 +16,15 @@ export function EditorArea({
   wf,
   relayoutKey,
   onSelection,
+  onOpenInChat,
 }: {
   project: Project;
   wf: WorkspaceFiles;
   relayoutKey?: number;
   /** Reports the active editor selection up for assistant grounding. */
   onSelection?: (selection: CodeSelection | null) => void;
+  /** "Open in Chat" — attach the selection to the assistant. */
+  onOpenInChat?: (selection: CodeSelection) => void;
 }): JSX.Element {
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
@@ -37,6 +40,7 @@ export function EditorArea({
           loadHead={(p) => api.fileAtHead(project.path, p)}
           relayoutKey={relayoutKey}
           onSelection={onSelection}
+          onOpenInChat={onOpenInChat}
         />
       </div>
       <PreviewBar project={project} />

@@ -80,6 +80,15 @@ export function Explorer({
           key={entry.path}
           type="button"
           aria-label={entry.name}
+          draggable
+          onDragStart={(e) => {
+            // Let the chat composer attach this file/folder as context.
+            e.dataTransfer.setData(
+              "application/vortspec-path",
+              JSON.stringify({ path: entry.path, type: entry.type }),
+            );
+            e.dataTransfer.effectAllowed = "copy";
+          }}
           onClick={() => (isDir ? toggle(entry.path) : onOpen(entry.path))}
           className={`flex w-full items-center gap-1 rounded px-1.5 py-[3px] text-left text-[13px] transition-colors ${
             activePath === entry.path

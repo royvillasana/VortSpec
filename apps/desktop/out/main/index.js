@@ -911,6 +911,10 @@ const ipcContract = {
     request: z.object({ projectPath: z.string(), relPath: z.string() }),
     response: fsFileSchema
   },
+  "workspace:searchFiles": {
+    request: z.object({ projectPath: z.string(), query: z.string(), limit: z.number().optional() }),
+    response: z.array(fsEntrySchema)
+  },
   "workspace:writeFile": {
     request: z.object({ projectPath: z.string(), relPath: z.string(), content: z.string() }),
     response: fsWriteResultSchema
@@ -1556,6 +1560,48 @@ async function listDir(root, rel) {
     (a, b) => a.type === b.type ? a.name.localeCompare(b.name) : a.type === "dir" ? -1 : 1
   );
   return entries;
+}
+const SEARCH_SKIP = /* @__PURE__ */ new Set([".git", "node_modules", "dist", "out", "build", ".next", ".turbo", ".cache", "coverage"]);
+async function searchFiles(root, query, limit = 30) {
+  const q = query.toLowerCase();
+  const matches = (rel) => {
+    if (!q) return true;
+    const hay = rel.toLowerCase();
+    if (hay.includes(q)) return true;
+    let i = 0;
+    for (const ch of hay) if (ch === q[i]) i++;
+    return i === q.length;
+  };
+  const results = [];
+  let visited = 0;
+  const MAX_DIRS = 4e3;
+  async function walk(rel) {
+    if (results.length >= limit || visited >= MAX_DIRS) return;
+    visited++;
+    let dirents;
+    try {
+      dirents = await promises.readdir(resolveInside(root, rel), { withFileTypes: true });
+    } catch {
+      return;
+    }
+    dirents.sort((a, b) => a.name.localeCompare(b.name));
+    for (const d of dirents) {
+      if (results.length >= limit) return;
+      if (d.name.startsWith(".") && rel === "") {
+        if (SEARCH_SKIP.has(d.name)) continue;
+      }
+      if (SEARCH_SKIP.has(d.name)) continue;
+      const childRel = rel ? `${rel}/${d.name}` : d.name;
+      const isDir = d.isDirectory();
+      if (matches(childRel)) {
+        results.push({ name: d.name, path: childRel, type: isDir ? "dir" : "file" });
+      }
+      if (isDir) await walk(childRel);
+    }
+  }
+  await walk("");
+  results.sort((a, b) => a.path.length - b.path.length);
+  return results.slice(0, limit);
 }
 async function readFile(root, rel) {
   const abs = resolveInside(root, rel);
@@ -4491,6 +4537,7 @@ const handlers = {
   "workspace:createProject": ((req) => createProject(req.path, req.answers)),
   "workspace:listDir": ((r) => listDir(r.projectPath, r.relPath)),
   "workspace:readFile": ((r) => readFile(r.projectPath, r.relPath)),
+  "workspace:searchFiles": ((r) => searchFiles(r.projectPath, r.query, r.limit)),
   "workspace:writeFile": ((r) => writeFile(r.projectPath, r.relPath, r.content)),
   "workspace:watchStart": ((projectPath, sender2) => {
     startWatch(sender2, projectPath);
