@@ -97,10 +97,10 @@ export function WorkspacePicker({
               {
                 "--x": "50%",
                 "--y": "50%",
-                backgroundImage: "linear-gradient(120deg, #2563EB 0%, #7C6FF0 50%, #B84DEE 100%)",
+                backgroundImage: "linear-gradient(120deg, #1D4ED8 0%, #7C6FF0 50%, #9333EA 100%)",
               } as CSSProperties
             }
-            className="group relative flex w-full items-center justify-center gap-2 overflow-hidden rounded-md px-3 py-2.5 text-sm font-semibold text-white shadow-[0_6px_24px_-6px_rgba(124,111,240,0.6)] transition-shadow hover:shadow-[0_10px_32px_-6px_rgba(124,111,240,0.75)]"
+            className="group relative flex w-full items-center justify-center gap-2 overflow-hidden rounded-md px-3 py-2.5 text-sm font-semibold text-white"
           >
             {/* Cursor-following spotlight (revealed on hover). */}
             <span
