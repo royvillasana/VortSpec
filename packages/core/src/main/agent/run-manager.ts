@@ -56,6 +56,12 @@ export function startRun(
     // Accumulate what happened, for the run-history record.
     if (event.kind === "tool-use" && event.path) acc.files.add(event.path);
     if ((event.kind === "result" && event.isError) || event.kind === "error") acc.isError = true;
+    // Instrumentation: capture the model that actually ran + the run's token/cost totals.
+    if (event.kind === "system-init" && event.model) acc.model = event.model;
+    if (event.kind === "result") {
+      if (event.usage) acc.usage = event.usage;
+      if (event.costUsd !== undefined) acc.costUsd = event.costUsd;
+    }
     // Capture the session id so an interrupted run can be `--resume`d.
     if ((event.kind === "system-init" || event.kind === "result") && event.sessionId) {
       if (acc.sessionId !== event.sessionId) {

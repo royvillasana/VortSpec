@@ -1,6 +1,19 @@
 import { z } from "zod";
 
 /**
+ * Token usage for one run — captured from the CLI result line's `usage` block so
+ * the app can show real token/cost/cache numbers (and measure model-routing
+ * savings). Cache reads are the cheap re-reads of the static prompt prefix.
+ */
+export const runUsageSchema = z.object({
+  inputTokens: z.number(),
+  outputTokens: z.number(),
+  cacheReadTokens: z.number().optional(),
+  cacheCreationTokens: z.number().optional(),
+});
+export type RunUsage = z.infer<typeof runUsageSchema>;
+
+/**
  * VortSpec's typed, friendly run events — the app-facing shape the renderer
  * consumes. The main-process parser (`src/main/agent/events.ts`) maps raw
  * Claude Code `stream-json` lines into these; nothing outside that parser knows
@@ -59,6 +72,8 @@ export const runEventSchema = z.discriminatedUnion("kind", [
     text: z.string().optional(),
     costUsd: z.number().optional(),
     sessionId: z.string().optional(),
+    /** Token usage for the run (from the CLI result line), for cost/cache visibility. */
+    usage: runUsageSchema.optional(),
   }),
   z.object({ kind: z.literal("error"), message: z.string() }),
   z.object({ kind: z.literal("exit"), code: z.number().nullable() }),

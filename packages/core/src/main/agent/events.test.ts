@@ -167,4 +167,32 @@ describe("parseStreamLine", () => {
       sessionId: "sess_abc",
     });
   });
+
+  it("captures token usage from the result line (instrumentation)", () => {
+    const [ev] = parseStreamLine(
+      JSON.stringify({
+        type: "result",
+        subtype: "success",
+        is_error: false,
+        total_cost_usd: 0.02,
+        session_id: "s",
+        usage: {
+          input_tokens: 1200,
+          output_tokens: 340,
+          cache_read_input_tokens: 8000,
+          cache_creation_input_tokens: 500,
+        },
+      }),
+    );
+    expect(ev).toMatchObject({
+      kind: "result",
+      usage: { inputTokens: 1200, outputTokens: 340, cacheReadTokens: 8000, cacheCreationTokens: 500 },
+    });
+  });
+
+  it("omits usage when the result line has none", () => {
+    const [ev] = parseStreamLine(JSON.stringify({ type: "result", is_error: false }));
+    expect(ev).toMatchObject({ kind: "result" });
+    expect((ev as { usage?: unknown }).usage).toBeUndefined();
+  });
 });

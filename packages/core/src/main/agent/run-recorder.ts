@@ -1,6 +1,6 @@
 import { join, basename } from "node:path";
 import { mkdir, writeFile, readFile, readdir } from "node:fs/promises";
-import type { AgentRunOptions, LastRun } from "@vortspec/core/run-events";
+import type { AgentRunOptions, LastRun, RunUsage } from "@vortspec/core/run-events";
 import { lastRunSchema } from "@vortspec/core/run-events";
 import type { RunSummary } from "@vortspec/core/flow";
 
@@ -15,6 +15,10 @@ export interface RunAccumulator {
   isError: boolean;
   /** Captured from the run's system-init / result events; enables `--resume`. */
   sessionId?: string;
+  /** Token usage + cost + actual model, captured from the run's events (instrumentation). */
+  usage?: RunUsage;
+  costUsd?: number;
+  model?: string;
 }
 
 export function newAccumulator(): RunAccumulator {
@@ -110,6 +114,11 @@ export async function recordRun(
       },
     ],
     artifacts: [...acc.files].map((f) => basename(f)),
+    // Instrumentation: real token usage, cost, and the model that ran — so the
+    // History screen and any model-routing experiment can be measured, not guessed.
+    ...(acc.usage ? { tokens: acc.usage } : {}),
+    ...(acc.costUsd !== undefined ? { costUsd: acc.costUsd } : {}),
+    ...(acc.model ? { model: acc.model } : {}),
   };
 
   await writeFile(join(dir, `${summary.id}.json`), JSON.stringify(summary, null, 2), "utf8").catch(
