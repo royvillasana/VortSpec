@@ -1,6 +1,7 @@
 import { test, expect } from "@playwright/experimental-ct-react";
 import App from "../../src/renderer/src/App";
-import type { Project } from "@vortspec/core/ipc";
+import { DesignPanel } from "@vortspec/ui/DesignPanel";
+import type { Project, Selection, InspectorToken } from "@vortspec/core/ipc";
 
 const PROJECT = {
   id: "p1",
@@ -59,4 +60,52 @@ test("the Layers header carries the mode toggle and a zoom control at the bottom
   await expect(c.getByRole("button", { name: "100%" })).toBeVisible();
   // The Design panel is a resizable sidebar (like the Explorer rail).
   await expect(c.getByRole("separator", { name: "Resize Design panel" })).toBeVisible();
+});
+
+// A gap bound to space-20; the project has space-16 too.
+const GAP_SELECTION: Selection = {
+  nodeId: "n1",
+  label: "Card",
+  component: "Card",
+  file: "src/Card.tsx",
+  resembles: null,
+  rect: { x: 0, y: 0, width: 100, height: 40 },
+  variants: [],
+  sections: [
+    {
+      id: "layout",
+      title: "Auto layout",
+      fields: [{ key: "gap", label: "Gap", kind: "length", value: "20px", token: "space-20", tokenType: "spacing", options: [] }],
+    },
+  ],
+};
+const SPACING_TOKENS: InspectorToken[] = [
+  { name: "space-20", type: "spacing", rawValue: "20px", resolvedValue: "20px", source: "generated-code", uses: 2 },
+  { name: "space-16", type: "spacing", rawValue: "16px", resolvedValue: "16px", source: "generated-code", uses: 1 },
+];
+
+test("re-binding a length token updates the field to the new token + value immediately", async ({ mount }) => {
+  const changes: [string, string][] = [];
+  const c = await mount(
+    <DesignPanel
+      selection={GAP_SELECTION}
+      tree={null}
+      tokens={SPACING_TOKENS}
+      onSelectNode={() => {}}
+      onFieldChange={(k, v) => changes.push([k, v])}
+    />,
+  );
+  // Starts bound to space-20 / 20px.
+  await expect(c.getByTitle(/Variable: space-20/)).toBeVisible();
+  await expect(c.getByRole("textbox")).toHaveValue("20px");
+
+  // Open the ◆ picker and choose space-16.
+  await c.getByTitle(/Variable: space-20/).click();
+  await c.getByRole("button", { name: /space-16/ }).click();
+
+  // The field reflects the new binding right away — before any apply.
+  await expect(c.getByTitle(/Variable: space-16/)).toBeVisible();
+  await expect(c.getByRole("textbox")).toHaveValue("16px");
+  // …and it emitted the var() binding for the ephemeral override / pending edit.
+  expect(changes).toContainEqual(["gap", "var(--space-16)"]);
 });

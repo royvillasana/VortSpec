@@ -1,4 +1,4 @@
-import { memo, useEffect, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import type { JSX } from "react";
 import type {
   Selection,
@@ -560,19 +560,49 @@ function LengthTokenField({
 }): JSX.Element {
   const opts = tokensForField(tokens, tokenType);
   const [draft, setDraft] = useState(value);
-  useEffect(() => setDraft(value), [value]);
+  // The just-picked binding, reflected immediately so the field shows the new token
+  // + its value BEFORE the (gated) apply refreshes the readout. `null` = detached to
+  // a literal; `undefined` = follow the selection's recognized token.
+  const [localToken, setLocalToken] = useState<string | null | undefined>(undefined);
+  // Whether the user has typed a raw value into the input (so blur commits it — a
+  // pick that merely repopulates the input must not be mistaken for a raw edit).
+  const editedRef = useRef(false);
+  // A fresh readout (new selection, or the kept change after apply) re-syncs the view.
+  useEffect(() => {
+    setDraft(value);
+    setLocalToken(undefined);
+    editedRef.current = false;
+  }, [value, token]);
   const [open, setOpen] = useState(false);
-  // Prefer the selection's recognized token / an explicit var() binding; else
-  // recognize a raw literal that happens to equal a token's value.
-  const matched = token ?? tokenNameFromVar(value) ?? (tokenType ? matchTokenName(draft, opts, tokenType) : null);
+  // The local pick wins; else the selection's recognized token / a var() binding;
+  // else a raw literal that happens to equal a token's value.
+  const matched =
+    localToken !== undefined
+      ? localToken
+      : (token ?? tokenNameFromVar(value) ?? (tokenType ? matchTokenName(draft, opts, tokenType) : null));
+
   const bindToken = (name: string): void => {
+    // Reflect the new token name + its resolved value in the field right away.
+    setDraft(opts.find((t) => t.name === name)?.resolvedValue ?? draft);
+    setLocalToken(name);
+    editedRef.current = false;
     onChange(`var(--${name})`); // emit the binding — the guest resolves the real value
     setOpen(false);
   };
   const detach = (): void => {
     // Fall back to a raw literal — the current resolved value (or the bound token's).
-    onChange(opts.find((t) => t.name === matched)?.resolvedValue ?? draft);
+    const raw = opts.find((t) => t.name === matched)?.resolvedValue ?? draft;
+    setDraft(raw);
+    setLocalToken(null);
+    editedRef.current = false;
+    onChange(raw);
     setOpen(false);
+  };
+  const commitRaw = (): void => {
+    if (!editedRef.current) return; // a pick repopulated the input — not a raw edit
+    editedRef.current = false;
+    setLocalToken(null); // typing a literal detaches any binding
+    onChange(draft);
   };
   return (
     <div className="relative w-full">
@@ -594,8 +624,11 @@ function LengthTokenField({
         )}
         <input
           value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onBlur={() => draft !== value && onChange(draft)}
+          onChange={(e) => {
+            editedRef.current = true;
+            setDraft(e.target.value);
+          }}
+          onBlur={commitRaw}
           onKeyDown={(e) => {
             if (e.key === "Enter") (e.target as HTMLInputElement).blur();
           }}
