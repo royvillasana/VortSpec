@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>VortSpec IDE — Usage Guide</title>
+    <meta name="description" content="How to install and use the VortSpec IDE: first-run checks, what it installs for you, the spec-driven design-to-code workflow, the Run canvas, the assistant, and Figma." />
+    <link rel="icon" type="image/png" href="./favicon.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
+    <style>
+      :root {
+        --bg: #0b0c0e; --surface: #141518; --elevated: #1b1d21; --border: #26282d; --border-strong: #34373d;
+        --text: #e7e9ec; --text-2: #9ba1ab; --text-3: #6b7280; --accent: #7c6ff0; --success: #30a46c; --warning: #ffb224; --danger: #e5484d;
+      }
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      html { scroll-behavior: smooth; }
+      body { background: var(--bg); color: var(--text); font-family: "Geist", system-ui, -apple-system, sans-serif; font-size: 16px; line-height: 1.65; -webkit-font-smoothing: antialiased; overflow-x: hidden; }
+      a { color: inherit; text-decoration: none; }
+      code, .mono { font-family: "Geist Mono", ui-monospace, monospace; }
+      .wrap { width: 100%; max-width: 1080px; margin: 0 auto; padding: 0 24px; }
+      .glow { position: fixed; inset: 0; z-index: 0; pointer-events: none; background: radial-gradient(600px 400px at 50% -8%, rgba(124,111,240,0.16), transparent 70%); }
+      main { position: relative; z-index: 1; }
+      nav { position: sticky; top: 0; z-index: 20; backdrop-filter: blur(10px); background: rgba(11,12,14,0.72); border-bottom: 1px solid var(--border); }
+      nav .row { display: flex; align-items: center; gap: 14px; height: 60px; }
+      nav .brand { display: flex; align-items: center; gap: 10px; font-weight: 600; }
+      nav .brand img { width: 26px; height: 26px; }
+      nav .spacer { flex: 1; }
+      nav .links { display: flex; align-items: center; gap: 22px; color: var(--text-2); font-size: 14px; }
+      nav .links a:hover, nav .links a.active { color: var(--text); }
+      @media (max-width: 760px) { nav .links a.hide-sm { display: none; } }
+      .btn { display: inline-flex; align-items: center; justify-content: center; gap: 9px; border-radius: 10px; font-weight: 500; font-size: 14px; line-height: 1; padding: 9px 15px; cursor: pointer; border: 1px solid transparent; transition: filter .15s ease, background .15s ease, border-color .15s ease; }
+      .btn-ide { background: rgba(124,111,240,0.1); color: var(--text); border-color: var(--accent); }
+      .btn-ide:hover { background: rgba(124,111,240,0.18); }
+
+      /* doc layout */
+      .doc { display: grid; grid-template-columns: 232px 1fr; gap: 48px; padding: 56px 0 96px; align-items: start; }
+      @media (max-width: 900px) { .doc { grid-template-columns: 1fr; gap: 24px; } .toc { display: none; } }
+      .toc { position: sticky; top: 92px; font-size: 13.5px; }
+      .toc h4 { text-transform: uppercase; letter-spacing: .06em; font-size: 11px; color: var(--text-3); margin-bottom: 12px; }
+      .toc a { display: block; color: var(--text-2); padding: 5px 0; border-left: 2px solid transparent; padding-left: 12px; margin-left: -14px; }
+      .toc a:hover { color: var(--text); border-color: var(--border-strong); }
+
+      .lede { font-size: 18px; color: var(--text-2); margin: 8px 0 40px; max-width: 62ch; }
+      .eyebrow { color: var(--accent); font-weight: 600; font-size: 13px; letter-spacing: .04em; text-transform: uppercase; }
+      h1 { font-size: 40px; font-weight: 700; letter-spacing: -0.02em; margin: 10px 0 0; }
+      h2 { font-size: 25px; font-weight: 650; letter-spacing: -0.01em; margin: 52px 0 14px; scroll-margin-top: 84px; }
+      h3 { font-size: 17px; font-weight: 600; margin: 26px 0 8px; }
+      p { color: var(--text); margin: 12px 0; max-width: 68ch; }
+      p.sub, li.sub { color: var(--text-2); }
+      ul, ol { margin: 12px 0 12px 22px; }
+      li { margin: 7px 0; max-width: 66ch; }
+      strong { font-weight: 600; }
+      hr { border: 0; border-top: 1px solid var(--border); margin: 40px 0; }
+      code { background: var(--elevated); border: 1px solid var(--border); border-radius: 5px; padding: 1.5px 6px; font-size: 13px; color: #cfd3da; }
+      pre { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; overflow-x: auto; margin: 14px 0; }
+      pre code { background: none; border: 0; padding: 0; font-size: 13px; color: #d7dbe2; }
+      .step { display: flex; gap: 14px; margin: 16px 0; }
+      .step .n { flex: none; width: 26px; height: 26px; border-radius: 50%; background: rgba(124,111,240,0.14); border: 1px solid var(--accent); color: #cfc8ff; font-size: 13px; font-weight: 600; display: grid; place-items: center; }
+      .step .b { flex: 1; }
+      .step .b > *:first-child { margin-top: 2px; }
+      .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 18px 20px; margin: 14px 0; }
+      .callout { border-radius: 10px; padding: 14px 16px; margin: 18px 0; border: 1px solid var(--border); background: var(--surface); font-size: 14.5px; }
+      .callout.info { border-color: rgba(124,111,240,0.4); background: rgba(124,111,240,0.07); }
+      .callout.warn { border-color: rgba(255,178,36,0.4); background: rgba(255,178,36,0.07); }
+      .callout .tag { font-weight: 600; margin-right: 6px; }
+      .callout.info .tag { color: #b8aeff; }
+      .callout.warn .tag { color: var(--warning); }
+      .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 16px 0; }
+      @media (max-width: 720px) { .grid2 { grid-template-columns: 1fr; } }
+      .card h3 { margin-top: 0; }
+      footer { border-top: 1px solid var(--border); padding: 30px 0; color: var(--text-3); font-size: 13.5px; }
+      footer .row { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+      footer a { color: var(--text-2); }
+      footer a:hover { color: var(--text); }
+      .pageicon { width: 64px; height: 64px; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,.45); margin-bottom: 18px; }
+    </style>
+  </head>
+  <body>
+    <div class="glow"></div>
+    <main>
+      <nav>
+        <div class="wrap row">
+          <a class="brand" href="./index.html"><img src="./vortspec-logo.png" alt="VortSpec" />VortSpec</a>
+          <span class="spacer"></span>
+          <div class="links">
+            <a href="./index.html" class="hide-sm">Home</a>
+            <a href="./guide.html" class="active">Usage Guide</a>
+            <a href="./troubleshooting.html">Troubleshooting</a>
+            <a class="btn btn-ide" href="https://github.com/royvillasana/VortSpec/releases/latest/download/VortSpec-IDE-mac-universal.dmg">Download the IDE</a>
+          </div>
+        </div>
+      </nav>
+
+      <div class="wrap doc">
+        <aside class="toc">
+          <h4>On this page</h4>
+          <a href="#what">What it is</a>
+          <a href="#requirements">Requirements</a>
+          <a href="#install">Install</a>
+          <a href="#first-run">First run &amp; checks</a>
+          <a href="#auto">What it installs for you</a>
+          <a href="#projects">Open a project</a>
+          <a href="#workflow">The workflow</a>
+          <a href="#ide">Around the IDE</a>
+          <a href="#figma">Connect Figma</a>
+          <a href="#privacy">Your data</a>
+        </aside>
+
+        <article>
+          <img class="pageicon" src="./vortspec-ide-icon.png" alt="VortSpec IDE" />
+          <span class="eyebrow">Usage Guide</span>
+          <h1>Using the VortSpec IDE</h1>
+          <p class="lede">VortSpec is a desktop cockpit over <strong>your own local Claude Code</strong>. It configures, launches, observes, and gates Claude Code runs so anyone can run a professional spec-driven design-to-code workflow. It never stores provider keys, proxies no model traffic, and sends no telemetry.</p>
+
+          <h2 id="what">What the IDE is</h2>
+          <p>A VS Code–style workbench: a file Explorer, a code editor, an integrated terminal, a live preview, a visual <strong>Run canvas</strong>, Source Control, and an assistant panel that is your Claude Code — grounded in the file you have open and always behind spec-first approval gates. The engine is the <code>claude</code> binary already installed on your machine, running under your own login.</p>
+
+          <h2 id="requirements">Requirements</h2>
+          <ul>
+            <li><strong>macOS</strong> — Apple Silicon or Intel (the current build is a universal binary).</li>
+            <li><strong>Node.js 20 or newer</strong> — used to run your project's dev server and installs.</li>
+            <li><strong>Git</strong> — for Source Control, cloning, and branch/commit history.</li>
+            <li><strong>Claude Code</strong>, installed and logged in — this is the engine. <span class="sub">You bring your own Claude; VortSpec adds no account and no keys.</span></li>
+            <li><strong>Figma</strong> — optional, only if you design from Figma sources.</li>
+          </ul>
+          <p class="sub">The IDE checks all of these for you on first run (next section) and gives you a one-click fix for anything missing.</p>
+
+          <h2 id="install">Install</h2>
+          <div class="step"><div class="n">1</div><div class="b"><p><strong>Download</strong> the IDE disk image and drag <strong>VortSpec IDE</strong> into your Applications folder.</p></div></div>
+          <div class="step"><div class="n">2</div><div class="b"><p><strong>First launch.</strong> The app isn't notarized yet, so macOS Gatekeeper blocks the first open. Clear it once, either way:</p>
+            <pre><code>xattr -cr "/Applications/VortSpec IDE.app"</code></pre>
+            <p class="sub">…or right-click the app → <strong>Open</strong>, then <strong>Open</strong> again; or System Settings → Privacy &amp; Security → <strong>Open Anyway</strong>.</p></div></div>
+          <div class="step"><div class="n">3</div><div class="b"><p><strong>Open it.</strong> You land on the welcome screen where you create, open, or clone a project — or open the bundled walk-through.</p></div></div>
+          <div class="callout info"><span class="tag">Note</span>See <a href="./troubleshooting.html#gatekeeper">Troubleshooting → First launch</a> if the app won't open.</div>
+
+          <h2 id="first-run">First run &amp; what gets validated</h2>
+          <p>VortSpec runs a quick, <strong>read-only</strong> environment scan. It never changes anything on its own — it only reports status and offers a fix. It checks:</p>
+          <div class="grid2">
+            <div class="card"><h3>Node.js</h3><p class="sub">Must be version 20 or newer. If missing or too old, VortSpec links you to the download.</p></div>
+            <div class="card"><h3>Git</h3><p class="sub">Required for Source Control and cloning. Missing → install link.</p></div>
+            <div class="card"><h3>Claude Code</h3><p class="sub">The engine. VortSpec runs <code>claude --version</code> to confirm it's installed and on your PATH.</p></div>
+            <div class="card"><h3>Claude Code login</h3><p class="sub">Verified only when you ask (it spends a tiny bit of your Claude usage), via a one-word headless probe — using your own login, never a bare API key.</p></div>
+            <div class="card"><h3>Figma MCP</h3><p class="sub">Optional. Checked with <code>claude mcp list</code> (no usage). Only needed for Figma design sources — a missing one is informational, not a failure.</p></div>
+          </div>
+          <p>Anything that isn't ready shows as a <strong>fix-it card</strong> with a next step (an install link, an "Open login", or a "Verify" button) — never a raw error. For exactly which of these can stop you and how to clear each, see <a href="./troubleshooting.html#blockers">Troubleshooting → Blockers</a>.</p>
+
+          <h2 id="auto">What VortSpec installs for you — with your permission</h2>
+          <p>VortSpec never installs system tools silently. The things it can set up for you, each on an explicit action:</p>
+          <ul>
+            <li><strong>Project dependencies.</strong> The first time you Run a project with no <code>node_modules</code>, VortSpec runs <code>npm install</code> (or your project's package manager) for you, then starts the dev server. Output streams live so you can see it.</li>
+            <li><strong>A <code>.env</code> file.</strong> If your project needs environment variables and ships a <code>.env.example</code>, VortSpec offers a one-click helper to create <code>.env</code> from it — it never invents secret values; you fill those in.</li>
+            <li><strong>The Figma connection (figma-cli).</strong> If you use Figma, VortSpec can install and connect <code>figma-cli</code> for you and walk you through enabling fast "yolo" mode. See <a href="#figma">Connect Figma</a>.</li>
+            <li><strong>The SDD-DE toolkit.</strong> Creating a new project scaffolds the Spec-Driven Design Engineering skills (<code>npx @royvillasana/sdd-de</code>) into the project so Claude Code can run the methodology.</li>
+          </ul>
+          <div class="callout info"><span class="tag">Your Claude, your machine</span>Everything happens in the folder you chose, using your own Claude Code login. VortSpec stores no keys and proxies no model traffic.</div>
+
+          <h2 id="projects">Open a project</h2>
+          <p>From the welcome screen or the <strong>File</strong> menu:</p>
+          <ul>
+            <li><strong>Create New Project</strong> — pick an empty folder and run the guided SDD-DE setup.</li>
+            <li><strong>Open Folder</strong> — open an existing project.</li>
+            <li><strong>Clone Repository</strong> — paste a Git URL; VortSpec clones it into a folder you choose.</li>
+            <li><strong>Open Walkthrough Project</strong> — a complete, correctly-structured SDD-DE reference project to learn from (dependencies install on first Run).</li>
+            <li><strong>Open Recent Projects</strong> — jump back into anything you've opened before.</li>
+          </ul>
+
+          <h2 id="workflow">The spec-driven workflow</h2>
+          <p>VortSpec follows the Spec-Driven Design Engineering (SDD-DE) cycle exactly as the CLI does. Generated artifacts — briefs, specs, plans, the design manifest — are <strong>gated</strong>: nothing advances to implementation, and no downstream files change, until you explicitly approve. You always have a one-click path to the raw form (the file, the terminal) behind every friendly view.</p>
+
+          <h2 id="ide">Around the IDE</h2>
+          <div class="grid2">
+            <div class="card"><h3>Editor &amp; Explorer</h3><p class="sub">A lazy file tree with per-type icons and a full code editor. Selections are surfaced to the assistant as grounding context.</p></div>
+            <div class="card"><h3>Terminal</h3><p class="sub">A real integrated terminal as a tab in the bottom panel — toggle with <code>Ctrl</code>+<code>`</code>.</p></div>
+            <div class="card"><h3>Live preview &amp; Run canvas</h3><p class="sub">Your running app beside the editor. The Run canvas is a Figma-style layer over the live app — <strong>Interact</strong> by default; switch to <strong>Inspect</strong> to edit tokens, spacing, variants, text, and colors visually.</p></div>
+            <div class="card"><h3>Source Control</h3><p class="sub">Stage, commit, branch, and a GitLens-style commit graph with branch/merge lanes.</p></div>
+            <div class="card"><h3>The assistant</h3><p class="sub">Your Claude Code with the whole tool surface — it sees your open file and preview, can act on the IDE, always behind the spec-first gates.</p></div>
+            <div class="card"><h3>Run Doctor</h3><p class="sub">If the dev server won't start, a one-click gated diagnosis uses Claude Code to find and fix the cause. See <a href="./troubleshooting.html#run">Troubleshooting</a>.</p></div>
+          </div>
+
+          <h2 id="figma">Connect Figma (optional)</h2>
+          <p>VortSpec's primary Figma link is the local <code>figma-cli</code>, which drives Figma Desktop directly with no token. In the Figma panel you can:</p>
+          <ul>
+            <li><strong>Let VortSpec install it</strong> if it isn't set up yet.</li>
+            <li>Enable <strong>yolo mode</strong> (fast, direct Chrome-DevTools patch of Figma Desktop). This needs macOS <strong>App Management</strong> permission for VortSpec — the panel has a button that opens the exact System Settings pane.</li>
+            <li>Or use <strong>safe mode</strong> (the MCP bridge / REST token) as a fallback.</li>
+          </ul>
+          <div class="callout info"><span class="tag">Optional</span>Skip this entirely if you don't design from Figma — it never blocks the IDE.</div>
+
+          <h2 id="privacy">Where your data lives</h2>
+          <p>Everything lives in your project folder as plain files. Flow state is derivable from those files plus the run log, so any run is cancelable and you can close and reopen mid-flow. Authentication, plan, and usage all belong to your own Claude Code install. VortSpec requires no account, stores no provider keys, and sends no telemetry without opt-in.</p>
+
+          <hr />
+          <p class="sub">Something not working? Head to the <a href="./troubleshooting.html">Troubleshooting &amp; first-run reference →</a></p>
+        </article>
+      </div>
+
+      <footer>
+        <div class="wrap row">
+          <a class="brand" href="./index.html" style="display:flex;align-items:center;gap:8px;color:var(--text)"><img src="./vortspec-logo.png" alt="" style="width:22px;height:22px" />VortSpec</a>
+          <span style="flex:1"></span>
+          <a href="./index.html">Home</a>
+          <a href="./guide.html">Usage Guide</a>
+          <a href="./troubleshooting.html">Troubleshooting</a>
+          <a href="https://github.com/royvillasana/VortSpec" target="_blank" rel="noopener">GitHub</a>
+        </div>
+      </footer>
+    </main>
+  </body>
+</html>
