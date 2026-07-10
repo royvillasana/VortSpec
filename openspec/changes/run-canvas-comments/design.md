@@ -4,6 +4,16 @@
 
 Anchor a comment to a **section of the live app** in the Run Canvas; store it **in the project's Git repo** so teammates see it on pull; **notify mentioned users by email** without a VortSpec server — by riding on the user's own GitHub. Must uphold: local-first, the user's own accounts, no keys/telemetry/proxy, framework-agnostic anchoring.
 
+## Decisions (confirmed 2026-07-11)
+
+All five §8 defaults were accepted:
+
+1. **Commit strategy** — comment files are committed on the **working branch** (they travel with the branch, like code).
+2. **Notification surface** — a @mention posts to the branch's **open PR if one exists, else a rolling issue** ("VortSpec review comments").
+3. **Mention source** — @mention autocomplete lists the repo's **collaborators**, falling back to **contributors** when that API is unavailable.
+4. **Auto-push vs manual** — posting **auto-commits** the single comment file but **does not push**; the user pushes via an explicit **Share** action (no surprise network writes).
+5. **Thumbnail capture** — pin thumbnails are a **webview `capturePage`** crop (no extra guest dependencies).
+
 ## 1. Anchoring a comment to a section
 
 A comment's anchor must resolve to "the same logical element" on **another machine, another render, another app version**. It reuses the **stable node identity** from Run-Canvas Phase 1 and adds resilience:

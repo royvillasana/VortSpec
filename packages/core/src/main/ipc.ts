@@ -35,6 +35,8 @@ import {
   restoreFiles,
 } from "./inspector/component-reader";
 import type { FileSnapshot } from "@vortspec/core/ipc";
+import { listThreads, upsertThread, resolveThread } from "./workspace/comment-store";
+import type { CommentThread } from "@vortspec/core/comment";
 import { getVerification } from "./inspector/verification-reader";
 import type { SetupAnswers } from "@vortspec/core/setup";
 import { startRun, cancelRun, hasActiveRun, getLastRun } from "./agent/run-manager";
@@ -312,6 +314,11 @@ const handlers: Record<IpcChannel, Handler> = {
     snapshotTokenScope(projectPath)) as Handler,
   "inspector:restoreFiles": ((req: { projectPath: string; files: FileSnapshot[] }) =>
     restoreFiles(req.projectPath, req.files).then(() => undefined)) as Handler,
+  "comments:list": ((projectPath: string) => listThreads(projectPath)) as Handler,
+  "comments:upsert": ((req: { projectPath: string; thread: CommentThread }) =>
+    upsertThread(req.projectPath, req.thread)) as Handler,
+  "comments:resolve": ((req: { projectPath: string; id: string; resolved: boolean }) =>
+    resolveThread(req.projectPath, req.id, req.resolved)) as Handler,
 };
 
 export function registerIpc(): void {

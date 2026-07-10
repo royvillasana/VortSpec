@@ -9,6 +9,7 @@
  * (`IpcResponse<channel>`), so they cannot drift from the handlers either.
  */
 import type { IpcResponse, StageStatus, SetupAnswers, FileSnapshot, Profile } from "./ipc";
+import type { CommentThread } from "./comment";
 import type { AgentRunOptions, AgentEventEnvelope, AgentRawEnvelope } from "./run-events";
 import type { DevServerUpdate } from "./dev-server";
 import type { WorkspaceChange } from "./fs";
@@ -144,6 +145,11 @@ export interface VortSpecApi {
   snapshotComponent(projectPath: string, file: string): Promise<IpcResponse<"inspector:snapshotComponent">>;
   snapshotTokenScope(projectPath: string): Promise<IpcResponse<"inspector:snapshotTokenScope">>;
   restoreFiles(projectPath: string, files: FileSnapshot[]): Promise<IpcResponse<"inspector:restoreFiles">>;
+
+  // run-canvas comments (repo-backed threads under .vortspec/comments/)
+  listComments(projectPath: string): Promise<IpcResponse<"comments:list">>;
+  upsertComment(projectPath: string, thread: CommentThread): Promise<IpcResponse<"comments:upsert">>;
+  resolveComment(projectPath: string, id: string, resolved: boolean): Promise<IpcResponse<"comments:resolve">>;
 
   // workspace filesystem (IDE)
   listDir(projectPath: string, relPath: string): Promise<IpcResponse<"workspace:listDir">>;

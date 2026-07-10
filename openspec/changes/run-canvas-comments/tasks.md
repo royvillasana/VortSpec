@@ -4,15 +4,15 @@
 
 ## Phase 0 — Decisions
 
-- [ ] Confirm the 5 open decisions in `design.md §8` (commit strategy, notification surface, mention source, auto-push, thumbnail capture). Record the choices at the top of `design.md`.
+- [x] Confirm the 5 open decisions in `design.md §8` (commit strategy, notification surface, mention source, auto-push, thumbnail capture). Record the choices at the top of `design.md`.
 
 ## Phase 1 — Schema + repo-backed store
 
-- [ ] Add `packages/core/src/shared/comment.ts`: zod schemas for `Anchor`, `CommentMessage`, `CommentThread`, and the mention/notify request/response shapes. Export types.
-- [ ] Add `packages/core/src/main/workspace/comment-store.ts`: `listThreads`, `upsertThread`, `resolveThread`, all resolving strictly inside `.vortspec/comments/` (reuse the `resolveInside` guard). One file per thread; messages append-only.
-- [ ] Register IPC channels `comments:list / comments:upsert / comments:resolve` (zod contract in `ipc.ts`), main handlers, preload wrappers, `VortSpecApi` methods, and the CT mock.
-- [ ] Vitest: store round-trips a thread, guards path traversal, and merges an appended message without clobbering.
-- [ ] **Done when:** a thread JSON can be written/read via IPC and lands under `.vortspec/comments/`.
+- [x] Add `packages/core/src/shared/comment.ts`: zod schemas for `Anchor`, `CommentMessage`, `CommentThread`, and the mention/notify request/response shapes. Export types. (+ `newCommentId`, `parseMentions`.)
+- [x] Add `packages/core/src/main/workspace/comment-store.ts`: `listThreads`, `upsertThread`, `resolveThread`, all resolving strictly inside `.vortspec/comments/` (reuse the `resolveInside` guard). One file per thread; messages append-only.
+- [x] Register IPC channels `comments:list / comments:upsert / comments:resolve` (zod contract in `ipc.ts`), main handlers, preload wrappers, `VortSpecApi` methods, and the CT mock (stateful in-memory store).
+- [x] Vitest: store round-trips a thread, guards path traversal, and merges an appended message without clobbering. (comment-store.test 8 + comment.test 5.)
+- [x] **Done when:** a thread JSON can be written/read via IPC and lands under `.vortspec/comments/`.
 
 ## Phase 2 — Anchoring + Comment mode + pins
 

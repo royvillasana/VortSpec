@@ -20,6 +20,7 @@ import { WORKSPACE_CHANGE_CHANNEL, type WorkspaceChange } from "@vortspec/core/f
 import { TERMINAL_DATA_CHANNEL, type TerminalData } from "@vortspec/core/terminal";
 import { IDE_ACTION_CHANNEL, type IdeState, type IdeAction, type IdeActionResult } from "@vortspec/core/ide-mcp";
 import type { FigmaCliMode } from "@vortspec/core/figma";
+import type { CommentThread } from "@vortspec/core/comment";
 import type { VortSpecApi } from "@vortspec/core/api";
 
 /**
@@ -224,6 +225,11 @@ const api: VortSpecApi = {
     invoke("inspector:snapshotTokenScope", projectPath),
   restoreFiles: (projectPath: string, files: FileSnapshot[]) =>
     invoke("inspector:restoreFiles", { projectPath, files }),
+  listComments: (projectPath: string) => invoke("comments:list", projectPath),
+  upsertComment: (projectPath: string, thread: CommentThread) =>
+    invoke("comments:upsert", { projectPath, thread }),
+  resolveComment: (projectPath: string, id: string, resolved: boolean) =>
+    invoke("comments:resolve", { projectPath, id, resolved }),
 };
 
 export type { VortSpecApi };

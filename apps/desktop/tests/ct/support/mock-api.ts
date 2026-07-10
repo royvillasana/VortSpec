@@ -6,6 +6,7 @@
  * or the real main process. Test-only: loose typing is intentional here.
  */
 import type { RunEvent } from "@vortspec/core/run-events";
+import type { CommentThread } from "@vortspec/core/comment";
 import type {
   InspectorTokensResult,
   InspectorComponentsResult,
@@ -44,6 +45,8 @@ export interface MockConfig {
   componentsAfterRun?: InspectorComponentsResult;
   /** Verification report returned by getVerification() — drives the verify outcome card. */
   verification?: VerificationResult;
+  /** Seed threads for the run-canvas comments store (list/upsert/resolve are stateful). */
+  comments?: CommentThread[];
   /** `--mcp-config` path returned by ideMcpConfigPath() (null keeps the bridge off). */
   ideMcpConfig?: { path: string } | null;
   /** Whether hasActiveRun() reports an in-flight run for the project (reconnect banner). */
@@ -138,6 +141,8 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
   const termSubs = new Set<(e: { id: string; data: string; exit?: number | null }) => void>();
   const ideActionSubs = new Set<(a: IdeAction) => void>();
   const ideResolutions: IdeActionResult[] = [];
+  // Stateful in-memory comment threads (seeded from cfg; list/upsert/resolve mutate it).
+  const comments: CommentThread[] = [...(cfg.comments ?? [])];
   // Records Explorer file operations (create/rename/trash) for assertions.
   const fsOps: { op: string; path: string; to?: string }[] = [];
   // Records URLs passed to openInstall (e.g. the Preview bar's Open Browser).
@@ -414,6 +419,26 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
     snapshotComponent: async () => [],
     snapshotTokenScope: async () => [],
     restoreFiles: async () => undefined,
+
+    // Stateful in-memory comment store (mirrors the repo-backed store's merge/append).
+    listComments: async () => [...comments].sort((a, b) => a.id.localeCompare(b.id)),
+    upsertComment: async (_p, thread) => {
+      const i = comments.findIndex((t) => t.id === thread.id);
+      const existing = i >= 0 ? comments[i] : null;
+      const seen = new Set((existing?.messages ?? []).map((m) => m.id));
+      const merged: CommentThread = existing
+        ? { ...existing, ...thread, messages: [...existing.messages, ...thread.messages.filter((m) => !seen.has(m.id))] }
+        : thread;
+      if (i >= 0) comments[i] = merged;
+      else comments.push(merged);
+      return { thread: merged, path: `.vortspec/comments/${thread.id}.json` };
+    },
+    resolveComment: async (_p, id, resolved) => {
+      const i = comments.findIndex((t) => t.id === id);
+      if (i < 0) return null;
+      comments[i] = { ...comments[i], resolved, updatedAt: comments[i].updatedAt };
+      return { thread: comments[i], path: `.vortspec/comments/${id}.json` };
+    },
   };
 
   (window as unknown as { vortspec: unknown }).vortspec = api;
