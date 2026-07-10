@@ -230,6 +230,9 @@ const api: VortSpecApi = {
     invoke("comments:upsert", { projectPath, thread }),
   resolveComment: (projectPath: string, id: string, resolved: boolean) =>
     invoke("comments:resolve", { projectPath, id, resolved }),
+  commentCollaborators: (projectPath: string) => invoke("comments:collaborators", projectPath),
+  notifyComment: (projectPath: string, threadId: string, messageId: string) =>
+    invoke("comments:notify", { projectPath, threadId, messageId }),
 };
 
 export type { VortSpecApi };

@@ -32,7 +32,7 @@ import { flowSchema, stageStatusSchema, runHistoryResultSchema } from "./flow";
 import { devServerStatusSchema } from "./dev-server";
 import { manifestResultSchema, manifestVersionsResultSchema } from "./manifest";
 import { updateInfoSchema } from "./update";
-import { commentThreadSchema } from "./comment";
+import { commentThreadSchema, commentCollaboratorSchema, notifyResultSchema } from "./comment";
 
 export type { DevServerStatus, DevServerState, DevServerUpdate } from "./dev-server";
 export { DEV_SERVER_UPDATE_CHANNEL, devServerUpdateSchema } from "./dev-server";
@@ -545,6 +545,14 @@ export const ipcContract = {
   "comments:resolve": {
     request: z.object({ projectPath: z.string(), id: z.string(), resolved: z.boolean() }),
     response: z.object({ thread: commentThreadSchema, path: z.string() }).nullable(),
+  },
+  "comments:collaborators": {
+    request: z.string(),
+    response: z.array(commentCollaboratorSchema),
+  },
+  "comments:notify": {
+    request: z.object({ projectPath: z.string(), threadId: z.string(), messageId: z.string() }),
+    response: notifyResultSchema,
   },
 } as const;
 

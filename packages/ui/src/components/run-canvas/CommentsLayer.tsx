@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { JSX } from "react";
-import type { CommentThread } from "@vortspec/core/comment";
+import type { CommentThread, CommentCollaborator } from "@vortspec/core/comment";
 import type { Rect } from "@vortspec/core/ipc";
 import { Markdown } from "../Markdown";
 
@@ -20,6 +20,11 @@ export interface CommentsLayerProps {
   /** A pending new-thread anchor from a comment-mode click, or null. */
   target: { fingerprint: string; label: string; component: string | null; rect: Rect } | null;
   activeId: string | null;
+  /** @mention autocomplete candidates. */
+  collaborators?: CommentCollaborator[];
+  /** The last notify outcome (success note or fix-it), shown as a dismissible toast. */
+  notice?: { ok: boolean; text: string } | null;
+  onClearNotice?: () => void;
   onSelectThread: (id: string | null) => void;
   onCreate: (body: string) => void;
   onReply: (threadId: string, body: string) => void;
@@ -33,6 +38,9 @@ export function CommentsLayer({
   anchorRects,
   target,
   activeId,
+  collaborators = [],
+  notice = null,
+  onClearNotice,
   onSelectThread,
   onCreate,
   onReply,
@@ -80,6 +88,7 @@ export function CommentsLayer({
             autoFocus
             placeholder="Leave feedback… use @name to notify"
             submitLabel="Comment"
+            collaborators={collaborators}
             onSubmit={(body) => onCreate(body)}
             onCancel={onCancelTarget}
           />
@@ -89,8 +98,25 @@ export function CommentsLayer({
       {/* The open thread's popover, next to its pin (or centered if unanchored). */}
       {active && !target && (
         <PopoverCard rect={rectFor(active)} zoom={zoom}>
-          <ThreadView thread={active} number={numberOf.get(active.id) ?? 0} onReply={onReply} onResolve={onResolve} onClose={() => onSelectThread(null)} />
+          <ThreadView
+            thread={active}
+            number={numberOf.get(active.id) ?? 0}
+            collaborators={collaborators}
+            onReply={onReply}
+            onResolve={onResolve}
+            onClose={() => onSelectThread(null)}
+          />
         </PopoverCard>
+      )}
+
+      {/* Notify outcome (e.g. "Notified on GitHub" or "connect GitHub to notify"). */}
+      {notice && (
+        <div className="pointer-events-auto absolute bottom-3 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-md border border-vs-border-default bg-vs-bg-elevated px-3 py-1.5 text-[11px] shadow">
+          <span className={notice.ok ? "text-vs-text-secondary" : "text-vs-warning"}>{notice.text}</span>
+          <button className="rounded px-1 text-vs-text-muted hover:bg-vs-bg-hover" onClick={onClearNotice} aria-label="Dismiss">
+            ✕
+          </button>
+        </div>
       )}
 
       {/* Unanchored rail — threads whose element isn't on screen / this route. */}
@@ -137,12 +163,14 @@ function PopoverCard({ rect, zoom, children }: { rect: Rect | null; zoom: number
 function ThreadView({
   thread,
   number,
+  collaborators,
   onReply,
   onResolve,
   onClose,
 }: {
   thread: CommentThread;
   number: number;
+  collaborators: CommentCollaborator[];
   onReply: (id: string, body: string) => void;
   onResolve: (id: string, resolved: boolean) => void;
   onClose: () => void;
@@ -168,6 +196,16 @@ function ThreadView({
             <div className="text-[12px] leading-snug text-vs-text-primary [&_p]:m-0">
               <Markdown text={m.body} />
             </div>
+            {m.notified?.github && (
+              <a
+                href={m.notified.github.url}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-0.5 inline-block text-[10px] text-vs-accent hover:underline"
+              >
+                Notified on GitHub ↗
+              </a>
+            )}
           </li>
         ))}
       </ul>
@@ -180,46 +218,91 @@ function ThreadView({
           {thread.resolved ? "Reopen" : "Resolve"}
         </button>
       </div>
-      <Composer placeholder="Reply… use @name to notify" submitLabel="Reply" onSubmit={(body) => onReply(thread.id, body)} />
+      <Composer
+        placeholder="Reply… use @name to notify"
+        submitLabel="Reply"
+        collaborators={collaborators}
+        onSubmit={(body) => onReply(thread.id, body)}
+      />
     </div>
   );
 }
 
-/** A small textarea + submit; Enter (no shift) submits, Escape cancels. */
+/**
+ * A small textarea + submit with @mention autocomplete. Typing `@` filters the
+ * repo collaborators; picking one (click or Enter) inserts `@login`. Enter (no
+ * shift) submits when the picker is closed; Escape cancels.
+ */
 function Composer({
   placeholder,
   submitLabel,
   autoFocus = false,
+  collaborators = [],
   onSubmit,
   onCancel,
 }: {
   placeholder: string;
   submitLabel: string;
   autoFocus?: boolean;
+  collaborators?: CommentCollaborator[];
   onSubmit: (body: string) => void;
   onCancel?: () => void;
 }): JSX.Element {
   const [draft, setDraft] = useState("");
+  const [caret, setCaret] = useState(0);
   const ref = useRef<HTMLTextAreaElement | null>(null);
   useEffect(() => {
     if (autoFocus) ref.current?.focus();
   }, [autoFocus]);
+
+  // The `@partial` handle being typed at the caret (or null), and its matches.
+  const upToCaret = draft.slice(0, caret);
+  const mention = /(?:^|\s)@([A-Za-z\d-]*)$/.exec(upToCaret);
+  const query = mention ? mention[1].toLowerCase() : null;
+  const suggestions =
+    query !== null
+      ? collaborators
+          .filter((c) => c.login.toLowerCase().includes(query) || (c.name ?? "").toLowerCase().includes(query))
+          .slice(0, 6)
+      : [];
+
+  const insertMention = (login: string): void => {
+    const at = upToCaret.lastIndexOf("@");
+    const next = `${draft.slice(0, at)}@${login} ${draft.slice(caret)}`;
+    const pos = at + login.length + 2;
+    setDraft(next);
+    setCaret(pos);
+    requestAnimationFrame(() => {
+      ref.current?.focus();
+      ref.current?.setSelectionRange(pos, pos);
+    });
+  };
+
   const submit = (): void => {
     const body = draft.trim();
     if (!body) return;
     onSubmit(body);
     setDraft("");
+    setCaret(0);
   };
+  const syncCaret = (el: HTMLTextAreaElement): void => setCaret(el.selectionStart ?? el.value.length);
+
   return (
-    <div className="flex flex-col gap-1.5">
+    <div className="relative flex flex-col gap-1.5">
       <textarea
         ref={ref}
         value={draft}
-        onChange={(e) => setDraft(e.target.value)}
+        onChange={(e) => {
+          setDraft(e.target.value);
+          syncCaret(e.target);
+        }}
+        onClick={(e) => syncCaret(e.currentTarget)}
+        onKeyUp={(e) => syncCaret(e.currentTarget)}
         onKeyDown={(e) => {
           if (e.key === "Enter" && !e.shiftKey) {
             e.preventDefault();
-            submit();
+            if (suggestions.length > 0) insertMention(suggestions[0].login);
+            else submit();
           } else if (e.key === "Escape") {
             onCancel?.();
           }
@@ -228,6 +311,22 @@ function Composer({
         placeholder={placeholder}
         className="w-full resize-none rounded border border-vs-border-default bg-vs-bg-surface px-2 py-1 text-[12px] text-vs-text-primary outline-none focus:border-vs-accent"
       />
+      {suggestions.length > 0 && (
+        <ul className="absolute left-0 right-0 top-full z-10 mt-1 max-h-40 overflow-y-auto rounded-md border border-vs-border-default bg-vs-bg-elevated py-1 shadow-2xl">
+          {suggestions.map((c) => (
+            <li key={c.login}>
+              <button
+                type="button"
+                onClick={() => insertMention(c.login)}
+                className="flex w-full items-center gap-2 px-2.5 py-1 text-left text-[11px] hover:bg-vs-bg-hover"
+              >
+                <span className="font-medium text-vs-text-primary">@{c.login}</span>
+                {c.name && <span className="truncate text-vs-text-muted">{c.name}</span>}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
       <div className="flex items-center justify-end gap-1.5">
         {onCancel && (
           <button type="button" onClick={onCancel} className="rounded px-2 py-0.5 text-[11px] text-vs-text-secondary hover:bg-vs-bg-hover">

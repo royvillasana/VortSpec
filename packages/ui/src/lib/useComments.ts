@@ -5,6 +5,7 @@ import {
   parseMentions,
   type CommentThread,
   type CommentMessage,
+  type CommentCollaborator,
   type Anchor,
 } from "@vortspec/core/comment";
 
@@ -21,6 +22,11 @@ export interface CommentsController {
   activeId: string | null;
   setActiveId: (id: string | null) => void;
   author: { name: string; githubLogin: string | null };
+  /** Repo collaborators for @mention autocomplete (empty when not a GitHub repo). */
+  collaborators: CommentCollaborator[];
+  /** The outcome of the last mention-notify (a success note or a fix-it), or null. */
+  notice: { ok: boolean; text: string } | null;
+  clearNotice: () => void;
   create: (anchor: Anchor, body: string) => Promise<CommentThread | null>;
   reply: (threadId: string, body: string) => Promise<void>;
   setResolved: (threadId: string, resolved: boolean) => Promise<void>;
@@ -37,6 +43,8 @@ export function useComments(
     name: "You",
     githubLogin: null,
   });
+  const [collaborators, setCollaborators] = useState<CommentCollaborator[]>([]);
+  const [notice, setNotice] = useState<{ ok: boolean; text: string } | null>(null);
 
   // Author = the profile name + the active GitHub account (best-effort, never blocks).
   useEffect(() => {
@@ -67,6 +75,30 @@ export function useComments(
   useEffect(() => {
     void reload();
   }, [reload]);
+
+  // @mention candidates (repo collaborators/contributors), best-effort.
+  useEffect(() => {
+    let alive = true;
+    void api
+      .commentCollaborators(projectPath)
+      .then((c) => alive && setCollaborators(c))
+      .catch(() => alive && setCollaborators([]));
+    return () => {
+      alive = false;
+    };
+  }, [projectPath]);
+
+  // After a post with @mentions, notify via GitHub and surface the outcome.
+  const notifyIfMentioned = useCallback(
+    async (threadId: string, message: CommentMessage) => {
+      if (message.mentions.length === 0) return;
+      const res = await api.notifyComment(projectPath, threadId, message.id).catch(() => null);
+      if (!res) return;
+      setNotice(res.notified ? { ok: true, text: "Notified on GitHub." } : { ok: false, text: res.reason ?? "Could not notify." });
+      if (res.notified) void reload(); // pick up the stored receipt
+    },
+    [projectPath, reload],
+  );
 
   // Keep the guest tracking every thread's anchor so pins get live rects.
   useEffect(() => {
@@ -103,18 +135,20 @@ export function useComments(
     async (anchor: Anchor, body: string): Promise<CommentThread | null> => {
       if (!body.trim()) return null;
       const now = new Date().toISOString();
+      const msg = mkMessage(body);
       const saved = await persist({
         id: newCommentId(),
         anchor,
         createdAt: now,
         updatedAt: now,
         resolved: false,
-        messages: [mkMessage(body)],
+        messages: [msg],
       });
       setActiveId(saved.id);
+      void notifyIfMentioned(saved.id, msg);
       return saved;
     },
-    [persist, mkMessage],
+    [persist, mkMessage, notifyIfMentioned],
   );
 
   const reply = useCallback(
@@ -122,9 +156,11 @@ export function useComments(
       if (!body.trim()) return;
       const t = threads.find((x) => x.id === threadId);
       if (!t) return;
-      await persist({ ...t, updatedAt: new Date().toISOString(), messages: [...t.messages, mkMessage(body)] });
+      const msg = mkMessage(body);
+      await persist({ ...t, updatedAt: new Date().toISOString(), messages: [...t.messages, msg] });
+      void notifyIfMentioned(threadId, msg);
     },
-    [threads, persist, mkMessage],
+    [threads, persist, mkMessage, notifyIfMentioned],
   );
 
   const setResolved = useCallback(
@@ -135,5 +171,17 @@ export function useComments(
     [projectPath],
   );
 
-  return { threads, activeId, setActiveId, author, create, reply, setResolved, reload };
+  return {
+    threads,
+    activeId,
+    setActiveId,
+    author,
+    collaborators,
+    notice,
+    clearNotice: useCallback(() => setNotice(null), []),
+    create,
+    reply,
+    setResolved,
+    reload,
+  };
 }

@@ -6,7 +6,7 @@
  * or the real main process. Test-only: loose typing is intentional here.
  */
 import type { RunEvent } from "@vortspec/core/run-events";
-import type { CommentThread } from "@vortspec/core/comment";
+import type { CommentThread, CommentCollaborator } from "@vortspec/core/comment";
 import type {
   InspectorTokensResult,
   InspectorComponentsResult,
@@ -47,6 +47,8 @@ export interface MockConfig {
   verification?: VerificationResult;
   /** Seed threads for the run-canvas comments store (list/upsert/resolve are stateful). */
   comments?: CommentThread[];
+  /** @mention autocomplete candidates returned by commentCollaborators(). */
+  collaborators?: CommentCollaborator[];
   /** `--mcp-config` path returned by ideMcpConfigPath() (null keeps the bridge off). */
   ideMcpConfig?: { path: string } | null;
   /** Whether hasActiveRun() reports an in-flight run for the project (reconnect banner). */
@@ -439,6 +441,8 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
       comments[i] = { ...comments[i], resolved, updatedAt: comments[i].updatedAt };
       return { thread: comments[i], path: `.vortspec/comments/${id}.json` };
     },
+    commentCollaborators: async () => cfg.collaborators ?? [],
+    notifyComment: async () => ({ notified: false, reason: "GitHub not connected in tests." }),
   };
 
   (window as unknown as { vortspec: unknown }).vortspec = api;

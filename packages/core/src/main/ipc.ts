@@ -36,6 +36,7 @@ import {
 } from "./inspector/component-reader";
 import type { FileSnapshot } from "@vortspec/core/ipc";
 import { listThreads, upsertThread, resolveThread } from "./workspace/comment-store";
+import { collaborators, notify } from "./workspace/comment-mentions";
 import type { CommentThread } from "@vortspec/core/comment";
 import { getVerification } from "./inspector/verification-reader";
 import type { SetupAnswers } from "@vortspec/core/setup";
@@ -319,6 +320,9 @@ const handlers: Record<IpcChannel, Handler> = {
     upsertThread(req.projectPath, req.thread)) as Handler,
   "comments:resolve": ((req: { projectPath: string; id: string; resolved: boolean }) =>
     resolveThread(req.projectPath, req.id, req.resolved)) as Handler,
+  "comments:collaborators": ((projectPath: string) => collaborators(projectPath)) as Handler,
+  "comments:notify": ((req: { projectPath: string; threadId: string; messageId: string }) =>
+    notify(req.projectPath, req.threadId, req.messageId)) as Handler,
 };
 
 export function registerIpc(): void {

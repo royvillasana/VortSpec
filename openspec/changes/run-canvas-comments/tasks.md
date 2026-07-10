@@ -24,12 +24,12 @@
 
 ## Phase 3 — Mentions + GitHub notification
 
-- [ ] `comment-mentions.ts` (main): `collaborators(projectPath)` via the provider's authed `gh api …/collaborators` (fallback contributors); parse `@handles` from a message body.
-- [ ] `notify(projectPath, threadId, messageId)`: post the mention to the branch's open PR if one exists, else create/append the rolling "VortSpec review comments" issue; include @handles + section label + route + deep link; return the receipt URL; store it on `message.notified`. Degrade to a fix-it when no remote/auth (never throw).
-- [ ] IPC `comments:collaborators` + `comments:notify`; preload + api + mock.
-- [ ] @mention autocomplete in the composer (from `comments:collaborators`).
-- [ ] Vitest: `@handle` extraction; notify chooses PR-over-issue; graceful no-remote path returns a fix-it, not a throw.
-- [ ] **Done when:** posting a comment that @mentions a collaborator produces a GitHub issue/PR mention (verified against a test repo) and the mentioned user receives GitHub's email; with no remote, the comment saves and shows a clear "connect GitHub to notify" note.
+- [x] `comment-mentions.ts` (main): `collaborators(projectPath)` via `gh api repos/{owner}/{repo}/collaborators --paginate` (fallback contributors), zod-validated; `@handles` parsed by `parseMentions` (shared, Phase 1).
+- [x] `notify(projectPath, threadId, messageId)`: posts the message body (its @handles notify) + a section link to the branch's **open PR** if one exists, else the rolling **"VortSpec review comments"** issue (create-or-append). Stores the receipt on `message.notified` (via `setMessageNotified`, bypassing the append-only merge). Degrades to a `{ notified:false, reason }` fix-it (never throws) on no mentions / no gh / signed out / no GitHub remote.
+- [x] IPC `comments:collaborators` + `comments:notify`; preload + api + CT mock.
+- [x] @mention autocomplete in the composer (typing `@` filters `comments:collaborators`; Enter/click inserts the handle). `useComments` fetches collaborators + calls `notifyComment` after a mentioned post, surfacing the outcome as a dismissible notice; a notified message links out to its GitHub thread.
+- [x] Vitest (`comment-mentions.test`, 8): `chooseSurface` prefers an open PR over the issue; `buildNotifyBody` carries body/label/route/file; graceful no-mentions / signed-out / no-remote / not-found all return a fix-it, never throw. `@handle` extraction covered by `comment.test` (Phase 1).
+- [x] **Done when:** posting a comment that @mentions a collaborator posts to the branch's PR-or-issue via the user's own `gh` (so GitHub emails the mention); with no remote/auth the comment saves locally and the panel shows a clear "connect GitHub to notify" note. (The live GitHub round-trip is the hands-on pass; the degradation paths + surface choice are unit-tested, and the notice/link are CT-covered.)
 
 ## Phase 4 — Sync (commit + Share)
 

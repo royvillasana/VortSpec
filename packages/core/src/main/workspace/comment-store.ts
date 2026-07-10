@@ -1,7 +1,12 @@
 import { readFile, writeFile, readdir, mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { resolveInside } from "./fs-workspace";
-import { commentThreadSchema, type CommentThread, type CommentMessage } from "@vortspec/core/comment";
+import {
+  commentThreadSchema,
+  type CommentThread,
+  type CommentMessage,
+  type NotifyReceipt,
+} from "@vortspec/core/comment";
 
 /**
  * Repo-backed comment store (change: run-canvas-comments).
@@ -91,6 +96,26 @@ export async function upsertThread(
     : thread;
   const path = await writeThread(root, merged);
   return { thread: merged, path };
+}
+
+/**
+ * Stamp a notification receipt onto an existing message (a metadata update that
+ * bypasses the append-only merge). Null if the thread/message doesn't exist.
+ */
+export async function setMessageNotified(
+  root: string,
+  threadId: string,
+  messageId: string,
+  notified: NotifyReceipt,
+): Promise<CommentThread | null> {
+  const existing = await readThread(root, threadId);
+  if (!existing || !existing.messages.some((m) => m.id === messageId)) return null;
+  const next: CommentThread = {
+    ...existing,
+    messages: existing.messages.map((m) => (m.id === messageId ? { ...m, notified } : m)),
+  };
+  await writeThread(root, next);
+  return next;
 }
 
 /** Flip a thread's resolved state (stamping `updatedAt`); null if it doesn't exist. */

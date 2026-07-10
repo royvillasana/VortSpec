@@ -85,6 +85,82 @@ test("clicking the pin (active thread) shows the message + a resolve toggle", as
   await expect(c.getByRole("button", { name: "Resolve" })).toBeVisible();
 });
 
+test("@mention autocomplete filters collaborators and inserts the handle", async ({ mount }) => {
+  const c = await mount(
+    <CommentsLayer
+      zoom={1}
+      threads={[]}
+      anchorRects={{}}
+      target={{ fingerprint: "fp", label: "Card", component: "Card", rect: { x: 10, y: 10, width: 100, height: 40 } }}
+      activeId={null}
+      collaborators={[
+        { login: "ana", name: "Ana Reyes", avatar: null },
+        { login: "bob", name: "Bob Lin", avatar: null },
+      ]}
+      onSelectThread={noop}
+      onCreate={noop}
+      onReply={noop}
+      onResolve={noop}
+      onCancelTarget={noop}
+    />,
+  );
+  const box = c.getByRole("textbox");
+  await box.fill("please @a");
+  await expect(c.getByRole("button", { name: /@ana/ })).toBeVisible();
+  await c.getByRole("button", { name: /@ana/ }).click();
+  await expect(box).toHaveValue("please @ana ");
+});
+
+test("the notify outcome is shown as a dismissible notice", async ({ mount }) => {
+  const c = await mount(
+    <CommentsLayer
+      zoom={1}
+      threads={[]}
+      anchorRects={{}}
+      target={null}
+      activeId={null}
+      notice={{ ok: false, text: "Sign in to GitHub to notify @mentions." }}
+      onSelectThread={noop}
+      onCreate={noop}
+      onReply={noop}
+      onResolve={noop}
+      onCancelTarget={noop}
+    />,
+  );
+  await expect(c.getByText(/Sign in to GitHub to notify/)).toBeVisible();
+});
+
+test("a notified message links out to its GitHub thread", async ({ mount }) => {
+  const notified = thread({
+    messages: [
+      {
+        id: "m1",
+        author: { name: "Ana", githubLogin: "ana" },
+        body: "@bob take a look",
+        mentions: ["bob"],
+        createdAt: "2026-07-11T00:00:00.000Z",
+        notified: { github: { issue: 42, url: "https://github.com/o/r/issues/42" } },
+      },
+    ],
+  });
+  const c = await mount(
+    <CommentsLayer
+      zoom={1}
+      threads={[notified]}
+      anchorRects={{ "header:1>button:2": { x: 40, y: 20, width: 80, height: 30 } }}
+      target={null}
+      activeId="t1abc-000"
+      onSelectThread={noop}
+      onCreate={noop}
+      onReply={noop}
+      onResolve={noop}
+      onCancelTarget={noop}
+    />,
+  );
+  const link = c.getByRole("link", { name: /Notified on GitHub/ });
+  await expect(link).toHaveAttribute("href", "https://github.com/o/r/issues/42");
+});
+
 test("a thread whose anchor is lost drops to the unanchored rail, not a pin", async ({ mount }) => {
   const c = await mount(
     <CommentsLayer

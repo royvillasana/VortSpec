@@ -150,6 +150,10 @@ export interface VortSpecApi {
   listComments(projectPath: string): Promise<IpcResponse<"comments:list">>;
   upsertComment(projectPath: string, thread: CommentThread): Promise<IpcResponse<"comments:upsert">>;
   resolveComment(projectPath: string, id: string, resolved: boolean): Promise<IpcResponse<"comments:resolve">>;
+  /** Repo collaborators/contributors for the @mention autocomplete. */
+  commentCollaborators(projectPath: string): Promise<IpcResponse<"comments:collaborators">>;
+  /** Notify a message's @mentions via the user's GitHub; returns a receipt or a fix-it. */
+  notifyComment(projectPath: string, threadId: string, messageId: string): Promise<IpcResponse<"comments:notify">>;
 
   // workspace filesystem (IDE)
   listDir(projectPath: string, relPath: string): Promise<IpcResponse<"workspace:listDir">>;
