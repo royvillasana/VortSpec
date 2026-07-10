@@ -23,6 +23,7 @@ import {
 } from "../components/run-canvas/pending";
 import { useInspectorBridge } from "../lib/useInspectorBridge";
 import { useAgentRun } from "../lib/useAgentRun";
+import { routedModel } from "../lib/model-routing";
 import { RunDoctor, type DoctorState } from "../components/run-canvas/RunDoctor";
 import { buildDoctorPrompt, relFileFromSource } from "../components/run-canvas/doctor";
 
@@ -436,6 +437,11 @@ export function RunApp({
           cwd: project.path,
           allowedTools: ["Read", "Edit", "Write"],
           bypassPermissions: true,
+          // A visual-edit apply reads/edits one source file — it needs no MCP, so
+          // skip the user's global MCP servers (Figma, etc.) to cut session startup,
+          // and route the mechanical patch to a faster tier than the default.
+          strictMcp: true,
+          model: routedModel("sonnet"),
         });
         // Completion (reload + review) is handled by the effect below.
       } else {

@@ -104,6 +104,14 @@ export const agentRunOptionsSchema = z.object({
    */
   mcpConfigPath: z.string().optional(),
   /**
+   * Load ONLY the `--mcp-config` servers, ignoring the user's globally-configured
+   * MCP servers (`--strict-mcp-config`). Used for small, self-contained source
+   * edits (the Run-canvas Apply) that only need Read/Edit/Write — skipping the
+   * user's Figma/other MCP connections removes most of the session-startup cost.
+   * Independent of `--bare`: skills, CLAUDE.md, and the user's login still load.
+   */
+  strictMcp: z.boolean().optional(),
+  /**
    * Renderer-supplied labels persisted with the run so an interrupted run can be
    * resumed later with its original stage view (kind) and scope (total). Opaque
    * to the main process except for persistence.
