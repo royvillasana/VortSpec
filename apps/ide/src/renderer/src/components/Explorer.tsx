@@ -16,6 +16,7 @@ export function Explorer({
   onOpen,
   onCollapse,
   openCount = 0,
+  newFileSignal = 0,
 }: {
   project: Project;
   activePath: string | null;
@@ -24,6 +25,8 @@ export function Explorer({
   onCollapse?: () => void;
   /** Number of currently-open files — shown as a badge by the "Explorer" header. */
   openCount?: number;
+  /** Bumped by File → New to start a new-file input at the workspace root. */
+  newFileSignal?: number;
 }): JSX.Element {
   const [tree, setTree] = useState<Record<string, FsEntry[]>>({});
   // Inline new-file/new-folder input under a parent dir ("" = root).
@@ -71,6 +74,15 @@ export function Explorer({
       void api.unwatchWorkspace(project.path);
     };
   }, [project.path, loadDir]);
+
+  // File → New (native menu): start a new-file input at the workspace root.
+  useEffect(() => {
+    if (newFileSignal <= 0) return;
+    setMenu(null);
+    setError(null);
+    setExpanded((p) => new Set(p).add(""));
+    setCreating({ parent: "", type: "file" });
+  }, [newFileSignal]);
 
   function toggle(dir: string): void {
     setExpanded((prev) => {

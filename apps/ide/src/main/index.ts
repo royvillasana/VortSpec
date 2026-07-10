@@ -2,6 +2,18 @@ import { app, shell, BrowserWindow } from "electron";
 import { join } from "path";
 import { electronApp, optimizer, is } from "@electron-toolkit/utils";
 import { registerIpc, stopAllDevServers, stopAllWatchers, stopAllTerminals, stopIdeMcp, fixGuiPath } from "@vortspec/core/main";
+import { installMenu } from "./menu";
+
+// Show "VortSpec IDE" in the menu bar / About / Quit instead of Electron's
+// default. Renaming the app moves userData (appData/<name>), which would strand
+// a user's recent-projects list and profile. Pin userData to the pre-rename
+// folder — productName when packaged, the package name in dev — so nothing is
+// lost (both resolve to "VortSpec IDE" / "@vortspec/ide" as before).
+app.setPath(
+  "userData",
+  join(app.getPath("appData"), app.isPackaged ? "VortSpec IDE" : "@vortspec/ide"),
+);
+app.setName("VortSpec IDE");
 
 /**
  * VortSpec IDE — main process (electron-vite).
@@ -54,6 +66,16 @@ function createWindow(): void {
 app.whenReady().then(async () => {
   electronApp.setAppUserModelId("com.vortspec.ide");
 
+  // In dev the Dock shows Electron's icon (packaged builds use the bundled
+  // .icns). Point the Dock at the app icon so the running dev app is branded.
+  if (is.dev && process.platform === "darwin") {
+    try {
+      app.dock?.setIcon(join(app.getAppPath(), "build", "icon.png"));
+    } catch {
+      // Non-fatal — the Dock just keeps the default icon.
+    }
+  }
+
   app.on("browser-window-created", (_, window) => {
     optimizer.watchWindowShortcuts(window);
   });
@@ -63,6 +85,7 @@ app.whenReady().then(async () => {
   await fixGuiPath();
 
   registerIpc();
+  installMenu({ createWindow });
   createWindow();
 
   app.on("activate", () => {

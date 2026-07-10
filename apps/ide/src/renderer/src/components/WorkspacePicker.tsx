@@ -15,10 +15,16 @@ import { Logo } from "@vortspec/ui/Logo";
 export function WorkspacePicker({
   onOpen,
   onCreateProject,
+  autoClone = false,
+  onCloneShown,
 }: {
   onOpen: (project: Project) => void;
   /** Start the "Create New Project" flow (folder pick → setup wizard). */
   onCreateProject: () => void;
+  /** Open the clone quick-input on mount (File → Clone Repository from the menu). */
+  autoClone?: boolean;
+  /** Called once the clone input has been auto-opened, so the intent can reset. */
+  onCloneShown?: () => void;
 }): JSX.Element {
   const [recent, setRecent] = useState<Project[] | null>(null);
   const [busy, setBusy] = useState(false);
@@ -37,6 +43,14 @@ export function WorkspacePicker({
       .then(setRecent)
       .catch(() => setRecent([]));
   }, []);
+
+  // File → Clone Repository (native menu) lands here — open the clone input.
+  useEffect(() => {
+    if (!autoClone) return;
+    setCloneErr("");
+    setCloneOpen(true);
+    onCloneShown?.();
+  }, [autoClone, onCloneShown]);
 
   async function openFolder(): Promise<void> {
     setBusy(true);
