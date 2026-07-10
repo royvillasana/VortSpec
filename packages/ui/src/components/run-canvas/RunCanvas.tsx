@@ -1,8 +1,9 @@
 import { createElement, useEffect, useRef, useState } from "react";
 import type { JSX } from "react";
 import type { Rect } from "@vortspec/core/ipc";
-import type { InspectorBridge } from "../../lib/useInspectorBridge";
+import type { InspectorBridge, CanvasMode } from "../../lib/useInspectorBridge";
 import { SpacingOverlay } from "./SpacingOverlay";
+import { CommentsLayer, type CommentsLayerProps } from "./CommentsLayer";
 
 const px = (s?: string): number => Math.max(0, parseFloat(s ?? "") || 0);
 
@@ -26,12 +27,13 @@ export function RunCanvas({
   onLiveEdit,
   onCommitEdit,
   onSendToChat,
+  comments,
 }: {
   src: string;
   guestPreloadUrl: string | null;
   bridge: InspectorBridge;
   /** Input mode — driven from the sidebar Layers header. */
-  mode: "inspect" | "interact";
+  mode: CanvasMode;
   /** Zoom factor — driven from the sidebar Layers footer. */
   zoom: number;
   /** Apply a CSS override live (per animation frame while dragging a handle). */
@@ -40,6 +42,8 @@ export function RunCanvas({
   onCommitEdit?: (edits: { key: string; value: string; cssProps: string[] }[]) => void;
   /** Send the current selection to the assistant chat (from the right-click menu). */
   onSendToChat?: () => void;
+  /** Comment threads + handlers; the pins/composer render in comment mode. */
+  comments?: Omit<CommentsLayerProps, "zoom">;
 }): JSX.Element {
   // Optimistic rectangle while dragging a handle — drives the overlay instantly
   // instead of waiting for the guest's geometry echo (the source of the lag).
@@ -146,6 +150,11 @@ export function RunCanvas({
           )}
         </div>
       </div>
+
+      {/* Comment pins + composer/threads — screen-space so they stay a constant size. */}
+      {mode === "comment" && comments && (
+        <CommentsLayer {...comments} zoom={zoom} />
+      )}
 
       {/* Right-click context menu on an element (Send to chat, …). */}
       {bridge.contextMenu && (

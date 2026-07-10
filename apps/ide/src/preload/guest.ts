@@ -99,7 +99,7 @@ const classOverrides = new Map<string, ClassOverride>();
 const textOverrides = new Map<string, { applied: string; original: string }>();
 let selectedId: string | null = null;
 /** Input mode: `interact` (default) lets the app work; `inspect` intercepts hover/click to select. */
-let mode: "inspect" | "interact" = "interact";
+let mode: "inspect" | "interact" | "comment" = "interact";
 
 function send(event: BridgeEvent): void {
   ipcRenderer.sendToHost(INSPECTOR_BRIDGE_CHANNEL, event);
@@ -345,6 +345,35 @@ function emitGeometry(id: string): void {
   if (el) send({ t: "geometry", nodeId: id, rect: rectOf(el) });
 }
 
+// ── Comment anchors (change: run-canvas-comments, Phase 2) ─────────────────────
+/** Fingerprints of pinned comments we resolve to live rects for the overlay. */
+let watchedFingerprints: string[] = [];
+
+/** Resolve a stored anchor fingerprint to its current element (via the last scan). */
+function resolveFingerprint(fp: string): Element | undefined {
+  const uid = fpToUid.get(fp);
+  return uid ? byId.get(uid) : undefined;
+}
+
+/** A human label for an element — its component name, else tag + an id/class hint. */
+function labelFor(el: Element): string {
+  const base = el.getAttribute("data-component") ?? el.tagName.toLowerCase();
+  const idAttr = el.getAttribute("id");
+  const cls = classesOf(el)[0];
+  return idAttr ? `${base} #${idAttr}` : cls ? `${base} .${cls}` : base;
+}
+
+/** Stream the live rect of every watched anchor (null = its element is currently gone). */
+function emitAnchorRects(): void {
+  if (watchedFingerprints.length === 0) return;
+  const rects: Record<string, ReturnType<typeof rectOf> | null> = {};
+  for (const fp of watchedFingerprints) {
+    const el = resolveFingerprint(fp);
+    rects[fp] = el ? rectOf(el) : null;
+  }
+  send({ t: "anchorRects", rects });
+}
+
 /**
  * Rescan the DOM (re-acquiring uids by fingerprint), rebroadcast the tree, and
  * re-lock the selection: if the selected node re-acquired a live element, echo its
@@ -355,6 +384,7 @@ function emitGeometry(id: string): void {
 function rebuildAndReacquire(): void {
   send({ t: "tree", tree: buildTree() });
   reapplyOverrides(); // a re-render reset the DOM — re-paint our ephemeral edits
+  emitAnchorRects(); // pins re-resolve to their (possibly moved) elements
   if (!selectedId) return;
   const el = resolve(selectedId);
   if (el) {
@@ -423,6 +453,10 @@ function handleCommand(cmd: BridgeCommand): void {
       }
       return;
     }
+    case "watchAnchors":
+      watchedFingerprints = cmd.fingerprints;
+      emitAnchorRects();
+      return;
   }
 }
 
@@ -449,7 +483,8 @@ function attach(): void {
   window.addEventListener(
     "pointermove",
     (e: PointerEvent) => {
-      if (mode !== "inspect" || rafPending) return;
+      // Hover feedback in both inspect and comment mode (so the user sees the target).
+      if ((mode !== "inspect" && mode !== "comment") || rafPending) return;
       rafPending = true;
       requestAnimationFrame(() => {
         rafPending = false;
@@ -465,22 +500,35 @@ function attach(): void {
   window.addEventListener(
     "pointerdown",
     (e: PointerEvent) => {
-      if (mode !== "inspect") return;
+      if (mode !== "inspect" && mode !== "comment") return;
       const id = idUnder(e.target);
       if (id === null) return;
       e.preventDefault();
       e.stopPropagation();
-      selectedId = id;
       const el = resolve(id);
-      if (el) send({ t: "readout", readout: readoutOf(el, id) });
+      if (!el) return;
+      if (mode === "comment") {
+        // Anchor a new comment to this element (fingerprint re-locates it later).
+        send({
+          t: "commentTarget",
+          nodeId: id,
+          fingerprint: fingerprintFor(el),
+          label: labelFor(el),
+          component: el.getAttribute("data-component"),
+          rect: rectOf(el),
+        });
+        return;
+      }
+      selectedId = id;
+      send({ t: "readout", readout: readoutOf(el, id) });
     },
     { capture: true },
   );
-  // Swallow the follow-up click so an inspected control doesn't also activate.
+  // Swallow the follow-up click so an inspected/commented control doesn't also activate.
   window.addEventListener(
     "click",
     (e: MouseEvent) => {
-      if (mode !== "inspect") return;
+      if (mode !== "inspect" && mode !== "comment") return;
       if (idUnder(e.target) !== null) {
         e.preventDefault();
         e.stopPropagation();
@@ -566,6 +614,7 @@ function attach(): void {
     requestAnimationFrame(() => {
       geomPending = false;
       if (selectedId) emitGeometry(selectedId);
+      emitAnchorRects(); // keep comment pins aligned with their sections too
     });
   };
   window.addEventListener("scroll", flushGeometry, { passive: true, capture: true });

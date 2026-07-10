@@ -21,7 +21,10 @@ import {
   isTokenBinding,
   type PendingEdit,
 } from "../components/run-canvas/pending";
-import { useInspectorBridge } from "../lib/useInspectorBridge";
+import { useInspectorBridge, type CanvasMode } from "../lib/useInspectorBridge";
+import { useComments } from "../lib/useComments";
+import { CommentsLayer } from "../components/run-canvas/CommentsLayer";
+import type { Anchor } from "@vortspec/core/comment";
 import { useAgentRun } from "../lib/useAgentRun";
 import { routedModel } from "../lib/model-routing";
 import { RunDoctor, type DoctorState } from "../components/run-canvas/RunDoctor";
@@ -202,7 +205,7 @@ export function RunApp({
   // Canvas controls now live in the sidebar (Layers header + footer), so their
   // state is lifted here where both the Design panel and the canvas can read it.
   // Default to Interact so the app just works; switch to Inspect to edit.
-  const [mode, setMode] = useState<"inspect" | "interact">("interact");
+  const [mode, setMode] = useState<CanvasMode>("interact");
   const [zoom, setZoom] = useState(1);
   const zoomBy = useCallback((f: number) => setZoom((z) => Math.min(4, Math.max(0.25, z * f))), []);
   const resetZoom = useCallback(() => setZoom(1), []);
@@ -272,8 +275,33 @@ export function RunApp({
 
   // Push the current mode to the guest whenever it (or readiness) changes.
   useEffect(() => {
-    if (bridge.ready) setGuestMode(mode === "inspect" ? "inspect" : "interact");
+    if (bridge.ready) setGuestMode(mode);
   }, [mode, bridge.ready, setGuestMode]);
+
+  // Run-canvas comments (repo-backed threads pinned to sections).
+  const comments = useComments(project.path, bridge.watchAnchors);
+  const { create: createComment, reply: replyComment, setResolved: resolveComment } = comments;
+  const { commentTarget, clearCommentTarget, captureThumbnail } = bridge;
+  // Post a new thread from the pending comment-mode target (adds its thumbnail).
+  const onCreateComment = useCallback(
+    async (body: string) => {
+      const t = commentTarget;
+      if (!t) return;
+      const thumbnail = await captureThumbnail(t.rect);
+      const anchor: Anchor = {
+        fingerprint: t.fingerprint,
+        component: t.component,
+        file: null,
+        label: t.label,
+        rectHint: { x: t.rect.x, y: t.rect.y, w: t.rect.width, h: t.rect.height },
+        thumbnail,
+        route: null,
+      };
+      await createComment(anchor, body);
+      clearCommentTarget();
+    },
+    [commentTarget, captureThumbnail, createComment, clearCommentTarget],
+  );
   const selectedIdRef = useRef(bridge.selectedId);
   selectedIdRef.current = bridge.selectedId;
   const selectionRef = useRef(selection);
@@ -695,6 +723,17 @@ export function RunApp({
                       ? () => onSendToChat(buildSelectionContext(selection, Object.values(pending)), selection.file)
                       : undefined
                   }
+                  comments={{
+                    threads: comments.threads,
+                    anchorRects: bridge.anchorRects,
+                    target: commentTarget,
+                    activeId: comments.activeId,
+                    onSelectThread: comments.setActiveId,
+                    onCreate: (body) => void onCreateComment(body),
+                    onReply: (id, body) => void replyComment(id, body),
+                    onResolve: (id, resolved) => void resolveComment(id, resolved),
+                    onCancelTarget: clearCommentTarget,
+                  }}
                 />
               </div>
               {bridge.runtimeError && !doctorDismissed && (

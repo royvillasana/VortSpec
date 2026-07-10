@@ -186,9 +186,16 @@ export const bridgeCommandSchema = z.discriminatedUnion("t", [
   z.object({ t: z.literal("hoverNode"), nodeId: z.string().nullable() }),
   /**
    * Toggle guest input handling: `inspect` intercepts hover/click to drive
-   * selection from the canvas; `interact` lets clicks reach the app normally.
+   * selection from the canvas; `interact` lets clicks reach the app normally;
+   * `comment` intercepts a click to anchor a new comment to the target element.
    */
-  z.object({ t: z.literal("setMode"), mode: z.enum(["inspect", "interact"]) }),
+  z.object({ t: z.literal("setMode"), mode: z.enum(["inspect", "interact", "comment"]) }),
+  /**
+   * Track these comment-anchor fingerprints — the guest resolves each to a live
+   * rect and streams `anchorRects` (re-emitting on scroll/resize/re-render) so pins
+   * stay on their sections. Send `[]` to stop watching.
+   */
+  z.object({ t: z.literal("watchAnchors"), fingerprints: z.array(z.string()) }),
   /** Apply an ephemeral CSS override to a node (instant preview; nothing written). */
   z.object({
     t: z.literal("applyOverride"),
@@ -233,6 +240,17 @@ export const bridgeEventSchema = z.discriminatedUnion("t", [
   z.object({ t: z.literal("contextMenu"), nodeId: z.string(), x: z.number(), y: z.number() }),
   /** The selected node could not be re-acquired after a re-render (its element is gone). */
   z.object({ t: z.literal("selectionLost"), nodeId: z.string() }),
+  /** A comment-mode click on an element — the anchor to pin a new comment thread to. */
+  z.object({
+    t: z.literal("commentTarget"),
+    nodeId: z.string(),
+    fingerprint: z.string(),
+    label: z.string(),
+    component: z.string().nullable(),
+    rect: rectSchema,
+  }),
+  /** Live rects for the watched comment anchors (fingerprint → rect, null = lost). */
+  z.object({ t: z.literal("anchorRects"), rects: z.record(z.string(), rectSchema.nullable()) }),
 ]);
 export type BridgeEvent = z.infer<typeof bridgeEventSchema>;
 

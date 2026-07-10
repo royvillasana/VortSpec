@@ -9,6 +9,7 @@ import type {
   InspectorToken,
 } from "@vortspec/core/ipc";
 import { NodeTree } from "./NodeTree";
+import type { CanvasMode } from "../../lib/useInspectorBridge";
 import type { PendingEdit } from "./pending";
 import { matchTokenName, tokenNameFromVar, tokensForField } from "./compose";
 import { ColorTokenField, type ColorToken } from "./ColorPicker";
@@ -75,8 +76,8 @@ export function DesignPanel({
   onKeep?: () => void;
   onRevert?: () => void;
   /** Canvas input mode (Inspect / Interact) — shown beside the Layers label. */
-  mode?: "inspect" | "interact";
-  onModeChange?: (mode: "inspect" | "interact") => void;
+  mode?: CanvasMode;
+  onModeChange?: (mode: CanvasMode) => void;
   /** Canvas zoom — controls sit at the bottom of the Layers region. */
   zoom?: number;
   onZoomBy?: (factor: number) => void;
@@ -332,8 +333,8 @@ function LayersRegion({
   hoveredId?: string | null;
   onSelectNode: (id: string) => void;
   onHoverNode?: (id: string | null) => void;
-  mode: "inspect" | "interact";
-  onModeChange?: (mode: "inspect" | "interact") => void;
+  mode: CanvasMode;
+  onModeChange?: (mode: CanvasMode) => void;
   zoom: number;
   onZoomBy?: (factor: number) => void;
   onZoomReset?: () => void;
@@ -353,6 +354,7 @@ function LayersRegion({
         <div className="ml-auto flex overflow-hidden rounded border border-vs-border-default text-[10px]">
           <ModeBtn active={mode === "inspect"} onClick={() => onModeChange?.("inspect")} label="Inspect" />
           <ModeBtn active={mode === "interact"} onClick={() => onModeChange?.("interact")} label="Interact" />
+          <ModeBtn active={mode === "comment"} onClick={() => onModeChange?.("comment")} label="Comment" />
         </div>
       </div>
       {open && (

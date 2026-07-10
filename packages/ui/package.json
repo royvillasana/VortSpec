@@ -113,6 +113,10 @@
       "types": "./src/components/run-canvas/DesignPanel.tsx",
       "default": "./src/components/run-canvas/DesignPanel.tsx"
     },
+    "./CommentsLayer": {
+      "types": "./src/components/run-canvas/CommentsLayer.tsx",
+      "default": "./src/components/run-canvas/CommentsLayer.tsx"
+    },
     "./NodeTree": {
       "types": "./src/components/run-canvas/NodeTree.tsx",
       "default": "./src/components/run-canvas/NodeTree.tsx"

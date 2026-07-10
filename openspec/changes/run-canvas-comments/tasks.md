@@ -16,11 +16,11 @@
 
 ## Phase 2 — Anchoring + Comment mode + pins
 
-- [ ] Guest: add `resolveAnchor(fingerprint)` (reuse the Phase-1 resolver) and a `captureAnchor(nodeId)` that returns `{ fingerprint, rect, thumbnail, label }` (thumbnail via webview `capturePage` crop). Emit these on demand over the bridge (schema in `inspector-bridge.ts`).
-- [ ] `RunCanvas.tsx`: add **Comment mode** to the mode toggle; in Comment mode a click resolves the target and opens a new-thread composer anchored to it. Render existing pins on the overlay (same transform as hover/select) as numbered bubbles; unresolved anchors go to an "unanchored" rail with their thumbnails.
-- [ ] `CommentThread` popover: messages (render via `Markdown`), a composer, Resolve/Reopen. Post → `comments:upsert` (+ commit, Phase 4).
-- [ ] Playwright/CT: enter Comment mode, drop a pin on a fixtured element, assert the thread + pin persist and re-anchor after a re-render (uses the Phase-1 fixture).
-- [ ] **Done when:** a user can pin a comment to a live element, reopen the app, and the pin is still on it (or in the unanchored rail with its thumbnail).
+- [x] Guest: `resolveFingerprint(fp)` (reuses the Phase-1 fpToUid→byId maps) + streams `anchorRects` for watched fingerprints (re-emitted on scroll/resize/rebuild). A comment-mode click emits `commentTarget` `{ nodeId, fingerprint, label, component, rect }`; the **thumbnail is captured host-side** via `bridge.captureThumbnail` (webview `capturePage` crop, per decision #5 — `capturePage` is a host API, not available to the guest). Schema in `inspector-bridge.ts` (`setMode` += comment, `watchAnchors`, `commentTarget`, `anchorRects`).
+- [x] `RunCanvas.tsx`: **Comment mode** in the mode toggle; a comment-mode click opens a new-thread composer anchored to the target. `CommentsLayer` renders pins as numbered bubbles (screen-space, constant size) at the streamed rects; unresolved anchors go to the "unanchored" rail with their thumbnails.
+- [x] `CommentThread` popover: messages via `Markdown`, a composer, Resolve/Reopen. Post → `comments:upsert` (via `useComments`; auto-commit is Phase 4).
+- [x] Playwright/CT (`comments.ct`): comment-mode composer posts a thread; a pin renders at its rect; the popover shows the message + Resolve; a lost anchor drops to the unanchored rail; **the pin re-anchors when the guest re-emits a moved rect** (post re-render). 5 tests.
+- [x] **Done when:** a user can pin a comment to a live element; the pin follows it (streamed rects), survives a re-render (re-anchor test), and a lost anchor keeps its thumbnail in the rail. Live reopen persists via the Phase-1 store.
 
 ## Phase 3 — Mentions + GitHub notification
 

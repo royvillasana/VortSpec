@@ -13,6 +13,9 @@ interface WebviewEl extends HTMLElement {
   send(channel: string, ...args: unknown[]): void;
   reload(): void;
 }
+
+/** Canvas input mode: select (inspect), use the app (interact), or pin a comment. */
+export type CanvasMode = "inspect" | "interact" | "comment";
 type WebviewIpcEvent = Event & { channel: string; args: unknown[] };
 
 export interface InspectorBridge {
@@ -47,8 +50,17 @@ export interface InspectorBridge {
   setClass: (id: string, remove: string[], add: string[]) => void;
   select: (id: string | null) => void;
   hover: (id: string | null) => void;
-  /** Toggle guest input handling between selecting (inspect) and using the app (interact). */
-  setMode: (mode: "inspect" | "interact") => void;
+  /** Toggle guest input handling: inspect (select), interact (use the app), comment (pin). */
+  setMode: (mode: CanvasMode) => void;
+  /** A comment-mode click's anchor payload (the target to pin a new thread to), or null. */
+  commentTarget: { nodeId: string; fingerprint: string; label: string; component: string | null; rect: Rect } | null;
+  clearCommentTarget: () => void;
+  /** Live rects of the watched comment anchors (fingerprint → rect, null = currently lost). */
+  anchorRects: Record<string, Rect | null>;
+  /** Tell the guest which anchor fingerprints to track (for pin placement). */
+  watchAnchors: (fingerprints: string[]) => void;
+  /** Capture a ~160px thumbnail of a guest rect (webview capturePage crop); "" if unavailable. */
+  captureThumbnail: (rect: Rect) => Promise<string>;
   applyOverride: (id: string, css: Record<string, string>) => void;
   clearOverride: (id?: string) => void;
   /** Re-request the selected node's readout so the panel reflects its actual state
@@ -81,6 +93,8 @@ export function useInspectorBridge(): InspectorBridge {
   const [textEdited, setTextEdited] = useState<InspectorBridge["textEdited"]>(null);
   const [contextMenu, setContextMenu] = useState<InspectorBridge["contextMenu"]>(null);
   const [selectionLost, setSelectionLost] = useState(false);
+  const [commentTarget, setCommentTarget] = useState<InspectorBridge["commentTarget"]>(null);
+  const [anchorRects, setAnchorRects] = useState<Record<string, Rect | null>>({});
 
   const send = useCallback((cmd: BridgeCommand) => {
     webviewRef.current?.send(INSPECTOR_BRIDGE_CHANNEL, cmd);
@@ -131,6 +145,18 @@ export function useInspectorBridge(): InspectorBridge {
         setSelectedId((cur) => (cur === event.nodeId ? null : cur));
         setReadout((r) => (r?.nodeId === event.nodeId ? null : r));
         setSelectionLost(true);
+        return;
+      case "commentTarget":
+        setCommentTarget({
+          nodeId: event.nodeId,
+          fingerprint: event.fingerprint,
+          label: event.label,
+          component: event.component,
+          rect: event.rect,
+        });
+        return;
+      case "anchorRects":
+        setAnchorRects(event.rects);
         return;
     }
   }, []);
@@ -185,9 +211,31 @@ export function useInspectorBridge(): InspectorBridge {
   );
 
   const setMode = useCallback(
-    (mode: "inspect" | "interact") => send({ t: "setMode", mode }),
+    (mode: CanvasMode) => send({ t: "setMode", mode }),
     [send],
   );
+  const watchAnchors = useCallback((fingerprints: string[]) => send({ t: "watchAnchors", fingerprints }), [send]);
+  const captureThumbnail = useCallback(async (rect: Rect): Promise<string> => {
+    // Electron <webview>.capturePage(rect) → NativeImage; downscale to a thumbnail.
+    const wv = webviewRef.current as unknown as {
+      capturePage?: (r: { x: number; y: number; width: number; height: number }) => Promise<{
+        toDataURL: () => string;
+        resize: (o: { width: number }) => { toDataURL: () => string };
+      }>;
+    } | null;
+    if (!wv?.capturePage || rect.width < 1 || rect.height < 1) return "";
+    try {
+      const img = await wv.capturePage({
+        x: Math.round(rect.x),
+        y: Math.round(rect.y),
+        width: Math.round(rect.width),
+        height: Math.round(rect.height),
+      });
+      return img.resize({ width: 160 }).toDataURL();
+    } catch {
+      return "";
+    }
+  }, []);
 
   const setText = useCallback((id: string, text: string) => send({ t: "setText", nodeId: id, text }), [send]);
   const setClass = useCallback(
@@ -231,6 +279,11 @@ export function useInspectorBridge(): InspectorBridge {
     clearContextMenu: useCallback(() => setContextMenu(null), []),
     selectionLost,
     clearSelectionLost: useCallback(() => setSelectionLost(false), []),
+    commentTarget,
+    clearCommentTarget: useCallback(() => setCommentTarget(null), []),
+    anchorRects,
+    watchAnchors,
+    captureThumbnail,
     setText,
     setClass,
     select,
