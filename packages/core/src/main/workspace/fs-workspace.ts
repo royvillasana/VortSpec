@@ -1,5 +1,6 @@
 import { promises as fsp, watch, type FSWatcher } from "node:fs";
 import { resolve, sep } from "node:path";
+import { homedir } from "node:os";
 import type { WebContents } from "electron";
 import {
   WORKSPACE_CHANGE_CHANNEL,
@@ -121,6 +122,44 @@ export async function readFile(root: string, rel: string): Promise<FsFile> {
   return { path: rel, content: buf.toString("utf8"), truncated: false };
 }
 
+/** Previewable image extensions → MIME type for the Explorer image preview. */
+const IMAGE_MIME: Record<string, string> = {
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  gif: "image/gif",
+  webp: "image/webp",
+  svg: "image/svg+xml",
+  bmp: "image/bmp",
+  ico: "image/x-icon",
+  avif: "image/avif",
+};
+/** Cap for inlining an image as a data URL (base64 inflates ~1.37×). */
+const MAX_ASSET_BYTES = 12_000_000;
+
+/** Whether `rel` is a previewable image by extension. */
+export function isImagePath(rel: string): boolean {
+  const ext = rel.slice(rel.lastIndexOf(".") + 1).toLowerCase();
+  return ext in IMAGE_MIME;
+}
+
+/**
+ * Read a previewable image as a `data:` URL for the Explorer preview. Returns
+ * `dataUrl: null` for a non-image, and `tooLarge: true` for an oversized one —
+ * never throws for those, so the caller can show a friendly placeholder.
+ */
+export async function readAsset(root: string, rel: string): Promise<{ dataUrl: string | null; tooLarge: boolean }> {
+  const ext = rel.slice(rel.lastIndexOf(".") + 1).toLowerCase();
+  const mime = IMAGE_MIME[ext];
+  if (!mime) return { dataUrl: null, tooLarge: false };
+  const abs = resolveInside(root, rel);
+  const stat = await fsp.stat(abs);
+  if (stat.isDirectory()) return { dataUrl: null, tooLarge: false };
+  if (stat.size > MAX_ASSET_BYTES) return { dataUrl: null, tooLarge: true };
+  const buf = await fsp.readFile(abs);
+  return { dataUrl: `data:${mime};base64,${buf.toString("base64")}`, tooLarge: false };
+}
+
 export async function writeFile(root: string, rel: string, content: string): Promise<FsWriteResult> {
   try {
     const abs = resolveInside(root, rel);
@@ -197,8 +236,24 @@ export async function trashPath(root: string, rel: string): Promise<FsWriteResul
 
 const watchers = new Map<string, FSWatcher>();
 
+/**
+ * A recursive `fs.watch` on macOS is an FSEvents subtree watch. If the root is
+ * the home directory (or an ancestor like `/` or `/Users`), that subtree spans
+ * macOS-protected areas — `~/Desktop`, `~/Documents`, and the Apple Music
+ * library at `~/Music/Music` — and macOS prompts for each. A project is never
+ * legitimately that broad, so we decline to recursively watch such roots (the
+ * Explorer just falls back to manual refresh) rather than trip permission prompts.
+ */
+export function isTooBroadToWatch(root: string): boolean {
+  const abs = resolve(root);
+  const home = resolve(homedir());
+  // `abs` is the home dir itself, or an ancestor of it (`/`, `/Users`).
+  return abs === home || home.startsWith(abs + sep) || abs === sep;
+}
+
 export function startWatch(sender: WebContents, root: string): void {
   if (watchers.has(root)) return;
+  if (isTooBroadToWatch(root)) return;
   try {
     const w = watch(root, { recursive: true }, (event, filename) => {
       if (!filename) {

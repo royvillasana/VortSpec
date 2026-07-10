@@ -306,6 +306,12 @@ export const ipcContract = {
     request: z.object({ projectPath: z.string(), relPath: z.string() }),
     response: fsFileSchema,
   },
+  // Read an image/asset as a `data:` URL for the Explorer preview (null when the
+  // file isn't a previewable image, or is too large).
+  "workspace:readAsset": {
+    request: z.object({ projectPath: z.string(), relPath: z.string() }),
+    response: z.object({ dataUrl: z.string().nullable(), tooLarge: z.boolean() }),
+  },
   "workspace:searchFiles": {
     request: z.object({ projectPath: z.string(), query: z.string(), limit: z.number().optional() }),
     response: z.array(fsEntrySchema),

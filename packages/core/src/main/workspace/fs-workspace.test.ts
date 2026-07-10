@@ -2,8 +2,10 @@ import { describe, expect, it, beforeEach, afterEach } from "vitest";
 import { mkdtemp, rm, mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { resolveInside, readFile, searchFiles, createFile, createDir, renamePath } from "./fs-workspace";
+import { resolveInside, isTooBroadToWatch, readFile, searchFiles, createFile, createDir, renamePath } from "./fs-workspace";
 import { readFile as fsRead } from "node:fs/promises";
+import { homedir } from "node:os";
+import { dirname } from "node:path";
 
 describe("resolveInside (workspace-root path guard)", () => {
   const root = "/Users/dev/project";
@@ -34,6 +36,21 @@ describe("resolveInside (workspace-root path guard)", () => {
   it("does not treat a sibling with the same prefix as inside", () => {
     // /Users/dev/project-2 shares the "project" prefix but is not inside.
     expect(() => resolveInside(root, "../project-2/x")).toThrow(/escapes/);
+  });
+});
+
+describe("isTooBroadToWatch (avoid FSEvents sweeping protected folders)", () => {
+  const home = homedir();
+
+  it("refuses the home directory and its ancestors (they span ~/Music, ~/Documents, …)", () => {
+    expect(isTooBroadToWatch(home)).toBe(true);
+    expect(isTooBroadToWatch(dirname(home))).toBe(true); // e.g. /Users
+    expect(isTooBroadToWatch("/")).toBe(true);
+  });
+
+  it("allows normal project folders inside home", () => {
+    expect(isTooBroadToWatch(`${home}/VortSpec`)).toBe(false);
+    expect(isTooBroadToWatch(`${home}/Desktop/my-app`)).toBe(false);
   });
 });
 

@@ -102,7 +102,15 @@ function tailMessage(prefix: string, raw: string): string {
 
 // NO_COLOR asks tools (picocolors/vite) not to emit ANSI; urlFrom still strips
 // any that slip through. CI keeps installs/servers non-interactive.
-const STEP_ENV: NodeJS.ProcessEnv = { ...process.env, NO_COLOR: "1", FORCE_COLOR: "0", BROWSER: "none", CI: "1" };
+//
+// Built fresh per spawn (NOT a module-level constant): `fixGuiPath()` repairs
+// `process.env.PATH` in `whenReady`, which runs AFTER this module is imported.
+// Snapshotting at import time would freeze the minimal GUI PATH a Finder launch
+// starts with, so `npm`/`pnpm` (often under nvm) wouldn't be found even after
+// the PATH was fixed. Reading process.env at spawn time picks up the repair.
+function stepEnv(): NodeJS.ProcessEnv {
+  return { ...process.env, NO_COLOR: "1", FORCE_COLOR: "0", BROWSER: "none", CI: "1" };
+}
 
 /**
  * Spawn one step — a dependency install or the dev script — streaming its
@@ -124,7 +132,7 @@ function runStep(
   let url: string | null = null;
   let child: ChildProcess;
   try {
-    child = spawn(cmd, args, { cwd: projectPath, shell: false, env: STEP_ENV });
+    child = spawn(cmd, args, { cwd: projectPath, shell: false, env: stepEnv() });
   } catch (err) {
     onDone({ code: -1, signal: false, tail: err instanceof Error ? err.message : String(err), url: null });
     return;

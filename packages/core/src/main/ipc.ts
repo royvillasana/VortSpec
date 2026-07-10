@@ -129,6 +129,8 @@ const handlers: Record<IpcChannel, Handler> = {
     fsw.listDir(r.projectPath, r.relPath)) as Handler,
   "workspace:readFile": ((r: { projectPath: string; relPath: string }) =>
     fsw.readFile(r.projectPath, r.relPath)) as Handler,
+  "workspace:readAsset": ((r: { projectPath: string; relPath: string }) =>
+    fsw.readAsset(r.projectPath, r.relPath)) as Handler,
   "workspace:searchFiles": ((r: { projectPath: string; query: string; limit?: number }) =>
     fsw.searchFiles(r.projectPath, r.query, r.limit)) as Handler,
   "workspace:createFile": ((r: { projectPath: string; relPath: string }) =>

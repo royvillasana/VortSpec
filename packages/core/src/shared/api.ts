@@ -148,6 +148,7 @@ export interface VortSpecApi {
   // workspace filesystem (IDE)
   listDir(projectPath: string, relPath: string): Promise<IpcResponse<"workspace:listDir">>;
   readFile(projectPath: string, relPath: string): Promise<IpcResponse<"workspace:readFile">>;
+  readAsset(projectPath: string, relPath: string): Promise<IpcResponse<"workspace:readAsset">>;
   /** Fuzzy-search workspace files + folders (for the composer's @-mention picker). */
   searchFiles(projectPath: string, query: string, limit?: number): Promise<IpcResponse<"workspace:searchFiles">>;
   /** Create an empty file (Explorer "New File"). */
