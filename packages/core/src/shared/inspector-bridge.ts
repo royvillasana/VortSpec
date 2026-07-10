@@ -89,7 +89,8 @@ export const fieldKindSchema = z.enum([
   "length", // px/rem numeric with unit (padding, radius, gap, size)
   "color", // a color swatch + value
   "number", // unitless number (opacity, rotation)
-  "select", // an enumerated dropdown (flow, variant options, blend mode)
+  "select", // an enumerated dropdown (variant options, blend mode)
+  "segment", // an inline segmented button group (flow: block/row/column)
   "text", // free text
   "toggle", // boolean
   "align", // a Figma-style 3×3 auto-layout alignment grid (value `"<x>|<y>"`)
@@ -111,6 +112,10 @@ export const sectionFieldSchema = z.object({
   value: z.string(),
   /** Owning design-token name when token-backed, else null. */
   token: z.string().nullable().default(null),
+  /** Token category this field binds to (`spacing`/`radius`/`typography`), so the
+   *  panel can offer the right variables and re-recognize a token when the value
+   *  changes. Absent for fields that never bind a token (margins, opacity, …). */
+  tokenType: z.string().optional(),
   /** Options for a `select` field (variant options, blend modes, …). */
   options: z.array(z.string()).default([]),
   /** Unit hint for a `length` field (`px`, `rem`, …). */

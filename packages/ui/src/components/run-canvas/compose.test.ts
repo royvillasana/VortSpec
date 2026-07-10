@@ -1,6 +1,24 @@
 import { describe, it, expect } from "vitest";
-import { resembleComponent } from "./compose";
+import { resembleComponent, matchTokenName } from "./compose";
 import type { InspectorComponent } from "@vortspec/core/ipc";
+
+describe("matchTokenName", () => {
+  const tokens = [
+    { name: "spacing-0", resolvedValue: "0px", type: "spacing" },
+    { name: "spacing-4", resolvedValue: "16px", type: "spacing" },
+    { name: "radius-md", resolvedValue: "16px", type: "radius" },
+  ];
+  it("matches a value to a token of the requested type", () => {
+    expect(matchTokenName("16px", tokens, "spacing")).toBe("spacing-4");
+    expect(matchTokenName("16px", tokens, "radius")).toBe("radius-md");
+  });
+  it("is null for a literal that matches no token (detach)", () => {
+    expect(matchTokenName("15px", tokens, "spacing")).toBeNull();
+  });
+  it("normalizes whitespace/case before comparing", () => {
+    expect(matchTokenName(" 0PX ", tokens, "spacing")).toBe("spacing-0");
+  });
+});
 
 const button: InspectorComponent = {
   name: "Button",

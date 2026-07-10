@@ -25,6 +25,12 @@ export interface PendingEdit {
   shared: boolean;
   /** CSS properties a `style` edit maps to (for the run prompt). */
   cssProps: string[];
+  /** The exact live override this edit applies — lets a single edit be removed
+   *  and the rest re-applied on top of the restored original. Style edits only. */
+  css?: Record<string, string>;
+  /** Class swap a `variant` edit applies live (to re-preview after a removal). */
+  removeClasses?: string[];
+  addClasses?: string[];
 }
 
 /** Classify a Design-panel field edit into a `PendingEdit`, given the live selection + token usage. */
@@ -38,9 +44,18 @@ export function classifyFieldEdit(
    *  canvas drags (padding/gap/margin/resize), which Figma treats as detaching to
    *  a literal rather than editing the shared token. */
   forceStyle = false,
+  /** The exact override map, when it isn't a simple `prop → value` (e.g. align, flow). */
+  css?: Record<string, string>,
+  /** Live token match for the NEW value (length fields): a name re-binds, `null`
+   *  detaches to a literal. `undefined` falls back to the field's static token. */
+  tokenOverride?: string | null,
 ): PendingEdit {
   const field = selection.sections.flatMap((s) => s.fields).find((f) => f.key === key);
-  const token = forceStyle ? null : (field?.token ?? null);
+  const token = forceStyle
+    ? null
+    : tokenOverride !== undefined
+      ? tokenOverride
+      : (field?.token ?? null);
   return {
     key,
     label: field?.label ?? key,
@@ -49,10 +64,16 @@ export function classifyFieldEdit(
     token,
     shared: token ? tokenUses(token) > 1 : false,
     cssProps,
+    css: css ?? (cssProps.length ? Object.fromEntries(cssProps.map((p) => [p, value])) : undefined),
   };
 }
 
-export function classifyVariantEdit(prop: string, value: string): PendingEdit {
+export function classifyVariantEdit(
+  prop: string,
+  value: string,
+  removeClasses: string[] = [],
+  addClasses: string[] = [],
+): PendingEdit {
   return {
     key: `variant:${prop}`,
     label: `Variant · ${prop}`,
@@ -61,6 +82,8 @@ export function classifyVariantEdit(prop: string, value: string): PendingEdit {
     token: null,
     shared: false,
     cssProps: [],
+    removeClasses,
+    addClasses,
   };
 }
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildSelection, alignToCss } from "./selection-builder";
+import { buildSelection, alignToCss, flowToCss } from "./selection-builder";
 import type { NodeReadout } from "./inspector-bridge";
 import type { InspectorToken } from "./inspector";
 
@@ -155,5 +155,25 @@ describe("alignToCss", () => {
 
   it("swaps the axes for a column container", () => {
     expect(alignToCss("end|center", "column")).toEqual({ "justify-content": "center", "align-items": "flex-end" });
+  });
+});
+
+describe("flowToCss", () => {
+  it("maps the flow segments to display / flex-direction", () => {
+    expect(flowToCss("block")).toEqual({ display: "block" });
+    expect(flowToCss("row")).toEqual({ display: "flex", "flex-direction": "row" });
+    expect(flowToCss("column")).toEqual({ display: "flex", "flex-direction": "column" });
+  });
+});
+
+describe("layout section controls", () => {
+  it("flow is a segmented control and margins are always present", () => {
+    const sel = buildSelection(readout({ computed: { "margin-left": "0px", "margin-top": "12px" } }));
+    const layout = sel.sections.find((s) => s.id === "layout")!;
+    const flow = layout.fields.find((f) => f.key === "flow")!;
+    expect(flow.kind).toBe("segment");
+    expect(flow.options).toEqual(["block", "row", "column"]);
+    expect(layout.fields.find((f) => f.key === "margin-left")?.value).toBe("0px");
+    expect(layout.fields.find((f) => f.key === "margin-top")?.value).toBe("12px");
   });
 });

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { DevServerStatus, Project, InspectorToken, InspectorComponent, FileSnapshot } from "@vortspec/core/ipc";
-import { buildSelection, alignToCss } from "@vortspec/core/selection-builder";
+import { buildSelection, alignToCss, flowToCss } from "@vortspec/core/selection-builder";
 import { api } from "../lib/api";
 import { Button, Spinner } from "@vortspec/ui/ui";
 import { ProjectRail, projectRailItems } from "@vortspec/ui/ProjectRail";
@@ -10,6 +10,7 @@ import {
   resolveComponent,
   resembleComponent,
   cssForField,
+  matchTokenName,
   buildSelectionContext,
 } from "../components/run-canvas/compose";
 import {
@@ -65,6 +66,9 @@ export function RunApp({
 }): React.JSX.Element {
   const [dev, setDev] = useState<DevServerStatus>({ state: "stopped", url: null, script: null, message: null });
   const [frameLoading, setFrameLoading] = useState(true);
+  // Bumped by the header Refresh button to reload the preview (remounts the
+  // iframe via its key; the canvas webview reloads through the bridge).
+  const [reloadNonce, setReloadNonce] = useState(0);
   const autoRef = useRef(false);
 
   // Missing-.env helper: a cloned repo often ships a `.env.example` but not the
@@ -181,6 +185,14 @@ export function RunApp({
 
   // ── Run Canvas (visual editing) state — only used when `canvas` is on ──────
   const bridge = useInspectorBridge();
+
+  // Reload the live preview: reload the canvas webview via the bridge, and
+  // remount the plain iframe by bumping its key nonce.
+  const refresh = (): void => {
+    setFrameLoading(true);
+    setReloadNonce((n) => n + 1);
+    bridge.reload();
+  };
   const [guestPreload, setGuestPreload] = useState<string | null>(null);
   const [tokens, setTokens] = useState<InspectorToken[]>([]);
   const [components, setComponents] = useState<InspectorComponent[]>([]);
@@ -285,14 +297,23 @@ export function RunApp({
 
   // Record pending edits once (e.g. on drag end), never per frame.
   const commitEdits = useCallback(
-    (edits: { key: string; value: string; cssProps: string[] }[], forceStyle = false) => {
+    (
+      edits: {
+        key: string;
+        value: string;
+        cssProps: string[];
+        css?: Record<string, string>;
+        token?: string | null;
+      }[],
+      forceStyle = false,
+    ) => {
       const sel = selectionRef.current;
       if (!sel) return;
       const uses = (n: string): number => tokensRef.current.find((t) => t.name === n)?.uses ?? 0;
       setPending((p) => {
         const next = { ...p };
         for (const e of edits) {
-          const edit = classifyFieldEdit(sel, e.key, e.value, e.cssProps, uses, forceStyle);
+          const edit = classifyFieldEdit(sel, e.key, e.value, e.cssProps, uses, forceStyle, e.css, e.token);
           next[edit.key] = edit;
         }
         return next;
@@ -322,16 +343,28 @@ export function RunApp({
         const css = alignToCss(value, dir);
         applyLive(css);
         commitEdits([
-          { key, value: `${css["justify-content"]}, ${css["align-items"]}`, cssProps: ["justify-content", "align-items"] },
+          { key, value: `${css["justify-content"]}, ${css["align-items"]}`, cssProps: ["justify-content", "align-items"], css },
         ]);
+        return;
+      }
+      if (key === "flow") {
+        // block / row / column → display (+ flex-direction). Multiple props, so
+        // compute the override explicitly rather than via the 1-value field map.
+        const css = flowToCss(value);
+        applyLive(css);
+        commitEdits([{ key, value, cssProps: Object.keys(css), css }]);
         return;
       }
       const css = cssForField(key, value);
       applyLive(css);
       // Choosing a color for an element is a per-element decision (Figma applies
       // the style / token reference to the element, not a rewrite of the token).
-      const kind = selectionRef.current?.sections.flatMap((s) => s.fields).find((f) => f.key === key)?.kind;
-      commitEdits([{ key, value, cssProps: Object.keys(css) }], kind === "color");
+      const field = selectionRef.current?.sections.flatMap((s) => s.fields).find((f) => f.key === key);
+      // For a token-typed length field, re-derive which token (of that type) the
+      // NEW value matches — a match re-binds, no match detaches to a literal (the
+      // Figma behaviour: change the px and the token tag updates or disappears).
+      const token = field?.tokenType ? matchTokenName(value, tokensRef.current, field.tokenType) : undefined;
+      commitEdits([{ key, value, cssProps: Object.keys(css), css, token }], field?.kind === "color");
     },
     [applyLive, commitEdits, setText],
   );
@@ -352,15 +385,17 @@ export function RunApp({
       const sel = selectionRef.current;
       const id = selectedIdRef.current;
       const variant = sel?.variants.find((v) => v.key === key);
+      const words = (s?: string): string[] => (s ? s.split(/\s+/).filter(Boolean) : []);
+      let remove: string[] = [];
+      let add: string[] = [];
       if (id && variant) {
         const prev = variantDraftRef.current[key] ?? variant.current ?? variant.defaultValue;
-        const words = (s?: string): string[] => (s ? s.split(/\s+/).filter(Boolean) : []);
-        const remove = prev ? words(variant.classes?.[prev]) : [];
-        const add = words(variant.classes?.[value]);
+        remove = prev ? words(variant.classes?.[prev]) : [];
+        add = words(variant.classes?.[value]);
         if (remove.length || add.length) setClass(id, remove, add);
         variantDraftRef.current[key] = value;
       }
-      setPending((p) => ({ ...p, [`variant:${key}`]: classifyVariantEdit(key, value) }));
+      setPending((p) => ({ ...p, [`variant:${key}`]: classifyVariantEdit(key, value, remove, add) }));
     },
     [setClass],
   );
@@ -418,6 +453,22 @@ export function RunApp({
     bridge.clearOverride();
     setPending({});
   }
+  // Drop a single pending edit before applying: restore the node to its original,
+  // then re-apply every remaining edit on top so the live preview stays exact.
+  function removePending(key: string): void {
+    const id = selectedIdRef.current;
+    const next = { ...pending };
+    delete next[key];
+    if (id) {
+      bridge.clearOverride(id);
+      for (const e of Object.values(next)) {
+        if (e.css && Object.keys(e.css).length > 0) bridge.applyOverride(id, e.css);
+        else if (e.key === "content") setText(id, e.value);
+        else if (e.kind === "variant") setClass(id, e.removeClasses ?? [], e.addClasses ?? []);
+      }
+    }
+    setPending(next);
+  }
   function keepEdits(): void {
     setReview(false);
     setSnapshot(null);
@@ -462,7 +513,7 @@ export function RunApp({
   }
 
   return (
-    <div className="flex h-[calc(100vh-3rem)] w-full overflow-hidden bg-vs-bg-primary text-[13px] text-vs-text-primary">
+    <div className={`flex w-full overflow-hidden bg-vs-bg-primary text-[13px] text-vs-text-primary ${hideRail ? "h-full min-h-0" : "h-[calc(100vh-3rem)]"}`}>
       {!hideRail && (
         <ProjectRail
         project={project}
@@ -496,6 +547,9 @@ export function RunApp({
             <>
               <span className="font-mono text-[11px] text-vs-text-secondary">{dev.url.replace(/^https?:\/\//, "")}</span>
               <Button variant="ghost" onClick={() => void api.openInstall(dev.url!)}>Open in browser</Button>
+              <Button variant="ghost" onClick={refresh} title="Reload the live preview">
+                <RefreshIcon /> Refresh
+              </Button>
               <Button variant="ghost" onClick={() => void stopFor()}>Stop</Button>
             </>
           ) : (
@@ -568,6 +622,7 @@ export function RunApp({
                   review={review}
                   onApply={() => void applyEdits()}
                   onDiscard={discardEdits}
+                  onRemovePending={removePending}
                   onKeep={keepEdits}
                   onRevert={() => void revertEdits()}
                   mode={mode}
@@ -576,6 +631,7 @@ export function RunApp({
                   onZoomBy={zoomBy}
                   onZoomReset={resetZoom}
                   colorTokens={colorTokens}
+                  tokens={tokens}
                   resembles={selection?.resembles ?? null}
                   onUseComponent={
                     onSendToChat && selection?.resembles
@@ -645,7 +701,7 @@ export function RunApp({
           ) : embedUrl ? (
             <div className="relative h-full min-h-[340px]">
               <iframe
-                key={embedUrl}
+                key={`${embedUrl}:${reloadNonce}`}
                 title={noun}
                 src={embedUrl}
                 onLoad={() => setFrameLoading(false)}
@@ -711,5 +767,14 @@ function Centered({ children }: { children: React.ReactNode }): React.JSX.Elemen
     <div className="flex h-full min-h-[340px] items-center justify-center gap-2 p-12 text-sm text-vs-text-secondary">
       {children}
     </div>
+  );
+}
+
+function RefreshIcon(): React.JSX.Element {
+  return (
+    <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M16.5 5.5A7 7 0 1 0 17 10" />
+      <path d="M17 3v3.5h-3.5" />
+    </svg>
   );
 }

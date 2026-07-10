@@ -50,12 +50,15 @@ export function buildSelection(
       literal("height", "Height", "length", sizeVal(c["height"], readout.rect.height)),
     ]),
     section("layout", "Auto layout", [
-      literal("flow", "Flow", "select", flow(c), ["block", "row", "column"]),
+      literal("flow", "Flow", "segment", flow(c), ["block", "row", "column"]),
       // Figma-style auto-layout alignment (only meaningful for flex containers).
       ...(isFlex(c) ? [alignField(c)] : []),
       bind("gap", "Gap", "length", c["gap"], "spacing"),
       bind("padding-left", "Padding X", "length", c["padding-left"], "spacing"),
       bind("padding-top", "Padding Y", "length", c["padding-top"], "spacing"),
+      // Margins — a per-element literal so it always shows (even at 0px), for any element.
+      literal("margin-left", "Margin X", "length", c["margin-left"]),
+      literal("margin-top", "Margin Y", "length", c["margin-top"]),
     ]),
     section("appearance", "Appearance", [
       literal("opacity", "Opacity", "number", c["opacity"] ?? "1"),
@@ -159,6 +162,16 @@ export function alignToCss(value: string, direction: string): Record<string, str
   };
 }
 
+/**
+ * Map the `flow` segmented control (block / row / column) to the display +
+ * flex-direction declarations the guest applies live. Exported for the host.
+ */
+export function flowToCss(value: string): Record<string, string> {
+  if (value === "block") return { display: "block" };
+  if (value === "column") return { display: "flex", "flex-direction": "column" };
+  return { display: "flex", "flex-direction": "row" };
+}
+
 // ── helpers ──────────────────────────────────────────────────────────
 
 function section(id: DesignSection["id"], title: string, fields: (SectionField | null)[]): DesignSection {
@@ -210,7 +223,7 @@ function makeTokenBinder(readout: NodeReadout, tokens: InspectorToken[]) {
     if (value === undefined || value === "") return null;
     const norm = normalize(value);
     const token = (preferType && byValueType.get(norm)?.get(preferType)) ?? byValue.get(norm) ?? null;
-    return { key, label, kind, value, token, options: [] };
+    return { key, label, kind, value, token, tokenType: preferType, options: [] };
   };
 }
 

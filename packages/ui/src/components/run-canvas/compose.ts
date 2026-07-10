@@ -94,10 +94,28 @@ export function cssForField(key: string, value: string): Record<string, string> 
   return Object.fromEntries(props.map((p) => [p, value]));
 }
 
+const normToken = (s: string): string => s.trim().toLowerCase().replace(/\s+/g, " ");
+
+/**
+ * Find the design token of `type` whose resolved value equals `value` (the
+ * Design-panel length field shows this token's name, and re-recognizes a token
+ * when the px value is edited to one). Returns null when the value is a literal.
+ */
+export function matchTokenName(
+  value: string,
+  tokens: { name: string; resolvedValue: string; type: string }[],
+  type: string,
+): string | null {
+  const target = normToken(value);
+  return tokens.find((t) => t.type === type && normToken(t.resolvedValue) === target)?.name ?? null;
+}
+
 const CSS_FIELD_MAP: Record<string, string[]> = {
   gap: ["gap"],
   "padding-left": ["padding-left", "padding-right"],
   "padding-top": ["padding-top", "padding-bottom"],
+  "margin-left": ["margin-left", "margin-right"],
+  "margin-top": ["margin-top", "margin-bottom"],
   width: ["width"],
   height: ["height"],
   radius: ["border-radius"],

@@ -6,9 +6,11 @@ import type {
   DesignSection,
   SectionField,
   VariantControl,
+  InspectorToken,
 } from "@vortspec/core/ipc";
 import { NodeTree } from "./NodeTree";
 import type { PendingEdit } from "./pending";
+import { matchTokenName } from "./compose";
 import { ColorTokenField, type ColorToken } from "./ColorPicker";
 
 /**
@@ -34,6 +36,7 @@ export function DesignPanel({
   review = false,
   onApply,
   onDiscard,
+  onRemovePending,
   onKeep,
   onRevert,
   mode = "inspect",
@@ -42,6 +45,7 @@ export function DesignPanel({
   onZoomBy,
   onZoomReset,
   colorTokens = [],
+  tokens = [],
   resembles = null,
   onUseComponent,
   onExtractComponent,
@@ -63,6 +67,8 @@ export function DesignPanel({
   review?: boolean;
   onApply?: () => void;
   onDiscard?: () => void;
+  /** Remove one pending edit before applying (the per-item trash button). */
+  onRemovePending?: (key: string) => void;
   onKeep?: () => void;
   onRevert?: () => void;
   /** Canvas input mode (Inspect / Interact) — shown beside the Layers label. */
@@ -74,6 +80,8 @@ export function DesignPanel({
   onZoomReset?: () => void;
   /** Project color tokens for the Figma-style color picker (Libraries tab). */
   colorTokens?: ColorToken[];
+  /** All project tokens — length fields offer/recognize spacing/radius/typography ones. */
+  tokens?: InspectorToken[];
   /** A component this element resembles but isn't using (suggest reuse), or null. */
   resembles?: { name: string; file: string | null } | null;
   /** Ask the assistant to refactor this element to use the resembled component. */
@@ -143,6 +151,7 @@ export function DesignPanel({
                 section={section}
                 onFieldChange={onFieldChange}
                 colorTokens={colorTokens}
+                tokens={tokens}
               />
             ))}
           </>
@@ -152,7 +161,7 @@ export function DesignPanel({
       {review ? (
         <ReviewBar onKeep={onKeep} onRevert={onRevert} />
       ) : pending.length > 0 ? (
-        <ApplyBar pending={pending} applying={applying} onApply={onApply} onDiscard={onDiscard} />
+        <ApplyBar pending={pending} applying={applying} onApply={onApply} onDiscard={onDiscard} onRemove={onRemovePending} />
       ) : null}
     </div>
   );
@@ -164,11 +173,13 @@ function ApplyBar({
   applying,
   onApply,
   onDiscard,
+  onRemove,
 }: {
   pending: PendingEdit[];
   applying: boolean;
   onApply?: () => void;
   onDiscard?: () => void;
+  onRemove?: (key: string) => void;
 }): JSX.Element {
   const shared = pending.filter((p) => p.shared);
   const structural = pending.filter((p) => p.kind !== "token");
@@ -180,15 +191,26 @@ function ApplyBar({
         </span>
         <ul className="flex flex-col gap-0.5">
           {pending.map((p) => (
-            <li key={p.key} className="flex items-center gap-1.5 text-[11px] text-vs-text-secondary">
-              <span className="truncate">
+            <li key={p.key} className="group flex items-center gap-1.5 text-[11px] text-vs-text-secondary">
+              <span className="min-w-0 flex-1 truncate">
                 {p.label} → <span className="font-mono">{p.value}</span>
               </span>
               {p.shared && (
-                <span className="rounded bg-vs-warning/20 px-1 text-[9px] text-vs-warning">shared token</span>
+                <span className="flex-none rounded bg-vs-warning/20 px-1 text-[9px] text-vs-warning">shared token</span>
               )}
               {p.kind !== "token" && (
-                <span className="rounded bg-vs-accent-subtle px-1 text-[9px] text-vs-accent">source edit</span>
+                <span className="flex-none rounded bg-vs-accent-subtle px-1 text-[9px] text-vs-accent">source edit</span>
+              )}
+              {onRemove && !applying && (
+                <button
+                  type="button"
+                  onClick={() => onRemove(p.key)}
+                  aria-label={`Remove ${p.label} change`}
+                  title="Remove this change"
+                  className="flex-none rounded p-0.5 text-vs-text-muted opacity-60 hover:bg-vs-bg-hover hover:text-vs-error hover:opacity-100"
+                >
+                  <TrashIcon />
+                </button>
               )}
             </li>
           ))}
@@ -406,10 +428,12 @@ const PropertySection = memo(function PropertySection({
   section,
   onFieldChange,
   colorTokens = [],
+  tokens = [],
 }: {
   section: DesignSection;
   onFieldChange?: (key: string, value: string) => void;
   colorTokens?: ColorToken[];
+  tokens?: InspectorToken[];
 }): JSX.Element | null {
   if (section.fields.length === 0) return null;
   return (
@@ -417,7 +441,7 @@ const PropertySection = memo(function PropertySection({
       <div className="flex flex-col gap-2 px-3 pb-3">
         {section.fields.map((f) => (
           <Row key={f.key} label={f.label}>
-            <Field field={f} colorTokens={colorTokens} onChange={(val) => onFieldChange?.(f.key, val)} />
+            <Field field={f} colorTokens={colorTokens} tokens={tokens} onChange={(val) => onFieldChange?.(f.key, val)} />
           </Row>
         ))}
       </div>
@@ -428,30 +452,135 @@ const PropertySection = memo(function PropertySection({
 function Field({
   field,
   colorTokens,
+  tokens,
   onChange,
 }: {
   field: SectionField;
   colorTokens: ColorToken[];
+  tokens: InspectorToken[];
   onChange: (value: string) => void;
 }): JSX.Element {
   const control =
     field.kind === "align" ? (
       <AlignGrid value={field.value} onChange={onChange} />
+    ) : field.kind === "segment" ? (
+      <SegmentedField value={field.value} options={field.options} onChange={onChange} />
     ) : field.kind === "select" ? (
       <SelectField value={field.value} options={field.options} onChange={onChange} />
     ) : field.kind === "toggle" ? (
       <SelectField value={field.value} options={["true", "false"]} onChange={onChange} />
     ) : field.kind === "color" ? (
       <ColorTokenField value={field.value} token={field.token} colorTokens={colorTokens} onChange={onChange} />
+    ) : field.kind === "length" ? (
+      <LengthTokenField value={field.value} tokenType={field.tokenType} tokens={tokens} onChange={onChange} />
+    ) : field.key === "content" ? (
+      <ContentTextarea value={field.value} onChange={onChange} />
     ) : (
       <TextField value={field.value} onChange={onChange} mono />
     );
-  // The color field shows its own token label; other token-backed fields get a badge.
+  // Color + length fields carry their own token indicator; other token-backed
+  // fields get a badge underneath.
+  const ownIndicator = field.kind === "color" || field.kind === "length";
   return (
     <div className="flex min-w-0 flex-1 flex-col gap-1">
       {control}
-      {field.token && field.kind !== "color" && <TokenBadge name={field.token} />}
+      {field.token && !ownIndicator && <TokenBadge name={field.token} />}
     </div>
+  );
+}
+
+/**
+ * Figma-style length field: the bound token's name sits on the left (a pill that
+ * opens the variable list for this attribute), the px value on the right. Editing
+ * the px re-recognizes a token (or detaches to a literal); picking one sets the value.
+ */
+function LengthTokenField({
+  value,
+  tokenType,
+  tokens,
+  onChange,
+}: {
+  value: string;
+  tokenType?: string;
+  tokens: InspectorToken[];
+  onChange: (v: string) => void;
+}): JSX.Element {
+  const opts = tokenType ? tokens.filter((t) => t.type === tokenType) : [];
+  const [draft, setDraft] = useState(value);
+  useEffect(() => setDraft(value), [value]);
+  const [open, setOpen] = useState(false);
+  const matched = tokenType ? matchTokenName(draft, opts, tokenType) : null;
+  return (
+    <div className="relative w-full">
+      <div className="flex w-full items-center rounded border border-vs-border-default bg-vs-bg-surface focus-within:border-vs-accent">
+        {opts.length > 0 && (
+          <button
+            type="button"
+            onClick={() => setOpen((o) => !o)}
+            title={matched ? `Variable: ${matched} — pick another` : "Bind a variable"}
+            className={`flex max-w-[58%] flex-none items-center gap-1 rounded-l px-1.5 py-1 text-[10px] ${
+              matched
+                ? "bg-vs-accent-subtle text-vs-accent"
+                : "text-vs-text-muted hover:bg-vs-bg-hover hover:text-vs-text-secondary"
+            }`}
+          >
+            <span className="text-[8px]">◆</span>
+            {matched && <span className="truncate">{matched}</span>}
+          </button>
+        )}
+        <input
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={() => draft !== value && onChange(draft)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+          }}
+          className="min-w-0 flex-1 bg-transparent px-2 py-1 text-right font-mono text-[12px] text-vs-text-primary outline-none"
+        />
+      </div>
+      {open && opts.length > 0 && (
+        <>
+          <div className="fixed inset-0 z-20" onClick={() => setOpen(false)} />
+          <div className="absolute left-0 right-0 z-30 mt-1 max-h-56 overflow-y-auto rounded-md border border-vs-border-default bg-vs-bg-elevated py-1 shadow-2xl">
+            {opts.map((t) => (
+              <button
+                key={t.name}
+                type="button"
+                onClick={() => {
+                  setDraft(t.resolvedValue);
+                  onChange(t.resolvedValue);
+                  setOpen(false);
+                }}
+                className={`flex w-full items-center justify-between gap-2 px-2.5 py-1.5 text-[11px] hover:bg-vs-bg-hover ${
+                  t.name === matched ? "text-vs-accent" : "text-vs-text-secondary"
+                }`}
+              >
+                <span className="flex min-w-0 items-center gap-1.5">
+                  <span className="text-[8px] text-vs-accent">◆</span>
+                  <span className="truncate">{t.name}</span>
+                </span>
+                <span className="flex-none font-mono text-vs-text-muted">{t.resolvedValue}</span>
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+/** Multi-line editor for an element's text content (grows to fit paragraphs). */
+function ContentTextarea({ value, onChange }: { value: string; onChange: (v: string) => void }): JSX.Element {
+  const [draft, setDraft] = useState(value);
+  useEffect(() => setDraft(value), [value]);
+  return (
+    <textarea
+      value={draft}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={() => draft !== value && onChange(draft)}
+      rows={3}
+      className="max-h-64 min-h-[4.5rem] w-full resize-y rounded border border-vs-border-default bg-vs-bg-surface px-2 py-1.5 text-[12px] leading-relaxed text-vs-text-primary outline-none focus:border-vs-accent"
+    />
   );
 }
 
@@ -514,6 +643,53 @@ function AlignGrid({
         }),
       )}
     </div>
+  );
+}
+
+/** An inline segmented button group (Figma-style) — e.g. flow: block / row / column. */
+function SegmentedField({
+  value,
+  options,
+  onChange,
+}: {
+  value: string;
+  options: string[];
+  onChange: (v: string) => void;
+}): JSX.Element {
+  const [local, setLocal] = useState(value);
+  useEffect(() => setLocal(value), [value]);
+  return (
+    <div className="flex w-full overflow-hidden rounded border border-vs-border-default">
+      {options.map((o) => {
+        const active = o === local;
+        return (
+          <button
+            key={o}
+            type="button"
+            onClick={() => {
+              setLocal(o);
+              onChange(o);
+            }}
+            className={`flex-1 px-1 py-1 text-[11px] capitalize transition-colors ${
+              active
+                ? "bg-vs-accent text-white"
+                : "bg-vs-bg-surface text-vs-text-secondary hover:bg-vs-bg-hover hover:text-vs-text-primary"
+            }`}
+          >
+            {o}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function TrashIcon(): JSX.Element {
+  return (
+    <svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M4 6h12M8 6V4.5A1.5 1.5 0 0 1 9.5 3h1A1.5 1.5 0 0 1 12 4.5V6m2 0v9.5A1.5 1.5 0 0 1 12.5 17h-5A1.5 1.5 0 0 1 6 15.5V6" />
+      <path d="M8.5 9.5v4M11.5 9.5v4" />
+    </svg>
   );
 }
 
