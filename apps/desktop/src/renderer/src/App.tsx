@@ -3,7 +3,7 @@ import type { EnvReport, Project, SetupAnswers, UpdateInfo, Profile as ProfileT 
 import { api } from "@vortspec/ui/api";
 import { EnvironmentCheck } from "./views/EnvironmentCheck";
 import { Dashboard } from "./views/Dashboard";
-import { GuidedFlow } from "./views/GuidedFlow";
+import { GuidedFlow } from "@vortspec/ui/GuidedFlow";
 import { Inspector } from "@vortspec/ui/Inspector";
 import { DevPreview } from "./views/DevPreview";
 import { RunView } from "./views/RunView";
@@ -16,7 +16,7 @@ import { SourceControl } from "@vortspec/ui/SourceControl";
 import { RunApp } from "@vortspec/ui/RunApp";
 import { Tasks } from "@vortspec/ui/Tasks";
 import { DesignInput } from "./views/DesignInput";
-import { Intake } from "./views/Intake";
+import { Intake } from "@vortspec/ui/Intake";
 import { NewProjectWizard } from "@vortspec/ui/NewProjectWizard";
 import { Logo } from "@vortspec/ui/Logo";
 import { AssistantDock } from "@vortspec/ui/AssistantDock";

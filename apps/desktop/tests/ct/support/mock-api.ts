@@ -79,6 +79,8 @@ export interface MockConfig {
   fsTree?: Record<string, import("@vortspec/core/ipc").FsEntry[]>;
   /** File contents for the IDE editor, keyed by relative path. */
   fsFiles?: Record<string, string>;
+  /** Image data URLs for the Explorer preview, keyed by relative path. */
+  fsAssets?: Record<string, string>;
   /** Entries returned by searchFiles() — the @-mention picker (filtered by query). */
   searchResults?: import("@vortspec/core/ipc").FsEntry[];
   /** Result of clipboardImage() — a pasted-image path + thumbnail, or null. */
@@ -97,9 +99,19 @@ export interface MockConfig {
   figmaSelection?: import("@vortspec/core/ipc").FigmaSelection;
 }
 
-const EMPTY_TOKENS: InspectorTokensResult = {
+export const EMPTY_TOKENS: InspectorTokensResult = {
   tokenFile: null,
   tokens: [],
+  usage: {},
+  figmaOnly: [],
+  figmaSynced: false,
+};
+/** A minimal "founded" token result — a project whose design-system foundation exists. */
+export const FOUNDED_TOKENS: InspectorTokensResult = {
+  tokenFile: "src/styles/tokens.css",
+  tokens: [
+    { name: "spacing-4", type: "spacing", rawValue: "16px", resolvedValue: "16px", source: "generated-code", uses: 3 },
+  ],
   usage: {},
   figmaOnly: [],
   figmaSynced: false,
@@ -288,6 +300,10 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
       path: relPath,
       content: cfg.fsFiles?.[relPath] ?? "",
       truncated: false,
+    }),
+    readAsset: async (_projectPath: string, relPath: string) => ({
+      dataUrl: cfg.fsAssets?.[relPath] ?? null,
+      tooLarge: false,
     }),
     searchFiles: async (_projectPath: string, query: string) =>
       (cfg.searchResults ?? []).filter((e) => e.path.toLowerCase().includes(query.toLowerCase())),

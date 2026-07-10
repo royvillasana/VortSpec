@@ -20,13 +20,13 @@ import {
   verifyPrompt,
   buildVerifyRestPrompt,
 } from "@vortspec/core/sdd-prompts";
-import { api } from "@vortspec/ui/api";
-import { useAgentRun, useLatestRun } from "@vortspec/ui/useAgentRun";
-import { deriveProgress, type OpKind } from "@vortspec/ui/run-progress";
-import { Button, Card, Spinner } from "@vortspec/ui/ui";
-import { RunPanel } from "@vortspec/ui/RunPanel";
-import { RunProgress } from "@vortspec/ui/RunProgress";
-import { ProjectRail, projectRailItems } from "@vortspec/ui/ProjectRail";
+import { api } from "../lib/api";
+import { useAgentRun, useLatestRun } from "../lib/useAgentRun";
+import { deriveProgress, type OpKind } from "../lib/run-progress";
+import { Button, Card, Spinner } from "../components/ui";
+import { RunPanel } from "../components/RunPanel";
+import { RunProgress } from "../components/RunProgress";
+import { ProjectRail, projectRailItems } from "../components/ProjectRail";
 
 /**
  * The Design System workspace (design: "Guided Flow.dc.html", reframed to v2).
@@ -84,6 +84,7 @@ const LEVEL_LABEL: Record<string, string> = {
 
 export function GuidedFlow({
   project,
+  hideRail = false,
   onBack,
   onOpenInspector,
   onOpenPreview,
@@ -96,6 +97,8 @@ export function GuidedFlow({
   onOpenTasks,
 }: {
   project: Project;
+  /** Hide the internal ProjectRail — the IDE embeds this with its own ActivityBar. */
+  hideRail?: boolean;
   onBack: () => void;
   onOpenInspector: () => void;
   onOpenPreview: () => void;
@@ -328,27 +331,33 @@ export function GuidedFlow({
     : `Foundation ready · ${builtCount}/${total} built · ${verifiedCount} verified`;
 
   return (
-    <div className="flex h-[calc(100vh-3rem)] w-full overflow-hidden bg-vs-bg-primary text-[13px] text-vs-text-primary">
+    <div
+      className={`flex w-full overflow-hidden bg-vs-bg-primary text-[13px] text-vs-text-primary ${
+        hideRail ? "h-full min-h-0" : "h-[calc(100vh-3rem)]"
+      }`}
+    >
       {toast && (
         <div className="fixed bottom-5 left-1/2 z-50 -translate-x-1/2 rounded-lg border border-vs-border-default bg-vs-bg-elevated px-4 py-2 text-[12px] text-vs-text-primary shadow-lg">
           {toast}
         </div>
       )}
-      <ProjectRail
-        project={project}
-        onHeaderClick={onBack}
-        items={projectRailItems("flow", {
-          onFlow: () => undefined,
-          onRun: onOpenRun,
-          onPlayground: onOpenPreview,
-          onTokens: onOpenInspector,
-          onManifest: onOpenManifest,
-          onSource: onOpenSource,
-          onRunApp: onOpenRunApp,
-          onTasks: onOpenTasks,
-          onHistory: onOpenHistory,
-        })}
-      />
+      {!hideRail && (
+        <ProjectRail
+          project={project}
+          onHeaderClick={onBack}
+          items={projectRailItems("flow", {
+            onFlow: () => undefined,
+            onRun: onOpenRun,
+            onPlayground: onOpenPreview,
+            onTokens: onOpenInspector,
+            onManifest: onOpenManifest,
+            onSource: onOpenSource,
+            onRunApp: onOpenRunApp,
+            onTasks: onOpenTasks,
+            onHistory: onOpenHistory,
+          })}
+        />
+      )}
 
       <main className="flex min-w-0 flex-1 flex-col bg-vs-bg-primary">
         <header className="flex flex-none items-center gap-3.5 border-b border-vs-border-default px-8 pb-4 pt-5">

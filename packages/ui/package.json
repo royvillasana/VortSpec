@@ -88,6 +88,14 @@
       "types": "./src/views/NewProjectWizard.tsx",
       "default": "./src/views/NewProjectWizard.tsx"
     },
+    "./Intake": {
+      "types": "./src/views/Intake.tsx",
+      "default": "./src/views/Intake.tsx"
+    },
+    "./GuidedFlow": {
+      "types": "./src/views/GuidedFlow.tsx",
+      "default": "./src/views/GuidedFlow.tsx"
+    },
     "./styles/tokens.css": "./src/styles/tokens.css",
     "./Terminal": {
       "types": "./src/components/Terminal.tsx",

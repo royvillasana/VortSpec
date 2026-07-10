@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/experimental-ct-react";
 import App from "../../src/renderer/src/App";
-import { DEFAULT_FLOW } from "@vortspec/core/flow";
-import type { Flow, Project } from "@vortspec/core/ipc";
+import type { Project } from "@vortspec/core/ipc";
+import { EMPTY_TOKENS, FOUNDED_TOKENS } from "../../../desktop/tests/ct/support/mock-api";
 
 const PROJECT = {
   id: "p1",
@@ -16,55 +16,21 @@ const base = {
   pickFolderResult: PROJECT,
 };
 
-/** A flow with the design-system stage approved and Components as the current one. */
-const FLOW: Flow = {
-  definitions: DEFAULT_FLOW,
-  state: {
-    currentStageId: "components",
-    stages: DEFAULT_FLOW.map((d) => ({
-      id: d.id,
-      status: d.id === "design-system" ? "approved" : "pending",
-      updatedAt: "2026-07-08T00:00:00.000Z",
-    })),
-  },
-};
-
-async function open(c: import("@playwright/test").Locator): Promise<void> {
+test("opening an un-founded project auto-starts the Flow foundation (parity with cockpit)", async ({
+  mount,
+}) => {
+  // Un-founded → no extracted tokens; the IDE should land on the actionable
+  // foundation, not the Explorer and not a read-only stage list.
+  const c = await mount(<App />, { hooksConfig: { mock: { ...base, tokens: EMPTY_TOKENS } } });
   await c.getByRole("button", { name: /acme-design-system/ }).click();
-  await c
-    .getByRole("navigation", { name: "Activity bar" })
-    .getByRole("button", { name: "SDD-DE pipeline" })
-    .click();
-}
-
-test("the pipeline activity surfaces every core-defined SDD-DE stage (parity)", async ({ mount }) => {
-  const c = await mount(<App />, { hooksConfig: { mock: { ...base, flow: FLOW } } });
-  await open(c);
-  await expect(c.getByRole("heading", { name: "SDD-DE pipeline" })).toBeVisible();
-  // Every stage title comes from @vortspec/core's DEFAULT_FLOW — so a core edit
-  // (rename/reorder/add a stage) shows up here with no IDE change. This is the
-  // parity check: the panel renders whatever core defines.
-  for (const def of DEFAULT_FLOW) {
-    await expect(c.getByRole("heading", { name: def.title })).toBeVisible();
-  }
+  await expect(c.getByRole("heading", { name: "Set up the foundation" })).toBeVisible();
+  await expect(c.getByRole("button", { name: /Extract tokens & detect components/ })).toBeVisible();
 });
 
-test("overlays file-derived status from core flow state", async ({ mount }) => {
-  const c = await mount(<App />, { hooksConfig: { mock: { ...base, flow: FLOW } } });
-  await open(c);
-  // design-system is approved; the approval count reflects required stages.
-  await expect(c.getByText("Approved").first()).toBeVisible();
-  const required = DEFAULT_FLOW.filter((d) => !d.optional).length;
-  await expect(c.getByText(`1/${required} stages approved`)).toBeVisible();
-  // Gated stages advertise the gate.
-  await expect(c.getByText("gated").first()).toBeVisible();
-});
-
-test("falls back to the core stage definitions before a flow exists", async ({ mount }) => {
-  // No flow fixture → getFlow returns null; the panel still renders the shape
-  // from DEFAULT_FLOW with every stage pending.
-  const c = await mount(<App />, { hooksConfig: { mock: base } });
-  await open(c);
-  await expect(c.getByRole("heading", { name: DEFAULT_FLOW[0]!.title })).toBeVisible();
-  await expect(c.getByText("Pending").first()).toBeVisible();
+test("a founded project opens on the Explorer, not the foundation", async ({ mount }) => {
+  // Founded → has tokens; the IDE opens normally (Explorer) with Flow still reachable.
+  const c = await mount(<App />, { hooksConfig: { mock: { ...base, tokens: FOUNDED_TOKENS } } });
+  await c.getByRole("button", { name: /acme-design-system/ }).click();
+  await expect(c.locator("aside").getByText("Explorer", { exact: true })).toBeVisible();
+  await expect(c.getByRole("heading", { name: "Set up the foundation" })).toHaveCount(0);
 });

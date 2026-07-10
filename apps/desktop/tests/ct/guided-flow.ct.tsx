@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/experimental-ct-react";
-import { GuidedFlow } from "../../src/renderer/src/views/GuidedFlow";
+import { GuidedFlow } from "@vortspec/ui/GuidedFlow";
 import { PROJECT } from "./support/fixtures";
 import type { InspectorComponentsResult, InspectorTokensResult } from "@vortspec/core/ipc";
 import type { RunEvent } from "@vortspec/core/run-events";
