@@ -21,7 +21,7 @@ const rail = (c: import("@playwright/test").Locator) =>
 
 async function openRun(c: import("@playwright/test").Locator): Promise<void> {
   await c.getByRole("button", { name: /acme-design-system/ }).click();
-  await rail(c).getByRole("button", { name: "Run app" }).click();
+  await rail(c).getByRole("button", { name: "Playground" }).click();
 }
 
 test("the Run activity shows the Figma-style Design panel beside the canvas", async ({ mount }) => {

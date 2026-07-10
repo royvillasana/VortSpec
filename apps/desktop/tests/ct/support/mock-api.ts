@@ -422,7 +422,7 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
 
     // Stateful in-memory comment store (mirrors the repo-backed store's merge/append).
     listComments: async () => [...comments].sort((a, b) => a.id.localeCompare(b.id)),
-    upsertComment: async (_p, thread) => {
+    upsertComment: async (_p: string, thread: CommentThread) => {
       const i = comments.findIndex((t) => t.id === thread.id);
       const existing = i >= 0 ? comments[i] : null;
       const seen = new Set((existing?.messages ?? []).map((m) => m.id));
@@ -433,7 +433,7 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
       else comments.push(merged);
       return { thread: merged, path: `.vortspec/comments/${thread.id}.json` };
     },
-    resolveComment: async (_p, id, resolved) => {
+    resolveComment: async (_p: string, id: string, resolved: boolean) => {
       const i = comments.findIndex((t) => t.id === id);
       if (i < 0) return null;
       comments[i] = { ...comments[i], resolved, updatedAt: comments[i].updatedAt };

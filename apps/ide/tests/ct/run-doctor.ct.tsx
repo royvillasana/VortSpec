@@ -30,7 +30,7 @@ const rail = (c: import("@playwright/test").Locator) =>
 test("the Run Doctor appears on a startup failure and offers a gated Fix with Claude", async ({ mount }) => {
   const c = await mount(<App />, { hooksConfig: { mock: base } });
   await c.getByRole("button", { name: /acme-design-system/ }).click();
-  await rail(c).getByRole("button", { name: "Run app" }).click();
+  await rail(c).getByRole("button", { name: "Playground" }).click();
 
   await expect(c.getByText(/Run Doctor/)).toBeVisible();
   await expect(c.getByText(/failed to start/)).toBeVisible();

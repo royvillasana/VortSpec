@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/experimental-ct-react";
 import { CommentsLayer } from "@vortspec/ui/CommentsLayer";
-import type { CommentThread } from "@vortspec/core/ipc";
+import type { CommentThread } from "@vortspec/core/comment";
 
 const thread = (over: Partial<CommentThread> = {}): CommentThread => ({
   id: "t1abc-000",

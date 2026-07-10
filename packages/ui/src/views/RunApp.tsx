@@ -581,7 +581,7 @@ export function RunApp({
 
       <main className="flex min-w-0 flex-1 flex-col bg-vs-bg-primary">
         <header className="flex flex-none items-center gap-3 border-b border-vs-border-default px-5 py-3">
-          <span className="text-[15px] font-semibold">{isApp ? "Run app" : "Storybook"}</span>
+          <span className="text-[15px] font-semibold">{isApp ? "Playground" : "Storybook"}</span>
           <span className="rounded border border-vs-border-default px-1.5 py-px text-[10px] uppercase tracking-wide text-vs-text-muted">
             localhost
           </span>
