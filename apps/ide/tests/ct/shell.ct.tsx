@@ -37,8 +37,9 @@ test("Create New Project opens the setup wizard for a fresh folder", async ({ mo
   };
   const c = await mount(<App />, { hooksConfig: { mock } });
   await c.getByRole("button", { name: "Create New Project" }).click();
-  // The shared SDD-DE setup wizard (same as the cockpit) takes over.
-  await expect(c.getByRole("heading", { name: "Set up project" })).toBeVisible();
+  // The unified setup + intake stepper (same as the cockpit) takes over on step 1.
+  await expect(c.getByRole("heading", { name: "Set up your stack" })).toBeVisible();
+  await expect(c.getByText("Where do your components and design specs come from?")).toBeVisible();
 });
 
 test("the Clone Repository link reveals a repo-URL input", async ({ mount }) => {

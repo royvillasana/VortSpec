@@ -92,6 +92,10 @@
       "types": "./src/views/Intake.tsx",
       "default": "./src/views/Intake.tsx"
     },
+    "./ProjectSetup": {
+      "types": "./src/views/ProjectSetup.tsx",
+      "default": "./src/views/ProjectSetup.tsx"
+    },
     "./GuidedFlow": {
       "types": "./src/views/GuidedFlow.tsx",
       "default": "./src/views/GuidedFlow.tsx"

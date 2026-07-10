@@ -8,12 +8,11 @@ import { ConversationTabs } from "@vortspec/ui/ConversationTabs";
 import { SourceControl } from "@vortspec/ui/SourceControl";
 import { Inspector } from "@vortspec/ui/Inspector";
 import { GuidedFlow } from "@vortspec/ui/GuidedFlow";
-import { Intake } from "@vortspec/ui/Intake";
 import { Tasks } from "@vortspec/ui/Tasks";
 import { DesignManifest } from "@vortspec/ui/DesignManifest";
 import { RunApp } from "@vortspec/ui/RunApp";
 import { Profile } from "@vortspec/ui/Profile";
-import { NewProjectWizard } from "@vortspec/ui/NewProjectWizard";
+import { ProjectSetup } from "@vortspec/ui/ProjectSetup";
 import { ActivityBar } from "./components/ActivityBar";
 import { WorkspacePicker } from "./components/WorkspacePicker";
 import { Explorer } from "./components/Explorer";
@@ -57,9 +56,6 @@ export default function App(): JSX.Element {
   const [welcomeView, setWelcomeView] = useState<"start" | "settings">("start");
   // The destination folder for a new project being set up (Create New Project flow).
   const [newProject, setNewProject] = useState<Project | null>(null);
-  // After setup, the project runs the SDD-DE Intake (the CLI's opening questions)
-  // before opening — same Create → Intake → Foundation sequence as the cockpit.
-  const [intakeProject, setIntakeProject] = useState<Project | null>(null);
   // "Clone Repository" from the native File menu routes Home and auto-opens the
   // clone input in the WorkspacePicker (it owns the repo-URL quick-input).
   const [welcomeIntent, setWelcomeIntent] = useState<"clone" | null>(null);
@@ -244,8 +240,9 @@ export default function App(): JSX.Element {
   const go = (activity: Activity) => (): void => dispatch({ type: "setActivity", activity });
 
   if (!workspace) {
-    // Create New Project — pick/create an empty folder, then run the SDD-DE setup
-    // wizard (the same flow as the cockpit); on finish, open the created project.
+    // Create New Project — one unified setup + intake stepper (Setup · Product ·
+    // Scope · Advanced). On finish it creates the project; the open-routing effect
+    // then lands it on the Foundation.
     if (newProject) {
       return (
         <div className="flex h-screen w-screen flex-col overflow-hidden bg-vs-bg-primary text-vs-text-primary">
@@ -256,41 +253,13 @@ export default function App(): JSX.Element {
             <span className="font-bold text-vs-text-secondary">VortSpec</span>
           </header>
           <div className="min-h-0 flex-1 overflow-auto">
-            <NewProjectWizard
+            <ProjectSetup
               project={newProject}
               onCreated={(p) => {
-                // Create → Intake → Foundation (same sequence as the cockpit).
                 setNewProject(null);
-                setIntakeProject(p);
+                setWorkspace(p);
               }}
               onCancel={() => setNewProject(null)}
-            />
-          </div>
-        </div>
-      );
-    }
-    // Intake — the CLI's opening questions → intake.json. On done (or skip), open
-    // the project; the open-routing effect lands it on the Foundation.
-    if (intakeProject) {
-      return (
-        <div className="flex h-screen w-screen flex-col overflow-hidden bg-vs-bg-primary text-vs-text-primary">
-          <header
-            className="flex h-9 shrink-0 items-center justify-center border-b border-vs-border-default bg-vs-bg-surface text-xs text-vs-text-muted"
-            style={{ WebkitAppRegion: "drag" } as unknown as CSSProperties}
-          >
-            <span className="font-bold text-vs-text-secondary">VortSpec</span>
-          </header>
-          <div className="min-h-0 flex-1 overflow-auto">
-            <Intake
-              project={intakeProject}
-              onDone={() => {
-                setWorkspace(intakeProject);
-                setIntakeProject(null);
-              }}
-              onSkip={() => {
-                setWorkspace(intakeProject);
-                setIntakeProject(null);
-              }}
             />
           </div>
         </div>
