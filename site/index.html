@@ -91,6 +91,25 @@
       .btn-sm { padding: 9px 15px; font-size: 14px; border-radius: 8px; }
       .two-apps-note { font-size: 13px; color: var(--text-3); margin-bottom: 12px; }
 
+      /* IDE download dropdown (pick Apple Silicon / Intel) — JS-free <details> */
+      .dl { position: relative; display: inline-block; }
+      .dl > summary { list-style: none; }
+      .dl > summary::-webkit-details-marker { display: none; }
+      .dl > summary { cursor: pointer; user-select: none; }
+      .dl .chev { transition: transform .18s ease; }
+      .dl[open] .chev { transform: rotate(180deg); }
+      .dl-menu {
+        position: absolute; top: calc(100% + 8px); left: 0; z-index: 30; min-width: 220px;
+        background: var(--elevated); border: 1px solid var(--border-strong); border-radius: 10px;
+        padding: 6px; box-shadow: 0 16px 40px rgba(0,0,0,0.45);
+        animation: dlpop .14s ease both;
+      }
+      @keyframes dlpop { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+      .dl-menu a { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 7px; color: var(--text); font-size: 14px; }
+      .dl-menu a:hover { background: rgba(124,111,240,0.14); }
+      .dl-menu a small { display: block; color: var(--text-3); font-size: 12px; font-weight: 400; }
+      .dl-menu .arch { font-weight: 500; }
+
       /* hero */
       .hero { text-align: center; padding: 92px 0 72px; position: relative; }
       #hero-canvas { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none; }
@@ -109,7 +128,6 @@
       h1 .grad { background: linear-gradient(120deg, #a99bff, #7c6ff0 60%, #5c8df0); -webkit-background-clip: text; background-clip: text; color: transparent; }
       .sub { font-size: clamp(16px, 2.3vw, 19px); color: var(--text-2); max-width: 60ch; margin: 0 auto 34px; }
       .cta { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; margin-top: 8px; }
-      .os-note { display: block; margin-top: 30px; font-size: 12.5px; color: var(--text-3); }
       .apple { width: 16px; height: 16px; }
 
       @keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
@@ -256,10 +274,17 @@
               <svg class="apple" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M11.18 8.46c-.02-1.6 1.31-2.37 1.37-2.41-.75-1.1-1.91-1.25-2.32-1.26-.99-.1-1.93.58-2.43.58-.5 0-1.28-.57-2.1-.55-1.08.02-2.08.63-2.63 1.6-1.12 1.95-.29 4.83.8 6.41.54.77 1.17 1.64 2 1.6.8-.03 1.11-.52 2.08-.52.97 0 1.24.52 2.09.5.86-.01 1.41-.78 1.94-1.56.61-.9.86-1.76.87-1.8-.02-.01-1.67-.64-1.68-2.55zM9.62 3.9c.44-.53.74-1.27.66-2.01-.63.03-1.4.42-1.86.95-.41.47-.77 1.22-.67 1.94.71.06 1.42-.36 1.87-.88z"/></svg>
               Download the Cockpit
             </a>
-            <a class="btn btn-ide" href="https://github.com/royvillasana/VortSpec/releases/latest/download/VortSpec-IDE-mac-arm64.dmg">
-              <svg class="apple" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M11.18 8.46c-.02-1.6 1.31-2.37 1.37-2.41-.75-1.1-1.91-1.25-2.32-1.26-.99-.1-1.93.58-2.43.58-.5 0-1.28-.57-2.1-.55-1.08.02-2.08.63-2.63 1.6-1.12 1.95-.29 4.83.8 6.41.54.77 1.17 1.64 2 1.6.8-.03 1.11-.52 2.08-.52.97 0 1.24.52 2.09.5.86-.01 1.41-.78 1.94-1.56.61-.9.86-1.76.87-1.8-.02-.01-1.67-.64-1.68-2.55zM9.62 3.9c.44-.53.74-1.27.66-2.01-.63.03-1.4.42-1.86.95-.41.47-.77 1.22-.67 1.94.71.06 1.42-.36 1.87-.88z"/></svg>
-              Download the IDE
-            </a>
+            <details class="dl">
+              <summary class="btn btn-ide">
+                <svg class="apple" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M11.18 8.46c-.02-1.6 1.31-2.37 1.37-2.41-.75-1.1-1.91-1.25-2.32-1.26-.99-.1-1.93.58-2.43.58-.5 0-1.28-.57-2.1-.55-1.08.02-2.08.63-2.63 1.6-1.12 1.95-.29 4.83.8 6.41.54.77 1.17 1.64 2 1.6.8-.03 1.11-.52 2.08-.52.97 0 1.24.52 2.09.5.86-.01 1.41-.78 1.94-1.56.61-.9.86-1.76.87-1.8-.02-.01-1.67-.64-1.68-2.55zM9.62 3.9c.44-.53.74-1.27.66-2.01-.63.03-1.4.42-1.86.95-.41.47-.77 1.22-.67 1.94.71.06 1.42-.36 1.87-.88z"/></svg>
+                Download the IDE
+                <svg class="chev" width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 8l5 5 5-5"/></svg>
+              </summary>
+              <div class="dl-menu">
+                <a href="https://github.com/royvillasana/VortSpec/releases/latest/download/VortSpec-IDE-mac-arm64.dmg"><span class="arch">Apple Silicon<small>M1 / M2 / M3 and newer</small></span></a>
+                <a href="https://github.com/royvillasana/VortSpec/releases/latest/download/VortSpec-IDE-mac-intel.dmg"><span class="arch">Intel<small>older Intel-based Macs</small></span></a>
+              </div>
+            </details>
             <a class="btn btn-ghost" href="https://github.com/royvillasana/VortSpec" target="_blank" rel="noopener">View on GitHub</a>
           </div>
         </div>
@@ -498,14 +523,17 @@
                 <svg class="apple" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M11.18 8.46c-.02-1.6 1.31-2.37 1.37-2.41-.75-1.1-1.91-1.25-2.32-1.26-.99-.1-1.93.58-2.43.58-.5 0-1.28-.57-2.1-.55-1.08.02-2.08.63-2.63 1.6-1.12 1.95-.29 4.83.8 6.41.54.77 1.17 1.64 2 1.6.8-.03 1.11-.52 2.08-.52.97 0 1.24.52 2.09.5.86-.01 1.41-.78 1.94-1.56.61-.9.86-1.76.87-1.8-.02-.01-1.67-.64-1.68-2.55zM9.62 3.9c.44-.53.74-1.27.66-2.01-.63.03-1.4.42-1.86.95-.41.47-.77 1.22-.67 1.94.71.06 1.42-.36 1.87-.88z"/></svg>
                 Get the Cockpit
               </a>
-              <a class="btn btn-ide" href="https://github.com/royvillasana/VortSpec/releases/latest/download/VortSpec-IDE-mac-arm64.dmg">
-                <svg class="apple" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M11.18 8.46c-.02-1.6 1.31-2.37 1.37-2.41-.75-1.1-1.91-1.25-2.32-1.26-.99-.1-1.93.58-2.43.58-.5 0-1.28-.57-2.1-.55-1.08.02-2.08.63-2.63 1.6-1.12 1.95-.29 4.83.8 6.41.54.77 1.17 1.64 2 1.6.8-.03 1.11-.52 2.08-.52.97 0 1.24.52 2.09.5.86-.01 1.41-.78 1.94-1.56.61-.9.86-1.76.87-1.8-.02-.01-1.67-.64-1.68-2.55zM9.62 3.9c.44-.53.74-1.27.66-2.01-.63.03-1.4.42-1.86.95-.41.47-.77 1.22-.67 1.94.71.06 1.42-.36 1.87-.88z"/></svg>
-                IDE — Apple Silicon
-              </a>
-              <a class="btn btn-ghost" href="https://github.com/royvillasana/VortSpec/releases/latest/download/VortSpec-IDE-mac-intel.dmg">
-                <svg class="apple" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M11.18 8.46c-.02-1.6 1.31-2.37 1.37-2.41-.75-1.1-1.91-1.25-2.32-1.26-.99-.1-1.93.58-2.43.58-.5 0-1.28-.57-2.1-.55-1.08.02-2.08.63-2.63 1.6-1.12 1.95-.29 4.83.8 6.41.54.77 1.17 1.64 2 1.6.8-.03 1.11-.52 2.08-.52.97 0 1.24.52 2.09.5.86-.01 1.41-.78 1.94-1.56.61-.9.86-1.76.87-1.8-.02-.01-1.67-.64-1.68-2.55zM9.62 3.9c.44-.53.74-1.27.66-2.01-.63.03-1.4.42-1.86.95-.41.47-.77 1.22-.67 1.94.71.06 1.42-.36 1.87-.88z"/></svg>
-                IDE — Intel
-              </a>
+              <details class="dl">
+                <summary class="btn btn-ide">
+                  <svg class="apple" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M11.18 8.46c-.02-1.6 1.31-2.37 1.37-2.41-.75-1.1-1.91-1.25-2.32-1.26-.99-.1-1.93.58-2.43.58-.5 0-1.28-.57-2.1-.55-1.08.02-2.08.63-2.63 1.6-1.12 1.95-.29 4.83.8 6.41.54.77 1.17 1.64 2 1.6.8-.03 1.11-.52 2.08-.52.97 0 1.24.52 2.09.5.86-.01 1.41-.78 1.94-1.56.61-.9.86-1.76.87-1.8-.02-.01-1.67-.64-1.68-2.55zM9.62 3.9c.44-.53.74-1.27.66-2.01-.63.03-1.4.42-1.86.95-.41.47-.77 1.22-.67 1.94.71.06 1.42-.36 1.87-.88z"/></svg>
+                  Download the IDE
+                  <svg class="chev" width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 8l5 5 5-5"/></svg>
+                </summary>
+                <div class="dl-menu">
+                  <a href="https://github.com/royvillasana/VortSpec/releases/latest/download/VortSpec-IDE-mac-arm64.dmg"><span class="arch">Apple Silicon<small>M1 / M2 / M3 and newer</small></span></a>
+                  <a href="https://github.com/royvillasana/VortSpec/releases/latest/download/VortSpec-IDE-mac-intel.dmg"><span class="arch">Intel<small>older Intel-based Macs</small></span></a>
+                </div>
+              </details>
             </div>
           </div>
         </div>
@@ -523,6 +551,17 @@
       </footer>
     </main>
 
+    <script>
+      // Close any open IDE download dropdown when clicking elsewhere or pressing Escape.
+      document.addEventListener("click", (e) => {
+        document.querySelectorAll("details.dl[open]").forEach((d) => {
+          if (!d.contains(e.target)) d.removeAttribute("open");
+        });
+      });
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") document.querySelectorAll("details.dl[open]").forEach((d) => d.removeAttribute("open"));
+      });
+    </script>
     <script>
       // Subtle interactive dot-grid overlay for the hero. Faint gray dots at rest;
       // near the cursor they brighten, grow, take on a hint of the accent hue, and
