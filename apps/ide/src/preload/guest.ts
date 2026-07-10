@@ -95,6 +95,8 @@ let uidSeq = 0;
 const overrides = new Map<string, StyleOverride>();
 /** Ephemeral class swaps, keyed by node uid: classes we added / removed for a variant preview. */
 const classOverrides = new Map<string, ClassOverride>();
+/** Ephemeral inline text edits, keyed by node uid (survive a re-render until persisted). */
+const textOverrides = new Map<string, { applied: string; original: string }>();
 let selectedId: string | null = null;
 /** Input mode: `interact` (default) lets the app work; `inspect` intercepts hover/click to select. */
 let mode: "inspect" | "interact" = "interact";
@@ -253,12 +255,24 @@ function readoutOf(el: Element, id: string): NodeReadout {
   };
 }
 
-/** The element's visible text when it is a text leaf (no element children), else undefined. */
+/** A genuine text leaf: an element with text but no (non-skipped) element children. */
+function isTextLeaf(el: Element): boolean {
+  return !Array.from(el.children).some((c) => !SKIP_TAGS.has(c.tagName));
+}
+
+/** The element's visible text when it is a text leaf, else undefined. */
 function textLeaf(el: Element): string | undefined {
-  const hasElementChild = Array.from(el.children).some((c) => !SKIP_TAGS.has(c.tagName));
-  if (hasElementChild) return undefined;
+  if (!isTextLeaf(el)) return undefined;
   const t = (el.textContent ?? "").trim();
   return t ? t.slice(0, 2000) : undefined;
+}
+
+/** Set an element's text as an ephemeral edit, capturing the original once (for restore). */
+function setTextOverride(id: string, el: Element, text: string): void {
+  let t = textOverrides.get(id);
+  if (!t) textOverrides.set(id, (t = { applied: text, original: el.textContent ?? "" }));
+  else t.applied = text;
+  el.textContent = text;
 }
 
 function applyOverride(id: string, css: Record<string, string>): void {
@@ -287,17 +301,21 @@ function restoreOverride(id: string): void {
     for (const c of cls.remove) el.classList.add(c);
   }
   classOverrides.delete(id);
+  const txt = textOverrides.get(id);
+  if (txt && el && isTextLeaf(el)) el.textContent = txt.original;
+  textOverrides.delete(id);
 }
 
 function clearOverride(id?: string): void {
   if (id !== undefined) {
     restoreOverride(id);
   } else {
-    for (const key of new Set([...overrides.keys(), ...classOverrides.keys()])) restoreOverride(key);
+    for (const key of new Set([...overrides.keys(), ...classOverrides.keys(), ...textOverrides.keys()]))
+      restoreOverride(key);
   }
 }
 
-/** Re-apply every ephemeral edit to the elements the current scan resolved (Phase 2). */
+/** Re-apply every ephemeral edit to the elements the current scan resolved (Phase 2/4). */
 function reapplyOverrides(): void {
   for (const [id, o] of overrides) {
     const el = resolve(id) as HTMLElement | undefined;
@@ -309,6 +327,12 @@ function reapplyOverrides(): void {
       for (const c of cls.remove) el.classList.remove(c);
       for (const c of cls.add) el.classList.add(c);
     }
+  }
+  // A re-render reverts our ephemeral text — re-apply it (only to a still-valid leaf)
+  // so the pending edit doesn't silently vanish before the user persists it.
+  for (const [id, t] of textOverrides) {
+    const el = resolve(id);
+    if (el && isTextLeaf(el) && (el.textContent ?? "") !== t.applied) el.textContent = t.applied;
   }
 }
 
@@ -374,9 +398,11 @@ function handleCommand(cmd: BridgeCommand): void {
       if (selectedId) emitGeometry(selectedId);
       return;
     case "setText": {
-      const el = resolve(cmd.nodeId) as HTMLElement | undefined;
-      if (el && !Array.from(el.children).some((c) => !SKIP_TAGS.has(c.tagName))) {
-        el.textContent = cmd.text;
+      const el = resolve(cmd.nodeId);
+      // Only ever rewrite genuine text leaves — never clobber an element that has
+      // formatted children (that would drop them and fight the framework's VDOM).
+      if (el && isTextLeaf(el)) {
+        setTextOverride(cmd.nodeId, el, cmd.text);
         emitGeometry(cmd.nodeId);
       }
       return;
@@ -485,25 +511,40 @@ function attach(): void {
       const id = idUnder(e.target);
       if (id === null) return;
       const el = resolve(id) as HTMLElement | undefined;
-      if (!el || Array.from(el.children).some((c) => !SKIP_TAGS.has(c.tagName))) return; // not a text leaf
+      // Only genuine text leaves are editable; double-clicking anything else is an
+      // inert no-op (never a partial/destructive edit of an element with children).
+      if (!el || !isTextLeaf(el)) return;
       e.preventDefault();
       e.stopPropagation();
       selectedId = id;
       send({ t: "readout", readout: readoutOf(el, id) });
+      const originalText = el.textContent ?? "";
       el.setAttribute("contenteditable", "true");
       el.focus();
+      let cancelled = false;
       const onKey = (ev: KeyboardEvent): void => {
         if (ev.key === "Enter" && !ev.shiftKey) {
           ev.preventDefault();
           el.blur();
         } else if (ev.key === "Escape") {
+          cancelled = true; // revert; don't emit an edit
           el.blur();
         }
       };
       const finish = (): void => {
         el.removeAttribute("contenteditable");
         el.removeEventListener("keydown", onKey);
-        send({ t: "textEdited", nodeId: id, text: (el.textContent ?? "").trim() });
+        if (cancelled) {
+          el.textContent = originalText;
+          return;
+        }
+        const text = (el.textContent ?? "").trim();
+        // Record as an ephemeral override so an HMR re-render doesn't silently revert
+        // the edit before it's persisted through the gated modify flow.
+        const t = textOverrides.get(id);
+        if (t) t.applied = text;
+        else textOverrides.set(id, { applied: text, original: originalText });
+        send({ t: "textEdited", nodeId: id, text });
       };
       el.addEventListener("blur", finish, { once: true });
       el.addEventListener("keydown", onKey);

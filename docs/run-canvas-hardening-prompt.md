@@ -107,6 +107,8 @@ The Run Canvas must let a user **select, inspect, and manipulate any component o
 
 **Done when.** Editing a text leaf updates it live and emits a clean `textEdited`; attempting to edit a non-leaf does nothing destructive; an HMR re-render does not leave a half-applied edit. Covered by a Playwright step and a guest unit where feasible.
 
+> **Status (done).** A shared `isTextLeaf(el)` now guards both `setText` and the double-click handler (and backs `textLeaf`); double-clicking a non-leaf is an inert no-op, never a partial edit. Ephemeral text edits are tracked by stable uid in `textOverrides` (applied + original), re-applied in `reapplyOverrides` after each re-scan so an HMR re-render doesn't silently revert a pending edit, and cleanly reverted on `clearOverride`. Escape now cancels an inline edit (restores the original, emits no `textEdited`); Enter/blur commits and records the override. The guest is DOM+electron-coupled so the check is verified by build + the Playwright/hands-on pass (per "where feasible").
+
 ---
 
 ## Phase 5 — Token-aware value editing (raw value or design token)
