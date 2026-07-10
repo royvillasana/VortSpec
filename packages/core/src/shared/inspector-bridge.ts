@@ -239,6 +239,16 @@ export type BridgeEvent = z.infer<typeof bridgeEventSchema>;
 // The stable node-identity fingerprint (Phase 1) — re-exported so the guest, which
 // imports this module, gets the resolver from one place.
 export { fingerprint, classSignature, segToken, type FpSeg } from "./dom-fingerprint";
+// Ephemeral-edit bookkeeping (Phase 2), likewise re-exported for the guest.
+export {
+  emptyStyleOverride,
+  mergeStyle,
+  restorePlan,
+  emptyClassOverride,
+  mergeClass,
+  type StyleOverride,
+  type ClassOverride,
+} from "./override-store";
 
 /** The channel name used for host⇄guest `webview` IPC messages. */
 export const INSPECTOR_BRIDGE_CHANNEL = "vortspec:inspector-bridge";

@@ -6,11 +6,18 @@ import {
   bridgeCommandSchema,
   fingerprint,
   classSignature,
+  emptyStyleOverride,
+  mergeStyle,
+  restorePlan,
+  emptyClassOverride,
+  mergeClass,
   type BridgeCommand,
   type BridgeEvent,
   type BridgeNode,
   type BridgeTree,
   type FpSeg,
+  type StyleOverride,
+  type ClassOverride,
   type NodeReadout,
   type Rect,
 } from "@vortspec/core/inspector-bridge";
@@ -81,10 +88,13 @@ let byId = new Map<string, Element>();
 /** fingerprint → uid from the last scan — re-acquires a uid after a re-render swaps the element. */
 let fpToUid = new Map<string, string>();
 let uidSeq = 0;
-/** Ephemeral overrides: element → the inline-style text it had before we touched it. */
-const overrides = new Map<Element, string>();
-/** Ephemeral class overrides: element → the `class` attribute it had before we swapped variants. */
-const classOverrides = new Map<Element, string>();
+// Ephemeral edits are keyed by the stable uid (Phase 2), not the element object, so
+// they re-apply to the element a re-render hands us in its place. The bookkeeping
+// (merge/restore semantics) lives in the pure, unit-tested `override-store`.
+/** Ephemeral inline-style overrides, keyed by node uid. */
+const overrides = new Map<string, StyleOverride>();
+/** Ephemeral class swaps, keyed by node uid: classes we added / removed for a variant preview. */
+const classOverrides = new Map<string, ClassOverride>();
 let selectedId: string | null = null;
 /** Input mode: `interact` (default) lets the app work; `inspect` intercepts hover/click to select. */
 let mode: "inspect" | "interact" = "interact";
@@ -254,29 +264,51 @@ function textLeaf(el: Element): string | undefined {
 function applyOverride(id: string, css: Record<string, string>): void {
   const el = resolve(id) as HTMLElement | undefined;
   if (!el || !("style" in el)) return;
-  if (!overrides.has(el)) overrides.set(el, el.getAttribute("style") ?? "");
+  let o = overrides.get(id);
+  if (!o) overrides.set(id, (o = emptyStyleOverride()));
+  mergeStyle(o, css, (prop) => el.style.getPropertyValue(prop));
   for (const [prop, value] of Object.entries(css)) el.style.setProperty(prop, value);
 }
 
+/** Restore an element to its pre-override inline state and forget the override. */
+function restoreOverride(id: string): void {
+  const el = resolve(id) as HTMLElement | undefined;
+  const o = overrides.get(id);
+  if (o && el) {
+    for (const [prop, value] of Object.entries(restorePlan(o))) {
+      if (value === null) el.style.removeProperty(prop);
+      else el.style.setProperty(prop, value);
+    }
+  }
+  overrides.delete(id);
+  const cls = classOverrides.get(id);
+  if (cls && el) {
+    for (const c of cls.add) el.classList.remove(c);
+    for (const c of cls.remove) el.classList.add(c);
+  }
+  classOverrides.delete(id);
+}
+
 function clearOverride(id?: string): void {
-  const restore = (el: Element): void => {
-    const style = overrides.get(el);
-    if (style !== undefined) {
-      if (style) el.setAttribute("style", style);
-      else el.removeAttribute("style");
-      overrides.delete(el);
-    }
-    const cls = classOverrides.get(el);
-    if (cls !== undefined) {
-      el.setAttribute("class", cls);
-      classOverrides.delete(el);
-    }
-  };
   if (id !== undefined) {
-    const el = resolve(id);
-    if (el) restore(el);
+    restoreOverride(id);
   } else {
-    for (const el of new Set([...overrides.keys(), ...classOverrides.keys()])) restore(el);
+    for (const key of new Set([...overrides.keys(), ...classOverrides.keys()])) restoreOverride(key);
+  }
+}
+
+/** Re-apply every ephemeral edit to the elements the current scan resolved (Phase 2). */
+function reapplyOverrides(): void {
+  for (const [id, o] of overrides) {
+    const el = resolve(id) as HTMLElement | undefined;
+    if (el) for (const [prop, value] of Object.entries(o.applied)) el.style.setProperty(prop, value);
+  }
+  for (const [id, cls] of classOverrides) {
+    const el = resolve(id);
+    if (el) {
+      for (const c of cls.remove) el.classList.remove(c);
+      for (const c of cls.add) el.classList.add(c);
+    }
   }
 }
 
@@ -294,6 +326,7 @@ function emitGeometry(id: string): void {
  */
 function rebuildAndReacquire(): void {
   send({ t: "tree", tree: buildTree() });
+  reapplyOverrides(); // a re-render reset the DOM — re-paint our ephemeral edits
   if (!selectedId) return;
   const el = resolve(selectedId);
   if (el) {
@@ -351,9 +384,11 @@ function handleCommand(cmd: BridgeCommand): void {
     case "setClass": {
       const el = resolve(cmd.nodeId);
       if (el) {
-        if (!classOverrides.has(el)) classOverrides.set(el, el.getAttribute("class") ?? "");
-        for (const c of cmd.remove) if (c) el.classList.remove(c);
-        for (const c of cmd.add) if (c) el.classList.add(c);
+        let c = classOverrides.get(cmd.nodeId);
+        if (!c) classOverrides.set(cmd.nodeId, (c = emptyClassOverride()));
+        mergeClass(c, cmd.remove, cmd.add);
+        for (const name of cmd.remove) if (name) el.classList.remove(name);
+        for (const name of cmd.add) if (name) el.classList.add(name);
         emitGeometry(cmd.nodeId);
       }
       return;
@@ -477,14 +512,22 @@ function attach(): void {
   );
 
   // Keep the selected node's overlay aligned during scroll / resize / layout shifts.
-  const onGeometry = (): void => {
-    if (selectedId) emitGeometry(selectedId);
+  // Coalesced behind a single rAF so a busy app can't flood the bridge with geometry
+  // events — at most one emit per frame (Phase 2), mirroring the pointermove flush.
+  let geomPending = false;
+  const flushGeometry = (): void => {
+    if (geomPending) return;
+    geomPending = true;
+    requestAnimationFrame(() => {
+      geomPending = false;
+      if (selectedId) emitGeometry(selectedId);
+    });
   };
-  window.addEventListener("scroll", onGeometry, { passive: true, capture: true });
-  window.addEventListener("resize", onGeometry, { passive: true });
+  window.addEventListener("scroll", flushGeometry, { passive: true, capture: true });
+  window.addEventListener("resize", flushGeometry, { passive: true });
   new MutationObserver((records) => {
     // Keep the selected overlay aligned for cheap attribute/layout mutations…
-    if (selectedId) emitGeometry(selectedId);
+    flushGeometry();
     // …and when the DOM's structure changed (an HMR re-render or route swap),
     // rescan so ids re-acquire their elements and the selection re-locks.
     if (records.some((r) => r.type === "childList" && (r.addedNodes.length || r.removedNodes.length))) {

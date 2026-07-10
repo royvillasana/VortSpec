@@ -67,6 +67,8 @@ The Run Canvas must let a user **select, inspect, and manipulate any component o
 
 **Done when.** On a page that mutates frequently, the overlay stays aligned with no visible lag and bridge message volume is bounded (verify via the guest console/IPC counts). An applied override remains visible across an HMR reload. Add a unit test for the rAF coalescing and a fixture-driven test that an override re-applies after a simulated tree rebuild.
 
+> **Status (done).** Ephemeral edits are now keyed by the stable uid via a pure, unit-tested bookkeeping module (`packages/core/src/shared/override-store.ts`): `mergeStyle` captures each prop's true original once and keeps `applied` for re-painting; `mergeClass` keeps add/remove exclusive; `restorePlan` drives exact restore. `rebuildAndReacquire` calls `reapplyOverrides()` after each rescan so overrides survive an HMR re-render. The `MutationObserver`'s geometry emit is now coalesced behind a single `requestAnimationFrame` (`flushGeometry`) — at most one emit per frame — and full-tree rebroadcasts are debounced (150 ms, from Phase 1). `RunCanvas`'s optimistic-drag handoff is unchanged. The "override re-applies after a simulated rebuild" invariant is covered by `override-store.test.ts`; the live no-lag / bounded-IPC check needs a running dev server (hands-on pass).
+
 ---
 
 ## Phase 3 — Component resolution accuracy
