@@ -5,9 +5,15 @@ import type {
   Selection,
 } from "@vortspec/core/ipc";
 import type { ComponentBinding } from "@vortspec/core/selection-builder";
+import { describeEdit, type PendingEdit } from "./pending";
 
-/** A readable text summary of a selection, to seed the assistant chat as context. */
-export function buildSelectionContext(selection: Selection): string {
+/**
+ * A readable text summary of a selection, to seed the assistant chat as context.
+ * When canvas edits are supplied they're appended as provenance-scoped instructions
+ * (Phase 6): variant/token/text edits read as exact, freeform style as approximate —
+ * so the agent gets precise intent where the edit has a known source mapping.
+ */
+export function buildSelectionContext(selection: Selection, edits: PendingEdit[] = []): string {
   const head = `Selected in the Run canvas: ${selection.label}${
     selection.component ? ` (component ${selection.component})` : ""
   }${selection.file ? ` — ${selection.file}` : ""}`;
@@ -20,7 +26,10 @@ export function buildSelectionContext(selection: Selection): string {
       return fields.length ? `${s.title} — ${fields.join(", ")}` : "";
     })
     .filter(Boolean);
-  return [head, variants, ...body].filter(Boolean).join("\n");
+  const editLines = edits.length
+    ? ["", "Canvas edits to apply:", ...edits.map((e) => `- ${describeEdit(e)}`)]
+    : [];
+  return [head, variants, ...body, ...editLines].filter(Boolean).join("\n");
 }
 
 /**

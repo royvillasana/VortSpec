@@ -11,6 +11,7 @@ import {
   resembleComponent,
   cssForField,
   matchTokenName,
+  tokenNameFromVar,
   buildSelectionContext,
 } from "../components/run-canvas/compose";
 import {
@@ -361,9 +362,12 @@ export function RunApp({
       // the style / token reference to the element, not a rewrite of the token).
       const field = selectionRef.current?.sections.flatMap((s) => s.fields).find((f) => f.key === key);
       // For a token-typed length field, re-derive which token (of that type) the
-      // NEW value matches — a match re-binds, no match detaches to a literal (the
-      // Figma behaviour: change the px and the token tag updates or disappears).
-      const token = field?.tokenType ? matchTokenName(value, tokensRef.current, field.tokenType) : undefined;
+      // NEW value binds — an explicit `var(--name)` binding or a literal that matches
+      // a token re-binds; anything else detaches to a literal (Figma behaviour: the
+      // token tag updates or disappears as the px changes).
+      const token = field?.tokenType
+        ? (tokenNameFromVar(value) ?? matchTokenName(value, tokensRef.current, field.tokenType))
+        : undefined;
       commitEdits([{ key, value, cssProps: Object.keys(css), css, token }], field?.kind === "color");
     },
     [applyLive, commitEdits, setText],
@@ -671,7 +675,7 @@ export function RunApp({
                   onCommitEdit={commitStyleEdits}
                   onSendToChat={
                     onSendToChat && selection
-                      ? () => onSendToChat(buildSelectionContext(selection), selection.file)
+                      ? () => onSendToChat(buildSelectionContext(selection, Object.values(pending)), selection.file)
                       : undefined
                   }
                 />

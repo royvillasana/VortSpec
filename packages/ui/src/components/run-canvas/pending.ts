@@ -87,6 +87,43 @@ export function classifyVariantEdit(
   };
 }
 
+/**
+ * The provenance of a canvas edit — how precisely it maps back to source (Phase 6).
+ * `variant`/`token`/`text` are deterministic (a known option, token, or literal);
+ * `freeform-style` is an arbitrary geometry/style target the agent must realize.
+ */
+export type EditProvenance = "variant" | "token" | "freeform-style" | "text";
+
+/** Classify a recorded edit's provenance from its kind + field. */
+export function editProvenance(edit: PendingEdit): EditProvenance {
+  if (edit.kind === "variant") return "variant";
+  if (edit.kind === "token") return "token";
+  if (edit.key === "content") return "text";
+  return "freeform-style";
+}
+
+/**
+ * A single edit as a provenance-scoped instruction: exact for deterministic edits
+ * (variant / token / text) so the agent doesn't have to guess intent, and clearly
+ * flagged as an approximate visual target for freeform geometry/style.
+ */
+export function describeEdit(edit: PendingEdit): string {
+  switch (editProvenance(edit)) {
+    case "variant": {
+      const prop = edit.key.replace(/^variant:/, "");
+      return `Set the \`${prop}\` variant to \`${edit.value}\` (exact — a known variant option).`;
+    }
+    case "token":
+      return `Bind ${edit.label} to the design token \`--${edit.token}\` (exact — a known token).`;
+    case "text":
+      return `Set the element's visible text to \`${edit.value}\` (exact).`;
+    case "freeform-style": {
+      const props = edit.cssProps.length ? edit.cssProps.join(", ") : edit.label.toLowerCase();
+      return `Approximate visual target — set ${props} to about \`${edit.value}\`; realize it in source however best fits the component.`;
+    }
+  }
+}
+
 /** A concise prompt for the gated Claude Code run that commits the structural edits. */
 export function buildEditPrompt(
   componentFile: string | null,
@@ -96,17 +133,7 @@ export function buildEditPrompt(
   const target = componentFile
     ? `the component source at \`${componentFile}\`${componentName ? ` (${componentName})` : ""}`
     : `the relevant component source`;
-  const lines = edits.map((e) => {
-    if (e.kind === "variant") {
-      const prop = e.key.replace(/^variant:/, "");
-      return `- Change the \`${prop}\` variant to \`${e.value}\`.`;
-    }
-    if (e.key === "content") {
-      return `- Change the element's visible text to \`${e.value}\`.`;
-    }
-    const props = e.cssProps.length ? e.cssProps.join(", ") : e.label.toLowerCase();
-    return `- Set ${props} to \`${e.value}\`.`;
-  });
+  const lines = edits.map((e) => `- ${describeEdit(e)}`);
   return [
     `Apply these visual edits made in the VortSpec Run Canvas to ${target}.`,
     `Make the minimal change so the rendered result matches; preserve existing design-token usage and do not touch unrelated code.`,

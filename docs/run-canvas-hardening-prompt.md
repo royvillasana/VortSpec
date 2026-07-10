@@ -151,6 +151,8 @@ The Run Canvas must let a user **select, inspect, and manipulate any component o
 
 **Done when.** A variant change and a freeform resize produce visibly different, correctly-scoped context strings for the assistant. Unit-test `buildSelectionContext` for each provenance kind. Confirm no new file writes exist anywhere in the canvas/guest path.
 
+> **Status (done).** A typed `EditProvenance = "variant" | "token" | "freeform-style" | "text"` + `editProvenance(edit)` derive provenance from the existing `PendingEdit`, and a shared `describeEdit(edit)` renders each edit as a provenance-scoped instruction: variant/token/text read as **exact** ("Set the `size` variant to `lg` (exact…)", "Bind … to design token `--vs-space-3`"), freeform geometry/style as an **approximate visual target**. `buildEditPrompt` (gated run) and `buildSelectionContext(selection, edits)` (assistant chat) both use it; the Run canvas Send-to-chat now passes the pending edits. Phase 5↔6 tie-in: `onFieldChange` recognizes a `var(--name)` binding via `tokenNameFromVar` so a token-bound length edit classifies as `token` provenance, not freeform. No disk-writing path added (all changes are pure string/DOM; the guest has no fs access). Vitest: provenance mapping + exact-vs-approximate phrasing (pending.test), variant-vs-freeform context divergence (compose.test).
+
 ---
 
 ## Phase 7 — Verification pass

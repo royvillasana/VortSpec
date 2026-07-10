@@ -1,6 +1,14 @@
 import { describe, it, expect } from "vitest";
-import { resembleComponent, matchTokenName, tokenNameFromVar, tokensForField, cssForField } from "./compose";
-import type { InspectorComponent } from "@vortspec/core/ipc";
+import {
+  resembleComponent,
+  matchTokenName,
+  tokenNameFromVar,
+  tokensForField,
+  cssForField,
+  buildSelectionContext,
+} from "./compose";
+import { classifyFieldEdit, classifyVariantEdit } from "./pending";
+import type { InspectorComponent, Selection } from "@vortspec/core/ipc";
 
 describe("matchTokenName", () => {
   const tokens = [
@@ -79,6 +87,42 @@ const button: InspectorComponent = {
   specPath: null,
   reportPath: null,
 };
+
+describe("buildSelectionContext with provenance (Phase 6)", () => {
+  const selection: Selection = {
+    nodeId: "n1",
+    label: "Button",
+    component: "Button",
+    file: "src/components/Button.tsx",
+    resembles: null,
+    rect: { x: 0, y: 0, width: 108, height: 38 },
+    variants: [],
+    sections: [
+      {
+        id: "appearance",
+        title: "Appearance",
+        fields: [{ key: "opacity", label: "Opacity", kind: "number", value: "1", token: null, options: [] }],
+      },
+    ],
+  };
+
+  it("appends nothing when there are no edits", () => {
+    expect(buildSelectionContext(selection)).not.toContain("Canvas edits");
+  });
+
+  it("scopes a variant edit as exact and a freeform resize as approximate", () => {
+    const variant = buildSelectionContext(selection, [classifyVariantEdit("size", "large")]);
+    expect(variant).toContain("Canvas edits to apply:");
+    expect(variant).toContain("Set the `size` variant to `large` (exact");
+
+    const freeform = buildSelectionContext(selection, [
+      classifyFieldEdit(selection, "opacity", "0.4", ["opacity"], () => 1),
+    ]);
+    expect(freeform).toContain("Approximate visual target");
+    // The two edits produce visibly different, correctly-scoped context.
+    expect(variant).not.toBe(freeform);
+  });
+});
 
 describe("resembleComponent", () => {
   it("flags a raw element styled exactly like a variant", () => {
