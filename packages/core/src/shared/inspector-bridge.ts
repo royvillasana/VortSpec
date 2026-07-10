@@ -196,6 +196,8 @@ export const bridgeCommandSchema = z.discriminatedUnion("t", [
    * stay on their sections. Send `[]` to stop watching.
    */
   z.object({ t: z.literal("watchAnchors"), fingerprints: z.array(z.string()) }),
+  /** Scroll the element for a comment anchor into view (jump-to-pin from the panel). */
+  z.object({ t: z.literal("scrollToAnchor"), fingerprint: z.string() }),
   /** Apply an ephemeral CSS override to a node (instant preview; nothing written). */
   z.object({
     t: z.literal("applyOverride"),

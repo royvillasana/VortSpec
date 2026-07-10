@@ -59,6 +59,8 @@ export interface InspectorBridge {
   anchorRects: Record<string, Rect | null>;
   /** Tell the guest which anchor fingerprints to track (for pin placement). */
   watchAnchors: (fingerprints: string[]) => void;
+  /** Scroll the element for a comment anchor into view (jump-to-pin). */
+  scrollToAnchor: (fingerprint: string) => void;
   /** Capture a ~160px thumbnail of a guest rect (webview capturePage crop); "" if unavailable. */
   captureThumbnail: (rect: Rect) => Promise<string>;
   applyOverride: (id: string, css: Record<string, string>) => void;
@@ -215,6 +217,7 @@ export function useInspectorBridge(): InspectorBridge {
     [send],
   );
   const watchAnchors = useCallback((fingerprints: string[]) => send({ t: "watchAnchors", fingerprints }), [send]);
+  const scrollToAnchor = useCallback((fingerprint: string) => send({ t: "scrollToAnchor", fingerprint }), [send]);
   const captureThumbnail = useCallback(async (rect: Rect): Promise<string> => {
     // Electron <webview>.capturePage(rect) → NativeImage; downscale to a thumbnail.
     const wv = webviewRef.current as unknown as {
@@ -283,6 +286,7 @@ export function useInspectorBridge(): InspectorBridge {
     clearCommentTarget: useCallback(() => setCommentTarget(null), []),
     anchorRects,
     watchAnchors,
+    scrollToAnchor,
     captureThumbnail,
     setText,
     setClass,

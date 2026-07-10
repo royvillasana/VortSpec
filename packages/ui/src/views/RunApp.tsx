@@ -24,6 +24,7 @@ import {
 import { useInspectorBridge, type CanvasMode } from "../lib/useInspectorBridge";
 import { useComments } from "../lib/useComments";
 import { CommentsLayer } from "../components/run-canvas/CommentsLayer";
+import { CommentsPanel } from "../components/run-canvas/CommentsPanel";
 import type { Anchor } from "@vortspec/core/comment";
 import { useAgentRun } from "../lib/useAgentRun";
 import { routedModel } from "../lib/model-routing";
@@ -657,6 +658,22 @@ export function RunApp({
                 style={{ width: panelW }}
                 className="flex-none overflow-hidden border-r border-vs-border-default bg-vs-bg-surface"
               >
+                {mode === "comment" ? (
+                  <CommentsPanel
+                    threads={comments.threads}
+                    anchorRects={bridge.anchorRects}
+                    activeId={comments.activeId}
+                    me={{ login: comments.author.githubLogin, name: comments.author.name }}
+                    mode={mode}
+                    onModeChange={setMode}
+                    onSelect={(t) => {
+                      comments.setActiveId(t.id);
+                      bridge.scrollToAnchor(t.anchor.fingerprint);
+                    }}
+                    onResolve={(id, resolved) => void resolveComment(id, resolved)}
+                    onShare={() => void comments.share()}
+                  />
+                ) : (
                 <DesignPanel
                   selection={selection}
                   tree={bridge.tree}
@@ -701,6 +718,7 @@ export function RunApp({
                       : undefined
                   }
                 />
+                )}
               </aside>
               {/* Resize the Design panel (like the IDE Explorer rail). */}
               <div

@@ -40,9 +40,9 @@
 
 ## Phase 5 — Comments panel + filters
 
-- [ ] `CommentsPanel` tab: list threads with filters (Open / Resolved / @me / Mine), jump-to-pin, unanchored section with thumbnails, "view on GitHub" when notified.
-- [ ] CT: filters narrow the list; clicking a thread selects its pin.
-- [ ] **Done when:** all threads are browsable/filterable and jump the canvas to their pin.
+- [x] `CommentsPanel` (the sidebar in comment mode): filters (Open / Resolved / @me / Mine, pure `comment-filters.ts`), jump-to-pin (selects + `scrollToAnchor` scrolls the element into view via a new bridge command), an "unanchored" section for off-view threads (with thumbnails), "View on GitHub" when notified, per-row Resolve/Reopen, a Share button, and a mode toggle to leave comment mode.
+- [x] Vitest (`comment-filters.test`, 4): each filter narrows correctly (open/resolved/@me/mine by login-or-name). CT (`comments-panel.ct`, 4): filters narrow the list, clicking a thread jumps to its pin, an unanchored thread is grouped, the mode toggle exits comment mode.
+- [x] **Done when:** all threads are browsable/filterable in the panel and clicking one jumps the canvas to its pin (`scrollToAnchor` + select). Verified via unit + CT; the live scroll is the hands-on pass.
 
 ## Phase 6 — Verification
 

@@ -457,6 +457,14 @@ function handleCommand(cmd: BridgeCommand): void {
       watchedFingerprints = cmd.fingerprints;
       emitAnchorRects();
       return;
+    case "scrollToAnchor": {
+      const el = resolveFingerprint(cmd.fingerprint);
+      if (el) {
+        el.scrollIntoView({ block: "center", inline: "center" });
+        emitAnchorRects(); // pins re-align after the scroll
+      }
+      return;
+    }
   }
 }
 
