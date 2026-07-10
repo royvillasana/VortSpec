@@ -68,9 +68,14 @@ const SddPipelineMark = (
   </svg>
 );
 
-// Order (top → bottom): Playground, Tokens, Design manifest, Storybook, Explorer,
+// Order (top → bottom): Explorer, Playground, Tokens, Design manifest, Storybook,
 // Jira (Tasks), Git (Source Control), SDD-DE pipeline.
 const TOP: Item[] = [
+  {
+    key: "explorer",
+    label: "Explorer",
+    icon: <path d="M3 4.5A1.5 1.5 0 0 1 4.5 3h4l2 2.5h5A1.5 1.5 0 0 1 17 7v8.5A1.5 1.5 0 0 1 15.5 17h-11A1.5 1.5 0 0 1 3 15.5v-11Z" />,
+  },
   {
     key: "run",
     label: "Playground",
@@ -90,11 +95,6 @@ const TOP: Item[] = [
     key: "play",
     label: "Storybook",
     custom: StorybookMark,
-  },
-  {
-    key: "explorer",
-    label: "Explorer",
-    icon: <path d="M3 4.5A1.5 1.5 0 0 1 4.5 3h4l2 2.5h5A1.5 1.5 0 0 1 17 7v8.5A1.5 1.5 0 0 1 15.5 17h-11A1.5 1.5 0 0 1 3 15.5v-11Z" />,
   },
   {
     key: "tasks",
