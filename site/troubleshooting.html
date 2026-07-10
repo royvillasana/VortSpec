@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>VortSpec IDE — Troubleshooting &amp; First-Run Reference</title>
+    <meta name="description" content="What the VortSpec IDE validates on first run, what it installs with your permission, what counts as a blocker, and how to fix common issues — Gatekeeper, PATH, .env, permissions, and the Run Doctor." />
+    <link rel="icon" type="image/png" href="./favicon.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
+    <style>
+      :root {
+        --bg: #0b0c0e; --surface: #141518; --elevated: #1b1d21; --border: #26282d; --border-strong: #34373d;
+        --text: #e7e9ec; --text-2: #9ba1ab; --text-3: #6b7280; --accent: #7c6ff0; --success: #30a46c; --warning: #ffb224; --danger: #e5484d;
+      }
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      html { scroll-behavior: smooth; }
+      body { background: var(--bg); color: var(--text); font-family: "Geist", system-ui, -apple-system, sans-serif; font-size: 16px; line-height: 1.65; -webkit-font-smoothing: antialiased; overflow-x: hidden; }
+      a { color: inherit; text-decoration: none; }
+      code, .mono { font-family: "Geist Mono", ui-monospace, monospace; }
+      .wrap { width: 100%; max-width: 1080px; margin: 0 auto; padding: 0 24px; }
+      .glow { position: fixed; inset: 0; z-index: 0; pointer-events: none; background: radial-gradient(600px 400px at 50% -8%, rgba(124,111,240,0.16), transparent 70%); }
+      main { position: relative; z-index: 1; }
+      nav { position: sticky; top: 0; z-index: 20; backdrop-filter: blur(10px); background: rgba(11,12,14,0.72); border-bottom: 1px solid var(--border); }
+      nav .row { display: flex; align-items: center; gap: 14px; height: 60px; }
+      nav .brand { display: flex; align-items: center; gap: 10px; font-weight: 600; }
+      nav .brand img { width: 26px; height: 26px; }
+      nav .spacer { flex: 1; }
+      nav .links { display: flex; align-items: center; gap: 22px; color: var(--text-2); font-size: 14px; }
+      nav .links a:hover, nav .links a.active { color: var(--text); }
+      @media (max-width: 760px) { nav .links a.hide-sm { display: none; } }
+      .btn { display: inline-flex; align-items: center; justify-content: center; gap: 9px; border-radius: 10px; font-weight: 500; font-size: 14px; line-height: 1; padding: 9px 15px; cursor: pointer; border: 1px solid transparent; transition: filter .15s ease, background .15s ease, border-color .15s ease; }
+      .btn-ide { background: rgba(124,111,240,0.1); color: var(--text); border-color: var(--accent); }
+      .btn-ide:hover { background: rgba(124,111,240,0.18); }
+
+      .doc { display: grid; grid-template-columns: 232px 1fr; gap: 48px; padding: 56px 0 96px; align-items: start; }
+      @media (max-width: 900px) { .doc { grid-template-columns: 1fr; gap: 24px; } .toc { display: none; } }
+      .toc { position: sticky; top: 92px; font-size: 13.5px; }
+      .toc h4 { text-transform: uppercase; letter-spacing: .06em; font-size: 11px; color: var(--text-3); margin-bottom: 12px; }
+      .toc a { display: block; color: var(--text-2); padding: 5px 0; border-left: 2px solid transparent; padding-left: 12px; margin-left: -14px; }
+      .toc a:hover { color: var(--text); border-color: var(--border-strong); }
+
+      .lede { font-size: 18px; color: var(--text-2); margin: 8px 0 40px; max-width: 62ch; }
+      .eyebrow { color: var(--accent); font-weight: 600; font-size: 13px; letter-spacing: .04em; text-transform: uppercase; }
+      h1 { font-size: 40px; font-weight: 700; letter-spacing: -0.02em; margin: 10px 0 0; }
+      h2 { font-size: 25px; font-weight: 650; letter-spacing: -0.01em; margin: 52px 0 14px; scroll-margin-top: 84px; }
+      h3 { font-size: 17px; font-weight: 600; margin: 26px 0 8px; scroll-margin-top: 84px; }
+      p { color: var(--text); margin: 12px 0; max-width: 68ch; }
+      p.sub, li.sub { color: var(--text-2); }
+      ul, ol { margin: 12px 0 12px 22px; }
+      li { margin: 7px 0; max-width: 66ch; }
+      strong { font-weight: 600; }
+      hr { border: 0; border-top: 1px solid var(--border); margin: 40px 0; }
+      code { background: var(--elevated); border: 1px solid var(--border); border-radius: 5px; padding: 1.5px 6px; font-size: 13px; color: #cfd3da; }
+      pre { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; overflow-x: auto; margin: 14px 0; }
+      pre code { background: none; border: 0; padding: 0; font-size: 13px; color: #d7dbe2; }
+
+      table { width: 100%; border-collapse: collapse; margin: 18px 0; font-size: 14.5px; }
+      .tablewrap { overflow-x: auto; }
+      th, td { text-align: left; padding: 11px 14px; border-bottom: 1px solid var(--border); vertical-align: top; }
+      th { color: var(--text-2); font-weight: 600; font-size: 12.5px; text-transform: uppercase; letter-spacing: .03em; }
+      td:first-child { white-space: nowrap; font-weight: 600; }
+      .pill { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--border-strong); }
+      .pill.block { color: #ffb4b4; border-color: rgba(229,72,77,0.5); background: rgba(229,72,77,0.08); }
+      .pill.ok { color: #a7e8c7; border-color: rgba(48,164,108,0.5); background: rgba(48,164,108,0.08); }
+      .pill.opt { color: #cbb6ff; border-color: rgba(124,111,240,0.5); background: rgba(124,111,240,0.08); }
+
+      .callout { border-radius: 10px; padding: 14px 16px; margin: 18px 0; border: 1px solid var(--border); background: var(--surface); font-size: 14.5px; }
+      .callout.info { border-color: rgba(124,111,240,0.4); background: rgba(124,111,240,0.07); }
+      .callout.warn { border-color: rgba(255,178,36,0.4); background: rgba(255,178,36,0.07); }
+      .callout.good { border-color: rgba(48,164,108,0.4); background: rgba(48,164,108,0.07); }
+      .callout .tag { font-weight: 600; margin-right: 6px; }
+      .callout.info .tag { color: #b8aeff; } .callout.warn .tag { color: var(--warning); } .callout.good .tag { color: #7bd3a6; }
+
+      .fix { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 4px 22px 18px; margin: 18px 0; }
+      .fix h3 { color: var(--text); }
+      .fix .symptom { color: var(--text-2); font-size: 14.5px; margin-top: 4px; }
+      footer { border-top: 1px solid var(--border); padding: 30px 0; color: var(--text-3); font-size: 13.5px; }
+      footer .row { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+      footer a { color: var(--text-2); } footer a:hover { color: var(--text); }
+      .pageicon { width: 64px; height: 64px; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,.45); margin-bottom: 18px; }
+    </style>
+  </head>
+  <body>
+    <div class="glow"></div>
+    <main>
+      <nav>
+        <div class="wrap row">
+          <a class="brand" href="./index.html"><img src="./vortspec-logo.png" alt="VortSpec" />VortSpec</a>
+          <span class="spacer"></span>
+          <div class="links">
+            <a href="./index.html" class="hide-sm">Home</a>
+            <a href="./guide.html">Usage Guide</a>
+            <a href="./troubleshooting.html" class="active">Troubleshooting</a>
+            <a class="btn btn-ide" href="https://github.com/royvillasana/VortSpec/releases/latest/download/VortSpec-IDE-mac-universal.dmg">Download the IDE</a>
+          </div>
+        </div>
+      </nav>
+
+      <div class="wrap doc">
+        <aside class="toc">
+          <h4>Contents</h4>
+          <a href="#validate">What we validate</a>
+          <a href="#auto">Installed with permission</a>
+          <a href="#blockers">Blockers</a>
+          <a href="#gatekeeper">Won't open (Gatekeeper)</a>
+          <a href="#path">"npm not on your PATH"</a>
+          <a href="#env">Missing .env / secrets</a>
+          <a href="#run">Preview won't start</a>
+          <a href="#permissions">macOS permission prompts</a>
+          <a href="#assistant">Assistant not responding</a>
+          <a href="#latest">Get the latest build</a>
+          <a href="#data">Reset / where data lives</a>
+        </aside>
+
+        <article>
+          <img class="pageicon" src="./vortspec-ide-icon.png" alt="VortSpec IDE" />
+          <span class="eyebrow">Troubleshooting &amp; First-Run Reference</span>
+          <h1>When something goes wrong</h1>
+          <p class="lede">Exactly what the IDE checks, what it can install for you, what can actually stop you, and how to clear each issue. Errors in the app are always shown as fix-it cards with a next step — this page is the deeper reference.</p>
+
+          <h2 id="validate">What we validate on first run</h2>
+          <p>The environment scan is <strong>read-only</strong> — it reports status and offers a fix, and never changes anything on its own.</p>
+          <div class="tablewrap">
+          <table>
+            <thead><tr><th>Check</th><th>How</th><th>Required?</th><th>If it fails</th></tr></thead>
+            <tbody>
+              <tr><td>Node.js</td><td><code>node --version</code>, must be ≥ 20</td><td><span class="pill block">Blocker</span></td><td>Install / update link</td></tr>
+              <tr><td>Git</td><td><code>git --version</code></td><td><span class="pill block">Blocker</span></td><td>Install link</td></tr>
+              <tr><td>Claude Code</td><td><code>claude --version</code></td><td><span class="pill block">Blocker</span></td><td>Install link</td></tr>
+              <tr><td>Claude login</td><td>One-word headless probe, only when you click <em>Verify</em></td><td><span class="pill block">Blocker</span> to run</td><td>"Open login"</td></tr>
+              <tr><td>Figma MCP</td><td><code>claude mcp list</code> (no usage)</td><td><span class="pill opt">Optional</span></td><td>Info only — set up if you want Figma</td></tr>
+            </tbody>
+          </table>
+          </div>
+          <p class="sub">The login check spends a tiny amount of your Claude usage, so it only runs on request — never in the routine scan.</p>
+
+          <h2 id="auto">What VortSpec installs — only with your permission</h2>
+          <p>VortSpec never installs system tools silently. On an explicit action it can set up:</p>
+          <ul>
+            <li><strong>Project dependencies</strong> — <code>npm install</code> automatically the first time you Run a project that has no <code>node_modules</code>.</li>
+            <li><strong>A <code>.env</code> file</strong> from your project's <code>.env.example</code> — a one-click helper. It never fabricates secret values; you fill those in.</li>
+            <li><strong>figma-cli</strong> — installed and connected for you if you choose to use Figma.</li>
+            <li><strong>The SDD-DE toolkit</strong> — scaffolded into a new project (<code>npx @royvillasana/sdd-de</code>).</li>
+          </ul>
+          <p class="sub">System tools it depends on (Node, Git, Claude Code) are never auto-installed — it points you to the official download instead.</p>
+
+          <h2 id="blockers">What counts as a blocker</h2>
+          <p>A <strong>blocker</strong> is anything that prevents the IDE from doing its core job. There are only a few, and each has a one-click fix:</p>
+          <div class="tablewrap">
+          <table>
+            <thead><tr><th>Blocker</th><th>Why it stops you</th><th>Fix</th></tr></thead>
+            <tbody>
+              <tr><td>Node.js missing / &lt; 20</td><td>Can't run installs or your dev server / preview</td><td>Install Node 20+ from the link, then re-check</td></tr>
+              <tr><td>Git missing</td><td>No Source Control, clone, or history</td><td>Install Git, then re-check</td></tr>
+              <tr><td>Claude Code not installed</td><td>No engine — the assistant and all runs need it</td><td>Install Claude Code, then re-check</td></tr>
+              <tr><td>Claude Code not logged in</td><td>Runs fail with an authentication error</td><td>"Open login", sign in, then Verify</td></tr>
+              <tr><td>App won't launch (Gatekeeper)</td><td>Unsigned build blocked on first open</td><td>See <a href="#gatekeeper">below</a></td></tr>
+            </tbody>
+          </table>
+          </div>
+          <div class="callout good"><span class="tag">Not a blocker</span>A missing or unconnected <strong>Figma</strong> connection only disables Figma design sources. Everything else in the IDE works without it.</div>
+
+          <h2 id="gatekeeper">The app won't open (Gatekeeper)</h2>
+          <p class="symptom">"VortSpec IDE can't be opened because Apple cannot check it for malicious software." The build isn't notarized yet.</p>
+          <p>Clear the quarantine flag once:</p>
+          <pre><code>xattr -cr "/Applications/VortSpec IDE.app"</code></pre>
+          <p>…or right-click the app → <strong>Open</strong> → <strong>Open</strong>; or System Settings → Privacy &amp; Security → <strong>Open Anyway</strong>. You only need to do this once per install.</p>
+
+          <h2 id="path">"npm is not installed or not on your PATH"</h2>
+          <p class="symptom">The dev server or Storybook exits immediately with <em>"npm is not installed or not on your PATH"</em>, and the Run Doctor keeps looping even though Node/npm are installed.</p>
+          <p>This was a bug in older builds: an app launched from Finder gets a minimal PATH, and the fix arrived a moment too late for the dev server. <strong>It's resolved in the latest build.</strong></p>
+          <div class="callout info"><span class="tag">Fix</span><a href="#latest">Update to the latest IDE build</a> and Run again. (If you use a Node version manager like nvm, the latest build finds it correctly.)</div>
+
+          <h2 id="env">Missing environment variables / secrets</h2>
+          <p class="symptom">The preview fails with something like <em>"supabaseUrl is required"</em> or another missing-config error — common right after cloning a repo.</p>
+          <p>The project needs a <code>.env</code> you don't have yet. In the Run view, VortSpec detects this and offers a helper to create <code>.env</code> from the project's <code>.env.example</code>. Then fill in the real values (API URLs, keys) — VortSpec never invents secrets for you.</p>
+          <div class="callout warn"><span class="tag">Heads-up</span>If the <code>.env.example</code> has placeholder values (like <code>&lt;your-key&gt;</code>), the app flags them so you know what still needs a real value.</div>
+
+          <h2 id="run">The preview / dev server won't start</h2>
+          <p class="symptom">"Preview process exits code 1", or the dev server errors out.</p>
+          <p>Work through it in order:</p>
+          <ol>
+            <li>VortSpec surfaces the <strong>real error tail</strong>, not a bare exit code — read the last lines.</li>
+            <li>A freshly cloned repo installs its dependencies automatically on first Run; let that finish.</li>
+            <li>If it's a missing <code>.env</code>, use the <a href="#env">helper above</a>.</li>
+            <li>Otherwise use the <strong>Run Doctor</strong> — a one-click, gated diagnosis that uses Claude Code to find the cause and propose a fix. It never fabricates secrets; if a value is genuinely required, it tells you what to provide.</li>
+          </ol>
+
+          <h2 id="permissions">macOS asked for a permission that seems too broad</h2>
+          <p class="symptom">macOS prompts to access something broad — e.g. your Apple Music library or other folders — when the assistant runs.</p>
+          <p>VortSpec declares <strong>no</strong> such permissions and has no interest in your music. This is a macOS runtime prompt that appears when a tool it runs (the assistant) touches a protected folder. <strong>It is always safe to click "Don't Allow"</strong> — the IDE works fine without it.</p>
+          <div class="callout good"><span class="tag">Fixed in the latest build</span>The assistant now runs in a dedicated, scoped folder instead of your home directory, and the file watcher no longer spans protected areas — so these prompts no longer appear. The unused camera/microphone/Bluetooth declarations were also removed. <a href="#latest">Update</a> to get this.</div>
+
+          <h2 id="assistant">The assistant isn't responding</h2>
+          <p class="symptom">Chats do nothing, or runs fail instantly.</p>
+          <ul>
+            <li>Confirm <strong>Claude Code is installed</strong> (<code>claude --version</code> in a terminal) and on your PATH.</li>
+            <li>Confirm you're <strong>logged in</strong> — run <code>claude</code> once in a terminal and sign in, or use the "Open login" fix-it card, then Verify.</li>
+            <li>VortSpec uses your own login (never a bare API key), so no keys or accounts are needed on the VortSpec side.</li>
+          </ul>
+
+          <h2 id="latest">Getting the latest build</h2>
+          <p>Several issues above are already fixed in the newest release. Grab it and reinstall (drag over the old app):</p>
+          <p><a class="btn btn-ide" href="https://github.com/royvillasana/VortSpec/releases/latest/download/VortSpec-IDE-mac-universal.dmg">Download the latest IDE</a></p>
+          <p class="sub">Or see all releases on <a href="https://github.com/royvillasana/VortSpec/releases/latest" target="_blank" rel="noopener">GitHub</a>. Your projects and settings are preserved across updates.</p>
+
+          <h2 id="data">Reset &amp; where your data lives</h2>
+          <ul>
+            <li><strong>Your projects</strong> are plain files in the folders you chose — nothing is hidden inside the app.</li>
+            <li><strong>App settings &amp; recent-projects list</strong> live in <code>~/Library/Application Support/VortSpec IDE</code>.</li>
+            <li><strong>Your Claude login, plan, and usage</strong> belong to your own Claude Code install — VortSpec stores no keys and sends no telemetry.</li>
+            <li>To start clean, close the app and remove that Application Support folder; your project files are untouched.</li>
+          </ul>
+
+          <hr />
+          <p class="sub">New here? Start with the <a href="./guide.html">Usage Guide →</a></p>
+        </article>
+      </div>
+
+      <footer>
+        <div class="wrap row">
+          <a class="brand" href="./index.html" style="display:flex;align-items:center;gap:8px;color:var(--text)"><img src="./vortspec-logo.png" alt="" style="width:22px;height:22px" />VortSpec</a>
+          <span style="flex:1"></span>
+          <a href="./index.html">Home</a>
+          <a href="./guide.html">Usage Guide</a>
+          <a href="./troubleshooting.html">Troubleshooting</a>
+          <a href="https://github.com/royvillasana/VortSpec" target="_blank" rel="noopener">GitHub</a>
+        </div>
+      </footer>
+    </main>
+  </body>
+</html>
