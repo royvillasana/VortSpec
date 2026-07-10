@@ -51,6 +51,9 @@ export interface InspectorBridge {
   setMode: (mode: "inspect" | "interact") => void;
   applyOverride: (id: string, css: Record<string, string>) => void;
   clearOverride: (id?: string) => void;
+  /** Re-request the selected node's readout so the panel reflects its actual state
+   *  after a discrete edit or a cleared override. Defaults to the current selection. */
+  refreshReadout: (id?: string) => void;
   requestTree: () => void;
   /** Reload the guest page (e.g. after a committed edit) — the bridge re-attaches. */
   reload: () => void;
@@ -197,6 +200,17 @@ export function useInspectorBridge(): InspectorBridge {
     [send],
   );
   const clearOverride = useCallback((id?: string) => send({ t: "clearOverride", nodeId: id }), [send]);
+  // Re-read the selected node's computed styles after a discrete edit or a clear, so
+  // the Design panel reflects the element's *actual* state (ephemeral overrides only
+  // emit geometry, not a fresh readout, so the panel would otherwise go stale). Sent
+  // after the mutating command on the same ordered channel, so it sees the new state.
+  const refreshReadout = useCallback(
+    (id?: string) => {
+      const target = id ?? selectedId;
+      if (target) send({ t: "selectNode", nodeId: target });
+    },
+    [selectedId, send],
+  );
   const requestTree = useCallback(() => send({ t: "requestTree" }), [send]);
   const reload = useCallback(() => webviewRef.current?.reload(), []);
 
@@ -224,6 +238,7 @@ export function useInspectorBridge(): InspectorBridge {
     setMode,
     applyOverride,
     clearOverride,
+    refreshReadout,
     requestTree,
     reload,
   };

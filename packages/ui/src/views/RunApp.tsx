@@ -268,7 +268,7 @@ export function RunApp({
   // Stable methods (the hook memoizes these) + refs to current state, so the
   // Design-panel callbacks keep a stable identity across the 60fps geometry
   // echoes during a drag — that's what lets the memoized sections skip work.
-  const { applyOverride, select, hover, setMode: setGuestMode, setText, setClass } = bridge;
+  const { applyOverride, select, hover, setMode: setGuestMode, setText, setClass, refreshReadout } = bridge;
 
   // Push the current mode to the guest whenever it (or readiness) changes.
   useEffect(() => {
@@ -339,40 +339,40 @@ export function RunApp({
         const id = selectedIdRef.current;
         if (id) setText(id, value); // live text preview
         commitEdits([{ key, value, cssProps: [] }], true); // source edit (gated)
-        return;
-      }
-      if (key === "align") {
+      } else if (key === "align") {
         const dir = readoutRef.current?.computed["flex-direction"] ?? "row";
         const css = alignToCss(value, dir);
         applyLive(css);
         commitEdits([
           { key, value: `${css["justify-content"]}, ${css["align-items"]}`, cssProps: ["justify-content", "align-items"], css },
         ]);
-        return;
-      }
-      if (key === "flow") {
+      } else if (key === "flow") {
         // block / row / column → display (+ flex-direction). Multiple props, so
         // compute the override explicitly rather than via the 1-value field map.
         const css = flowToCss(value);
         applyLive(css);
         commitEdits([{ key, value, cssProps: Object.keys(css), css }]);
-        return;
+      } else {
+        const css = cssForField(key, value);
+        applyLive(css);
+        // Choosing a color for an element is a per-element decision (Figma applies
+        // the style / token reference to the element, not a rewrite of the token).
+        const field = selectionRef.current?.sections.flatMap((s) => s.fields).find((f) => f.key === key);
+        // For a token-typed length field, re-derive which token (of that type) the
+        // NEW value binds — an explicit `var(--name)` binding or a literal that matches
+        // a token re-binds; anything else detaches to a literal (Figma behaviour: the
+        // token tag updates or disappears as the px changes).
+        const token = field?.tokenType
+          ? (tokenNameFromVar(value) ?? matchTokenName(value, tokensRef.current, field.tokenType))
+          : undefined;
+        commitEdits([{ key, value, cssProps: Object.keys(css), css, token }], field?.kind === "color");
       }
-      const css = cssForField(key, value);
-      applyLive(css);
-      // Choosing a color for an element is a per-element decision (Figma applies
-      // the style / token reference to the element, not a rewrite of the token).
-      const field = selectionRef.current?.sections.flatMap((s) => s.fields).find((f) => f.key === key);
-      // For a token-typed length field, re-derive which token (of that type) the
-      // NEW value binds — an explicit `var(--name)` binding or a literal that matches
-      // a token re-binds; anything else detaches to a literal (Figma behaviour: the
-      // token tag updates or disappears as the px changes).
-      const token = field?.tokenType
-        ? (tokenNameFromVar(value) ?? matchTokenName(value, tokensRef.current, field.tokenType))
-        : undefined;
-      commitEdits([{ key, value, cssProps: Object.keys(css), css, token }], field?.kind === "color");
+      // Re-read the node so the panel reflects its actual computed state (a token
+      // re-bind, a value that snaps to/from a token) instead of a stale prop — and
+      // so a later undo of this edit is detectable as a real change.
+      refreshReadout();
     },
-    [applyLive, commitEdits, setText],
+    [applyLive, commitEdits, setText, refreshReadout],
   );
 
   // An inline text edit on the canvas (double-click) — the guest already applied
@@ -468,6 +468,7 @@ export function RunApp({
   function discardEdits(): void {
     bridge.clearOverride();
     setPending({});
+    refreshReadout(); // the canvas reverted — re-read so the panel fields follow
   }
   // Drop a single pending edit before applying: restore the node to its original,
   // then re-apply every remaining edit on top so the live preview stays exact.
@@ -482,6 +483,9 @@ export function RunApp({
         else if (e.key === "content") setText(id, e.value);
         else if (e.kind === "variant") setClass(id, e.removeClasses ?? [], e.addClasses ?? []);
       }
+      // The removed edit is gone from the canvas — re-read so its Design-panel field
+      // snaps back to the node's actual value/token (not the removed override).
+      refreshReadout(id);
     }
     setPending(next);
   }

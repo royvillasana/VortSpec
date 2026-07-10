@@ -109,3 +109,30 @@ test("re-binding a length token updates the field to the new token + value immed
   // …and it emitted the var() binding for the ephemeral override / pending edit.
   expect(changes).toContainEqual(["gap", "var(--space-16)"]);
 });
+
+test("removing the edit (a fresh readout) snaps the field back to the node's real token", async ({ mount }) => {
+  // The node is currently showing a picked space-16 binding…
+  const boundTo16: Selection = {
+    ...GAP_SELECTION,
+    sections: [
+      {
+        id: "layout",
+        title: "Auto layout",
+        fields: [{ key: "gap", label: "Gap", kind: "length", value: "16px", token: "space-16", tokenType: "spacing", options: [] }],
+      },
+    ],
+  };
+  const c = await mount(
+    <DesignPanel selection={boundTo16} tree={null} tokens={SPACING_TOKENS} onSelectNode={() => {}} onFieldChange={() => {}} />,
+  );
+  await expect(c.getByTitle(/Variable: space-16/)).toBeVisible();
+  await expect(c.getByRole("textbox")).toHaveValue("16px");
+
+  // Removing the pending edit reverts the canvas and re-reads the node (refreshReadout),
+  // so the panel now receives the original space-20 / 20px readout.
+  await c.update(
+    <DesignPanel selection={GAP_SELECTION} tree={null} tokens={SPACING_TOKENS} onSelectNode={() => {}} onFieldChange={() => {}} />,
+  );
+  await expect(c.getByTitle(/Variable: space-20/)).toBeVisible();
+  await expect(c.getByRole("textbox")).toHaveValue("20px");
+});
