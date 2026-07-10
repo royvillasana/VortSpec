@@ -2,6 +2,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "@vortspec/ui/api";
 import type { OpenFile } from "../components/EditorGroup";
 
+/** Image files open as a preview (data URL) rather than in the text editor. */
+const IMAGE_RE = /\.(png|jpe?g|gif|webp|svg|bmp|ico|avif)$/i;
+
 /**
  * Owns the open-file/tab state for a workspace, lifted out of the editor so the
  * Explorer (left sidebar) and the editor area (center) are independent regions
@@ -42,9 +45,19 @@ export function useWorkspaceFiles(projectPath: string | null): WorkspaceFiles {
         setActivePath(path);
         return;
       }
+      if (IMAGE_RE.test(path)) {
+        // Images open as a preview (data URL), not in the text editor.
+        const asset = await api.readAsset(projectPath, path);
+        setFiles((prev) => [
+          ...prev,
+          { path, content: "", dirty: false, staleOnDisk: false, kind: "image", dataUrl: asset.dataUrl, tooLarge: asset.tooLarge },
+        ]);
+        setActivePath(path);
+        return;
+      }
       const file = await api.readFile(projectPath, path);
       if (file.truncated) return; // binary / too large — don't open in the text editor
-      setFiles((prev) => [...prev, { path, content: file.content, dirty: false, staleOnDisk: false }]);
+      setFiles((prev) => [...prev, { path, content: file.content, dirty: false, staleOnDisk: false, kind: "text" }]);
       setActivePath(path);
     },
     [projectPath],
@@ -81,6 +94,13 @@ export function useWorkspaceFiles(projectPath: string | null): WorkspaceFiles {
   const reload = useCallback(
     async (path: string): Promise<void> => {
       if (!projectPath) return;
+      if (filesRef.current.find((f) => f.path === path)?.kind === "image") {
+        const asset = await api.readAsset(projectPath, path);
+        setFiles((prev) =>
+          prev.map((f) => (f.path === path ? { ...f, dataUrl: asset.dataUrl, tooLarge: asset.tooLarge, staleOnDisk: false } : f)),
+        );
+        return;
+      }
       const file = await api.readFile(projectPath, path);
       setFiles((prev) =>
         prev.map((f) =>

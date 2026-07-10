@@ -1,6 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import type { JSX } from "react";
+import { Markdown } from "@vortspec/ui/Markdown";
 import { CodeEditor, DiffView, type CodeSelection } from "./CodeEditor";
+
+/** Files rendered as a stylized document (Markdown) rather than code. */
+const MARKDOWN_RE = /\.(md|markdown|mdown|mkd)$/i;
 
 /** Drag mime for reordering editor tabs — distinct from the chat-attach drag. */
 const TAB_MIME = "application/vortspec-tab";
@@ -11,6 +15,12 @@ export interface OpenFile {
   dirty: boolean;
   /** true when the file changed on disk while it had unsaved edits. */
   staleOnDisk: boolean;
+  /** "image" files render as a preview (data URL) instead of the code editor. */
+  kind?: "text" | "image";
+  /** For an image: its `data:` URL (null if it couldn't be inlined). */
+  dataUrl?: string | null;
+  /** For an image: too large to inline as a preview. */
+  tooLarge?: boolean;
 }
 
 /**
@@ -52,16 +62,22 @@ export function EditorGroup({
   onReorder?: (fromPath: string, toPath: string | null) => void;
 }): JSX.Element {
   const active = files.find((f) => f.path === activePath) ?? null;
+  const isImage = active?.kind === "image";
+  const isMarkdown = !!active && !isImage && MARKDOWN_RE.test(active.path);
   const [diff, setDiff] = useState(false);
   const [head, setHead] = useState<string | null>(null);
+  // Markdown files open in the stylized reading view by default; toggle to Source
+  // to edit. Reset whenever the active file changes (see the effect below).
+  const [mdPreview, setMdPreview] = useState(true);
   // Drag-to-reorder tabs: the dragged tab's path, and the tab we'd drop before.
   const dragTabRef = useRef<string | null>(null);
   const [dropBefore, setDropBefore] = useState<string | null>(null);
 
-  // Reset the diff view when the active file changes.
+  // Reset the diff + markdown-preview view when the active file changes.
   useEffect(() => {
     setDiff(false);
     setHead(null);
+    setMdPreview(true);
   }, [activePath]);
 
   async function toggleDiff(): Promise<void> {
@@ -196,29 +212,51 @@ export function EditorGroup({
 
       {/* Editor toolbar: path + Edit/Diff toggle */}
       {active && (
-        <div className="flex shrink-0 items-center justify-between border-b border-vs-border-subtle bg-vs-bg-surface px-3 py-1 text-[11px] text-vs-text-muted">
+        <div className="flex shrink-0 items-center justify-between gap-2 border-b border-vs-border-subtle bg-vs-bg-surface px-3 py-1 text-[11px] text-vs-text-muted">
           <span className="truncate font-mono">{active.path}</span>
-          <button
-            type="button"
-            aria-pressed={diff}
-            onClick={() => void toggleDiff()}
-            className={`rounded px-2 py-0.5 ${diff ? "bg-vs-bg-elevated text-vs-text-primary" : "hover:text-vs-text-secondary"}`}
-          >
-            {diff ? "Editing" : "Diff vs HEAD"}
-          </button>
+          <div className={`flex flex-none items-center gap-1 ${isImage ? "hidden" : ""}`}>
+            {isMarkdown && !diff && (
+              <button
+                type="button"
+                aria-pressed={mdPreview}
+                onClick={() => setMdPreview((v) => !v)}
+                title={mdPreview ? "Edit the raw Markdown" : "Show the stylized preview"}
+                className={`rounded px-2 py-0.5 ${mdPreview ? "bg-vs-bg-elevated text-vs-text-primary" : "hover:text-vs-text-secondary"}`}
+              >
+                {mdPreview ? "Source" : "Preview"}
+              </button>
+            )}
+            <button
+              type="button"
+              aria-pressed={diff}
+              onClick={() => void toggleDiff()}
+              className={`rounded px-2 py-0.5 ${diff ? "bg-vs-bg-elevated text-vs-text-primary" : "hover:text-vs-text-secondary"}`}
+            >
+              {diff ? "Editing" : "Diff vs HEAD"}
+            </button>
+          </div>
         </div>
       )}
 
-      {/* Editor / diff — positioned so the absolute-filling editor gets a
+      {/* Editor / preview — positioned so the absolute-filling editor gets a
           definite size regardless of the flexbox percentage-height quirk. */}
       <div className="relative min-h-0 flex-1">
-        {active && diff ? (
+        {active && isImage ? (
+          <ImagePreview file={active} />
+        ) : active && diff ? (
           <DiffView
             path={active.path}
             original={head ?? ""}
             modified={active.content}
             relayoutKey={relayoutKey}
           />
+        ) : active && isMarkdown && mdPreview ? (
+          // Stylized reading view (docs-like), scrollable, with a comfortable measure.
+          <div className="absolute inset-0 overflow-y-auto bg-vs-bg-code">
+            <div className="mx-auto max-w-3xl px-8 py-8 text-[14px] leading-relaxed text-vs-text-secondary">
+              <Markdown text={active.content} />
+            </div>
+          </div>
         ) : active ? (
           <CodeEditor
             path={active.path}
@@ -230,6 +268,38 @@ export function EditorGroup({
           />
         ) : null}
       </div>
+    </div>
+  );
+}
+
+/** Preview an image file (PNG/JPEG/GIF/WebP/SVG/…) on a subtle checkerboard. */
+function ImagePreview({ file }: { file: OpenFile }): JSX.Element {
+  const name = file.path.slice(file.path.lastIndexOf("/") + 1);
+  return (
+    <div
+      className="absolute inset-0 flex flex-col items-center justify-center gap-3 overflow-auto p-8"
+      style={{
+        // A light/dark checkerboard so transparent images read clearly.
+        backgroundImage:
+          "linear-gradient(45deg, rgba(255,255,255,0.04) 25%, transparent 25%, transparent 75%, rgba(255,255,255,0.04) 75%), linear-gradient(45deg, rgba(255,255,255,0.04) 25%, transparent 25%, transparent 75%, rgba(255,255,255,0.04) 75%)",
+        backgroundSize: "20px 20px",
+        backgroundPosition: "0 0, 10px 10px",
+      }}
+    >
+      {file.dataUrl ? (
+        <>
+          <img
+            src={file.dataUrl}
+            alt={name}
+            className="max-h-full max-w-full rounded object-contain shadow-lg"
+          />
+          <span className="rounded bg-vs-bg-elevated px-2 py-0.5 font-mono text-[11px] text-vs-text-muted">{name}</span>
+        </>
+      ) : (
+        <p className="text-sm text-vs-text-muted">
+          {file.tooLarge ? "This image is too large to preview." : "Can’t preview this file."}
+        </p>
+      )}
     </div>
   );
 }

@@ -66,7 +66,11 @@ test("New Folder creates a folder at the root", async ({ mount }) => {
   const input = c.locator("input:focus").first();
   await input.fill("lib");
   await input.press("Enter");
-  await expect.poll(async () => (await fsOps(c)).find((o) => o.op === "createDir")?.path).toBe("lib");
+  // The app also ensures ~/VortSpec (the scoped assistant home) during the welcome
+  // phase, so assert the user's folder is among the createDir ops, not that it's first.
+  await expect
+    .poll(async () => (await fsOps(c)).some((o) => o.op === "createDir" && o.path === "lib"))
+    .toBe(true);
 });
 
 test("dragging a file onto a folder moves it into that folder", async ({ mount }) => {
@@ -232,6 +236,8 @@ test("editor tracks its container both directions when the assistant toggles", a
   const c = await mount(<App />, { hooksConfig: { mock: base } });
   await open(c);
   await c.getByRole("button", { name: "README.md" }).click();
+  // Markdown opens in the stylized preview by default — switch to Source for the editor.
+  await c.getByRole("button", { name: "Source", exact: true }).click();
   const host = c.getByTestId("code-editor");
   await expect(host).toBeVisible();
   const width = async (): Promise<number> => (await host.boundingBox())!.width;
