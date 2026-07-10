@@ -23,6 +23,7 @@ import {
 import { api } from "../lib/api";
 import { useAgentRun, useLatestRun } from "../lib/useAgentRun";
 import { deriveProgress, type OpKind } from "../lib/run-progress";
+import { routedModel, modelHonored, disableRouting, isRoutingDisabled, type ModelTier } from "../lib/model-routing";
 import { Button, Card, Spinner } from "../components/ui";
 import { RunPanel } from "../components/RunPanel";
 import { RunProgress } from "../components/RunProgress";
@@ -214,6 +215,15 @@ export function GuidedFlow({
   // and, for verify/pipeline runs, load the report summary for the outcome card.
   useEffect(() => {
     if (run.model.status === "done") {
+      // R2 capability probe: if we requested a cheaper tier but the session ran a
+      // different model, this login doesn't honor `--model` — disable routing for
+      // the rest of the session and say so once (never a hard error).
+      const tier = lastTierRef.current;
+      lastTierRef.current = null;
+      if (tier && !isRoutingDisabled() && !modelHonored(tier, run.model.model)) {
+        disableRouting();
+        flash("Your Claude plan runs everything on its default model — model routing is off.");
+      }
       void reload();
       // Refresh resume state (a completed run clears it) after this run finishes.
       void api.lastRun(project.path).then(setResume);
@@ -230,10 +240,14 @@ export function GuidedFlow({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [latest.model.status]);
 
+  // The model tier requested for the in-flight run, so the done-effect can detect
+  // whether the login actually honored `--model` (R2 capability probe).
+  const lastTierRef = useRef<ModelTier | null>(null);
+
   async function op(
     label: string,
     prompt: string,
-    opts?: { tools?: string[]; kind?: OpKind; total?: number; resumeSessionId?: string },
+    opts?: { tools?: string[]; kind?: OpKind; total?: number; resumeSessionId?: string; model?: ModelTier },
   ): Promise<void> {
     const kind = opts?.kind ?? "other";
     setRunLabel(label);
@@ -243,12 +257,15 @@ export function GuidedFlow({
     setPipelineTotal(opts?.total);
     setResume(null);
     runDismissRef.current = false;
+    lastTierRef.current = opts?.model ?? null;
     await run.start({
       prompt,
       cwd: project.path,
       allowedTools: opts?.tools ?? ["Read", "Write", "Edit", "Bash"],
       bypassPermissions: true,
       resumeSessionId: opts?.resumeSessionId,
+      // Route mechanical/structured steps to a cheaper tier when the login allows.
+      model: opts?.model ? routedModel(opts.model) : undefined,
       // Persisted so an interrupted run can be resumed with its stage view intact.
       meta: { kind, label, total: opts?.total },
     });
@@ -288,7 +305,9 @@ export function GuidedFlow({
 
   async function verify(target: string, label: string): Promise<void> {
     const url = await ensureHarness();
-    await op(label, verifyPrompt(target, url, config?.designSource === "figma"), { kind: "verify" });
+    // R3: verification is structured checking (visual-verify + adversarial review),
+    // not deep reasoning — route it to Sonnet. Build/implement stays on the default.
+    await op(label, verifyPrompt(target, url, config?.designSource === "figma"), { kind: "verify", model: "sonnet" });
   }
 
   async function buildAndVerifyRest(): Promise<void> {
