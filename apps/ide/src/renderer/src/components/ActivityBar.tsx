@@ -58,6 +58,16 @@ const DesignStudioMark = (
   </svg>
 );
 
+/** SDD-DE pipeline — an "import into a document" badged mark (svgrepo "import-outline-badged"). */
+const SddPipelineMark = (
+  <svg width="18" height="18" viewBox="0 0 36 36" fill="currentColor" aria-hidden="true">
+    <path d="M11.94,26.28a1,1,0,1,0,1.41,1.41L19,22l-5.68-5.68a1,1,0,0,0-1.41,1.41L15.2,21H3a1,1,0,1,0,0,2H15.23Z" />
+    <path d="M28,13.22V30H8a2,2,0,0,0,2,2H28a2,2,0,0,0,2-2V13.5A7.49,7.49,0,0,1,28,13.22Z" />
+    <path d="M10,13.61h7.61V6H22.5a7.49,7.49,0,0,1,.28-2H14.87L8,10.86V15h2Zm0-1.92L15.7,6H16v6H10Z" />
+    <circle cx="30" cy="6" r="5" />
+  </svg>
+);
+
 // Order (top → bottom): Playground, Tokens, Design manifest, Storybook, Explorer,
 // Jira (Tasks), Git (Source Control), SDD-DE pipeline.
 const TOP: Item[] = [
@@ -99,7 +109,7 @@ const TOP: Item[] = [
   {
     key: "flow",
     label: "SDD-DE pipeline",
-    icon: <path d="M5 4h10M5 4a1.5 1.5 0 1 1 0 .01M5 10h10M15 10a1.5 1.5 0 1 1 0 .01M5 16h10M5 16a1.5 1.5 0 1 1 0 .01M5 5.5v3M15 11.5v3" />,
+    custom: SddPipelineMark,
   },
 ];
 
