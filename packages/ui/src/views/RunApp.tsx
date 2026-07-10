@@ -736,6 +736,7 @@ export function RunApp({
                     onReply: (id, body) => void replyComment(id, body),
                     onResolve: (id, resolved) => void resolveComment(id, resolved),
                     onCancelTarget: clearCommentTarget,
+                    onShare: () => void comments.share(),
                   }}
                 />
               </div>

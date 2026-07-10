@@ -30,6 +30,8 @@ export interface CommentsLayerProps {
   onReply: (threadId: string, body: string) => void;
   onResolve: (threadId: string, resolved: boolean) => void;
   onCancelTarget: () => void;
+  /** Push the auto-committed comment commits (manual Share). */
+  onShare?: () => void;
 }
 
 export function CommentsLayer({
@@ -46,6 +48,7 @@ export function CommentsLayer({
   onReply,
   onResolve,
   onCancelTarget,
+  onShare,
 }: CommentsLayerProps): JSX.Element {
   // Number threads in creation order (sortable ids), like Figma's pin numbers.
   const ordered = [...threads].sort((a, b) => a.id.localeCompare(b.id));
@@ -57,6 +60,18 @@ export function CommentsLayer({
 
   return (
     <div className="pointer-events-none absolute inset-0 z-20 overflow-hidden">
+      {/* Share — push the auto-committed comment commits (teammates pull to see them). */}
+      {onShare && ordered.length > 0 && (
+        <button
+          type="button"
+          onClick={onShare}
+          title="Push the comment commits so teammates get them on pull"
+          className="pointer-events-auto absolute right-3 top-3 flex items-center gap-1.5 rounded-md border border-vs-border-default bg-vs-bg-elevated px-2.5 py-1 text-[11px] font-medium text-vs-text-secondary shadow hover:bg-vs-bg-hover hover:text-vs-text-primary"
+        >
+          ⇪ Share comments
+        </button>
+      )}
+
       {/* Pins on their anchored sections. */}
       {anchored.map((t) => {
         const r = rectFor(t)!;

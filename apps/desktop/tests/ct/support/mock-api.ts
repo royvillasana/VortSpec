@@ -7,6 +7,7 @@
  */
 import type { RunEvent } from "@vortspec/core/run-events";
 import type { CommentThread, CommentCollaborator } from "@vortspec/core/comment";
+import type { GitResult } from "@vortspec/core/git";
 import type {
   InspectorTokensResult,
   InspectorComponentsResult,
@@ -49,6 +50,8 @@ export interface MockConfig {
   comments?: CommentThread[];
   /** @mention autocomplete candidates returned by commentCollaborators(). */
   collaborators?: CommentCollaborator[];
+  /** Result returned by shareComments() (the manual push). */
+  shareResult?: GitResult;
   /** `--mcp-config` path returned by ideMcpConfigPath() (null keeps the bridge off). */
   ideMcpConfig?: { path: string } | null;
   /** Whether hasActiveRun() reports an in-flight run for the project (reconnect banner). */
@@ -443,6 +446,7 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
     },
     commentCollaborators: async () => cfg.collaborators ?? [],
     notifyComment: async () => ({ notified: false, reason: "GitHub not connected in tests." }),
+    shareComments: async () => cfg.shareResult ?? { ok: true, message: "Pushed comment commits." },
   };
 
   (window as unknown as { vortspec: unknown }).vortspec = api;

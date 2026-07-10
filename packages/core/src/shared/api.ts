@@ -154,6 +154,8 @@ export interface VortSpecApi {
   commentCollaborators(projectPath: string): Promise<IpcResponse<"comments:collaborators">>;
   /** Notify a message's @mentions via the user's GitHub; returns a receipt or a fix-it. */
   notifyComment(projectPath: string, threadId: string, messageId: string): Promise<IpcResponse<"comments:notify">>;
+  /** Push the auto-committed comment commits (manual Share). */
+  shareComments(projectPath: string): Promise<IpcResponse<"comments:share">>;
 
   // workspace filesystem (IDE)
   listDir(projectPath: string, relPath: string): Promise<IpcResponse<"workspace:listDir">>;

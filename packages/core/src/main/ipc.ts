@@ -35,7 +35,8 @@ import {
   restoreFiles,
 } from "./inspector/component-reader";
 import type { FileSnapshot } from "@vortspec/core/ipc";
-import { listThreads, upsertThread, resolveThread } from "./workspace/comment-store";
+import { listThreads } from "./workspace/comment-store";
+import { postComment, resolveComment, shareComments } from "./workspace/comment-sync";
 import { collaborators, notify } from "./workspace/comment-mentions";
 import type { CommentThread } from "@vortspec/core/comment";
 import { getVerification } from "./inspector/verification-reader";
@@ -317,12 +318,13 @@ const handlers: Record<IpcChannel, Handler> = {
     restoreFiles(req.projectPath, req.files).then(() => undefined)) as Handler,
   "comments:list": ((projectPath: string) => listThreads(projectPath)) as Handler,
   "comments:upsert": ((req: { projectPath: string; thread: CommentThread }) =>
-    upsertThread(req.projectPath, req.thread)) as Handler,
+    postComment(req.projectPath, req.thread)) as Handler,
   "comments:resolve": ((req: { projectPath: string; id: string; resolved: boolean }) =>
-    resolveThread(req.projectPath, req.id, req.resolved)) as Handler,
+    resolveComment(req.projectPath, req.id, req.resolved)) as Handler,
   "comments:collaborators": ((projectPath: string) => collaborators(projectPath)) as Handler,
   "comments:notify": ((req: { projectPath: string; threadId: string; messageId: string }) =>
     notify(req.projectPath, req.threadId, req.messageId)) as Handler,
+  "comments:share": ((projectPath: string) => shareComments(projectPath)) as Handler,
 };
 
 export function registerIpc(): void {

@@ -1,7 +1,8 @@
 import { z } from "zod";
 import { execFileSafe } from "../util/exec";
 import { getGithubAuth, parseGithubUrl } from "../git/github";
-import { listThreads, setMessageNotified } from "./comment-store";
+import { listThreads, setMessageNotified, threadRelPath } from "./comment-store";
+import { commitCommentFile } from "./comment-sync";
 import type { CommentCollaborator, CommentThread, CommentMessage, NotifyResult } from "@vortspec/core/comment";
 
 /**
@@ -131,6 +132,8 @@ export async function notify(projectPath: string, threadId: string, messageId: s
     if (!result.ok) return { notified: false, reason: result.reason };
 
     await setMessageNotified(projectPath, threadId, messageId, { github: { issue: result.issue, url: result.url } });
+    // Keep the working tree clean — commit the stored receipt too (never pushes).
+    await commitCommentFile(projectPath, threadRelPath(threadId), `notified ${thread.anchor.label}`);
     return { notified: true, url: result.url };
   } catch {
     return { notified: false, reason: "Could not notify via GitHub — the comment is saved locally." };

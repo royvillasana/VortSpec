@@ -30,6 +30,8 @@ export interface CommentsController {
   create: (anchor: Anchor, body: string) => Promise<CommentThread | null>;
   reply: (threadId: string, body: string) => Promise<void>;
   setResolved: (threadId: string, resolved: boolean) => Promise<void>;
+  /** Push the auto-committed comment commits (manual Share); surfaces the outcome. */
+  share: () => Promise<void>;
   reload: () => Promise<void>;
 }
 
@@ -171,6 +173,11 @@ export function useComments(
     [projectPath],
   );
 
+  const share = useCallback(async (): Promise<void> => {
+    const res = await api.shareComments(projectPath).catch(() => null);
+    if (res) setNotice({ ok: res.ok, text: res.ok ? "Shared — teammates get the comments on pull." : res.message });
+  }, [projectPath]);
+
   return {
     threads,
     activeId,
@@ -182,6 +189,7 @@ export function useComments(
     create,
     reply,
     setResolved,
+    share,
     reload,
   };
 }

@@ -111,6 +111,27 @@ test("@mention autocomplete filters collaborators and inserts the handle", async
   await expect(box).toHaveValue("please @ana ");
 });
 
+test("Share pushes the auto-committed comment commits", async ({ mount }) => {
+  let shared = 0;
+  const c = await mount(
+    <CommentsLayer
+      zoom={1}
+      threads={[thread()]}
+      anchorRects={{ "header:1>button:2": { x: 40, y: 20, width: 80, height: 30 } }}
+      target={null}
+      activeId={null}
+      onSelectThread={noop}
+      onCreate={noop}
+      onReply={noop}
+      onResolve={noop}
+      onCancelTarget={noop}
+      onShare={() => (shared += 1)}
+    />,
+  );
+  await c.getByRole("button", { name: /Share comments/ }).click();
+  expect(shared).toBe(1);
+});
+
 test("the notify outcome is shown as a dismissible notice", async ({ mount }) => {
   const c = await mount(
     <CommentsLayer

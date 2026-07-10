@@ -554,6 +554,10 @@ export const ipcContract = {
     request: z.object({ projectPath: z.string(), threadId: z.string(), messageId: z.string() }),
     response: notifyResultSchema,
   },
+  "comments:share": {
+    request: z.string(),
+    response: gitResultSchema,
+  },
 } as const;
 
 export type IpcContract = typeof ipcContract;

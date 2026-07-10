@@ -233,6 +233,7 @@ const api: VortSpecApi = {
   commentCollaborators: (projectPath: string) => invoke("comments:collaborators", projectPath),
   notifyComment: (projectPath: string, threadId: string, messageId: string) =>
     invoke("comments:notify", { projectPath, threadId, messageId }),
+  shareComments: (projectPath: string) => invoke("comments:share", projectPath),
 };
 
 export type { VortSpecApi };

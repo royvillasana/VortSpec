@@ -33,10 +33,10 @@
 
 ## Phase 4 — Sync (commit + Share)
 
-- [ ] On post/resolve, stage **only** the single comment file and commit it (`vortspec(comment): …`) via the existing git layer — never stage the user's other changes.
-- [ ] A **Share** action pushes the comment commits (manual, no surprise network writes); surface push errors as fix-its. Pull is the user's normal `git pull`.
-- [ ] CT/unit: posting stages exactly one file; Share calls push; failures are fix-it sentences.
-- [ ] **Done when:** teammate B pulls and sees teammate A's comment pinned on the same section.
+- [x] `comment-sync.ts`: posting/resolving (and stamping a notify receipt) auto-commits **only** the single comment file — `git add -- <path>` then `git commit -m "vortspec(comment): <label>" -- <path>` (a pathspec commit that leaves the user's other staged work untouched). Graceful no-op outside a git repo / when nothing changed. The IPC `comments:upsert`/`comments:resolve` handlers now go through `postComment`/`resolveComment`.
+- [x] `comments:share` IPC + `shareComments` (`git push`) — a manual **Share** button in the comments overlay (no surprise network writes); `useComments.share` surfaces the outcome as a notice, push errors as fix-its. Pull stays the user's normal `git pull`.
+- [x] Vitest (`comment-sync.test`, 5, real git in a temp repo): posting commits **exactly** the comment file (a co-staged `other.txt` stays uncommitted), the message is scoped, an unchanged file is a no-op, no-repo/push-failure degrade to fix-its (never throw). CT (`comments`, +1): the Share button fires `onShare`.
+- [x] **Done when:** teammate B pulls and sees teammate A's comment pinned on the same section — the file is committed on post (verified: only that file) and pushed on Share; the anchor re-resolves via the Phase-1 fingerprint on B's machine (Phase-2 re-anchor test). The live two-machine pull is the hands-on check.
 
 ## Phase 5 — Comments panel + filters
 
