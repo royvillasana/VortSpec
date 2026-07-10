@@ -22,7 +22,7 @@ const COMMENTS_DIR = ".vortspec/comments";
 
 /** A thread id must be a bare filename segment — never a path fragment. */
 function safeId(id: string): string {
-  if (!/^[A-Za-z0-9._-]+$/.test(id)) throw new Error("Invalid comment id.");
+  if (id === "." || id === ".." || !/^[A-Za-z0-9._-]+$/.test(id)) throw new Error("Invalid comment id.");
   return id;
 }
 
@@ -91,8 +91,10 @@ export async function upsertThread(
   thread: CommentThread,
 ): Promise<{ thread: CommentThread; path: string }> {
   const existing = await readThread(root, thread.id);
+  // Append messages, but keep the DISK's resolved/anchor/createdAt — a stale client
+  // posting a reply must not revert a concurrent Resolve (that has its own path).
   const merged: CommentThread = existing
-    ? { ...existing, ...thread, messages: mergeMessages(existing.messages, thread.messages) }
+    ? { ...existing, updatedAt: thread.updatedAt, messages: mergeMessages(existing.messages, thread.messages) }
     : thread;
   const path = await writeThread(root, merged);
   return { thread: merged, path };

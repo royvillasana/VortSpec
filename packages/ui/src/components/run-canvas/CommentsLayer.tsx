@@ -211,7 +211,7 @@ function ThreadView({
             <div className="text-[12px] leading-snug text-vs-text-primary [&_p]:m-0">
               <Markdown text={m.body} />
             </div>
-            {m.notified?.github && (
+            {m.notified?.github?.url && (
               <a
                 href={m.notified.github.url}
                 target="_blank"

@@ -46,7 +46,7 @@
 
 ## Phase 6 — Verification
 
-- [ ] `pnpm build && pnpm test && pnpm lint` green.
-- [ ] End-to-end through the UI: pin a comment, @mention a teammate, Share, have the teammate pull + see it and receive the GitHub email; resolve it; confirm anchor survives an HMR re-render (relies on Phase 1).
-- [ ] Two-framework check (React and non-React page) — anchoring stays framework-agnostic.
-- [ ] Review pass: confirm no comment path writes outside `.vortspec/comments/`, no VortSpec-side account/server/keys, notification uses only the user's GitHub auth, all wire shapes are zod at the boundary, no `any` outside fixtures.
+- [x] `pnpm build` (4 pkgs), `pnpm test` (core 274 / ui 54 / ide 19 …), `pnpm lint`, and `pnpm test:ct` (ide 83 / desktop 66) all green. `pnpm check-types` shows only the pre-existing `ide-mcp/bridge.ts` `?raw` error (unrelated to this feature).
+- [ ] End-to-end through the UI: pin a comment, @mention a teammate, Share, have the teammate pull + see it and receive the GitHub email; resolve it; confirm anchor survives an HMR re-render (relies on Phase 1). *(Hands-on — needs the running app + a GitHub repo/teammate.)*
+- [ ] Two-framework check (React and non-React page) — anchoring stays framework-agnostic. *(Hands-on — needs a running dev server.)*
+- [x] Review pass (agent): all six invariants upheld, **no blockers** — no comment path writes outside `.vortspec/comments/` (`resolveInside` + `safeId`; `git commit -- <path>` never touches other staged work), no VortSpec account/server/keys (notify via the user's own `gh`, array args, never throws), all wire shapes zod at the boundary (IPC + bridge unions + gh JSON), no `any` outside tests, append-only + receipt correctness, Phase-1 anchor reuse. Minor/nit fixes applied: `upsertThread` preserves disk `resolved`/`anchor` (a stale reply can't revert a concurrent resolve — regression test added); gitignored-`.vortspec/` gets a targeted fix-it; `safeId` rejects `.`/`..`; `watchAnchors([])` clears stale host pin rects; the "Notified on GitHub" link is guarded on a non-empty URL.

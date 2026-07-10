@@ -61,6 +61,16 @@ describe("comment-store", () => {
     expect(merged.messages.map((m) => m.id).sort()).toEqual(["m1", "m2", "m3"]);
   });
 
+  it("a stale reply does not revert a concurrent resolve", async () => {
+    await upsertThread(root, thread()); // resolved: false
+    await resolveThread(root, "t1abc-000", true); // resolved on disk
+    // A client that loaded before the resolve posts a reply (its view says resolved:false).
+    await upsertThread(root, thread({ resolved: false, messages: [msg("m1"), msg("m2")] }));
+    const [got] = await listThreads(root);
+    expect(got.resolved).toBe(true); // disk state preserved
+    expect(got.messages.map((m) => m.id).sort()).toEqual(["m1", "m2"]); // reply still appended
+  });
+
   it("keeps the stored copy of a message already on disk (append-only, immutable)", async () => {
     await upsertThread(root, thread({ messages: [msg("m1", "original")] }));
     await upsertThread(root, thread({ messages: [msg("m1", "TAMPERED")] }));

@@ -455,7 +455,9 @@ function handleCommand(cmd: BridgeCommand): void {
     }
     case "watchAnchors":
       watchedFingerprints = cmd.fingerprints;
-      emitAnchorRects();
+      // Emit even when empty so the host clears stale pin rects (the last thread removed).
+      if (watchedFingerprints.length === 0) send({ t: "anchorRects", rects: {} });
+      else emitAnchorRects();
       return;
     case "scrollToAnchor": {
       const el = resolveFingerprint(cmd.fingerprint);

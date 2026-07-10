@@ -27,7 +27,15 @@ async function git(cwd: string, args: string[]): Promise<{ ok: boolean; stdout: 
 export async function commitCommentFile(projectPath: string, relPath: string, summary: string): Promise<GitResult> {
   if (!(await isRepo(projectPath))) return { ok: false, message: "Not a git repository — the comment is saved as a file." };
   const add = await git(projectPath, ["add", "--", relPath]); // track a new file
-  if (!add.ok) return { ok: false, message: add.stderr.trim() || "Could not stage the comment." };
+  if (!add.ok) {
+    if (/ignored by/i.test(add.stderr))
+      return {
+        ok: false,
+        message:
+          "Your project ignores `.vortspec/`, so comments can't be committed or shared — they're saved locally. Remove `.vortspec/` from .gitignore to share them.",
+      };
+    return { ok: false, message: add.stderr.trim() || "Could not stage the comment." };
+  }
   const co = await git(projectPath, ["commit", "-m", `vortspec(comment): ${summary}`, "--", relPath]);
   if (co.ok) return { ok: true, message: "Committed the comment." };
   if (/nothing to commit|no changes added|nothing added/i.test(`${co.stdout}\n${co.stderr}`)) {
