@@ -56,9 +56,10 @@ export function buildSelection(
       bind("gap", "Gap", "length", c["gap"], "spacing"),
       bind("padding-left", "Padding X", "length", c["padding-left"], "spacing"),
       bind("padding-top", "Padding Y", "length", c["padding-top"], "spacing"),
-      // Margins — a per-element literal so it always shows (even at 0px), for any element.
-      literal("margin-left", "Margin X", "length", c["margin-left"]),
-      literal("margin-top", "Margin Y", "length", c["margin-top"]),
+      // Margins — token-bindable to the spacing scale (Figma binds a variable to any
+      // spacing prop); shown even at 0px (bind only drops undefined/empty values).
+      bind("margin-left", "Margin X", "length", c["margin-left"], "spacing"),
+      bind("margin-top", "Margin Y", "length", c["margin-top"], "spacing"),
     ]),
     section("appearance", "Appearance", [
       literal("opacity", "Opacity", "number", c["opacity"] ?? "1"),

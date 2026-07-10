@@ -10,7 +10,7 @@ import type {
 } from "@vortspec/core/ipc";
 import { NodeTree } from "./NodeTree";
 import type { PendingEdit } from "./pending";
-import { matchTokenName } from "./compose";
+import { matchTokenName, tokenNameFromVar, tokensForField } from "./compose";
 import { ColorTokenField, type ColorToken } from "./ColorPicker";
 
 /**
@@ -472,7 +472,13 @@ function Field({
     ) : field.kind === "color" ? (
       <ColorTokenField value={field.value} token={field.token} colorTokens={colorTokens} onChange={onChange} />
     ) : field.kind === "length" ? (
-      <LengthTokenField value={field.value} tokenType={field.tokenType} tokens={tokens} onChange={onChange} />
+      <LengthTokenField
+        value={field.value}
+        token={field.token}
+        tokenType={field.tokenType}
+        tokens={tokens}
+        onChange={onChange}
+      />
     ) : field.key === "content" ? (
       <ContentTextarea value={field.value} onChange={onChange} />
     ) : (
@@ -490,26 +496,43 @@ function Field({
 }
 
 /**
- * Figma-style length field: the bound token's name sits on the left (a pill that
- * opens the variable list for this attribute), the px value on the right. Editing
- * the px re-recognizes a token (or detaches to a literal); picking one sets the value.
+ * Figma-style length field: bind the attribute to one of the project's design
+ * tokens **or** type a raw value. When bound, the token name sits on the left (a
+ * pill that opens the variable list for this field's type — spacing / radius /
+ * typography), and the px value on the right. Picking a token emits `var(--name)`
+ * as the ephemeral override so the live preview uses the real token value; editing
+ * the px detaches to a raw literal. The picker lists each token's name with its
+ * resolved value beside it.
  */
 function LengthTokenField({
   value,
+  token,
   tokenType,
   tokens,
   onChange,
 }: {
   value: string;
+  token?: string | null;
   tokenType?: string;
   tokens: InspectorToken[];
   onChange: (v: string) => void;
 }): JSX.Element {
-  const opts = tokenType ? tokens.filter((t) => t.type === tokenType) : [];
+  const opts = tokensForField(tokens, tokenType);
   const [draft, setDraft] = useState(value);
   useEffect(() => setDraft(value), [value]);
   const [open, setOpen] = useState(false);
-  const matched = tokenType ? matchTokenName(draft, opts, tokenType) : null;
+  // Prefer the selection's recognized token / an explicit var() binding; else
+  // recognize a raw literal that happens to equal a token's value.
+  const matched = token ?? tokenNameFromVar(value) ?? (tokenType ? matchTokenName(draft, opts, tokenType) : null);
+  const bindToken = (name: string): void => {
+    onChange(`var(--${name})`); // emit the binding — the guest resolves the real value
+    setOpen(false);
+  };
+  const detach = (): void => {
+    // Fall back to a raw literal — the current resolved value (or the bound token's).
+    onChange(opts.find((t) => t.name === matched)?.resolvedValue ?? draft);
+    setOpen(false);
+  };
   return (
     <div className="relative w-full">
       <div className="flex w-full items-center rounded border border-vs-border-default bg-vs-bg-surface focus-within:border-vs-accent">
@@ -517,7 +540,7 @@ function LengthTokenField({
           <button
             type="button"
             onClick={() => setOpen((o) => !o)}
-            title={matched ? `Variable: ${matched} — pick another` : "Bind a variable"}
+            title={matched ? `Variable: ${matched} — pick another or detach` : "Bind a variable"}
             className={`flex max-w-[58%] flex-none items-center gap-1 rounded-l px-1.5 py-1 text-[10px] ${
               matched
                 ? "bg-vs-accent-subtle text-vs-accent"
@@ -542,15 +565,21 @@ function LengthTokenField({
         <>
           <div className="fixed inset-0 z-20" onClick={() => setOpen(false)} />
           <div className="absolute left-0 right-0 z-30 mt-1 max-h-56 overflow-y-auto rounded-md border border-vs-border-default bg-vs-bg-elevated py-1 shadow-2xl">
+            {matched && (
+              <button
+                type="button"
+                onClick={detach}
+                className="flex w-full items-center gap-1.5 px-2.5 py-1.5 text-[11px] text-vs-text-muted hover:bg-vs-bg-hover"
+              >
+                <span className="text-[8px]">◇</span>
+                <span className="truncate">Raw value</span>
+              </button>
+            )}
             {opts.map((t) => (
               <button
                 key={t.name}
                 type="button"
-                onClick={() => {
-                  setDraft(t.resolvedValue);
-                  onChange(t.resolvedValue);
-                  setOpen(false);
-                }}
+                onClick={() => bindToken(t.name)}
                 className={`flex w-full items-center justify-between gap-2 px-2.5 py-1.5 text-[11px] hover:bg-vs-bg-hover ${
                   t.name === matched ? "text-vs-accent" : "text-vs-text-secondary"
                 }`}

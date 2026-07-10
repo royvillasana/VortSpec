@@ -131,6 +131,8 @@ The Run Canvas must let a user **select, inspect, and manipulate any component o
 
 **Done when.** Selecting **margin** lets the user type `16px` **or** pick a spacing token, and the token list shows each token's name with its value beside it. Binding a **radius** token updates corner radius live; binding a **color** token still works via the unified path. The bound field displays the token name; switching to raw restores literal editing. Add Vitest coverage for token filtering by field type and for `cssForField` emitting `var(--token)` on a bound value, and a Playwright step exercising raw-vs-token on a length field.
 
+> **Status (done).** Margins are now token-bindable (`bind(..., "spacing")` in selection-builder) alongside the already-bindable gap/padding/radius/font-size — so body margin, padding, gap, radius all offer spacing/radius tokens, and color already binds via `ColorTokenField`. `LengthTokenField` now mirrors `ColorTokenField`'s pattern: picking a token emits **`var(--name)`** as the ephemeral override (guest resolves the real value) rather than the literal, takes the recognized `token` prop, and adds a "Raw value" detach row; the picker still lists each token's **name with its resolved value beside it**. New pure helpers `tokenNameFromVar` + `tokensForField` (filter by field type) in compose. Vitest: token filtering by type, `tokenNameFromVar`, `cssForField` var(--token) passthrough (compose.test — 12), margin token-binding (selection-builder.test). The live raw-vs-token Playwright step is the hands-on pass.
+
 ---
 
 ## Phase 6 — Edit provenance for spec-first persistence

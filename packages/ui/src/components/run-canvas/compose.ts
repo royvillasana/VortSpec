@@ -97,6 +97,17 @@ export function cssForField(key: string, value: string): Record<string, string> 
 
 const normToken = (s: string): string => s.trim().toLowerCase().replace(/\s+/g, " ");
 
+/** The token name bound in a `var(--name)` value (any field type), or null for a literal. */
+export function tokenNameFromVar(value: string): string | null {
+  const m = value.trim().match(/^var\(\s*--([\w-]+)\s*\)$/);
+  return m ? m[1] : null;
+}
+
+/** The project tokens a field of `tokenType` may bind (spacing/radius/typography/color). */
+export function tokensForField<T extends { type: string }>(tokens: T[], tokenType: string | undefined): T[] {
+  return tokenType ? tokens.filter((t) => t.type === tokenType) : [];
+}
+
 /**
  * Find the design token of `type` whose resolved value equals `value` (the
  * Design-panel length field shows this token's name, and re-recognizes a token

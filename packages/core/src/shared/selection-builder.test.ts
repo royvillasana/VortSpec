@@ -62,6 +62,17 @@ describe("buildSelection", () => {
     expect(strokeColor.token).toBe("color-border");
   });
 
+  it("makes margins token-bindable to the spacing scale (Phase 5)", () => {
+    const sel = buildSelection(readout({ computed: { "margin-left": "8px", "margin-top": "8px" } }), {
+      tokens,
+      tag: "div",
+    });
+    const marginX = sel.sections.find((s) => s.id === "layout")!.fields.find((f) => f.key === "margin-left")!;
+    expect(marginX.kind).toBe("length");
+    expect(marginX.tokenType).toBe("spacing");
+    expect(marginX.token).toBe("space-2"); // 8px recognized as the spacing token
+  });
+
   it("falls back to an in-scope custom-property name when no project token matches", () => {
     const sel = buildSelection(readout({ customProps: { "--brand-gap": "8px" } }), { tag: "button" });
     const gap = sel.sections.find((s) => s.id === "layout")!.fields.find((f) => f.key === "gap")!;

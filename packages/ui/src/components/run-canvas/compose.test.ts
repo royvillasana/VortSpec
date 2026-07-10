@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { resembleComponent, matchTokenName } from "./compose";
+import { resembleComponent, matchTokenName, tokenNameFromVar, tokensForField, cssForField } from "./compose";
 import type { InspectorComponent } from "@vortspec/core/ipc";
 
 describe("matchTokenName", () => {
@@ -17,6 +17,47 @@ describe("matchTokenName", () => {
   });
   it("normalizes whitespace/case before comparing", () => {
     expect(matchTokenName(" 0PX ", tokens, "spacing")).toBe("spacing-0");
+  });
+});
+
+describe("tokensForField (filter by field type — Phase 5)", () => {
+  const tokens = [
+    { name: "space-4", resolvedValue: "16px", type: "spacing" },
+    { name: "space-6", resolvedValue: "24px", type: "spacing" },
+    { name: "radius-md", resolvedValue: "8px", type: "radius" },
+    { name: "brand", resolvedValue: "#2563EB", type: "color" },
+  ];
+  it("returns only tokens whose type matches the field", () => {
+    expect(tokensForField(tokens, "spacing").map((t) => t.name)).toEqual(["space-4", "space-6"]);
+    expect(tokensForField(tokens, "radius").map((t) => t.name)).toEqual(["radius-md"]);
+    expect(tokensForField(tokens, "color").map((t) => t.name)).toEqual(["brand"]);
+  });
+  it("returns nothing when the field has no token type", () => {
+    expect(tokensForField(tokens, undefined)).toEqual([]);
+  });
+});
+
+describe("tokenNameFromVar", () => {
+  it("extracts the token name from a var() binding", () => {
+    expect(tokenNameFromVar("var(--space-4)")).toBe("space-4");
+    expect(tokenNameFromVar("var( --brand-primary )")).toBe("brand-primary");
+  });
+  it("is null for a raw literal", () => {
+    expect(tokenNameFromVar("16px")).toBeNull();
+    expect(tokenNameFromVar("#2563EB")).toBeNull();
+  });
+});
+
+describe("cssForField emits var(--token) on a bound value (Phase 5)", () => {
+  it("passes a var() binding through to every mapped property", () => {
+    expect(cssForField("margin-left", "var(--space-4)")).toEqual({
+      "margin-left": "var(--space-4)",
+      "margin-right": "var(--space-4)",
+    });
+    expect(cssForField("radius", "var(--radius-md)")).toEqual({ "border-radius": "var(--radius-md)" });
+  });
+  it("still maps a raw literal", () => {
+    expect(cssForField("gap", "16px")).toEqual({ gap: "16px" });
   });
 });
 
