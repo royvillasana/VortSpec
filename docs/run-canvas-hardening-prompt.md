@@ -169,6 +169,10 @@ The Run Canvas must let a user **select, inspect, and manipulate any component o
 
 **Done when.** All of the above pass and the review agent finds no invariant violation.
 
+> **Status (automated gate green; live checks are the hands-on pass).** `pnpm build` (4 packages), `pnpm test` (core 242 / ui 50 / ide 19), `pnpm test:ct` (ide 68 / desktop 66), and `pnpm lint` are green. `pnpm check-types` surfaces only one pre-existing error (`ide-mcp/bridge.ts` `server.mjs?raw`, from commit `e1c5a91`, before this work — not a regression). A review agent audited the P1–P6 diff against the invariants: invariants 2 (wire changes zod-gated), 3 (no `any`), 5 (parse degrades) fully clean; 4 (identity) clean, with a rare survivor/reacquire fingerprint-collision hardened by a 1:1 `byId` guard in `idFor`. It caught one **blocker** (now fixed): a `var(--name)` length-token *binding* was routed to `setTokenValue`, which would rewrite the token's own definition to `--name: var(--name)`; bindings now route to the gated **source** run via `isTokenBinding` (a per-element reference, like color), preserving the exact "Bind to token" provenance. Regression test in `pending.test.ts`.
+>
+> **Remaining (hands-on, need a running dev server):** the live Playwright end-to-end (select → resize → variant → text → force re-render → selection+overrides survive), the two-framework guest run (React/Tailwind + a plain-HTML page), and the live token raw-vs-token check.
+
 ---
 
 ## Out of scope

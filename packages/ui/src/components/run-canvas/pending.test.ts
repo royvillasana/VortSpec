@@ -5,6 +5,7 @@ import {
   buildEditPrompt,
   editProvenance,
   describeEdit,
+  isTokenBinding,
   type PendingEdit,
 } from "./pending";
 import type { Selection } from "@vortspec/core/ipc";
@@ -77,6 +78,33 @@ describe("edit provenance (Phase 6)", () => {
     const ff = describeEdit(freeform);
     expect(ff).toContain("Approximate visual target");
     expect(ff).toContain("opacity");
+  });
+});
+
+describe("isTokenBinding — a var() binding is a source edit, not a token-value rewrite", () => {
+  it("is true for a var(--name) token edit (routes to the gated source run)", () => {
+    const bind = classifyFieldEdit(
+      selection,
+      "radius",
+      "var(--radius-md)",
+      ["border-radius"],
+      () => 5,
+      false,
+      undefined,
+      "radius-md", // tokenOverride: the bound token name
+    );
+    expect(bind.kind).toBe("token");
+    expect(isTokenBinding(bind)).toBe(true); // must NOT go to setTokenValue (would write --radius-md: var(--radius-md))
+  });
+
+  it("is false for a concrete token-value edit (commits to the token file)", () => {
+    const valueEdit = classifyFieldEdit(selection, "radius", "12px", ["border-radius"], () => 5);
+    expect(valueEdit.kind).toBe("token");
+    expect(isTokenBinding(valueEdit)).toBe(false);
+  });
+
+  it("is false for a plain style edit", () => {
+    expect(isTokenBinding(classifyFieldEdit(selection, "opacity", "0.5", ["opacity"], () => 1))).toBe(false);
   });
 });
 

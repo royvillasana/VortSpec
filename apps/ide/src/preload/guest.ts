@@ -197,6 +197,10 @@ function buildTree(): BridgeTree {
       const reacquired = fpToUid.get(fp);
       uid = reacquired && !byId.has(reacquired) ? reacquired : `n${uidSeq++}`;
     }
+    // Guarantee a 1:1 uid↔element map within a scan: if this uid was already claimed
+    // by a coexisting element (a rare fingerprint collision between a survivor and a
+    // reacquired element), mint a fresh one so the two never share an id.
+    if (byId.has(uid)) uid = `n${uidSeq++}`;
     uidOf.set(el, uid);
     byId.set(uid, el);
     nextFpToUid.set(fp, uid);

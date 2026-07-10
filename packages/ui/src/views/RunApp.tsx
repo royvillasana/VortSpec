@@ -18,6 +18,7 @@ import {
   classifyFieldEdit,
   classifyVariantEdit,
   buildEditPrompt,
+  isTokenBinding,
   type PendingEdit,
 } from "../components/run-canvas/pending";
 import { useInspectorBridge } from "../lib/useInspectorBridge";
@@ -412,8 +413,13 @@ export function RunApp({
   async function applyEdits(): Promise<void> {
     const edits = Object.values(pending);
     if (edits.length === 0) return;
-    const tokenEdits = edits.filter((e) => e.kind === "token" && e.token);
-    const structural = edits.filter((e) => e.kind !== "token");
+    // A `var(--name)` value is a per-element token *binding* (Phase 5) — the element
+    // should reference the token in its source, exactly like a color-token binding.
+    // That's a gated source edit, NOT a rewrite of the token's own value (which would
+    // write `--name: var(--name)`). Only concrete-valued token edits commit to the file.
+    const isTokenValueEdit = (e: PendingEdit): boolean => e.kind === "token" && !!e.token && !isTokenBinding(e);
+    const tokenEdits = edits.filter(isTokenValueEdit);
+    const structural = edits.filter((e) => !isTokenValueEdit(e));
     setApplying(true);
     try {
       for (const e of tokenEdits) {

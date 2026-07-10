@@ -94,6 +94,16 @@ export function classifyVariantEdit(
  */
 export type EditProvenance = "variant" | "token" | "freeform-style" | "text";
 
+/**
+ * A `var(--name)` token *binding* — the element references the token in its source
+ * (Phase 5), a gated source edit — as opposed to a concrete token-value edit that
+ * rewrites the token's own definition in the token file. Applying a binding through
+ * the token-value path would write `--name: var(--name)`, so the two must not mix.
+ */
+export function isTokenBinding(edit: PendingEdit): boolean {
+  return edit.kind === "token" && /^\s*var\(\s*--/.test(edit.value);
+}
+
 /** Classify a recorded edit's provenance from its kind + field. */
 export function editProvenance(edit: PendingEdit): EditProvenance {
   if (edit.kind === "variant") return "variant";
