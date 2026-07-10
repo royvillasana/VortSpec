@@ -46,6 +46,8 @@ The Run Canvas must let a user **select, inspect, and manipulate any component o
 
 **Done when.** With a project running under HMR, select a nested element, trigger a source re-render of that subtree, and confirm the selection overlay and any live override stay on the correct element. Add a Vitest unit for the fingerprint resolver (given a serialized DOM, an id resolves back to the same node after a simulated re-render) and a Playwright step that selects → forces re-render → asserts the overlay is still on the same element.
 
+> **Status (done).** Node ids are now opaque per-element uids (`WeakMap<Element,string>`), minted once and re-acquired across re-renders by a serializable structural fingerprint (`packages/core/src/shared/dom-fingerprint.ts`, unit-tested). `buildTree` re-maps uids by fingerprint; every command handler resolves through `resolve(id)`; a debounced `MutationObserver` rescans on structural mutations and re-locks the selection (or emits a new `selectionLost` event the host handles by clearing selection with a dismissible notice). **Override re-application to the re-acquired element is Phase 2** (overrides are still keyed by the element object). The live-HMR overlay check + Playwright step need a running dev server (hands-on pass); the fingerprint resolver is covered by `dom-fingerprint.test.ts`.
+
 ---
 
 ## Phase 2 — Override & geometry resilience

@@ -38,6 +38,9 @@ export interface InspectorBridge {
   /** A pending context-menu request from a right-click ({nodeId, x, y} in guest coords), or null. */
   contextMenu: { nodeId: string; x: number; y: number } | null;
   clearContextMenu: () => void;
+  /** True when the selected node's element vanished after a re-render (couldn't be re-acquired). */
+  selectionLost: boolean;
+  clearSelectionLost: () => void;
   /** Set an element's visible text live (from the sidebar Content input). */
   setText: (id: string, text: string) => void;
   /** Swap classes on an element for a live variant preview. */
@@ -74,6 +77,7 @@ export function useInspectorBridge(): InspectorBridge {
   const [runtimeError, setRuntimeError] = useState<InspectorBridge["runtimeError"]>(null);
   const [textEdited, setTextEdited] = useState<InspectorBridge["textEdited"]>(null);
   const [contextMenu, setContextMenu] = useState<InspectorBridge["contextMenu"]>(null);
+  const [selectionLost, setSelectionLost] = useState(false);
 
   const send = useCallback((cmd: BridgeCommand) => {
     webviewRef.current?.send(INSPECTOR_BRIDGE_CHANNEL, cmd);
@@ -96,6 +100,7 @@ export function useInspectorBridge(): InspectorBridge {
       case "readout":
         setReadout(event.readout);
         setSelectedId(event.readout.nodeId);
+        setSelectionLost(false); // a fresh readout means the node is alive again
         setRects((r) => ({ ...r, [event.readout.nodeId]: event.readout.rect }));
         return;
       case "geometry":
@@ -116,6 +121,13 @@ export function useInspectorBridge(): InspectorBridge {
         return;
       case "contextMenu":
         setContextMenu({ nodeId: event.nodeId, x: event.x, y: event.y });
+        return;
+      case "selectionLost":
+        // The selected node's element is gone after a re-render — drop the stale
+        // selection so overlays/panels don't point at nothing.
+        setSelectedId((cur) => (cur === event.nodeId ? null : cur));
+        setReadout((r) => (r?.nodeId === event.nodeId ? null : r));
+        setSelectionLost(true);
         return;
     }
   }, []);
@@ -150,6 +162,7 @@ export function useInspectorBridge(): InspectorBridge {
   const select = useCallback(
     (id: string | null) => {
       setSelectedId(id);
+      setSelectionLost(false);
       if (id === null) {
         setReadout(null);
         send({ t: "clearOverride" });
@@ -202,6 +215,8 @@ export function useInspectorBridge(): InspectorBridge {
     clearTextEdited: useCallback(() => setTextEdited(null), []),
     contextMenu,
     clearContextMenu: useCallback(() => setContextMenu(null), []),
+    selectionLost,
+    clearSelectionLost: useCallback(() => setSelectionLost(false), []),
     setText,
     setClass,
     select,

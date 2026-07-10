@@ -164,6 +164,18 @@ export function RunCanvas({
           Visual editing unavailable on this page — {bridge.error}
         </div>
       )}
+
+      {bridge.selectionLost && (
+        <div className="absolute bottom-3 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-md border border-vs-border-default bg-vs-bg-elevated px-3 py-1.5 text-[11px] text-vs-text-secondary shadow">
+          The element you were editing was removed by a live reload — pick another to keep going.
+          <button
+            className="rounded px-1.5 py-0.5 text-vs-text-primary hover:bg-vs-bg-hover"
+            onClick={() => bridge.clearSelectionLost()}
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
     </div>
   );
 }

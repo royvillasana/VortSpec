@@ -231,8 +231,14 @@ export const bridgeEventSchema = z.discriminatedUnion("t", [
   z.object({ t: z.literal("textEdited"), nodeId: z.string(), text: z.string() }),
   /** Right-click on an element — the host shows a context menu at (x,y) guest coords. */
   z.object({ t: z.literal("contextMenu"), nodeId: z.string(), x: z.number(), y: z.number() }),
+  /** The selected node could not be re-acquired after a re-render (its element is gone). */
+  z.object({ t: z.literal("selectionLost"), nodeId: z.string() }),
 ]);
 export type BridgeEvent = z.infer<typeof bridgeEventSchema>;
+
+// The stable node-identity fingerprint (Phase 1) — re-exported so the guest, which
+// imports this module, gets the resolver from one place.
+export { fingerprint, classSignature, segToken, type FpSeg } from "./dom-fingerprint";
 
 /** The channel name used for host⇄guest `webview` IPC messages. */
 export const INSPECTOR_BRIDGE_CHANNEL = "vortspec:inspector-bridge";
