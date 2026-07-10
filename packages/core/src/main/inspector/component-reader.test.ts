@@ -55,3 +55,68 @@ describe("parseProps (CVA)", () => {
     expect(parseProps("export const x = 1;")).toEqual([]);
   });
 });
+
+// Option values that aren't plain string literals, plus a compoundVariants array.
+const NESTED = `
+export const cardVariants = cva('rounded', {
+  variants: {
+    tone: {
+      // a cn()/clsx() call with multiple string args
+      solid: cn('bg-primary text-white', 'shadow-md'),
+      // an array of classes
+      soft: ['bg-primary/10', 'text-primary'],
+      // a multi-line template literal
+      ghost: \`
+        bg-transparent
+        text-primary
+      \`,
+    },
+    size: {
+      sm: 'p-2',
+      lg: 'p-6',
+    },
+  },
+  compoundVariants: [
+    { tone: 'solid', size: 'lg', class: 'ring-2 ring-primary' },
+    { tone: 'soft', size: 'sm', className: 'ring-1' },
+  ],
+  defaultVariants: { tone: 'solid', size: 'sm' },
+});
+`;
+
+describe("parseProps (nested values + compoundVariants)", () => {
+  const props = parseProps(NESTED);
+  const byKey = new Map(props.map((p) => [p.key, p]));
+
+  it("extracts base variant groups without leaking compoundVariants", () => {
+    expect(props.map((p) => p.key).sort()).toEqual(["size", "tone"]);
+  });
+
+  it("reads options whose value is a cn() call, array, or multi-line template", () => {
+    expect(byKey.get("tone")?.options).toEqual(["solid", "soft", "ghost"]);
+  });
+
+  it("recovers the class string from a cn() call (joins the literals)", () => {
+    expect(byKey.get("tone")?.classes.solid).toBe("bg-primary text-white shadow-md");
+  });
+
+  it("recovers classes from an array value", () => {
+    expect(byKey.get("tone")?.classes.soft).toBe("bg-primary/10 text-primary");
+  });
+
+  it("recovers classes from a multi-line template literal (collapsed whitespace)", () => {
+    expect(byKey.get("tone")?.classes.ghost).toBe("bg-transparent text-primary");
+  });
+
+  it("still reads defaults with compoundVariants present", () => {
+    expect(byKey.get("tone")?.defaultValue).toBe("solid");
+    expect(byKey.get("size")?.defaultValue).toBe("sm");
+  });
+});
+
+describe("parseProps (robustness)", () => {
+  it("never throws on malformed source (returns best-effort/empty)", () => {
+    expect(() => parseProps("variants: { a: { ")).not.toThrow();
+    expect(() => parseProps("variants: {}")).not.toThrow();
+  });
+});

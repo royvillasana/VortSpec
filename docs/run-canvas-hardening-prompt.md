@@ -87,6 +87,8 @@ The Run Canvas must let a user **select, inspect, and manipulate any component o
 
 **Done when.** Given fixture components using flat variants, nested variant values, and `compoundVariants`, `parseProps` returns the correct controls. Selecting an instance rendered with a non-default variant shows that variant as current in the panel. All new cases covered by Vitest.
 
+> **Status (done).** `parseProps` is now a brace-aware tokenizer (`stripComments` → `splitTopLevel` → `splitKeyValue` → `extractClasses`) instead of a flat regex: it parses option values that are `cn()`/`clsx()` calls, arrays, or multi-line templates, strips comments first, keeps `defaultVariants`, isolates a sibling `compoundVariants` array from the base controls, and degrades to `[]` (never throws) on malformed source. Current-variant inference was already implemented via `detectVariant` in `selection-builder` (host-side, read-only) and is covered by `selection-builder.test.ts`; the stale `resolveComponent` comment is corrected. New cases in `component-reader.test.ts` (13 total: flat, cn/array/template values, compoundVariants present, malformed robustness).
+
 ---
 
 ## Phase 4 — Inline text-edit fidelity

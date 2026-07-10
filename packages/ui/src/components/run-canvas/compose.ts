@@ -76,8 +76,9 @@ export function resolveComponent(
   if (!match) return null;
   const variants: VariantControl[] = match.props.map((p) => ({
     ...p,
-    // The instance's current value isn't derivable from the DOM alone; default to
-    // the component's defaultVariants until we infer it from classes (later).
+    // Seed `current` with the component's default; `buildSelection` then infers the
+    // instance's real current value from its live classes (see `detectVariant` in
+    // selection-builder), falling back to this default only when no class set matches.
     current: p.defaultValue,
   }));
   return { name: match.name, file: match.file, variants };
