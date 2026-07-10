@@ -33,6 +33,7 @@ export function DesignPanel({
   onVariantChange,
   pending = [],
   applying = false,
+  applyStatus = null,
   review = false,
   onApply,
   onDiscard,
@@ -63,6 +64,8 @@ export function DesignPanel({
   pending?: PendingEdit[];
   /** An apply is in flight (gated Claude run). */
   applying?: boolean;
+  /** The gated run's current activity label, shown live under the progress bar. */
+  applyStatus?: string | null;
   /** Post-apply review of a structural (gated) change — offer Keep / Revert. */
   review?: boolean;
   onApply?: () => void;
@@ -161,7 +164,14 @@ export function DesignPanel({
       {review ? (
         <ReviewBar onKeep={onKeep} onRevert={onRevert} />
       ) : pending.length > 0 ? (
-        <ApplyBar pending={pending} applying={applying} onApply={onApply} onDiscard={onDiscard} onRemove={onRemovePending} />
+        <ApplyBar
+          pending={pending}
+          applying={applying}
+          applyStatus={applyStatus}
+          onApply={onApply}
+          onDiscard={onDiscard}
+          onRemove={onRemovePending}
+        />
       ) : null}
     </div>
   );
@@ -171,12 +181,14 @@ export function DesignPanel({
 function ApplyBar({
   pending,
   applying,
+  applyStatus,
   onApply,
   onDiscard,
   onRemove,
 }: {
   pending: PendingEdit[];
   applying: boolean;
+  applyStatus?: string | null;
   onApply?: () => void;
   onDiscard?: () => void;
   onRemove?: (key: string) => void;
@@ -220,12 +232,13 @@ function ApplyBar({
             Editing a shared token changes every element bound to it.
           </p>
         )}
-        {structural.length > 0 && (
+        {structural.length > 0 && !applying && (
           <p className="text-[10px] text-vs-text-muted">
             Source edits run through Claude Code and can be reverted.
           </p>
         )}
       </div>
+      {applying && <ApplyProgress status={applyStatus} structural={structural.length > 0} />}
       <div className="flex items-center gap-2">
         <button
           type="button"
@@ -243,6 +256,34 @@ function ApplyBar({
         >
           Discard
         </button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Live progress for an in-flight apply. A source (gated) edit runs a Claude Code
+ * session that can take a minute+, so show an indeterminate bar, the run's current
+ * activity, and an elapsed timer rather than a frozen "Applying…".
+ */
+function ApplyProgress({ status, structural }: { status?: string | null; structural: boolean }): JSX.Element {
+  const [elapsed, setElapsed] = useState(0);
+  useEffect(() => {
+    const started = Date.now();
+    const id = setInterval(() => setElapsed(Math.floor((Date.now() - started) / 1000)), 1000);
+    return () => clearInterval(id);
+  }, []);
+  const time = elapsed >= 60 ? `${Math.floor(elapsed / 60)}m ${elapsed % 60}s` : `${elapsed}s`;
+  return (
+    <div className="mb-2 flex flex-col gap-1.5">
+      <div className="h-1 w-full overflow-hidden rounded-full bg-vs-bg-hover">
+        <div className="h-full w-full animate-pulse rounded-full bg-vs-accent" />
+      </div>
+      <div className="flex items-center gap-2 text-[10px] text-vs-text-muted">
+        <span className="min-w-0 flex-1 truncate">
+          {status ?? (structural ? "Claude Code is editing the source…" : "Applying…")}
+        </span>
+        <span className="flex-none font-mono">{time}</span>
       </div>
     </div>
   );

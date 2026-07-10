@@ -1,4 +1,4 @@
-import { memo, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import type { JSX } from "react";
 import type { BridgeTree, BridgeNode } from "@vortspec/core/ipc";
 
@@ -24,6 +24,35 @@ export const NodeTree = memo(function NodeTree({
   onHover?: (id: string | null) => void;
 }): JSX.Element {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const selectedRef = useRef<HTMLButtonElement | null>(null);
+
+  // child id → parent id, so we can reveal a node selected on the canvas.
+  const parentOf = useMemo(() => {
+    const map = new Map<string, string>();
+    if (tree) for (const [pid, kids] of Object.entries(tree.children)) for (const k of kids) map.set(k, pid);
+    return map;
+  }, [tree]);
+
+  // When the selection changes (e.g. clicking an element on the canvas), expand the
+  // whole ancestor chain so the highlighted row is actually visible, then scroll to it.
+  useEffect(() => {
+    if (!selectedId) return;
+    const ancestors: string[] = [];
+    for (let p = parentOf.get(selectedId); p; p = parentOf.get(p)) ancestors.push(p);
+    if (ancestors.length) {
+      setExpanded((prev) => {
+        if (ancestors.every((a) => prev.has(a))) return prev;
+        return new Set([...prev, ...ancestors]);
+      });
+    }
+  }, [selectedId, parentOf]);
+
+  // Scroll the selected row into view once it's rendered (after any expansion).
+  useEffect(() => {
+    if (selectedId && selectedRef.current) {
+      selectedRef.current.scrollIntoView({ block: "nearest" });
+    }
+  }, [selectedId, expanded]);
 
   function toggle(id: string): void {
     setExpanded((prev) => {
@@ -47,16 +76,18 @@ export const NodeTree = memo(function NodeTree({
     const kids = tree!.children[id] ?? [];
     const hasKids = kids.length > 0 || node.childCount > 0;
     const isOpen = expanded.has(id);
+    const isSelected = selectedId === id;
     const row = (
       <button
         key={id}
+        ref={isSelected ? selectedRef : undefined}
         type="button"
         onClick={() => onSelect(id)}
         onMouseEnter={() => onHover?.(id)}
         onMouseLeave={() => onHover?.(null)}
         style={{ paddingLeft: 6 + depth * 12 }}
         className={`flex w-full items-center gap-1 py-[3px] pr-2 text-left text-[12px] ${
-          selectedId === id
+          isSelected
             ? "bg-vs-accent-subtle text-vs-text-primary"
             : hoveredId === id
               ? "bg-vs-bg-hover text-vs-text-primary"

@@ -78,6 +78,15 @@ export function RunCanvas({
       : "block";
   const showSpacing = mode === "inspect" && !!selRect && !!readout;
 
+  // The selected node's name for the overlay badge — its component name, else its
+  // tag, plus an id/class hint so a plain element still reads meaningfully.
+  const selNode = bridge.selectedId ? bridge.tree?.nodes[bridge.selectedId] : undefined;
+  const selName = selNode
+    ? `${selNode.component ?? selNode.tag}${
+        selNode.idAttr ? ` #${selNode.idAttr}` : selNode.classes[0] ? ` .${selNode.classes[0]}` : ""
+      }`
+    : undefined;
+
   return (
     <div className="relative h-full min-h-[340px] w-full overflow-hidden bg-white">
       {/* Stage — the webview + overlay share one transform, so rects align at any zoom. */}
@@ -124,6 +133,7 @@ export function RunCanvas({
             <Box
               rect={selRect}
               kind="select"
+              label={selName}
               showHandles
               zoom={zoom}
               onLiveEdit={onLiveEdit}
@@ -190,6 +200,7 @@ const RESIZABLE: Record<string, { w?: boolean; h?: boolean; cursor: string }> = 
 function Box({
   rect,
   kind,
+  label,
   showHandles = false,
   zoom = 1,
   onLiveEdit,
@@ -199,6 +210,8 @@ function Box({
 }: {
   rect: Rect;
   kind: "hover" | "select";
+  /** The element/component name shown on the selection badge (Figma-style). */
+  label?: string;
   showHandles?: boolean;
   zoom?: number;
   onLiveEdit?: (css: Record<string, string>) => void;
@@ -274,6 +287,11 @@ function Box({
       {kind === "hover" && (
         <span className="absolute -top-5 left-0 whitespace-nowrap rounded bg-vs-accent px-1 py-px text-[9px] text-white">
           {Math.round(rect.width)}×{Math.round(rect.height)}
+        </span>
+      )}
+      {kind === "select" && label && (
+        <span className="absolute -top-5 left-0 max-w-[240px] truncate whitespace-nowrap rounded bg-vs-accent px-1.5 py-px text-[10px] font-medium text-white">
+          {label}
         </span>
       )}
       {showHandles &&

@@ -629,6 +629,7 @@ export function RunApp({
                   onVariantChange={onVariantChange}
                   pending={Object.values(pending)}
                   applying={applying}
+                  applyStatus={applying ? (structuralMod.model.activity.at(-1)?.label ?? null) : null}
                   review={review}
                   onApply={() => void applyEdits()}
                   onDiscard={discardEdits}
