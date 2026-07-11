@@ -3,9 +3,7 @@
 ## Purpose
 
 Shared layout shell for the Design Inspector application, providing persistent navigation, chat strip, and dark theme across all inspector routes.
-
 ## Requirements
-
 ### Requirement: Shared inspector layout shell
 The application SHALL render a persistent layout shell for all Inspector routes consisting of a 220px left navigation rail, a flexible main content area, and a 48px chat strip on the right edge.
 
@@ -49,11 +47,15 @@ The nav rail SHALL display a Settings link at the bottom with a gear icon and la
 - **THEN** the Settings link SHALL appear at the bottom of the nav rail, pushed down by flex spacer
 
 ### Requirement: Chat strip toggle
-The chat strip SHALL display a chat bubble icon button (32x32px). Clicking it SHALL open the full Assistant drawer. The icon SHALL be `#9BA1AB` with hover to `#E7E9EC`.
+The top bar SHALL display a chat toggle. Activating it SHALL open a persistent
+Assistant dock on the right that stays open across project-screen navigation
+(not a one-off drawer). The toggle icon SHALL be `#9BA1AB` with hover to
+`#E7E9EC`, and its open/closed state SHALL persist for the session.
 
-#### Scenario: Chat strip opens assistant
-- **WHEN** user clicks the chat icon in the strip
-- **THEN** the Assistant drawer SHALL open from the right
+#### Scenario: Chat toggle opens the persistent assistant dock
+- **WHEN** the user clicks the chat toggle in the top bar
+- **THEN** the Assistant dock SHALL open from the right
+- **AND** it SHALL remain open as the user moves between project screens until explicitly closed
 
 ### Requirement: Global dark theme
 The application SHALL use a dark theme with background `#0B0C0E`, text `#E7E9EC`, font-family Geist (400/500/600) with Geist Mono for code values. Custom scrollbars SHALL use thumb `#26282D` with border-radius 8px on transparent track.
@@ -61,3 +63,26 @@ The application SHALL use a dark theme with background `#0B0C0E`, text `#E7E9EC`
 #### Scenario: Dark theme applies globally
 - **WHEN** any page renders
 - **THEN** the background SHALL be `#0B0C0E`, text SHALL be `#E7E9EC`, and scrollbars SHALL use dark styling
+
+### Requirement: Design manifest stage in the guided flow
+The guided flow SHALL include a gated Design-manifest stage positioned after
+Verification and before Publish, producing the `DESIGN.md` artifact. The stage
+SHALL link to the Design Manifest screen and SHALL not let Publish proceed for
+the manifest until it is approved.
+
+#### Scenario: Manifest stage appears after verification
+- **WHEN** the guided flow renders its stages
+- **THEN** a "Design manifest" stage SHALL appear between Verification and Publish, showing the `DESIGN.md` artifact and a link to open it
+
+#### Scenario: Manifest stage gates publish
+- **WHEN** the Design-manifest stage has not been approved
+- **THEN** the flow SHALL show it as needing review and SHALL not advance to Publish
+
+### Requirement: Design manifest navigation destination
+The application SHALL provide a way to reach the Design Manifest screen for a
+project once the manifest stage is available (from the flow stage and the nav).
+
+#### Scenario: Open the manifest screen
+- **WHEN** the user activates the Design-manifest destination
+- **THEN** the Design Manifest screen SHALL open for the active project
+

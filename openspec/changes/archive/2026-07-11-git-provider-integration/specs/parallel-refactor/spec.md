@@ -3,9 +3,9 @@
 ## ADDED Requirements
 
 ### Requirement: Non-destructive parallel refactor of existing screens
-Using the VortSpec-built design system (tokens + components + Storybook + DESIGN.md), the
-app SHALL re-implement the repo's existing screens against the new token-driven components
-as duplicated, parallel files — never modifying, moving, or deleting the originals.
+The app SHALL re-implement the repo's existing screens against the new token-driven
+components — using the VortSpec-built design system (tokens + components + Storybook +
+DESIGN.md) — as duplicated, parallel files, never modifying, moving, or deleting the originals.
 
 #### Scenario: Duplicate screens against the new system
 - **WHEN** the user runs the refactor on a scanned repo whose design system has been built

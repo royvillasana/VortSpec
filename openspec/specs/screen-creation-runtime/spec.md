@@ -1,11 +1,12 @@
-# screen-creation-runtime
+# screen-creation-runtime Specification
 
-## ADDED Requirements
-
+## Purpose
+TBD - created by archiving change git-provider-integration. Update Purpose after archive.
+## Requirements
 ### Requirement: Vibe-engineer screens from the built design system
-After a design system (component set + tokens + DESIGN.md) exists and is pushed, the app
-SHALL let the user compose new screens/features conversationally from within VortSpec,
-using the built components — driven by Claude Code through the SDD-DE Screen Creation flow.
+The app SHALL let the user compose new screens/features conversationally from within
+VortSpec using the built components — once a design system (component set + tokens +
+DESIGN.md) exists and is pushed — driven by Claude Code through the SDD-DE Screen Creation flow.
 
 #### Scenario: Describe a screen, get an implementation
 - **WHEN** the user describes a screen/feature in natural language in the app
@@ -32,3 +33,4 @@ running app inside VortSpec, so the user can run and interact with what they bui
 - **WHEN** the user vibe-engineers a change while the app runtime is running
 - **THEN** the change lands in the project files and the running localhost app reflects it
   (hot reload), closing the build-and-run loop without leaving the app
+
