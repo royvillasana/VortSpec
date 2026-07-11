@@ -38,6 +38,8 @@ export interface CommentsController {
 export function useComments(
   projectPath: string,
   watchAnchors: (fingerprints: string[]) => void,
+  /** Whether the guest bridge is attached — re-sends the watch once the preview mounts. */
+  bridgeReady = true,
 ): CommentsController {
   const [threads, setThreads] = useState<CommentThread[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -102,10 +104,12 @@ export function useComments(
     [projectPath, reload],
   );
 
-  // Keep the guest tracking every thread's anchor so pins get live rects.
+  // Keep the guest tracking every thread's anchor so pins get live rects. Re-runs
+  // when the bridge becomes ready, so an early watch (before the preview mounts) is
+  // re-sent once `<webview>.send` actually works.
   useEffect(() => {
-    watchAnchors(threads.map((t) => t.anchor.fingerprint));
-  }, [threads, watchAnchors]);
+    if (bridgeReady) watchAnchors(threads.map((t) => t.anchor.fingerprint));
+  }, [threads, watchAnchors, bridgeReady]);
 
   const persist = useCallback(
     async (thread: CommentThread): Promise<CommentThread> => {

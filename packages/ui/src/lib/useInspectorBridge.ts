@@ -99,7 +99,14 @@ export function useInspectorBridge(): InspectorBridge {
   const [anchorRects, setAnchorRects] = useState<Record<string, Rect | null>>({});
 
   const send = useCallback((cmd: BridgeCommand) => {
-    webviewRef.current?.send(INSPECTOR_BRIDGE_CHANNEL, cmd);
+    // `<webview>.send` throws until the view is attached + `dom-ready`. An early
+    // command (e.g. watchAnchors when threads load before the preview mounts) is
+    // harmlessly dropped — the host re-syncs (tree/watchAnchors) once `ready`.
+    try {
+      webviewRef.current?.send(INSPECTOR_BRIDGE_CHANNEL, cmd);
+    } catch {
+      /* webview not ready yet */
+    }
   }, []);
 
   const onIpcMessage = useCallback((raw: Event) => {

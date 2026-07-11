@@ -280,7 +280,7 @@ export function RunApp({
   }, [mode, bridge.ready, setGuestMode]);
 
   // Run-canvas comments (repo-backed threads pinned to sections).
-  const comments = useComments(project.path, bridge.watchAnchors);
+  const comments = useComments(project.path, bridge.watchAnchors, bridge.ready);
   const { create: createComment, reply: replyComment, setResolved: resolveComment } = comments;
   const { commentTarget, clearCommentTarget, captureThumbnail } = bridge;
   // Post a new thread from the pending comment-mode target (adds its thumbnail).
