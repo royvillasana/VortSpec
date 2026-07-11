@@ -132,6 +132,10 @@
     "./useInspectorBridge": {
       "types": "./src/lib/useInspectorBridge.ts",
       "default": "./src/lib/useInspectorBridge.ts"
+    },
+    "./FirstRunSetup": {
+      "types": "./src/views/FirstRunSetup.tsx",
+      "default": "./src/views/FirstRunSetup.tsx"
     }
   },
   "scripts": {
