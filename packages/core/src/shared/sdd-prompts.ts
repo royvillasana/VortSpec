@@ -194,3 +194,56 @@ export function buildVerifyRestPrompt(url: string | null, isFigma: boolean): str
     "End with one line per component: '<name>: PASS' or '<name>: ISSUES (n)'.",
   ].join("\n");
 }
+
+// ── Re-runnable Foundation: add a source, Clean-sweep vs Merge (change: ide-guided-flow-parity) ──
+
+/** How re-running the Foundation against a new source reconciles with the existing one. */
+export type FoundationMode = "clean-sweep" | "merge";
+
+/** An additional design source to (re)run the Foundation against. */
+export interface AddedSource {
+  /** `figma` = a Figma file URL read via the Figma MCP / figma-cli; `local` = a folder/zip path. */
+  kind: "figma" | "local";
+  /** The Figma file URL, or the local folder/zip path. */
+  ref: string;
+}
+
+/** A human phrase for the source, used in the prompt. */
+function sourceClause(source: AddedSource): string {
+  return source.kind === "figma"
+    ? `the Figma file at ${source.ref} (connect via the Figma MCP / figma-cli to read it)`
+    : `the local design source at \`${source.ref}\` (a folder or zip of components/tokens)`;
+}
+
+/**
+ * Re-run the design-system Foundation against an ADDITIONAL source. `clean-sweep`
+ * replaces the current tokens + component inventory from the new source; `merge`
+ * is additive — it adds newly-found tokens/components (deduped by name) and, for a
+ * same-NAME token/component that differs, **flags the conflict** rather than
+ * overwriting. Never touches component source files.
+ */
+export function addSourcePrompt(mode: FoundationMode, source: AddedSource): string {
+  const where = sourceClause(source);
+  if (mode === "clean-sweep") {
+    return [
+      RESUMABLE,
+      `Rebuild this project's design-system Foundation from ${where}, REPLACING the current one.`,
+      "1. Extract design tokens from this source into the configured `token_file`, replacing the existing token set.",
+      "2. Detect EVERY component in this source and REWRITE `.sdd-de/components.json` to match it ({ name, level, description }).",
+      "3. Do NOT implement or modify any component source files.",
+      NO_MANUAL_STEPS,
+      "End with a summary: token count, component count.",
+    ].join("\n");
+  }
+  return [
+    RESUMABLE,
+    `MERGE ${where} into this project's EXISTING design system — additive, never destructive.`,
+    "1. Read `.sdd-de/project.yaml` for the config, then read the current `token_file` and `.sdd-de/components.json`.",
+    "2. Extract tokens from the new source and reconcile into `token_file`: ADD newly-found tokens. For a token whose " +
+      "NAME already exists but with a DIFFERENT value, DO NOT overwrite — FLAG it as a conflict (name, existing value, new value).",
+    "3. Detect components in the new source and MERGE into `.sdd-de/components.json`, deduped by name: add entries not " +
+      "already listed. For a same-NAME component that differs, FLAG the conflict; do NOT delete entries or touch component source files.",
+    NO_MANUAL_STEPS,
+    "End with a summary: tokens added, components added, and every flagged conflict (token or component name + both values).",
+  ].join("\n");
+}

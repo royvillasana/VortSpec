@@ -96,6 +96,28 @@ test("shows living status and the component roster once established", async ({ m
   await expect(c.getByText("detected", { exact: true })).toBeVisible();
 });
 
+test("re-source: a founded project offers a source input + Merge / Clean-sweep (Steps 4/5)", async ({ mount }) => {
+  const c = await mount(<GuidedFlow {...props} />, {
+    hooksConfig: { mock: { tokens: TOKENS, components: ROSTER, manifest: MANIFEST } },
+  });
+  // The re-source panel lives in the collapsible Foundation header — expand it.
+  await c.getByRole("button", { name: /Foundation.*ready/ }).click();
+  await expect(c.getByText("Add a design source")).toBeVisible();
+  await expect(c.getByPlaceholder("Figma file URL")).toBeVisible();
+  await expect(c.getByRole("button", { name: "Merge" })).toBeVisible();
+  await expect(c.getByRole("button", { name: "Clean sweep" })).toBeVisible();
+  await expect(c.getByRole("button", { name: /Pick a folder/ })).toBeVisible(); // local source (Step 5)
+});
+
+test("re-source: an un-founded project shows setup, not the Merge / Clean-sweep choice", async ({ mount }) => {
+  const c = await mount(<GuidedFlow {...props} />, {
+    hooksConfig: { mock: { tokens: EMPTY_TOKENS, components: EMPTY_COMPONENTS } },
+  });
+  await expect(c.getByRole("heading", { name: "Set up the foundation" })).toBeVisible();
+  await expect(c.getByText("Add a design source")).toHaveCount(0);
+  await expect(c.getByRole("button", { name: "Merge" })).toHaveCount(0);
+});
+
 test("offers build for detected, verify/open for built components", async ({ mount }) => {
   const c = await mount(<GuidedFlow {...props} />, {
     hooksConfig: { mock: { tokens: TOKENS, components: ROSTER, manifest: MANIFEST } },

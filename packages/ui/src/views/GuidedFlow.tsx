@@ -19,6 +19,9 @@ import {
   RESUME_PROMPT,
   verifyPrompt,
   buildVerifyRestPrompt,
+  addSourcePrompt,
+  type FoundationMode,
+  type AddedSource,
 } from "@vortspec/core/sdd-prompts";
 import { api } from "../lib/api";
 import { useAgentRun, useLatestRun } from "../lib/useAgentRun";
@@ -526,13 +529,16 @@ export function GuidedFlow({
                   open={foundationOpen}
                   onToggle={() => setFoundationOpen((v) => !v)}
                   running={busy}
-                  onReExtract={() =>
+                  onReSource={(mode, source) =>
                     void op(
-                      "Re-extracting tokens + re-detecting components",
-                      FOUNDATION_DEF.promptTemplate ?? "Re-extract tokens and detect components.",
+                      mode === "merge"
+                        ? "Merging the new source into the design system"
+                        : "Rebuilding the foundation from the new source",
+                      addSourcePrompt(mode, source),
                       { tools: FOUNDATION_DEF.allowedTools, kind: "source" },
                     )
                   }
+                  onPickFolder={() => api.pickFolder(false).then((r) => r?.path ?? null).catch(() => null)}
                   onOpenTokens={onOpenInspector}
                 />
 
@@ -800,7 +806,8 @@ function FoundationHeader({
   open,
   onToggle,
   running,
-  onReExtract,
+  onReSource,
+  onPickFolder,
   onOpenTokens,
 }: {
   config: ProjectConfig | null;
@@ -809,7 +816,10 @@ function FoundationHeader({
   open: boolean;
   onToggle: () => void;
   running: boolean;
-  onReExtract: () => void;
+  /** Re-run the Foundation against a source, replacing (clean-sweep) or merging. */
+  onReSource: (mode: FoundationMode, source: AddedSource) => void;
+  /** Pick a local folder/zip as a source; resolves to its path or null. */
+  onPickFolder: () => Promise<string | null>;
   onOpenTokens: () => void;
 }): React.JSX.Element {
   const sourceLabel = config?.designSource ?? "source";
@@ -843,17 +853,78 @@ function FoundationHeader({
             <Row label="Tokens →" value={config?.tokenFile ?? "—"} mono />
             <Row label="Components →" value={config?.componentDir ?? "—"} mono />
           </div>
-          <div className="flex gap-2">
-            <Button variant="default" onClick={onOpenTokens}>
-              View tokens
-            </Button>
-            <Button variant="default" disabled={running} onClick={onReExtract}>
-              Re-extract
-            </Button>
-          </div>
+          <Button variant="default" onClick={onOpenTokens}>
+            View tokens
+          </Button>
+          <AddSourcePanel
+            defaultFigmaUrl={config?.figmaFileUrl ?? ""}
+            running={running}
+            onReSource={onReSource}
+            onPickFolder={onPickFolder}
+          />
         </div>
       )}
     </Card>
+  );
+}
+
+/**
+ * Re-source the Foundation (change: ide-guided-flow-parity Steps 4/5). A Figma URL
+ * (prefilled from the project's configured file) or a picked local folder/zip, plus
+ * the Clean-sweep vs Merge choice — only shown once a foundation already exists.
+ */
+function AddSourcePanel({
+  defaultFigmaUrl,
+  running,
+  onReSource,
+  onPickFolder,
+}: {
+  defaultFigmaUrl: string;
+  running: boolean;
+  onReSource: (mode: FoundationMode, source: AddedSource) => void;
+  onPickFolder: () => Promise<string | null>;
+}): React.JSX.Element {
+  const [url, setUrl] = useState(defaultFigmaUrl);
+  const [localPath, setLocalPath] = useState<string | null>(null);
+  const source: AddedSource = localPath ? { kind: "local", ref: localPath } : { kind: "figma", ref: url.trim() };
+  const canRun = localPath ? true : url.trim().length > 0;
+  return (
+    <div className="flex flex-col gap-2 rounded border border-vs-border-default bg-vs-bg-surface p-3">
+      <span className="text-[11px] font-semibold text-vs-text-secondary">Add a design source</span>
+      <input
+        value={url}
+        onChange={(e) => {
+          setUrl(e.target.value);
+          setLocalPath(null);
+        }}
+        placeholder="Figma file URL"
+        className="w-full rounded border border-vs-border-default bg-vs-bg-primary px-2 py-1 text-[12px] text-vs-text-primary outline-none focus:border-vs-accent"
+      />
+      <div className="flex items-center gap-2">
+        <Button
+          variant="default"
+          onClick={async () => {
+            const p = await onPickFolder();
+            if (p) setLocalPath(p);
+          }}
+        >
+          Pick a folder…
+        </Button>
+        {localPath && <span className="min-w-0 flex-1 truncate font-mono text-[10px] text-vs-text-muted">{localPath}</span>}
+      </div>
+      <div className="flex gap-2 pt-0.5">
+        <Button variant="primary" disabled={running || !canRun} onClick={() => onReSource("merge", source)}>
+          Merge
+        </Button>
+        <Button variant="default" disabled={running || !canRun} onClick={() => onReSource("clean-sweep", source)}>
+          Clean sweep
+        </Button>
+      </div>
+      <p className="text-[10px] leading-relaxed text-vs-text-muted">
+        <b>Merge</b> adds new tokens &amp; components (same-name conflicts are flagged, not overwritten). <b>Clean sweep</b>{" "}
+        replaces the design system from this source.
+      </p>
+    </div>
   );
 }
 
