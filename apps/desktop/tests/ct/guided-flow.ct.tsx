@@ -87,8 +87,10 @@ test("shows living status and the component roster once established", async ({ m
   const c = await mount(<GuidedFlow {...props} />, {
     hooksConfig: { mock: { tokens: TOKENS, components: ROSTER, manifest: MANIFEST } },
   });
-  // Living status, not "complete".
-  await expect(c.getByText(/Foundation ready · 2\/3 built · 1 verified/)).toBeVisible();
+  // Living status pills, not "complete".
+  await expect(c.getByText("foundation ready")).toBeVisible();
+  await expect(c.getByText("2/3 built")).toBeVisible();
+  await expect(c.getByText("1 verified")).toBeVisible();
   await expect(c.getByText(/complete/i)).toHaveCount(0);
   // Roster rows with their statuses (exact to avoid the summary line).
   await expect(c.getByText("Button", { exact: true })).toBeVisible();
@@ -306,7 +308,7 @@ test("build-one runs a transcript, then the roster reflects it from files", asyn
   await expect(c.getByRole("button", { name: /View details|Hide details/ })).toBeVisible();
   // After the run completes, the roster re-reads and no detected row remains.
   await expect(c.getByText("detected", { exact: true })).toHaveCount(0);
-  await expect(c.getByText(/Foundation ready · 3\/3 built/)).toBeVisible();
+  await expect(c.getByText("3/3 built")).toBeVisible();
 });
 
 test("surfaces outputs: manifest + optional publish, no completion gate", async ({ mount }) => {

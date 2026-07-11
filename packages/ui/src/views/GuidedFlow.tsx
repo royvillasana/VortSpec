@@ -86,6 +86,13 @@ const LEVEL_LABEL: Record<string, string> = {
   organism: "Organisms",
   other: "Components",
 };
+/** Per-level accent swatches (design: Design System Dashboard.dc.html). */
+const LEVEL_SWATCH: Record<string, string> = {
+  atom: "#7C6FF0",
+  molecule: "#4CB8C4",
+  organism: "#C48A4C",
+  other: "#6B7280",
+};
 
 export function GuidedFlow({
   project,
@@ -447,9 +454,24 @@ export function GuidedFlow({
         <header className="flex flex-none items-center gap-3.5 border-b border-vs-border-default px-8 pb-4 pt-5">
           <div className="flex flex-col gap-0.5">
             <h1 className="text-xl font-semibold tracking-[-0.01em]">Design system</h1>
-            <span className="text-xs text-vs-text-secondary">{status}</span>
+            {!foundationReady && <span className="text-xs text-vs-text-secondary">{status}</span>}
           </div>
           <div className="flex-1" />
+          {/* Status pills — foundation state + built/verified counts (design: dashboard). */}
+          {foundationReady && (
+            <div className="flex items-center gap-2 font-mono text-[11px]">
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-vs-success-border bg-vs-success-muted px-2.5 py-1 text-vs-success">
+                <span className="h-1.5 w-1.5 rounded-full bg-vs-success" />
+                foundation ready
+              </span>
+              <span className="rounded-full border border-vs-border-default px-2.5 py-1 text-vs-text-secondary">
+                {builtCount}/{total} built
+              </span>
+              <span className="rounded-full border border-vs-border-default px-2.5 py-1 text-vs-text-secondary">
+                {verifiedCount} verified
+              </span>
+            </div>
+          )}
           {foundationReady && builtCount > 0 && (
             <>
               <button
@@ -616,8 +638,8 @@ export function GuidedFlow({
                 {/* Components */}
                 <section className="flex flex-col gap-3">
                   <div className="flex items-center gap-3">
-                    <h2 className="text-[13px] font-semibold uppercase tracking-wide text-vs-text-muted">
-                      Components <span className="text-vs-border-strong">· {total}</span>
+                    <h2 className="flex items-baseline gap-2 text-[13px] font-semibold text-vs-text-primary">
+                      Components <span className="font-mono text-[11px] font-normal text-vs-text-muted">{total}</span>
                     </h2>
                     {figmaCompSynced && (
                       <span className="text-[11px] text-vs-text-muted">
@@ -705,15 +727,19 @@ export function GuidedFlow({
                       No components detected yet. Re-extract the foundation, or add one above.
                     </Card>
                   ) : (
-                    <Card className="flex flex-col p-0">
+                    <Card className="flex flex-col overflow-hidden p-0">
                       {groups.map((g, gi) => (
                         <div key={g.level}>
                           <div
-                            className={`bg-vs-bg-primary px-4 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-vs-text-muted ${
+                            className={`flex items-center gap-2 bg-vs-bg-surface px-4 py-2 font-mono text-[10.5px] uppercase tracking-[0.12em] text-vs-text-secondary ${
                               gi > 0 ? "border-t border-vs-border-default" : ""
                             }`}
                           >
-                            {LEVEL_LABEL[g.level]} <span className="text-vs-border-strong">{g.items.length}</span>
+                            <span
+                              className="h-2 w-2 rounded-[2px]"
+                              style={{ background: LEVEL_SWATCH[g.level] ?? LEVEL_SWATCH.other }}
+                            />
+                            {LEVEL_LABEL[g.level]} <span className="text-vs-text-muted">{g.items.length}</span>
                           </div>
                           {g.items.map((c) => (
                             <ComponentRow
@@ -1043,29 +1069,25 @@ function ComponentRow({
   const meta = STATUS_META[s];
   const isBuilt = s !== "detected";
   return (
-    <div className="flex items-center gap-3 border-t border-vs-border-subtle px-4 py-2.5 first:border-t-0">
-      <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${meta.dot}`} />
-      <div className="min-w-0 flex-1">
-        <p className="flex items-center gap-2 text-[13px] text-vs-text-primary">
-          {component.name}
-          {component.figmaBacked && (
-            <span
-              title={
-                component.figmaVariants && component.figmaVariants.length > 0
-                  ? `Backed by a Figma component · variant axes: ${component.figmaVariants.join(", ")}`
-                  : "Backed by a Figma component"
-              }
-              className="rounded-full border border-vs-accent/40 bg-vs-accent/10 px-1.5 py-px text-[9px] font-medium uppercase tracking-wide text-vs-accent"
-            >
-              Figma{component.figmaVariants && component.figmaVariants.length > 0 ? ` ·${component.figmaVariants.length}` : ""}
-            </span>
-          )}
-        </p>
-        {component.description && (
-          <p className="truncate text-[11px] text-vs-text-muted">{component.description}</p>
+    <div className="grid grid-cols-[10px_minmax(0,200px)_1fr_auto_auto] items-center gap-3.5 border-t border-vs-border-subtle px-4 py-2 transition-colors first:border-t-0 hover:bg-vs-bg-hover">
+      <span className={`h-1.5 w-1.5 justify-self-center rounded-full ${meta.dot}`} />
+      <div className="flex min-w-0 items-center gap-2">
+        <span className="truncate text-[13px] font-medium text-vs-text-primary">{component.name}</span>
+        {component.figmaBacked && (
+          <span
+            title={
+              component.figmaVariants && component.figmaVariants.length > 0
+                ? `Backed by a Figma component · variant axes: ${component.figmaVariants.join(", ")}`
+                : "Backed by a Figma component"
+            }
+            className="shrink-0 rounded-full border border-vs-accent/40 bg-vs-accent/10 px-1.5 py-px text-[9px] font-medium uppercase tracking-wide text-vs-accent"
+          >
+            Figma{component.figmaVariants && component.figmaVariants.length > 0 ? ` ·${component.figmaVariants.length}` : ""}
+          </span>
         )}
       </div>
-      <span className={`font-mono text-[10px] ${meta.text}`}>{meta.label}</span>
+      <span className="truncate text-[12px] text-vs-text-muted">{component.description ?? ""}</span>
+      <span className={`font-mono text-[10.5px] ${meta.text}`}>{meta.label}</span>
       <div className="flex items-center gap-1.5">
         {isBuilt ? (
           <>

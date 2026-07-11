@@ -96,3 +96,10 @@ All token mutations (edit value, rename, merge, delete, promote a flagged litera
 - **WHEN** the user renames a token
 - **THEN** the rename SHALL be applied through a gated Claude Code run that updates the token file and every code reference, presented as an approvable diff
 
+### Requirement: Navigable token where-used list
+The token detail view SHALL present the components that use a token as a navigable list, grouping multiple property hits per component, and clicking a component SHALL open its source file.
+
+#### Scenario: Jump from token to component
+- **WHEN** the user opens a token that is used by a component and clicks that component in the where-used list
+- **THEN** the component's source file SHALL open
+
