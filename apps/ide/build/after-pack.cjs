@@ -8,10 +8,12 @@ const { join } = require("node:path");
  * prompt on their own (only calling the API does), but removing them keeps the
  * app's declared permission surface honest.
  *
- * Runs before code-signing (electron-builder order: pack -> afterPack -> sign),
- * so the signature seals the edited plist. Fires for each arch's temp dir in a
- * universal build; editing both identically keeps @electron/universal's plist
- * parity check happy.
+ * Editing Info.plist AFTER Electron's prebuilt binary is ad-hoc-signed invalidates
+ * that signature. When a real Developer ID cert is present, electron-builder's own
+ * signing step (which runs after afterPack) re-seals it — fine. But when signing is
+ * SKIPPED (no cert), nothing re-seals it, and macOS reports the arm64 app as
+ * "damaged" (a broken signature reads worse than an unsigned one). So we re-apply an
+ * ad-hoc signature here; if Developer ID signing follows, `--force` lets it override.
  */
 const REMOVE = [
   "NSCameraUsageDescription",
@@ -22,17 +24,20 @@ const REMOVE = [
 
 exports.default = async function afterPack(context) {
   if (context.electronPlatformName !== "darwin") return;
-  const plist = join(
-    context.appOutDir,
-    `${context.packager.appInfo.productFilename}.app`,
-    "Contents",
-    "Info.plist",
-  );
+  const app = join(context.appOutDir, `${context.packager.appInfo.productFilename}.app`);
+  const plist = join(app, "Contents", "Info.plist");
   for (const key of REMOVE) {
     try {
       execFileSync("/usr/libexec/PlistBuddy", ["-c", `Delete :${key}`, plist], { stdio: "ignore" });
     } catch {
       // Key already absent (e.g. re-run, or a helper app) — nothing to remove.
     }
+  }
+  // Re-seal an ad-hoc signature so the edited bundle is valid (not "damaged").
+  // Sign nested code inside-out via --deep; a later Developer ID sign overrides it.
+  try {
+    execFileSync("/usr/bin/codesign", ["--force", "--deep", "--sign", "-", app], { stdio: "ignore" });
+  } catch (err) {
+    console.warn(`[after-pack] ad-hoc re-sign failed for ${app}: ${err.message}`);
   }
 };
