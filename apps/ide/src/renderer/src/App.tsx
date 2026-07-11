@@ -47,6 +47,7 @@ export default function App(): JSX.Element {
   const [assistantHome, setAssistantHome] = useState<string | null>(null);
   // The current git branch, shown in the status bar beside the project name.
   const [branch, setBranch] = useState<string | null>(null);
+  const [gitCounts, setGitCounts] = useState<{ changes: number; ahead: number }>({ changes: 0, ahead: 0 });
   // The live editor selection, surfaced to the assistant as grounding context.
   const [selection, setSelection] = useState<EditorSelection | null>(null);
   // "Open in Chat" — the selection the user pushed to the assistant (nonce re-adds).
@@ -73,20 +74,42 @@ export default function App(): JSX.Element {
     setSelection(null);
   }, [wf.activePath]);
 
-  // Current git branch for the status bar. Re-read on activity change so a
-  // checkout in the Source Control view is reflected on return.
+  // Current git branch + change/unpushed counts for the status bar. Re-read on
+  // activity change (so a checkout/commit in Source Control is reflected on
+  // return) and whenever files change on disk (autosave, agent runs).
   useEffect(() => {
     if (!workspace) {
       setBranch(null);
+      setGitCounts({ changes: 0, ahead: 0 });
       return;
     }
     let alive = true;
-    void api
-      .gitStatus(workspace.path)
-      .then((s) => alive && setBranch(s.isRepo && s.branch ? s.branch : null))
-      .catch(() => alive && setBranch(null));
+    const refresh = (): void => {
+      void api
+        .gitStatus(workspace.path)
+        .then((s) => {
+          if (!alive) return;
+          setBranch(s.isRepo && s.branch ? s.branch : null);
+          setGitCounts(
+            s.isRepo
+              ? { changes: s.staged.length + s.unstaged.length + s.untracked.length, ahead: s.ahead }
+              : { changes: 0, ahead: 0 },
+          );
+        })
+        .catch(() => {
+          if (alive) {
+            setBranch(null);
+            setGitCounts({ changes: 0, ahead: 0 });
+          }
+        });
+    };
+    refresh();
+    const off = api.onWorkspaceChange((e) => {
+      if (e.projectPath === workspace.path) refresh();
+    });
     return () => {
       alive = false;
+      off();
     };
   }, [workspace?.path, layout.activity]);
 
@@ -473,7 +496,7 @@ export default function App(): JSX.Element {
       ) : a === "play" ? (
         <RunApp project={p} kind="storybook" hideRail onBack={go("explorer")} onFlow={go("flow")} onRun={go("run")} onPlayground={go("play")} onTokens={go("tokens")} onManifest={go("manifest")} onHistory={go("explorer")} onSource={go("source")} />
       ) : a === "tokens" ? (
-        <Inspector project={p} hideRail onBack={go("explorer")} onOpenPreview={go("explorer")} onOpenRun={go("run")} onOpenHistory={go("explorer")} onOpenManifest={go("manifest")} />
+        <Inspector project={p} hideRail onBack={go("explorer")} onOpenPreview={go("explorer")} onOpenRun={go("run")} onOpenHistory={go("explorer")} onOpenManifest={go("manifest")} onOpenFile={(path) => { void wf.openFile(path); dispatch({ type: "setActivity", activity: "explorer" }); }} />
       ) : a === "tasks" ? (
         <Tasks project={p} hideRail onBack={go("explorer")} onFlow={go("flow")} onRun={go("run")} onPlayground={go("explorer")} onTokens={go("tokens")} onManifest={go("manifest")} onHistory={go("explorer")} onSource={go("source")} />
       ) : a === "manifest" ? (
@@ -497,7 +520,7 @@ export default function App(): JSX.Element {
         </header>
 
         <div className="flex min-h-0 flex-1 overflow-hidden">
-          <ActivityBar active={layout.activity} onSelect={(a) => dispatch({ type: "setActivity", activity: a })} chatOpen={layout.secondaryOpen} onToggleChat={() => dispatch({ type: "toggleSecondary" })} />
+          <ActivityBar active={layout.activity} onSelect={(a) => (a === "home" ? setWorkspace(null) : dispatch({ type: "setActivity", activity: a }))} chatOpen={layout.secondaryOpen} onToggleChat={() => dispatch({ type: "toggleSecondary" })} />
 
           {showPrimary && (
             <>
@@ -600,6 +623,23 @@ export default function App(): JSX.Element {
               onCheckout={(name) => setBranch(name)}
               onCreate={() => dispatch({ type: "setActivity", activity: "source" })}
             />
+          )}
+          {(gitCounts.changes > 0 || gitCounts.ahead > 0) && (
+            <button
+              type="button"
+              onClick={() => dispatch({ type: "setActivity", activity: "source" })}
+              className="flex items-center gap-1.5 rounded px-1.5 text-vs-text-secondary hover:text-vs-text-primary"
+              title="You have local changes that aren't on GitHub/GitLab yet — open Source Control to commit and push."
+            >
+              {gitCounts.changes > 0 && (
+                <span className="flex items-center gap-1">
+                  <span className="inline-block h-1.5 w-1.5 rounded-full bg-vs-warning" />
+                  {gitCounts.changes} change{gitCounts.changes === 1 ? "" : "s"}
+                </span>
+              )}
+              {gitCounts.ahead > 0 && <span title="commits not yet pushed">↑{gitCounts.ahead} unpushed</span>}
+              <span className="text-vs-text-muted">— Commit &amp; push</span>
+            </button>
           )}
           <div className="flex-1" />
           {/* Region toggles apply to the Explorer/editor view only. */}

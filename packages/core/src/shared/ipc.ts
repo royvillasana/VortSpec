@@ -275,6 +275,14 @@ export const ipcContract = {
     response: projectSchema.nullable(),
   },
   "workspace:createFolder": { request: z.void(), response: projectSchema.nullable() },
+  "workspace:pickFile": {
+    request: z
+      .object({
+        filters: z.array(z.object({ name: z.string(), extensions: z.array(z.string()) })).optional(),
+      })
+      .optional(),
+    response: z.string().nullable(),
+  },
   "workspace:listProjects": { request: z.void(), response: projectListSchema },
   "workspace:openFolder": { request: z.string(), response: z.void() },
   "workspace:revealPath": {

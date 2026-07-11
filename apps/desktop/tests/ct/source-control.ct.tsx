@@ -28,6 +28,27 @@ const DIRTY: GitStatus = {
   clean: false,
 };
 
+test("drafts a commit message from the staged diff into the commit box", async ({ mount }) => {
+  const c = await mount(<SourceControl {...props} />, {
+    hooksConfig: {
+      mock: {
+        gitStatus: DIRTY,
+        // The scoped draft run: init → the drafted message → done.
+        runScript: [
+          { kind: "system-init", model: "claude-haiku-4-5-20251001", sessionId: "sess-d", tools: ["Bash"], mcpServers: [], mcpErrors: [] },
+          { kind: "assistant-text", text: "feat(button): add primary Button component" },
+          { kind: "result", isError: false, text: "done", sessionId: "sess-d" },
+        ],
+      },
+    },
+  });
+  await c.getByRole("button", { name: "Draft message" }).click();
+  // The drafted message lands in the editable commit box.
+  await expect(c.getByPlaceholder("Commit message…")).toHaveValue(
+    "feat(button): add primary Button component",
+  );
+});
+
 test("renders branch, changes, and additive git actions", async ({ mount }) => {
   const c = await mount(<SourceControl {...props} />, {
     hooksConfig: { mock: { gitStatus: DIRTY, gitBranches: [{ name: "feature/x", current: true, remote: false, upstream: null }] } },

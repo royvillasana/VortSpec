@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/experimental-ct-react";
 import { Inspector } from "@vortspec/ui/Inspector";
-import { PROJECT, TOKENS } from "./support/fixtures";
+import { PROJECT, TOKENS, COMPONENTS } from "./support/fixtures";
 import type { RunEvent } from "@vortspec/core/run-events";
 
 // A run that starts but never finishes → the sync stays "running" so the Cancel
@@ -139,6 +139,19 @@ test("opens the token detail drawer with where-used on selection", async ({ moun
   await expect(c.getByText("Token details")).toBeVisible();
   await expect(c.getByText("Where used")).toBeVisible();
   await expect(c.getByText("Button")).toBeVisible();
+});
+
+test("jumps from a token's where-used component to its source file", async ({ mount }) => {
+  let opened: string | null = null;
+  const c = await mount(
+    <Inspector {...props} onOpenFile={(p) => (opened = p)} />,
+    { hooksConfig: { mock: { tokens: TOKENS, figmaMcp: CONNECTED, components: COMPONENTS } } },
+  );
+  await c.getByText("color-primary").click();
+  await expect(c.getByText("Where used")).toBeVisible();
+  // The Button row resolves to a source file → it's an openable button.
+  await c.getByRole("button", { name: /Button/ }).click();
+  expect(opened).toBe("src/components/Button.tsx");
 });
 
 test("filters tokens by search query", async ({ mount }) => {

@@ -1,10 +1,22 @@
 import type { JSX } from "react";
 import type { Activity } from "../lib/layout";
 
+/** Activity-bar keys: every layout Activity plus `home`, which is an ACTION
+ *  (return to the project picker) rather than a panel — so it is not part of the
+ *  layout `Activity` union. */
+export type NavKey = Activity | "home";
+
 /** The IDE's single navigation. Explorer opens the primary sidebar; the rest
  *  open a full-center panel. Every icon carries a hover tooltip (title + label).
  *  `custom` renders a full (e.g. brand-colored) SVG instead of the monochrome one. */
-type Item = { key: Activity; label: string; icon?: JSX.Element; custom?: JSX.Element };
+type Item = { key: NavKey; label: string; icon?: JSX.Element; custom?: JSX.Element };
+
+/** Home — a house mark (svgrepo), filled, in currentColor. */
+const HomeMark = (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+    <path d="M12 3.172 3 10.657V21a1 1 0 0 0 1 1h5v-6h6v6h5a1 1 0 0 0 1-1V10.657l-9-7.485Zm9.6 6.09L12.64 1.81a1 1 0 0 0-1.28 0L2.4 9.262a1 1 0 0 0 1.28 1.535L12 3.86l8.32 6.937a1 1 0 1 0 1.28-1.535Z" />
+  </svg>
+);
 
 /** The Git logo (simple-icons), in currentColor. */
 const GitMark = (
@@ -68,9 +80,14 @@ const SddPipelineMark = (
   </svg>
 );
 
-// Order (top → bottom): Explorer, Playground, Tokens, Design manifest, Storybook,
-// Jira (Tasks), Git (Source Control), SDD-DE pipeline.
+// Order (top → bottom): Home, Explorer, Playground, Tokens, Design manifest,
+// Storybook, Jira (Tasks), Git (Source Control), SDD-DE pipeline.
 const TOP: Item[] = [
+  {
+    key: "home",
+    label: "Home — back to your projects",
+    custom: HomeMark,
+  },
   {
     key: "explorer",
     label: "Explorer",
@@ -156,7 +173,7 @@ export function ActivityBar({
   onToggleChat,
 }: {
   active: Activity;
-  onSelect: (key: Activity) => void;
+  onSelect: (key: NavKey) => void;
   chatOpen: boolean;
   onToggleChat: () => void;
 }): JSX.Element {

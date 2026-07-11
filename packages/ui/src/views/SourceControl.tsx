@@ -1,9 +1,18 @@
 import { useEffect, useState } from "react";
 import type { GitStatus, GitBranch, GitRemote, ProviderAuth, Project } from "@vortspec/core/ipc";
 import { api } from "../lib/api";
+import { useAgentRun } from "../lib/useAgentRun";
+import { routedModel } from "../lib/model-routing";
 import { Button, Card, Spinner } from "@vortspec/ui/ui";
 import { ProjectRail, projectRailItems } from "@vortspec/ui/ProjectRail";
 import { GitGraph } from "../components/GitGraph";
+
+/** Scoped, read-only prompt that drafts a commit message from the staged diff. */
+const DRAFT_COMMIT_PROMPT =
+  "Run `git diff --staged --stat` and `git diff --staged` to see the staged changes, then write a " +
+  "single Conventional Commits message for them: a concise subject line (<72 chars, imperative mood), " +
+  "and if warranted a short body of one or two bullet points. Output ONLY the commit message text — " +
+  "no backticks, no preamble, no explanation, nothing else.";
 
 /**
  * Source Control (git) — M1. Drives the user's own `git`/`gh` through the
@@ -37,6 +46,8 @@ export function SourceControl({
   const [remotes, setRemotes] = useState<GitRemote[]>([]);
   const [auth, setAuth] = useState<ProviderAuth | null>(null);
   const [message, setMessage] = useState("");
+  const [drafting, setDrafting] = useState(false);
+  const draft = useAgentRun();
   const [newBranch, setNewBranch] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const [toast, setToast] = useState("");
@@ -65,6 +76,33 @@ export function SourceControl({
     void api.providerAuth(project.path).then(setAuth);
     void api.getManifest(project.path).then((m) => setManifestReady(m.exists));
   }, [project.path]);
+
+  // When the draft-message run finishes, drop its text into the commit box for
+  // the user to edit. Committing stays a deliberate action — this never commits.
+  useEffect(() => {
+    if (!drafting) return;
+    if (draft.model.status === "done") {
+      const text = [...draft.model.messages].reverse().find((m) => m.role === "assistant")?.text ?? "";
+      if (text.trim()) setMessage(text.trim());
+      setDrafting(false);
+    } else if (draft.model.status === "error" || draft.model.status === "canceled") {
+      setDrafting(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draft.model.status]);
+
+  function draftMessage(): void {
+    setDrafting(true);
+    void draft.start({
+      prompt: DRAFT_COMMIT_PROMPT,
+      cwd: project.path,
+      allowedTools: ["Bash"],
+      bypassPermissions: true,
+      // Mechanical summarization → cheapest tier; skip the user's global MCP.
+      model: routedModel("haiku"),
+      strictMcp: true,
+    });
+  }
 
   function flash(m: string): void {
     setToast(m);
@@ -276,6 +314,14 @@ export function SourceControl({
                     onClick={() => void act("commit", () => api.gitCommit(project.path, message.trim())).then(() => setMessage(""))}
                   >
                     Commit ({status.staged.length})
+                  </Button>
+                  <Button
+                    variant="default"
+                    disabled={busy !== null || drafting || status.staged.length === 0}
+                    title="Draft a commit message from the staged changes (uses a lightweight model). You can edit it before committing."
+                    onClick={draftMessage}
+                  >
+                    {drafting ? "Drafting…" : "Draft message"}
                   </Button>
                   <span className="flex-1" />
                   <Button variant="default" disabled={busy !== null} onClick={() => void act("fetch", () => api.gitFetch(project.path))}>Fetch</Button>

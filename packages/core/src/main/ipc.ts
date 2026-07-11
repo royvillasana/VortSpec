@@ -8,6 +8,7 @@ import {
   listProjects,
   pickFolder,
   createFolder,
+  pickFile,
   refreshProject,
   openFolder,
   revealPath,
@@ -116,6 +117,8 @@ const handlers: Record<IpcChannel, Handler> = {
   "workspace:pickFolder": ((req?: { create: boolean }) =>
     pickFolder(req ?? { create: false })) as Handler,
   "workspace:createFolder": (() => createFolder()) as Handler,
+  "workspace:pickFile": ((req?: { filters?: { name: string; extensions: string[] }[] }) =>
+    pickFile(req?.filters ?? [])) as Handler,
   "workspace:listProjects": () => listProjects(),
   "workspace:openFolder": ((path: string) => openFolder(path)) as Handler,
   "workspace:revealPath": ((req: { projectPath: string; relPath: string }) => {

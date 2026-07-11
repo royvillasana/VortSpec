@@ -5,6 +5,9 @@ import type { OpenFile } from "../components/EditorGroup";
 /** Image files open as a preview (data URL) rather than in the text editor. */
 const IMAGE_RE = /\.(png|jpe?g|gif|webp|svg|bmp|ico|avif)$/i;
 
+/** Idle delay before an edit is autosaved to disk. */
+const AUTOSAVE_MS = 800;
+
 /**
  * Owns the open-file/tab state for a workspace, lifted out of the editor so the
  * Explorer (left sidebar) and the editor area (center) are independent regions
@@ -31,12 +34,27 @@ export function useWorkspaceFiles(projectPath: string | null): WorkspaceFiles {
   const [activePath, setActivePath] = useState<string | null>(null);
   const filesRef = useRef(files);
   filesRef.current = files;
+  // Per-file debounce timers for autosave, and a ref to the latest `save` so the
+  // stable `change` callback can trigger it without capturing a stale closure.
+  const autosaveTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  const saveRef = useRef<(path: string) => Promise<void>>(async () => undefined);
 
-  // Reset when the workspace changes (or closes).
+  // Reset when the workspace changes (or closes) — and clear pending autosaves.
   useEffect(() => {
+    for (const t of autosaveTimers.current.values()) clearTimeout(t);
+    autosaveTimers.current.clear();
     setFiles([]);
     setActivePath(null);
   }, [projectPath]);
+
+  // Flush all pending autosave timers on unmount.
+  useEffect(() => {
+    const timers = autosaveTimers.current;
+    return () => {
+      for (const t of timers.values()) clearTimeout(t);
+      timers.clear();
+    };
+  }, []);
 
   const openFile = useCallback(
     async (path: string): Promise<void> => {
@@ -65,11 +83,31 @@ export function useWorkspaceFiles(projectPath: string | null): WorkspaceFiles {
 
   const change = useCallback((path: string, value: string): void => {
     setFiles((prev) => prev.map((f) => (f.path === path ? { ...f, content: value, dirty: true } : f)));
+    // Debounced autosave-to-disk: reset the idle timer on every keystroke; when it
+    // fires, save unless the file went stale (an external change must not be
+    // clobbered — the stale banner asks the user to reconcile).
+    const timers = autosaveTimers.current;
+    const existing = timers.get(path);
+    if (existing) clearTimeout(existing);
+    timers.set(
+      path,
+      setTimeout(() => {
+        timers.delete(path);
+        const f = filesRef.current.find((x) => x.path === path);
+        if (f && f.dirty && !f.staleOnDisk) void saveRef.current(path);
+      }, AUTOSAVE_MS),
+    );
   }, []);
 
   const save = useCallback(
     async (path: string): Promise<void> => {
       if (!projectPath) return;
+      // A save supersedes any pending autosave for this file.
+      const pending = autosaveTimers.current.get(path);
+      if (pending) {
+        clearTimeout(pending);
+        autosaveTimers.current.delete(path);
+      }
       const file = filesRef.current.find((f) => f.path === path);
       if (!file) return;
       const res = await api.writeFile(projectPath, path, file.content);
@@ -81,6 +119,7 @@ export function useWorkspaceFiles(projectPath: string | null): WorkspaceFiles {
     },
     [projectPath],
   );
+  saveRef.current = save;
 
   const close = useCallback((path: string): void => {
     setFiles((prev) => prev.filter((f) => f.path !== path));

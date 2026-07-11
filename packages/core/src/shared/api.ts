@@ -42,6 +42,7 @@ export interface VortSpecApi {
   // workspace / projects
   pickFolder(create?: boolean): Promise<IpcResponse<"workspace:pickFolder">>;
   createFolder(): Promise<IpcResponse<"workspace:createFolder">>;
+  pickFile(filters?: { name: string; extensions: string[] }[]): Promise<IpcResponse<"workspace:pickFile">>;
   listProjects(): Promise<IpcResponse<"workspace:listProjects">>;
   openFolder(path: string): Promise<IpcResponse<"workspace:openFolder">>;
   revealPath(projectPath: string, relPath: string): Promise<IpcResponse<"workspace:revealPath">>;

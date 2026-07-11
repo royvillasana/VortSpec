@@ -26,3 +26,22 @@ test("offers a GitHub-repo source that continues with the repo url + branch (M3.
   expect(source!.githubRepoUrl).toBe("https://github.com/me/design-system");
   expect(source!.githubBranch).toBe("develop");
 });
+
+test("picks a .zip via the native file dialog and continues with its path", async ({ mount }) => {
+  let source: Partial<SetupAnswers> | null = null;
+  const c = await mount(
+    <DesignInput project={PROJECT} onBack={noop} onContinue={(s) => (source = s)} />,
+    { hooksConfig: { mock: { pickFileResult: "/Users/dev/exports/design-system.zip" } } },
+  );
+  // The ZIP tab is the default; Continue is gated until a .zip is chosen.
+  const cont = c.getByRole("button", { name: /Continue to setup/ });
+  await expect(cont).toBeDisabled();
+
+  await c.getByRole("button", { name: /Choose .zip/ }).click();
+  await expect(c.getByText("design-system.zip")).toBeVisible();
+  await expect(cont).toBeEnabled();
+
+  await cont.click();
+  expect(source!.designSource).toBe("zip");
+  expect(source!.zipFilePath).toBe("/Users/dev/exports/design-system.zip");
+});

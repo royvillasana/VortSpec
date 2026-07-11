@@ -108,11 +108,25 @@ export function ProjectSetup({
   }
 
   return (
-    <div className="min-h-[calc(100vh-3rem)] bg-vs-bg-primary text-vs-text-primary">
-      <div className="mx-auto flex w-full max-w-[860px] gap-9 px-6 pb-16 pt-10">
+    <div className="flex h-[calc(100vh-3rem)] min-h-0 flex-col bg-vs-bg-primary text-vs-text-primary">
+      {/* Top bar — breadcrumb + section title + workspace path (design: Project Setup.dc.html). */}
+      <header className="flex h-[52px] flex-none items-center gap-4 border-b border-vs-border-default bg-vs-bg-surface px-5">
+        <nav className="flex items-center gap-2 text-[13px] text-vs-text-muted">
+          <button onClick={onCancel} className="hover:text-vs-text-primary">Home</button>
+          <span className="text-vs-border-strong">/</span>
+          <span>walkthrough</span>
+          <span className="text-vs-border-strong">/</span>
+          <span className="text-vs-text-secondary">New project</span>
+        </nav>
+        <div className="h-5 w-px bg-vs-border-default" />
+        <h1 className="text-[14px] font-semibold tracking-[-0.01em]">Design system</h1>
+        <span className="ml-auto truncate font-mono text-[11px] text-vs-text-muted">{project.path}</span>
+      </header>
+
+      <div className="flex min-h-0 flex-1">
         {/* step rail */}
-        <div className="flex w-48 flex-none flex-col gap-0.5 pt-1.5">
-          <div className="px-2 pb-2.5 text-[11px] font-semibold uppercase tracking-wide text-vs-text-muted">
+        <aside className="flex w-[296px] flex-none flex-col gap-0.5 border-r border-vs-border-default bg-vs-bg-surface p-4">
+          <div className="px-2 pb-3 font-mono text-[10px] uppercase tracking-[0.1em] text-vs-text-muted">
             New project
           </div>
           {STEPS.map((s, i) => {
@@ -125,38 +139,48 @@ export function ProjectSetup({
                 key={s.label}
                 disabled={!reachable}
                 onClick={() => reachable && setStep(i)}
-                className={`flex items-center gap-2.5 rounded-md p-2 text-left text-[13px] disabled:opacity-40 ${
-                  active ? "bg-vs-bg-elevated" : "hover:bg-vs-bg-elevated"
+                className={`flex items-center gap-3 rounded-lg p-2.5 text-left text-[13.5px] disabled:opacity-40 ${
+                  active ? "bg-vs-accent-muted" : "hover:bg-vs-bg-hover"
                 }`}
               >
                 <span
-                  className="flex h-[18px] w-[18px] flex-none items-center justify-center rounded-full border-[1.5px] font-mono text-[10px]"
+                  className="flex h-5 w-5 flex-none items-center justify-center rounded-full border font-mono text-[10px]"
                   style={{
-                    borderColor: done ? "#30A46C" : active ? "#7C6FF0" : "#34373D",
-                    background: done ? "#30A46C" : "transparent",
-                    color: done ? "#0B0C0E" : active ? "#7C6FF0" : "#6B7280",
+                    borderColor: done ? "#23402F" : active ? "#34305C" : "#26282D",
+                    background: done ? "rgba(48,164,108,0.12)" : active ? "rgba(124,111,240,0.12)" : "transparent",
+                    color: done ? "#30A46C" : active ? "#A79BFF" : "#6B7280",
                   }}
                 >
                   {done ? "✓" : i + 1}
                 </span>
-                <span className={active ? "text-vs-text-primary" : "text-vs-text-secondary"}>{s.label}</span>
-                {i >= 2 && <span className="ml-auto text-[10px] text-vs-text-muted">optional</span>}
+                <span className={active ? "font-semibold text-vs-text-primary" : "text-vs-text-secondary"}>{s.label}</span>
+                {i >= 2 && <span className="ml-auto font-mono text-[9.5px] text-vs-text-muted">optional</span>}
               </button>
             );
           })}
-        </div>
+          {/* What comes next: the design-system Foundation (a separate screen after create). */}
+          <div className="mt-2.5 border-t border-vs-border-default pt-3">
+            <div className="flex items-center gap-3 rounded-lg p-2.5 opacity-60">
+              <span className="flex h-5 w-5 flex-none items-center justify-center rounded-full border border-vs-border-default font-mono text-[10px] text-vs-text-muted">
+                5
+              </span>
+              <span className="text-[13.5px] text-vs-text-muted">Foundation</span>
+              <span className="ml-auto font-mono text-[9.5px] text-vs-text-muted">next</span>
+            </div>
+          </div>
+        </aside>
 
         {/* form */}
-        <div className="flex min-w-0 flex-1 flex-col gap-6">
-          <div className="flex flex-col gap-1.5">
-            <div className="flex items-center gap-2.5">
-              <h1 className="text-[20px] font-semibold tracking-[-0.01em]">{def.title}</h1>
-              <span className="font-mono text-[11px] text-vs-text-muted">
+        <main className="min-w-0 flex-1 overflow-y-auto">
+        <div className="flex min-w-0 max-w-[760px] flex-col gap-6 px-10 pb-16 pt-9">
+          <div className="flex flex-col gap-2.5">
+            <div className="flex items-baseline gap-3.5">
+              <h1 className="text-[22px] font-semibold tracking-[-0.02em]">{def.title}</h1>
+              <span className="font-mono text-[12px] text-vs-text-muted">
                 step {step + 1} / {STEPS.length}
               </span>
             </div>
-            <p className="max-w-[62ch] text-[13px] leading-relaxed text-vs-text-secondary">{def.blurb}</p>
-            <p className="truncate font-mono text-[11px] text-vs-text-muted">{project.path}</p>
+            <p className="max-w-[62ch] text-[13.5px] leading-relaxed text-vs-text-secondary">{def.blurb}</p>
           </div>
 
           {step === 0 && (
@@ -181,7 +205,7 @@ export function ProjectSetup({
                 <Text label="Component directory" value={a.componentDir} onChange={(v) => set("componentDir", v)} />
               </div>
               <Chips label="Package manager" hint="Auto picks the best for your framework (prefers pnpm)." options={PKG_OPTIONS} value={intake.pkg ?? "Auto (pnpm)"} onChange={(v) => setI("pkg", v)} />
-              <Radios label="Test runner" options={TEST_RUNNER_OPTIONS} value={a.testRunner} onChange={(v) => set("testRunner", v as SetupAnswers["testRunner"])} />
+              <Pills label="Test runner" options={TEST_RUNNER_OPTIONS} value={a.testRunner} onChange={(v) => set("testRunner", v as SetupAnswers["testRunner"])} />
               <Chips label="Accessibility target" optional options={["WCAG 2.2 AA", "WCAG 2.1 AA", "No specific target"]} value={intake.a11y ?? ""} onChange={(v) => setI("a11y", v)} />
               <div className="grid grid-cols-2 gap-3">
                 <Text label="Browser support" optional value={intake.browsers ?? ""} placeholder="evergreen + iOS Safari 16" onChange={(v) => setI("browsers", v)} />
@@ -194,13 +218,13 @@ export function ProjectSetup({
             <div className="rounded-md border border-vs-error/40 bg-vs-error/10 px-4 py-2 text-sm text-vs-error">{error}</div>
           )}
 
-          <div className="flex items-center gap-3 border-t border-vs-border-default pt-5">
+          <div className="flex items-center gap-3.5 border-t border-vs-border-default pt-[18px]">
             {step > 0 ? (
               <Button variant="default" onClick={() => setStep((s) => s - 1)}>← Back</Button>
             ) : (
               <Button variant="ghost" onClick={onCancel}>Cancel</Button>
             )}
-            <span className="flex-1" />
+            <span className="ml-auto font-mono text-[11px] text-vs-text-muted">autosaved</span>
             {/* Skip the remaining optional steps and create now (Setup must be valid). */}
             {step >= 1 && !isLast && (
               <Button variant="ghost" disabled={!ready || busy} onClick={() => void finish()}>
@@ -218,6 +242,7 @@ export function ProjectSetup({
             )}
           </div>
         </div>
+        </main>
       </div>
     </div>
   );
@@ -290,8 +315,8 @@ function SetupStep({
       </Field>
 
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-        <Radios label="Framework" options={FRAMEWORK_OPTIONS} value={a.framework} onChange={(v) => setFramework(v as SetupAnswers["framework"])} />
-        <Radios
+        <Pills label="Framework" options={FRAMEWORK_OPTIONS} value={a.framework} onChange={(v) => setFramework(v as SetupAnswers["framework"])} />
+        <Pills
           label="Language"
           options={[
             { value: "typescript", label: "TypeScript" },
@@ -301,7 +326,7 @@ function SetupStep({
           onChange={(v) => set("language", v as SetupAnswers["language"])}
         />
       </div>
-      <Radios label={`Styling (${a.styling} suggested)`} options={STYLING_OPTIONS} value={a.styling} onChange={(v) => set("styling", v as SetupAnswers["styling"])} />
+      <Pills label={`Styling (${a.styling} suggested)`} options={STYLING_OPTIONS} value={a.styling} onChange={(v) => set("styling", v as SetupAnswers["styling"])} />
     </div>
   );
 }
@@ -416,6 +441,54 @@ function Chips({
           );
         })}
       </div>
+    </div>
+  );
+}
+
+/** Chip pills for a small option set ({value,label}), matching the design's
+ *  framework/language/styling/test-runner selectors. */
+function Pills({
+  label,
+  hint,
+  options,
+  value,
+  optional,
+  onChange,
+}: {
+  label?: string;
+  hint?: string;
+  options: readonly { value: string; label: string; hint?: string }[];
+  value: string;
+  optional?: boolean;
+  onChange: (v: string) => void;
+}): React.JSX.Element {
+  const row = (
+    <div className="flex flex-wrap gap-[7px]">
+      {options.map((o) => {
+        const active = o.value === value;
+        return (
+          <button
+            key={o.value}
+            onClick={() => onChange(o.value)}
+            className="h-8 rounded-md border px-[13px] text-[12.5px] transition-colors hover:border-vs-border-strong"
+            style={{
+              borderColor: active ? "#34305C" : "#26282D",
+              background: active ? "rgba(124,111,240,0.10)" : "transparent",
+              color: active ? "#C4BBFF" : "#9BA1AB",
+            }}
+          >
+            {o.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+  if (!label) return row;
+  return (
+    <div className="flex flex-col gap-2.5">
+      {labelNode(label, optional)}
+      {hint && <span className="-mt-1 text-[12px] text-vs-text-muted">{hint}</span>}
+      {row}
     </div>
   );
 }

@@ -49,6 +49,37 @@ test("the Clone Repository link reveals a repo-URL input", async ({ mount }) => 
   await expect(c.getByRole("button", { name: /Choose folder & clone/ })).toBeVisible();
 });
 
+test("the Home activity returns to the project picker", async ({ mount }) => {
+  const c = await mount(<App />, { hooksConfig: { mock: base } });
+  await open(c);
+  // In a workspace now (the code shell is shown).
+  await expect(c.getByText("No file open", { exact: true })).toBeVisible();
+  // Click Home → back to the homepage project picker.
+  await c.getByRole("navigation", { name: "Activity bar" }).getByRole("button", { name: /^Home/ }).click();
+  await expect(c.getByRole("heading", { name: "VortSpec", exact: true })).toBeVisible();
+  await expect(c.getByRole("button", { name: /acme-design-system/ })).toBeVisible();
+});
+
+test("the status bar surfaces uncommitted + unpushed changes and opens Source Control", async ({ mount }) => {
+  const mock = {
+    ...base,
+    gitStatus: {
+      isRepo: true, branch: "main", upstream: "origin/main", ahead: 2, behind: 0,
+      staged: [{ path: "a.ts", status: "modified" as const }],
+      unstaged: [{ path: "b.ts", status: "modified" as const }],
+      untracked: ["c.ts"], conflicts: [], clean: false,
+    },
+  };
+  const c = await mount(<App />, { hooksConfig: { mock } });
+  await open(c);
+  // 1 staged + 1 unstaged + 1 untracked = 3 local changes, 2 unpushed commits.
+  await expect(c.getByText(/3 changes/)).toBeVisible();
+  await expect(c.getByText(/2 unpushed/)).toBeVisible();
+  // Clicking opens Source Control.
+  await c.getByRole("button", { name: /Commit & push/ }).click();
+  await expect(c.getByRole("heading", { name: "Source Control" })).toBeVisible();
+});
+
 test("Settings is reachable from the initial (no-workspace) screen", async ({ mount }) => {
   const c = await mount(<App />, { hooksConfig: { mock: base } });
   await c.getByRole("navigation", { name: "Activity bar" }).getByRole("button", { name: "Settings (profile)" }).click();

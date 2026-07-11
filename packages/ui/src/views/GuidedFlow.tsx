@@ -11,14 +11,15 @@ import type {
 import { DEFAULT_FLOW } from "@vortspec/core/flow";
 import {
   buildOnePrompt,
-  BUILD_REMAINING_PROMPT,
   RESCAN_PROMPT,
   newComponentPrompt,
   newComponentFromFigmaNodePrompt,
   REFACTOR_PROMPT,
   RESUME_PROMPT,
   verifyPrompt,
-  buildVerifyRestPrompt,
+  chunkByLevel,
+  tierForChunk,
+  buildChunkPrompt,
   addSourcePrompt,
   type FoundationMode,
   type AddedSource,
@@ -139,6 +140,14 @@ export function GuidedFlow({
   const [externalRun, setExternalRun] = useState(false);
   const [resume, setResume] = useState<LastRun | null>(null);
   const runDismissRef = useRef(false);
+  // Chunked build: a queue of component groups built one run at a time, so
+  // partial results (Storybook + manifest) land after every chunk. Driven off
+  // the run-done effect below (start resolves on kick-off, not completion).
+  const [chunksActive, setChunksActive] = useState(false);
+  const chunkQueueRef = useRef<
+    null | { chunks: InspectorComponent[][]; index: number; verify: boolean; url: string | null; isFigma: boolean }
+  >(null);
+  const cancelChunksRef = useRef(false);
 
   async function reload(): Promise<void> {
     const [cfg, comps, toks, man] = await Promise.all([
@@ -233,6 +242,9 @@ export function GuidedFlow({
       if (opKind === "verify" || opKind === "pipeline") {
         void api.getVerification(project.path).then(setVerifyResult);
       }
+      // Advance a chunked build: the just-built chunk refreshed the roster above;
+      // start the next one (or finish the queue).
+      if (chunkQueueRef.current) void runNextChunk();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [run.model.status]);
@@ -313,15 +325,64 @@ export function GuidedFlow({
     await op(label, verifyPrompt(target, url, config?.designSource === "figma"), { kind: "verify", model: "sonnet" });
   }
 
-  async function buildAndVerifyRest(): Promise<void> {
-    const n = remaining.length;
-    if (n === 0) return;
-    const url = await ensureHarness();
+  /**
+   * Build the not-yet-built components in CHUNKS of five rather than one long run.
+   * Each chunk is a separate `claude -p` process routed by complexity
+   * (atoms/molecules → Haiku, organisms → Sonnet) and, when it finishes,
+   * regenerates Storybook + the manifest — so the first five are usable before
+   * the rest are built. Sequencing is driven by the run-done effect (below),
+   * because `run.start` resolves on kick-off, not completion.
+   */
+  async function buildRemaining(verify: boolean): Promise<void> {
+    if (remaining.length === 0 || busy) return;
+    const chunks = chunkByLevel(remaining, 5);
+    // A live preview surface for the per-chunk verify/storybook steps (idempotent).
+    const url = verify ? await ensureHarness() : null;
+    cancelChunksRef.current = false;
+    chunkQueueRef.current = {
+      chunks,
+      index: 0,
+      verify,
+      url,
+      isFigma: config?.designSource === "figma",
+    };
+    setChunksActive(true);
+    await runNextChunk();
+  }
+
+  /** Kick off the next queued chunk, or finish the queue when done/cancelled. */
+  async function runNextChunk(): Promise<void> {
+    const q = chunkQueueRef.current;
+    if (!q || cancelChunksRef.current || q.index >= q.chunks.length) {
+      chunkQueueRef.current = null;
+      setChunksActive(false);
+      return;
+    }
+    const chunk = q.chunks[q.index]!;
+    const names = chunk.map((c) => c.name);
+    const label = `Chunk ${q.index + 1}/${q.chunks.length} — ${q.verify ? "building & verifying" : "building"} ${
+      names.length
+    } component${names.length === 1 ? "" : "s"}`;
+    q.index += 1;
     await op(
-      `Building & verifying ${n} component${n === 1 ? "" : "s"}`,
-      buildVerifyRestPrompt(url, config?.designSource === "figma"),
-      { kind: "pipeline", total: n },
+      label,
+      buildChunkPrompt(names, {
+        url: q.url,
+        isFigma: q.isFigma,
+        verify: q.verify,
+        storybook: true,
+        manifest: true,
+      }),
+      { kind: "pipeline", total: chunk.length, model: tierForChunk(chunk) },
     );
+  }
+
+  /** Stop the chunked build: cancel the in-flight run and drop the remaining queue. */
+  async function stopChunks(): Promise<void> {
+    cancelChunksRef.current = true;
+    chunkQueueRef.current = null;
+    setChunksActive(false);
+    await run.cancel();
   }
 
   const total = components?.length ?? 0;
@@ -340,8 +401,9 @@ export function GuidedFlow({
   }, [components]);
 
   const running = run.running;
-  // A run is in flight either here or (adopted) elsewhere for this project.
-  const busy = running || externalRun;
+  // A run is in flight either here or (adopted) elsewhere for this project, or a
+  // chunked build is between chunks (queue still draining).
+  const busy = running || externalRun || chunksActive;
   const showRunCard = running || (run.model.status === "done" && !runDismissRef.current);
   const showsOutcome = opKind === "verify" || opKind === "pipeline";
   const openFindings = verifyResult?.findings.filter((f) => f.status === "open") ?? [];
@@ -451,6 +513,15 @@ export function GuidedFlow({
                 <div className="flex items-center gap-2 text-sm text-vs-text-primary">
                   {running ? <Spinner /> : <span className="text-vs-success">✓</span>}
                   <span className="flex-1">{harnessMsg || runLabel || "Working…"}</span>
+                  {running && chunksActive && (
+                    <button
+                      onClick={() => void stopChunks()}
+                      className="rounded-md border border-vs-border-strong px-2.5 py-1 text-[11px] text-vs-text-secondary hover:border-vs-warning hover:text-vs-text-primary"
+                      title="Stop after cancelling the current chunk — already-built components are kept."
+                    >
+                      Stop
+                    </button>
+                  )}
                   {!running && (
                     <button
                       onClick={() => {
@@ -584,21 +655,16 @@ export function GuidedFlow({
                         <Button
                           variant="default"
                           disabled={busy}
-                          title="Build the remaining components without running verification."
-                          onClick={() =>
-                            void op(
-                              `Building ${remaining.length} remaining component${remaining.length === 1 ? "" : "s"}`,
-                              BUILD_REMAINING_PROMPT,
-                            )
-                          }
+                          title="Build the remaining components in chunks of five — each chunk on a cheaper model by complexity, followed by Storybook + manifest so the first results are usable right away."
+                          onClick={() => void buildRemaining(false)}
                         >
                           Build only ({remaining.length})
                         </Button>
                         <Button
                           variant="default"
                           disabled={busy}
-                          title="Build every detected component and verify each in the background — the CLI's Apply → Visual-Verify → Adversarial-Review cycle."
-                          onClick={() => void buildAndVerifyRest()}
+                          title="Build every detected component in chunks of five and verify each — the CLI's Apply → Visual-Verify → Adversarial-Review cycle, per chunk."
+                          onClick={() => void buildRemaining(true)}
                         >
                           Build &amp; verify the rest ({remaining.length})
                         </Button>
@@ -654,7 +720,12 @@ export function GuidedFlow({
                               key={c.name}
                               component={c}
                               disabled={busy}
-                              onBuild={() => void op(`Building "${c.name}"`, buildOnePrompt(c.name, c.level), { kind: "build" })}
+                              onBuild={() =>
+                                void op(`Building "${c.name}"`, buildOnePrompt(c.name, c.level), {
+                                  kind: "build",
+                                  model: tierForChunk([c]),
+                                })
+                              }
                               onVerify={() => void verify(c.name, `Verifying "${c.name}"`)}
                               onOpen={onOpenPreview}
                             />
@@ -889,7 +960,20 @@ function AddSourcePanel({
   const source: AddedSource = localPath ? { kind: "local", ref: localPath } : { kind: "figma", ref: url.trim() };
   const canRun = localPath ? true : url.trim().length > 0;
   return (
-    <div className="flex flex-col gap-2 rounded border border-vs-border-default bg-vs-bg-surface p-3">
+    <div
+      className="flex flex-col gap-2 rounded border border-vs-border-default bg-vs-bg-surface p-3"
+      onDragOver={(e) => e.preventDefault()}
+      onDrop={(e) => {
+        // A dropped folder or .zip becomes a local source (the engine extracts a zip).
+        e.preventDefault();
+        const f = e.dataTransfer.files[0];
+        const p = f ? api.getPathForFile(f) : "";
+        if (p) {
+          setLocalPath(p);
+          setUrl("");
+        }
+      }}
+    >
       <span className="text-[11px] font-semibold text-vs-text-secondary">Add a design source</span>
       <input
         value={url}
@@ -909,6 +993,18 @@ function AddSourcePanel({
           }}
         >
           Pick a folder…
+        </Button>
+        <Button
+          variant="default"
+          onClick={async () => {
+            const p = await api.pickFile([{ name: "ZIP archive", extensions: ["zip"] }]);
+            if (p) {
+              setLocalPath(p);
+              setUrl("");
+            }
+          }}
+        >
+          Choose .zip…
         </Button>
         {localPath && <span className="min-w-0 flex-1 truncate font-mono text-[10px] text-vs-text-muted">{localPath}</span>}
       </div>
