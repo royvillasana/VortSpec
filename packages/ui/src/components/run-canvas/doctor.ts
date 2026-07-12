@@ -29,6 +29,35 @@ export function relFileFromSource(source: string | undefined): string | null {
   }
 }
 
+/** A prompt for the assistant to help set up a project's environment variables
+ *  so the app can run — creating `.env` from an example and explaining which
+ *  values the user must supply, without ever inventing a secret. */
+export function buildEnvSetupPrompt(ctx: {
+  hasEnv: boolean;
+  example?: string | null;
+  placeholders?: string[];
+}): string {
+  const placeholders = ctx.placeholders ?? [];
+  return [
+    `Help me set up this project's environment variables so the app runs in the VortSpec live preview.`,
+    ctx.hasEnv
+      ? `A \`.env\` file exists.`
+      : `There is no \`.env\` file yet${ctx.example ? `, but there is \`${ctx.example}\`` : ""}.`,
+    placeholders.length
+      ? `These variables still hold placeholder values and need real ones: ${placeholders.join(", ")}.`
+      : "",
+    ``,
+    `Do this:`,
+    `1. If there is no \`.env\`, create it${ctx.example ? ` from \`${ctx.example}\`` : " from the example file if one exists"}.`,
+    `2. Read the example and any config to work out what each variable is for.`,
+    `3. Tell me EXACTLY which variables I must fill in and where to obtain each value (which dashboard / provider).`,
+    ``,
+    `CRITICAL — never fabricate secrets. Do NOT invent or guess API keys, URLs, database connection strings, tokens, or any credential. Leave clear placeholder names for anything only I can provide. When the file is ready for me to fill in, say so and remind me to Stop and Start the app afterwards so the dev server reloads it.`,
+  ]
+    .filter((l) => l !== "")
+    .join("\n");
+}
+
 /** A focused prompt for the gated Claude Code run that fixes the failure. */
 export function buildDoctorPrompt(ctx: DoctorContext): string {
   return [

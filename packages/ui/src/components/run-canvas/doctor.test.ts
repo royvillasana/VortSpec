@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildDoctorPrompt, relFileFromSource } from "./doctor";
+import { buildDoctorPrompt, buildEnvSetupPrompt, relFileFromSource } from "./doctor";
 
 describe("relFileFromSource", () => {
   it("derives a project-relative path from a dev-server URL", () => {
@@ -29,5 +29,20 @@ describe("buildDoctorPrompt", () => {
     const p = buildDoctorPrompt({ kind: "startup", error: "boom" });
     expect(p.toLowerCase()).toContain("never fabricate secrets");
     expect(p).toContain(".env");
+  });
+});
+
+describe("buildEnvSetupPrompt", () => {
+  it("offers to create .env from the example and lists placeholders", () => {
+    const p = buildEnvSetupPrompt({ hasEnv: false, example: ".env.example", placeholders: ["SUPABASE_URL"] });
+    expect(p).toContain(".env.example");
+    expect(p).toContain("no `.env` file yet");
+    expect(p).toContain("SUPABASE_URL");
+  });
+
+  it("never fabricates secrets", () => {
+    const p = buildEnvSetupPrompt({ hasEnv: true });
+    expect(p.toLowerCase()).toContain("never fabricate secrets");
+    expect(p).toContain("A `.env` file exists.");
   });
 });

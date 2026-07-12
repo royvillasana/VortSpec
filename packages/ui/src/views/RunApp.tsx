@@ -27,9 +27,10 @@ import { CommentsLayer } from "../components/run-canvas/CommentsLayer";
 import { CommentsPanel } from "../components/run-canvas/CommentsPanel";
 import type { Anchor } from "@vortspec/core/comment";
 import { useAgentRun } from "../lib/useAgentRun";
+import { useAssistantTask } from "../lib/assistant-task";
 import { routedModel } from "../lib/model-routing";
 import { RunDoctor, type DoctorState } from "../components/run-canvas/RunDoctor";
-import { buildDoctorPrompt, relFileFromSource } from "../components/run-canvas/doctor";
+import { buildDoctorPrompt, buildEnvSetupPrompt, relFileFromSource } from "../components/run-canvas/doctor";
 
 /**
  * Run App (M5) — the live localhost runtime for the project's OWN app (its `dev`
@@ -119,11 +120,48 @@ export function RunApp({
   const [doctorState, setDoctorState] = useState<DoctorState>("idle");
   const [doctorSnap, setDoctorSnap] = useState<FileSnapshot[] | null>(null);
   const [doctorDismissed, setDoctorDismissed] = useState(false);
+  // When an assistant host is mounted (the IDE), a fix is handed to the sidebar
+  // chat instead of running inline — so the user can leave this screen while it
+  // works. Null in the cockpit, where the inline "Fix with Claude" run stays.
+  const dispatchTask = useAssistantTask();
+  const [doctorHandedOff, setDoctorHandedOff] = useState(false);
+  const [envHandedOff, setEnvHandedOff] = useState(false);
 
   useEffect(() => {
     setDoctorDismissed(false);
     setDoctorState("idle");
+    setDoctorHandedOff(false);
+    setEnvHandedOff(false);
   }, [project.path]);
+
+  /** Hand the startup/runtime fix to the sidebar assistant. */
+  function fixInAssistant(mode: "startup" | "runtime"): void {
+    const file = mode === "runtime" ? relFileFromSource(bridge.runtimeError?.source) : null;
+    const error =
+      mode === "startup"
+        ? (dev.message ?? "The dev server exited.")
+        : `${bridge.runtimeError?.message ?? "Runtime error"}\n${bridge.runtimeError?.stack ?? ""}`;
+    dispatchTask?.({
+      title: mode === "startup" ? "Fix: app won't start" : "Fix: runtime error",
+      allowModify: true,
+      prompt: buildDoctorPrompt({ kind: mode, error, file, script: dev.script }),
+    });
+    setDoctorHandedOff(true);
+  }
+
+  /** Hand environment setup (missing/placeholder .env) to the sidebar assistant. */
+  function fixEnvInAssistant(): void {
+    dispatchTask?.({
+      title: "Fix: environment setup",
+      allowModify: true,
+      prompt: buildEnvSetupPrompt({
+        hasEnv: !!envStatus?.hasEnv,
+        example: envStatus?.examples[0],
+        placeholders: envStatus?.placeholders,
+      }),
+    });
+    setEnvHandedOff(true);
+  }
 
   async function fixWithClaude(mode: "startup" | "runtime"): Promise<void> {
     const file = mode === "runtime" ? relFileFromSource(bridge.runtimeError?.source) : null;
@@ -630,10 +668,23 @@ export function RunApp({
                 </p>
               )}
             </div>
-            {!envCreated && (
-              <Button variant="default" disabled={envBusy} onClick={() => void createEnvFile()}>
-                {envBusy ? "Creating…" : `Create .env from ${envStatus?.examples[0]}`}
-              </Button>
+            {envHandedOff ? (
+              <span className="flex-none self-center text-[11px] text-vs-text-muted">
+                Working in the assistant — you can keep using the app.
+              </span>
+            ) : (
+              <>
+                {!envCreated && (
+                  <Button variant="default" disabled={envBusy} onClick={() => void createEnvFile()}>
+                    {envBusy ? "Creating…" : `Create .env from ${envStatus?.examples[0]}`}
+                  </Button>
+                )}
+                {dispatchTask && (
+                  <Button variant="primary" onClick={fixEnvInAssistant}>
+                    Fix in the assistant →
+                  </Button>
+                )}
+              </>
             )}
             <button
               type="button"
@@ -770,6 +821,8 @@ export function RunApp({
                       onCreateEnv={() => void createEnvFile()}
                       state={doctorState}
                       onFix={() => void fixWithClaude("runtime")}
+                      onFixInAssistant={dispatchTask ? () => fixInAssistant("runtime") : undefined}
+                      handedOff={doctorHandedOff}
                       onKeep={doctorKeep}
                       onRevert={() => void doctorRevert()}
                       onOpenSource={onSource}
@@ -819,6 +872,8 @@ export function RunApp({
                 onCreateEnv={() => void createEnvFile()}
                 state={doctorState}
                 onFix={() => void fixWithClaude("startup")}
+                onFixInAssistant={dispatchTask ? () => fixInAssistant("startup") : undefined}
+                handedOff={doctorHandedOff}
                 onKeep={doctorKeep}
                 onRevert={() => void doctorRevert()}
                 onOpenSource={onSource}

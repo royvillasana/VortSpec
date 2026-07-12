@@ -20,6 +20,8 @@ export function RunDoctor({
   onCreateEnv,
   state,
   onFix,
+  onFixInAssistant,
+  handedOff,
   onKeep,
   onRevert,
   onOpenSource,
@@ -34,6 +36,11 @@ export function RunDoctor({
   onCreateEnv: () => void;
   state: DoctorState;
   onFix: () => void;
+  /** When provided (an assistant host is mounted), the fix is handed to the
+   *  sidebar chat instead of running inline — the user can leave this screen. */
+  onFixInAssistant?: () => void;
+  /** True once the fix has been handed to the assistant (shows the note). */
+  handedOff?: boolean;
   onKeep: () => void;
   onRevert: () => void;
   onOpenSource?: () => void;
@@ -85,23 +92,50 @@ export function RunDoctor({
         </div>
       )}
 
-      {/* Tier 2 — gated Fix with Claude. */}
-      {state === "idle" && (
-        <div className="flex items-center gap-3">
-          <p className="min-w-0 flex-1 text-[11px] text-vs-text-muted">
-            Or let Claude Code read your project and apply a minimal, reviewable fix. It won't invent secrets.
+      {/* Tier 2 — Fix with Claude. With an assistant host, hand it to the sidebar
+          chat so the user can leave this screen; otherwise run it inline. */}
+      {onFixInAssistant ? (
+        handedOff ? (
+          <p className="text-[12px] text-vs-text-secondary">
+            Handed to the assistant — it's working in the sidebar. Keep using the app; it'll point you back here when
+            it's done.
           </p>
-          <Button variant="primary" onClick={onFix}>
-            Fix with Claude
-          </Button>
-        </div>
+        ) : (
+          <div className="flex items-center gap-3">
+            <p className="min-w-0 flex-1 text-[11px] text-vs-text-muted">
+              Or let Claude read your project and apply a minimal, reviewable fix — in the assistant sidebar, so you can
+              keep working. It won't invent secrets.
+            </p>
+            <Button variant="primary" onClick={onFixInAssistant}>
+              Fix in the assistant →
+            </Button>
+          </div>
+        )
+      ) : (
+        <>
+          {state === "idle" && (
+            <div className="flex items-center gap-3">
+              <p className="min-w-0 flex-1 text-[11px] text-vs-text-muted">
+                Or let Claude Code read your project and apply a minimal, reviewable fix. It won't invent secrets.
+              </p>
+              <Button variant="primary" onClick={onFix}>
+                Fix with Claude
+              </Button>
+            </div>
+          )}
+          {state === "running" && (
+            <div className="flex items-center gap-2 text-[12px] text-vs-text-secondary">
+              <Spinner /> Claude is diagnosing and applying a fix…
+            </div>
+          )}
+          {state === "done" && renderDone()}
+        </>
       )}
-      {state === "running" && (
-        <div className="flex items-center gap-2 text-[12px] text-vs-text-secondary">
-          <Spinner /> Claude is diagnosing and applying a fix…
-        </div>
-      )}
-      {state === "done" && (
+    </div>
+  );
+
+  function renderDone(): JSX.Element {
+    return (
         <div className="flex flex-col gap-2 rounded border border-vs-border-default bg-vs-bg-surface p-2.5">
           <p className="text-[12px] text-vs-text-primary">
             Claude applied changes. Review them in Source Control, then restart the app to check.
@@ -123,7 +157,6 @@ export function RunDoctor({
             </Button>
           </div>
         </div>
-      )}
-    </div>
-  );
+    );
+  }
 }
