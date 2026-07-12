@@ -136,7 +136,9 @@ function runInit(
   onLine?: (line: string) => void,
 ): Promise<{ ok: boolean; tail: string }> {
   return new Promise((resolve) => {
-    const args = ["--yes", "storybook@latest", "init", "--yes", "--skip-install=false"];
+    // `npx --yes` auto-confirms the npx package fetch; `init --yes` + CI=1 keep
+    // the initializer itself non-interactive.
+    const args = ["--yes", "storybook@latest", "init", "--yes"];
     if (type) args.push("--type", type);
     let tail = "";
     let child;
