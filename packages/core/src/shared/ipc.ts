@@ -488,6 +488,28 @@ export const ipcContract = {
     request: z.string(),
     response: z.array(storybookEntrySchema),
   },
+  // Deterministic Storybook provisioning (the cockpit backstop): report whether
+  // real Storybook is set up + the story gap, and install it non-interactively.
+  "storybook:status": {
+    request: z.string(),
+    response: z.object({
+      installed: z.boolean(),
+      hasConfig: z.boolean(),
+      hasScript: z.boolean(),
+      storyCount: z.number(),
+      components: z.number(),
+      missingStories: z.number(),
+    }),
+  },
+  "storybook:ensure": {
+    request: z.string(),
+    response: z.object({
+      state: z.enum(["present", "installed", "failed"]),
+      installed: z.boolean(),
+      storyCount: z.number(),
+      error: z.string().optional(),
+    }),
+  },
   "manifest:get": { request: z.string(), response: manifestResultSchema },
   "manifest:save": {
     request: z.object({ projectPath: z.string(), content: z.string() }),

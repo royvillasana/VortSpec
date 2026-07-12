@@ -156,6 +156,8 @@ const api: VortSpecApi = {
   stopAppServer: (projectPath: string) => invoke("appserver:stop", projectPath),
   appServerStatus: (projectPath: string) => invoke("appserver:status", projectPath),
   previewInfo: (projectPath: string) => invoke("devserver:previewInfo", projectPath),
+  storybookStatus: (projectPath: string) => invoke("storybook:status", projectPath),
+  ensureStorybook: (projectPath: string) => invoke("storybook:ensure", projectPath),
   storybookIndex: (url: string) => invoke("devserver:storybookIndex", url),
   onDevServerUpdate: (callback: (payload: DevServerUpdate) => void) =>
     subscribe(DEV_SERVER_UPDATE_CHANNEL, callback),

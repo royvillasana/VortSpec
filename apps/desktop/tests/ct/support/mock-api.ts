@@ -36,6 +36,17 @@ export interface MockConfig {
   previewInfo?: { hasStorybook: boolean; script: string | null };
   /** Entries returned by storybookIndex(). */
   storybookIndex?: { id: string; title: string; name: string; type: "docs" | "story" }[];
+  /** Result of storybookStatus() — drives the Playground provisioning gate. */
+  storybookStatus?: {
+    installed: boolean;
+    hasConfig: boolean;
+    hasScript: boolean;
+    storyCount: number;
+    components: number;
+    missingStories: number;
+  };
+  /** Result of ensureStorybook(). */
+  ensureStorybook?: { state: "present" | "installed" | "failed"; installed: boolean; storyCount: number; error?: string };
   /** Replayed to onAgentEvent subscribers (with the started run's id) on startRun. */
   runScript?: RunEvent[];
   /** Manifest returned by getManifest(). */
@@ -309,6 +320,17 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
     appServerStatus: async () => cfg.appStatus ?? STOPPED,
     previewInfo: async () => cfg.previewInfo ?? { hasStorybook: false, script: "storybook" },
     storybookIndex: async () => cfg.storybookIndex ?? [],
+    storybookStatus: async () =>
+      cfg.storybookStatus ?? {
+        installed: true,
+        hasConfig: true,
+        hasScript: true,
+        storyCount: 0,
+        components: 0,
+        missingStories: 0,
+      },
+    ensureStorybook: async () =>
+      cfg.ensureStorybook ?? { state: "present" as const, installed: true, storyCount: 0 },
     onDevServerUpdate: (cb: (e: { projectPath: string; status: DevServerStatus }) => void) => {
       devSubs.add(cb);
       return () => devSubs.delete(cb);

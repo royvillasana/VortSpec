@@ -134,6 +134,8 @@ export interface VortSpecApi {
   appServerStatus(projectPath: string): Promise<IpcResponse<"appserver:status">>;
   previewInfo(projectPath: string): Promise<IpcResponse<"devserver:previewInfo">>;
   storybookIndex(url: string): Promise<IpcResponse<"devserver:storybookIndex">>;
+  storybookStatus(projectPath: string): Promise<IpcResponse<"storybook:status">>;
+  ensureStorybook(projectPath: string): Promise<IpcResponse<"storybook:ensure">>;
 
   // artifacts / config
   readArtifact(projectPath: string, relPath: string): Promise<IpcResponse<"artifact:read">>;

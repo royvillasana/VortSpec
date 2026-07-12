@@ -348,6 +348,10 @@ export function GuidedFlow({
    */
   async function buildRemaining(verify: boolean): Promise<void> {
     if (remaining.length === 0 || busy) return;
+    // Pre-provision a real Storybook (idempotent, non-blocking) so the engine's
+    // per-chunk story step writes into it and the Playground has it ready — the
+    // deterministic backstop against the improvised-gallery failure.
+    void api.ensureStorybook(project.path).catch(() => undefined);
     const chunks = chunkByLevel(remaining, 5);
     // A live preview surface for the per-chunk verify/storybook steps (idempotent).
     const url = verify ? await ensureHarness() : null;
@@ -797,12 +801,14 @@ export function GuidedFlow({
                               key={c.name}
                               component={c}
                               disabled={busy}
-                              onBuild={() =>
+                              onBuild={() => {
+                                // Pre-provision Storybook (idempotent) so a story lands in a real one.
+                                void api.ensureStorybook(project.path).catch(() => undefined);
                                 void op(`Building "${c.name}"`, buildOnePrompt(c.name, c.level), {
                                   kind: "build",
                                   model: tierForChunk([c]),
-                                })
-                              }
+                                });
+                              }}
                               onVerify={() => void verify(c.name, `Verifying "${c.name}"`)}
                               onOpen={onOpenPreview}
                             />

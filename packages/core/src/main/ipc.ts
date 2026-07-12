@@ -27,6 +27,7 @@ import { getFigmaTokenStatus, setFigmaToken } from "./figma/figma-token";
 import type { FigmaCliMode } from "@vortspec/core/figma";
 import { readProjectConfig } from "./workspace/config-manager";
 import { getEnvStatus, createEnvFromExample } from "./workspace/env-files";
+import { ensureStorybook, storybookReadiness, storyGap } from "./workspace/storybook-setup";
 import { extractWalkthrough } from "./workspace/walkthrough";
 import {
   getInspectorTokens,
@@ -307,6 +308,22 @@ const handlers: Record<IpcChannel, Handler> = {
   }) as Handler,
   "appserver:status": ((projectPath: string) => getAppServerStatus(projectPath)) as Handler,
   "devserver:previewInfo": ((projectPath: string) => getPreviewInfo(projectPath)) as Handler,
+  "storybook:status": ((projectPath: string) =>
+    Promise.all([storybookReadiness(projectPath), storyGap(projectPath)]).then(([r, g]) => ({
+      installed: r.installed,
+      hasConfig: r.hasConfig,
+      hasScript: r.hasScript,
+      storyCount: r.storyCount,
+      components: g.components,
+      missingStories: g.missing,
+    }))) as Handler,
+  "storybook:ensure": ((projectPath: string) =>
+    ensureStorybook({ projectPath }).then((res) => ({
+      state: res.state,
+      installed: res.readiness.installed,
+      storyCount: res.readiness.storyCount,
+      error: res.error,
+    }))) as Handler,
   "devserver:storybookIndex": ((url: string) => getStorybookIndex(url)) as Handler,
   "flow:setPublishTarget": ((req: { projectPath: string; repoUrl: string }) =>
     setPublishTarget(req.projectPath, req.repoUrl)) as Handler,

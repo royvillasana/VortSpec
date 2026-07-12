@@ -228,6 +228,60 @@ export function RunApp({
   const embedUrl = dev.url ? dev.url.replace(/\/+$/, "") + "/" : "";
   const canvasReady = canvas && isApp && !!embedUrl;
 
+  // ── Storybook provisioning (the deterministic backstop) ─────────────────────
+  // The Playground guarantees a REAL Storybook to serve once components exist,
+  // instead of silently falling back to the improvised Vite gallery. On open we
+  // check the project: if components exist but Storybook isn't installed, install
+  // it (once, non-interactively) and then start it; if it's installed but some
+  // components have no story yet, offer to fill the gap via the assistant.
+  const [sb, setSb] = useState<
+    { phase: "idle" | "checking" | "installing" | "failed" | "gap"; missing?: number; error?: string }
+  >({ phase: "idle" });
+
+  useEffect(() => {
+    if (isApp) return;
+    let alive = true;
+    setSb({ phase: "checking" });
+    void (async () => {
+      const s = await api.storybookStatus(project.path).catch(() => null);
+      if (!alive) return;
+      if (!s) return setSb({ phase: "idle" });
+      if (!s.installed && s.components > 0) {
+        setSb({ phase: "installing" });
+        const r = await api.ensureStorybook(project.path).catch(() => null);
+        if (!alive) return;
+        if (r && r.installed) {
+          setSb({ phase: "idle" });
+          void start();
+        } else {
+          setSb({ phase: "failed", error: r?.error });
+        }
+      } else if (s.installed && s.missingStories > 0) {
+        setSb({ phase: "gap", missing: s.missingStories });
+      } else {
+        setSb({ phase: "idle" });
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project.path, isApp]);
+
+  /** Hand story generation for missing components to the sidebar assistant. */
+  function generateStoriesInAssistant(): void {
+    dispatchTask?.({
+      title: "Storybook: generate stories",
+      allowModify: true,
+      prompt:
+        "Run the /storybook skill for this project. Storybook is already installed. Generate a Storybook " +
+        "story (`*.stories.tsx` next to each component) for EVERY built component under the component dir that " +
+        "doesn't already have one, following the project's story conventions (variants + states). Do NOT start a " +
+        "blocking dev server and do NOT create any custom gallery/preview page. End by listing how many stories you added.",
+    });
+    setSb({ phase: "idle" });
+  }
+
   // ── Run Canvas (visual editing) state — only used when `canvas` is on ──────
   const bridge = useInspectorBridge();
 
@@ -697,8 +751,76 @@ export function RunApp({
           </div>
         )}
 
+        {!isApp && sb.phase === "gap" && (
+          <div className="flex flex-none items-center gap-3 border-b border-vs-warning/40 bg-vs-warning/10 px-5 py-2.5 text-[12px]">
+            <span className="text-vs-warning">⚠</span>
+            <span className="min-w-0 flex-1 text-vs-text-primary">
+              Storybook is set up, but {sb.missing} component{sb.missing === 1 ? "" : "s"} don’t have a story yet — they
+              won’t appear in the sidebar until they do.
+            </span>
+            {dispatchTask && (
+              <Button variant="primary" onClick={generateStoriesInAssistant}>
+                Generate missing stories →
+              </Button>
+            )}
+            <button
+              type="button"
+              onClick={() => setSb({ phase: "idle" })}
+              aria-label="Dismiss"
+              className="flex-none text-vs-text-muted hover:text-vs-text-secondary"
+            >
+              ✕
+            </button>
+          </div>
+        )}
+
         <div className="min-h-0 flex-1 overflow-hidden bg-vs-bg-primary">
-          {dev.state === "starting" ? (
+          {!isApp && sb.phase === "installing" ? (
+            <Centered>
+              <div className="flex max-w-md flex-col items-center gap-2 text-center">
+                <Spinner />
+                <p className="text-sm font-medium text-vs-text-primary">Setting up Storybook…</p>
+                <p className="text-xs leading-relaxed text-vs-text-muted">
+                  Installing Storybook so your components show up here with the full sidebar. This runs once and can
+                  take a minute — no need to wait, it’ll open when it’s ready.
+                </p>
+              </div>
+            </Centered>
+          ) : !isApp && sb.phase === "failed" ? (
+            <Centered>
+              <div className="flex max-w-lg flex-col gap-3 rounded-lg border border-vs-warning/40 bg-vs-warning/10 p-4 text-left">
+                <p className="text-sm font-semibold text-vs-text-primary">Couldn’t set up Storybook automatically</p>
+                <p className="text-[12px] leading-relaxed text-vs-text-secondary">
+                  Your components are built, but Storybook didn’t install on its own. Let the assistant finish it, or
+                  run <code className="font-mono">npx storybook@latest init</code> in a terminal in the project.
+                </p>
+                {sb.error && (
+                  <pre className="max-h-32 overflow-auto whitespace-pre-wrap rounded border border-vs-border-default bg-vs-bg-surface p-2 font-mono text-[10px] text-vs-text-muted">
+                    {sb.error}
+                  </pre>
+                )}
+                {dispatchTask && (
+                  <Button
+                    variant="primary"
+                    className="self-start"
+                    onClick={() =>
+                      dispatchTask({
+                        title: "Storybook: set up",
+                        allowModify: true,
+                        prompt:
+                          "Install real Storybook into this project non-interactively (`CI=1 npx storybook@latest init --yes`), " +
+                          "wire the design token file into `.storybook/preview`, and generate a `*.stories.tsx` for every built " +
+                          "component. Do NOT create a custom Vite gallery/preview and do NOT start a blocking dev server. Verify " +
+                          "`.storybook` and the `storybook` script exist when done.",
+                      })
+                    }
+                  >
+                    Fix in the assistant →
+                  </Button>
+                )}
+              </div>
+            </Centered>
+          ) : dev.state === "starting" ? (
             <Centered>
               <Spinner /> {dev.message ?? `Starting ${isApp ? "your app's dev server" : "Storybook"}…`}
             </Centered>
