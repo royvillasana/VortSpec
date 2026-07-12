@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtemp, writeFile, mkdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { storybookInitType, storybookReadiness, storyGap } from "./storybook-setup";
+import { storybookInitType, storybookReadiness, storyGap, findGlobalStylesheet } from "./storybook-setup";
 
 describe("storybookInitType", () => {
   it("maps frameworks to storybook init --type hints", () => {
@@ -58,6 +58,40 @@ describe("storybookReadiness", () => {
     const r = await storybookReadiness(dir);
     expect(r.installed).toBe(true);
     expect(r.storyCount).toBe(1);
+  });
+});
+
+describe("findGlobalStylesheet", () => {
+  let dir: string;
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), "vs-css-"));
+    await mkdir(join(dir, "src", "styles"), { recursive: true });
+  });
+  afterEach(async () => {
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  it("prefers the global stylesheet the app entry imports (Tailwind + tokens), NOT the raw token file", async () => {
+    // The real failure: importing only tokens.css → variables but no utilities → raw components.
+    await writeFile(join(dir, "src", "main.tsx"), `import "./index.css";\n`);
+    await writeFile(
+      join(dir, "src", "index.css"),
+      `@import "./styles/tokens.css";\n@tailwind base;\n@tailwind utilities;\n`,
+    );
+    await writeFile(join(dir, "src", "styles", "tokens.css"), ":root{--color-x:#000}");
+    const g = await findGlobalStylesheet(dir, "src/styles/tokens.css");
+    expect(g).toBe("src/index.css");
+  });
+
+  it("falls back to a known Tailwind global when there's no entry import", async () => {
+    await writeFile(join(dir, "src", "styles", "globals.css"), `@tailwind base;\n@tailwind utilities;\n`);
+    const g = await findGlobalStylesheet(dir, undefined);
+    expect(g).toBe("src/styles/globals.css");
+  });
+
+  it("falls back to the token file when no global stylesheet exists", async () => {
+    const g = await findGlobalStylesheet(dir, "src/styles/tokens.css");
+    expect(g).toBe("src/styles/tokens.css");
   });
 });
 

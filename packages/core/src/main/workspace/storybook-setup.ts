@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import { existsSync, type Dirent } from "node:fs";
 import { readFile, writeFile, readdir } from "node:fs/promises";
-import { join } from "node:path";
+import { join, dirname, normalize } from "node:path";
 import { readProjectConfig } from "./config-manager";
 
 /**
@@ -169,19 +169,75 @@ function runInit(
   });
 }
 
-/** Import the project's design tokens into `.storybook/preview.*` so stories render on-token. */
-async function wireTokenImport(projectPath: string, tokenFile: string | undefined): Promise<void> {
-  if (!tokenFile) return;
+/**
+ * Locate the app's GLOBAL stylesheet — the entry CSS that pulls in the CSS
+ * framework (Tailwind's base/components/utilities) AND the design tokens.
+ * Importing ONLY the raw token file into Storybook gives CSS variables but no
+ * utility classes, so Tailwind components render unstyled ("raw"). Prefer the
+ * sheet the app itself loads (e.g. `src/index.css` with `@tailwind` + the token
+ * import), falling back to the token file when there's no global sheet.
+ */
+export async function findGlobalStylesheet(
+  projectPath: string,
+  tokenFile: string | undefined,
+): Promise<string | null> {
+  // 1. Whatever the app entry actually imports — the source of truth.
+  const entries = [
+    "src/main.tsx", "src/main.jsx", "src/main.ts", "src/main.js",
+    "src/index.tsx", "src/index.jsx", "src/app/layout.tsx", "app/layout.tsx",
+  ];
+  for (const entry of entries) {
+    const full = join(projectPath, entry);
+    if (!existsSync(full)) continue;
+    const src = await readFile(full, "utf8").catch(() => "");
+    const m = src.match(/import\s+["']([^"']+\.css)["']/);
+    if (m) {
+      const resolved = normalize(join(dirname(entry), m[1]));
+      if (existsSync(join(projectPath, resolved))) return resolved;
+    }
+  }
+  // 2. A known global stylesheet that includes a CSS-framework directive.
+  const knowns = [
+    "src/index.css", "src/main.css", "src/styles/globals.css", "src/styles/global.css",
+    "src/styles/index.css", "src/globals.css", "src/App.css", "app/globals.css", "styles/globals.css",
+  ];
+  for (const k of knowns) {
+    const full = join(projectPath, k);
+    if (!existsSync(full)) continue;
+    const css = await readFile(full, "utf8").catch(() => "");
+    if (/@tailwind|tailwindcss|@import|@use/.test(css)) return k;
+  }
+  // 3. Any known global, else the token file (variables-only, last resort).
+  for (const k of knowns) if (existsSync(join(projectPath, k))) return k;
+  return tokenFile ?? null;
+}
+
+/**
+ * Import the app's global stylesheet (framework + tokens) into `.storybook/preview.*`
+ * so components render fully styled — not just the token variables.
+ */
+async function wireGlobalStyles(projectPath: string, tokenFile: string | undefined): Promise<void> {
+  const globalSheet = await findGlobalStylesheet(projectPath, tokenFile);
+  const toImport: string[] = [];
+  if (globalSheet) toImport.push(globalSheet);
+  // If the global sheet doesn't already pull in the tokens, import them too.
+  if (tokenFile && globalSheet && globalSheet !== tokenFile) {
+    const css = await readFile(join(projectPath, globalSheet), "utf8").catch(() => "");
+    const base = tokenFile.split("/").pop();
+    if (base && !css.includes(base)) toImport.push(tokenFile);
+  } else if (tokenFile && !globalSheet) {
+    toImport.push(tokenFile);
+  }
+  if (toImport.length === 0) return;
   for (const name of ["preview.ts", "preview.tsx", "preview.js", "preview.mjs"]) {
     const p = join(projectPath, ".storybook", name);
     if (!existsSync(p)) continue;
     try {
       const src = await readFile(p, "utf8");
-      const importLine = `import "../${tokenFile}";`;
-      if (src.includes(importLine) || src.includes(tokenFile)) return;
-      await writeFile(p, `${importLine}\n${src}`, "utf8");
+      const lines = toImport.filter((f) => !src.includes(f)).map((f) => `import "../${f}";`);
+      if (lines.length) await writeFile(p, `${lines.join("\n")}\n${src}`, "utf8");
     } catch {
-      /* best-effort; stories still render, just without token wiring */
+      /* best-effort; stories still render, just without style wiring */
     }
     return;
   }
@@ -219,7 +275,7 @@ export async function ensureStorybook(opts: {
         r.tail.split("\n").slice(-6).join("\n"),
     };
   }
-  await wireTokenImport(opts.projectPath, tokenFile);
+  await wireGlobalStyles(opts.projectPath, tokenFile);
   const after = await storybookReadiness(opts.projectPath);
   return after.installed
     ? { state: "installed", readiness: after }
