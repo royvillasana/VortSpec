@@ -179,14 +179,30 @@
             <div class="card"><h3>Run Doctor</h3><p class="sub">If the dev server won't start, a one-click gated diagnosis uses Claude Code to find and fix the cause. See <a href="./troubleshooting.html#run">Troubleshooting</a>.</p></div>
           </div>
 
-          <h2 id="figma">Connect Figma (optional)</h2>
-          <p>VortSpec's primary Figma link is the local <code>figma-cli</code>, which drives Figma Desktop directly with no token. In the Figma panel you can:</p>
+          <h2 id="figma">Figma connection</h2>
+          <p>Figma is optional — skip it entirely if you don't design from Figma; it never blocks the IDE. When you do use a Figma source, VortSpec reads your design through <strong>your own Claude Code</strong> (the engine). VortSpec never calls the Figma API itself and stores no Figma token.</p>
+
+          <h3>Three ways VortSpec can read Figma</h3>
+          <div class="grid2">
+            <div class="card"><h3>Remote Figma MCP <span class="tag">recommended</span></h3><p class="sub">The official <code>mcp.figma.com</code> server. <strong>OAuth</strong> — no personal access token to expire, no local plugin, and no live layer selection. Reads variables, styles, and components straight from a file link. The most reliable path; least likely to break mid-project.</p></div>
+            <div class="card"><h3>figma-cli</h3><p class="sub">VortSpec's local reader — drives Figma Desktop directly, no token. Powers the Tokens Inspector's <em>Read Figma components</em> / <em>Sync</em>. Enable <strong>yolo</strong> (fast; needs macOS App Management — the panel opens the exact Settings pane) or <strong>safe</strong> mode from the Figma panel.</p></div>
+            <div class="card"><h3>figma-console Desktop Bridge</h3><p class="sub">A local MCP (<code>figma-console-mcp</code>) that reads variables via a <strong>personal access token</strong> (<code>FIGMA_ACCESS_TOKEN</code>) <em>plus</em> a <strong>Desktop Bridge plugin</strong> running in Figma Desktop. Capable, but higher-maintenance: the token expires and the plugin must be open with the file focused.</p></div>
+          </div>
+
+          <h3>The Figma API token</h3>
+          <p>The <code>figma-console</code> path authenticates with a personal access token. When it expires you get a <code>403</code>, and extraction can silently fall back to <em>approximating</em> token values — so VortSpec surfaces it. Update it in <strong>Settings → Figma API token</strong>: paste a fresh token (Figma → Settings → Security → Personal access tokens) and Save. VortSpec writes it straight into your own Claude Code MCP config, where the token already lives, and <strong>keeps no copy</strong> (invariant: no provider keys stored). The field only ever tells you whether a token is set — it never shows one back.</p>
+
+          <h3>Check the connection before you scan</h3>
+          <p>In the design-system Foundation, <strong>Check Figma connection</strong> runs a quick, read-only probe and tells you exactly what's wrong instead of letting a scan fail quietly:</p>
           <ul>
-            <li><strong>Let VortSpec install it</strong> if it isn't set up yet.</li>
-            <li>Enable <strong>yolo mode</strong> (fast, direct Chrome-DevTools patch of Figma Desktop). This needs macOS <strong>App Management</strong> permission for VortSpec — the panel has a button that opens the exact System Settings pane.</li>
-            <li>Or use <strong>safe mode</strong> (the MCP bridge / REST token) as a fallback.</li>
+            <li><strong>Token expired</strong> — refresh it in Settings → Figma API token.</li>
+            <li><strong>Desktop Bridge not connected</strong> — open the figma-console plugin in Figma Desktop, or just switch to the remote Figma MCP (no bridge needed).</li>
+            <li><strong>OK</strong> — variables and styles are readable; safe to scan.</li>
           </ul>
-          <div class="callout info"><span class="tag">Optional</span>Skip this entirely if you don't design from Figma — it never blocks the IDE.</div>
+          <div class="callout info"><span class="tag">Tip</span>Prefer the remote Figma MCP (OAuth). No token, no Desktop Bridge, no live selection — it sidesteps the two things that most often break a Figma read.</div>
+
+          <h3>What a scan produces</h3>
+          <p>A Foundation scan (or ↻ Re-scan) reads the <strong>full</strong> variable collection + text/color styles into your token file and detects the component inventory. It <strong>collapses variant sets</strong> — a Figma component set (or a slash-named family like <code>form-item/horizontal/input</code>) becomes <em>one</em> component carrying its variant axes, not one row per variant — and <strong>excludes internal sub-parts</strong> (private <code>_</code>-prefixed nodes, <code>.</code>-prefixed styles, and parts used only inside another component). It never fabricates a value it can't read — if the connection is degraded, the check above catches it first.</p>
 
           <h2 id="privacy">Where your data lives</h2>
           <p>Everything lives in your project folder as plain files. Flow state is derivable from those files plus the run log, so any run is cancelable and you can close and reopen mid-flow. Authentication, plan, and usage all belong to your own Claude Code install. VortSpec requires no account, stores no provider keys, and sends no telemetry without opt-in.</p>

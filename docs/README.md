@@ -2,6 +2,9 @@
 
 **Primary product document:** [`vortspec-prd-v2.md`](./vortspec-prd-v2.md) — PRD v2.0, the desktop pivot. This supersedes PRD v1 entirely.
 
+## Subsystems
+- [`figma-connection.md`](./figma-connection.md) — how VortSpec reads a Figma source (remote MCP vs figma-cli vs Desktop Bridge), the connection health check, write-through token management, and variant-aware / public-only component detection.
+
 ## Launch-gate verification (change `pivot-to-desktop-cockpit`, milestone 0)
 - [`launch-gate-anthropic-policy.md`](./launch-gate-anthropic-policy.md) — Anthropic policy on wrapping the user's local Claude Code. Compliant path confirmed for local development; **written Anthropic confirmation required before public launch**.
 - [`launch-gate-claude-code-headless.md`](./launch-gate-claude-code-headless.md) — verified `claude -p` flags + stream-json event types; the contract the `AgentAdapter` encapsulates.
