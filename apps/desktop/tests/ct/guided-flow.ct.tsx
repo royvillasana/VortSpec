@@ -92,6 +92,12 @@ test("shows living status and the component roster once established", async ({ m
   await expect(c.getByText("2/3 built")).toBeVisible();
   await expect(c.getByText("1 verified")).toBeVisible();
   await expect(c.getByText(/complete/i)).toHaveCount(0);
+  // The dashboard rail's category nav jumps to each level + the outputs.
+  const nav = c.getByRole("navigation");
+  await expect(nav.getByRole("button", { name: /Atoms/ })).toBeVisible();
+  await expect(nav.getByRole("button", { name: /Organisms/ })).toBeVisible();
+  await expect(nav.getByRole("button", { name: /Outputs/ })).toBeVisible();
+  await nav.getByRole("button", { name: /Organisms/ }).click();
   // Roster rows with their statuses (exact to avoid the summary line).
   await expect(c.getByText("Button", { exact: true })).toBeVisible();
   await expect(c.getByText("verified", { exact: true })).toBeVisible();

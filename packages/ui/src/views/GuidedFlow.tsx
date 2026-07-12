@@ -94,6 +94,11 @@ const LEVEL_SWATCH: Record<string, string> = {
   other: "#6B7280",
 };
 
+/** Smoothly scroll a roster group / outputs section into view (category nav). */
+function scrollToId(id: string): void {
+  document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
 export function GuidedFlow({
   project,
   hideRail = false,
@@ -491,8 +496,135 @@ export function GuidedFlow({
           )}
         </header>
 
-        <div className="flex-1 overflow-y-auto px-8 pb-16 pt-6">
-          <div className="mx-auto flex max-w-[720px] flex-col gap-5">
+        <div className="flex min-h-0 flex-1">
+          {/* Dashboard rail: pipeline card + foundation + category nav
+              (design: Design System Dashboard.dc.html). */}
+          {(showRunCard || foundationReady) && (
+            <aside className="flex w-[296px] flex-none flex-col gap-4 overflow-y-auto border-r border-vs-border-default bg-vs-bg-surface p-4">
+              {/* Active/just-finished run — the pipeline card. */}
+              {showRunCard && (
+                <Card className="flex flex-col gap-3 p-3.5">
+                  <div className="flex items-center gap-2 text-[13px] text-vs-text-primary">
+                    {running ? <Spinner /> : <span className="text-vs-success">✓</span>}
+                    <span className="min-w-0 flex-1 truncate">{harnessMsg || runLabel || "Working…"}</span>
+                    {running && chunksActive && (
+                      <button
+                        onClick={() => void stopChunks()}
+                        className="rounded-md border border-vs-border-strong px-2.5 py-1 text-[11px] text-vs-text-secondary hover:border-vs-warning hover:text-vs-text-primary"
+                        title="Stop after cancelling the current chunk — already-built components are kept."
+                      >
+                        Stop
+                      </button>
+                    )}
+                    {!running && (
+                      <button
+                        onClick={() => {
+                          runDismissRef.current = true;
+                          setShowTranscript(false);
+                          run.reset();
+                        }}
+                        className="rounded-md border border-vs-border-strong px-2.5 py-1 text-[11px] text-vs-text-secondary hover:border-vs-accent hover:text-vs-text-primary"
+                      >
+                        Dismiss
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Holistic stage/progress view — the same structure for every action. */}
+                  <RunProgress progress={progress} running={running} />
+
+                  {running && (
+                    <p className="text-[11.5px] leading-relaxed text-vs-text-muted">
+                      Runs in the background — you can leave this screen; it keeps going.
+                    </p>
+                  )}
+
+                  {/* Verify/pipeline outcome summary from the report files. */}
+                  {!running && showsOutcome && verifyResult && (
+                    <div className="text-[12px]">
+                      {openFindings.length === 0 ? (
+                        <span className="text-vs-success">✓ Verification passed — no open findings.</span>
+                      ) : (
+                        <span className="text-vs-warning">
+                          ⚠ {openFindings.length} open finding{openFindings.length === 1 ? "" : "s"}
+                          {openFindings[0] ? ` — e.g. ${openFindings[0].component}: ${openFindings[0].title}` : ""}
+                        </span>
+                      )}
+                    </div>
+                  )}
+
+                  <div className="flex gap-3 text-xs">
+                    {showsOutcome && (
+                      <button onClick={onOpenVerify} className="text-vs-accent hover:underline">
+                        Verification report →
+                      </button>
+                    )}
+                    <button
+                      onClick={() => setShowTranscript((v) => !v)}
+                      className="text-vs-text-secondary hover:text-vs-text-primary"
+                    >
+                      {showTranscript ? "Hide details" : "View details"}
+                    </button>
+                  </div>
+                </Card>
+              )}
+
+              {/* Foundation summary + re-source. */}
+              {foundationReady && (
+                <FoundationHeader
+                  config={config}
+                  tokenCount={tokenCount ?? 0}
+                  componentCount={total}
+                  open={foundationOpen}
+                  onToggle={() => setFoundationOpen((v) => !v)}
+                  running={busy}
+                  onReSource={(mode, source) =>
+                    void op(
+                      mode === "merge"
+                        ? "Merging the new source into the design system"
+                        : "Rebuilding the foundation from the new source",
+                      addSourcePrompt(mode, source),
+                      { tools: FOUNDATION_DEF.allowedTools, kind: "source" },
+                    )
+                  }
+                  onPickFolder={() => api.pickFolder(false).then((r) => r?.path ?? null).catch(() => null)}
+                  onOpenTokens={onOpenInspector}
+                />
+              )}
+
+              {/* Category nav — jump to a level or the outputs. */}
+              {foundationReady && total > 0 && (
+                <nav className="flex flex-col gap-0.5">
+                  <div className="px-2 pb-1.5 font-mono text-[10px] uppercase tracking-[0.1em] text-vs-text-muted">
+                    Categories
+                  </div>
+                  {groups.map((g) => (
+                    <button
+                      key={g.level}
+                      onClick={() => scrollToId(`gf-roster-${g.level}`)}
+                      className="flex items-center gap-2.5 rounded-md px-2 py-1.5 text-left text-[13px] text-vs-text-secondary hover:bg-vs-bg-hover hover:text-vs-text-primary"
+                    >
+                      <span className="h-2 w-2 rounded-[2px]" style={{ background: LEVEL_SWATCH[g.level] ?? LEVEL_SWATCH.other }} />
+                      {LEVEL_LABEL[g.level]}
+                      <span className="ml-auto font-mono text-[10.5px] text-vs-text-muted">{g.items.length}</span>
+                    </button>
+                  ))}
+                  <button
+                    onClick={() => scrollToId("gf-outputs")}
+                    className="flex items-center gap-2.5 rounded-md px-2 py-1.5 text-left text-[13px] text-vs-text-secondary hover:bg-vs-bg-hover hover:text-vs-text-primary"
+                  >
+                    <span className="h-2 w-2 rounded-[2px] bg-vs-success" />
+                    Outputs
+                    <span className="ml-auto font-mono text-[10.5px] text-vs-text-muted">3</span>
+                  </button>
+                </nav>
+              )}
+            </aside>
+          )}
+
+          {/* Content: banners + toolbar + table + outputs. */}
+          <div className="min-w-0 flex-1 overflow-y-auto px-8 pb-16 pt-6">
+          <div className="mx-auto flex max-w-[900px] flex-col gap-5">
             {/* The previous run was interrupted — offer to pick up where it stopped. */}
             {resume?.sessionId && !busy && !showRunCard && (
               <Card className="flex items-center gap-3 border-vs-warning-border bg-vs-warning-muted p-3 text-xs">
@@ -529,76 +661,9 @@ export function GuidedFlow({
               </Card>
             )}
 
-            {/* Active run */}
-            {showRunCard && (
-              <Card className="flex flex-col gap-3 p-4">
-                <div className="flex items-center gap-2 text-sm text-vs-text-primary">
-                  {running ? <Spinner /> : <span className="text-vs-success">✓</span>}
-                  <span className="flex-1">{harnessMsg || runLabel || "Working…"}</span>
-                  {running && chunksActive && (
-                    <button
-                      onClick={() => void stopChunks()}
-                      className="rounded-md border border-vs-border-strong px-2.5 py-1 text-[11px] text-vs-text-secondary hover:border-vs-warning hover:text-vs-text-primary"
-                      title="Stop after cancelling the current chunk — already-built components are kept."
-                    >
-                      Stop
-                    </button>
-                  )}
-                  {!running && (
-                    <button
-                      onClick={() => {
-                        runDismissRef.current = true;
-                        setShowTranscript(false);
-                        run.reset();
-                      }}
-                      className="rounded-md border border-vs-border-strong px-2.5 py-1 text-[11px] text-vs-text-secondary hover:border-vs-accent hover:text-vs-text-primary"
-                    >
-                      Dismiss
-                    </button>
-                  )}
-                </div>
-
-                {/* Holistic stage/progress view — the same structure for every action. */}
-                <RunProgress progress={progress} running={running} />
-
-                {running && (
-                  <p className="text-xs text-vs-text-muted">
-                    Running in the background — you can leave this screen; it keeps going.
-                  </p>
-                )}
-
-                {/* Verify/pipeline outcome summary from the report files. */}
-                {!running && showsOutcome && verifyResult && (
-                  <div className="text-sm">
-                    {openFindings.length === 0 ? (
-                      <span className="text-vs-success">✓ Verification passed — no open findings.</span>
-                    ) : (
-                      <span className="text-vs-warning">
-                        ⚠ {openFindings.length} open finding{openFindings.length === 1 ? "" : "s"}
-                        {openFindings[0] ? ` — e.g. ${openFindings[0].component}: ${openFindings[0].title}` : ""}
-                      </span>
-                    )}
-                  </div>
-                )}
-
-                <div className="flex gap-3 text-xs">
-                  {showsOutcome && (
-                    <button onClick={onOpenVerify} className="text-vs-accent hover:underline">
-                      Verification report →
-                    </button>
-                  )}
-                  <button
-                    onClick={() => setShowTranscript((v) => !v)}
-                    className="text-vs-text-secondary hover:text-vs-text-primary"
-                  >
-                    {showTranscript ? "Hide details" : "View details"}
-                  </button>
-                </div>
-
-                {showTranscript && (
-                  <RunPanel model={run.model} onSend={(t) => void run.send(t)} canChat={run.canChat} />
-                )}
-              </Card>
+            {/* Full run transcript — rendered here (not the rail) for room. */}
+            {showRunCard && showTranscript && (
+              <RunPanel model={run.model} onSend={(t) => void run.send(t)} canChat={run.canChat} />
             )}
 
             {!foundationReady ? (
@@ -615,26 +680,6 @@ export function GuidedFlow({
               />
             ) : (
               <>
-                <FoundationHeader
-                  config={config}
-                  tokenCount={tokenCount ?? 0}
-                  componentCount={total}
-                  open={foundationOpen}
-                  onToggle={() => setFoundationOpen((v) => !v)}
-                  running={busy}
-                  onReSource={(mode, source) =>
-                    void op(
-                      mode === "merge"
-                        ? "Merging the new source into the design system"
-                        : "Rebuilding the foundation from the new source",
-                      addSourcePrompt(mode, source),
-                      { tools: FOUNDATION_DEF.allowedTools, kind: "source" },
-                    )
-                  }
-                  onPickFolder={() => api.pickFolder(false).then((r) => r?.path ?? null).catch(() => null)}
-                  onOpenTokens={onOpenInspector}
-                />
-
                 {/* Components */}
                 <section className="flex flex-col gap-3">
                   <div className="flex items-center gap-3">
@@ -729,7 +774,7 @@ export function GuidedFlow({
                   ) : (
                     <Card className="flex flex-col overflow-hidden p-0">
                       {groups.map((g, gi) => (
-                        <div key={g.level}>
+                        <div key={g.level} id={`gf-roster-${g.level}`} className="scroll-mt-2">
                           <div
                             className={`flex items-center gap-2 bg-vs-bg-surface px-4 py-2 font-mono text-[10.5px] uppercase tracking-[0.12em] text-vs-text-secondary ${
                               gi > 0 ? "border-t border-vs-border-default" : ""
@@ -801,8 +846,9 @@ export function GuidedFlow({
                 </section>
 
                 {/* Outputs */}
-                <section className="flex flex-col gap-3">
-                  <h2 className="text-[13px] font-semibold uppercase tracking-wide text-vs-text-muted">
+                <section id="gf-outputs" className="scroll-mt-2 flex flex-col gap-3">
+                  <h2 className="flex items-center gap-2 text-[13px] font-semibold uppercase tracking-wide text-vs-text-muted">
+                    <span className="h-2 w-2 rounded-[2px] bg-vs-success" />
                     Outputs
                   </h2>
                   <OutputCard
@@ -842,6 +888,7 @@ export function GuidedFlow({
                 </section>
               </>
             )}
+          </div>
           </div>
         </div>
       </main>
