@@ -195,6 +195,12 @@ export interface VortSpecApi {
   figmaSyncComponents(projectPath: string): Promise<IpcResponse<"figma:syncComponents">>;
   /** Read the node(s) currently selected in Figma Desktop (figma-cli). */
   figmaSelection(): Promise<IpcResponse<"figma:selection">>;
+  /** Validate that the Figma read path (token + Desktop Bridge) can actually read variables + styles. */
+  checkFigmaHealth(req: { projectPath: string; figmaFileUrl?: string }): Promise<IpcResponse<"figma:checkHealth">>;
+  /** Whether a Figma token is configured (presence only — never the value). */
+  figmaTokenStatus(): Promise<IpcResponse<"figma:tokenStatus">>;
+  /** Write-through a new Figma token into the user's own Figma MCP config (VortSpec keeps no copy). */
+  setFigmaToken(req: { token: string }): Promise<IpcResponse<"figma:setToken">>;
 
   // IDE MCP integration (IDE app only)
   /** Start (once) the IDE MCP bridge and get the `--mcp-config` path for runs. */

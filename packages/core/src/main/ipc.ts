@@ -22,6 +22,8 @@ import { ideMcpConfigPath, reportIdeState, resolveIdeAction } from "./ide-mcp/ho
 import { readClipboardImage } from "./system/clipboard";
 import type { IdeState, IdeActionResult } from "@vortspec/core/ide-mcp";
 import * as figmaCli from "./figma/figma-cli";
+import { checkFigmaHealth } from "./figma/figma-health";
+import { getFigmaTokenStatus, setFigmaToken } from "./figma/figma-token";
 import type { FigmaCliMode } from "@vortspec/core/figma";
 import { readProjectConfig } from "./workspace/config-manager";
 import { getEnvStatus, createEnvFromExample } from "./workspace/env-files";
@@ -193,6 +195,10 @@ const handlers: Record<IpcChannel, Handler> = {
   "figma:syncComponents": ((r: { projectPath: string }) =>
     figmaCli.syncComponentsToCache(r.projectPath)) as Handler,
   "figma:selection": (() => figmaCli.getSelection()) as Handler,
+  "figma:checkHealth": ((r: { projectPath: string; figmaFileUrl?: string }) =>
+    checkFigmaHealth(r)) as Handler,
+  "figma:tokenStatus": (() => getFigmaTokenStatus()) as Handler,
+  "figma:setToken": ((r: { token: string }) => setFigmaToken(r.token)) as Handler,
 
   "toolkit:status": ((path: string) => getToolkitStatus(path)) as Handler,
   "toolkit:install": ((path: string) => installToolkit(path)) as Handler,

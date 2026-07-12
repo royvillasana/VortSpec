@@ -88,3 +88,64 @@ export const figmaSelectionSchema = z.object({
   message: z.string(),
 });
 export type FigmaSelection = z.infer<typeof figmaSelectionSchema>;
+
+/**
+ * The classified health of the Figma read path used to extract tokens/styles.
+ * A shallow "MCP connected" handshake is not enough — the token can be expired
+ * (REST 403) or the Desktop Bridge can be closed, and the extraction then
+ * silently degrades to guessing. This distinguishes those failure modes so the
+ * app can tell the user exactly what to fix before they re-run the scan.
+ */
+export const figmaHealthModeSchema = z.enum([
+  "ok", // variables + styles are readable
+  "token-expired", // Figma REST API returned 401/403 — the token needs refreshing
+  "bridge-down", // the Figma Desktop Bridge plugin isn't running/reachable
+  "no-variables", // the connection works but returned no variables/styles
+  "not-configured", // no Figma MCP is connected to Claude Code
+  "unknown", // the diagnostic couldn't determine the state
+]);
+export type FigmaHealthMode = z.infer<typeof figmaHealthModeSchema>;
+
+export const figmaHealthSchema = z.object({
+  mode: figmaHealthModeSchema,
+  /** the Figma REST/API token authenticates (no 401/403). */
+  tokenValid: z.boolean(),
+  /** the Figma Desktop Bridge plugin is running and reachable. */
+  bridgeConnected: z.boolean(),
+  /** variables AND styles could actually be read. */
+  canRead: z.boolean(),
+  /** how many variables the probe read (0 when it couldn't). */
+  variableCount: z.number(),
+  /** how many styles the probe read. */
+  styleCount: z.number(),
+  /** a human, next-step message for the UI. */
+  message: z.string(),
+  /** the raw one-line detail from the probe. */
+  detail: z.string(),
+});
+export type FigmaHealth = z.infer<typeof figmaHealthSchema>;
+
+export const figmaHealthRequestSchema = z.object({
+  projectPath: z.string(),
+  /** overrides the project.yaml `figma_file_url` when provided. */
+  figmaFileUrl: z.string().optional(),
+});
+
+/**
+ * Where the Figma personal-access token lives (the user's own figma-console MCP
+ * config). Reports only presence — never the token value — because VortSpec
+ * stores no provider keys; it write-throughs a new token into the user's config.
+ */
+export const figmaTokenStatusSchema = z.object({
+  /** a non-empty token is currently set on the Figma MCP. */
+  configured: z.boolean(),
+  /** the MCP server name it's set on (e.g. "figma-console"), or null if none. */
+  serverName: z.string().nullable(),
+  /** the env var the token is stored under (e.g. "FIGMA_ACCESS_TOKEN"), or null. */
+  envVar: z.string().nullable(),
+  /** a human, next-step message. */
+  message: z.string(),
+});
+export type FigmaTokenStatus = z.infer<typeof figmaTokenStatusSchema>;
+
+export const figmaSetTokenRequestSchema = z.object({ token: z.string() });

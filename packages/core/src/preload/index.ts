@@ -209,6 +209,9 @@ const api: VortSpecApi = {
   figmaSyncVariables: (projectPath: string) => invoke("figma:syncVariables", { projectPath }),
   figmaSyncComponents: (projectPath: string) => invoke("figma:syncComponents", { projectPath }),
   figmaSelection: () => invoke("figma:selection", undefined),
+  checkFigmaHealth: (req) => invoke("figma:checkHealth", req),
+  figmaTokenStatus: () => invoke("figma:tokenStatus", undefined),
+  setFigmaToken: (req) => invoke("figma:setToken", req),
   setPublishTarget: (projectPath: string, repoUrl: string) =>
     invoke("flow:setPublishTarget", { projectPath, repoUrl }),
   readArtifact: (projectPath: string, relPath: string) =>

@@ -101,6 +101,12 @@ export interface MockConfig {
   terminalGreeting?: string;
   /** Figma connection status returned by figmaStatus(). */
   figma?: import("@vortspec/core/ipc").FigmaConnection;
+  /** Result returned by checkFigmaHealth(). */
+  figmaHealth?: import("@vortspec/core/ipc").FigmaHealth;
+  /** Status returned by figmaTokenStatus(). */
+  figmaTokenStatus?: import("@vortspec/core/ipc").FigmaTokenStatus;
+  /** Result returned by setFigmaToken(). */
+  setFigmaTokenResult?: { ok: boolean; message: string };
   /** Result returned by figmaSyncVariables(). */
   figmaSync?: import("@vortspec/core/ipc").FigmaSyncResult;
   /** Result returned by figmaSyncComponents(). */
@@ -414,6 +420,25 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
       },
     figmaSelection: async () =>
       cfg.figmaSelection ?? { nodes: [], message: "Nothing selected in Figma." },
+    checkFigmaHealth: async () =>
+      cfg.figmaHealth ?? {
+        mode: "ok",
+        tokenValid: true,
+        bridgeConnected: true,
+        canRead: true,
+        variableCount: 80,
+        styleCount: 12,
+        message: "Figma connection healthy — read 80 variables and 12 styles.",
+        detail: "",
+      },
+    figmaTokenStatus: async () =>
+      cfg.figmaTokenStatus ?? {
+        configured: true,
+        serverName: "figma-console",
+        envVar: "FIGMA_ACCESS_TOKEN",
+        message: "A Figma token is set on “figma-console” (FIGMA_ACCESS_TOKEN). Paste a new one to replace it.",
+      },
+    setFigmaToken: async () => cfg.setFigmaTokenResult ?? { ok: true, message: "Figma token updated." },
 
     setPublishTarget: async () => null,
     readArtifact: async () => null,

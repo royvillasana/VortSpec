@@ -53,3 +53,31 @@ test("edits the profile name and saves", async ({ mount }) => {
   await expect(c.getByText("✓ Saved")).toBeVisible();
   expect(saved!.name).toBe("Roy");
 });
+
+test("updates the Figma API token (write-through, stores no value)", async ({ mount }) => {
+  const c = await mount(<Profile onBack={noop} />, {
+    hooksConfig: {
+      mock: {
+        usage: USAGE,
+        profile: PROFILE,
+        figmaTokenStatus: {
+          configured: true,
+          serverName: "figma-console",
+          envVar: "FIGMA_ACCESS_TOKEN",
+          message: "A Figma token is set on “figma-console” (FIGMA_ACCESS_TOKEN). Paste a new one to replace it.",
+        },
+        setFigmaTokenResult: { ok: true, message: "Figma token updated on “figma-console”. Re-run the scan to pick it up." },
+      },
+    },
+  });
+  await expect(c.getByRole("heading", { name: "Figma API token" })).toBeVisible();
+  await expect(c.getByText(/A Figma token is set on/)).toBeVisible();
+  // Never stored in VortSpec — the field is empty and the copy says so.
+  await expect(c.getByText(/VortSpec never stores this token/)).toBeVisible();
+  const save = c.getByRole("button", { name: "Save token" });
+  await expect(save).toBeDisabled(); // gated until a token is entered
+  await c.getByPlaceholder("figd_…").fill("figd_newtoken12345");
+  await expect(save).toBeEnabled();
+  await save.click();
+  await expect(c.getByText(/Figma token updated/)).toBeVisible();
+});

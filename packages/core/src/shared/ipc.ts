@@ -62,6 +62,10 @@ import {
   figmaSyncRequestSchema,
   figmaSyncResultSchema,
   figmaSelectionSchema,
+  figmaHealthSchema,
+  figmaHealthRequestSchema,
+  figmaTokenStatusSchema,
+  figmaSetTokenRequestSchema,
 } from "./figma";
 export {
   figmaConnectionSchema,
@@ -70,6 +74,9 @@ export {
   figmaSyncRequestSchema,
   figmaSyncResultSchema,
   figmaSelectionSchema,
+  figmaHealthSchema,
+  figmaHealthModeSchema,
+  figmaTokenStatusSchema,
 } from "./figma";
 export type {
   FigmaConnection,
@@ -78,6 +85,9 @@ export type {
   FigmaComponent,
   FigmaNode,
   FigmaSelection,
+  FigmaHealth,
+  FigmaHealthMode,
+  FigmaTokenStatus,
 } from "./figma";
 export { figmaComponentSchema } from "./figma";
 import { setupAnswersSchema, projectConfigSchema } from "./setup";
@@ -382,6 +392,12 @@ export const ipcContract = {
   "figma:syncVariables": { request: figmaSyncRequestSchema, response: figmaSyncResultSchema },
   "figma:syncComponents": { request: figmaSyncRequestSchema, response: figmaSyncResultSchema },
   "figma:selection": { request: z.void(), response: figmaSelectionSchema },
+  "figma:checkHealth": { request: figmaHealthRequestSchema, response: figmaHealthSchema },
+  "figma:tokenStatus": { request: z.void(), response: figmaTokenStatusSchema },
+  "figma:setToken": {
+    request: figmaSetTokenRequestSchema,
+    response: z.object({ ok: z.boolean(), message: z.string() }),
+  },
 
   "toolkit:status": { request: z.string(), response: toolkitStatusSchema },
   "toolkit:install": { request: z.string(), response: toolkitStatusSchema },

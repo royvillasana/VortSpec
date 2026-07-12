@@ -31,6 +31,7 @@ import { routedModel, modelHonored, disableRouting, isRoutingDisabled, type Mode
 import { Button, Card, Spinner } from "../components/ui";
 import { RunPanel } from "../components/RunPanel";
 import { RunProgress } from "../components/RunProgress";
+import { FigmaHealthCheck } from "../components/FigmaHealthCheck";
 import { ProjectRail, projectRailItems } from "../components/ProjectRail";
 
 /**
@@ -666,6 +667,11 @@ export function GuidedFlow({
               <RunPanel model={run.model} onSend={(t) => void run.send(t)} canChat={run.canChat} />
             )}
 
+            {/* Figma read-path validation — surfaced before a (re)scan so an
+                expired token / closed Desktop Bridge is caught instead of the
+                extraction silently degrading to guessed token values. */}
+            {config?.designSource === "figma" && <FigmaHealthCheck project={project} />}
+
             {!foundationReady ? (
               <FoundationSetup
                 config={config}
@@ -1130,6 +1136,15 @@ function ComponentRow({
             className="shrink-0 rounded-full border border-vs-accent/40 bg-vs-accent/10 px-1.5 py-px text-[9px] font-medium uppercase tracking-wide text-vs-accent"
           >
             Figma{component.figmaVariants && component.figmaVariants.length > 0 ? ` ·${component.figmaVariants.length}` : ""}
+          </span>
+        )}
+        {/* Collapsed variant set — the axes this one component varies on. */}
+        {component.variants && component.variants.length > 0 && (
+          <span
+            title={`Variant set — axes: ${component.variants.join(", ")}`}
+            className="shrink-0 rounded-full border border-vs-border-strong bg-vs-bg-elevated px-1.5 py-px text-[9px] font-medium text-vs-text-secondary"
+          >
+            ⎇ {component.variants.join(" · ")}
           </span>
         )}
       </div>

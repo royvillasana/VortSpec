@@ -376,3 +376,25 @@ test("builds remaining components in chunks of five, routed by complexity", asyn
   expect(opts[1].prompt).toContain('"Dialog"');
   expect(opts[1].prompt).not.toContain("Button");
 });
+
+// A collapsed variant set: ONE component carrying its variant axes (not 40 rows).
+const ROSTER_VARIANTS: InspectorComponentsResult = {
+  componentDir: "src/components",
+  previewUrl: null,
+  components: [
+    {
+      name: "form-item", level: "molecule", description: "Labeled form field", file: null,
+      props: [], tokens: [], status: "unknown", issues: [], specPath: null, reportPath: null,
+      variants: ["orientation", "control"],
+    },
+  ],
+};
+
+test("shows a collapsed variant set's axes in the roster (not one row per variant)", async ({ mount }) => {
+  const c = await mount(<GuidedFlow {...props} />, {
+    hooksConfig: { mock: { tokens: TOKENS, components: ROSTER_VARIANTS, manifest: MANIFEST } },
+  });
+  await expect(c.getByText("form-item", { exact: true })).toBeVisible();
+  // The variant axes badge, not 40 separate form-item rows.
+  await expect(c.getByText(/orientation · control/)).toBeVisible();
+});

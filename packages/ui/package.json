@@ -109,6 +109,10 @@
       "types": "./src/views/FigmaConnection.tsx",
       "default": "./src/views/FigmaConnection.tsx"
     },
+    "./FigmaHealthCheck": {
+      "types": "./src/components/FigmaHealthCheck.tsx",
+      "default": "./src/components/FigmaHealthCheck.tsx"
+    },
     "./DesignPanel": {
       "types": "./src/components/run-canvas/DesignPanel.tsx",
       "default": "./src/components/run-canvas/DesignPanel.tsx"

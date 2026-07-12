@@ -227,6 +227,13 @@ export function Profile({ onBack, onSaved }: { onBack: () => void; onSaved?: (p:
           </Card>
         </section>
 
+        <section className="flex flex-col gap-3">
+          <h2 className="text-[13px] font-semibold uppercase tracking-wide text-vs-text-muted">
+            Figma API token
+          </h2>
+          <FigmaTokenSettings />
+        </section>
+
         <div className="flex items-center gap-3">
           <Button variant="primary" onClick={() => void save()}>
             Save profile
@@ -235,6 +242,87 @@ export function Profile({ onBack, onSaved }: { onBack: () => void; onSaved?: (p:
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * Update the Figma personal-access token used by the local figma-console MCP to
+ * read variables + styles (the token that 403s when expired). VortSpec stores no
+ * copy — the token is written straight into the user's own Claude Code MCP config
+ * (invariant #4); the field never displays an existing token, only whether one
+ * is set. Paste a new one to replace it.
+ */
+function FigmaTokenSettings(): React.JSX.Element {
+  const [status, setStatus] = useState<import("@vortspec/core/ipc").FigmaTokenStatus | null>(null);
+  const [token, setToken] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
+
+  useEffect(() => {
+    void api.figmaTokenStatus().then(setStatus);
+  }, []);
+
+  async function saveToken(): Promise<void> {
+    if (!token.trim()) return;
+    setBusy(true);
+    setResult(null);
+    try {
+      const r = await api.setFigmaToken({ token: token.trim() });
+      setResult(r);
+      if (r.ok) {
+        setToken("");
+        setStatus(await api.figmaTokenStatus());
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Card className="flex flex-col gap-3 p-5">
+      <div className="flex items-center gap-2 text-[12px]">
+        <span
+          className={`h-1.5 w-1.5 rounded-full ${status?.configured ? "bg-vs-success" : "bg-vs-warning"}`}
+        />
+        <span className="text-vs-text-secondary">
+          {status
+            ? status.message
+            : "Checking your Figma MCP configuration…"}
+        </span>
+      </div>
+      <label className="flex flex-col gap-1.5">
+        <span className="text-xs text-vs-text-secondary">
+          {status?.configured ? "Replace the token" : "Set the token"}{" "}
+          <span className="text-vs-text-muted">(Figma → Settings → Security → Personal access tokens)</span>
+        </span>
+        <div className="flex items-center gap-2">
+          <input
+            type="password"
+            autoComplete="off"
+            value={token}
+            onChange={(e) => setToken(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") void saveToken();
+            }}
+            placeholder="figd_…"
+            className="min-w-0 flex-1 rounded-md border border-vs-border-default bg-vs-bg-primary px-3 py-2 font-mono text-[12px] text-vs-text-primary placeholder:text-vs-text-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-vs-accent-subtle"
+          />
+          <Button variant="primary" disabled={busy || !token.trim()} onClick={() => void saveToken()}>
+            {busy ? "Saving…" : "Save token"}
+          </Button>
+        </div>
+      </label>
+      {result && (
+        <span className={`text-[11px] leading-relaxed ${result.ok ? "text-vs-success" : "text-vs-error"}`}>
+          {result.ok ? "✓ " : "⚠ "}
+          {result.message}
+        </span>
+      )}
+      <p className="text-[11px] leading-relaxed text-vs-text-muted">
+        VortSpec never stores this token — it's written into your own Claude Code Figma MCP config, where
+        it already lives. A fresh scan or connection check picks up the new token.
+      </p>
+    </Card>
   );
 }
 
