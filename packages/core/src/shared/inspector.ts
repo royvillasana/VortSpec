@@ -112,6 +112,8 @@ export const inspectorComponentSchema = z.object({
   specPath: z.string().nullable(),
   /** Project-relative path of the visual-verify report, if one exists. */
   reportPath: z.string().nullable(),
+  /** Detected variant-set axes (e.g. ["type","size"]) — a collapsed COMPONENT_SET / variant family. */
+  variants: z.array(z.string()).optional(),
   /** Whether a matching component exists in the connected Figma file (Wave 3). */
   figmaBacked: z.boolean().optional(),
   /** The matched Figma component's variant axes, when figma-backed. */

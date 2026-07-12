@@ -62,6 +62,13 @@ export const detectedComponentSchema = z.object({
   name: z.string(),
   level: z.enum(["atom", "molecule", "organism"]).optional(),
   description: z.string().optional(),
+  /**
+   * Variant axis names for a COMPONENT_SET / variant family — e.g.
+   * ["type", "size"] or ["orientation", "control"]. Detection collapses a whole
+   * variant set into ONE entry carrying its axes here, instead of emitting one
+   * entry per variant (which explodes a `form-item` set into 40 rows).
+   */
+  variants: z.array(z.string()).optional(),
 });
 export type DetectedComponent = z.infer<typeof detectedComponentSchema>;
 export const detectedComponentsSchema = z.array(detectedComponentSchema);
@@ -131,16 +138,38 @@ export const DEFAULT_FLOW: StageDef[] = [
       "Read .sdd-de/project.yaml for `design_source` and the project configuration " +
       "(framework, language, token_file, component_dir). Connect to the configured source — do NOT " +
       "ask for a brief; the design source is the input.\n\n" +
-      "For `design_source: figma`, use the Figma MCP to read the file at `figma_file_url` and the " +
-      "variable collection named `figma_token_collection`.\n\n" +
+      "For `design_source: figma`, PREFER the remote/official Figma MCP (the OAuth-based " +
+      "`mcp.figma.com` server — file-level reads that need NO Figma Desktop app, NO local Desktop Bridge " +
+      "plugin, and NO live layer selection) over any local bridge. Read the file at `figma_file_url`: use " +
+      "its metadata for structure, and read the FULL variable collection (`figma_token_collection`) AND the " +
+      "text/color STYLES from the file link. Explicitly fetch VARIABLES + STYLES — not code generation. If a " +
+      "variable read needs a node scope, iterate the design system's foundation/component nodes and aggregate. " +
+      "Do NOT depend on the figma-console Desktop Bridge or a personal access token. Extract the COMPLETE " +
+      "token set and NEVER guess or approximate a value — if a value truly can't be read, OMIT it and note it, " +
+      "never fabricate a value.\n\n" +
       "For `design_source: github` (a repository imported into this project), the repo's own files ARE " +
       "the source: scan them for the design system — read its existing token definitions (CSS variables, " +
       "Tailwind/theme config, SCSS/JS token files) and its component library, and reconcile them into the " +
       "configured `token_file` and inventory. Do not fetch anything remotely; read the files on disk.\n\n" +
       "1. Extract every design token and variable from the source into the configured `token_file`.\n" +
-      "2. Detect every component in the design system and write `.sdd-de/components.json` — a JSON " +
+      "2. Detect the design system's PUBLIC components and write `.sdd-de/components.json` — a JSON " +
       "array of objects `{ \"name\": string, \"level\": \"atom\"|\"molecule\"|\"organism\", " +
-      "\"description\": string }`, ordered tokens → atoms → molecules → organisms.\n\n" +
+      "\"description\": string, \"variants\"?: string[] }`, ordered tokens → atoms → molecules → organisms.\n\n" +
+      "   COLLAPSE VARIANTS — do NOT emit one entry per variant:\n" +
+      "   - A Figma COMPONENT_SET is ONE component: emit a single entry named after the set and record its " +
+      "variant AXIS names in `variants` (e.g. `{ \"name\": \"button\", \"variants\": [\"type\", \"size\"] }`), " +
+      "not one entry per variant.\n" +
+      "   - Components whose names share a slash-separated prefix (e.g. `form-item/horizontal/input`, " +
+      "`form-item/vertical/select`) are variants of ONE component: emit a single entry named after the shared " +
+      "base (`form-item`) with the DIFFERING path segments as its axes (`\"variants\": [\"orientation\", \"control\"]`), " +
+      "NOT one entry per combination.\n" +
+      "   EXCLUDE internal sub-components and styles — DROP a node when it is: underscore-prefixed " +
+      "(`_carousel-item`) — a private part; dot-prefixed (`.largeTitle`) — a text/color STYLE, which belongs in the " +
+      "token file as a typography/color token, NOT the component inventory; or used ONLY as a child inside ONE " +
+      "other component and never placed on its own (a sub-part like navbar-brand/navbar-collapse of `navbar`, " +
+      "carousel-item of `carousel`, dropdown-menu-item of `dropdown-menu`) — fold it into its parent, don't list it " +
+      "separately. The `components/` FOLDER prefix is NOT by itself an internal marker — judge by composition. " +
+      "Detect the public, standalone design-system components only.\n\n" +
       "Do NOT implement the components yet — this stage only extracts tokens and detects the inventory.",
     allowedTools: ["Read", "Write", "Edit"],
   },

@@ -15,9 +15,15 @@ export function buildOnePrompt(name: string, level?: string): string {
     `Read .sdd-de/project.yaml. Implement the "${name}" component` +
     (level ? ` (${level})` : "") +
     " into component_dir in the configured framework and language, using ONLY the extracted " +
-    "design tokens. Run /generate-artifacts for it to produce its specs, then implement it."
+    "design tokens. Run /generate-artifacts for it to produce its specs, then implement it. " +
+    VARIANT_SET_CLAUSE
   );
 }
+
+/** Shared reminder so a collapsed variant set is ONE component, not many. */
+const VARIANT_SET_CLAUSE =
+  "If its .sdd-de/components.json entry has a `variants` array (variant axes), implement a SINGLE " +
+  "component that covers ALL those variants via variant props (e.g. CVA), not a separate component per variant.";
 
 /**
  * Every batch action is idempotent so an interrupted run resumes from the files:
@@ -50,17 +56,43 @@ export const RESCAN_PROMPT = [
   "modify any component code — this only refreshes tokens and the component inventory.",
   "",
   "1. Read `.sdd-de/project.yaml` for `design_source` and the config. Connect to the configured",
-  "   source. For `design_source: figma`, use the Figma MCP to read `figma_file_url` and the",
-  "   variable collection `figma_token_collection`.",
-  "2. Re-extract design tokens into the configured `token_file`: add newly-found tokens and update",
-  "   values that changed. Do NOT remove tokens that existing components still reference.",
-  "3. Detect EVERY component in the source and MERGE into `.sdd-de/components.json`:",
+  "   source. For `design_source: figma`, PREFER the remote/official Figma MCP (the OAuth-based",
+  "   `mcp.figma.com` server — file-level reads that need NO Figma Desktop app, NO local Desktop Bridge",
+  "   plugin, and NO live layer selection) over any local bridge. Read `figma_file_url` and the variable",
+  "   collection `figma_token_collection` PLUS the text/color STYLES from the file link. Explicitly fetch",
+  "   VARIABLES + STYLES — not code generation. If a variable read needs a node scope, iterate the design",
+  "   system's foundation/component nodes and aggregate. Do NOT depend on the figma-console Desktop Bridge",
+  "   or a personal access token.",
+  "2. Re-extract design tokens into the configured `token_file` from the FULL variable collection + styles:",
+  "   add newly-found tokens and update values that changed. NEVER guess or approximate a value — if one",
+  "   truly can't be read, OMIT it and note it, never fabricate a value. Do NOT remove tokens that existing",
+  "   components still reference.",
+  "3. Detect the PUBLIC components in the source and MERGE into `.sdd-de/components.json`:",
   "   - keep every existing entry (including components added by hand),",
-  "   - add any component found in the source that isn't already listed ({ name, level, description }),",
+  "   - add any component found in the source that isn't already listed ({ name, level, description, variants? }),",
+  "   - COLLAPSE VARIANTS — do NOT add one entry per variant:",
+  "       · a Figma COMPONENT_SET is ONE component — one entry named after the set, with its variant AXIS names",
+  "         in a `variants` array (e.g. { \"name\": \"button\", \"variants\": [\"type\", \"size\"] });",
+  "       · components sharing a slash-separated prefix (e.g. `form-item/horizontal/input`, `form-item/vertical/select`)",
+  "         are variants of ONE component — one entry named after the shared base (`form-item`) with the differing",
+  "         path segments as axes (`\"variants\": [\"orientation\", \"control\"]`), NOT one entry per combination;",
+  "   - EXCLUDE internal sub-components and styles — apply this BEFORE adding, and REMOVE any such entry a prior",
+  "     scan already added (this is a case where you may delete stale entries). DROP a node when it is:",
+  "       · underscore-prefixed (e.g. `_carousel-item`, `_input-base`) — a private/internal part; or",
+  "       · dot-prefixed (e.g. `.largeTitle`, `.smallTitle`) — those are text/COLOR STYLES: put them in the token",
+  "         file as typography/color tokens, NOT in the component inventory; or",
+  "       · used ONLY as a child inside ONE other component and never placed on its own — a sub-part of its parent",
+  "         (e.g. navbar-brand/navbar-toggler/navbar-collapse belong to `navbar`; carousel-item/indicator to",
+  "         `carousel`; dropdown-menu-item to `dropdown-menu`; input-affix/addon/cursor/separator to `input`).",
+  "         Fold these into the parent, do NOT list them as separate components.",
+  "     The `components/` folder prefix is NOT by itself an internal marker — judge by composition, not the folder.",
+  "     Detect the PUBLIC, standalone design-system components only.",
+  "   - if a PRIOR scan wrongly split a set into per-variant rows (e.g. many `form-item/*` entries), REPLACE them",
+  "     with the single collapsed entry (this is the one case where you may remove stale entries),",
   "   - for `design_source: figma`, record each entry's Figma node id as a `figmaNodeId` field (resolve it",
   "     via `figma_get_component_details`/`figma_search_components` by name) so component docs can be enriched",
   "     later without re-resolving — add/refresh it where missing or changed,",
-  "   - do NOT delete entries and do NOT touch component source files.",
+  "   - do NOT delete other entries and do NOT touch component source files.",
   "4. RECONCILE IMPLEMENTATION STATUS: for every existing entry whose description says it is",
   "   \"not yet implemented\" (or similar wording, e.g. \"discovered in a re-scan; not yet implemented\")",
   "   but which NOW has an implemented source file under the component dir, update that entry's",
@@ -252,6 +284,7 @@ export function buildChunkPrompt(names: string[], opts: BuildChunkOptions = {}):
     "For EACH of them, run /generate-artifacts to produce its specs, then implement it into " +
       "component_dir in the configured framework and language, using ONLY the extracted design tokens. " +
       "Skip any that already have a source file.",
+    VARIANT_SET_CLAUSE,
   ];
   if (opts.verify) {
     lines.push(

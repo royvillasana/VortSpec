@@ -4,6 +4,8 @@ import {
   chunkByLevel,
   tierForChunk,
   buildChunkPrompt,
+  buildOnePrompt,
+  RESCAN_PROMPT,
 } from "./sdd-prompts";
 
 describe("addSourcePrompt — re-run the Foundation against a new source", () => {
@@ -120,5 +122,40 @@ describe("buildChunkPrompt — scoped to the named components", () => {
     expect(full).toMatch(/\/design-doc/);
     expect(full).toContain("http://localhost:6006");
     expect(full).toMatch(/Figma MCP/);
+  });
+});
+
+describe("detection — collapse variant sets + drop internal nodes", () => {
+  it("RESCAN_PROMPT collapses COMPONENT_SETs and slash-named variant families", () => {
+    expect(RESCAN_PROMPT).toMatch(/COLLAPSE VARIANTS/);
+    expect(RESCAN_PROMPT).toMatch(/COMPONENT_SET is ONE component/);
+    expect(RESCAN_PROMPT).toMatch(/form-item\/horizontal\/input/);
+    expect(RESCAN_PROMPT).toMatch(/NOT one entry per combination/);
+    // Records the variant axes rather than exploding.
+    expect(RESCAN_PROMPT).toMatch(/variants/);
+  });
+
+  it("RESCAN_PROMPT excludes internal sub-components + styles by composition, not the components/ folder", () => {
+    expect(RESCAN_PROMPT).toMatch(/EXCLUDE internal sub-components and styles/);
+    expect(RESCAN_PROMPT).toMatch(/underscore-prefixed/);
+    expect(RESCAN_PROMPT).toMatch(/dot-prefixed .* STYLES/);
+    expect(RESCAN_PROMPT).toMatch(/used ONLY as a child inside ONE other component/);
+    // The `components/` folder must NOT be treated as an internal marker.
+    expect(RESCAN_PROMPT).toMatch(/`components\/` folder prefix is NOT by itself an internal marker/);
+    // And repairs a prior wrongly-split inventory.
+    expect(RESCAN_PROMPT).toMatch(/wrongly split a set into per-variant rows/);
+  });
+
+  it("build prompts implement a collapsed variant set as ONE component", () => {
+    expect(buildOnePrompt("form-item")).toMatch(/single .* component .* ALL those variants|SINGLE component that covers ALL those variants/i);
+    expect(buildChunkPrompt(["form-item"])).toMatch(/SINGLE component that covers ALL those variants/);
+  });
+
+  it("RESCAN_PROMPT prefers the remote OAuth Figma MCP (no Desktop Bridge, no token) and never fabricates", () => {
+    expect(RESCAN_PROMPT).toMatch(/PREFER the remote\/official Figma MCP/);
+    expect(RESCAN_PROMPT).toMatch(/mcp\.figma\.com/);
+    expect(RESCAN_PROMPT).toMatch(/NO local Desktop Bridge/);
+    expect(RESCAN_PROMPT).toMatch(/VARIABLES \+ STYLES/);
+    expect(RESCAN_PROMPT).toMatch(/never fabricate a value/);
   });
 });

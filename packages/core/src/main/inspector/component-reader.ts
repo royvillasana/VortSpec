@@ -316,6 +316,7 @@ export async function getInspectorComponents(
       name: entry.name,
       level: entry.level,
       description: entry.description,
+      variants: entry.variants,
       file,
       props,
       tokens,
