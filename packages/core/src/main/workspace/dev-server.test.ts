@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { urlFrom } from "./dev-server";
+import { urlFrom, serverExitMessage } from "./dev-server";
 
 describe("dev-server urlFrom", () => {
   it("parses the Vite Local line", () => {
@@ -25,5 +25,32 @@ describe("dev-server urlFrom", () => {
   it("returns null when there is no local URL", () => {
     expect(urlFrom("compiling…")).toBeNull();
     expect(urlFrom("Network: https://example.com")).toBeNull();
+  });
+});
+
+describe("dev-server serverExitMessage", () => {
+  it("explains that Storybook isn't installed on exit 127", () => {
+    const msg = serverExitMessage("storybook", "npm", "storybook", 127, "sh: storybook: command not found");
+    expect(msg).toMatch(/Storybook isn't installed in this project yet/);
+    expect(msg).toMatch(/npx storybook@latest init/);
+    // Not the raw dump.
+    expect(msg).not.toMatch(/exited with code 127/);
+  });
+
+  it("also detects the 'command not found' text even without code 127", () => {
+    const msg = serverExitMessage("storybook", "pnpm", "storybook", 1, "sh: storybook: command not found");
+    expect(msg).toMatch(/Storybook isn't installed/);
+  });
+
+  it("keeps the raw-tail message for a genuine build error", () => {
+    const msg = serverExitMessage("storybook", "npm", "storybook", 1, "SB_ERROR: config is invalid\nstack trace");
+    expect(msg).toMatch(/exited with code 1/);
+    expect(msg).toMatch(/config is invalid/);
+  });
+
+  it("does not special-case the app runtime (127 stays a raw error)", () => {
+    const msg = serverExitMessage("app", "npm", "dev", 127, "sh: vite: command not found");
+    expect(msg).toMatch(/exited with code 127/);
+    expect(msg).not.toMatch(/Storybook/);
   });
 });

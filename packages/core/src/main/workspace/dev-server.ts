@@ -100,6 +100,31 @@ function tailMessage(prefix: string, raw: string): string {
   return tail ? `${prefix}:\n${tail}` : `${prefix}.`;
 }
 
+/**
+ * The error message for a dev-server step that exited non-zero. A `127` /
+ * "command not found" from the Storybook script means the `storybook` CLI isn't
+ * installed in the project — surface that as an actionable fix-it instead of a
+ * raw `sh: storybook: command not found` dump.
+ */
+export function serverExitMessage(
+  kind: ServerKind,
+  pm: string,
+  script: string,
+  code: number,
+  tail: string,
+): string {
+  const noun = kind === "app" ? "app" : "Storybook";
+  const notInstalled = code === 127 || /command not found/i.test(tail);
+  if (notInstalled && kind === "storybook") {
+    return (
+      `Storybook isn't installed in this project yet, so \`${pm} run ${script}\` can't start it. ` +
+      "Run “Build & verify the rest” (it runs the /storybook setup), or set it up in a terminal with " +
+      "`npx storybook@latest init`."
+    );
+  }
+  return tailMessage(`The ${noun} dev server (\`${pm} run ${script}\`) exited with code ${code}`, tail);
+}
+
 // NO_COLOR asks tools (picocolors/vite) not to emit ANSI; urlFrom still strips
 // any that slip through. CI keeps installs/servers non-interactive.
 //
@@ -186,7 +211,6 @@ export async function startServer(
   }
 
   const pm = detectPackageManager(projectPath);
-  const noun = kind === "app" ? "app" : "Storybook";
   const server: Server = {
     child: null,
     status: { state: "starting", url: null, script, message: null },
@@ -204,7 +228,7 @@ export async function startServer(
           state: "error",
           url: null,
           script,
-          message: tailMessage(`The ${noun} dev server (\`${pm} run ${script}\`) exited with code ${code}`, tail),
+          message: serverExitMessage(kind, pm, script, code, tail),
         };
       } else {
         server.status = { state: "stopped", url: null, script, message: null };
@@ -213,10 +237,15 @@ export async function startServer(
     });
   };
 
-  // A freshly cloned repo has no node_modules — install first, then run, so the
-  // preview actually starts instead of failing with "command not found".
-  if (!existsSync(join(projectPath, "node_modules"))) {
-    server.status = { state: "starting", url: null, script, message: `Installing dependencies with ${pm}… (first run)` };
+  // Install first when the deps aren't there, so the preview doesn't fail with
+  // "command not found": a freshly cloned repo has no node_modules at all, and a
+  // just-scaffolded Storybook often has the script + config but its CLI isn't
+  // installed yet (stale node_modules). Both cases are fixed by an install.
+  const noNodeModules = !existsSync(join(projectPath, "node_modules"));
+  const storybookBinMissing =
+    kind === "storybook" && !existsSync(join(projectPath, "node_modules", ".bin", "storybook"));
+  if (noNodeModules || storybookBinMissing) {
+    server.status = { state: "starting", url: null, script, message: `Installing dependencies with ${pm}…` };
     push(server, projectPath, kind);
     runStep(server, projectPath, kind, script, pm, ["install"], false, ({ code, tail }) => {
       if (code !== 0) {
