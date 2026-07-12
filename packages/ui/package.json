@@ -48,6 +48,10 @@
       "types": "./src/lib/useAgentRun.ts",
       "default": "./src/lib/useAgentRun.ts"
     },
+    "./assistant-task": {
+      "types": "./src/lib/assistant-task.ts",
+      "default": "./src/lib/assistant-task.ts"
+    },
     "./AssistantDock": {
       "types": "./src/components/AssistantDock.tsx",
       "default": "./src/components/AssistantDock.tsx"

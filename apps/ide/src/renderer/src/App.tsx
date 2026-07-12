@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { JSX, CSSProperties } from "react";
 import type { Project } from "@vortspec/core/ipc";
 import type { IdeState } from "@vortspec/core/ide-mcp";
 import { api } from "@vortspec/ui/api";
 import { AssistantDock, type PendingSelectionRef } from "@vortspec/ui/AssistantDock";
-import { ConversationTabs } from "@vortspec/ui/ConversationTabs";
+import { ConversationTabs, type IncomingTask } from "@vortspec/ui/ConversationTabs";
+import { AssistantTaskProvider, type AssistantTask } from "@vortspec/ui/assistant-task";
 import { SourceControl } from "@vortspec/ui/SourceControl";
 import { Inspector } from "@vortspec/ui/Inspector";
 import { GuidedFlow } from "@vortspec/ui/GuidedFlow";
@@ -53,6 +54,11 @@ export default function App(): JSX.Element {
   // "Open in Chat" — the selection the user pushed to the assistant (nonce re-adds).
   const [pendingRef, setPendingRef] = useState<PendingSelectionRef | undefined>(undefined);
   const refNonce = useRef(0);
+  // A "Fix in Assistant" handoff: an error/fix-it surfaced anywhere in the IDE,
+  // routed into the right-sidebar chat as its own auto-running conversation so
+  // the user can leave the screen it came from while it works.
+  const [assistantTask, setAssistantTask] = useState<IncomingTask | undefined>(undefined);
+  const taskNonce = useRef(0);
   // Which welcome view is showing when no workspace is open.
   const [welcomeView, setWelcomeView] = useState<"start" | "settings">("start");
   // The destination folder for a new project being set up (Create New Project flow).
@@ -261,6 +267,25 @@ export default function App(): JSX.Element {
   }, [dispatch]);
 
   const go = (activity: Activity) => (): void => dispatch({ type: "setActivity", activity });
+
+  // Route an error/fix-it into the right-sidebar chat. Captures where the user
+  // is now so the dock can point them back once the fix run finishes, and opens
+  // the assistant if it's collapsed.
+  const dispatchAssistantTask = useCallback(
+    (task: AssistantTask): void => {
+      const origin = layout.activity;
+      if (!layout.secondaryOpen) dispatch({ type: "toggleSecondary" });
+      setAssistantTask({
+        title: task.title,
+        prompt: task.prompt,
+        allowModify: task.allowModify ?? true,
+        origin: activityLabel(origin),
+        returnTo: origin,
+        nonce: ++taskNonce.current,
+      });
+    },
+    [layout.activity, layout.secondaryOpen, dispatch],
+  );
 
   if (!workspace) {
     // Create New Project — one unified setup + intake stepper (Setup · Product ·
@@ -511,6 +536,7 @@ export default function App(): JSX.Element {
 
   return (
     <IdeContext.Provider value={{ activeFile: wf.activePath, previewUrl, setActiveFile: () => {}, setPreviewUrl: () => {} }}>
+     <AssistantTaskProvider value={dispatchAssistantTask}>
       <div className="flex h-screen w-screen flex-col overflow-hidden bg-vs-bg-primary text-vs-text-primary">
         <header
           className="flex h-9 shrink-0 items-center justify-center border-b border-vs-border-default bg-vs-bg-surface text-xs text-vs-text-muted"
@@ -604,6 +630,10 @@ export default function App(): JSX.Element {
                     mcpConfigPath={ideMcp.configPath}
                     extraAllowedTools={ideMcp.configPath ? [IDE_MCP_TOOL_GROUP] : undefined}
                     pendingRef={pendingRef}
+                    incomingTask={assistantTask}
+                    onReturnToOrigin={(returnTo) =>
+                      dispatch({ type: "setActivity", activity: returnTo as Activity })
+                    }
                     onClose={() => dispatch({ type: "toggleSecondary" })}
                   />
                 </div>
@@ -656,8 +686,26 @@ export default function App(): JSX.Element {
       {ideMcp.pending && (
         <IdeActionDialog pending={ideMcp.pending} onConfirm={ideMcp.confirm} onCancel={ideMcp.cancel} />
       )}
+     </AssistantTaskProvider>
     </IdeContext.Provider>
   );
+}
+
+/** Friendly name for the screen a fix-it was dispatched from (the resume banner). */
+function activityLabel(a: Activity): string {
+  const LABELS: Partial<Record<Activity, string>> = {
+    explorer: "the Explorer",
+    source: "Source Control",
+    settings: "Settings",
+    flow: "the Foundation",
+    run: "the Run view",
+    play: "the Playground",
+    tokens: "the Tokens inspector",
+    tasks: "Tasks",
+    manifest: "the Manifest",
+    history: "History",
+  };
+  return LABELS[a] ?? a;
 }
 
 /** A status-bar region toggle: highlighted when its region is visible. */

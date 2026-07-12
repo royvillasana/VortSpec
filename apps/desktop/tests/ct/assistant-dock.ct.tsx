@@ -55,6 +55,29 @@ test("first message starts a session and streams the reply", async ({ mount }) =
   await expect(c.getByText("Your project uses 45 design tokens.")).toBeVisible();
 });
 
+test("auto-starts a handed-off task and shows a resume banner when the run finishes", async ({ mount }) => {
+  let returned = 0;
+  const c = await mount(
+    <AssistantDock
+      project={PROJECT}
+      autoStart={{ prompt: "reconnect figma please", nonce: 1 }}
+      taskReturn={{ origin: "the Foundation", onReturn: () => { returned++; } }}
+    />,
+    { hooksConfig: { mock: { runScript: REPLY } } },
+  );
+  // The task prompt auto-ran as the opening bubble — no typing, no Send click…
+  await expect(c.getByText("reconnect figma please")).toBeVisible();
+  // …and the transcript streamed the reply.
+  await expect(c.getByText("Your project uses 45 design tokens.")).toBeVisible();
+  const prompts = await c.page().evaluate(() => (window as unknown as { __runPrompts: string[] }).__runPrompts);
+  expect(prompts[0]).toContain("reconnect figma please");
+  // When the run finishes, the resume banner points back to where the user was.
+  const resume = c.getByRole("button", { name: /Resume the Foundation/ });
+  await expect(resume).toBeVisible();
+  await resume.click();
+  await expect.poll(() => returned).toBe(1);
+});
+
 test("an Open-in-Chat selection ref becomes a chip and rides in the prompt", async ({ mount }) => {
   const ref = { path: "src/Button.tsx", startLine: 2, endLine: 5, text: "const x = 1;", nonce: 1 };
   const c = await mount(<AssistantDock project={PROJECT} pendingRef={ref} onClose={noop} />, {

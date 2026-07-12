@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/experimental-ct-react";
 import { FigmaHealthCheck } from "@vortspec/ui/FigmaHealthCheck";
+import { AssistantTaskProvider, type AssistantTask } from "@vortspec/ui/assistant-task";
 import { PROJECT } from "./support/fixtures";
 import type { FigmaHealth } from "@vortspec/core/ipc";
 
@@ -54,4 +55,24 @@ test("reports a healthy connection with counts", async ({ mount }) => {
   const c = await mount(<FigmaHealthCheck project={PROJECT} />, { hooksConfig: { mock: {} } });
   await c.getByRole("button", { name: "Check Figma connection" }).click();
   await expect(c.getByText(/Figma connection healthy/)).toBeVisible();
+  // No assistant host + healthy → no "Fix in the assistant" handoff button.
+  await expect(c.getByRole("button", { name: /Fix in the assistant/ })).toHaveCount(0);
+});
+
+test("with an assistant host, a broken connection hands the fix to the sidebar chat", async ({ mount }) => {
+  let task: AssistantTask | null = null;
+  const c = await mount(
+    <AssistantTaskProvider value={(t) => { task = t; }}>
+      <FigmaHealthCheck project={PROJECT} />
+    </AssistantTaskProvider>,
+    { hooksConfig: { mock: { figmaHealth: BRIDGE_DOWN } } },
+  );
+  await c.getByRole("button", { name: "Check Figma connection" }).click();
+  await c.getByRole("button", { name: /Fix in the assistant/ }).click();
+  await expect(c.getByText(/Working in the assistant/)).toBeVisible();
+  // The dispatched task steers to the OAuth MCP and NEVER asks for a token.
+  await expect.poll(() => task?.title ?? "").toContain("Figma");
+  const dispatched = task as AssistantTask | null;
+  expect(dispatched?.prompt).toContain("remote Figma MCP");
+  expect(dispatched?.prompt).toMatch(/[Nn]ever ask me for[^.]*token/);
 });

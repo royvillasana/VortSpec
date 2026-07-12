@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { JSX } from "react";
 import type { FigmaHealth, FigmaHealthMode, Project } from "@vortspec/core/ipc";
 import { api } from "../lib/api";
+import { useAssistantTask } from "../lib/assistant-task";
 import { Button } from "./ui";
 
 /**
@@ -20,12 +21,35 @@ const TONE: Record<FigmaHealthMode, { cls: string; icon: string }> = {
   unknown: { cls: "border-vs-border-default bg-vs-bg-surface text-vs-text-muted", icon: "?" },
 };
 
+/** Modes where the connection is broken and the assistant can help reconnect. */
+const FIXABLE: FigmaHealthMode[] = ["token-expired", "bridge-down", "not-configured", "no-variables"];
+
+/** The seed prompt handed to the sidebar assistant to reconnect Figma. It steers
+ *  to the OAuth remote MCP and NEVER touches a personal access token (invariant #4). */
+function figmaFixPrompt(h: FigmaHealth): string {
+  return [
+    "Help me reconnect this project's Figma design source so a foundation scan can read design variables and styles.",
+    "",
+    `A read-path health check reported: ${h.mode}. Detail: ${h.detail || "(none)"}.`,
+    "",
+    "Do this:",
+    `1. Check whether the official remote Figma MCP is already configured (\`claude mcp list\`). If not, add it: \`${REMOTE_FIGMA_MCP_CMD}\`. This OAuth server needs no token, no Desktop Bridge, and no live selection.`,
+    "2. Then tell me to run `/mcp` in Claude Code and Authenticate the `figma` server in the browser (this is an interactive step I do myself).",
+    "3. After I confirm I've authenticated, verify by doing a file-level read of the variable collection AND styles through the remote MCP.",
+    "",
+    "HARD RULES: Never ask me for, generate, paste, or set a Figma personal access token or any API key — steer entirely to the OAuth server. Don't modify my design files. When the read works, tell me the connection is healthy and that I can go back and re-run the scan.",
+  ].join("\n");
+}
+
 export function FigmaHealthCheck({ project }: { project: Project }): JSX.Element {
   const [health, setHealth] = useState<FigmaHealth | null>(null);
   const [busy, setBusy] = useState(false);
+  const [handedOff, setHandedOff] = useState(false);
+  const dispatchTask = useAssistantTask();
 
   async function check(): Promise<void> {
     setBusy(true);
+    setHandedOff(false);
     try {
       setHealth(await api.checkFigmaHealth({ projectPath: project.path }));
     } finally {
@@ -33,7 +57,13 @@ export function FigmaHealthCheck({ project }: { project: Project }): JSX.Element
     }
   }
 
+  function fixInAssistant(h: FigmaHealth): void {
+    dispatchTask?.({ title: "Fix: Figma connection", allowModify: true, prompt: figmaFixPrompt(h) });
+    setHandedOff(true);
+  }
+
   const tone = health ? TONE[health.mode] : null;
+  const canFix = health ? FIXABLE.includes(health.mode) && dispatchTask !== null : false;
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-center gap-2.5">
@@ -51,6 +81,20 @@ export function FigmaHealthCheck({ project }: { project: Project }): JSX.Element
           <span className={`text-sm leading-none ${tone.cls.match(/text-\S+/)?.[0] ?? ""}`}>{tone.icon}</span>
           <div className="flex min-w-0 flex-col gap-1.5 text-[12px] leading-relaxed text-vs-text-primary">
             <span>{health.message}</span>
+            {/* Hand the fix to the right-sidebar chat so it can reconnect while
+                the user carries on elsewhere. Only in a host that has the dock. */}
+            {canFix && (
+              <div className="mt-0.5 flex items-center gap-2">
+                <Button variant="primary" onClick={() => fixInAssistant(health)}>
+                  Fix in the assistant →
+                </Button>
+                {handedOff && (
+                  <span className="text-[11px] text-vs-text-muted">
+                    Working in the assistant — you can keep using the app.
+                  </span>
+                )}
+              </div>
+            )}
             {/* When the legacy figma-console path is failing, recommend the OAuth MCP. */}
             {(health.mode === "token-expired" ||
               health.mode === "bridge-down" ||

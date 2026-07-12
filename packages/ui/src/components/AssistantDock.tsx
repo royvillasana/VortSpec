@@ -60,6 +60,8 @@ export function AssistantDock({
   onTranscript,
   incomingText,
   onSendSelection,
+  autoStart,
+  taskReturn,
 }: {
   project: Project;
   /** Optional one-line context the dock mentions to Claude on the first message. */
@@ -100,6 +102,13 @@ export function AssistantDock({
   incomingText?: { text: string; from: string; nonce: number };
   /** Called when the user sends a highlighted message selection to a conversation. */
   onSendSelection?: (targetConvId: string, text: string) => void;
+  /** A handed-off task ("Fix in Assistant") that auto-starts this conversation's
+   *  first run with `prompt` — the user watches it here and can leave the screen
+   *  it came from. Re-fires on `nonce` change. */
+  autoStart?: { prompt: string; nonce: number };
+  /** When set, a "resume where you were" banner appears once the run finishes,
+   *  linking back to the screen the task was dispatched from. */
+  taskReturn?: { origin: string; onReturn: () => void };
 }): React.JSX.Element {
   const run = useAgentRun();
   const [draft, setDraft] = useState("");
@@ -301,6 +310,45 @@ export function AssistantDock({
     textareaRef.current?.focus();
   }
 
+  /** The agent-resolved run options (toolset, model, system prompt) shared by
+   *  a first message, a follow-up, and an auto-started task. */
+  function buildRunOpts(): { allowedTools: string[]; model: string | undefined; appendSystemPrompt: string | undefined } {
+    const baseTools = agent?.allowedTools ?? (allowModify ? MODIFY_TOOLS : READ_TOOLS);
+    const appendSystemPrompt =
+      [
+        userName ? `The user's name is ${userName}. Address them as ${userName} when appropriate.` : null,
+        agent?.systemPrompt ?? null,
+      ]
+        .filter(Boolean)
+        .join("\n\n") || undefined;
+    return {
+      allowedTools: [...baseTools, ...(extraAllowedTools ?? [])],
+      model: selectedModel ?? agent?.model,
+      appendSystemPrompt,
+    };
+  }
+
+  /** Start this conversation's first run with `text` (a handed-off task). Shows
+   *  the text as the opening user bubble; no attachments/live grounding. */
+  function startTask(text: string): void {
+    const t = text.trim();
+    if (!t || started || run.running) return;
+    setFirstPrompt(t);
+    const prompt = seedContext ? `${seedContext}\n\n${t}` : t;
+    void run.start({ prompt, cwd: project.path, bypassPermissions: true, mcpConfigPath, ...buildRunOpts() });
+  }
+
+  // A handed-off task ("Fix in Assistant") auto-starts as this conversation's
+  // first run. Guarded by nonce so a re-render / strict-mode remount can't
+  // double-fire, and only when the conversation hasn't started yet.
+  const lastAutoNonce = useRef<number | null>(null);
+  useEffect(() => {
+    if (!autoStart || lastAutoNonce.current === autoStart.nonce) return;
+    lastAutoNonce.current = autoStart.nonce;
+    startTask(autoStart.prompt);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoStart?.nonce]);
+
   function submit(): void {
     const text = draft.trim();
     if (!text || run.running) return;
@@ -317,21 +365,7 @@ export function AssistantDock({
     const grounding = [expandAttachments(attachments, conversations), liveContext].filter(Boolean).join("\n\n");
     const withLive = grounding ? `${grounding}\n\n${text}` : text;
     setAttachments([]);
-    // Resolve the run options from the agent (if any) — its toolset, model, and
-    // system prompt take precedence, merged with the user-name preamble.
-    const baseTools = agent?.allowedTools ?? (allowModify ? MODIFY_TOOLS : READ_TOOLS);
-    const appendSystemPrompt =
-      [
-        userName ? `The user's name is ${userName}. Address them as ${userName} when appropriate.` : null,
-        agent?.systemPrompt ?? null,
-      ]
-        .filter(Boolean)
-        .join("\n\n") || undefined;
-    const runOpts = {
-      allowedTools: [...baseTools, ...(extraAllowedTools ?? [])],
-      model: selectedModel ?? agent?.model,
-      appendSystemPrompt,
-    };
+    const runOpts = buildRunOpts();
     if (!started) {
       setFirstPrompt(text);
       const prompt = seedContext ? `${seedContext}\n\n${withLive}` : withLive;
@@ -454,6 +488,27 @@ export function AssistantDock({
           </div>
         )}
       </div>
+
+      {taskReturn && (run.model.status === "done" || run.model.status === "error") && (
+        <button
+          type="button"
+          onClick={taskReturn.onReturn}
+          aria-label={`Resume ${taskReturn.origin}`}
+          className={`flex flex-none items-center gap-2 border-t px-4 py-2.5 text-left text-[12px] ${
+            run.model.status === "error"
+              ? "border-vs-border-default bg-vs-bg-surface text-vs-text-secondary hover:bg-vs-bg-hover"
+              : "border-vs-success-border bg-vs-success-muted text-vs-success hover:brightness-105"
+          }`}
+        >
+          <span className="text-sm leading-none">{run.model.status === "error" ? "•" : "✓"}</span>
+          <span className="min-w-0 flex-1">
+            {run.model.status === "error"
+              ? `Stopped before finishing. Review here, or go back to ${taskReturn.origin}.`
+              : `Done — you can head back to ${taskReturn.origin} and pick up where you left off.`}
+          </span>
+          <span aria-hidden className="font-medium">Resume {taskReturn.origin} →</span>
+        </button>
+      )}
 
       <div
         className="flex-none border-t border-vs-border-default p-3"

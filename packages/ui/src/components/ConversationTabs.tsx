@@ -1,8 +1,21 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Project } from "@vortspec/core/ipc";
 import type { ChatMessage } from "@vortspec/ui/run-model";
 import { AssistantDock, type PendingSelectionRef } from "./AssistantDock";
-import { DEFAULT_PRESETS, type Agent } from "./ai/agents";
+import { DEFAULT_PRESETS, READ_TOOLS, type Agent } from "./ai/agents";
+
+/** A task handed in from elsewhere in the app ("Fix in Assistant"): opens a new
+ *  dedicated tab that auto-runs `prompt`, tagged with the screen to resume. */
+export interface IncomingTask {
+  title: string;
+  prompt: string;
+  allowModify?: boolean;
+  /** Human label of the screen the task came from (shown in the resume banner). */
+  origin: string;
+  /** Opaque token the host maps back to a view when the user clicks resume. */
+  returnTo: string;
+  nonce: number;
+}
 
 /**
  * Multiple assistant conversations as tabs. Each tab is an independent
@@ -18,6 +31,10 @@ interface Conv {
   id: string;
   label: string;
   agent: Agent;
+  /** Set on a handed-off "Fix in Assistant" tab: auto-runs on mount. */
+  autoStart?: { prompt: string; nonce: number };
+  /** The screen to resume + its opaque return token (for the done banner). */
+  origin?: { label: string; returnTo: string };
 }
 
 export function ConversationTabs({
@@ -25,12 +42,18 @@ export function ConversationTabs({
   presets = DEFAULT_PRESETS,
   pendingRef,
   onClose,
+  incomingTask,
+  onReturnToOrigin,
   ...shared
 }: {
   project: Project;
   presets?: Agent[];
   pendingRef?: PendingSelectionRef;
   onClose?: () => void;
+  /** A "Fix in Assistant" task → opens a dedicated auto-running tab. */
+  incomingTask?: IncomingTask;
+  /** Navigate back to a task's origin screen (from the done banner). */
+  onReturnToOrigin?: (returnTo: string) => void;
   seedContext?: string;
   liveContext?: string;
   mcpConfigPath?: string;
@@ -68,6 +91,32 @@ export function ConversationTabs({
       return rest;
     });
   }
+
+  // A handed-off "Fix in Assistant" task opens its own dedicated tab that
+  // auto-runs, so it never clobbers an in-progress chat. A fix acts on files,
+  // so it uses a modify-capable agent unless explicitly read-only.
+  useEffect(() => {
+    if (!incomingTask) return;
+    const id = `c${seq.current++}`;
+    const readOnly = incomingTask.allowModify === false;
+    const agent = (readOnly ? presets.find((p) => p.allowedTools === READ_TOOLS) : undefined) ?? presets[0];
+    const conv: Conv = {
+      id,
+      label: incomingTask.title,
+      agent,
+      autoStart: { prompt: incomingTask.prompt, nonce: incomingTask.nonce },
+      origin: { label: incomingTask.origin, returnTo: incomingTask.returnTo },
+    };
+    // Respect the tab cap by retiring the oldest non-active conversation.
+    setConvs((cs) => {
+      const next = [...cs, conv];
+      if (next.length <= MAX) return next;
+      const victim = next.find((c) => c.id !== active && c.id !== id);
+      return victim ? next.filter((c) => c.id !== victim.id) : next;
+    });
+    setActive(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [incomingTask?.nonce]);
 
   return (
     <div className="flex h-full min-w-0 flex-col bg-vs-bg-surface">
@@ -156,6 +205,12 @@ export function ConversationTabs({
               presets={presets}
               onAgentChange={(a) => setConvs((cs) => cs.map((x) => (x.id === c.id ? { ...x, agent: a } : x)))}
               pendingRef={c.id === active ? pendingRef : undefined}
+              autoStart={c.autoStart}
+              taskReturn={
+                c.origin && onReturnToOrigin
+                  ? { origin: c.origin.label, onReturn: () => onReturnToOrigin(c.origin!.returnTo) }
+                  : undefined
+              }
               onTranscript={(msgs) => setTranscripts((t) => ({ ...t, [c.id]: msgs }))}
               conversations={{
                 list: () => convs.filter((x) => x.id !== c.id).map((x) => ({ id: x.id, label: x.label })),
