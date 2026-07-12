@@ -45,3 +45,20 @@ test("picks a .zip via the native file dialog and continues with its path", asyn
   expect(source!.designSource).toBe("zip");
   expect(source!.zipFilePath).toBe("/Users/dev/exports/design-system.zip");
 });
+
+test("offers a Claude Design source that continues with the project link", async ({ mount }) => {
+  let source: Partial<SetupAnswers> | null = null;
+  const c = await mount(
+    <DesignInput project={PROJECT} onBack={noop} onContinue={(s) => (source = s)} />,
+    { hooksConfig: { mock: {} } },
+  );
+  await c.getByRole("button", { name: "Claude Design" }).click();
+  await expect(c.getByText("Paste a Claude Design link")).toBeVisible();
+  const cont = c.getByRole("button", { name: /Continue to setup/ });
+  await expect(cont).toBeDisabled();
+  await c.getByPlaceholder("https://claude.ai/design/p/…").fill("https://claude.ai/design/p/abc123");
+  await expect(cont).toBeEnabled();
+  await cont.click();
+  expect(source!.designSource).toBe("claude-design");
+  expect(source!.claudeDesignUrl).toBe("https://claude.ai/design/p/abc123");
+});

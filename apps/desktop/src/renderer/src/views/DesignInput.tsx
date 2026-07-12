@@ -3,7 +3,7 @@ import type { Project, SetupAnswers } from "@vortspec/core/ipc";
 import { api } from "@vortspec/ui/api";
 import { Button } from "@vortspec/ui/ui";
 
-type Tab = "zip" | "figma" | "github" | "folder";
+type Tab = "zip" | "figma" | "claude" | "github" | "folder";
 type Mcp = "checking" | "ok" | "unauth" | "unknown";
 
 /**
@@ -24,6 +24,7 @@ export function DesignInput({
   const [tab, setTab] = useState<Tab>("zip");
   const [zipPath, setZipPath] = useState("");
   const [figmaUrl, setFigmaUrl] = useState("");
+  const [claudeUrl, setClaudeUrl] = useState("");
   const [folderPath, setFolderPath] = useState("");
   const [githubUrl, setGithubUrl] = useState("");
   const [githubBranch, setGithubBranch] = useState("");
@@ -50,10 +51,12 @@ export function DesignInput({
   }
 
   const figmaValid = /figma\.com\//.test(figmaUrl);
+  const claudeValid = claudeUrl.trim().length > 0;
   const githubValid = /^(https?:\/\/|git@|ssh:\/\/).+/.test(githubUrl.trim());
   const canStart =
     (tab === "zip" && zipPath.trim().endsWith(".zip")) ||
     (tab === "figma" && figmaValid) ||
+    (tab === "claude" && claudeValid) ||
     (tab === "github" && githubValid) ||
     (tab === "folder" && folderPath.trim().length > 0);
 
@@ -61,6 +64,7 @@ export function DesignInput({
     if (!canStart) return;
     if (tab === "zip") onContinue({ designSource: "zip", zipFilePath: zipPath.trim() });
     else if (tab === "figma") onContinue({ designSource: "figma", figmaFileUrl: figmaUrl.trim() });
+    else if (tab === "claude") onContinue({ designSource: "claude-design", claudeDesignUrl: claudeUrl.trim() });
     else if (tab === "github")
       onContinue({
         designSource: "github",
@@ -106,6 +110,7 @@ export function DesignInput({
             [
               ["zip", "ZIP export"],
               ["figma", "Figma link"],
+              ["claude", "Claude Design"],
               ["github", "GitHub repo"],
               ["folder", "Folder / repo"],
             ] as [Tab, string][]
@@ -201,6 +206,21 @@ export function DesignInput({
                 </div>
               </div>
             )}
+          </Panel>
+        )}
+
+        {tab === "claude" && (
+          <Panel title="Paste a Claude Design link" desc="A claude.ai/design project. Claude Code reads it through the design MCP — run /design-login once. Or export it as a ZIP and use the ZIP export tab.">
+            <input
+              value={claudeUrl}
+              onChange={(e) => setClaudeUrl(e.target.value)}
+              placeholder="https://claude.ai/design/p/…"
+              className="h-[38px] rounded-md border border-vs-border-default bg-vs-bg-primary px-3 font-mono text-xs text-vs-text-primary placeholder:text-vs-text-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-vs-accent-subtle"
+            />
+            <p className="text-xs leading-relaxed text-vs-text-muted">
+              VortSpec never touches the design API itself — the engine reads the project via your Claude
+              Code login, the same way it reads Figma.
+            </p>
           </Panel>
         )}
 

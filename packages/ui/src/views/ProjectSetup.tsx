@@ -287,9 +287,23 @@ function SetupStep({
           </div>
         )}
         {a.designSource === "zip" && (
-          <div className="mt-2 grid grid-cols-1 gap-2">
-            <Text label="Path to the ZIP file" value={a.zipFilePath ?? ""} placeholder="./design-system.zip" onChange={(v) => set("zipFilePath", v)} />
+          <div className="mt-2 flex flex-col gap-2.5">
+            <ZipUpload
+              label="Design export (.zip)"
+              hint="Exported from Google Stitch, Claude Design, or any other design tool."
+              value={a.zipFilePath ?? ""}
+              onPick={(p) => set("zipFilePath", p)}
+            />
             <Text label="Component directory inside the ZIP" value={a.zipComponentDir ?? "src/components"} placeholder="src/components" onChange={(v) => set("zipComponentDir", v)} />
+          </div>
+        )}
+        {a.designSource === "claude-design" && (
+          <div className="mt-2 grid grid-cols-1 gap-2">
+            <Text label="Claude Design project link" value={a.claudeDesignUrl ?? ""} placeholder="https://claude.ai/design/p/…" onChange={(v) => set("claudeDesignUrl", v)} />
+            <p className="text-[11px] leading-relaxed text-vs-text-muted">
+              Claude Code reads the project through the design MCP (run{" "}
+              <code className="text-vs-text-secondary">/design-login</code> once). Or export it and use the ZIP option.
+            </p>
           </div>
         )}
         {a.designSource === "stitch" && (
@@ -308,7 +322,7 @@ function SetupStep({
                 <Text label="Stitch project ID (optional)" value={a.stitchProjectId ?? ""} placeholder="proj_abc123 — blank to list at runtime" onChange={(v) => set("stitchProjectId", v)} />
               </>
             ) : (
-              <Text label="Path to the Stitch exported ZIP" value={a.stitchZipPath ?? ""} placeholder="./stitch-export.zip" onChange={(v) => set("stitchZipPath", v)} />
+              <ZipUpload label="Stitch exported ZIP" hint="design.md + screen PNGs." value={a.stitchZipPath ?? ""} onPick={(p) => set("stitchZipPath", p)} />
             )}
           </div>
         )}
@@ -332,6 +346,70 @@ function SetupStep({
 }
 
 // ── Field controls (Intake-styled) ───────────────────────────────────
+
+/** A real file-upload control for a design-export ZIP: a drop target + a native
+ *  "Choose .zip…" picker (path only — the engine extracts it). Reused by the ZIP
+ *  source and the Stitch exported-ZIP mode. */
+function ZipUpload({
+  label,
+  hint,
+  value,
+  onPick,
+}: {
+  label: string;
+  hint?: string;
+  value: string;
+  onPick: (path: string) => void;
+}): React.JSX.Element {
+  async function choose(): Promise<void> {
+    const p = await api.pickFile([{ name: "ZIP archive", extensions: ["zip"] }]);
+    if (p) onPick(p);
+  }
+  return (
+    <div className="flex flex-col gap-2">
+      {labelNode(label)}
+      {value ? (
+        <div className="flex items-center justify-between rounded-md border border-vs-border-default bg-vs-bg-surface px-3 py-2.5">
+          <span className="min-w-0 truncate font-mono text-[12px] text-vs-text-primary">{value.split("/").pop()}</span>
+          <button
+            onClick={() => onPick("")}
+            className="ml-2 rounded px-1.5 leading-none text-vs-text-muted hover:text-vs-error"
+            title="Remove"
+            aria-label="Remove the selected file"
+          >
+            ×
+          </button>
+        </div>
+      ) : (
+        <div
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={(e) => {
+            e.preventDefault();
+            const f = e.dataTransfer.files[0];
+            const p = f ? api.getPathForFile(f) : "";
+            if (p.endsWith(".zip")) onPick(p);
+          }}
+          className="flex flex-col items-center justify-center gap-2.5 rounded-md border border-dashed border-vs-border-strong px-4 py-6 text-center"
+        >
+          <UploadIcon />
+          <span className="text-[12px] text-vs-text-secondary">Drop your .zip here, or choose it.</span>
+          <Button variant="default" onClick={() => void choose()}>
+            Choose .zip…
+          </Button>
+        </div>
+      )}
+      {hint && <span className="text-[11px] text-vs-text-muted">{hint}</span>}
+    </div>
+  );
+}
+
+function UploadIcon(): React.JSX.Element {
+  return (
+    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" className="text-vs-text-muted">
+      <path d="M10 13V4M6.5 7.5 10 4l3.5 3.5M4 14v1.5A1.5 1.5 0 0 0 5.5 17h9a1.5 1.5 0 0 0 1.5-1.5V14" />
+    </svg>
+  );
+}
 
 function Field({ label, children }: { label: string; children: React.ReactNode }): React.JSX.Element {
   return (
@@ -550,6 +628,7 @@ function defaults(): SetupAnswers {
 function isReady(a: SetupAnswers): boolean {
   if (a.designSource === "github") return (a.githubRepoUrl ?? "").startsWith("https://github.com/");
   if (a.designSource === "zip") return (a.zipFilePath ?? "").endsWith(".zip");
+  if (a.designSource === "claude-design") return (a.claudeDesignUrl ?? "").trim().length > 0;
   if (a.designSource === "stitch") {
     return (a.stitchConnection ?? "mcp") === "mcp"
       ? (a.stitchApiKey ?? "").trim().length >= 10

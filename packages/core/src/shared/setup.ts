@@ -19,7 +19,14 @@ export const frameworkSchema = z.enum([
   "vanilla",
 ]);
 export const languageSchema = z.enum(["typescript", "javascript"]);
-export const designSourceSchema = z.enum(["figma", "library", "github", "zip", "stitch"]);
+export const designSourceSchema = z.enum([
+  "figma",
+  "library",
+  "github",
+  "stitch",
+  "claude-design",
+  "zip",
+]);
 export const componentLibrarySchema = z.enum([
   "shadcn",
   "radix",
@@ -62,6 +69,8 @@ export const setupAnswersSchema = z.object({
   stitchApiKey: z.string().optional(),
   stitchProjectId: z.string().optional(),
   stitchZipPath: z.string().optional(),
+  // Claude Design (live link, read via the design MCP)
+  claudeDesignUrl: z.string().optional(),
   // Common
   styling: stylingSchema,
   tokenFile: z.string(),
@@ -88,8 +97,9 @@ export const DESIGN_SOURCE_OPTIONS = [
   { value: "figma", label: "Figma", hint: "Read frames, variables, and specs via the Figma MCP" },
   { value: "library", label: "Component Library", hint: "shadcn/ui, MUI, Ant Design, Chakra, Mantine…" },
   { value: "github", label: "GitHub Repository", hint: "A repo with your component library / design system" },
-  { value: "zip", label: "ZIP File", hint: "A ZIP archive containing your components" },
-  { value: "stitch", label: "Google Stitch", hint: "Google's AI design tool — Stitch MCP or exported ZIP" },
+  { value: "stitch", label: "Google Stitch", hint: "Google's AI design tool — via the Stitch MCP" },
+  { value: "claude-design", label: "Claude Design", hint: "A claude.ai/design project, read via the design MCP" },
+  { value: "zip", label: "ZIP File", hint: "Exported from Stitch, Claude Design, or any other design tool" },
 ] as const;
 
 export const COMPONENT_LIBRARY_OPTIONS = [
@@ -139,7 +149,12 @@ export function autoStyling(
     };
     if (map[library]) return map[library];
   }
-  if (designSource === "github" || designSource === "zip" || designSource === "stitch") {
+  if (
+    designSource === "github" ||
+    designSource === "zip" ||
+    designSource === "stitch" ||
+    designSource === "claude-design"
+  ) {
     return "css-modules";
   }
   const map: Record<string, string> = {
@@ -185,6 +200,7 @@ export const projectConfigSchema = z.object({
   githubComponentDir: z.string().optional(),
   zipFilePath: z.string().optional(),
   stitchConnection: z.string().optional(),
+  claudeDesignUrl: z.string().optional(),
   framework: z.string().optional(),
   language: z.string().optional(),
   styling: z.string().optional(),
@@ -204,7 +220,7 @@ export function buildProjectYaml(a: SetupAnswers): string {
     `language: ${a.language}`,
     `styling: ${a.styling}`,
     "",
-    "# Design system source: figma | library | github | zip | stitch",
+    "# Design system source: figma | library | github | stitch | claude-design | zip",
     `design_source: ${a.designSource}`,
   ];
 
@@ -228,6 +244,8 @@ export function buildProjectYaml(a: SetupAnswers): string {
     } else {
       lines.push(`stitch_zip_path: "${a.stitchZipPath ?? ""}"`);
     }
+  } else if (a.designSource === "claude-design") {
+    lines.push(`claude_design_url: "${a.claudeDesignUrl ?? ""}"`);
   }
 
   lines.push("");
