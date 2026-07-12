@@ -33,6 +33,7 @@ blob-report
 
 # electron-builder output (dmg/app — published as GitHub releases, never committed)
 apps/desktop/release/
+apps/ide/release/
 
 # SDD-DE toolkit
 .sdd-de/

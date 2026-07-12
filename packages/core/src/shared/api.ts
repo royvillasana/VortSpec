@@ -9,6 +9,7 @@
  * (`IpcResponse<channel>`), so they cannot drift from the handlers either.
  */
 import type { IpcResponse, StageStatus, SetupAnswers, FileSnapshot, Profile } from "./ipc";
+import type { CommentThread } from "./comment";
 import type { AgentRunOptions, AgentEventEnvelope, AgentRawEnvelope } from "./run-events";
 import type { DevServerUpdate } from "./dev-server";
 import type { WorkspaceChange } from "./fs";
@@ -25,6 +26,7 @@ export interface VortSpecApi {
   getVersion(): Promise<IpcResponse<"system:getVersion">>;
   /** The user's home directory — a default cwd for a no-workspace assistant chat. */
   homeDir(): Promise<IpcResponse<"system:homeDir">>;
+  guestPreloadUrl(): Promise<IpcResponse<"system:guestPreloadUrl">>;
   /** Read an image from the OS clipboard → temp PNG path + thumbnail (or null). */
   clipboardImage(): Promise<IpcResponse<"system:clipboardImage">>;
   /** Absolute path of a File dragged in from the OS (Finder). Synchronous. */
@@ -40,10 +42,14 @@ export interface VortSpecApi {
   // workspace / projects
   pickFolder(create?: boolean): Promise<IpcResponse<"workspace:pickFolder">>;
   createFolder(): Promise<IpcResponse<"workspace:createFolder">>;
+  pickFile(filters?: { name: string; extensions: string[] }[]): Promise<IpcResponse<"workspace:pickFile">>;
   listProjects(): Promise<IpcResponse<"workspace:listProjects">>;
   openFolder(path: string): Promise<IpcResponse<"workspace:openFolder">>;
   revealPath(projectPath: string, relPath: string): Promise<IpcResponse<"workspace:revealPath">>;
   refreshProject(path: string): Promise<IpcResponse<"workspace:refreshProject">>;
+  envStatus(projectPath: string): Promise<IpcResponse<"workspace:envStatus">>;
+  createEnv(projectPath: string, example: string): Promise<IpcResponse<"workspace:createEnv">>;
+  openWalkthrough(destPath: string): Promise<IpcResponse<"workspace:openWalkthrough">>;
   createProject(path: string, answers: SetupAnswers): Promise<IpcResponse<"workspace:createProject">>;
 
   toolkitStatus(path: string): Promise<IpcResponse<"toolkit:status">>;
@@ -61,6 +67,7 @@ export interface VortSpecApi {
   gitBranches(projectPath: string): Promise<IpcResponse<"git:branches">>;
   gitRemotes(projectPath: string): Promise<IpcResponse<"git:remotes">>;
   gitLog(projectPath: string): Promise<IpcResponse<"git:log">>;
+  gitGraph(projectPath: string): Promise<IpcResponse<"git:graph">>;
   gitStage(projectPath: string, paths: string[]): Promise<IpcResponse<"git:stage">>;
   gitUnstage(projectPath: string, paths: string[]): Promise<IpcResponse<"git:unstage">>;
   gitCommit(projectPath: string, message: string): Promise<IpcResponse<"git:commit">>;
@@ -140,9 +147,21 @@ export interface VortSpecApi {
   snapshotTokenScope(projectPath: string): Promise<IpcResponse<"inspector:snapshotTokenScope">>;
   restoreFiles(projectPath: string, files: FileSnapshot[]): Promise<IpcResponse<"inspector:restoreFiles">>;
 
+  // run-canvas comments (repo-backed threads under .vortspec/comments/)
+  listComments(projectPath: string): Promise<IpcResponse<"comments:list">>;
+  upsertComment(projectPath: string, thread: CommentThread): Promise<IpcResponse<"comments:upsert">>;
+  resolveComment(projectPath: string, id: string, resolved: boolean): Promise<IpcResponse<"comments:resolve">>;
+  /** Repo collaborators/contributors for the @mention autocomplete. */
+  commentCollaborators(projectPath: string): Promise<IpcResponse<"comments:collaborators">>;
+  /** Notify a message's @mentions via the user's GitHub; returns a receipt or a fix-it. */
+  notifyComment(projectPath: string, threadId: string, messageId: string): Promise<IpcResponse<"comments:notify">>;
+  /** Push the auto-committed comment commits (manual Share). */
+  shareComments(projectPath: string): Promise<IpcResponse<"comments:share">>;
+
   // workspace filesystem (IDE)
   listDir(projectPath: string, relPath: string): Promise<IpcResponse<"workspace:listDir">>;
   readFile(projectPath: string, relPath: string): Promise<IpcResponse<"workspace:readFile">>;
+  readAsset(projectPath: string, relPath: string): Promise<IpcResponse<"workspace:readAsset">>;
   /** Fuzzy-search workspace files + folders (for the composer's @-mention picker). */
   searchFiles(projectPath: string, query: string, limit?: number): Promise<IpcResponse<"workspace:searchFiles">>;
   /** Create an empty file (Explorer "New File"). */

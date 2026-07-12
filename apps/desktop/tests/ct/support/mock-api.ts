@@ -6,6 +6,8 @@
  * or the real main process. Test-only: loose typing is intentional here.
  */
 import type { RunEvent } from "@vortspec/core/run-events";
+import type { CommentThread, CommentCollaborator } from "@vortspec/core/comment";
+import type { GitResult } from "@vortspec/core/git";
 import type {
   InspectorTokensResult,
   InspectorComponentsResult,
@@ -44,6 +46,12 @@ export interface MockConfig {
   componentsAfterRun?: InspectorComponentsResult;
   /** Verification report returned by getVerification() — drives the verify outcome card. */
   verification?: VerificationResult;
+  /** Seed threads for the run-canvas comments store (list/upsert/resolve are stateful). */
+  comments?: CommentThread[];
+  /** @mention autocomplete candidates returned by commentCollaborators(). */
+  collaborators?: CommentCollaborator[];
+  /** Result returned by shareComments() (the manual push). */
+  shareResult?: GitResult;
   /** `--mcp-config` path returned by ideMcpConfigPath() (null keeps the bridge off). */
   ideMcpConfig?: { path: string } | null;
   /** Whether hasActiveRun() reports an in-flight run for the project (reconnect banner). */
@@ -57,6 +65,9 @@ export interface MockConfig {
   /** Git status for the Source Control view. */
   gitStatus?: import("@vortspec/core/ipc").GitStatus;
   gitBranches?: import("@vortspec/core/ipc").GitBranch[];
+  gitGraph?: import("@vortspec/core/ipc").GitGraphResult;
+  envStatus?: { hasEnv: boolean; examples: string[]; placeholders: string[] };
+  openWalkthrough?: { ok: boolean; message: string };
   gitRemotes?: import("@vortspec/core/ipc").GitRemote[];
   githubAuth?: import("@vortspec/core/ipc").ProviderAuth;
   taskAuth?: import("@vortspec/core/ipc").TaskAuth;
@@ -70,12 +81,16 @@ export interface MockConfig {
   projects?: import("@vortspec/core/ipc").Project[];
   /** Project returned by pickFolder() — the IDE "Open a folder…" result. */
   pickFolderResult?: import("@vortspec/core/ipc").Project | null;
+  /** Absolute path returned by pickFile() — e.g. the chosen .zip. */
+  pickFileResult?: string | null;
   /** Folder returned by createFolder() — the destination for a new project. */
   createFolderResult?: import("@vortspec/core/ipc").Project | null;
   /** Workspace file tree for the IDE Explorer, keyed by relative dir ("" = root). */
   fsTree?: Record<string, import("@vortspec/core/ipc").FsEntry[]>;
   /** File contents for the IDE editor, keyed by relative path. */
   fsFiles?: Record<string, string>;
+  /** Image data URLs for the Explorer preview, keyed by relative path. */
+  fsAssets?: Record<string, string>;
   /** Entries returned by searchFiles() — the @-mention picker (filtered by query). */
   searchResults?: import("@vortspec/core/ipc").FsEntry[];
   /** Result of clipboardImage() — a pasted-image path + thumbnail, or null. */
@@ -94,9 +109,19 @@ export interface MockConfig {
   figmaSelection?: import("@vortspec/core/ipc").FigmaSelection;
 }
 
-const EMPTY_TOKENS: InspectorTokensResult = {
+export const EMPTY_TOKENS: InspectorTokensResult = {
   tokenFile: null,
   tokens: [],
+  usage: {},
+  figmaOnly: [],
+  figmaSynced: false,
+};
+/** A minimal "founded" token result — a project whose design-system foundation exists. */
+export const FOUNDED_TOKENS: InspectorTokensResult = {
+  tokenFile: "src/styles/tokens.css",
+  tokens: [
+    { name: "spacing-4", type: "spacing", rawValue: "16px", resolvedValue: "16px", source: "generated-code", uses: 3 },
+  ],
   usage: {},
   figmaOnly: [],
   figmaSynced: false,
@@ -123,6 +148,8 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
   const termSubs = new Set<(e: { id: string; data: string; exit?: number | null }) => void>();
   const ideActionSubs = new Set<(a: IdeAction) => void>();
   const ideResolutions: IdeActionResult[] = [];
+  // Stateful in-memory comment threads (seeded from cfg; list/upsert/resolve mutate it).
+  const comments: CommentThread[] = [...(cfg.comments ?? [])];
   // Records Explorer file operations (create/rename/trash) for assertions.
   const fsOps: { op: string; path: string; to?: string }[] = [];
   // Records URLs passed to openInstall (e.g. the Preview bar's Open Browser).
@@ -155,6 +182,9 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
     isElectron: async () => true,
     getVersion: async () => "test",
     homeDir: async () => "/Users/dev",
+    // Empty → the Run Canvas shows its "Preparing…" state instead of mounting a
+    // real Electron <webview> (which doesn't exist in the CT browser).
+    guestPreloadUrl: async () => "",
     clipboardImage: async () => cfg.clipboardImage ?? null,
     getPathForFile: (file: File) => (file as unknown as { __path?: string }).__path ?? file.name,
     checkUpdate: async () => ({
@@ -175,6 +205,7 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
 
     pickFolder: async () => cfg.pickFolderResult ?? null,
     createFolder: async () => cfg.createFolderResult ?? null,
+    pickFile: async () => cfg.pickFileResult ?? null,
     listProjects: async () => cfg.projects ?? [],
     openFolder: async () => undefined,
     revealPath: async () => undefined,
@@ -195,7 +226,16 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
       cfg.gitStatus ?? { isRepo: true, branch: "main", upstream: null, ahead: 0, behind: 0, staged: [], unstaged: [], untracked: [], conflicts: [], clean: true },
     gitBranches: async () => cfg.gitBranches ?? [{ name: "main", current: true, remote: false, upstream: null }],
     gitRemotes: async () => cfg.gitRemotes ?? [],
+    envStatus: async () => cfg.envStatus ?? { hasEnv: true, examples: [], placeholders: [] },
+    createEnv: async () => ({ ok: true, message: "Created .env" }),
+    openWalkthrough: async () => cfg.openWalkthrough ?? { ok: true, message: "Walk-through ready." },
     gitLog: async () => [],
+    gitGraph: async () =>
+      cfg.gitGraph ?? {
+        commits: [],
+        stats: { commits: 0, branches: 1, remoteBranches: 0, merges: 0, tags: 0 },
+        truncated: false,
+      },
     gitStage: async () => ({ ok: true, message: "Staged." }),
     gitUnstage: async () => ({ ok: true, message: "Unstaged." }),
     gitCommit: async () => ({ ok: true, message: "Committed." }),
@@ -273,6 +313,10 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
       path: relPath,
       content: cfg.fsFiles?.[relPath] ?? "",
       truncated: false,
+    }),
+    readAsset: async (_projectPath: string, relPath: string) => ({
+      dataUrl: cfg.fsAssets?.[relPath] ?? null,
+      tooLarge: false,
     }),
     searchFiles: async (_projectPath: string, query: string) =>
       (cfg.searchResults ?? []).filter((e) => e.path.toLowerCase().includes(query.toLowerCase())),
@@ -383,6 +427,29 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
     snapshotComponent: async () => [],
     snapshotTokenScope: async () => [],
     restoreFiles: async () => undefined,
+
+    // Stateful in-memory comment store (mirrors the repo-backed store's merge/append).
+    listComments: async () => [...comments].sort((a, b) => a.id.localeCompare(b.id)),
+    upsertComment: async (_p: string, thread: CommentThread) => {
+      const i = comments.findIndex((t) => t.id === thread.id);
+      const existing = i >= 0 ? comments[i] : null;
+      const seen = new Set((existing?.messages ?? []).map((m) => m.id));
+      const merged: CommentThread = existing
+        ? { ...existing, ...thread, messages: [...existing.messages, ...thread.messages.filter((m) => !seen.has(m.id))] }
+        : thread;
+      if (i >= 0) comments[i] = merged;
+      else comments.push(merged);
+      return { thread: merged, path: `.vortspec/comments/${thread.id}.json` };
+    },
+    resolveComment: async (_p: string, id: string, resolved: boolean) => {
+      const i = comments.findIndex((t) => t.id === id);
+      if (i < 0) return null;
+      comments[i] = { ...comments[i], resolved, updatedAt: comments[i].updatedAt };
+      return { thread: comments[i], path: `.vortspec/comments/${id}.json` };
+    },
+    commentCollaborators: async () => cfg.collaborators ?? [],
+    notifyComment: async () => ({ notified: false, reason: "GitHub not connected in tests." }),
+    shareComments: async () => cfg.shareResult ?? { ok: true, message: "Pushed comment commits." },
   };
 
   (window as unknown as { vortspec: unknown }).vortspec = api;

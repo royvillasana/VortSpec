@@ -97,6 +97,7 @@ export function Inspector({
   onOpenRun,
   onOpenHistory,
   onOpenManifest,
+  onOpenFile,
 }: {
   project: Project;
   /** Hide the internal ProjectRail (the IDE supplies its own activity-bar navigation). */
@@ -106,9 +107,15 @@ export function Inspector({
   onOpenRun: () => void;
   onOpenHistory: () => void;
   onOpenManifest: () => void;
+  /** Open a workspace file in the editor (IDE). When absent, the file is revealed
+   *  in the OS file manager instead — lets a token's "where used" jump to source. */
+  onOpenFile?: (relPath: string) => void;
 }): React.JSX.Element {
   const [tokens, setTokens] = useState<InspectorToken[] | null>(null);
   const [usage, setUsage] = useState<Record<string, TokenUsage[]>>({});
+  // Map a where-used component (its file basename, as `buildUsage` records it) to
+  // its source path, so a "where used" row can jump to the component.
+  const [componentFile, setComponentFile] = useState<Record<string, string>>({});
   const [tokenFile, setTokenFile] = useState<string | null>(null);
   const [segment, setSegment] = useState<TokenType | "all">("all");
   const [query, setQuery] = useState("");
@@ -146,8 +153,29 @@ export function Inspector({
     void reloadTokens();
     void api.verifyFigmaMcp().then(setFigmaEnv);
     void api.figmaStatus().then(setFigmaCli);
+    // Build the component → file map for "where used" navigation.
+    void api.inspectorComponents(project.path).then((r) => {
+      const map: Record<string, string> = {};
+      for (const c of r.components) {
+        if (!c.file) continue;
+        const base = c.file.split("/").pop() ?? c.file;
+        // Key by both the file basename-sans-extension and the component name,
+        // since usage is recorded under the file's basename.
+        map[base.replace(/\.[^.]+$/, "")] = c.file;
+        map[c.name] = c.file;
+      }
+      setComponentFile(map);
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project.path]);
+
+  /** Jump to a component's source from a token's "where used" list. */
+  function openComponent(component: string): void {
+    const rel = componentFile[component];
+    if (!rel) return;
+    if (onOpenFile) onOpenFile(rel);
+    else void api.revealPath(project.path, rel);
+  }
 
   // Step 1's primary reader: figma-cli (fast, no token). When it isn't
   // connected, fall back to the scoped-Claude MCP export. VortSpec always
@@ -440,6 +468,8 @@ export function Inspector({
           onSave={saveValue}
           onRename={requestRename}
           onDelete={requestDelete}
+          canOpen={(component) => Boolean(componentFile[component])}
+          onOpenComponent={openComponent}
         />
       )}
 
@@ -705,6 +735,21 @@ function MenuItem({
 
 // ── Detail drawer ────────────────────────────────────────────────────
 
+/** Collapse a token's raw usage entries into one row per component, collecting
+ *  the distinct properties/utilities it's used on. */
+function groupUsage(usage: TokenUsage[]): { component: string; properties: string[] }[] {
+  const byComponent = new Map<string, Set<string>>();
+  for (const u of usage) {
+    const props = byComponent.get(u.component) ?? new Set<string>();
+    if (u.property) props.add(u.property);
+    byComponent.set(u.component, props);
+  }
+  return [...byComponent.entries()].map(([component, props]) => ({
+    component,
+    properties: [...props],
+  }));
+}
+
 function TokenDrawer({
   token,
   usage,
@@ -714,6 +759,8 @@ function TokenDrawer({
   onSave,
   onRename,
   onDelete,
+  canOpen,
+  onOpenComponent,
 }: {
   token: InspectorToken;
   usage: TokenUsage[];
@@ -723,6 +770,10 @@ function TokenDrawer({
   onSave: (name: string, value: string) => Promise<void>;
   onRename: (name: string, newName: string) => void;
   onDelete: (name: string) => void;
+  /** Whether a where-used component resolves to an openable source file. */
+  canOpen: (component: string) => boolean;
+  /** Jump to a where-used component's source. */
+  onOpenComponent: (component: string) => void;
 }): React.JSX.Element {
   const [value, setValue] = useState(token.rawValue);
   const [saving, setSaving] = useState(false);
@@ -848,17 +899,34 @@ function TokenDrawer({
           {usage.length === 0 ? (
             <span className="px-2 py-1.5 text-xs text-vs-text-muted">Not referenced yet</span>
           ) : (
-            usage.map((u, i) => (
-              <div
-                key={`${u.component}-${i}`}
-                className="flex items-center justify-between rounded-md px-2 py-1.5 hover:bg-vs-bg-elevated"
-              >
-                <span className="text-xs text-vs-text-primary">{u.component}</span>
-                {u.property && (
-                  <span className="font-mono text-[11px] text-vs-text-secondary">{u.property}</span>
-                )}
-              </div>
-            ))
+            groupUsage(usage).map(({ component, properties }) => {
+              const openable = canOpen(component);
+              return (
+                <button
+                  key={component}
+                  type="button"
+                  disabled={!openable}
+                  onClick={() => onOpenComponent(component)}
+                  title={openable ? "Open this component's source" : undefined}
+                  className={`flex items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left ${
+                    openable ? "hover:bg-vs-bg-elevated" : "cursor-default"
+                  }`}
+                >
+                  <span className={`text-xs ${openable ? "text-vs-accent" : "text-vs-text-primary"}`}>
+                    {component}
+                  </span>
+                  {properties.length > 0 && (
+                    <span className="flex flex-wrap justify-end gap-1">
+                      {properties.map((p) => (
+                        <span key={p} className="rounded bg-vs-bg-elevated px-1.5 py-0.5 font-mono text-[10px] text-vs-text-secondary">
+                          {p}
+                        </span>
+                      ))}
+                    </span>
+                  )}
+                </button>
+              );
+            })
           )}
         </div>
 

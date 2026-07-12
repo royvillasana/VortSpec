@@ -3,7 +3,7 @@ import type { EnvReport, Project, SetupAnswers, UpdateInfo, Profile as ProfileT 
 import { api } from "@vortspec/ui/api";
 import { EnvironmentCheck } from "./views/EnvironmentCheck";
 import { Dashboard } from "./views/Dashboard";
-import { GuidedFlow } from "./views/GuidedFlow";
+import { GuidedFlow } from "@vortspec/ui/GuidedFlow";
 import { Inspector } from "@vortspec/ui/Inspector";
 import { DevPreview } from "./views/DevPreview";
 import { RunView } from "./views/RunView";
@@ -16,8 +16,7 @@ import { SourceControl } from "@vortspec/ui/SourceControl";
 import { RunApp } from "@vortspec/ui/RunApp";
 import { Tasks } from "@vortspec/ui/Tasks";
 import { DesignInput } from "./views/DesignInput";
-import { Intake } from "./views/Intake";
-import { NewProjectWizard } from "@vortspec/ui/NewProjectWizard";
+import { ProjectSetup } from "@vortspec/ui/ProjectSetup";
 import { Logo } from "@vortspec/ui/Logo";
 import { AssistantDock } from "@vortspec/ui/AssistantDock";
 import { Terminal } from "@vortspec/ui/Terminal";
@@ -89,7 +88,6 @@ export default function App(): React.JSX.Element {
   const [activeProject, setActiveProject] = useState<Project | null>(null);
   const [setupProject, setSetupProject] = useState<Project | null>(null);
   const [sourceProject, setSourceProject] = useState<Project | null>(null);
-  const [intakeProject, setIntakeProject] = useState<Project | null>(null);
   const [pendingSource, setPendingSource] = useState<Partial<SetupAnswers> | undefined>(undefined);
   const [projectView, setProjectView] = useState<
     "flow" | "inspector" | "preview" | "run" | "review" | "verify" | "history" | "manifest" | "source" | "runapp" | "tasks"
@@ -175,7 +173,6 @@ export default function App(): React.JSX.Element {
         breadcrumb={
           sourceProject?.name ??
           setupProject?.name ??
-          intakeProject?.name ??
           activeProject?.name ??
           null
         }
@@ -186,7 +183,6 @@ export default function App(): React.JSX.Element {
             setActiveProject(null);
             setSetupProject(null);
             setSourceProject(null);
-            setIntakeProject(null);
             setPendingSource(undefined);
             setProjectView("flow");
           }
@@ -225,7 +221,7 @@ export default function App(): React.JSX.Element {
             }}
           />
         ) : setupProject ? (
-          <NewProjectWizard
+          <ProjectSetup
             project={setupProject}
             // Profile preferences seed the wizard; the design-source screen's
             // choices (pendingSource) still win over the global defaults.
@@ -235,22 +231,11 @@ export default function App(): React.JSX.Element {
               setPendingSource(undefined);
             }}
             onCreated={(project) => {
+              // One unified stepper now covers setup + intake; open the flow directly.
               mergeProject(project);
               setSetupProject(null);
               setPendingSource(undefined);
-              setIntakeProject(project);
-            }}
-          />
-        ) : intakeProject ? (
-          <Intake
-            project={intakeProject}
-            onSkip={() => {
-              setActiveProject(intakeProject);
-              setIntakeProject(null);
-            }}
-            onDone={() => {
-              setActiveProject(intakeProject);
-              setIntakeProject(null);
+              setActiveProject(project);
             }}
           />
         ) : activeProject && projectView === "inspector" ? (

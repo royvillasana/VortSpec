@@ -14,8 +14,18 @@ import { api } from "../lib/api";
  * streamed back, and the PTY resizes with the viewport. The session is killed
  * when the component unmounts.
  */
-export function Terminal({ project }: { project: Project }): JSX.Element {
+export function Terminal({
+  project,
+  onReady,
+}: {
+  project: Project;
+  /** Called with the PTY session id once created, so a parent can drive it (write input). */
+  onReady?: (id: string) => void;
+}): JSX.Element {
   const elRef = useRef<HTMLDivElement>(null);
+  // Ref so a changing onReady doesn't re-run the effect (which would kill the PTY).
+  const onReadyRef = useRef(onReady);
+  onReadyRef.current = onReady;
 
   useEffect(() => {
     const el = elRef.current;
@@ -44,7 +54,9 @@ export function Terminal({ project }: { project: Project }): JSX.Element {
       // element not laid out yet — the ResizeObserver below will fit shortly.
     }
 
-    void api.terminalCreate({ id, projectPath: project.path, cols: term.cols, rows: term.rows });
+    void api
+      .terminalCreate({ id, projectPath: project.path, cols: term.cols, rows: term.rows })
+      .then(() => onReadyRef.current?.(id));
 
     const offData = api.onTerminalData((p) => {
       if (p.id !== id) return;

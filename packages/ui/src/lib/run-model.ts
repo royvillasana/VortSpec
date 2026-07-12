@@ -60,7 +60,12 @@ export interface RunModel {
     permissionMode?: string;
     mcpStatuses: { name: string; status: string }[];
   };
-  result?: { isError: boolean; text?: string; costUsd?: number };
+  result?: {
+    isError: boolean;
+    text?: string;
+    costUsd?: number;
+    usage?: { inputTokens: number; outputTokens: number; cacheReadTokens?: number; cacheCreationTokens?: number };
+  };
 }
 
 export const initialRun: RunModel = {
@@ -204,7 +209,7 @@ function applyEvent(state: RunModel, event: RunEvent): RunModel {
         messages: commitStreaming(state),
         streamingText: "",
         sessionId: event.sessionId ?? state.sessionId,
-        result: { isError: event.isError, text: event.text, costUsd: event.costUsd },
+        result: { isError: event.isError, text: event.text, costUsd: event.costUsd, usage: event.usage },
       };
     case "error":
       return pushActivity({ ...state, status: "error" }, event.message, "error");

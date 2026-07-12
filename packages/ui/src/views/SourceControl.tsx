@@ -1,8 +1,18 @@
 import { useEffect, useState } from "react";
 import type { GitStatus, GitBranch, GitRemote, ProviderAuth, Project } from "@vortspec/core/ipc";
 import { api } from "../lib/api";
+import { useAgentRun } from "../lib/useAgentRun";
+import { routedModel } from "../lib/model-routing";
 import { Button, Card, Spinner } from "@vortspec/ui/ui";
 import { ProjectRail, projectRailItems } from "@vortspec/ui/ProjectRail";
+import { GitGraph } from "../components/GitGraph";
+
+/** Scoped, read-only prompt that drafts a commit message from the staged diff. */
+const DRAFT_COMMIT_PROMPT =
+  "Run `git diff --staged --stat` and `git diff --staged` to see the staged changes, then write a " +
+  "single Conventional Commits message for them: a concise subject line (<72 chars, imperative mood), " +
+  "and if warranted a short body of one or two bullet points. Output ONLY the commit message text — " +
+  "no backticks, no preamble, no explanation, nothing else.";
 
 /**
  * Source Control (git) — M1. Drives the user's own `git`/`gh` through the
@@ -36,12 +46,19 @@ export function SourceControl({
   const [remotes, setRemotes] = useState<GitRemote[]>([]);
   const [auth, setAuth] = useState<ProviderAuth | null>(null);
   const [message, setMessage] = useState("");
+  const [drafting, setDrafting] = useState(false);
+  const draft = useAgentRun();
   const [newBranch, setNewBranch] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const [toast, setToast] = useState("");
   const [manifestReady, setManifestReady] = useState(false);
   const [importUrl, setImportUrl] = useState("");
   const [importBranch, setImportBranch] = useState("");
+  // Bumped on every reload so the Commit Graph refetches after commits/branch ops.
+  const [graphKey, setGraphKey] = useState(0);
+  // The Commit Graph sits below the git controls, expanded by default; collapse it
+  // when a long history would otherwise bury the controls.
+  const [graphOpen, setGraphOpen] = useState(true);
 
   async function reload(): Promise<void> {
     const [s, b, r] = await Promise.all([
@@ -52,12 +69,40 @@ export function SourceControl({
     setStatus(s);
     setBranches(b);
     setRemotes(r);
+    setGraphKey((k) => k + 1);
   }
   useEffect(() => {
     void reload();
     void api.providerAuth(project.path).then(setAuth);
     void api.getManifest(project.path).then((m) => setManifestReady(m.exists));
   }, [project.path]);
+
+  // When the draft-message run finishes, drop its text into the commit box for
+  // the user to edit. Committing stays a deliberate action — this never commits.
+  useEffect(() => {
+    if (!drafting) return;
+    if (draft.model.status === "done") {
+      const text = [...draft.model.messages].reverse().find((m) => m.role === "assistant")?.text ?? "";
+      if (text.trim()) setMessage(text.trim());
+      setDrafting(false);
+    } else if (draft.model.status === "error" || draft.model.status === "canceled") {
+      setDrafting(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draft.model.status]);
+
+  function draftMessage(): void {
+    setDrafting(true);
+    void draft.start({
+      prompt: DRAFT_COMMIT_PROMPT,
+      cwd: project.path,
+      allowedTools: ["Bash"],
+      bypassPermissions: true,
+      // Mechanical summarization → cheapest tier; skip the user's global MCP.
+      model: routedModel("haiku"),
+      strictMcp: true,
+    });
+  }
 
   function flash(m: string): void {
     setToast(m);
@@ -75,7 +120,14 @@ export function SourceControl({
   const notRepo = status && !status.isRepo;
 
   return (
-    <div className="flex h-[calc(100vh-3rem)] w-full overflow-hidden bg-vs-bg-primary text-[13px] text-vs-text-primary">
+    <div
+      className={`flex w-full overflow-hidden bg-vs-bg-primary text-[13px] text-vs-text-primary ${
+        // In the IDE (hideRail) fill the work panel so only <main> scrolls — the
+        // panel already wraps us in overflow-auto, and a fixed 100vh height would
+        // overflow it and create a second scrollbar. Standalone (cockpit) keeps 100vh.
+        hideRail ? "h-full min-h-0" : "h-[calc(100vh-3rem)]"
+      }`}
+    >
       {!hideRail && (
         <ProjectRail
         project={project}
@@ -93,7 +145,7 @@ export function SourceControl({
       )}
 
       <main className="flex min-w-0 flex-1 flex-col overflow-y-auto bg-vs-bg-primary">
-        <header className="flex flex-none items-center gap-3 border-b border-vs-border-default px-8 py-4">
+        <header className="sticky top-0 z-20 flex flex-none items-center gap-3 border-b border-vs-border-default bg-vs-bg-primary px-8 py-4">
           <h1 className="text-xl font-semibold tracking-[-0.01em]">Source Control</h1>
           {status?.isRepo && (
             <>
@@ -263,6 +315,14 @@ export function SourceControl({
                   >
                     Commit ({status.staged.length})
                   </Button>
+                  <Button
+                    variant="default"
+                    disabled={busy !== null || drafting || status.staged.length === 0}
+                    title="Draft a commit message from the staged changes (uses a lightweight model). You can edit it before committing."
+                    onClick={draftMessage}
+                  >
+                    {drafting ? "Drafting…" : "Draft message"}
+                  </Button>
                   <span className="flex-1" />
                   <Button variant="default" disabled={busy !== null} onClick={() => void act("fetch", () => api.gitFetch(project.path))}>Fetch</Button>
                   <Button variant="default" disabled={busy !== null} onClick={() => void act("pull", () => api.gitPull(project.path))}>Pull</Button>
@@ -273,6 +333,29 @@ export function SourceControl({
             </>
           )}
         </div>
+
+        {/* Commit Graph — below the git controls, collapsed by default so a long
+            history doesn't push the controls off-screen. */}
+        {status?.isRepo && (
+          <section className="border-t border-vs-border-default">
+            <div className="mx-auto w-full max-w-[760px] px-8 py-5">
+              <button
+                type="button"
+                onClick={() => setGraphOpen((o) => !o)}
+                aria-expanded={graphOpen}
+                className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-vs-text-secondary hover:text-vs-text-primary"
+              >
+                <span className="text-[9px] text-vs-text-muted">{graphOpen ? "▾" : "▸"}</span>
+                Commit Graph
+              </button>
+              {graphOpen && (
+                <div className="mt-3">
+                  <GitGraph project={project} refreshKey={graphKey} />
+                </div>
+              )}
+            </div>
+          </section>
+        )}
       </main>
 
       {toast && (

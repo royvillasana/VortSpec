@@ -1,6 +1,19 @@
 import { z } from "zod";
 
 /**
+ * Token usage for one run — captured from the CLI result line's `usage` block so
+ * the app can show real token/cost/cache numbers (and measure model-routing
+ * savings). Cache reads are the cheap re-reads of the static prompt prefix.
+ */
+export const runUsageSchema = z.object({
+  inputTokens: z.number(),
+  outputTokens: z.number(),
+  cacheReadTokens: z.number().optional(),
+  cacheCreationTokens: z.number().optional(),
+});
+export type RunUsage = z.infer<typeof runUsageSchema>;
+
+/**
  * VortSpec's typed, friendly run events — the app-facing shape the renderer
  * consumes. The main-process parser (`src/main/agent/events.ts`) maps raw
  * Claude Code `stream-json` lines into these; nothing outside that parser knows
@@ -59,6 +72,8 @@ export const runEventSchema = z.discriminatedUnion("kind", [
     text: z.string().optional(),
     costUsd: z.number().optional(),
     sessionId: z.string().optional(),
+    /** Token usage for the run (from the CLI result line), for cost/cache visibility. */
+    usage: runUsageSchema.optional(),
   }),
   z.object({ kind: z.literal("error"), message: z.string() }),
   z.object({ kind: z.literal("exit"), code: z.number().nullable() }),
@@ -88,6 +103,14 @@ export const agentRunOptionsSchema = z.object({
    * and read editor state). The file is written and owned by the caller.
    */
   mcpConfigPath: z.string().optional(),
+  /**
+   * Load ONLY the `--mcp-config` servers, ignoring the user's globally-configured
+   * MCP servers (`--strict-mcp-config`). Used for small, self-contained source
+   * edits (the Run-canvas Apply) that only need Read/Edit/Write — skipping the
+   * user's Figma/other MCP connections removes most of the session-startup cost.
+   * Independent of `--bare`: skills, CLAUDE.md, and the user's login still load.
+   */
+  strictMcp: z.boolean().optional(),
   /**
    * Renderer-supplied labels persisted with the run so an interrupted run can be
    * resumed later with its original stage view (kind) and scope (total). Opaque

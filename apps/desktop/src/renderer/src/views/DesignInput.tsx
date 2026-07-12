@@ -44,6 +44,11 @@ export function DesignInput({
     if (picked) setFolderPath(picked.path);
   }
 
+  async function chooseZip(): Promise<void> {
+    const path = await api.pickFile([{ name: "ZIP archive", extensions: ["zip"] }]);
+    if (path) setZipPath(path);
+  }
+
   const figmaValid = /figma\.com\//.test(figmaUrl);
   const githubValid = /^(https?:\/\/|git@|ssh:\/\/).+/.test(githubUrl.trim());
   const canStart =
@@ -134,16 +139,23 @@ export function DesignInput({
                 </span>
               </div>
             ) : (
-              <label className="flex h-[132px] cursor-text flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-vs-border-strong px-4 text-center text-xs text-vs-text-secondary hover:border-vs-accent">
+              <div
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setDrag(false);
+                  const f = e.dataTransfer.files[0];
+                  const path = f ? api.getPathForFile(f) : "";
+                  if (path.endsWith(".zip")) setZipPath(path);
+                }}
+                className="flex h-[132px] flex-col items-center justify-center gap-2.5 rounded-lg border border-dashed border-vs-border-strong px-4 text-center text-xs text-vs-text-secondary"
+              >
                 <UploadIcon />
-                Drop your .zip here, or paste its path below.
-                <input
-                  value={zipPath}
-                  onChange={(e) => setZipPath(e.target.value)}
-                  placeholder="/path/to/export.zip"
-                  className="mt-1 w-64 rounded-md border border-vs-border-default bg-vs-bg-primary px-2.5 py-1.5 text-center font-mono text-[11px] text-vs-text-primary placeholder:text-vs-text-muted focus:outline-none focus-visible:border-vs-accent"
-                />
-              </label>
+                Drop your .zip here, or choose it.
+                <Button variant="default" onClick={() => void chooseZip()}>
+                  Choose .zip…
+                </Button>
+              </div>
             )}
           </Panel>
         )}
@@ -274,9 +286,11 @@ export function DesignInput({
           onDrop={(e) => {
             e.preventDefault();
             setDrag(false);
-            const f = e.dataTransfer.files[0] as (File & { path?: string }) | undefined;
-            const path = f?.path;
-            if (path?.endsWith(".zip")) {
+            const f = e.dataTransfer.files[0];
+            // Resolve the OS path via the preload bridge (Electron dropped the
+            // File.path property; webUtils.getPathForFile is the supported path).
+            const path = f ? api.getPathForFile(f) : "";
+            if (path.endsWith(".zip")) {
               setTab("zip");
               setZipPath(path);
             }

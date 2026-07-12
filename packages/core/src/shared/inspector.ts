@@ -87,6 +87,8 @@ export const propControlSchema = z.object({
   options: z.array(z.string()).default([]),
   /** Default value from the component's defaultVariants, if any. */
   defaultValue: z.string().optional(),
+  /** CVA classes per option (option → class string), for live variant preview + detection. */
+  classes: z.record(z.string(), z.string()).default({}),
 });
 export type PropControl = z.infer<typeof propControlSchema>;
 

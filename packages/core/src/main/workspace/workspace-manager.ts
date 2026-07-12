@@ -81,6 +81,23 @@ export async function pickFolder(
   return registerPath(result.filePaths[0]!);
 }
 
+/**
+ * Pick a single file through the native dialog, returning its absolute path (or
+ * null if cancelled). Used for the ZIP design source — the app captures the path
+ * only; the engine extracts it. Not registered as a project.
+ */
+export async function pickFile(
+  filters: { name: string; extensions: string[] }[] = [],
+): Promise<string | null> {
+  const result = await dialog.showOpenDialog({
+    title: "Choose a file",
+    properties: ["openFile"],
+    filters: filters.length > 0 ? filters : undefined,
+  });
+  if (result.canceled || result.filePaths.length === 0) return null;
+  return result.filePaths[0]!;
+}
+
 /** Create a brand-new folder (name + location) and register it as a project. */
 export async function createFolder(): Promise<Project | null> {
   const result = await dialog.showSaveDialog({

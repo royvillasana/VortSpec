@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { runUsageSchema } from "./run-events";
 
 /**
  * The SDD-DE guided flow model. Stages are data-driven so they can be aligned
@@ -100,6 +101,11 @@ export const runSummarySchema = z.object({
   updatedAt: z.string(),
   stages: z.array(runStageSummarySchema),
   artifacts: z.array(z.string()),
+  // Instrumentation (optional, additive — older records omit these).
+  tokens: runUsageSchema.optional(),
+  costUsd: z.number().optional(),
+  /** The model the run actually used (for measuring model routing). */
+  model: z.string().optional(),
 });
 export type RunSummary = z.infer<typeof runSummarySchema>;
 

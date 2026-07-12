@@ -28,6 +28,10 @@
       "types": "./src/components/RunPanel.tsx",
       "default": "./src/components/RunPanel.tsx"
     },
+    "./GitGraph": {
+      "types": "./src/components/GitGraph.tsx",
+      "default": "./src/components/GitGraph.tsx"
+    },
     "./run-model": {
       "types": "./src/lib/run-model.ts",
       "default": "./src/lib/run-model.ts"
@@ -84,6 +88,18 @@
       "types": "./src/views/NewProjectWizard.tsx",
       "default": "./src/views/NewProjectWizard.tsx"
     },
+    "./Intake": {
+      "types": "./src/views/Intake.tsx",
+      "default": "./src/views/Intake.tsx"
+    },
+    "./ProjectSetup": {
+      "types": "./src/views/ProjectSetup.tsx",
+      "default": "./src/views/ProjectSetup.tsx"
+    },
+    "./GuidedFlow": {
+      "types": "./src/views/GuidedFlow.tsx",
+      "default": "./src/views/GuidedFlow.tsx"
+    },
     "./styles/tokens.css": "./src/styles/tokens.css",
     "./Terminal": {
       "types": "./src/components/Terminal.tsx",
@@ -92,6 +108,34 @@
     "./FigmaConnection": {
       "types": "./src/views/FigmaConnection.tsx",
       "default": "./src/views/FigmaConnection.tsx"
+    },
+    "./DesignPanel": {
+      "types": "./src/components/run-canvas/DesignPanel.tsx",
+      "default": "./src/components/run-canvas/DesignPanel.tsx"
+    },
+    "./CommentsLayer": {
+      "types": "./src/components/run-canvas/CommentsLayer.tsx",
+      "default": "./src/components/run-canvas/CommentsLayer.tsx"
+    },
+    "./CommentsPanel": {
+      "types": "./src/components/run-canvas/CommentsPanel.tsx",
+      "default": "./src/components/run-canvas/CommentsPanel.tsx"
+    },
+    "./NodeTree": {
+      "types": "./src/components/run-canvas/NodeTree.tsx",
+      "default": "./src/components/run-canvas/NodeTree.tsx"
+    },
+    "./RunCanvas": {
+      "types": "./src/components/run-canvas/RunCanvas.tsx",
+      "default": "./src/components/run-canvas/RunCanvas.tsx"
+    },
+    "./useInspectorBridge": {
+      "types": "./src/lib/useInspectorBridge.ts",
+      "default": "./src/lib/useInspectorBridge.ts"
+    },
+    "./FirstRunSetup": {
+      "types": "./src/views/FirstRunSetup.tsx",
+      "default": "./src/views/FirstRunSetup.tsx"
     }
   },
   "scripts": {

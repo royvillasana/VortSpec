@@ -16,6 +16,7 @@ import {
   gitBranchSchema,
   gitRemoteSchema,
   gitLogEntrySchema,
+  gitGraphResultSchema,
   gitResultSchema,
   providerAuthSchema,
   gitCommitRequestSchema,
@@ -31,6 +32,7 @@ import { flowSchema, stageStatusSchema, runHistoryResultSchema } from "./flow";
 import { devServerStatusSchema } from "./dev-server";
 import { manifestResultSchema, manifestVersionsResultSchema } from "./manifest";
 import { updateInfoSchema } from "./update";
+import { commentThreadSchema, commentCollaboratorSchema, notifyResultSchema } from "./comment";
 
 export type { DevServerStatus, DevServerState, DevServerUpdate } from "./dev-server";
 export { DEV_SERVER_UPDATE_CHANNEL, devServerUpdateSchema } from "./dev-server";
@@ -109,6 +111,25 @@ export type {
 } from "./inspector";
 export type { FileSnapshot } from "./inspector";
 export type {
+  BridgeNode,
+  BridgeTree,
+  Rect,
+  NodeReadout,
+  FieldKind,
+  SectionField,
+  DesignSectionId,
+  DesignSection,
+  VariantControl,
+  Selection,
+  BridgeCommand,
+  BridgeEvent,
+} from "./inspector-bridge";
+export {
+  INSPECTOR_BRIDGE_CHANNEL,
+  bridgeCommandSchema,
+  bridgeEventSchema,
+} from "./inspector-bridge";
+export type {
   ManifestResult,
   ManifestVersion,
   ManifestVersionsResult,
@@ -133,6 +154,9 @@ export type {
   GitBranch,
   GitRemote,
   GitLogEntry,
+  GitGraphCommit,
+  GitGraphStats,
+  GitGraphResult,
   GitResult,
   ProviderAuth,
   ProviderId,
@@ -233,6 +257,8 @@ export const ipcContract = {
   "system:isElectron": { request: z.void(), response: z.boolean() },
   "system:getVersion": { request: z.void(), response: z.string() },
   "system:homeDir": { request: z.void(), response: z.string() },
+  // file:// URL of the Run-Canvas <webview> guest preload (inspector bridge).
+  "system:guestPreloadUrl": { request: z.void(), response: z.string() },
   "system:clipboardImage": {
     request: z.void(),
     response: z.object({ path: z.string(), dataUrl: z.string() }).nullable(),
@@ -249,6 +275,14 @@ export const ipcContract = {
     response: projectSchema.nullable(),
   },
   "workspace:createFolder": { request: z.void(), response: projectSchema.nullable() },
+  "workspace:pickFile": {
+    request: z
+      .object({
+        filters: z.array(z.object({ name: z.string(), extensions: z.array(z.string()) })).optional(),
+      })
+      .optional(),
+    response: z.string().nullable(),
+  },
   "workspace:listProjects": { request: z.void(), response: projectListSchema },
   "workspace:openFolder": { request: z.string(), response: z.void() },
   "workspace:revealPath": {
@@ -256,6 +290,19 @@ export const ipcContract = {
     response: z.void(),
   },
   "workspace:refreshProject": { request: z.string(), response: projectSchema },
+  "workspace:envStatus": {
+    request: z.string(),
+    response: z.object({
+      hasEnv: z.boolean(),
+      examples: z.array(z.string()),
+      placeholders: z.array(z.string()).default([]),
+    }),
+  },
+  "workspace:createEnv": {
+    request: z.object({ projectPath: z.string(), example: z.string() }),
+    response: gitResultSchema,
+  },
+  "workspace:openWalkthrough": { request: z.string(), response: gitResultSchema },
   "workspace:createProject": {
     request: z.object({ path: z.string(), answers: setupAnswersSchema }),
     response: projectSchema,
@@ -267,6 +314,12 @@ export const ipcContract = {
   "workspace:readFile": {
     request: z.object({ projectPath: z.string(), relPath: z.string() }),
     response: fsFileSchema,
+  },
+  // Read an image/asset as a `data:` URL for the Explorer preview (null when the
+  // file isn't a previewable image, or is too large).
+  "workspace:readAsset": {
+    request: z.object({ projectPath: z.string(), relPath: z.string() }),
+    response: z.object({ dataUrl: z.string().nullable(), tooLarge: z.boolean() }),
   },
   "workspace:searchFiles": {
     request: z.object({ projectPath: z.string(), query: z.string(), limit: z.number().optional() }),
@@ -346,6 +399,7 @@ export const ipcContract = {
   "git:branches": { request: z.string(), response: z.array(gitBranchSchema) },
   "git:remotes": { request: z.string(), response: z.array(gitRemoteSchema) },
   "git:log": { request: z.string(), response: z.array(gitLogEntrySchema) },
+  "git:graph": { request: z.string(), response: gitGraphResultSchema },
   "git:stage": { request: gitPathsRequestSchema, response: gitResultSchema },
   "git:unstage": { request: gitPathsRequestSchema, response: gitResultSchema },
   "git:commit": { request: gitCommitRequestSchema, response: gitResultSchema },
@@ -486,6 +540,31 @@ export const ipcContract = {
   "inspector:restoreFiles": {
     request: z.object({ projectPath: z.string(), files: fileSnapshotListSchema }),
     response: z.void(),
+  },
+  // Run-canvas comments — repo-backed threads under .vortspec/comments/.
+  "comments:list": {
+    request: z.string(),
+    response: z.array(commentThreadSchema),
+  },
+  "comments:upsert": {
+    request: z.object({ projectPath: z.string(), thread: commentThreadSchema }),
+    response: z.object({ thread: commentThreadSchema, path: z.string() }),
+  },
+  "comments:resolve": {
+    request: z.object({ projectPath: z.string(), id: z.string(), resolved: z.boolean() }),
+    response: z.object({ thread: commentThreadSchema, path: z.string() }).nullable(),
+  },
+  "comments:collaborators": {
+    request: z.string(),
+    response: z.array(commentCollaboratorSchema),
+  },
+  "comments:notify": {
+    request: z.object({ projectPath: z.string(), threadId: z.string(), messageId: z.string() }),
+    response: notifyResultSchema,
+  },
+  "comments:share": {
+    request: z.string(),
+    response: gitResultSchema,
   },
 } as const;
 

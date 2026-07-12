@@ -1,11 +1,14 @@
 import { ipcMain, shell, app, type WebContents } from "electron";
 import { homedir } from "node:os";
+import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { ipcContract, type IpcChannel } from "@vortspec/core/ipc";
 import { checkEnvironment, verifyClaudeLogin, verifyFigmaMcp } from "./environment/env-manager";
 import {
   listProjects,
   pickFolder,
   createFolder,
+  pickFile,
   refreshProject,
   openFolder,
   revealPath,
@@ -20,6 +23,8 @@ import type { IdeState, IdeActionResult } from "@vortspec/core/ide-mcp";
 import * as figmaCli from "./figma/figma-cli";
 import type { FigmaCliMode } from "@vortspec/core/figma";
 import { readProjectConfig } from "./workspace/config-manager";
+import { getEnvStatus, createEnvFromExample } from "./workspace/env-files";
+import { extractWalkthrough } from "./workspace/walkthrough";
 import {
   getInspectorTokens,
   setInspectorTokenValue,
@@ -31,6 +36,10 @@ import {
   restoreFiles,
 } from "./inspector/component-reader";
 import type { FileSnapshot } from "@vortspec/core/ipc";
+import { listThreads } from "./workspace/comment-store";
+import { postComment, resolveComment, shareComments } from "./workspace/comment-sync";
+import { collaborators, notify } from "./workspace/comment-mentions";
+import type { CommentThread } from "@vortspec/core/comment";
 import { getVerification } from "./inspector/verification-reader";
 import type { SetupAnswers } from "@vortspec/core/setup";
 import { startRun, cancelRun, hasActiveRun, getLastRun } from "./agent/run-manager";
@@ -93,6 +102,9 @@ const handlers: Record<IpcChannel, Handler> = {
   "system:isElectron": () => true,
   "system:getVersion": () => app.getVersion(),
   "system:homeDir": () => homedir(),
+  // Core is bundled into the app's main process, so __dirname is the app's
+  // out/main; the IDE emits the guest preload beside it at out/preload/guest.mjs.
+  "system:guestPreloadUrl": () => pathToFileURL(join(__dirname, "../preload/guest.mjs")).href,
   "system:clipboardImage": (() => readClipboardImage()) as Handler,
   "system:checkUpdate": () => checkForUpdate(),
 
@@ -105,6 +117,8 @@ const handlers: Record<IpcChannel, Handler> = {
   "workspace:pickFolder": ((req?: { create: boolean }) =>
     pickFolder(req ?? { create: false })) as Handler,
   "workspace:createFolder": (() => createFolder()) as Handler,
+  "workspace:pickFile": ((req?: { filters?: { name: string; extensions: string[] }[] }) =>
+    pickFile(req?.filters ?? [])) as Handler,
   "workspace:listProjects": () => listProjects(),
   "workspace:openFolder": ((path: string) => openFolder(path)) as Handler,
   "workspace:revealPath": ((req: { projectPath: string; relPath: string }) => {
@@ -112,12 +126,18 @@ const handlers: Record<IpcChannel, Handler> = {
     return undefined;
   }) as Handler,
   "workspace:refreshProject": ((path: string) => refreshProject(path)) as Handler,
+  "workspace:envStatus": ((path: string) => getEnvStatus(path)) as Handler,
+  "workspace:createEnv": ((req: { projectPath: string; example: string }) =>
+    createEnvFromExample(req.projectPath, req.example)) as Handler,
+  "workspace:openWalkthrough": ((destPath: string) => extractWalkthrough(destPath)) as Handler,
   "workspace:createProject": ((req: { path: string; answers: SetupAnswers }) =>
     createProject(req.path, req.answers)) as Handler,
   "workspace:listDir": ((r: { projectPath: string; relPath: string }) =>
     fsw.listDir(r.projectPath, r.relPath)) as Handler,
   "workspace:readFile": ((r: { projectPath: string; relPath: string }) =>
     fsw.readFile(r.projectPath, r.relPath)) as Handler,
+  "workspace:readAsset": ((r: { projectPath: string; relPath: string }) =>
+    fsw.readAsset(r.projectPath, r.relPath)) as Handler,
   "workspace:searchFiles": ((r: { projectPath: string; query: string; limit?: number }) =>
     fsw.searchFiles(r.projectPath, r.query, r.limit)) as Handler,
   "workspace:createFile": ((r: { projectPath: string; relPath: string }) =>
@@ -189,6 +209,7 @@ const handlers: Record<IpcChannel, Handler> = {
   "git:branches": ((p: string) => gitAdapter.getBranches(p)) as Handler,
   "git:remotes": ((p: string) => gitAdapter.getRemotes(p)) as Handler,
   "git:log": ((p: string) => gitAdapter.getLog(p)) as Handler,
+  "git:graph": ((p: string) => gitAdapter.getGraph(p)) as Handler,
   "git:stage": ((r: { projectPath: string; paths: string[] }) =>
     gitAdapter.stage(r.projectPath, r.paths)) as Handler,
   "git:unstage": ((r: { projectPath: string; paths: string[] }) =>
@@ -298,6 +319,15 @@ const handlers: Record<IpcChannel, Handler> = {
     snapshotTokenScope(projectPath)) as Handler,
   "inspector:restoreFiles": ((req: { projectPath: string; files: FileSnapshot[] }) =>
     restoreFiles(req.projectPath, req.files).then(() => undefined)) as Handler,
+  "comments:list": ((projectPath: string) => listThreads(projectPath)) as Handler,
+  "comments:upsert": ((req: { projectPath: string; thread: CommentThread }) =>
+    postComment(req.projectPath, req.thread)) as Handler,
+  "comments:resolve": ((req: { projectPath: string; id: string; resolved: boolean }) =>
+    resolveComment(req.projectPath, req.id, req.resolved)) as Handler,
+  "comments:collaborators": ((projectPath: string) => collaborators(projectPath)) as Handler,
+  "comments:notify": ((req: { projectPath: string; threadId: string; messageId: string }) =>
+    notify(req.projectPath, req.threadId, req.messageId)) as Handler,
+  "comments:share": ((projectPath: string) => shareComments(projectPath)) as Handler,
 };
 
 export function registerIpc(): void {

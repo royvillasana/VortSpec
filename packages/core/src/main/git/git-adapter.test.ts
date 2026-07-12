@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseStatus, parseBranches, parseLog } from "./git-adapter";
+import { parseStatus, parseBranches, parseLog, parseGraph } from "./git-adapter";
 import { parseGhAccounts, buildRepoCreateArgs, buildPrCreateArgs, parseGithubUrl } from "./github";
 
 describe("parseStatus (porcelain v2)", () => {
@@ -75,6 +75,23 @@ describe("parseLog", () => {
     const log = parseLog(raw);
     expect(log).toHaveLength(1);
     expect(log[0]).toEqual({ hash: "h1", shortHash: "s1", subject: "subject one", author: "Alice", date: "2026-07-01" });
+  });
+});
+
+describe("parseGraph", () => {
+  it("parses parents (space-separated) and comma-separated refs", () => {
+    const rec = "H1\x1fh1\x1fP1 P2\x1fAlice\x1f2 hours ago\x1fmerge branch\x1fHEAD -> main, origin/main, tag: v1";
+    const commits = parseGraph(rec + "\x1e");
+    expect(commits).toHaveLength(1);
+    expect(commits[0].parents).toEqual(["P1", "P2"]);
+    expect(commits[0].refs).toEqual(["HEAD -> main", "origin/main", "tag: v1"]);
+    expect(commits[0].date).toBe("2 hours ago");
+  });
+
+  it("handles a root commit with no parents and no refs", () => {
+    const commits = parseGraph("H1\x1fh1\x1f\x1fBob\x1f1 day ago\x1finit\x1f\x1e");
+    expect(commits[0].parents).toEqual([]);
+    expect(commits[0].refs).toEqual([]);
   });
 });
 

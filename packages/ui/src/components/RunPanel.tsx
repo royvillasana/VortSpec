@@ -90,8 +90,31 @@ function StatusBar({ model }: { model: RunModel }): React.JSX.Element {
       {model.result?.costUsd !== undefined && (
         <span className="text-vs-text-muted">· ${model.result.costUsd.toFixed(4)}</span>
       )}
+      {model.result?.usage && (
+        <span className="text-vs-text-muted" title="input / output tokens · prompt-cache hit ratio">
+          · {fmtTokens(model.result.usage.inputTokens)} in / {fmtTokens(model.result.usage.outputTokens)} out
+          {cacheHitRatio(model.result.usage) !== null && ` · ${cacheHitRatio(model.result.usage)}% cached`}
+        </span>
+      )}
     </div>
   );
+}
+
+/** Compact token count (e.g. 12_345 → "12.3k"). */
+function fmtTokens(n: number): string {
+  return n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
+}
+
+/** Prompt-cache hit ratio = cacheRead / (cacheRead + cacheCreation + input), as a %. */
+function cacheHitRatio(u: {
+  inputTokens: number;
+  cacheReadTokens?: number;
+  cacheCreationTokens?: number;
+}): number | null {
+  const read = u.cacheReadTokens ?? 0;
+  const denom = read + (u.cacheCreationTokens ?? 0) + u.inputTokens;
+  if (denom === 0 || (u.cacheReadTokens === undefined && u.cacheCreationTokens === undefined)) return null;
+  return Math.round((read / denom) * 100);
 }
 
 // ── Tab 1: Chat ──────────────────────────────────────────────────────

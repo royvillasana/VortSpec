@@ -35,56 +35,161 @@ function balanced(src: string, from: number): { body: string; end: number } | nu
   return null;
 }
 
-/** Blank out string literals so their contents (which contain `:`) aren't parsed as keys. */
-function stripStrings(s: string): string {
-  return s
-    .replace(/'(?:[^'\\]|\\.)*'/g, "''")
-    .replace(/"(?:[^"\\]|\\.)*"/g, '""')
-    .replace(/`(?:[^`\\]|\\.)*`/g, "``");
+/** Strip `//` line and `/* *\/` block comments, but never inside string/template literals. */
+function stripComments(src: string): string {
+  let out = "";
+  for (let i = 0; i < src.length; i++) {
+    const ch = src[i];
+    if (ch === "'" || ch === '"' || ch === "`") {
+      out += ch;
+      i++;
+      while (i < src.length && src[i] !== ch) {
+        out += src[i];
+        if (src[i] === "\\" && i + 1 < src.length) out += src[++i];
+        i++;
+      }
+      out += src[i] ?? "";
+      continue;
+    }
+    if (ch === "/" && src[i + 1] === "/") {
+      while (i < src.length && src[i] !== "\n") i++;
+      out += "\n";
+      continue;
+    }
+    if (ch === "/" && src[i + 1] === "*") {
+      i += 2;
+      while (i < src.length && !(src[i] === "*" && src[i + 1] === "/")) i++;
+      i++; // land on the '/'
+      continue;
+    }
+    out += ch;
+  }
+  return out;
 }
 
-/** Parse CVA `variants` groups + `defaultVariants` from component/variants source. */
-export function parseProps(src: string): PropControl[] {
-  const vIdx = src.search(/\bvariants\s*:/);
-  if (vIdx < 0) return [];
-  const vb = balanced(src, vIdx);
-  if (!vb) return [];
+/**
+ * Split an object/array body into its top-level `,`-separated segments, respecting
+ * nested `{}`/`[]`/`()` and skipping over string/template literals (whose contents
+ * may contain commas, colons, or braces). The caller passes the *inner* body — the
+ * text between the outer braces.
+ */
+function splitTopLevel(body: string): string[] {
+  const parts: string[] = [];
+  let depth = 0;
+  let start = 0;
+  for (let i = 0; i < body.length; i++) {
+    const ch = body[i];
+    if (ch === "'" || ch === '"' || ch === "`") {
+      i++;
+      while (i < body.length && body[i] !== ch) {
+        if (body[i] === "\\") i++;
+        i++;
+      }
+      continue;
+    }
+    if (ch === "{" || ch === "[" || ch === "(") depth++;
+    else if (ch === "}" || ch === "]" || ch === ")") depth--;
+    else if (ch === "," && depth === 0) {
+      parts.push(body.slice(start, i));
+      start = i + 1;
+    }
+  }
+  const last = body.slice(start);
+  if (last.trim()) parts.push(last);
+  return parts;
+}
 
+/** Split a top-level `key: value` segment. Key may be an identifier, string, or `true`/`false`. */
+function splitKeyValue(seg: string): { key: string; value: string } | null {
+  const s = seg.trim();
+  const m = s.match(/^(?:(['"])((?:[^'"\\]|\\.)*)\1|([A-Za-z_$][\w$-]*))\s*:/);
+  if (!m) return null;
+  return { key: m[2] ?? m[3] ?? "", value: s.slice(m[0].length).trim() };
+}
+
+/**
+ * The class string carried by a variant option value: a plain string/template
+ * literal, or — for `cn(...)`/`clsx(...)`/array/object values — every string
+ * literal within, joined. Best-effort so live preview + variant detection still
+ * work for non-trivial option expressions.
+ */
+function extractClasses(value: string): string {
+  const v = value.trim();
+  const lit = v.match(/^(['"`])([\s\S]*?)\1$/);
+  if (lit) return lit[2].replace(/\s+/g, " ").trim();
+  const chunks: string[] = [];
+  for (const sm of v.matchAll(/(['"`])((?:[^'"`\\]|\\.)*)\1/g)) chunks.push(sm[2]);
+  return chunks.join(" ").replace(/\s+/g, " ").trim();
+}
+
+/** Parse `defaultVariants: { key: 'value', ... }` into key → value. */
+function parseDefaults(src: string): Map<string, string> {
   const defaults = new Map<string, string>();
   const dIdx = src.search(/\bdefaultVariants\s*:/);
-  if (dIdx >= 0) {
-    const db = balanced(src, dIdx);
-    if (db) {
-      for (const m of stripStrings(db.body).matchAll(/([A-Za-z_$][\w$]*)\s*:/g)) {
-        // Recover the real (un-stripped) value for this key.
-        const valMatch = db.body.match(
-          new RegExp(`${m[1]}\\s*:\\s*['"]([^'"]+)['"]`),
-        );
-        if (valMatch) defaults.set(m[1], valMatch[1]);
-      }
-    }
+  if (dIdx < 0) return defaults;
+  const db = balanced(src, dIdx);
+  if (!db) return defaults;
+  for (const seg of splitTopLevel(db.body)) {
+    const kv = splitKeyValue(seg);
+    if (!kv) continue;
+    // Value is a string literal, a boolean, or a number — take its bare text.
+    const lit = kv.value.match(/^(['"])((?:[^'"\\]|\\.)*)\1/);
+    defaults.set(kv.key, lit ? lit[2] : kv.value.replace(/[,\s]+$/, ""));
   }
+  return defaults;
+}
 
-  const props: PropControl[] = [];
-  // Each variant group is `key: { ...flat option keys... }` (no nested braces).
-  for (const m of vb.body.matchAll(/([A-Za-z_$][\w$]*)\s*:\s*\{([^{}]*)\}/g)) {
-    const key = m[1];
-    const options: string[] = [];
-    for (const om of stripStrings(m[2]).matchAll(
-      /(['"]?)([A-Za-z_$][\w$-]*|true|false)\1\s*:/g,
-    )) {
-      options.push(om[2]);
+/**
+ * Parse CVA `variants` groups + `defaultVariants` from component/variants source.
+ *
+ * Brace-aware (not a flat regex): it walks the `variants: {...}` body into top-level
+ * groups, and each group into its option entries, so option values containing nested
+ * braces, `cn(...)` calls, or multi-line templates parse correctly. A sibling
+ * `compoundVariants` array never leaks into the base controls (it is not inside the
+ * `variants` object). Degrades gracefully — any parse failure yields best-effort /
+ * empty, never a throw, and nothing is surfaced to the user.
+ */
+export function parseProps(rawSrc: string): PropControl[] {
+  try {
+    const src = stripComments(rawSrc);
+    const vIdx = src.search(/\bvariants\s*:/);
+    if (vIdx < 0) return [];
+    const vb = balanced(src, vIdx);
+    if (!vb) return [];
+
+    const defaults = parseDefaults(src);
+    const props: PropControl[] = [];
+
+    for (const groupSeg of splitTopLevel(vb.body)) {
+      const kv = splitKeyValue(groupSeg);
+      if (!kv) continue;
+      const groupBody = balanced(kv.value, 0); // the `{...}` of option keys after the group name
+      if (!groupBody) continue;
+
+      const options: string[] = [];
+      const classes: Record<string, string> = {};
+      for (const optSeg of splitTopLevel(groupBody.body)) {
+        const okv = splitKeyValue(optSeg);
+        if (!okv) continue;
+        options.push(okv.key);
+        const cls = extractClasses(okv.value);
+        if (cls) classes[okv.key] = cls;
+      }
+      if (options.length === 0) continue;
+
+      const isBool = options.every((o) => o === "true" || o === "false");
+      props.push({
+        key: kv.key,
+        kind: isBool ? "boolean" : "enum",
+        options,
+        defaultValue: defaults.get(kv.key),
+        classes,
+      });
     }
-    if (options.length === 0) continue;
-    const isBool = options.every((o) => o === "true" || o === "false");
-    props.push({
-      key,
-      kind: isBool ? "boolean" : "enum",
-      options,
-      defaultValue: defaults.get(key),
-    });
+    return props;
+  } catch {
+    return []; // never let a malformed source blow up the component read
   }
-  return props;
 }
 
 /**

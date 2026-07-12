@@ -20,6 +20,7 @@ import { WORKSPACE_CHANGE_CHANNEL, type WorkspaceChange } from "@vortspec/core/f
 import { TERMINAL_DATA_CHANNEL, type TerminalData } from "@vortspec/core/terminal";
 import { IDE_ACTION_CHANNEL, type IdeState, type IdeAction, type IdeActionResult } from "@vortspec/core/ide-mcp";
 import type { FigmaCliMode } from "@vortspec/core/figma";
+import type { CommentThread } from "@vortspec/core/comment";
 import type { VortSpecApi } from "@vortspec/core/api";
 
 /**
@@ -48,6 +49,7 @@ const api: VortSpecApi = {
   isElectron: () => invoke("system:isElectron"),
   getVersion: () => invoke("system:getVersion"),
   homeDir: () => invoke("system:homeDir"),
+  guestPreloadUrl: () => invoke("system:guestPreloadUrl"),
   clipboardImage: () => invoke("system:clipboardImage"),
   // Resolve the absolute path of a File dropped from the OS (Electron 32+ removed
   // File.path). Not an IPC call — runs in the preload with webUtils.
@@ -61,11 +63,16 @@ const api: VortSpecApi = {
 
   pickFolder: (create = false) => invoke("workspace:pickFolder", { create }),
   createFolder: () => invoke("workspace:createFolder"),
+  pickFile: (filters) => invoke("workspace:pickFile", filters ? { filters } : undefined),
   listProjects: () => invoke("workspace:listProjects"),
   openFolder: (path: string) => invoke("workspace:openFolder", path),
   revealPath: (projectPath: string, relPath: string) =>
     invoke("workspace:revealPath", { projectPath, relPath }),
   refreshProject: (path: string) => invoke("workspace:refreshProject", path),
+  envStatus: (projectPath: string) => invoke("workspace:envStatus", projectPath),
+  createEnv: (projectPath: string, example: string) =>
+    invoke("workspace:createEnv", { projectPath, example }),
+  openWalkthrough: (destPath: string) => invoke("workspace:openWalkthrough", destPath),
   createProject: (path: string, answers: SetupAnswers) =>
     invoke("workspace:createProject", { path, answers }),
 
@@ -82,6 +89,7 @@ const api: VortSpecApi = {
   gitBranches: (projectPath: string) => invoke("git:branches", projectPath),
   gitRemotes: (projectPath: string) => invoke("git:remotes", projectPath),
   gitLog: (projectPath: string) => invoke("git:log", projectPath),
+  gitGraph: (projectPath: string) => invoke("git:graph", projectPath),
   gitStage: (projectPath: string, paths: string[]) => invoke("git:stage", { projectPath, paths }),
   gitUnstage: (projectPath: string, paths: string[]) => invoke("git:unstage", { projectPath, paths }),
   gitCommit: (projectPath: string, message: string) => invoke("git:commit", { projectPath, message }),
@@ -156,6 +164,8 @@ const api: VortSpecApi = {
     invoke("workspace:listDir", { projectPath, relPath }),
   readFile: (projectPath: string, relPath: string) =>
     invoke("workspace:readFile", { projectPath, relPath }),
+  readAsset: (projectPath: string, relPath: string) =>
+    invoke("workspace:readAsset", { projectPath, relPath }),
   searchFiles: (projectPath: string, query: string, limit?: number) =>
     invoke("workspace:searchFiles", { projectPath, query, limit }),
   createFile: (projectPath: string, relPath: string) =>
@@ -216,6 +226,15 @@ const api: VortSpecApi = {
     invoke("inspector:snapshotTokenScope", projectPath),
   restoreFiles: (projectPath: string, files: FileSnapshot[]) =>
     invoke("inspector:restoreFiles", { projectPath, files }),
+  listComments: (projectPath: string) => invoke("comments:list", projectPath),
+  upsertComment: (projectPath: string, thread: CommentThread) =>
+    invoke("comments:upsert", { projectPath, thread }),
+  resolveComment: (projectPath: string, id: string, resolved: boolean) =>
+    invoke("comments:resolve", { projectPath, id, resolved }),
+  commentCollaborators: (projectPath: string) => invoke("comments:collaborators", projectPath),
+  notifyComment: (projectPath: string, threadId: string, messageId: string) =>
+    invoke("comments:notify", { projectPath, threadId, messageId }),
+  shareComments: (projectPath: string) => invoke("comments:share", projectPath),
 };
 
 export type { VortSpecApi };

@@ -77,7 +77,7 @@ test("the Storybook activity shows the Storybook runtime on localhost", async ({
   const c = await mount(<App />, { hooksConfig: { mock: base } });
   await open(c);
   await rail(c).getByRole("button", { name: "Storybook" }).click();
-  // The RunApp view in Storybook mode — its own header, distinct from "Run app".
+  // The RunApp view in Storybook mode — its own header, distinct from "Playground".
   await expect(c.getByText("Storybook", { exact: true })).toBeVisible();
   await expect(c.getByText("localhost", { exact: true })).toBeVisible();
 });

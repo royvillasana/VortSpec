@@ -37,8 +37,9 @@ test("Create New Project opens the setup wizard for a fresh folder", async ({ mo
   };
   const c = await mount(<App />, { hooksConfig: { mock } });
   await c.getByRole("button", { name: "Create New Project" }).click();
-  // The shared SDD-DE setup wizard (same as the cockpit) takes over.
-  await expect(c.getByRole("heading", { name: "Set up project" })).toBeVisible();
+  // The unified setup + intake stepper (same as the cockpit) takes over on step 1.
+  await expect(c.getByRole("heading", { name: "Set up your stack" })).toBeVisible();
+  await expect(c.getByText("Where do your components and design specs come from?")).toBeVisible();
 });
 
 test("the Clone Repository link reveals a repo-URL input", async ({ mount }) => {
@@ -46,6 +47,37 @@ test("the Clone Repository link reveals a repo-URL input", async ({ mount }) => 
   await c.getByRole("button", { name: /Clone Repository/ }).click();
   await expect(c.getByPlaceholder(/Repository URL/)).toBeVisible();
   await expect(c.getByRole("button", { name: /Choose folder & clone/ })).toBeVisible();
+});
+
+test("the Home activity returns to the project picker", async ({ mount }) => {
+  const c = await mount(<App />, { hooksConfig: { mock: base } });
+  await open(c);
+  // In a workspace now (the code shell is shown).
+  await expect(c.getByText("No file open", { exact: true })).toBeVisible();
+  // Click Home → back to the homepage project picker.
+  await c.getByRole("navigation", { name: "Activity bar" }).getByRole("button", { name: /^Home/ }).click();
+  await expect(c.getByRole("heading", { name: "VortSpec", exact: true })).toBeVisible();
+  await expect(c.getByRole("button", { name: /acme-design-system/ })).toBeVisible();
+});
+
+test("the status bar surfaces uncommitted + unpushed changes and opens Source Control", async ({ mount }) => {
+  const mock = {
+    ...base,
+    gitStatus: {
+      isRepo: true, branch: "main", upstream: "origin/main", ahead: 2, behind: 0,
+      staged: [{ path: "a.ts", status: "modified" as const }],
+      unstaged: [{ path: "b.ts", status: "modified" as const }],
+      untracked: ["c.ts"], conflicts: [], clean: false,
+    },
+  };
+  const c = await mount(<App />, { hooksConfig: { mock } });
+  await open(c);
+  // 1 staged + 1 unstaged + 1 untracked = 3 local changes, 2 unpushed commits.
+  await expect(c.getByText(/3 changes/)).toBeVisible();
+  await expect(c.getByText(/2 unpushed/)).toBeVisible();
+  // Clicking opens Source Control.
+  await c.getByRole("button", { name: /Commit & push/ }).click();
+  await expect(c.getByRole("heading", { name: "Source Control" })).toBeVisible();
 });
 
 test("Settings is reachable from the initial (no-workspace) screen", async ({ mount }) => {

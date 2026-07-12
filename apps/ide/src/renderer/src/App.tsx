@@ -7,12 +7,12 @@ import { AssistantDock, type PendingSelectionRef } from "@vortspec/ui/AssistantD
 import { ConversationTabs } from "@vortspec/ui/ConversationTabs";
 import { SourceControl } from "@vortspec/ui/SourceControl";
 import { Inspector } from "@vortspec/ui/Inspector";
-import { PipelinePanel } from "@vortspec/ui/PipelinePanel";
+import { GuidedFlow } from "@vortspec/ui/GuidedFlow";
 import { Tasks } from "@vortspec/ui/Tasks";
 import { DesignManifest } from "@vortspec/ui/DesignManifest";
 import { RunApp } from "@vortspec/ui/RunApp";
 import { Profile } from "@vortspec/ui/Profile";
-import { NewProjectWizard } from "@vortspec/ui/NewProjectWizard";
+import { ProjectSetup } from "@vortspec/ui/ProjectSetup";
 import { ActivityBar } from "./components/ActivityBar";
 import { WorkspacePicker } from "./components/WorkspacePicker";
 import { Explorer } from "./components/Explorer";
@@ -41,8 +41,13 @@ export default function App(): JSX.Element {
   const [userName, setUserName] = useState<string | undefined>(undefined);
   const [previewUrl] = useState<string | null>(null);
   const [homeDir, setHomeDir] = useState<string | null>(null);
+  // A dedicated, scoped folder (~/VortSpec) the pre-project assistant runs in —
+  // NOT the bare home dir, so Claude Code doesn't wander into ~/Music, ~/Documents,
+  // etc. and make macOS prompt for those protected areas.
+  const [assistantHome, setAssistantHome] = useState<string | null>(null);
   // The current git branch, shown in the status bar beside the project name.
   const [branch, setBranch] = useState<string | null>(null);
+  const [gitCounts, setGitCounts] = useState<{ changes: number; ahead: number }>({ changes: 0, ahead: 0 });
   // The live editor selection, surfaced to the assistant as grounding context.
   const [selection, setSelection] = useState<EditorSelection | null>(null);
   // "Open in Chat" — the selection the user pushed to the assistant (nonce re-adds).
@@ -52,6 +57,11 @@ export default function App(): JSX.Element {
   const [welcomeView, setWelcomeView] = useState<"start" | "settings">("start");
   // The destination folder for a new project being set up (Create New Project flow).
   const [newProject, setNewProject] = useState<Project | null>(null);
+  // "Clone Repository" from the native File menu routes Home and auto-opens the
+  // clone input in the WorkspacePicker (it owns the repo-URL quick-input).
+  const [welcomeIntent, setWelcomeIntent] = useState<"clone" | null>(null);
+  // Bumped by File → New to ask the Explorer to start a new-file input at root.
+  const [newFileSignal, setNewFileSignal] = useState(0);
   const [winW, setWinW] = useState<number>(() =>
     typeof window === "undefined" ? 1440 : window.innerWidth,
   );
@@ -64,22 +74,72 @@ export default function App(): JSX.Element {
     setSelection(null);
   }, [wf.activePath]);
 
-  // Current git branch for the status bar. Re-read on activity change so a
-  // checkout in the Source Control view is reflected on return.
+  // Current git branch + change/unpushed counts for the status bar. Re-read on
+  // activity change (so a checkout/commit in Source Control is reflected on
+  // return) and whenever files change on disk (autosave, agent runs).
   useEffect(() => {
     if (!workspace) {
       setBranch(null);
+      setGitCounts({ changes: 0, ahead: 0 });
       return;
     }
     let alive = true;
-    void api
-      .gitStatus(workspace.path)
-      .then((s) => alive && setBranch(s.isRepo && s.branch ? s.branch : null))
-      .catch(() => alive && setBranch(null));
+    const refresh = (): void => {
+      void api
+        .gitStatus(workspace.path)
+        .then((s) => {
+          if (!alive) return;
+          setBranch(s.isRepo && s.branch ? s.branch : null);
+          setGitCounts(
+            s.isRepo
+              ? { changes: s.staged.length + s.unstaged.length + s.untracked.length, ahead: s.ahead }
+              : { changes: 0, ahead: 0 },
+          );
+        })
+        .catch(() => {
+          if (alive) {
+            setBranch(null);
+            setGitCounts({ changes: 0, ahead: 0 });
+          }
+        });
+    };
+    refresh();
+    const off = api.onWorkspaceChange((e) => {
+      if (e.projectPath === workspace.path) refresh();
+    });
+    return () => {
+      alive = false;
+      off();
+    };
+  }, [workspace?.path, layout.activity]);
+
+  // Auto-start the SDD-DE pipeline: when a project is opened whose design-system
+  // foundation isn't set up yet (no extracted tokens, no detected components),
+  // land on the Flow/foundation instead of the Explorer. A founded project keeps
+  // its default (Explorer). Runs once per opened project.
+  useEffect(() => {
+    if (!workspace) return;
+    let alive = true;
+    void (async () => {
+      let ready = false;
+      try {
+        const t = await api.inspectorTokens(workspace.path);
+        ready = t.tokens.length > 0;
+        if (!ready) {
+          const c = await api.inspectorComponents(workspace.path);
+          ready = c.components.length > 0;
+        }
+      } catch {
+        ready = false;
+      }
+      if (alive && !ready) dispatch({ type: "setActivity", activity: "flow" });
+    })();
     return () => {
       alive = false;
     };
-  }, [workspace?.path, layout.activity]);
+    // Only re-evaluate when a different project is opened.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workspace?.path]);
 
   // The editor state the assistant's IDE tools read (via the MCP bridge).
   const ideState = useMemo<IdeState>(
@@ -101,6 +161,15 @@ export default function App(): JSX.Element {
     void api.getProfile().then((p) => setUserName(p.name || undefined)).catch(() => undefined);
     void api.homeDir().then(setHomeDir).catch(() => undefined);
   }, []);
+  // Only when no project is open (welcome screen): ensure ~/VortSpec exists and
+  // ground the pre-project assistant there instead of the bare home dir — best-
+  // effort, created inside home so no traversal. Keeps Claude Code scoped and
+  // avoids macOS prompting for ~/Music, ~/Documents, etc. Never runs with a
+  // workspace open, so it doesn't touch the filesystem during normal editing.
+  useEffect(() => {
+    if (workspace || assistantHome || !homeDir) return;
+    void api.createDir(homeDir, "VortSpec").finally(() => setAssistantHome(`${homeDir}/VortSpec`));
+  }, [workspace, assistantHome, homeDir]);
   useEffect(() => {
     const onResize = (): void => setWinW(window.innerWidth);
     window.addEventListener("resize", onResize);
@@ -131,11 +200,72 @@ export default function App(): JSX.Element {
     return () => window.removeEventListener("keydown", onKey);
   }, [dispatch]);
 
+  // Native File/App menu commands (from the IDE preload). These drive the SAME
+  // flows as the welcome screen and status bar, so the renderer stays the single
+  // source of truth for what's open — the menu never mutates files itself.
+  useEffect(() => {
+    const bridge = window.vortspecMenu;
+    if (!bridge) return;
+    return bridge.onCommand(async ({ command, path }) => {
+      switch (command) {
+        case "openRecent": {
+          if (!path) return;
+          const fresh = await api.refreshProject(path).catch(() => null);
+          if (fresh) setWorkspace(fresh);
+          return;
+        }
+        case "openFolder": {
+          const p = await api.pickFolder(false);
+          if (p) setWorkspace(p);
+          return;
+        }
+        case "createProject": {
+          const dest = await api.createFolder();
+          if (dest) {
+            setWorkspace(null);
+            setNewProject(dest);
+          }
+          return;
+        }
+        case "openWalkthrough": {
+          const dest = await api.createFolder();
+          if (!dest) return;
+          const r = await api.openWalkthrough(dest.path);
+          if (!r.ok) return;
+          const fresh = await api.refreshProject(dest.path).catch(() => null);
+          setWorkspace(fresh ?? dest);
+          return;
+        }
+        case "cloneRepo": {
+          setWorkspace(null);
+          setWelcomeView("start");
+          setWelcomeIntent("clone");
+          return;
+        }
+        case "closeProject": {
+          setWorkspace(null);
+          return;
+        }
+        case "newFile": {
+          dispatch({ type: "setActivity", activity: "explorer" });
+          setNewFileSignal((n) => n + 1);
+          return;
+        }
+        case "settings": {
+          setWelcomeView("settings");
+          dispatch({ type: "setActivity", activity: "settings" });
+          return;
+        }
+      }
+    });
+  }, [dispatch]);
+
   const go = (activity: Activity) => (): void => dispatch({ type: "setActivity", activity });
 
   if (!workspace) {
-    // Create New Project — pick/create an empty folder, then run the SDD-DE setup
-    // wizard (the same flow as the cockpit); on finish, open the created project.
+    // Create New Project — one unified setup + intake stepper (Setup · Product ·
+    // Scope · Advanced). On finish it creates the project; the open-routing effect
+    // then lands it on the Foundation.
     if (newProject) {
       return (
         <div className="flex h-screen w-screen flex-col overflow-hidden bg-vs-bg-primary text-vs-text-primary">
@@ -146,7 +276,7 @@ export default function App(): JSX.Element {
             <span className="font-bold text-vs-text-secondary">VortSpec</span>
           </header>
           <div className="min-h-0 flex-1 overflow-auto">
-            <NewProjectWizard
+            <ProjectSetup
               project={newProject}
               onCreated={(p) => {
                 setNewProject(null);
@@ -160,12 +290,13 @@ export default function App(): JSX.Element {
     }
     // A synthetic "Home" project gives the welcome-screen assistant a cwd so the
     // user can chat with the AI before opening a project (ask it to set up, clone,
-    // scaffold, etc. — it runs in your home directory).
-    const homeProject: Project | null = homeDir
+    // scaffold, etc.). It runs in a dedicated ~/VortSpec folder — NOT the bare home
+    // dir — so the assistant stays out of protected areas (Music/Documents/Desktop).
+    const homeProject: Project | null = assistantHome
       ? {
           id: "home",
           name: "Home",
-          path: homeDir,
+          path: assistantHome,
           toolkit: { present: false, version: null, updateAvailable: false },
           lastRunStatus: "none",
           addedAt: "",
@@ -200,6 +331,8 @@ export default function App(): JSX.Element {
             ) : (
               <WorkspacePicker
                 onOpen={(p) => setWorkspace(p)}
+                autoClone={welcomeIntent === "clone"}
+                onCloneShown={() => setWelcomeIntent(null)}
                 onCreateProject={() => {
                   void api.createFolder().then((dest) => {
                     if (dest) setNewProject(dest);
@@ -339,13 +472,31 @@ export default function App(): JSX.Element {
       a === "source" ? (
         <SourceControl project={p} hideRail onBack={go("explorer")} onFlow={go("flow")} onRun={go("run")} onPlayground={go("explorer")} onTokens={go("tokens")} onManifest={go("manifest")} onHistory={go("explorer")} />
       ) : a === "flow" ? (
-        <PipelinePanel project={p} onOpenManifest={go("manifest")} onOpenTokens={go("tokens")} />
+        <GuidedFlow
+          project={p}
+          hideRail
+          onBack={go("explorer")}
+          onOpenInspector={go("tokens")}
+          onOpenPreview={go("play")}
+          onOpenRun={go("run")}
+          onOpenVerify={go("run")}
+          onOpenHistory={go("explorer")}
+          onOpenManifest={go("manifest")}
+          onOpenSource={go("source")}
+          onOpenRunApp={go("run")}
+          onOpenTasks={go("tasks")}
+        />
       ) : a === "run" ? (
-        <RunApp project={p} kind="app" hideRail onBack={go("explorer")} onFlow={go("flow")} onRun={go("run")} onPlayground={go("play")} onTokens={go("tokens")} onManifest={go("manifest")} onHistory={go("explorer")} onSource={go("source")} />
+        <RunApp project={p} kind="app" hideRail canvas onBack={go("explorer")} onFlow={go("flow")} onRun={go("run")} onPlayground={go("play")} onTokens={go("tokens")} onManifest={go("manifest")} onHistory={go("explorer")} onSource={go("source")}
+          onSendToChat={(text, file) => {
+            if (!layout.secondaryOpen) dispatch({ type: "toggleSecondary" });
+            setPendingRef({ path: file ?? "Run canvas selection", startLine: 1, endLine: 1, text, nonce: ++refNonce.current });
+          }}
+        />
       ) : a === "play" ? (
         <RunApp project={p} kind="storybook" hideRail onBack={go("explorer")} onFlow={go("flow")} onRun={go("run")} onPlayground={go("play")} onTokens={go("tokens")} onManifest={go("manifest")} onHistory={go("explorer")} onSource={go("source")} />
       ) : a === "tokens" ? (
-        <Inspector project={p} hideRail onBack={go("explorer")} onOpenPreview={go("explorer")} onOpenRun={go("run")} onOpenHistory={go("explorer")} onOpenManifest={go("manifest")} />
+        <Inspector project={p} hideRail onBack={go("explorer")} onOpenPreview={go("explorer")} onOpenRun={go("run")} onOpenHistory={go("explorer")} onOpenManifest={go("manifest")} onOpenFile={(path) => { void wf.openFile(path); dispatch({ type: "setActivity", activity: "explorer" }); }} />
       ) : a === "tasks" ? (
         <Tasks project={p} hideRail onBack={go("explorer")} onFlow={go("flow")} onRun={go("run")} onPlayground={go("explorer")} onTokens={go("tokens")} onManifest={go("manifest")} onHistory={go("explorer")} onSource={go("source")} />
       ) : a === "manifest" ? (
@@ -369,12 +520,12 @@ export default function App(): JSX.Element {
         </header>
 
         <div className="flex min-h-0 flex-1 overflow-hidden">
-          <ActivityBar active={layout.activity} onSelect={(a) => dispatch({ type: "setActivity", activity: a })} chatOpen={layout.secondaryOpen} onToggleChat={() => dispatch({ type: "toggleSecondary" })} />
+          <ActivityBar active={layout.activity} onSelect={(a) => (a === "home" ? setWorkspace(null) : dispatch({ type: "setActivity", activity: a }))} chatOpen={layout.secondaryOpen} onToggleChat={() => dispatch({ type: "toggleSecondary" })} />
 
           {showPrimary && (
             <>
               <aside style={{ width: eff.primary }} className="flex shrink-0 flex-col overflow-auto border-r border-vs-border-default bg-vs-bg-surface transition-[width] duration-150 ease-out">
-                <Explorer project={workspace} activePath={wf.activePath} onOpen={openFromExplorer} onCollapse={() => dispatch({ type: "togglePrimary" })} openCount={wf.files.length} />
+                <Explorer project={workspace} activePath={wf.activePath} onOpen={openFromExplorer} onCollapse={() => dispatch({ type: "togglePrimary" })} openCount={wf.files.length} newFileSignal={newFileSignal} />
               </aside>
               <Resizer orientation="vertical" ariaLabel="Resize sidebar" onDelta={(d) => dispatch({ type: "nudgePrimary", delta: d })} />
             </>
@@ -472,6 +623,23 @@ export default function App(): JSX.Element {
               onCheckout={(name) => setBranch(name)}
               onCreate={() => dispatch({ type: "setActivity", activity: "source" })}
             />
+          )}
+          {(gitCounts.changes > 0 || gitCounts.ahead > 0) && (
+            <button
+              type="button"
+              onClick={() => dispatch({ type: "setActivity", activity: "source" })}
+              className="flex items-center gap-1.5 rounded px-1.5 text-vs-text-secondary hover:text-vs-text-primary"
+              title="You have local changes that aren't on GitHub/GitLab yet — open Source Control to commit and push."
+            >
+              {gitCounts.changes > 0 && (
+                <span className="flex items-center gap-1">
+                  <span className="inline-block h-1.5 w-1.5 rounded-full bg-vs-warning" />
+                  {gitCounts.changes} change{gitCounts.changes === 1 ? "" : "s"}
+                </span>
+              )}
+              {gitCounts.ahead > 0 && <span title="commits not yet pushed">↑{gitCounts.ahead} unpushed</span>}
+              <span className="text-vs-text-muted">— Commit &amp; push</span>
+            </button>
           )}
           <div className="flex-1" />
           {/* Region toggles apply to the Explorer/editor view only. */}

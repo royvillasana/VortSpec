@@ -44,6 +44,12 @@ export class AgentAdapter extends EventEmitter {
       // this run. Non-strict: the user's globally configured servers still load.
       args.push("--mcp-config", opts.mcpConfigPath);
     }
+    if (opts.strictMcp) {
+      // Ignore the user's globally-configured MCP servers (Figma, etc.) for this
+      // run — a small source edit doesn't need them, and skipping their startup
+      // connections is most of the win. Not `--bare`: skills/CLAUDE.md still load.
+      args.push("--strict-mcp-config");
+    }
     if (opts.resumeSessionId) {
       args.push("--resume", opts.resumeSessionId);
     }

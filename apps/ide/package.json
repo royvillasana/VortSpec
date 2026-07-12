@@ -50,22 +50,41 @@
   "build": {
     "appId": "com.vortspec.ide",
     "productName": "VortSpec IDE",
+    "afterPack": "build/after-pack.cjs",
+    "npmRebuild": false,
     "asarUnpack": [
       "**/node_modules/@royvillasana/sdd-de/**",
       "**/node_modules/node-pty/**"
     ],
     "mac": {
       "category": "public.app-category.developer-tools",
+      "icon": "build/icon.icns",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist",
+      "notarize": false,
       "target": [
         {
           "target": "dmg",
-          "arch": "universal"
+          "arch": ["arm64", "x64"]
         }
-      ],
-      "x64ArchFiles": "**/node_modules/node-pty/**"
+      ]
     },
     "files": [
-      "out/**/*"
+      "out/**/*",
+      "!node_modules/**",
+      "node_modules/node-pty/**",
+      "node_modules/node-addon-api/**",
+      "node_modules/zod/**",
+      "node_modules/@electron-toolkit/**",
+      "node_modules/@royvillasana/**"
+    ],
+    "extraResources": [
+      {
+        "from": "resources",
+        "to": "."
+      }
     ],
     "directories": {
       "output": "release"

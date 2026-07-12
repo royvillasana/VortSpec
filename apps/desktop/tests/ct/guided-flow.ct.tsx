@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/experimental-ct-react";
-import { GuidedFlow } from "../../src/renderer/src/views/GuidedFlow";
+import { GuidedFlow } from "@vortspec/ui/GuidedFlow";
 import { PROJECT } from "./support/fixtures";
 import type { InspectorComponentsResult, InspectorTokensResult } from "@vortspec/core/ipc";
 import type { RunEvent } from "@vortspec/core/run-events";
@@ -87,13 +87,43 @@ test("shows living status and the component roster once established", async ({ m
   const c = await mount(<GuidedFlow {...props} />, {
     hooksConfig: { mock: { tokens: TOKENS, components: ROSTER, manifest: MANIFEST } },
   });
-  // Living status, not "complete".
-  await expect(c.getByText(/Foundation ready · 2\/3 built · 1 verified/)).toBeVisible();
+  // Living status pills, not "complete".
+  await expect(c.getByText("foundation ready")).toBeVisible();
+  await expect(c.getByText("2/3 built")).toBeVisible();
+  await expect(c.getByText("1 verified")).toBeVisible();
   await expect(c.getByText(/complete/i)).toHaveCount(0);
+  // The dashboard rail's category nav jumps to each level + the outputs.
+  const nav = c.getByRole("navigation");
+  await expect(nav.getByRole("button", { name: /Atoms/ })).toBeVisible();
+  await expect(nav.getByRole("button", { name: /Organisms/ })).toBeVisible();
+  await expect(nav.getByRole("button", { name: /Outputs/ })).toBeVisible();
+  await nav.getByRole("button", { name: /Organisms/ }).click();
   // Roster rows with their statuses (exact to avoid the summary line).
   await expect(c.getByText("Button", { exact: true })).toBeVisible();
   await expect(c.getByText("verified", { exact: true })).toBeVisible();
   await expect(c.getByText("detected", { exact: true })).toBeVisible();
+});
+
+test("re-source: a founded project offers a source input + Merge / Clean-sweep (Steps 4/5)", async ({ mount }) => {
+  const c = await mount(<GuidedFlow {...props} />, {
+    hooksConfig: { mock: { tokens: TOKENS, components: ROSTER, manifest: MANIFEST } },
+  });
+  // The re-source panel lives in the collapsible Foundation header — expand it.
+  await c.getByRole("button", { name: /Foundation.*ready/ }).click();
+  await expect(c.getByText("Add a design source")).toBeVisible();
+  await expect(c.getByPlaceholder("Figma file URL")).toBeVisible();
+  await expect(c.getByRole("button", { name: "Merge" })).toBeVisible();
+  await expect(c.getByRole("button", { name: "Clean sweep" })).toBeVisible();
+  await expect(c.getByRole("button", { name: /Pick a folder/ })).toBeVisible(); // local source (Step 5)
+});
+
+test("re-source: an un-founded project shows setup, not the Merge / Clean-sweep choice", async ({ mount }) => {
+  const c = await mount(<GuidedFlow {...props} />, {
+    hooksConfig: { mock: { tokens: EMPTY_TOKENS, components: EMPTY_COMPONENTS } },
+  });
+  await expect(c.getByRole("heading", { name: "Set up the foundation" })).toBeVisible();
+  await expect(c.getByText("Add a design source")).toHaveCount(0);
+  await expect(c.getByRole("button", { name: "Merge" })).toHaveCount(0);
 });
 
 test("offers build for detected, verify/open for built components", async ({ mount }) => {
@@ -284,7 +314,7 @@ test("build-one runs a transcript, then the roster reflects it from files", asyn
   await expect(c.getByRole("button", { name: /View details|Hide details/ })).toBeVisible();
   // After the run completes, the roster re-reads and no detected row remains.
   await expect(c.getByText("detected", { exact: true })).toHaveCount(0);
-  await expect(c.getByText(/Foundation ready · 3\/3 built/)).toBeVisible();
+  await expect(c.getByText("3/3 built")).toBeVisible();
 });
 
 test("surfaces outputs: manifest + optional publish, no completion gate", async ({ mount }) => {
@@ -308,4 +338,41 @@ test("gates the refactor action until the manifest exists (M4)", async ({ mount 
     },
   });
   await expect(c.getByRole("button", { name: /Refactor screens/ })).toBeDisabled();
+});
+
+// A roster of six detected components (five atoms + one organism) with no source
+// files — the chunked build should split them into a chunk of five (Haiku) and a
+// chunk of one organism (Sonnet).
+const SIX_DETECTED: InspectorComponentsResult = {
+  componentDir: "src/components",
+  previewUrl: null,
+  components: [
+    ...["Button", "Input", "Label", "Badge", "Icon"].map((name) => ({
+      name, level: "atom", description: `${name} atom`, file: null, props: [], tokens: [],
+      status: "unknown" as const, issues: [], specPath: null, reportPath: null,
+    })),
+    { name: "Dialog", level: "organism", description: "Dialog organism", file: null, props: [], tokens: [], status: "unknown" as const, issues: [], specPath: null, reportPath: null },
+  ],
+};
+
+test("builds remaining components in chunks of five, routed by complexity", async ({ mount, page }) => {
+  const c = await mount(<GuidedFlow {...props} />, {
+    hooksConfig: { mock: { tokens: TOKENS, components: SIX_DETECTED, manifest: MANIFEST, runScript: BUILD_RUN } },
+  });
+  await c.getByRole("button", { name: /Build only \(6\)/ }).click();
+  // The queue drains into two sequential runs (5 + 1).
+  await expect
+    .poll(async () => (await page.evaluate(() => (window as unknown as { __runOpts: unknown[] }).__runOpts.length)))
+    .toBe(2);
+  const opts = await page.evaluate(
+    () => (window as unknown as { __runOpts: { prompt: string; model?: string }[] }).__runOpts,
+  );
+  // First chunk: the five atoms, on Haiku, scoped so no other component is built.
+  expect(opts[0].model).toBe("haiku");
+  expect(opts[0].prompt).toContain('"Button", "Input", "Label", "Badge", "Icon"');
+  expect(opts[0].prompt).toMatch(/Do NOT build any other component/);
+  expect(opts[0].prompt).not.toContain("Dialog");
+  // Second chunk: the lone organism, scoped to just it.
+  expect(opts[1].prompt).toContain('"Dialog"');
+  expect(opts[1].prompt).not.toContain("Button");
 });

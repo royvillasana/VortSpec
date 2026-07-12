@@ -66,6 +66,22 @@ function toolResultText(content: unknown): string | undefined {
   return text ? text.slice(0, 4000) : undefined;
 }
 
+/** Map the CLI result line's `usage` block to our token shape (undefined if absent). */
+function mapUsage(raw: unknown): { inputTokens: number; outputTokens: number; cacheReadTokens?: number; cacheCreationTokens?: number } | undefined {
+  if (typeof raw !== "object" || raw === null) return undefined;
+  const u = raw as Record<string, unknown>;
+  const n = (v: unknown): number | undefined => (typeof v === "number" ? v : undefined);
+  const input = n(u.input_tokens);
+  const output = n(u.output_tokens);
+  if (input === undefined && output === undefined) return undefined;
+  return {
+    inputTokens: input ?? 0,
+    outputTokens: output ?? 0,
+    cacheReadTokens: n(u.cache_read_input_tokens),
+    cacheCreationTokens: n(u.cache_creation_input_tokens),
+  };
+}
+
 function mapAssistant(message: unknown): RunEvent[] {
   if (typeof message !== "object" || message === null) return [];
   const content = (message as { content?: unknown }).content;
@@ -212,6 +228,7 @@ function mapObject(obj: Record<string, unknown>): RunEvent[] {
           text: typeof obj.result === "string" ? obj.result : undefined,
           costUsd: typeof obj.total_cost_usd === "number" ? obj.total_cost_usd : undefined,
           sessionId: typeof obj.session_id === "string" ? obj.session_id : undefined,
+          usage: mapUsage(obj.usage),
         },
       ];
     default:
