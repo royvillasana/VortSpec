@@ -30,6 +30,15 @@ test("opens on the workspace picker and lists recent projects", async ({ mount }
   await expect(c.getByRole("button", { name: /acme-design-system/ })).toBeVisible();
 });
 
+test("a recent workspace can be removed from the picker", async ({ mount }) => {
+  const c = await mount(<App />, { hooksConfig: { mock: base } });
+  await expect(c.getByRole("button", { name: /acme-design-system/ })).toBeVisible();
+  // The × on the card forgets it from the recent list (folder untouched).
+  await c.getByRole("button", { name: "Remove from recent workspaces" }).click();
+  await expect(c.getByRole("button", { name: /acme-design-system/ })).toHaveCount(0);
+  await expect(c.getByText("No recent projects yet.")).toBeVisible();
+});
+
 test("Create New Project opens the setup wizard for a fresh folder", async ({ mount }) => {
   const mock = {
     ...base,

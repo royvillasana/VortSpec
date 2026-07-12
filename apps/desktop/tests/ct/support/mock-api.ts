@@ -207,6 +207,7 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
     createFolder: async () => cfg.createFolderResult ?? null,
     pickFile: async () => cfg.pickFileResult ?? null,
     listProjects: async () => cfg.projects ?? [],
+    removeProject: async (id: string) => (cfg.projects ?? []).filter((p) => p.id !== id),
     openFolder: async () => undefined,
     revealPath: async () => undefined,
     refreshProject: async (path: string) => ({ id: "p", name: "p", path }),

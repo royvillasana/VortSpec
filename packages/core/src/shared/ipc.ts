@@ -284,6 +284,7 @@ export const ipcContract = {
     response: z.string().nullable(),
   },
   "workspace:listProjects": { request: z.void(), response: projectListSchema },
+  "workspace:removeProject": { request: z.string(), response: projectListSchema },
   "workspace:openFolder": { request: z.string(), response: z.void() },
   "workspace:revealPath": {
     request: z.object({ projectPath: z.string(), relPath: z.string() }),

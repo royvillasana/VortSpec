@@ -83,6 +83,14 @@ export function WorkspacePicker({
     }
   }
 
+  /** Forget a recent workspace (registry only — the folder is left untouched). */
+  async function removeRecent(id: string): Promise<void> {
+    // Optimistic: drop it immediately, then reconcile with the authoritative list.
+    setRecent((r) => r?.filter((x) => x.id !== id) ?? r);
+    const next = await api.removeProject(id).catch(() => null);
+    if (next) setRecent(next);
+  }
+
   async function cloneRepo(): Promise<void> {
     const url = cloneUrl.trim();
     if (!url) return;
@@ -245,14 +253,24 @@ export function WorkspacePicker({
           ) : (
             <ul className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto pr-1">
               {recent.map((p) => (
-                <li key={p.path}>
+                <li key={p.path} className="group relative">
                   <button
                     type="button"
                     onClick={() => onOpen(p)}
-                    className="flex w-full min-w-0 flex-col items-start rounded-md border border-vs-border-subtle bg-vs-bg-surface px-3 py-2 text-left transition-colors hover:bg-vs-bg-hover"
+                    className="flex w-full min-w-0 flex-col items-start rounded-md border border-vs-border-subtle bg-vs-bg-surface py-2 pl-3 pr-9 text-left transition-colors hover:bg-vs-bg-hover"
                   >
                     <span className="text-sm text-vs-text-primary">{p.name}</span>
                     <span className="w-full break-all font-mono text-[11px] text-vs-text-muted">{p.path}</span>
+                  </button>
+                  {/* Remove from the recent list — never deletes the folder on disk. */}
+                  <button
+                    type="button"
+                    onClick={() => void removeRecent(p.id)}
+                    title={`Remove ${p.name} from recent workspaces (does not delete the folder)`}
+                    aria-label="Remove from recent workspaces"
+                    className="absolute right-1.5 top-1.5 rounded p-1 text-vs-text-muted opacity-0 transition-opacity hover:bg-vs-bg-elevated hover:text-vs-error focus-visible:opacity-100 group-hover:opacity-100"
+                  >
+                    <CloseIcon />
                   </button>
                 </li>
               ))}
@@ -286,6 +304,14 @@ function BookIcon(): JSX.Element {
       <path d="M4 4.5A1.5 1.5 0 0 1 5.5 3H16v11H5.5A1.5 1.5 0 0 0 4 15.5V4.5Z" />
       <path d="M4 15.5A1.5 1.5 0 0 1 5.5 14H16v3H5.5A1.5 1.5 0 0 1 4 15.5Z" />
       <path d="M8 6.5h5M8 9h4" />
+    </svg>
+  );
+}
+
+function CloseIcon(): JSX.Element {
+  return (
+    <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M5 5l10 10M15 5L5 15" />
     </svg>
   );
 }

@@ -44,6 +44,8 @@ export interface VortSpecApi {
   createFolder(): Promise<IpcResponse<"workspace:createFolder">>;
   pickFile(filters?: { name: string; extensions: string[] }[]): Promise<IpcResponse<"workspace:pickFile">>;
   listProjects(): Promise<IpcResponse<"workspace:listProjects">>;
+  /** Forget a project from the recent-workspaces list (never deletes the folder). */
+  removeProject(id: string): Promise<IpcResponse<"workspace:removeProject">>;
   openFolder(path: string): Promise<IpcResponse<"workspace:openFolder">>;
   revealPath(projectPath: string, relPath: string): Promise<IpcResponse<"workspace:revealPath">>;
   refreshProject(path: string): Promise<IpcResponse<"workspace:refreshProject">>;

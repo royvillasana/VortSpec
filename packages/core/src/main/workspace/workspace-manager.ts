@@ -124,6 +124,19 @@ async function registerPath(path: string): Promise<Project> {
   return hydrate(entry);
 }
 
+/**
+ * Forget a project from the recent-workspaces registry by id. This only removes
+ * the entry from the list — it never touches the folder on disk. Returns the
+ * updated recents so the caller can refresh without a re-read race.
+ */
+export async function removeProject(id: string): Promise<Project[]> {
+  const entries = await readRegistry();
+  const next = entries.filter((e) => e.id !== id);
+  if (next.length !== entries.length) await writeRegistry(next);
+  const projects = await Promise.all(next.map(hydrate));
+  return projectListSchema.parse(projects);
+}
+
 export async function refreshProject(path: string): Promise<Project> {
   const entries = await readRegistry();
   const entry =

@@ -65,6 +65,7 @@ const api: VortSpecApi = {
   createFolder: () => invoke("workspace:createFolder"),
   pickFile: (filters) => invoke("workspace:pickFile", filters ? { filters } : undefined),
   listProjects: () => invoke("workspace:listProjects"),
+  removeProject: (id) => invoke("workspace:removeProject", id),
   openFolder: (path: string) => invoke("workspace:openFolder", path),
   revealPath: (projectPath: string, relPath: string) =>
     invoke("workspace:revealPath", { projectPath, relPath }),
