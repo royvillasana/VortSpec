@@ -27,21 +27,26 @@ const BRIDGE_DOWN: FigmaHealth = {
   detail: "bridge not connected",
 };
 
-test("flags an expired token with a refresh link", async ({ mount }) => {
+test("on an expired token, recommends the OAuth MCP + keeps a token fallback link", async ({ mount }) => {
   const c = await mount(<FigmaHealthCheck project={PROJECT} />, {
     hooksConfig: { mock: { figmaHealth: EXPIRED } },
   });
   await c.getByRole("button", { name: "Check Figma connection" }).click();
   await expect(c.getByText(/token has expired/i)).toBeVisible();
-  await expect(c.getByRole("button", { name: /How to create a Figma access token/ })).toBeVisible();
+  // Leads with the recommended OAuth MCP command…
+  await expect(c.getByText(/Recommended — the official Figma MCP/)).toBeVisible();
+  await expect(c.getByText(/claude mcp add --transport http figma https:\/\/mcp\.figma\.com\/mcp/)).toBeVisible();
+  // …with the figma-console token path demoted to a secondary link.
+  await expect(c.getByRole("button", { name: /Prefer to keep figma-console/ })).toBeVisible();
 });
 
-test("tells the user to open the Desktop Bridge when it's down", async ({ mount }) => {
+test("on a down bridge, recommends switching to the OAuth MCP", async ({ mount }) => {
   const c = await mount(<FigmaHealthCheck project={PROJECT} />, {
     hooksConfig: { mock: { figmaHealth: BRIDGE_DOWN } },
   });
   await c.getByRole("button", { name: "Check Figma connection" }).click();
-  await expect(c.getByText(/Open Figma Desktop and start the Desktop Bridge/i)).toBeVisible();
+  await expect(c.getByText(/Recommended — the official Figma MCP/)).toBeVisible();
+  await expect(c.getByText(/mcp\.figma\.com/)).toBeVisible();
 });
 
 test("reports a healthy connection with counts", async ({ mount }) => {

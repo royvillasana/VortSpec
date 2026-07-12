@@ -43,7 +43,7 @@ export function FigmaHealthCheck({ project }: { project: Project }): JSX.Element
         <span className="text-[11px] text-vs-text-muted">
           {busy
             ? "Reading variables + styles through your Figma MCP…"
-            : "Confirm the token + Desktop Bridge can read variables & styles before scanning."}
+            : "Confirm your Figma MCP can read variables & styles before scanning."}
         </span>
       </div>
       {health && tone && (
@@ -51,12 +51,38 @@ export function FigmaHealthCheck({ project }: { project: Project }): JSX.Element
           <span className={`text-sm leading-none ${tone.cls.match(/text-\S+/)?.[0] ?? ""}`}>{tone.icon}</span>
           <div className="flex min-w-0 flex-col gap-1.5 text-[12px] leading-relaxed text-vs-text-primary">
             <span>{health.message}</span>
+            {/* When the legacy figma-console path is failing, recommend the OAuth MCP. */}
+            {(health.mode === "token-expired" ||
+              health.mode === "bridge-down" ||
+              health.mode === "not-configured") && (
+              <div className="mt-0.5 flex flex-col gap-1 rounded border border-vs-border-default bg-vs-bg-surface p-2">
+                <span className="text-[11px] font-medium text-vs-text-secondary">
+                  Recommended — the official Figma MCP (OAuth, no token or Desktop Bridge):
+                </span>
+                <code className="select-all break-all font-mono text-[11px] text-vs-text-primary">
+                  {REMOTE_FIGMA_MCP_CMD}
+                </code>
+                <span className="text-[10px] text-vs-text-muted">
+                  …then run <code className="text-vs-text-secondary">/mcp</code> in Claude Code and Authenticate.{" "}
+                  <button
+                    onClick={() =>
+                      void api.openInstall(
+                        "https://developers.figma.com/docs/figma-mcp-server/remote-server-installation/",
+                      )
+                    }
+                    className="text-vs-accent hover:underline"
+                  >
+                    Docs →
+                  </button>
+                </span>
+              </div>
+            )}
             {health.mode === "token-expired" && (
               <button
                 onClick={() => void api.openInstall("https://www.figma.com/developers/api#access-tokens")}
-                className="self-start text-vs-accent hover:underline"
+                className="self-start text-[11px] text-vs-text-muted hover:text-vs-text-secondary"
               >
-                How to create a Figma access token →
+                Prefer to keep figma-console? How to create a Figma token →
               </button>
             )}
           </div>
@@ -65,3 +91,6 @@ export function FigmaHealthCheck({ project }: { project: Project }): JSX.Element
     </div>
   );
 }
+
+/** The command that connects the recommended OAuth Figma MCP (kept in sync with core). */
+const REMOTE_FIGMA_MCP_CMD = "claude mcp add --transport http figma https://mcp.figma.com/mcp";

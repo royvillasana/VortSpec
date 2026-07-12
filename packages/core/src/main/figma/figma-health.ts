@@ -41,15 +41,22 @@ export function figmaHealthPrompt(figmaFileUrl?: string): string {
   ].join("\n");
 }
 
+/** The command that connects the recommended (OAuth, token-free) Figma MCP. */
+export const REMOTE_FIGMA_MCP_CMD = "claude mcp add --transport http figma https://mcp.figma.com/mcp";
+/** Recommend the official OAuth server — no token, no Desktop Bridge, no selection. */
+const REMOTE_MCP_HINT = `Easiest fix: use the official Figma MCP (OAuth — no token, no Desktop Bridge). Run \`${REMOTE_FIGMA_MCP_CMD}\`, then \`/mcp\` → Authenticate.`;
+
 const MESSAGES: Record<FigmaHealthMode, (v: number, s: number, detail: string) => string> = {
   ok: (v, s) =>
     `Figma connection healthy — read ${v} variable${v === 1 ? "" : "s"} and ${s} style${s === 1 ? "" : "s"}. Safe to re-run the scan.`,
+  // token-expired + bridge-down are both the LEGACY figma-console path breaking —
+  // lead with the OAuth-MCP switch, keep the figma-console fix as a fallback.
   "token-expired": () =>
-    "Your Figma API token has expired — the Figma REST API returned 401/403. Generate a fresh personal access token (Figma → Settings → Security → Personal access tokens), update it in your Figma MCP config, then re-check.",
+    `Your Figma token expired (401/403) on the legacy figma-console path. ${REMOTE_MCP_HINT} Or, to keep figma-console: refresh the token in Settings → Figma API token.`,
   "bridge-down": () =>
-    "VortSpec can't reach the Figma Desktop Bridge. Open Figma Desktop and start the Desktop Bridge plugin (figma-console-mcp), then re-check.",
+    `The legacy figma-console Desktop Bridge isn't connected. ${REMOTE_MCP_HINT} Or, to keep figma-console: open its Desktop Bridge plugin in Figma Desktop.`,
   "not-configured": () =>
-    "No Figma MCP is connected to Claude Code. Add the Figma MCP (or use the figma-cli connection), then re-check.",
+    `No Figma MCP is connected to Claude Code. ${REMOTE_MCP_HINT}`,
   "no-variables": (_v, _s, detail) =>
     `The Figma connection responded but read no variables or styles. ${detail}`.trim(),
   unknown: (_v, _s, detail) =>

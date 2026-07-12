@@ -2,21 +2,32 @@ import { describe, it, expect } from "vitest";
 import { classifyFigmaHealth, extractVerdict, figmaHealthPrompt } from "./figma-health";
 
 describe("classifyFigmaHealth", () => {
-  it("maps token-expired to a token-update fix (and marks the token invalid)", () => {
+  it("maps token-expired to the OAuth-MCP switch (token/console kept as fallback)", () => {
     const h = classifyFigmaHealth({ failureMode: "token-expired", detail: "REST 403" });
     expect(h.mode).toBe("token-expired");
     expect(h.tokenValid).toBe(false);
     expect(h.canRead).toBe(false);
-    expect(h.message).toMatch(/token has expired/i);
-    expect(h.message).toMatch(/personal access token/i);
+    expect(h.message).toMatch(/token expired/i);
+    // Leads with the recommended OAuth MCP…
+    expect(h.message).toMatch(/official Figma MCP/);
+    expect(h.message).toMatch(/mcp\.figma\.com/);
+    // …and offers the figma-console token refresh as the fallback.
+    expect(h.message).toMatch(/Settings → Figma API token/);
   });
 
-  it("maps bridge-down to an 'open the Desktop Bridge' fix", () => {
+  it("maps bridge-down to the OAuth-MCP switch (Desktop Bridge as fallback)", () => {
     const h = classifyFigmaHealth({ failureMode: "bridge-down" });
     expect(h.mode).toBe("bridge-down");
     expect(h.bridgeConnected).toBe(false);
+    expect(h.message).toMatch(/official Figma MCP/);
+    expect(h.message).toMatch(/mcp\.figma\.com/);
     expect(h.message).toMatch(/Desktop Bridge/);
-    expect(h.message).toMatch(/Open Figma Desktop/i);
+  });
+
+  it("recommends the OAuth MCP when nothing is configured", () => {
+    const h = classifyFigmaHealth({ failureMode: "not-configured" });
+    expect(h.message).toMatch(/official Figma MCP/);
+    expect(h.message).toMatch(/mcp\.figma\.com/);
   });
 
   it("reports a healthy connection with counts", () => {

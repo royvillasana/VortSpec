@@ -280,6 +280,22 @@ function FigmaTokenSettings(): React.JSX.Element {
 
   return (
     <Card className="flex flex-col gap-3 p-5">
+      {/* This whole field is only for the LEGACY figma-console path — steer users
+          to the OAuth Figma MCP, which needs no token or Desktop Bridge. */}
+      <div className="flex flex-col gap-1 rounded-md border border-vs-accent/30 bg-vs-accent-muted p-3">
+        <span className="text-[12px] font-medium text-vs-text-primary">
+          Most people don&rsquo;t need this.
+        </span>
+        <span className="text-[11px] leading-relaxed text-vs-text-secondary">
+          A token is only for the legacy <code className="text-vs-text-primary">figma-console</code> MCP
+          (personal access token + a Desktop Bridge plugin). The recommended path is the official{" "}
+          <strong>Figma MCP</strong> — OAuth, no token and no bridge:{" "}
+          <code className="select-all break-all text-vs-text-primary">
+            claude mcp add --transport http figma https://mcp.figma.com/mcp
+          </code>{" "}
+          then <code className="text-vs-text-primary">/mcp</code> → Authenticate.
+        </span>
+      </div>
       <div className="flex items-center gap-2 text-[12px]">
         <span
           className={`h-1.5 w-1.5 rounded-full ${status?.configured ? "bg-vs-success" : "bg-vs-warning"}`}

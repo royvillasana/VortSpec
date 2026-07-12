@@ -190,13 +190,13 @@
           </div>
 
           <h3>The Figma API token</h3>
-          <p>The <code>figma-console</code> path authenticates with a personal access token. When it expires you get a <code>403</code>, and extraction can silently fall back to <em>approximating</em> token values — so VortSpec surfaces it. Update it in <strong>Settings → Figma API token</strong>: paste a fresh token (Figma → Settings → Security → Personal access tokens) and Save. VortSpec writes it straight into your own Claude Code MCP config, where the token already lives, and <strong>keeps no copy</strong> (invariant: no provider keys stored). The field only ever tells you whether a token is set — it never shows one back.</p>
+          <div class="callout info"><span class="tag">Most people can skip this</span>A token is only for the legacy <code>figma-console</code> path. If you use the <strong>remote Figma MCP</strong> (OAuth), you never need a token or the Desktop Bridge — connect it once with <code>claude mcp add --transport http figma https://mcp.figma.com/mcp</code>, then <code>/mcp</code> → Authenticate.</div>
+          <p>If you do use the token-based <code>figma-console</code> path: it authenticates with a personal access token, and when that expires you get a <code>403</code> and extraction can silently fall back to <em>approximating</em> token values — so VortSpec surfaces it. Update it in <strong>Settings → Figma API token</strong>: paste a fresh token (Figma → Settings → Security → Personal access tokens) and Save. VortSpec writes it straight into your own Claude Code MCP config, where the token already lives, and <strong>keeps no copy</strong> (invariant: no provider keys stored). The field only ever tells you whether a token is set — it never shows one back.</p>
 
           <h3>Check the connection before you scan</h3>
           <p>In the design-system Foundation, <strong>Check Figma connection</strong> runs a quick, read-only probe and tells you exactly what's wrong instead of letting a scan fail quietly:</p>
           <ul>
-            <li><strong>Token expired</strong> — refresh it in Settings → Figma API token.</li>
-            <li><strong>Desktop Bridge not connected</strong> — open the figma-console plugin in Figma Desktop, or just switch to the remote Figma MCP (no bridge needed).</li>
+            <li><strong>Token expired</strong> or <strong>Desktop Bridge not connected</strong> — both mean the legacy <code>figma-console</code> path is failing. The card leads with the one-time fix: switch to the remote Figma MCP (OAuth, no token/bridge). Or keep figma-console by refreshing the token / opening its Desktop Bridge plugin.</li>
             <li><strong>OK</strong> — variables and styles are readable; safe to scan.</li>
           </ul>
           <div class="callout info"><span class="tag">Tip</span>Prefer the remote Figma MCP (OAuth). No token, no Desktop Bridge, no live selection — it sidesteps the two things that most often break a Figma read.</div>

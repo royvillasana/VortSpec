@@ -47,6 +47,15 @@ caught **before** a scan wastes a run on guessed tokens.
 
 ## Token management (Settings → Figma API token)
 
+> **Legacy fallback only.** The token + Desktop Bridge exist to support users on
+> the `figma-console` path; they are **not required**. The remote Figma MCP (OAuth)
+> reads variables + styles with no token, no bridge, and no Enterprise REST scope —
+> it's the recommended path, and the product now steers users to it. When the
+> health check returns `token-expired` or `bridge-down`, its fix-it **leads with**
+> the one-time switch (`claude mcp add --transport http figma https://mcp.figma.com/mcp`
+> → `/mcp` → Authenticate) and demotes the token/bridge fix to a fallback. The
+> Settings token field is likewise framed as "most people don't need this."
+
 `main/figma/figma-token.ts` — write-through only, **no VortSpec-side storage**
 (invariant #4):
 
