@@ -83,13 +83,17 @@ describe("extractVerdict", () => {
 });
 
 describe("figmaHealthPrompt", () => {
-  it("is read-only and asks for both variables and styles", () => {
+  it("is read-only, prefers the remote MCP, and asks for variables + styles", () => {
     const p = figmaHealthPrompt("https://figma.com/design/ABC");
     expect(p).toMatch(/READ-ONLY/);
     expect(p).toMatch(/Do NOT modify/);
     expect(p).toMatch(/VARIABLES and text\/color STYLES/);
     expect(p).toContain("https://figma.com/design/ABC");
-    // Must not require a live selection (the exact failure we're diagnosing).
-    expect(p).toMatch(/do NOT rely on a live layer selection/i);
+    // Prefers the OAuth remote MCP and never requires a live selection.
+    expect(p).toMatch(/PREFER the official remote Figma MCP/);
+    expect(p).toMatch(/mcp\.figma\.com/);
+    expect(p).toMatch(/rely on a live layer selection/i);
+    // A working remote MCP means OK even if the local Desktop Bridge is down.
+    expect(p).toMatch(/a working remote MCP wins/);
   });
 });

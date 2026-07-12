@@ -22,22 +22,20 @@ export function figmaHealthPrompt(figmaFileUrl?: string): string {
     : "the Figma file configured for this project (read `figma_file_url` from .sdd-de/project.yaml)";
   return [
     "You are a READ-ONLY Figma connection diagnostic. Do NOT modify anything — not in Figma, not on disk.",
-    `Using the Figma MCP tools available in THIS environment, determine whether design VARIABLES and text/color STYLES can be read from ${target}.`,
+    `Determine whether design VARIABLES and text/color STYLES can be read from ${target} through ANY available Figma MCP.`,
     "",
     "Steps:",
-    "1. If a Figma diagnostic/status tool exists (e.g. figma_diagnose, figma_get_status), call it.",
-    "2. Attempt a FILE-LEVEL read of the variable collection AND the styles (e.g. the design-system kit / variables / styles). Do NOT rely on a live layer selection — use file-level reads that don't require selecting a node.",
-    "3. Classify the outcome using the rules below.",
+    "1. PREFER the official remote Figma MCP (the OAuth `mcp.figma.com` server — no token, no Desktop Bridge, no live selection). Try a FILE-LEVEL read of the variable collection AND the styles through it FIRST.",
+    "2. Only if no remote Figma MCP is available, try a local one (figma-console / Desktop Bridge). If a diagnostic/status tool exists (figma_diagnose, figma_get_status), you may call it.",
+    "3. Never rely on a live layer selection — use file-level reads that don't require selecting a node. Then classify the outcome.",
     "",
     "Reply with ONLY a single-line minified JSON object as your FINAL message, nothing before or after it:",
     '{"failureMode":"ok|token-expired|bridge-down|no-variables|not-configured|unknown","tokenValid":true|false,"bridgeConnected":true|false,"canReadVariablesAndStyles":true|false,"variableCount":<int>,"styleCount":<int>,"detail":"<one short sentence>"}',
     "",
-    "Classification rules:",
-    "- A 401/403/expired/unauthorized/invalid-token/'token' error from the Figma REST API → \"token-expired\".",
-    "- 'Desktop Bridge not connected'/'plugin not running'/'nothing is connected'/connection refused/ECONNREFUSED/timeout reaching the bridge → \"bridge-down\".",
-    "- No Figma MCP server available at all → \"not-configured\".",
-    "- Reads succeed and return variables AND styles → \"ok\".",
-    "- Reads run but return zero variables/styles for another reason → \"no-variables\".",
+    "Classification rules (judge by the BEST available path — a working remote MCP wins):",
+    "- If ANY available Figma MCP (preferably the remote one) reads variables AND styles → \"ok\", even when a local figma-console Desktop Bridge is down — that legacy path is optional.",
+    "- Only if NO path can read: a 401/403/expired/unauthorized/invalid-token from the Figma REST API → \"token-expired\"; 'Desktop Bridge not connected'/'plugin not running'/connection refused/ECONNREFUSED → \"bridge-down\"; no Figma MCP configured at all → \"not-configured\".",
+    "- A path reads but returns zero variables/styles for another reason → \"no-variables\".",
   ].join("\n");
 }
 
