@@ -558,10 +558,10 @@ export async function syncVariablesToCache(projectPath: string): Promise<FigmaSy
  * Build the figma-cli `eval` script that applies a push plan to Figma Variables.
  * Pure + exported for testing. Isolated CLI/plugin-API knowledge (verify the
  * variables API shape against current docs at implementation time). Creates or
- * updates each variable in the target collection, binding aliases where the
- * plan specifies one, and returns a JSON summary as its last expression:
- *   { error: null, created, updated } | { error: "collection-missing", collection }
- * When the target collection is absent it writes nothing (fix-it, not auto-create).
+ * updates each variable in VortSpec's own collection — auto-creating that
+ * collection when it doesn't exist — binding aliases where the plan specifies
+ * one, and returns a JSON summary as its last expression:
+ *   { error: null, created, updated, createdCollection }
  */
 export function buildPushScript(plan: PushPlan): string {
   return `(async function () {
@@ -581,7 +581,8 @@ export function buildPushScript(plan: PushPlan): string {
   }
   var cols = await figma.variables.getLocalVariableCollectionsAsync();
   var col = cols.find(function(c){ return c.name === PLAN.collection; });
-  if (!col) return { error: 'collection-missing', collection: PLAN.collection };
+  var createdCollection = false;
+  if (!col){ col = figma.variables.createVariableCollection(PLAN.collection); createdCollection = true; }
   var modeId = col.defaultModeId || (col.modes[0] && col.modes[0].modeId);
   var vars = await figma.variables.getLocalVariablesAsync();
   var byNorm = {};
@@ -598,14 +599,14 @@ export function buildPushScript(plan: PushPlan): string {
     }
     v.setValueForMode(modeId, toValue(e.figmaType, e.value));
   }
-  return { error: null, created: created, updated: updated };
+  return { error: null, created: created, updated: updated, createdCollection: createdCollection };
 })();`;
 }
 
 /** Parse the push `eval` output (a JSON object behind a possible banner). Pure + exported. */
 export function parsePushEval(
   raw: string,
-): { error: string | null; created: number; updated: number; collection?: string } | null {
+): { error: string | null; created: number; updated: number; createdCollection: boolean } | null {
   const start = raw.indexOf("{");
   const end = raw.lastIndexOf("}");
   if (start === -1 || end === -1 || end < start) return null;
@@ -621,15 +622,15 @@ export function parsePushEval(
     error: typeof r.error === "string" ? r.error : null,
     created: typeof r.created === "number" ? r.created : 0,
     updated: typeof r.updated === "number" ? r.updated : 0,
-    collection: typeof r.collection === "string" ? r.collection : undefined,
+    createdCollection: r.createdCollection === true,
   };
 }
 
 /**
  * Apply a confirmed push plan to Figma Variables through figma-cli (the preferred
  * writer; the caller falls back to a scoped Claude Code run when `source: null`).
- * Never deletes and writes only to the plan's target collection. Never throws to
- * the caller — connection/collection problems surface as fix-it messages.
+ * Writes only to VortSpec's own collection, creating it when absent. Never
+ * deletes and never throws — connection problems surface as fix-it messages.
  */
 export async function pushVariablesToFigma(plan: PushPlan): Promise<FigmaPushResult> {
   const conn = await ensureConnected();
@@ -651,24 +652,16 @@ export async function pushVariablesToFigma(plan: PushPlan): Promise<FigmaPushRes
       const detail = (res.stderr || res.stdout || "").split("\n").find((l) => l.trim()) ?? "";
       return { ok: false, created: 0, updated: 0, source: "cli", message: `figma-cli couldn't apply the push.${detail ? ` (${detail.trim()})` : ""}` };
     }
-    if (parsed.error === "collection-missing") {
-      return {
-        ok: false,
-        created: 0,
-        updated: 0,
-        source: "cli",
-        message: `No Figma Variables collection named "${plan.collection}" exists in the focused file. Create the "${plan.collection}" collection in Figma first, then push again.`,
-      };
-    }
     if (parsed.error) {
       return { ok: false, created: 0, updated: 0, source: "cli", message: `figma-cli reported an error applying the push (${parsed.error}).` };
     }
+    const madeCol = parsed.createdCollection ? ` (created the "${plan.collection}" collection)` : "";
     return {
       ok: true,
       created: parsed.created,
       updated: parsed.updated,
       source: "cli",
-      message: `Pushed to Figma — created ${parsed.created}, updated ${parsed.updated} variable${parsed.created + parsed.updated === 1 ? "" : "s"} in "${plan.collection}".`,
+      message: `Pushed to Figma — created ${parsed.created}, updated ${parsed.updated} variable${parsed.created + parsed.updated === 1 ? "" : "s"} in "${plan.collection}"${madeCol}.`,
     };
   } finally {
     await rm(tmp, { force: true }).catch(() => undefined);

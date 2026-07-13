@@ -43,18 +43,18 @@ function pushPrompt(plan: PushPlan): string {
   const creates = plan.entries.filter((e) => e.op === "create");
   const updates = plan.entries.filter((e) => e.op === "update");
   return [
-    `Apply this pre-approved token push to the Figma Variables collection "${plan.collection}".`,
+    `Apply this pre-approved token push to VortSpec's own Figma Variables collection "${plan.collection}".`,
     "",
-    "1. Confirm a variable collection named exactly this collection exists. If it does NOT exist, STOP and",
-    "   report that the user must create it in Figma first — do not create the collection or any variable.",
+    `1. Ensure a variable collection named exactly "${plan.collection}" exists. If it does NOT exist, CREATE`,
+    "   it (figma_create_variable_collection). VortSpec owns this collection — do not ask the user to make it.",
     "2. Create the following NEW variables (figma_batch_create_variables), each in that collection with the",
     "   given type; for entries with an `aliasTarget`, bind the variable as an ALIAS to that existing",
     "   variable instead of a raw value:",
     `   ${JSON.stringify(creates)}`,
     "3. Update the following EXISTING variables to the given value/alias (figma_batch_update_variables):",
     `   ${JSON.stringify(updates)}`,
-    "4. Write ONLY to that collection. Do not delete variables, touch other collections, styles, layers, or",
-    "   any local file. Report how many variables you created and updated.",
+    `4. Write ONLY to the "${plan.collection}" collection. Do not delete variables, touch other collections,`,
+    "   styles, layers, or any local file. Report how many variables you created and updated.",
   ].join("\n");
 }
 

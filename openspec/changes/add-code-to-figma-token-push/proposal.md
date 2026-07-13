@@ -4,7 +4,7 @@ Token sync today is one-way: Figma is the source of truth and VortSpec pulls var
 
 ## What Changes
 
-- Add a **"Send to Figma"** action in the Inspector Tokens panel that pushes the current code token file into the Figma Variables collection named by `figma_token_collection` (default `Tokens`), on explicit user click only — never automatically.
+- Add a **"Send to Figma"** action in the Inspector Tokens panel that pushes the current code token file into VortSpec's own Figma Variables collection (`VortSpec`, auto-created if absent), on explicit user click only — never automatically.
 - **Preview-and-confirm gate:** before anything is written to Figma, the user sees exactly what will be created and what will be updated (per-token: name, new value, current Figma value), consistent with the spec-first gating invariant. Nothing mutates Figma without a recorded confirmation.
 - Push runs through the existing two-path model, mirroring the pull direction:
   - **Preferred:** `figma-cli` eval (fast, no Claude usage) writing/updating variables in the connected file.

@@ -61,24 +61,28 @@ When a code token is defined as a reference to another token (`var(--other)`), a
 - **THEN** the token SHALL be pushed with its resolved concrete value
 
 ### Requirement: Target collection and scope
-The push SHALL write only to the Figma Variables collection named by `figma_token_collection` in `.sdd-de/project.yaml` (default `Tokens`). The push SHALL NOT modify variables in other collections, component sources, styles, or layers, and SHALL NOT delete Figma variables that have no code counterpart.
+The push SHALL write only to VortSpec's own `VortSpec` collection. The push SHALL NOT modify variables in other collections, component sources, styles, or layers, and SHALL NOT delete Figma variables that have no code counterpart.
 
-#### Scenario: Writes are confined to the configured collection
-- **WHEN** a push is executed with `figma_token_collection: Tokens`
-- **THEN** only variables in the `Tokens` collection SHALL be created or updated
+#### Scenario: Writes are confined to the VortSpec collection
+- **WHEN** a push is executed
+- **THEN** only variables in the `VortSpec` collection SHALL be created or updated
 - **AND** variables in other collections SHALL be left unchanged
 
 #### Scenario: Figma-only variables are not deleted
 - **WHEN** a Figma variable in the target collection has no matching code token
 - **THEN** the push SHALL leave that variable in place and SHALL NOT delete it
 
-### Requirement: Absent target collection is a fix-it, not silent
-When the configured `figma_token_collection` does not exist in the connected Figma file, the system SHALL surface a fixed, human-readable message telling the user to create that collection in Figma first, and SHALL NOT create the collection itself or write any variables. The message SHALL name the expected collection.
+### Requirement: Push targets VortSpec's own auto-created collection
+The push SHALL write into a Figma Variables collection named `VortSpec` that VortSpec owns. When that collection does not exist in the file, the push SHALL create it automatically and write the tokens there — the user SHALL NOT be required to create or name a collection in Figma first. The result message SHALL report when the collection was created.
 
-#### Scenario: Missing collection shows a fix-it
-- **WHEN** a push is attempted and no collection named `figma_token_collection` (e.g. `Tokens`) exists in the file
-- **THEN** the system SHALL show a message telling the user to create the `Tokens` collection in Figma first
-- **AND** no variable and no collection SHALL be created
+#### Scenario: Missing collection is auto-created
+- **WHEN** a push is confirmed and no collection named `VortSpec` exists in the file
+- **THEN** the system SHALL create the `VortSpec` collection and write the planned variables into it
+- **AND** the result SHALL report that the collection was created
+
+#### Scenario: Existing VortSpec collection is reused
+- **WHEN** a push is confirmed and a `VortSpec` collection already exists
+- **THEN** the system SHALL write into that existing collection without creating a duplicate
 
 ### Requirement: Composite tokens are created and pushed
 Typography and shadow tokens SHALL NOT be skipped. When such a token has no corresponding representation in Figma, the push SHALL create it — decomposing a composite token into the scalar Figma variables it needs (e.g. font-family / font-size / line-height for typography; offset / blur / spread / color for shadow) under the target collection, or the equivalent supported Figma representation — and update it on subsequent pushes. The push plan SHALL account for every token type so that a completed push leaves no token type unrepresented.

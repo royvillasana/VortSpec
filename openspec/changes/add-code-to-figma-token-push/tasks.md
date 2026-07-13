@@ -14,7 +14,7 @@
 ## 2. CLI push path (preferred)
 
 - [x] 2.1 Add `pushVariablesFromTokenFile(projectPath, plan)` to `figma-cli.ts` following the existing eval pattern (write a temp JS script, `run(["eval", tmp])`).
-- [x] 2.2 Author the eval script: locate/target the `figma_token_collection` collection, then per plan entry create or update the variable, binding aliases where `aliasTarget` is set and `setValueForMode` for concrete values. Confine writes to the target collection; never delete.
+- [x] 2.2 Author the eval script: locate the `VortSpec` collection (create it if absent), then per plan entry create or update the variable, binding aliases where `aliasTarget` is set and `setValueForMode` for concrete values. Confine writes to that collection; never delete.
 - [x] 2.3 Return a structured `FigmaSyncResult`-style outcome (created count, updated count, skipped, detail on failure); add a parser unit test over recorded eval output.
 
 ## 3. MCP fallback push path
@@ -39,7 +39,7 @@
 
 ## 6. Errors, docs, and verification
 
-- [x] 6.1 Render the no-writer-connected and absent-collection cases as fixed, human-readable fix-it messages (never raw exceptions), consistent with the existing sync messaging; the absent-collection message SHALL name the expected collection.
+- [x] 6.1 Render the no-writer-connected case as a fixed, human-readable fix-it message (never raw exceptions), consistent with the existing sync messaging. The `VortSpec` collection is auto-created on push, so an absent collection is not an error; the result message reports when it was created.
 - [x] 6.2 Update `sync-tokens` SKILL.md (both copies: `.claude/skills/` and `.sdd-de/ai-specs/skills/`) and `design-token-model.md` to document the on-demand code→Figma push and the two-way model.
-- [ ] 6.3 End-to-end UI verification: create a token in the Inspector, click "Send to Figma", confirm the plan, and verify the variable appears/updates in the `Tokens` collection and drift clears; verify an alias token lands as a Figma alias.
+- [ ] 6.3 End-to-end UI verification: create a token in the Inspector, click "Send to Figma", confirm the plan, and verify the variable appears/updates in the auto-created `VortSpec` collection and drift clears; verify an alias token lands as a Figma alias.
 - [x] 6.4 Ensure `pnpm build && pnpm test && pnpm lint` are green.

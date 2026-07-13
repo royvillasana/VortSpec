@@ -16,7 +16,12 @@ import { normName, normValue } from "./figma-reconcile";
  * delegated to figma-cli or a scoped Claude Code run. No MCP client, no network.
  */
 
-export const DEFAULT_TOKEN_COLLECTION = "Tokens";
+/**
+ * The Figma Variables collection VortSpec pushes into. VortSpec owns this
+ * collection: the push auto-creates it if it doesn't exist and writes the code
+ * tokens there, so the user never has to create or name a collection in Figma.
+ */
+export const VORTSPEC_COLLECTION = "VortSpec";
 
 /** Leading numeric magnitude of a dimension value (`16px` → 16, `1.5rem` → 1.5). null when not numeric. */
 function numericValue(value: string): number | null {
@@ -128,7 +133,7 @@ function expandToken(token: Pick<InspectorToken, "name" | "rawValue" | "resolved
 export function computePushPlan(
   tokens: Pick<InspectorToken, "name" | "rawValue" | "resolvedValue" | "type">[],
   figmaVars: FigmaVariable[],
-  collection: string = DEFAULT_TOKEN_COLLECTION,
+  collection: string = VORTSPEC_COLLECTION,
 ): PushPlan {
   const figmaByNorm = new Map<string, string>(); // normName → resolvedValue
   for (const v of figmaVars) if (!figmaByNorm.has(normName(v.name))) figmaByNorm.set(normName(v.name), v.resolvedValue);

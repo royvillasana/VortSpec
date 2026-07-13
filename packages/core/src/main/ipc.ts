@@ -35,7 +35,7 @@ import {
   createInspectorToken,
   snapshotTokenScope,
 } from "./inspector/token-parser";
-import { computePushPlan } from "./inspector/figma-push";
+import { computePushPlan, VORTSPEC_COLLECTION } from "./inspector/figma-push";
 import { readFigmaVariables } from "./inspector/figma-reconcile";
 import type { PushPlan } from "@vortspec/core/ipc";
 import {
@@ -208,13 +208,13 @@ const handlers: Record<IpcChannel, Handler> = {
   "figma:setToken": ((r: { token: string }) => setFigmaToken(r.token)) as Handler,
   // Code→Figma push: plan is computed locally (never calls Figma); apply is delegated to figma-cli.
   "figma:computePushPlan": (async (projectPath: string) => {
-    const [config, result, figmaVars] = await Promise.all([
-      readProjectConfig(projectPath),
+    const [result, figmaVars] = await Promise.all([
       getInspectorTokens(projectPath),
       readFigmaVariables(projectPath),
     ]);
-    const collection = config?.figmaTokenCollection ?? "Tokens";
-    return computePushPlan(result.tokens, figmaVars ?? [], collection);
+    // Always push into VortSpec's own collection (auto-created on write), so the
+    // user never has to create or name a collection in Figma first.
+    return computePushPlan(result.tokens, figmaVars ?? [], VORTSPEC_COLLECTION);
   }) as Handler,
   "figma:pushVariables": ((r: { projectPath: string; plan: PushPlan }) =>
     figmaCli.pushVariablesToFigma(r.plan)) as Handler,

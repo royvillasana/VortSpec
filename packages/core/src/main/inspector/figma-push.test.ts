@@ -3,7 +3,7 @@ import {
   computePushPlan,
   decomposeShadow,
   figmaTypeFor,
-  DEFAULT_TOKEN_COLLECTION,
+  VORTSPEC_COLLECTION,
 } from "./figma-push";
 import type { FigmaVariable, InspectorToken } from "@vortspec/core/inspector";
 
@@ -111,7 +111,8 @@ describe("computePushPlan", () => {
     expect(computePushPlan(tokens, figma).entries).toHaveLength(0);
   });
 
-  it("defaults the collection name", () => {
-    expect(computePushPlan([], []).collection).toBe(DEFAULT_TOKEN_COLLECTION);
+  it("defaults to VortSpec's own collection", () => {
+    expect(computePushPlan([], []).collection).toBe(VORTSPEC_COLLECTION);
+    expect(VORTSPEC_COLLECTION).toBe("VortSpec");
   });
 });
