@@ -1,6 +1,6 @@
 {
   "name": "@vortspec/desktop",
-  "version": "0.1.21",
+  "version": "0.1.22",
   "private": true,
   "type": "module",
   "main": "./out/main/index.js",
@@ -61,7 +61,8 @@
           "target": "dmg",
           "arch": "universal"
         }
-      ]
+      ],
+      "x64ArchFiles": "**/node_modules/node-pty/**"
     },
     "files": [
       "out/**/*",
