@@ -226,10 +226,16 @@ const api: VortSpecApi = {
   findLatestArtifact: (projectPath: string, suffix: string) =>
     invoke("artifact:findLatest", { projectPath, suffix }),
   projectConfig: (projectPath: string) => invoke("project:config", projectPath),
-  inspectorTokens: (projectPath: string) => invoke("inspector:getTokens", projectPath),
+  inspectorTokens: (projectPath: string, preferredCollection?: string) =>
+    invoke(
+      "inspector:getTokens",
+      preferredCollection ? { projectPath, preferredCollection } : projectPath,
+    ),
   inspectorComponents: (projectPath: string) => invoke("inspector:getComponents", projectPath),
-  setTokenValue: (projectPath: string, name: string, value: string) =>
-    invoke("inspector:setTokenValue", { projectPath, name, value }),
+  setTokenValue: (projectPath: string, name: string, value: string, context?: string) =>
+    invoke("inspector:setTokenValue", { projectPath, name, value, context }),
+  setTokenModeMap: (projectPath: string, map: Record<string, string>) =>
+    invoke("inspector:setTokenModeMap", { projectPath, map }),
   createToken: (projectPath: string, name: string, value: string) =>
     invoke("inspector:createToken", { projectPath, name, value }),
   getVerification: (projectPath: string) => invoke("inspector:getVerification", projectPath),

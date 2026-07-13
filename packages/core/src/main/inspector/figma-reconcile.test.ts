@@ -7,9 +7,14 @@ import {
   normValue,
   reconcile,
   readFigmaVariables,
+  readFigmaVariableModel,
   reconcileComponents,
   readFigmaComponents,
+  variableValueInMode,
+  figmaGroup,
+  figmaSegments,
 } from "./figma-reconcile";
+import type { FigmaVariable } from "@vortspec/core/inspector";
 
 describe("normName", () => {
   it("canonicalizes across separators and casing", () => {
@@ -165,5 +170,75 @@ describe("readFigmaVariables", () => {
       "utf8",
     );
     expect(await readFigmaVariables(dir)).toEqual([]);
+  });
+});
+
+describe("figma group helpers", () => {
+  it("splits a slash path into segments and group folders", () => {
+    expect(figmaSegments("primitive/color/primary")).toEqual(["primitive", "color", "primary"]);
+    expect(figmaGroup("primitive/color/primary")).toEqual(["primitive", "color"]);
+    expect(figmaGroup("flat")).toEqual([]);
+  });
+});
+
+describe("variableValueInMode", () => {
+  const v: FigmaVariable = {
+    name: "color/primary",
+    resolvedValue: "#7C6FF0",
+    valuesByMode: { Light: { value: "#7C6FF0" }, Dark: { value: "#2A2540" } },
+  };
+  it("returns the value for the named mode", () => {
+    expect(variableValueInMode(v, "Dark")).toBe("#2A2540");
+    expect(variableValueInMode(v, "Light")).toBe("#7C6FF0");
+  });
+  it("falls back to the default mode then the flat value", () => {
+    expect(variableValueInMode(v, "Missing", "Light")).toBe("#7C6FF0");
+    expect(variableValueInMode({ name: "x", resolvedValue: "#000" }, "Dark")).toBe("#000");
+  });
+});
+
+describe("readFigmaVariableModel", () => {
+  let dir: string;
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), "vortspec-model-"));
+    await mkdir(join(dir, ".vortspec"), { recursive: true });
+  });
+  afterEach(async () => {
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  it("parses the new object shape (collections + modes + valuesByMode)", async () => {
+    const model = {
+      collections: [
+        { name: "Theme", modes: [{ id: "1:0", name: "Light" }, { id: "1:1", name: "Dark" }], defaultModeId: "1:0" },
+      ],
+      variables: [
+        {
+          name: "color/primary",
+          resolvedValue: "#7C6FF0",
+          collection: "Theme",
+          resolvedType: "COLOR",
+          valuesByMode: { Light: { value: "#7C6FF0" }, Dark: { value: "#2A2540" } },
+        },
+      ],
+    };
+    await writeFile(join(dir, ".vortspec/figma-variables.json"), JSON.stringify(model), "utf8");
+    const parsed = await readFigmaVariableModel(dir);
+    expect(parsed?.collections[0].modes.map((m) => m.name)).toEqual(["Light", "Dark"]);
+    expect(parsed?.variables[0].valuesByMode?.Dark.value).toBe("#2A2540");
+    // Back-compat reader returns the flat variable list unchanged.
+    expect((await readFigmaVariables(dir))?.[0].name).toBe("color/primary");
+  });
+
+  it("wraps a legacy flat array as a single Default-mode collection", async () => {
+    await writeFile(
+      join(dir, ".vortspec/figma-variables.json"),
+      JSON.stringify([{ name: "color/primary", resolvedValue: "#087990" }]),
+      "utf8",
+    );
+    const parsed = await readFigmaVariableModel(dir);
+    expect(parsed?.collections).toHaveLength(1);
+    expect(parsed?.collections[0].modes).toEqual([{ id: "Default", name: "Default" }]);
+    expect(parsed?.variables).toEqual([{ name: "color/primary", resolvedValue: "#087990" }]);
   });
 });

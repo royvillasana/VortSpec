@@ -1,8 +1,16 @@
 import { join, basename, dirname, extname } from "node:path";
 import { readFile, readdir, writeFile, mkdir } from "node:fs/promises";
 import { readProjectConfig } from "../workspace/config-manager";
-import { readFigmaVariables, reconcile, normName } from "./figma-reconcile";
+import {
+  readFigmaVariableModel,
+  variableValueInMode,
+  figmaGroup,
+  normName,
+  normValue,
+} from "./figma-reconcile";
 import type {
+  FigmaCollection,
+  FigmaVariable,
   FileSnapshot,
   InspectorToken,
   InspectorTokensResult,
@@ -17,7 +25,6 @@ import type {
  * parsed token is attributed to the generated code.
  */
 
-const CSS_VAR = /--([\w-]+)\s*:\s*([^;]+);/g;
 const HEX = /^#(?:[0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/;
 const COLOR_FN = /^(?:rgb|rgba|hsl|hsla|oklch|color)\(/i;
 const CSS_COLOR_KEYWORDS = new Set([
@@ -51,28 +58,127 @@ function classify(name: string, resolvedValue: string): TokenType {
   return "other";
 }
 
-/** Follow in-file `var(--x)` references to a concrete value (bounded to avoid cycles). */
-function resolve(value: string, table: Map<string, string>, depth = 0): string {
-  if (depth > 10) return value;
+/** The canonical key for the default (light / mode-less) code context. */
+export const DEFAULT_CONTEXT = ":root";
+
+/**
+ * Context-aware parse of a token file (change: figma-native-token-model). CSS
+ * expresses Figma "modes" as selector scopes (`:root`, `.dark`,
+ * `[data-theme="dark"]`, `@media (prefers-color-scheme: dark)`), so we collect
+ * each `--var: value;` under the context it is declared in rather than merging
+ * everything into one map. A brace-matched scan tracks the enclosing prelude
+ * stack; isolated here so it can be swapped for a full CSS AST later (D5).
+ */
+export interface CssContextParse {
+  /** Context keys found, `:root` first when present. */
+  contexts: string[];
+  /** Token names in first-seen order (union across contexts). */
+  order: string[];
+  /** token name → (context key → raw value). */
+  raw: Map<string, Map<string, string>>;
+}
+
+/** Collapse an at-rule/selector prelude stack to a single canonical context key. */
+function contextKeyFor(stack: string[]): string {
+  const joined = stack.join(" | ").toLowerCase();
+  if (/prefers-color-scheme\s*:\s*dark/.test(joined)) return "@media (prefers-color-scheme: dark)";
+  for (let i = stack.length - 1; i >= 0; i--) {
+    const p = stack[i].trim();
+    if (!p) continue;
+    if (p.startsWith("@")) {
+      if (/^@theme\b/.test(p)) return DEFAULT_CONTEXT; // Tailwind v4 @theme is the default context
+      continue; // other at-rules (@media light, @supports) — look further out for a selector
+    }
+    return normalizeSelector(p);
+  }
+  return DEFAULT_CONTEXT;
+}
+
+/** Canonicalize a selector prelude to its context key (root-ish selectors → `:root`). */
+function normalizeSelector(sel: string): string {
+  const first = sel.split(",")[0].trim().replace(/\s+/g, " ");
+  if (first === ":root" || first === "html" || first === "*" || first === ":where(:root)") {
+    return DEFAULT_CONTEXT;
+  }
+  return first;
+}
+
+export function parseCssContexts(css: string): CssContextParse {
+  const src = css.replace(/\/\*[\s\S]*?\*\//g, ""); // strip comments
+  const raw = new Map<string, Map<string, string>>();
+  const order: string[] = [];
+  const contextsSeen = new Set<string>();
+  const stack: string[] = [];
+  let buf = "";
+  const record = (ctx: string, name: string, value: string) => {
+    let byCtx = raw.get(name);
+    if (!byCtx) {
+      byCtx = new Map();
+      raw.set(name, byCtx);
+      order.push(name);
+    }
+    byCtx.set(ctx, value.trim()); // last declaration in a context wins
+    contextsSeen.add(ctx);
+  };
+  for (let i = 0; i < src.length; i++) {
+    const ch = src[i];
+    if (ch === "{") {
+      stack.push(buf.trim());
+      buf = "";
+    } else if (ch === "}") {
+      stack.pop();
+      buf = "";
+    } else if (ch === ";") {
+      const decl = buf.trim();
+      const m = decl.match(/^--([\w-]+)\s*:\s*([\s\S]+)$/);
+      if (m) record(contextKeyFor(stack), m[1], m[2]);
+      buf = "";
+    } else {
+      buf += ch;
+    }
+  }
+  const contexts = [...contextsSeen];
+  contexts.sort((a, b) => (a === DEFAULT_CONTEXT ? -1 : b === DEFAULT_CONTEXT ? 1 : 0));
+  return { contexts, order, raw };
+}
+
+/**
+ * Resolve a `var(--x)` reference to a concrete value within a context: look up
+ * the referenced token in the same context first, then fall back to the default
+ * context, mirroring the CSS cascade. Bounded to avoid reference cycles.
+ */
+export function resolveInContext(
+  value: string,
+  ctx: string,
+  parse: CssContextParse,
+  depth = 0,
+): string {
+  if (depth > 10) return value.trim();
   const match = value.trim().match(/^var\(\s*--([\w-]+)\s*(?:,\s*([^)]*))?\)$/);
   if (!match) return value.trim();
-  const referenced = table.get(match[1]);
-  if (referenced !== undefined) return resolve(referenced, table, depth + 1);
-  // Unresolved reference — fall back to the declared default, else the raw ref.
+  const byCtx = parse.raw.get(match[1]);
+  const referenced = byCtx?.get(ctx) ?? byCtx?.get(DEFAULT_CONTEXT);
+  if (referenced !== undefined) return resolveInContext(referenced, ctx, parse, depth + 1);
   return (match[2] ?? value).trim();
 }
 
+/**
+ * Parse a token file into the flat, default-context token list the base view
+ * uses. Each token is valued at the default (`:root`) context when present, else
+ * its first-declared context, so the union of custom properties is returned
+ * (back-compatible with the pre-mode single-value behavior).
+ */
 export function parseTokensFromCss(
   css: string,
 ): Omit<InspectorToken, "source" | "uses">[] {
-  const raw = new Map<string, string>();
-  for (const m of css.matchAll(CSS_VAR)) {
-    // Last declaration wins, matching CSS cascade within a single :root block.
-    raw.set(m[1], m[2].trim());
-  }
+  const parse = parseCssContexts(css);
   const tokens: Omit<InspectorToken, "source" | "uses">[] = [];
-  for (const [name, rawValue] of raw) {
-    const resolvedValue = resolve(rawValue, raw);
+  for (const name of parse.order) {
+    const byCtx = parse.raw.get(name);
+    if (!byCtx) continue;
+    const ctx = byCtx.has(DEFAULT_CONTEXT) ? DEFAULT_CONTEXT : [...byCtx.keys()][0];
+    const rawValue = byCtx.get(ctx) ?? "";
+    const resolvedValue = resolveInContext(rawValue, ctx, parse);
     tokens.push({ name, rawValue, resolvedValue, type: classify(name, resolvedValue) });
   }
   return tokens;
@@ -177,18 +283,134 @@ async function markOverridden(projectPath: string, name: string): Promise<void> 
   );
 }
 
+/**
+ * User overrides for the Figma-mode → code-context mapping, persisted per project
+ * (local-first plain file, like token overrides). A missing/malformed file means
+ * "use the derived defaults". Kept out of the CLI-written `project.yaml` because
+ * that file is flat and machine-owned; this is VortSpec-owned state.
+ */
+const MODE_MAP_PATH = ".vortspec/token-mode-map.json";
+
+async function readModeMapOverrides(projectPath: string): Promise<Record<string, string>> {
+  try {
+    const raw = await readFile(join(projectPath, MODE_MAP_PATH), "utf8");
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      const out: Record<string, string> = {};
+      for (const [k, v] of Object.entries(parsed)) if (typeof v === "string") out[k] = v;
+      return out;
+    }
+  } catch {
+    /* no override yet */
+  }
+  return {};
+}
+
+/** Persist a full mode→context map override (used by the transparent-cockpit editor). */
+export async function writeTokenModeMap(
+  projectPath: string,
+  map: Record<string, string>,
+): Promise<InspectorTokensResult> {
+  const path = join(projectPath, MODE_MAP_PATH);
+  await mkdir(dirname(path), { recursive: true }).catch(() => undefined);
+  await writeFile(path, `${JSON.stringify(map, null, 2)}\n`, "utf8").catch(() => undefined);
+  return getInspectorTokens(projectPath);
+}
+
+/**
+ * Derive the default Figma-mode → code-context mapping from a collection's modes
+ * and the contexts present in the token file. The collection's default mode maps
+ * to the default `:root` context; a dark-named mode maps to the best dark context
+ * found; otherwise a context whose selector mentions the mode name, else unmapped.
+ */
+export function deriveModeMap(
+  collection: FigmaCollection | null,
+  contexts: string[],
+): Record<string, string> {
+  const map: Record<string, string> = {};
+  if (!collection) return map;
+  const darkCtx =
+    contexts.find((c) => c === "@media (prefers-color-scheme: dark)") ??
+    contexts.find((c) => /(^|\.)dark\b/.test(c)) ??
+    contexts.find((c) => /dark/i.test(c));
+  for (const m of collection.modes) {
+    const nm = m.name.toLowerCase();
+    if (collection.modes.length === 1 || m.id === collection.defaultModeId) {
+      map[m.name] = DEFAULT_CONTEXT;
+    } else if (/dark|night/.test(nm) && darkCtx) {
+      map[m.name] = darkCtx;
+    } else if (/light|day|default/.test(nm)) {
+      map[m.name] = DEFAULT_CONTEXT;
+    } else {
+      const byName = contexts.find((c) => c.toLowerCase().includes(nm));
+      map[m.name] = byName ?? "";
+    }
+  }
+  return map;
+}
+
+/** The name of a collection's default mode (by `defaultModeId`, else the first mode). */
+function defaultModeName(collection: FigmaCollection | null): string | null {
+  if (!collection || collection.modes.length === 0) return null;
+  const byId = collection.modes.find((m) => m.id === collection.defaultModeId);
+  return (byId ?? collection.modes[0]).name;
+}
+
+/** Pick the collection to reconcile against: the one whose variables match the most code tokens. */
+function pickActiveCollection(
+  collections: FigmaCollection[],
+  variables: FigmaVariable[],
+  codeNorms: Set<string>,
+  preferred?: string,
+): FigmaCollection | null {
+  if (collections.length === 0) return null;
+  if (preferred) {
+    const p = collections.find((c) => c.name === preferred);
+    if (p) return p;
+  }
+  const counts = new Map<string, number>();
+  for (const v of variables) {
+    if (v.collection && codeNorms.has(normName(v.name))) {
+      counts.set(v.collection, (counts.get(v.collection) ?? 0) + 1);
+    }
+  }
+  let best = collections[0];
+  let bestN = -1;
+  for (const c of collections) {
+    const n = counts.get(c.name) ?? 0;
+    if (n > bestN) {
+      bestN = n;
+      best = c;
+    }
+  }
+  return best;
+}
+
+const EMPTY_RESULT: Omit<InspectorTokensResult, "tokenFile"> = {
+  tokens: [],
+  usage: {},
+  figmaOnly: [],
+  figmaSynced: false,
+  collections: [],
+  activeCollection: null,
+  activeMode: null,
+  modeMap: {},
+};
+
 export async function getInspectorTokens(
   projectPath: string,
+  preferredCollection?: string,
 ): Promise<InspectorTokensResult> {
   const config = await readProjectConfig(projectPath);
   const tokenFile = config?.tokenFile ?? null;
-  if (!tokenFile) return { tokenFile: null, tokens: [], usage: {}, figmaOnly: [], figmaSynced: false };
+  if (!tokenFile) return { tokenFile: null, ...EMPTY_RESULT };
   let css: string;
   try {
     css = await readFile(join(projectPath, tokenFile), "utf8");
   } catch {
-    return { tokenFile, tokens: [], usage: {}, figmaOnly: [], figmaSynced: false };
+    return { tokenFile, ...EMPTY_RESULT };
   }
+  const parse = parseCssContexts(css);
   const parsed = parseTokensFromCss(css);
   const sources = config?.componentDir
     ? await collectSources(join(projectPath, config.componentDir))
@@ -198,42 +420,139 @@ export async function getInspectorTokens(
     sources,
   );
   const edited = await readOverrides(projectPath);
-  // Figma-authoritative overlay: match by normalized name, flag drift. Absent
-  // export → figmaVars is null and every token stays generated-code/hand-edited.
-  const figmaVars = await readFigmaVariables(projectPath);
-  const recon = figmaVars ? reconcile(parsed, figmaVars) : null;
+
+  // Figma-authoritative overlay, now mode- and group-aware (change:
+  // figma-native-token-model). Absent export → model is null and every token
+  // stays generated-code/hand-edited with a single (default) mode.
+  const model = await readFigmaVariableModel(projectPath);
+  const codeNorms = new Set(parsed.map((t) => normName(t.name)));
+  const figmaByNorm = new Map<string, FigmaVariable>();
+  if (model) {
+    for (const v of model.variables) {
+      const k = normName(v.name);
+      if (!figmaByNorm.has(k)) figmaByNorm.set(k, v); // first wins
+    }
+  }
+
+  const activeCollection = model
+    ? pickActiveCollection(model.collections, model.variables, codeNorms, preferredCollection)
+    : null;
+  const modeNames = activeCollection?.modes.map((m) => m.name) ?? [];
+  const defMode = defaultModeName(activeCollection);
+  const modeMap = {
+    ...deriveModeMap(activeCollection, parse.contexts),
+    ...(await readModeMapOverrides(projectPath)),
+  };
+  const multiMode = modeNames.length > 1;
+  const activeMode = multiMode ? defMode : (modeNames[0] ?? null);
+
+  const driftOf = (codeResolved: string, figmaVal: string | undefined) =>
+    figmaVal === undefined
+      ? undefined
+      : normValue(codeResolved) === normValue(figmaVal)
+        ? ("in-sync" as const)
+        : ("drifted" as const);
+
   const tokens: InspectorToken[] = parsed.map((t) => {
-    const match = recon?.byName.get(normName(t.name));
-    // Provenance: a local hand-edit is what the user did last, so it wins the
-    // badge; otherwise a Figma match is the authoritative origin.
+    const match = figmaByNorm.get(normName(t.name));
     const source = edited.has(t.name) ? "hand-edited" : match ? "figma-variable" : "generated-code";
+    const figmaPath = match ? match.name : undefined;
+    const group = match ? figmaGroup(match.name) : undefined;
+
+    // Per-mode view (only when the active collection actually has >1 mode).
+    let modes: InspectorToken["modes"];
+    if (multiMode) {
+      modes = {};
+      for (const m of modeNames) {
+        const ctx = modeMap[m];
+        // Read-only is a property of the MODE, not the token: a mode with no
+        // mapped code context can't be edited at all. When a mode IS mapped, a
+        // token that isn't redefined in that context still has an effective value
+        // — the default `:root` value cascades (CSS semantics) — so it stays
+        // editable/pushable rather than flipping to read-only.
+        const mapped = !!ctx && parse.contexts.includes(ctx);
+        const figmaVal = match ? variableValueInMode(match, m, defMode ?? undefined) : undefined;
+        if (!mapped) {
+          modes[m] = {
+            rawValue: figmaVal ?? t.rawValue,
+            resolvedValue: figmaVal ?? t.resolvedValue,
+            figmaValue: figmaVal,
+            readOnly: true,
+          };
+        } else {
+          const byCtx = parse.raw.get(t.name);
+          const codeRaw = byCtx?.get(ctx) ?? byCtx?.get(DEFAULT_CONTEXT) ?? t.rawValue;
+          const resolved = resolveInContext(codeRaw, ctx, parse);
+          modes[m] = {
+            rawValue: codeRaw,
+            resolvedValue: resolved,
+            figmaValue: figmaVal,
+            drift: driftOf(resolved, figmaVal),
+            readOnly: false,
+          };
+        }
+      }
+    }
+
+    // Top-level fields mirror the default mode (back-compat for the flat view).
+    const defEntry = multiMode && defMode ? modes?.[defMode] : undefined;
+    const figmaValue = defEntry
+      ? defEntry.figmaValue
+      : match
+        ? variableValueInMode(match, defMode, defMode ?? undefined)
+        : undefined;
+    const drift = defEntry ? defEntry.drift : driftOf(t.resolvedValue, figmaValue);
+
     return {
       ...t,
       source,
       uses: usage[t.name]?.length ?? 0,
-      figmaValue: match?.figmaValue,
-      drift: match?.drift,
+      figmaValue,
+      drift,
+      figmaPath,
+      group,
+      modes,
     };
   });
+
+  // Figma variables with no matching code token (designed, not yet in code).
+  const figmaOnly: FigmaVariable[] = [];
+  const seenOnly = new Set<string>();
+  if (model) {
+    for (const v of model.variables) {
+      const k = normName(v.name);
+      if (seenOnly.has(k)) continue;
+      seenOnly.add(k);
+      if (!codeNorms.has(k)) figmaOnly.push(v);
+    }
+  }
+
   return {
     tokenFile,
     tokens,
     usage,
-    figmaOnly: recon?.figmaOnly ?? [],
-    figmaSynced: figmaVars !== null,
+    figmaOnly,
+    figmaSynced: model !== null,
+    collections: model?.collections ?? [],
+    activeCollection: activeCollection?.name ?? null,
+    activeMode,
+    modeMap,
   };
 }
 
 /**
  * Gated value edit: write a new value for `--name` into the token file. Only the
  * value of an existing declaration is changed (the property name is untouched —
- * renames that also rewrite code go through the Claude Code modify loop). Returns
- * the refreshed token set.
+ * renames that also rewrite code go through the Claude Code modify loop). When a
+ * `context` (a selector such as `.dark`) is given, the edit is scoped to that
+ * block so a per-mode value is written without touching the default mode; VortSpec
+ * never creates a context that doesn't already exist. Returns the refreshed set.
  */
 export async function setInspectorTokenValue(
   projectPath: string,
   name: string,
   value: string,
+  context?: string,
 ): Promise<InspectorTokensResult> {
   const config = await readProjectConfig(projectPath);
   const tokenFile = config?.tokenFile;
@@ -241,16 +560,76 @@ export async function setInspectorTokenValue(
     const path = join(projectPath, tokenFile);
     const css = await readFile(path, "utf8").catch(() => null);
     if (css) {
-      // Replace the value of `--name: <value>;`, preserving indentation + comment.
-      const re = new RegExp(`(--${name}\\s*:\\s*)([^;]*)(;)`);
-      if (re.test(css)) {
-        await writeFile(path, css.replace(re, `$1${value.trim()}$3`), "utf8");
+      const next =
+        context && context !== DEFAULT_CONTEXT
+          ? replaceDeclInContext(css, name, value, context)
+          : replaceDecl(css, name, value);
+      if (next !== null) {
+        await writeFile(path, next, "utf8");
         // Record the hand-edit so its provenance shows as "hand-edited" on reload.
         await markOverridden(projectPath, name);
       }
     }
   }
   return getInspectorTokens(projectPath);
+}
+
+/** Replace the first `--name: <value>;` anywhere, preserving indentation. null if not found. */
+function replaceDecl(css: string, name: string, value: string): string | null {
+  const re = new RegExp(`(--${escapeRe(name)}\\s*:\\s*)([^;]*)(;)`);
+  return re.test(css) ? css.replace(re, `$1${value.trim()}$3`) : null;
+}
+
+/**
+ * Replace `--name: value;` only within the block whose prelude matches `context`
+ * (e.g. `.dark`), so a per-mode edit leaves other modes untouched. Returns null
+ * when the context block or the declaration inside it isn't found.
+ */
+function replaceDeclInContext(
+  css: string,
+  name: string,
+  value: string,
+  context: string,
+): string | null {
+  // Find a block prelude that, normalized, equals the target context selector.
+  const target = context.trim();
+  let i = 0;
+  while (i < css.length) {
+    const open = css.indexOf("{", i);
+    if (open === -1) return null;
+    const prelude = css.slice(i, open).split(/[{}]/).pop()?.trim() ?? "";
+    // Match the last selector prelude ending at this brace.
+    const preludeStart = Math.max(css.lastIndexOf("}", open), css.lastIndexOf("{", open - 1)) + 1;
+    const rawPrelude = css.slice(preludeStart, open).trim();
+    const sel = rawPrelude.split(",")[0].trim().replace(/\s+/g, " ");
+    // Determine the block extent (brace-matched).
+    let depth = 0;
+    let close = -1;
+    for (let j = open; j < css.length; j++) {
+      if (css[j] === "{") depth++;
+      else if (css[j] === "}") {
+        depth--;
+        if (depth === 0) {
+          close = j;
+          break;
+        }
+      }
+    }
+    if (close === -1) return null;
+    if (sel === target || rawPrelude === target || prelude === target) {
+      const block = css.slice(open, close);
+      const re = new RegExp(`(--${escapeRe(name)}\\s*:\\s*)([^;]*)(;)`);
+      if (re.test(block)) {
+        return css.slice(0, open) + block.replace(re, `$1${value.trim()}$3`) + css.slice(close);
+      }
+    }
+    i = close + 1;
+  }
+  return null;
+}
+
+function escapeRe(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 /** Index just before the closing `}` of the first `@theme` block, or -1 if none. */

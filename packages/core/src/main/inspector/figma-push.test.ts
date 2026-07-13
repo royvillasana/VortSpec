@@ -57,7 +57,7 @@ describe("computePushPlan", () => {
       tok("space-2", "8px", "spacing"), // in-sync → skip
     ];
     const figma = [fvar("color/primary", "#5b4fd0"), fvar("space/2", "8px")];
-    const plan = computePushPlan(tokens, figma, "Tokens");
+    const plan = computePushPlan(tokens, figma, { collection: "Tokens" });
     expect(plan.collection).toBe("Tokens");
     const byToken = Object.fromEntries(plan.entries.map((e) => [e.tokenName, e]));
     expect(byToken["color-primary"]).toMatchObject({ op: "update", currentFigmaValue: "#5b4fd0" });
@@ -114,5 +114,39 @@ describe("computePushPlan", () => {
   it("defaults to VortSpec's own collection", () => {
     expect(computePushPlan([], []).collection).toBe(VORTSPEC_COLLECTION);
     expect(VORTSPEC_COLLECTION).toBe("VortSpec");
+  });
+
+  it("names the pushed variable with its Figma group path (folders preserved)", () => {
+    const tokens = [{ ...tok("color-primary", "#7C6FF0", "color"), figmaPath: "color/primary" }];
+    const [entry] = computePushPlan(tokens, []).entries;
+    expect(entry.variable).toBe("color/primary");
+    expect(entry.op).toBe("create");
+  });
+
+  it("targets the given mode and compares against that mode's Figma value", () => {
+    const tokens = [
+      {
+        ...tok("color-primary", "#2A2540", "color"),
+        figmaPath: "color/primary",
+        modes: {
+          Light: { rawValue: "#7C6FF0", resolvedValue: "#7C6FF0", readOnly: false },
+          Dark: { rawValue: "#2A2540", resolvedValue: "#2A2540", readOnly: false },
+        },
+      },
+    ];
+    const figma: FigmaVariable[] = [
+      {
+        name: "color/primary",
+        resolvedValue: "#7C6FF0",
+        valuesByMode: { Light: { value: "#7C6FF0" }, Dark: { value: "#111111" } },
+      },
+    ];
+    // Pushing the Dark mode: code #2A2540 drifts from Figma's Dark #111111 → an update.
+    const plan = computePushPlan(tokens, figma, { mode: "Dark" });
+    expect(plan.mode).toBe("Dark");
+    const [entry] = plan.entries;
+    expect(entry).toMatchObject({ op: "update", value: "#2A2540", currentFigmaValue: "#111111" });
+    // The same token is in-sync for Light → no entry when pushing Light.
+    expect(computePushPlan(tokens, figma, { mode: "Light" }).entries).toHaveLength(0);
   });
 });

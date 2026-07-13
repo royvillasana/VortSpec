@@ -1,6 +1,12 @@
 import { join } from "node:path";
 import { readFile } from "node:fs/promises";
-import { figmaVariableSchema, type FigmaVariable, type TokenDrift } from "@vortspec/core/inspector";
+import {
+  figmaVariableSchema,
+  figmaVariableModelSchema,
+  type FigmaVariable,
+  type FigmaVariableModel,
+  type TokenDrift,
+} from "@vortspec/core/inspector";
 import { figmaComponentSchema, type FigmaComponent } from "@vortspec/core/figma";
 
 /**
@@ -54,24 +60,17 @@ export interface Reconciliation {
   figmaOnly: FigmaVariable[];
 }
 
+/** The synthetic collection/mode names a legacy (mode-less) export is wrapped into. */
+export const DEFAULT_COLLECTION = "Tokens";
+export const DEFAULT_MODE = "Default";
+
 /**
- * Parse `.vortspec/figma-variables.json`. Tolerant of two shapes Claude may emit:
- * an array of `{name, resolvedValue|value}` objects, or a flat `{name: value}` map.
- * Returns null when the file is absent or unparseable (→ "not synced").
+ * Parse the tolerant legacy shapes into flat FigmaVariable rows: an array of
+ * `{name, resolvedValue|value}` objects, or a flat `{name: value}` map. Kept
+ * field-for-field identical to the original `readFigmaVariables` output so the
+ * back-compat contract (and its tests) hold. Returns [] for garbage rows.
  */
-export async function readFigmaVariables(projectPath: string): Promise<FigmaVariable[] | null> {
-  let raw: string;
-  try {
-    raw = await readFile(join(projectPath, FIGMA_VARS_PATH), "utf8");
-  } catch {
-    return null;
-  }
-  let data: unknown;
-  try {
-    data = JSON.parse(raw);
-  } catch {
-    return null;
-  }
+function parseLegacyVariableRows(data: unknown): FigmaVariable[] {
   const rows: unknown[] = Array.isArray(data)
     ? data
     : data && typeof data === "object"
@@ -93,6 +92,98 @@ export async function readFigmaVariables(projectPath: string): Promise<FigmaVari
     if (parsed.success) vars.push(parsed.data);
   }
   return vars;
+}
+
+/**
+ * Parse `.vortspec/figma-variables.json`. Tolerant of two shapes Claude may emit:
+ * an array of `{name, resolvedValue|value}` objects, or a flat `{name: value}` map.
+ * Returns null when the file is absent or unparseable (→ "not synced").
+ *
+ * Back-compat reader (change: figma-native-token-model kept this signature). For
+ * the mode/group-aware object shape use `readFigmaVariableModel`; this returns
+ * just the flat variable list (default-mode values), which the push planner and
+ * legacy single-mode reconcile still consume.
+ */
+export async function readFigmaVariables(projectPath: string): Promise<FigmaVariable[] | null> {
+  const model = await readFigmaVariableModel(projectPath);
+  return model ? model.variables : null;
+}
+
+/**
+ * Read the full mode/group/alias-aware variable model. Detects the new object
+ * shape (`{collections, variables}`) and parses it richly; wraps a legacy flat
+ * array/map as one `Default`-mode collection with the path taken from each name.
+ * Returns null when the cache is absent or unparseable (→ "not synced").
+ */
+export async function readFigmaVariableModel(
+  projectPath: string,
+): Promise<FigmaVariableModel | null> {
+  let raw: string;
+  try {
+    raw = await readFile(join(projectPath, FIGMA_VARS_PATH), "utf8");
+  } catch {
+    return null;
+  }
+  let data: unknown;
+  try {
+    data = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+  // New object shape: has a `variables` (and usually `collections`) key.
+  if (
+    data &&
+    typeof data === "object" &&
+    !Array.isArray(data) &&
+    "variables" in (data as Record<string, unknown>)
+  ) {
+    const parsed = figmaVariableModelSchema.safeParse(data);
+    if (parsed.success) return parsed.data;
+    // Fall through to legacy parsing if the object failed strict validation.
+  }
+  // Legacy array / flat map → wrap as a single Default-mode collection.
+  const vars = parseLegacyVariableRows(data);
+  const collections = new Set<string>();
+  for (const v of vars) collections.add(v.collection ?? DEFAULT_COLLECTION);
+  if (collections.size === 0) collections.add(DEFAULT_COLLECTION);
+  return {
+    collections: [...collections].map((name) => ({
+      name,
+      modes: [{ id: DEFAULT_MODE, name: DEFAULT_MODE }],
+      defaultModeId: DEFAULT_MODE,
+    })),
+    variables: vars,
+  };
+}
+
+/** Full slash segments of a Figma variable name (`primitive/color/primary` → 3 segments). */
+export function figmaSegments(name: string): string[] {
+  return name.split("/").map((s) => s.trim()).filter(Boolean);
+}
+
+/** Group-folder segments (path minus the leaf label) for indented display. */
+export function figmaGroup(name: string): string[] {
+  return figmaSegments(name).slice(0, -1);
+}
+
+/**
+ * A variable's resolved value in a given mode. Prefers `valuesByMode[modeName]`,
+ * falling back to the default mode's value, then the flat `resolvedValue`. When
+ * the mode has an alias, the concrete resolved value is still returned for
+ * display (the alias is surfaced separately).
+ */
+export function variableValueInMode(
+  v: FigmaVariable,
+  modeName: string | null,
+  defaultModeName?: string,
+): string | undefined {
+  const byMode = v.valuesByMode;
+  if (byMode) {
+    const pick = (m: string | null | undefined) =>
+      m && byMode[m] ? (byMode[m].value ?? undefined) : undefined;
+    return pick(modeName) ?? pick(defaultModeName) ?? v.resolvedValue;
+  }
+  return v.resolvedValue;
 }
 
 /**

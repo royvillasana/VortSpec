@@ -109,6 +109,9 @@ export type {
   TokenUsage,
   TokenDrift,
   FigmaVariable,
+  FigmaCollection,
+  FigmaMode,
+  FigmaVariableModel,
   PushPlan,
   PushPlanEntry,
   FigmaPushResult,
@@ -563,7 +566,10 @@ export const ipcContract = {
     response: projectConfigSchema.nullable(),
   },
   "inspector:getTokens": {
-    request: z.string(),
+    request: z.union([
+      z.string(),
+      z.object({ projectPath: z.string(), preferredCollection: z.string().optional() }),
+    ]),
     response: inspectorTokensResultSchema,
   },
   "inspector:getComponents": {
@@ -575,6 +581,16 @@ export const ipcContract = {
       projectPath: z.string(),
       name: z.string(),
       value: z.string(),
+      /** The code context (selector) to write into — for a per-mode edit. Omit → default `:root`. */
+      context: z.string().optional(),
+    }),
+    response: inspectorTokensResultSchema,
+  },
+  "inspector:setTokenModeMap": {
+    request: z.object({
+      projectPath: z.string(),
+      /** figma mode NAME → code context selector. */
+      map: z.record(z.string(), z.string()),
     }),
     response: inspectorTokensResultSchema,
   },

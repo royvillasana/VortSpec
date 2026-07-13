@@ -143,9 +143,22 @@ export interface VortSpecApi {
   projectConfig(projectPath: string): Promise<IpcResponse<"project:config">>;
 
   // inspector (tokens / components / verification)
-  inspectorTokens(projectPath: string): Promise<IpcResponse<"inspector:getTokens">>;
+  inspectorTokens(
+    projectPath: string,
+    preferredCollection?: string,
+  ): Promise<IpcResponse<"inspector:getTokens">>;
   inspectorComponents(projectPath: string): Promise<IpcResponse<"inspector:getComponents">>;
-  setTokenValue(projectPath: string, name: string, value: string): Promise<IpcResponse<"inspector:setTokenValue">>;
+  setTokenValue(
+    projectPath: string,
+    name: string,
+    value: string,
+    context?: string,
+  ): Promise<IpcResponse<"inspector:setTokenValue">>;
+  /** Persist the figma-mode → code-context map (transparent-cockpit editor). */
+  setTokenModeMap(
+    projectPath: string,
+    map: Record<string, string>,
+  ): Promise<IpcResponse<"inspector:setTokenModeMap">>;
   /** Create a new design token (name + value) in the project token file, marked hand-edited. */
   createToken(projectPath: string, name: string, value: string): Promise<IpcResponse<"inspector:createToken">>;
   getVerification(projectPath: string): Promise<IpcResponse<"inspector:getVerification">>;
