@@ -6,7 +6,7 @@ import type {
   PushPlanEntry,
   TokenType,
 } from "@vortspec/core/inspector";
-import { normName, normValue } from "./figma-reconcile";
+import { normName, normValue, variableValueInMode } from "./figma-reconcile";
 
 /**
  * Code→Figma push planning (change: add-code-to-figma-token-push). Pure file
@@ -89,36 +89,46 @@ export function decomposeShadow(
  * tokens are a single scalar entry; a shadow composite decomposes into
  * offset/blur/spread/color sub-variables so no token type is left unrepresented.
  */
-function expandToken(token: Pick<InspectorToken, "name" | "rawValue" | "resolvedValue" | "type">): {
+/** The token fields the planner needs, incl. the authoritative Figma slash path + per-mode values. */
+type PushToken = Pick<InspectorToken, "name" | "rawValue" | "resolvedValue" | "type" | "figmaPath" | "modes">;
+
+function expandToken(
+  token: PushToken,
+  rawValue: string,
+  resolvedValue: string,
+): {
   variable: string;
   figmaType: FigmaVariableType;
   value: string;
-  /** the referenced token name when rawValue is `var(--x)`, else null */
+  /** the referenced token name when the value is `var(--x)`, else null */
   ref: string | null;
 }[] {
-  const ref = token.rawValue.trim().match(/^var\(\s*--([\w-]+)\s*(?:,[^)]*)?\)$/);
+  // The variable name carries the full group path (e.g. `color/primary`) so Figma
+  // folders it; fall back to the flat code name for a genuinely new token.
+  const base = token.figmaPath ?? token.name;
+  const ref = rawValue.trim().match(/^var\(\s*--([\w-]+)\s*(?:,[^)]*)?\)$/);
   const refName = ref ? ref[1] : null;
 
   // A composite box-shadow with no reference → decompose into scalar sub-variables.
   if (token.type === "shadow" && !refName) {
-    const parts = decomposeShadow(token.resolvedValue);
+    const parts = decomposeShadow(resolvedValue);
     if (parts) {
       return parts.map((p) => ({
-        variable: `${token.name}-${p.suffix}`,
+        variable: `${base}-${p.suffix}`,
         figmaType: p.figmaType,
         value: p.value,
         ref: null,
       }));
     }
     // Unparseable → push the raw shadow string so it is still represented.
-    return [{ variable: token.name, figmaType: "STRING", value: token.resolvedValue, ref: null }];
+    return [{ variable: base, figmaType: "STRING", value: resolvedValue, ref: null }];
   }
 
   return [
     {
-      variable: token.name,
-      figmaType: figmaTypeFor(token.type, token.name, token.resolvedValue),
-      value: token.resolvedValue,
+      variable: base,
+      figmaType: figmaTypeFor(token.type, token.name, resolvedValue),
+      value: resolvedValue,
       ref: refName,
     },
   ];
@@ -131,35 +141,45 @@ function expandToken(token: Pick<InspectorToken, "name" | "rawValue" | "resolved
  * an alias entry; otherwise it falls back to its resolved concrete value.
  */
 export function computePushPlan(
-  tokens: Pick<InspectorToken, "name" | "rawValue" | "resolvedValue" | "type">[],
+  tokens: PushToken[],
   figmaVars: FigmaVariable[],
-  collection: string = VORTSPEC_COLLECTION,
+  opts: { collection?: string; mode?: string } = {},
 ): PushPlan {
-  const figmaByNorm = new Map<string, string>(); // normName → resolvedValue
-  for (const v of figmaVars) if (!figmaByNorm.has(normName(v.name))) figmaByNorm.set(normName(v.name), v.resolvedValue);
+  const collection = opts.collection ?? VORTSPEC_COLLECTION;
+  const mode = opts.mode;
+  // Match by normalized name → the full FigmaVariable, so we can read its value in
+  // the target mode (not just the flattened default) for the in-sync check.
+  const figmaByNorm = new Map<string, FigmaVariable>();
+  for (const v of figmaVars) if (!figmaByNorm.has(normName(v.name))) figmaByNorm.set(normName(v.name), v);
 
   const entries: PushPlanEntry[] = [];
   for (const token of tokens) {
-    for (const e of expandToken(token)) {
+    // Use the value for the mode being pushed when the token carries per-mode data.
+    const modeEntry = mode && token.modes ? token.modes[mode] : undefined;
+    const rawValue = modeEntry?.rawValue ?? token.rawValue;
+    const resolvedValue = modeEntry?.resolvedValue ?? token.resolvedValue;
+
+    for (const e of expandToken(token, rawValue, resolvedValue)) {
       const key = normName(e.variable);
-      const figmaValue = figmaByNorm.get(key);
-      const exists = figmaValue !== undefined;
+      const figmaVar = figmaByNorm.get(key);
+      const exists = figmaVar !== undefined;
+      const figmaValue = figmaVar ? variableValueInMode(figmaVar, mode ?? null) : undefined;
 
       // Alias when the reference resolves to a variable that exists in the collection.
       const aliasTarget = e.ref && figmaByNorm.has(normName(e.ref)) ? normName(e.ref) : undefined;
 
-      if (exists && normValue(e.value) === normValue(figmaValue)) continue; // in-sync → skip
+      if (exists && figmaValue !== undefined && normValue(e.value) === normValue(figmaValue)) continue; // in-sync → skip
 
       entries.push({
         variable: e.variable,
         op: exists ? "update" : "create",
         figmaType: e.figmaType,
         ...(aliasTarget ? { aliasTarget } : { value: e.value }),
-        ...(exists ? { currentFigmaValue: figmaValue } : {}),
+        ...(figmaValue !== undefined ? { currentFigmaValue: figmaValue } : {}),
         tokenName: token.name,
         tokenType: token.type,
       });
     }
   }
-  return { collection, entries };
+  return { collection, ...(mode ? { mode } : {}), entries };
 }

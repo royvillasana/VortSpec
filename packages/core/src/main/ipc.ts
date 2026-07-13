@@ -34,6 +34,7 @@ import {
   setInspectorTokenValue,
   createInspectorToken,
   snapshotTokenScope,
+  writeTokenModeMap,
 } from "./inspector/token-parser";
 import { computePushPlan, VORTSPEC_COLLECTION } from "./inspector/figma-push";
 import { readFigmaVariables } from "./inspector/figma-reconcile";
@@ -212,9 +213,13 @@ const handlers: Record<IpcChannel, Handler> = {
       getInspectorTokens(projectPath),
       readFigmaVariables(projectPath),
     ]);
-    // Always push into VortSpec's own collection (auto-created on write), so the
-    // user never has to create or name a collection in Figma first.
-    return computePushPlan(result.tokens, figmaVars ?? [], VORTSPEC_COLLECTION);
+    // Push into the collection currently in view (true two-way sync), falling back
+    // to VortSpec's own auto-created collection when the project isn't synced —
+    // writing into the active mode so per-mode values round-trip.
+    return computePushPlan(result.tokens, figmaVars ?? [], {
+      collection: result.activeCollection ?? VORTSPEC_COLLECTION,
+      ...(result.activeMode ? { mode: result.activeMode } : {}),
+    });
   }) as Handler,
   "figma:pushVariables": ((r: { projectPath: string; plan: PushPlan }) =>
     figmaCli.pushVariablesToFigma(r.plan)) as Handler,
@@ -350,11 +355,20 @@ const handlers: Record<IpcChannel, Handler> = {
   "artifact:findLatest": ((req: { projectPath: string; suffix: string }) =>
     findLatestArtifact(req.projectPath, req.suffix)) as Handler,
   "project:config": ((projectPath: string) => readProjectConfig(projectPath)) as Handler,
-  "inspector:getTokens": ((projectPath: string) => getInspectorTokens(projectPath)) as Handler,
+  "inspector:getTokens": ((req: string | { projectPath: string; preferredCollection?: string }) =>
+    typeof req === "string"
+      ? getInspectorTokens(req)
+      : getInspectorTokens(req.projectPath, req.preferredCollection)) as Handler,
   "inspector:getComponents": ((projectPath: string) =>
     getInspectorComponents(projectPath)) as Handler,
-  "inspector:setTokenValue": ((req: { projectPath: string; name: string; value: string }) =>
-    setInspectorTokenValue(req.projectPath, req.name, req.value)) as Handler,
+  "inspector:setTokenValue": ((req: {
+    projectPath: string;
+    name: string;
+    value: string;
+    context?: string;
+  }) => setInspectorTokenValue(req.projectPath, req.name, req.value, req.context)) as Handler,
+  "inspector:setTokenModeMap": ((req: { projectPath: string; map: Record<string, string> }) =>
+    writeTokenModeMap(req.projectPath, req.map)) as Handler,
   "inspector:createToken": ((req: { projectPath: string; name: string; value: string }) =>
     createInspectorToken(req.projectPath, req.name, req.value)) as Handler,
   "inspector:getVerification": ((projectPath: string) => getVerification(projectPath)) as Handler,

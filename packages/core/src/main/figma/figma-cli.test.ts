@@ -7,6 +7,8 @@ import {
   parseComponentsEval,
   parseSelectionEval,
   connectModeOrder,
+  buildVariablesFetchScript,
+  parseVariablesFetch,
 } from "./figma-cli";
 
 describe("connectModeOrder (auto-connect)", () => {
@@ -185,5 +187,29 @@ describe("parseSelectionEval", () => {
       { id: "1:1", name: "A", type: "FRAME" },
     ]);
     expect(parseSelectionEval("nope")).toEqual([]);
+  });
+});
+
+describe("buildVariablesFetchScript", () => {
+  const script = buildVariablesFetchScript();
+  it("reads collections + variables via the plugin API and keeps modes/aliases", () => {
+    expect(script).toContain("getLocalVariableCollectionsAsync");
+    expect(script).toContain("getLocalVariablesAsync");
+    expect(script).toContain("valuesByMode");
+    expect(script).toContain("VARIABLE_ALIAS");
+    expect(script).toContain("resolvedType");
+  });
+});
+
+describe("parseVariablesFetch", () => {
+  it("parses a model behind a CLI banner", () => {
+    const raw =
+      'figma-cli v1\nconnected\n{"collections":[{"name":"Theme","modes":[{"id":"1:0","name":"Light"}],"defaultModeId":"1:0"}],"variables":[{"name":"color/primary","resolvedValue":"#7C6FF0","collection":"Theme","resolvedType":"COLOR","valuesByMode":{"Light":{"value":"#7C6FF0"}}}]}\n';
+    const model = parseVariablesFetch(raw);
+    expect(model?.collections[0].modes[0].name).toBe("Light");
+    expect(model?.variables[0].valuesByMode?.Light.value).toBe("#7C6FF0");
+  });
+  it("returns null when there is no JSON object", () => {
+    expect(parseVariablesFetch("no json here")).toBeNull();
   });
 });

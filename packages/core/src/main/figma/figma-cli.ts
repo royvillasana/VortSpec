@@ -15,10 +15,12 @@ import type {
 } from "@vortspec/core/figma";
 import type {
   FigmaVariable,
+  FigmaVariableModel,
   TokenType,
   PushPlan,
   FigmaPushResult,
 } from "@vortspec/core/inspector";
+import { figmaVariableModelSchema } from "@vortspec/core/inspector";
 
 /**
  * Drives the local figma-cli (github.com/silships/figma-cli) — VortSpec's
@@ -250,6 +252,85 @@ export function mapDtcgType($type: string | undefined, name: string): TokenType 
   if (/radius|corner|rounded/i.test(name)) return "radius";
   if (t === "dimension" || t === "number" || t === "duration") return "spacing";
   return "other";
+}
+
+/**
+ * Build the figma-cli `eval` that reads the full mode/group/alias-aware variable
+ * model straight from the Variables plugin API — the authoritative capture path
+ * (change: figma-native-token-model). Unlike the DTCG export it keeps every
+ * mode's value, the slash group path (via `v.name`), the resolvedType, and alias
+ * references. Returns a JSON string matching `figmaVariableModelSchema`. Pure +
+ * exported for unit testing. Verify plugin-API shapes against current docs.
+ */
+export function buildVariablesFetchScript(): string {
+  return `(async function () {
+  var cols = await figma.variables.getLocalVariableCollectionsAsync();
+  var vars = await figma.variables.getLocalVariablesAsync();
+  var byId = {}; vars.forEach(function(v){ byId[v.id] = v; });
+  var colById = {}; cols.forEach(function(c){ colById[c.id] = c; });
+  function h(x){ var s = Math.round((x||0)*255).toString(16); return s.length===1?'0'+s:s; }
+  function rgbaToHex(c){
+    if (!c || typeof c !== 'object') return '';
+    var hex = '#'+h(c.r)+h(c.g)+h(c.b);
+    if (c.a !== undefined && c.a < 1) hex += h(c.a);
+    return hex;
+  }
+  function scalar(val, type){
+    if (type === 'COLOR') return rgbaToHex(val);
+    if (type === 'BOOLEAN') return String(val);
+    return String(val);
+  }
+  // Follow an alias chain to a concrete display value within a mode (bounded).
+  function resolveConcrete(val, type, modeId, depth){
+    if (depth > 10) return '';
+    if (val && val.type === 'VARIABLE_ALIAS'){
+      var tv = byId[val.id];
+      if (!tv) return '';
+      var tvv = tv.valuesByMode[modeId];
+      if (tvv === undefined){ var ks = Object.keys(tv.valuesByMode); tvv = tv.valuesByMode[ks[0]]; }
+      return resolveConcrete(tvv, tv.resolvedType, modeId, depth+1);
+    }
+    return scalar(val, type);
+  }
+  var variables = vars.map(function(v){
+    var col = colById[v.variableCollectionId];
+    var modes = col ? col.modes : [{ modeId: '__default', name: 'Default' }];
+    var valuesByMode = {};
+    modes.forEach(function(m){
+      var raw = v.valuesByMode[m.modeId];
+      var entry = {};
+      if (raw && raw.type === 'VARIABLE_ALIAS'){ var tgt = byId[raw.id]; if (tgt) entry.aliasOf = tgt.name; }
+      entry.value = resolveConcrete(raw, v.resolvedType, m.modeId, 0);
+      valuesByMode[m.name] = entry;
+    });
+    var defMode = col ? (col.modes.filter(function(mm){return mm.modeId===col.defaultModeId;})[0] || col.modes[0]) : null;
+    var defVal = defMode && valuesByMode[defMode.name] ? valuesByMode[defMode.name].value : '';
+    return { name: v.name, collection: col ? col.name : undefined, resolvedType: v.resolvedType, resolvedValue: defVal || '', valuesByMode: valuesByMode };
+  });
+  var collections = cols.map(function(c){
+    return { name: c.name, modes: c.modes.map(function(m){ return { id: m.modeId, name: m.name }; }), defaultModeId: c.defaultModeId };
+  });
+  return JSON.stringify({ collections: collections, variables: variables });
+})();`;
+}
+
+/**
+ * Parse the variables-fetch `eval` output (a JSON model string, possibly behind a
+ * CLI banner) into a validated `FigmaVariableModel`. Returns null when no JSON
+ * object is present or it fails validation. Pure + exported for unit testing.
+ */
+export function parseVariablesFetch(raw: string): FigmaVariableModel | null {
+  const start = raw.indexOf("{");
+  const end = raw.lastIndexOf("}");
+  if (start === -1 || end === -1 || end < start) return null;
+  let data: unknown;
+  try {
+    data = JSON.parse(raw.slice(start, end + 1));
+  } catch {
+    return null;
+  }
+  const parsed = figmaVariableModelSchema.safeParse(data);
+  return parsed.success ? parsed.data : null;
 }
 
 /** Stringify a DTCG `$value` to a concrete display value (objects → JSON). */
@@ -508,6 +589,27 @@ export async function syncVariablesToCache(projectPath: string): Promise<FigmaSy
     };
   }
 
+  // PRIMARY: read the full mode/group/alias-aware model via the Variables plugin
+  // API (change: figma-native-token-model). Falls back to the DTCG export when the
+  // eval path is unavailable, so this never regresses below the prior behavior.
+  const model = await fetchVariableModelViaEval();
+  if (model) {
+    await mkdir(join(projectPath, ".vortspec"), { recursive: true });
+    await writeFile(join(projectPath, FIGMA_VARS_PATH), `${JSON.stringify(model, null, 2)}\n`, "utf8");
+    const modeCount = new Set(model.collections.flatMap((c) => c.modes.map((m) => m.name))).size;
+    return {
+      ok: true,
+      count: model.variables.length,
+      source: "cli",
+      mode: conn.mode,
+      message: `Read ${model.variables.length} Figma variable${
+        model.variables.length === 1 ? "" : "s"
+      } across ${model.collections.length} collection${model.collections.length === 1 ? "" : "s"}${
+        modeCount > 1 ? ` (${modeCount} modes)` : ""
+      } via figma-cli${conn.mode ? ` (${conn.mode} mode)` : ""}.`,
+    };
+  }
+
   const tmp = join(tmpdir(), `vortspec-dtcg-${process.pid}-${Date.now()}.json`);
   try {
     const res = await run(["export", "dtcg", tmp], 30000);
@@ -552,6 +654,23 @@ export async function syncVariablesToCache(projectPath: string): Promise<FigmaSy
   }
 }
 
+/**
+ * Run the variables-fetch `eval` and parse it into a validated model. Returns null
+ * on any failure so `syncVariablesToCache` can fall back to the DTCG export.
+ */
+async function fetchVariableModelViaEval(): Promise<FigmaVariableModel | null> {
+  const tmp = join(tmpdir(), `vortspec-figvars-${process.pid}-${Date.now()}.js`);
+  try {
+    await writeFile(tmp, buildVariablesFetchScript(), "utf8");
+    const res = await run(["eval", "--file", tmp], 30000);
+    return parseVariablesFetch(res.stdout);
+  } catch {
+    return null;
+  } finally {
+    await rm(tmp, { force: true }).catch(() => undefined);
+  }
+}
+
 // ── Writing variables: code → Figma push (change: add-code-to-figma-token-push) ──
 
 /**
@@ -588,7 +707,9 @@ export function buildPushScript(plan: PushPlan): string {
   var col = cols.find(function(c){ return c.name === PLAN.collection; });
   var createdCollection = false;
   if (!col){ col = figma.variables.createVariableCollection(PLAN.collection); createdCollection = true; }
+  // Write into the plan's target mode (by name) when given; else the default mode.
   var modeId = col.defaultModeId || (col.modes[0] && col.modes[0].modeId);
+  if (PLAN.mode){ var pm = col.modes.filter(function(m){ return m.name === PLAN.mode; })[0]; if (pm) modeId = pm.modeId; }
   var vars = await figma.variables.getLocalVariablesAsync();
   var byNorm = {};
   vars.forEach(function(v){ if (v.variableCollectionId === col.id) byNorm[norm(v.name)] = v; });

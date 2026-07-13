@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type {
   EnvCheck,
+  FigmaCollection,
   FigmaConnection,
   FigmaVariable,
   FileSnapshot,
@@ -21,15 +22,23 @@ import { ProjectRail, projectRailItems } from "@vortspec/ui/ProjectRail";
 const FIGMA_SYNC_PROMPT = [
   "Export this design system's Figma variables so VortSpec can reconcile them with the token file.",
   "",
-  "1. Using the connected Figma MCP (Desktop Bridge), fetch ALL design variables with values resolved",
-  "   for the default/primary mode. Prefer a bulk call (e.g. figma_get_variables / get_variable_defs);",
-  "   page through collections if the file is large.",
-  "2. Resolve each variable to a CONCRETE value (hex for colors, px/number for dimensions) — never an",
-  "   alias to another variable.",
-  "3. Write the result to `.vortspec/figma-variables.json` as a JSON array of objects:",
-  '   { "name": "<variable name, e.g. color/primary>", "resolvedValue": "<concrete value>",',
-  '     "type": "color|spacing|radius|typography|shadow|other", "collection": "<optional>" }.',
-  "4. Write ONLY `.vortspec/figma-variables.json`. Do not modify the token file, component sources, or",
+  "1. Using the connected Figma MCP (Desktop Bridge), fetch ALL variable collections and their variables.",
+  "   For EACH variable capture its value in EVERY mode of its collection (not just the default mode).",
+  "2. Write the result to `.vortspec/figma-variables.json` as a single JSON OBJECT with this shape:",
+  "   {",
+  '     "collections": [ { "name": "<collection>", "modes": [ { "id": "<modeId>", "name": "<mode>" } ],',
+  '                        "defaultModeId": "<modeId>" } ],',
+  '     "variables": [ {',
+  '       "name": "<full slash path, e.g. primitive/color/primary>",',
+  '       "collection": "<collection name>",',
+  '       "resolvedType": "COLOR|FLOAT|STRING|BOOLEAN",',
+  '       "resolvedValue": "<default mode concrete value>",',
+  '       "valuesByMode": { "<mode name>": { "value": "<concrete value>", "aliasOf": "<target slash path, if this mode is an alias>" } }',
+  "     } ]",
+  "   }",
+  "   Keep the FULL slash path in `name` (do not flatten `/` to `-`). Resolve each value to a CONCRETE value",
+  "   (hex for colors, px/number for dimensions); when a mode's value is an alias, ALSO record `aliasOf`.",
+  "3. Write ONLY `.vortspec/figma-variables.json`. Do not modify the token file, component sources, or",
   "   any other file, and do not change anything in Figma.",
 ].join("\n");
 
@@ -42,16 +51,21 @@ const FIGMA_SYNC_PROMPT = [
 function pushPrompt(plan: PushPlan): string {
   const creates = plan.entries.filter((e) => e.op === "create");
   const updates = plan.entries.filter((e) => e.op === "update");
+  const modeLine = plan.mode
+    ? ` Write values into the "${plan.mode}" mode of the collection (leave other modes untouched).`
+    : "";
   return [
-    `Apply this pre-approved token push to VortSpec's own Figma Variables collection "${plan.collection}".`,
+    `Apply this pre-approved token push to the Figma Variables collection "${plan.collection}".${modeLine}`,
     "",
     `1. Ensure a variable collection named exactly "${plan.collection}" exists. If it does NOT exist, CREATE`,
-    "   it (figma_create_variable_collection). VortSpec owns this collection — do not ask the user to make it.",
-    "2. Create the following NEW variables (figma_batch_create_variables), each in that collection with the",
-    "   given type; for entries with an `aliasTarget`, bind the variable as an ALIAS to that existing",
-    "   variable instead of a raw value:",
+    "   it (figma_create_variable_collection) — do not ask the user to make it.",
+    "2. Create the following NEW variables (figma_batch_create_variables), each in that collection. Keep the",
+    "   FULL slash path in the name so Figma folders it (e.g. `color/primary`, not `color-primary`). Use the",
+    "   given type; for entries with an `aliasTarget`, bind the variable as an ALIAS to that existing variable",
+    plan.mode ? `   in the "${plan.mode}" mode instead of a raw value:` : "   instead of a raw value:",
     `   ${JSON.stringify(creates)}`,
-    "3. Update the following EXISTING variables to the given value/alias (figma_batch_update_variables):",
+    "3. Update the following EXISTING variables to the given value/alias (figma_batch_update_variables)" +
+      (plan.mode ? ` in the "${plan.mode}" mode:` : ":"),
     `   ${JSON.stringify(updates)}`,
     `4. Write ONLY to the "${plan.collection}" collection. Do not delete variables, touch other collections,`,
     "   styles, layers, or any local file. Report how many variables you created and updated.",
@@ -108,6 +122,41 @@ const SOURCE: Record<TokenSource, { label: string; dot: string; text: string; li
     line: "Edited by you in the Inspector",
   },
 };
+
+/** A token's displayed values for the active mode (change: figma-native-token-model). */
+type ModeView = {
+  resolvedValue: string;
+  rawValue: string;
+  figmaValue?: string;
+  drift?: InspectorToken["drift"];
+  readOnly: boolean;
+};
+
+/** The values to show/edit for a token in the active mode — falls back to the flat default. */
+function modeView(token: InspectorToken, mode: string | null): ModeView {
+  const m = mode && token.modes ? token.modes[mode] : undefined;
+  if (m) {
+    return {
+      resolvedValue: m.resolvedValue,
+      rawValue: m.rawValue,
+      figmaValue: m.figmaValue,
+      drift: m.drift,
+      readOnly: m.readOnly,
+    };
+  }
+  return {
+    resolvedValue: token.resolvedValue,
+    rawValue: token.rawValue,
+    figmaValue: token.figmaValue,
+    drift: token.drift,
+    readOnly: false,
+  };
+}
+
+/** One rendered row of the group-folder tree: a collapsible folder header or a leaf token. */
+type TreeRow =
+  | { kind: "folder"; depth: number; label: string; key: string; count: number }
+  | { kind: "token"; depth: number; token: InspectorToken };
 
 /**
  * Design System Inspector — Tokens page (design: "Tokens.dc.html", adapted to
@@ -182,13 +231,27 @@ export function Inspector({
     type: "color",
   });
 
-  async function reloadTokens(): Promise<void> {
-    const r = await api.inspectorTokens(project.path);
+  // Figma-native model (change: figma-native-token-model): collections + modes +
+  // the mode↔context map, plus the collection/mode the user is currently viewing.
+  const [collections, setCollections] = useState<FigmaCollection[]>([]);
+  const [modeMap, setModeMap] = useState<Record<string, string>>({});
+  const [pickedCollection, setPickedCollection] = useState<string | null>(null);
+  const [activeMode, setActiveMode] = useState<string | null>(null);
+  // Group folders collapsed in the tree (by their slash-path key).
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const [modeMapOpen, setModeMapOpen] = useState(false);
+
+  async function reloadTokens(preferredCollection?: string): Promise<void> {
+    const r = await api.inspectorTokens(project.path, preferredCollection);
     setTokens(r.tokens);
     setUsage(r.usage);
     setTokenFile(r.tokenFile);
     setFigmaOnly(r.figmaOnly);
     setFigmaSynced(r.figmaSynced);
+    setCollections(r.collections);
+    setModeMap(r.modeMap);
+    setPickedCollection(r.activeCollection);
+    setActiveMode(r.activeMode);
   }
 
   useEffect(() => {
@@ -398,26 +461,76 @@ export function Inspector({
     flash("Canceled — restored the token file and components");
   }
 
-  const groups = useMemo(() => {
+  const filtered = useMemo(() => {
     if (!tokens) return [];
     const q = query.trim().toLowerCase();
-    const filtered = tokens.filter(
+    return tokens.filter(
       (t) =>
         (segment === "all" || t.type === segment) &&
         (!codeOnly || t.source === "generated-code") &&
-        (q === "" || t.name.toLowerCase().includes(q) || t.resolvedValue.toLowerCase().includes(q)),
+        (q === "" ||
+          t.name.toLowerCase().includes(q) ||
+          modeView(t, activeMode).resolvedValue.toLowerCase().includes(q)),
     );
-    return TYPE_ORDER.map((type) => ({
-      type,
-      items: filtered.filter((t) => t.type === type),
-    })).filter((g) => g.items.length > 0);
-  }, [tokens, query, segment, codeOnly]);
+  }, [tokens, query, segment, codeOnly, activeMode]);
+
+  // Type grouping (the fallback when no Figma group paths are present).
+  const groups = useMemo(
+    () =>
+      TYPE_ORDER.map((type) => ({ type, items: filtered.filter((t) => t.type === type) })).filter(
+        (g) => g.items.length > 0,
+      ),
+    [filtered],
+  );
+
+  // Figma-native folder tree: nest tokens under their `/` group path with
+  // indentation, mirroring how Figma displays variables (change:
+  // figma-native-token-model). Used whenever any token carries a group path.
+  const useTree = useMemo(() => filtered.some((t) => (t.group?.length ?? 0) > 0), [filtered]);
+  const treeRows = useMemo<TreeRow[]>(() => {
+    if (!useTree) return [];
+    const counts = new Map<string, number>();
+    for (const t of filtered) {
+      const g = t.group ?? [];
+      for (let d = 0; d < g.length; d++) {
+        const key = g.slice(0, d + 1).join("/");
+        counts.set(key, (counts.get(key) ?? 0) + 1);
+      }
+    }
+    const sorted = [...filtered].sort((a, b) =>
+      [...(a.group ?? []), a.name].join("/").localeCompare([...(b.group ?? []), b.name].join("/")),
+    );
+    const rows: TreeRow[] = [];
+    let prev: string[] = [];
+    for (const t of sorted) {
+      const segs = t.group ?? [];
+      let common = 0;
+      while (common < segs.length && common < prev.length && segs[common] === prev[common]) common++;
+      for (let d = common; d < segs.length; d++) {
+        const key = segs.slice(0, d + 1).join("/");
+        rows.push({ kind: "folder", depth: d, label: segs[d], key, count: counts.get(key) ?? 0 });
+      }
+      rows.push({ kind: "token", depth: segs.length, token: t });
+      prev = segs;
+    }
+    // Hide anything strictly under a collapsed folder (the folder header stays).
+    return rows.filter((r) => {
+      const path = r.kind === "folder" ? r.key : [...(r.token.group ?? []), r.token.name].join("/");
+      for (const c of collapsed) if (path !== c && path.startsWith(c + "/")) return false;
+      return true;
+    });
+  }, [filtered, useTree, collapsed]);
+
+  const activeCollectionObj =
+    collections.find((c) => c.name === pickedCollection) ?? collections[0] ?? null;
+  const modes = activeCollectionObj?.modes ?? [];
+  const multiMode = modes.length > 1;
 
   const total = tokens?.length ?? 0;
-  const resultCount = groups.reduce((a, g) => a + g.items.length, 0);
+  const resultCount = filtered.length;
   const selectedToken = tokens?.find((t) => t.name === selected) ?? null;
-  const driftCount = tokens?.filter((t) => t.drift === "drifted").length ?? 0;
-  const inSyncCount = tokens?.filter((t) => t.drift === "in-sync").length ?? 0;
+  const driftCount = tokens?.filter((t) => modeView(t, activeMode).drift === "drifted").length ?? 0;
+  const inSyncCount = tokens?.filter((t) => modeView(t, activeMode).drift === "in-sync").length ?? 0;
   const cliConnected = figmaCli?.connected ?? false;
   const mcpConnected = figmaEnv?.status === "pass";
   // The sync button lights up when EITHER path can run; the CLI is preferred.
@@ -425,10 +538,27 @@ export function Inspector({
   const syncSource: "cli" | "mcp" | null = cliConnected ? "cli" : mcpConnected ? "mcp" : null;
 
   async function saveValue(name: string, value: string): Promise<void> {
-    const r = await api.setTokenValue(project.path, name, value);
+    // Route a per-mode edit into that mode's code context; default mode → no context.
+    const context = activeMode ? modeMap[activeMode] : undefined;
+    const r = await api.setTokenValue(project.path, name, value, context || undefined);
     setTokens(r.tokens);
     setUsage(r.usage);
-    flash(`Saved --${name} to ${tokenFile ?? "token file"}`);
+    const where = activeMode && multiMode ? ` (${activeMode})` : "";
+    flash(`Saved --${name}${where} to ${tokenFile ?? "token file"}`);
+  }
+
+  /** Switch the collection in view — re-reconciles server-side against that collection. */
+  async function selectCollection(name: string): Promise<void> {
+    setPickedCollection(name);
+    setCollapsed(new Set());
+    await reloadTokens(name);
+  }
+
+  async function saveModeMap(next: Record<string, string>): Promise<void> {
+    const r = await api.setTokenModeMap(project.path, next);
+    setModeMap(r.modeMap);
+    setTokens(r.tokens);
+    flash("Updated the mode → context map");
   }
 
   return (
@@ -524,6 +654,51 @@ export function Inspector({
             </div>
           )}
           <div className="flex flex-wrap items-center gap-3">
+            {/* Collection scope — shown only when Figma exposes more than one. */}
+            {collections.length > 1 && (
+              <label className="flex items-center gap-1.5 text-xs text-vs-text-muted">
+                <span className="inline-block h-1.5 w-1.5 rounded-sm bg-vs-accent" />
+                <select
+                  value={activeCollectionObj?.name ?? ""}
+                  onChange={(e) => void selectCollection(e.target.value)}
+                  className="rounded-md border border-vs-border-default bg-vs-bg-surface px-2 py-1.5 text-xs text-vs-text-primary focus:outline-none"
+                  title="Figma variable collection"
+                >
+                  {collections.map((c) => (
+                    <option key={c.name} value={c.name}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+            {/* Mode switcher — swaps every value/drift to the chosen mode. */}
+            {multiMode && (
+              <div className="flex items-center gap-0.5 rounded-lg border border-vs-border-default bg-vs-bg-surface p-0.5">
+                {modes.map((m) => {
+                  const mapped = modeMap[m.name];
+                  return (
+                    <Segment
+                      key={m.id}
+                      active={activeMode === m.name}
+                      onClick={() => setActiveMode(m.name)}
+                    >
+                      <span title={mapped ? `→ ${mapped}` : "No mapped code context (read-only)"}>
+                        {m.name}
+                        {!mapped && <span className="ml-1 text-vs-text-muted">·ro</span>}
+                      </span>
+                    </Segment>
+                  );
+                })}
+                <button
+                  onClick={() => setModeMapOpen(true)}
+                  title="Edit the mode → code-context map"
+                  className="rounded px-1.5 text-xs text-vs-text-muted hover:text-vs-text-primary"
+                >
+                  ⚙
+                </button>
+              </div>
+            )}
             <div className="flex gap-0.5 rounded-lg border border-vs-border-default bg-vs-bg-surface p-0.5">
               <Segment active={segment === "all"} onClick={() => setSegment("all")}>
                 All
@@ -576,6 +751,47 @@ export function Inspector({
                 Clear filters
               </button>
             </div>
+          ) : useTree ? (
+            // Figma-native group-folder tree with indentation + collapse.
+            treeRows.map((r) =>
+              r.kind === "folder" ? (
+                <button
+                  key={`f:${r.key}`}
+                  onClick={() =>
+                    setCollapsed((prev) => {
+                      const next = new Set(prev);
+                      if (next.has(r.key)) next.delete(r.key);
+                      else next.add(r.key);
+                      return next;
+                    })
+                  }
+                  style={{ paddingLeft: 22 + r.depth * 16 }}
+                  className="flex w-full items-center gap-2 border-b border-vs-border-default bg-vs-bg-surface/40 py-1.5 pr-5 text-left hover:bg-vs-bg-hover"
+                >
+                  <span className="w-3 text-[10px] text-vs-text-muted">
+                    {collapsed.has(r.key) ? "▸" : "▾"}
+                  </span>
+                  <span className="font-mono text-[11px] font-medium uppercase tracking-wide text-vs-text-secondary">
+                    {r.label}
+                  </span>
+                  <span className="font-mono text-[10px] text-vs-text-muted">{r.count}</span>
+                </button>
+              ) : (
+                <TokenRow
+                  key={r.token.name}
+                  token={r.token}
+                  view={modeView(r.token, activeMode)}
+                  depth={r.depth}
+                  selected={r.token.name === selected}
+                  figmaSynced={figmaSynced}
+                  onSelect={() => setSelected(r.token.name)}
+                  onCopy={(text, what) => {
+                    void navigator.clipboard?.writeText(text);
+                    flash(`Copied ${what}`);
+                  }}
+                />
+              ),
+            )
           ) : (
             groups.map((g) => (
               <div key={g.type}>
@@ -589,6 +805,7 @@ export function Inspector({
                   <TokenRow
                     key={t.name}
                     token={t}
+                    view={modeView(t, activeMode)}
                     selected={t.name === selected}
                     figmaSynced={figmaSynced}
                     onSelect={() => setSelected(t.name)}
@@ -604,11 +821,28 @@ export function Inspector({
         </div>
       </main>
 
+      {modeMapOpen && (
+        <ModeMapModal
+          modes={modes}
+          contexts={Array.from(
+            new Set([":root", ".dark", '[data-theme="dark"]', "@media (prefers-color-scheme: dark)", ...Object.values(modeMap)]),
+          ).filter(Boolean)}
+          map={modeMap}
+          onClose={() => setModeMapOpen(false)}
+          onSave={(next) => {
+            void saveModeMap(next);
+            setModeMapOpen(false);
+          }}
+        />
+      )}
+
       {/* Detail drawer */}
       {selectedToken && (
         <TokenDrawer
           key={selectedToken.name}
           token={selectedToken}
+          view={modeView(selectedToken, activeMode)}
+          modeLabel={multiMode ? activeMode : null}
           usage={usage[selectedToken.name] ?? []}
           tokenFile={tokenFile}
           busy={tokenMod.running}
@@ -915,6 +1149,79 @@ function FigmaSyncButton({
   );
 }
 
+/**
+ * Transparent-cockpit editor for the Figma-mode → code-context map (change:
+ * figma-native-token-model). A wrong default is a one-click fix; an unmapped mode
+ * is read-only, never silently mis-synced.
+ */
+function ModeMapModal({
+  modes,
+  contexts,
+  map,
+  onClose,
+  onSave,
+}: {
+  modes: { id: string; name: string }[];
+  contexts: string[];
+  map: Record<string, string>;
+  onClose: () => void;
+  onSave: (next: Record<string, string>) => void;
+}): React.JSX.Element {
+  const [draft, setDraft] = useState<Record<string, string>>(() => ({ ...map }));
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-6"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-md rounded-xl border border-vs-border-strong bg-vs-bg-elevated p-5 shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h3 className="mb-1 text-sm font-semibold text-vs-text-primary">Mode → code context</h3>
+        <p className="mb-4 text-xs text-vs-text-muted">
+          Map each Figma mode to the selector that carries its values in the token file. Leave a mode
+          unmapped to keep it read-only — VortSpec never invents a context that doesn’t exist.
+        </p>
+        <div className="space-y-2">
+          {modes.map((m) => (
+            <label key={m.id} className="flex items-center gap-3">
+              <span className="w-28 shrink-0 truncate font-mono text-xs text-vs-text-secondary">
+                {m.name}
+              </span>
+              <select
+                value={draft[m.name] ?? ""}
+                onChange={(e) => setDraft((d) => ({ ...d, [m.name]: e.target.value }))}
+                className="flex-1 rounded-md border border-vs-border-default bg-vs-bg-surface px-2 py-1.5 text-xs text-vs-text-primary focus:outline-none"
+              >
+                <option value="">— unmapped (read-only) —</option>
+                {contexts.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ))}
+        </div>
+        <div className="mt-5 flex justify-end gap-2">
+          <button
+            onClick={onClose}
+            className="rounded-md border border-vs-border-default px-3 py-1.5 text-xs text-vs-text-secondary hover:bg-vs-bg-hover"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={() => onSave(draft)}
+            className="rounded-md border border-vs-accent bg-vs-bg-elevated px-3 py-1.5 text-xs text-vs-text-primary hover:brightness-110"
+          >
+            Save map
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Segment({
   active,
   onClick,
@@ -946,12 +1253,18 @@ function Empty({ text }: { text: string }): React.JSX.Element {
 
 function TokenRow({
   token,
+  view,
+  depth = 0,
   selected,
   figmaSynced,
   onSelect,
   onCopy,
 }: {
   token: InspectorToken;
+  /** The active-mode values to display (falls back to the flat default). */
+  view: ModeView;
+  /** Group-folder nesting depth, for indentation in the tree view. */
+  depth?: number;
   selected: boolean;
   /** whether a Figma export has been reconciled (so "code-only" means "pushable, not yet in Figma"). */
   figmaSynced: boolean;
@@ -960,36 +1273,53 @@ function TokenRow({
 }): React.JSX.Element {
   const [menu, setMenu] = useState(false);
   const src = SOURCE[token.source];
+  // Leaf label = final path segment when nested; else the flat name.
+  const label = depth > 0 ? token.name.split(/[-/]/).slice(-1)[0] : token.name;
   // Pushable: drifted (value differs) or code-only once a Figma sync exists (would be created on push).
-  const pushableNew = figmaSynced && !token.drift && token.source !== "figma-variable";
+  const pushableNew = figmaSynced && !view.drift && token.source !== "figma-variable" && !view.readOnly;
   return (
     <div
       onClick={onSelect}
-      style={selected ? { boxShadow: "inset 2px 0 0 #7C6FF0" } : undefined}
-      className={`relative flex h-11 cursor-pointer items-center gap-3 border-b border-vs-border-default pl-[22px] pr-5 ${
+      style={{
+        ...(selected ? { boxShadow: "inset 2px 0 0 #7C6FF0" } : undefined),
+        paddingLeft: 22 + depth * 16,
+      }}
+      className={`relative flex h-11 cursor-pointer items-center gap-3 border-b border-vs-border-default pr-5 ${
         selected ? "bg-vs-bg-elevated" : "hover:bg-vs-bg-hover"
       }`}
     >
-      <Preview token={token} />
-      <span className="w-[210px] shrink-0 truncate font-mono text-xs text-vs-text-primary">
-        {token.name}
+      <Preview token={{ ...token, resolvedValue: view.resolvedValue }} />
+      <span
+        title={token.name}
+        className="w-[210px] shrink-0 truncate font-mono text-xs text-vs-text-primary"
+      >
+        {label}
       </span>
       <span className="w-40 shrink-0 truncate font-mono text-xs text-vs-text-secondary">
-        {token.resolvedValue}
+        {view.resolvedValue}
       </span>
       <span className="flex w-24 shrink-0 items-center gap-1.5">
         <span className="inline-block h-2 w-2 rounded-full" style={{ background: src.dot }} />
         <span className="text-xs text-vs-text-secondary">{src.label}</span>
       </span>
       <span className="flex-1" />
-      {token.drift === "drifted" ? (
+      {view.readOnly ? (
+        view.figmaValue !== undefined ? (
+          <span
+            title="This mode has no mapped code context — value shown from Figma (read-only)"
+            className="rounded-full border border-vs-border-strong bg-vs-bg-surface px-1.5 py-0.5 text-[10px] font-medium text-vs-text-muted"
+          >
+            Figma only
+          </span>
+        ) : null
+      ) : view.drift === "drifted" ? (
         <span
-          title={`Figma: ${token.figmaValue}`}
+          title={`Figma: ${view.figmaValue}`}
           className="rounded-full border border-vs-warning-border bg-vs-warning-muted px-1.5 py-0.5 text-[10px] font-medium text-vs-warning"
         >
           ≠ Figma
         </span>
-      ) : token.drift === "in-sync" ? (
+      ) : view.drift === "in-sync" ? (
         <span title="Matches the Figma variable" className="text-[10px] text-vs-success">
           ✓ Figma
         </span>
@@ -1023,7 +1353,7 @@ function TokenRow({
             <MenuItem onClick={() => { onCopy(`--${token.name}`, "name"); setMenu(false); }}>
               Copy name
             </MenuItem>
-            <MenuItem onClick={() => { onCopy(token.resolvedValue, "value"); setMenu(false); }}>
+            <MenuItem onClick={() => { onCopy(view.resolvedValue, "value"); setMenu(false); }}>
               Copy value
             </MenuItem>
           </div>
@@ -1069,6 +1399,8 @@ function groupUsage(usage: TokenUsage[]): { component: string; properties: strin
 
 function TokenDrawer({
   token,
+  view,
+  modeLabel,
   usage,
   tokenFile,
   busy,
@@ -1080,6 +1412,10 @@ function TokenDrawer({
   onOpenComponent,
 }: {
   token: InspectorToken;
+  /** The active-mode values to edit/display (falls back to the flat default). */
+  view: ModeView;
+  /** The active mode name when the collection is multi-mode (for the editor label), else null. */
+  modeLabel: string | null;
   usage: TokenUsage[];
   tokenFile: string | null;
   busy: boolean;
@@ -1092,18 +1428,18 @@ function TokenDrawer({
   /** Jump to a where-used component's source. */
   onOpenComponent: (component: string) => void;
 }): React.JSX.Element {
-  const [value, setValue] = useState(token.rawValue);
+  const [value, setValue] = useState(view.rawValue);
   const [saving, setSaving] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [newName, setNewName] = useState(token.name);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const src = SOURCE[token.source];
   const isColor = token.type === "color";
-  const dirty = value.trim() !== token.rawValue.trim();
+  const dirty = value.trim() !== view.rawValue.trim();
   const colorHex = /^#[0-9a-fA-F]{6}$/.test(value.trim()) ? value.trim() : "#000000";
 
   async function save(): Promise<void> {
-    if (!dirty) return;
+    if (!dirty || view.readOnly) return;
     setSaving(true);
     await onSave(token.name, value);
     setSaving(false);
@@ -1139,22 +1475,31 @@ function TokenDrawer({
           </div>
         </Field>
 
-        <Field label="Value">
-          <div className="flex items-center gap-2">
-            {isColor && (
+        <Field label={modeLabel ? `Value · ${modeLabel}` : "Value"}>
+          {view.readOnly ? (
+            <div className="rounded-md border border-vs-border-default bg-vs-bg-elevated px-2.5 py-2 font-mono text-xs text-vs-text-muted">
+              {view.resolvedValue}
+              <span className="ml-2 not-italic text-[10px] text-vs-text-muted">
+                read-only — no code context mapped to this mode
+              </span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              {isColor && (
+                <input
+                  type="color"
+                  value={colorHex}
+                  onChange={(e) => setValue(e.target.value.toUpperCase())}
+                  className="h-8 w-9 shrink-0 cursor-pointer rounded-md border border-vs-border-default bg-vs-bg-elevated p-0.5"
+                />
+              )}
               <input
-                type="color"
-                value={colorHex}
-                onChange={(e) => setValue(e.target.value.toUpperCase())}
-                className="h-8 w-9 shrink-0 cursor-pointer rounded-md border border-vs-border-default bg-vs-bg-elevated p-0.5"
+                value={value}
+                onChange={(e) => setValue(e.target.value)}
+                className="flex-1 rounded-md border border-vs-border-default bg-vs-bg-elevated px-2.5 py-2 font-mono text-xs text-vs-text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-vs-accent-subtle"
               />
-            )}
-            <input
-              value={value}
-              onChange={(e) => setValue(e.target.value)}
-              className="flex-1 rounded-md border border-vs-border-default bg-vs-bg-elevated px-2.5 py-2 font-mono text-xs text-vs-text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-vs-accent-subtle"
-            />
-          </div>
+            </div>
+          )}
         </Field>
 
         {/* live preview */}
@@ -1172,34 +1517,41 @@ function TokenDrawer({
           <span className="text-xs text-vs-text-secondary">{src.line}</span>
         </div>
 
-        {/* figma reconciliation */}
-        {token.figmaValue !== undefined && (
+        {/* figma reconciliation — scoped to the active mode */}
+        {view.figmaValue !== undefined && (
           <div className="flex flex-col gap-2 rounded-lg border border-vs-border-default bg-vs-bg-primary p-3">
             <div className="flex items-center gap-2">
               <span className="text-[11px] font-semibold uppercase tracking-wide text-vs-text-muted">
-                Figma variable
+                Figma variable{modeLabel ? ` · ${modeLabel}` : ""}
               </span>
-              {token.drift === "drifted" ? (
+              {view.readOnly ? (
+                <span className="text-[10px] text-vs-text-muted">read-only</span>
+              ) : view.drift === "drifted" ? (
                 <span className="rounded-full border border-vs-warning-border bg-vs-warning-muted px-1.5 py-0.5 text-[10px] font-medium text-vs-warning">
                   drifted
                 </span>
               ) : (
                 <span className="text-[10px] text-vs-success">in sync</span>
               )}
+              {token.figmaPath && (
+                <span className="ml-auto font-mono text-[10px] text-vs-text-muted">
+                  {token.figmaPath}
+                </span>
+              )}
             </div>
             <div className="flex items-center justify-between font-mono text-[11px]">
               <span className="text-vs-text-muted">Figma</span>
-              <span className="text-vs-text-primary">{token.figmaValue}</span>
+              <span className="text-vs-text-primary">{view.figmaValue}</span>
             </div>
             <div className="flex items-center justify-between font-mono text-[11px]">
               <span className="text-vs-text-muted">Code</span>
-              <span className={token.drift === "drifted" ? "text-vs-warning" : "text-vs-text-primary"}>
-                {token.resolvedValue}
+              <span className={view.drift === "drifted" ? "text-vs-warning" : "text-vs-text-primary"}>
+                {view.resolvedValue}
               </span>
             </div>
-            {token.drift === "drifted" && (
+            {view.drift === "drifted" && !view.readOnly && (
               <button
-                onClick={() => setValue(token.figmaValue ?? value)}
+                onClick={() => setValue(view.figmaValue ?? value)}
                 className="mt-0.5 self-start rounded-md border border-vs-border-strong px-2.5 py-1 text-[11px] text-vs-text-secondary hover:border-vs-accent hover:text-vs-text-primary"
               >
                 Use Figma value
@@ -1331,10 +1683,10 @@ function TokenDrawer({
           {dirty ? "Value edits are written to the token file" : `Saved to ${tokenFile ?? "token file"}`}
         </span>
         <button
-          disabled={!dirty || saving}
+          disabled={!dirty || saving || view.readOnly}
           onClick={() => void save()}
           className={`rounded-lg px-4 py-2 text-xs font-medium ${
-            dirty && !saving
+            dirty && !saving && !view.readOnly
               ? "bg-vs-accent text-white hover:brightness-110"
               : "cursor-not-allowed bg-vs-bg-elevated text-vs-text-muted"
           }`}

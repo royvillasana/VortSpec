@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { parseTokensFromCss } from "./token-parser";
+import {
+  parseTokensFromCss,
+  parseCssContexts,
+  resolveInContext,
+  deriveModeMap,
+  DEFAULT_CONTEXT,
+} from "./token-parser";
+import type { FigmaCollection } from "@vortspec/core/inspector";
 
 const CSS = `
 :root {
@@ -42,5 +49,75 @@ describe("parseTokensFromCss", () => {
     expect(t?.resolvedValue).toBe("#087990");
     // A resolved color reference is still classified as a color.
     expect(t?.type).toBe("color");
+  });
+});
+
+const MULTI = `
+:root {
+  --color-primary: #7C6FF0;
+  --bg: var(--color-primary);
+}
+.dark {
+  --color-primary: #2A2540;
+  --bg: var(--color-primary);
+}
+@media (prefers-color-scheme: dark) {
+  :root { --color-primary: #111111; }
+}
+`;
+
+describe("parseCssContexts", () => {
+  const p = parseCssContexts(MULTI);
+
+  it("collects each declaration under its selector context", () => {
+    expect(p.raw.get("color-primary")?.get(":root")).toBe("#7C6FF0");
+    expect(p.raw.get("color-primary")?.get(".dark")).toBe("#2A2540");
+    expect(p.raw.get("color-primary")?.get("@media (prefers-color-scheme: dark)")).toBe("#111111");
+  });
+
+  it("orders contexts with the default `:root` first", () => {
+    expect(p.contexts[0]).toBe(DEFAULT_CONTEXT);
+    expect(p.contexts).toContain(".dark");
+  });
+
+  it("treats a Tailwind @theme block as the default context", () => {
+    const t = parseCssContexts("@theme { --x: 1px; }");
+    expect(t.raw.get("x")?.get(":root")).toBe("1px");
+  });
+});
+
+describe("resolveInContext", () => {
+  const p = parseCssContexts(MULTI);
+  it("resolves var() within the same context (not the default)", () => {
+    expect(resolveInContext("var(--color-primary)", ".dark", p)).toBe("#2A2540");
+    expect(resolveInContext("var(--color-primary)", ":root", p)).toBe("#7C6FF0");
+  });
+  it("falls back to the default context when the ref is absent in-context", () => {
+    const q = parseCssContexts(":root { --a: red; } .dark { --b: var(--a); }");
+    expect(resolveInContext("var(--a)", ".dark", q)).toBe("red");
+  });
+});
+
+describe("deriveModeMap", () => {
+  const collection: FigmaCollection = {
+    name: "Theme",
+    modes: [
+      { id: "1:0", name: "Light" },
+      { id: "1:1", name: "Dark" },
+    ],
+    defaultModeId: "1:0",
+  };
+  it("maps the default mode to :root and a dark mode to a dark context", () => {
+    const map = deriveModeMap(collection, [":root", ".dark"]);
+    expect(map.Light).toBe(":root");
+    expect(map.Dark).toBe(".dark");
+  });
+  it("prefers a prefers-color-scheme media context for dark", () => {
+    const map = deriveModeMap(collection, [":root", "@media (prefers-color-scheme: dark)"]);
+    expect(map.Dark).toBe("@media (prefers-color-scheme: dark)");
+  });
+  it("leaves a mode unmapped when no matching context exists", () => {
+    const map = deriveModeMap(collection, [":root"]);
+    expect(map.Dark).toBe("");
   });
 });
