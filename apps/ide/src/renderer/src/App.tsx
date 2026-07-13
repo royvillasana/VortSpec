@@ -80,6 +80,13 @@ export default function App(): JSX.Element {
     setSelection(null);
   }, [wf.activePath]);
 
+  // Warm up the figma-cli connection when a workspace opens, so token sync/push
+  // is ready without a manual connect. Fire-and-forget, best-effort (a no-op
+  // when figma-cli isn't installed; it self-heals on use).
+  useEffect(() => {
+    if (workspace) void api.figmaEnsureConnected().catch(() => undefined);
+  }, [workspace]);
+
   // Current git branch + change/unpushed counts for the status bar. Re-read on
   // activity change (so a checkout/commit in Source Control is reflected on
   // return) and whenever files change on disk (autosave, agent runs).

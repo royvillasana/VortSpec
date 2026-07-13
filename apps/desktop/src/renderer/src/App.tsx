@@ -119,6 +119,13 @@ export default function App(): React.JSX.Element {
     if (projectView === "preview" || projectView === "runapp") setChatOpen(true);
   }, [projectView]);
 
+  // Warm up the figma-cli connection when a project opens, so token sync/push is
+  // ready before the user clicks — no manual connect. Fire-and-forget + best-
+  // effort: a no-op when figma-cli isn't installed, and it self-heals on use.
+  useEffect(() => {
+    if (activeProject) void api.figmaEnsureConnected().catch(() => undefined);
+  }, [activeProject]);
+
   function mergeProject(project: Project): void {
     setProjects((prev) => [project, ...prev.filter((p) => p.path !== project.path)]);
   }

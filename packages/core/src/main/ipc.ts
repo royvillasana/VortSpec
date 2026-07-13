@@ -32,8 +32,12 @@ import { extractWalkthrough } from "./workspace/walkthrough";
 import {
   getInspectorTokens,
   setInspectorTokenValue,
+  createInspectorToken,
   snapshotTokenScope,
 } from "./inspector/token-parser";
+import { computePushPlan } from "./inspector/figma-push";
+import { readFigmaVariables } from "./inspector/figma-reconcile";
+import type { PushPlan } from "@vortspec/core/ipc";
 import {
   getInspectorComponents,
   snapshotComponent,
@@ -188,6 +192,8 @@ const handlers: Record<IpcChannel, Handler> = {
   "ide:resolveAction": ((r: IdeActionResult) => resolveIdeAction(r)) as Handler,
 
   "figma:status": (() => figmaCli.getConnection()) as Handler,
+  // Auto-connect (warm-up on project open + self-heal); never throws.
+  "figma:ensureConnected": (() => figmaCli.ensureConnected()) as Handler,
   "figma:openAppManagement": (() =>
     figmaCli.openAppManagementSettings().then(() => undefined)) as Handler,
   "figma:connect": ((r: { mode: FigmaCliMode }) => figmaCli.connect(r.mode)) as Handler,
@@ -200,6 +206,18 @@ const handlers: Record<IpcChannel, Handler> = {
     checkFigmaHealth(r)) as Handler,
   "figma:tokenStatus": (() => getFigmaTokenStatus()) as Handler,
   "figma:setToken": ((r: { token: string }) => setFigmaToken(r.token)) as Handler,
+  // Code→Figma push: plan is computed locally (never calls Figma); apply is delegated to figma-cli.
+  "figma:computePushPlan": (async (projectPath: string) => {
+    const [config, result, figmaVars] = await Promise.all([
+      readProjectConfig(projectPath),
+      getInspectorTokens(projectPath),
+      readFigmaVariables(projectPath),
+    ]);
+    const collection = config?.figmaTokenCollection ?? "Tokens";
+    return computePushPlan(result.tokens, figmaVars ?? [], collection);
+  }) as Handler,
+  "figma:pushVariables": ((r: { projectPath: string; plan: PushPlan }) =>
+    figmaCli.pushVariablesToFigma(r.plan)) as Handler,
 
   "toolkit:status": ((path: string) => getToolkitStatus(path)) as Handler,
   "toolkit:install": ((path: string) => installToolkit(path)) as Handler,
@@ -337,6 +355,8 @@ const handlers: Record<IpcChannel, Handler> = {
     getInspectorComponents(projectPath)) as Handler,
   "inspector:setTokenValue": ((req: { projectPath: string; name: string; value: string }) =>
     setInspectorTokenValue(req.projectPath, req.name, req.value)) as Handler,
+  "inspector:createToken": ((req: { projectPath: string; name: string; value: string }) =>
+    createInspectorToken(req.projectPath, req.name, req.value)) as Handler,
   "inspector:getVerification": ((projectPath: string) => getVerification(projectPath)) as Handler,
   "inspector:snapshotComponent": ((req: { projectPath: string; file: string }) =>
     snapshotComponent(req.projectPath, req.file)) as Handler,

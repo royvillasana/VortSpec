@@ -96,6 +96,8 @@ import {
   inspectorComponentsResultSchema,
   verificationResultSchema,
   fileSnapshotListSchema,
+  pushPlanSchema,
+  figmaPushResultSchema,
 } from "./inspector";
 
 export type { SetupAnswers, ProjectConfig } from "./setup";
@@ -107,6 +109,10 @@ export type {
   TokenUsage,
   TokenDrift,
   FigmaVariable,
+  PushPlan,
+  PushPlanEntry,
+  FigmaPushResult,
+  FigmaVariableType,
 } from "./inspector";
 export type {
   InspectorComponent,
@@ -388,6 +394,7 @@ export const ipcContract = {
   "ide:resolveAction": { request: ideActionResultSchema, response: ideOkSchema },
 
   "figma:status": { request: z.void(), response: figmaConnectionSchema },
+  "figma:ensureConnected": { request: z.void(), response: figmaConnectionSchema },
   "figma:openAppManagement": { request: z.void(), response: z.void() },
   "figma:connect": { request: figmaConnectRequestSchema, response: figmaConnectionSchema },
   "figma:syncVariables": { request: figmaSyncRequestSchema, response: figmaSyncResultSchema },
@@ -398,6 +405,12 @@ export const ipcContract = {
   "figma:setToken": {
     request: figmaSetTokenRequestSchema,
     response: z.object({ ok: z.boolean(), message: z.string() }),
+  },
+  // Code→Figma token push (change: add-code-to-figma-token-push).
+  "figma:computePushPlan": { request: z.string(), response: pushPlanSchema },
+  "figma:pushVariables": {
+    request: z.object({ projectPath: z.string(), plan: pushPlanSchema }),
+    response: figmaPushResultSchema,
   },
 
   "toolkit:status": { request: z.string(), response: toolkitStatusSchema },
@@ -558,6 +571,14 @@ export const ipcContract = {
     response: inspectorComponentsResultSchema,
   },
   "inspector:setTokenValue": {
+    request: z.object({
+      projectPath: z.string(),
+      name: z.string(),
+      value: z.string(),
+    }),
+    response: inspectorTokensResultSchema,
+  },
+  "inspector:createToken": {
     request: z.object({
       projectPath: z.string(),
       name: z.string(),

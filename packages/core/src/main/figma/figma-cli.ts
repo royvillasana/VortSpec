@@ -1,5 +1,5 @@
 import { homedir, tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, dirname } from "node:path";
 import { existsSync } from "node:fs";
 import { readFile, writeFile, mkdir, rm } from "node:fs/promises";
 import { app } from "electron";
@@ -13,7 +13,12 @@ import type {
   FigmaNode,
   FigmaSelection,
 } from "@vortspec/core/figma";
-import type { FigmaVariable, TokenType } from "@vortspec/core/inspector";
+import type {
+  FigmaVariable,
+  TokenType,
+  PushPlan,
+  FigmaPushResult,
+} from "@vortspec/core/inspector";
 
 /**
  * Drives the local figma-cli (github.com/silships/figma-cli) — VortSpec's
@@ -145,6 +150,87 @@ export async function connect(mode: FigmaCliMode): Promise<FigmaConnection> {
   return getConnection();
 }
 
+// ── Auto-connect: keep the CLI ready so the user never runs it by hand ──────
+//
+// The daemon persists once connected, so this short-circuits on the common
+// path. When installed-but-disconnected it connects automatically (preferring
+// the last mode that worked, then yolo→safe), remembers the winning mode, and
+// self-heals a dropped connection. Single-flight so warm-up + a concurrent
+// sync/push don't race two `connect` runs. The one-time first setup (install +
+// grant App Management / import the plugin) still can't be headless.
+
+/** In-memory cache of the last mode that connected; avoids a disk read per call. */
+let cachedMode: FigmaCliMode | null = null;
+/** The in-flight connect, shared by concurrent callers (warm-up + sync/push). */
+let connecting: Promise<FigmaConnection> | null = null;
+
+function modePath(): string {
+  return join(app.getPath("userData"), "figma-cli.json");
+}
+
+async function readPreferredMode(): Promise<FigmaCliMode | null> {
+  if (cachedMode) return cachedMode;
+  try {
+    const parsed = JSON.parse(await readFile(modePath(), "utf8")) as { mode?: unknown };
+    if (parsed.mode === "yolo" || parsed.mode === "safe") return (cachedMode = parsed.mode);
+  } catch {
+    /* no remembered mode yet */
+  }
+  return null;
+}
+
+async function rememberMode(mode: FigmaCliMode | null): Promise<void> {
+  if (!mode || mode === cachedMode) {
+    cachedMode = mode ?? cachedMode;
+    return;
+  }
+  cachedMode = mode;
+  try {
+    await mkdir(dirname(modePath()), { recursive: true });
+    await writeFile(modePath(), `${JSON.stringify({ mode })}\n`, "utf8");
+  } catch {
+    /* best-effort persistence */
+  }
+}
+
+/** The order to try connection modes, preferring the last-working one. Pure + tested. */
+export function connectModeOrder(preferred: FigmaCliMode | null): FigmaCliMode[] {
+  return preferred === "safe" ? ["safe", "yolo"] : ["yolo", "safe"];
+}
+
+/**
+ * Ensure figma-cli is connected, connecting automatically if it isn't. Returns
+ * the resulting connection (never throws). A no-op fast path when not installed
+ * or already connected; otherwise attempts each mode in `connectModeOrder` until
+ * one connects. Callers that need the CLI (sync/push) and the on-open warm-up
+ * both go through here, so the user never runs a connect command by hand.
+ */
+export async function ensureConnected(): Promise<FigmaConnection> {
+  if (!isInstalled()) return getConnection();
+  const current = await getConnection();
+  if (current.connected) {
+    await rememberMode(current.mode);
+    return current;
+  }
+  if (connecting) return connecting;
+  connecting = (async () => {
+    const preferred = await readPreferredMode();
+    for (const mode of connectModeOrder(preferred)) {
+      const conn = await connect(mode);
+      if (conn.connected) {
+        await rememberMode(conn.mode ?? mode);
+        return conn;
+      }
+    }
+    // Neither mode connected (first-time setup needed) — report the real status;
+    // callers fall back to the Figma MCP or surface a fix-it.
+    return getConnection();
+  })().finally(() => {
+    connecting = null;
+  });
+  return connecting;
+}
+
 // ── Reading variables (step 1's primary reader) ──────────────────────
 
 /** Map a W3C DTCG `$type` (+ name hint) to VortSpec's token type. Pure. */
@@ -251,7 +337,7 @@ export function parseSelectionEval(raw: string): FigmaNode[] {
  * selected. Never throws to the caller.
  */
 export async function getSelection(): Promise<FigmaSelection> {
-  const conn = await getConnection();
+  const conn = await ensureConnected();
   if (!conn.installed || !conn.connected) {
     return {
       nodes: [],
@@ -340,7 +426,7 @@ export function parseComponentsEval(raw: string): FigmaComponent[] {
  * `syncVariablesToCache`; `source: null` when the CLI is unavailable.
  */
 export async function syncComponentsToCache(projectPath: string): Promise<FigmaSyncResult> {
-  const conn = await getConnection();
+  const conn = await ensureConnected();
   if (!conn.installed) {
     return {
       ok: false,
@@ -402,7 +488,7 @@ export async function syncComponentsToCache(projectPath: string): Promise<FigmaS
  * available so the caller can fall back to the scoped-Claude MCP export.
  */
 export async function syncVariablesToCache(projectPath: string): Promise<FigmaSyncResult> {
-  const conn = await getConnection();
+  const conn = await ensureConnected();
   if (!conn.installed) {
     return {
       ok: false,
@@ -460,6 +546,129 @@ export async function syncVariablesToCache(projectPath: string): Promise<FigmaSy
       message: `Read ${vars.length} Figma variable${vars.length === 1 ? "" : "s"} via figma-cli${
         conn.mode ? ` (${conn.mode} mode)` : ""
       }.`,
+    };
+  } finally {
+    await rm(tmp, { force: true }).catch(() => undefined);
+  }
+}
+
+// ── Writing variables: code → Figma push (change: add-code-to-figma-token-push) ──
+
+/**
+ * Build the figma-cli `eval` script that applies a push plan to Figma Variables.
+ * Pure + exported for testing. Isolated CLI/plugin-API knowledge (verify the
+ * variables API shape against current docs at implementation time). Creates or
+ * updates each variable in the target collection, binding aliases where the
+ * plan specifies one, and returns a JSON summary as its last expression:
+ *   { error: null, created, updated } | { error: "collection-missing", collection }
+ * When the target collection is absent it writes nothing (fix-it, not auto-create).
+ */
+export function buildPushScript(plan: PushPlan): string {
+  return `(async function () {
+  var PLAN = ${JSON.stringify(plan)};
+  function norm(s){ return String(s).replace(/^--/,'').trim().toLowerCase().replace(/[\\s\\/._]+/g,'-').replace(/-+/g,'-'); }
+  function hexToRgba(hex){
+    var h = hex.replace('#','').trim();
+    if (h.length === 3 || h.length === 4){ h = h.split('').map(function(c){return c+c;}).join(''); }
+    var r = parseInt(h.slice(0,2),16)/255, g = parseInt(h.slice(2,4),16)/255, b = parseInt(h.slice(4,6),16)/255;
+    var a = h.length >= 8 ? parseInt(h.slice(6,8),16)/255 : 1;
+    return { r:r, g:g, b:b, a:a };
+  }
+  function toValue(type, raw){
+    if (type === 'FLOAT'){ var m = String(raw).match(/-?\\d*\\.?\\d+/); return m ? Number(m[0]) : 0; }
+    if (type === 'COLOR'){ var s = String(raw).trim(); return s[0] === '#' ? hexToRgba(s) : { r:0,g:0,b:0,a:1 }; }
+    return String(raw);
+  }
+  var cols = await figma.variables.getLocalVariableCollectionsAsync();
+  var col = cols.find(function(c){ return c.name === PLAN.collection; });
+  if (!col) return { error: 'collection-missing', collection: PLAN.collection };
+  var modeId = col.defaultModeId || (col.modes[0] && col.modes[0].modeId);
+  var vars = await figma.variables.getLocalVariablesAsync();
+  var byNorm = {};
+  vars.forEach(function(v){ if (v.variableCollectionId === col.id) byNorm[norm(v.name)] = v; });
+  var created = 0, updated = 0;
+  for (var i = 0; i < PLAN.entries.length; i++){
+    var e = PLAN.entries[i];
+    var v = byNorm[norm(e.variable)];
+    if (!v){ v = figma.variables.createVariable(e.variable, col, e.figmaType); byNorm[norm(e.variable)] = v; created++; }
+    else { updated++; }
+    if (e.aliasTarget){
+      var target = byNorm[norm(e.aliasTarget)];
+      if (target){ v.setValueForMode(modeId, figma.variables.createVariableAlias(target)); continue; }
+    }
+    v.setValueForMode(modeId, toValue(e.figmaType, e.value));
+  }
+  return { error: null, created: created, updated: updated };
+})();`;
+}
+
+/** Parse the push `eval` output (a JSON object behind a possible banner). Pure + exported. */
+export function parsePushEval(
+  raw: string,
+): { error: string | null; created: number; updated: number; collection?: string } | null {
+  const start = raw.indexOf("{");
+  const end = raw.lastIndexOf("}");
+  if (start === -1 || end === -1 || end < start) return null;
+  let obj: unknown;
+  try {
+    obj = JSON.parse(raw.slice(start, end + 1));
+  } catch {
+    return null;
+  }
+  if (!obj || typeof obj !== "object") return null;
+  const r = obj as Record<string, unknown>;
+  return {
+    error: typeof r.error === "string" ? r.error : null,
+    created: typeof r.created === "number" ? r.created : 0,
+    updated: typeof r.updated === "number" ? r.updated : 0,
+    collection: typeof r.collection === "string" ? r.collection : undefined,
+  };
+}
+
+/**
+ * Apply a confirmed push plan to Figma Variables through figma-cli (the preferred
+ * writer; the caller falls back to a scoped Claude Code run when `source: null`).
+ * Never deletes and writes only to the plan's target collection. Never throws to
+ * the caller — connection/collection problems surface as fix-it messages.
+ */
+export async function pushVariablesToFigma(plan: PushPlan): Promise<FigmaPushResult> {
+  const conn = await ensureConnected();
+  if (!conn.installed) {
+    return { ok: false, created: 0, updated: 0, source: null, message: "figma-cli isn't set up. Set it up, or push via the Figma MCP instead." };
+  }
+  if (!conn.connected) {
+    return { ok: false, created: 0, updated: 0, source: null, message: "figma-cli isn't connected to Figma Desktop yet. Connect it, or push via the Figma MCP instead." };
+  }
+  if (plan.entries.length === 0) {
+    return { ok: true, created: 0, updated: 0, source: "cli", message: "Figma is already in sync — nothing to push." };
+  }
+  const tmp = join(tmpdir(), `vortspec-figma-push-${process.pid}-${Date.now()}.js`);
+  try {
+    await writeFile(tmp, buildPushScript(plan), "utf8");
+    const res = await run(["eval", "--file", tmp], 60000);
+    const parsed = parsePushEval(res.stdout);
+    if (!parsed) {
+      const detail = (res.stderr || res.stdout || "").split("\n").find((l) => l.trim()) ?? "";
+      return { ok: false, created: 0, updated: 0, source: "cli", message: `figma-cli couldn't apply the push.${detail ? ` (${detail.trim()})` : ""}` };
+    }
+    if (parsed.error === "collection-missing") {
+      return {
+        ok: false,
+        created: 0,
+        updated: 0,
+        source: "cli",
+        message: `No Figma Variables collection named "${plan.collection}" exists in the focused file. Create the "${plan.collection}" collection in Figma first, then push again.`,
+      };
+    }
+    if (parsed.error) {
+      return { ok: false, created: 0, updated: 0, source: "cli", message: `figma-cli reported an error applying the push (${parsed.error}).` };
+    }
+    return {
+      ok: true,
+      created: parsed.created,
+      updated: parsed.updated,
+      source: "cli",
+      message: `Pushed to Figma — created ${parsed.created}, updated ${parsed.updated} variable${parsed.created + parsed.updated === 1 ? "" : "s"} in "${plan.collection}".`,
     };
   } finally {
     await rm(tmp, { force: true }).catch(() => undefined);

@@ -6,6 +6,7 @@ import type {
   FileSnapshot,
   InspectorToken,
   Project,
+  PushPlan,
   TokenSource,
   TokenType,
   TokenUsage,
@@ -31,6 +32,31 @@ const FIGMA_SYNC_PROMPT = [
   "4. Write ONLY `.vortspec/figma-variables.json`. Do not modify the token file, component sources, or",
   "   any other file, and do not change anything in Figma.",
 ].join("\n");
+
+/**
+ * Code→Figma push (MCP fallback). When figma-cli isn't connected, a scoped Claude
+ * Code run applies the confirmed plan to the user's Figma via their own MCP, using
+ * bulk variable ops. VortSpec never writes Figma directly. The plan is embedded so
+ * the run has an exact, pre-confirmed instruction — it does not recompute a diff.
+ */
+function pushPrompt(plan: PushPlan): string {
+  const creates = plan.entries.filter((e) => e.op === "create");
+  const updates = plan.entries.filter((e) => e.op === "update");
+  return [
+    `Apply this pre-approved token push to the Figma Variables collection "${plan.collection}".`,
+    "",
+    "1. Confirm a variable collection named exactly this collection exists. If it does NOT exist, STOP and",
+    "   report that the user must create it in Figma first — do not create the collection or any variable.",
+    "2. Create the following NEW variables (figma_batch_create_variables), each in that collection with the",
+    "   given type; for entries with an `aliasTarget`, bind the variable as an ALIAS to that existing",
+    "   variable instead of a raw value:",
+    `   ${JSON.stringify(creates)}`,
+    "3. Update the following EXISTING variables to the given value/alias (figma_batch_update_variables):",
+    `   ${JSON.stringify(updates)}`,
+    "4. Write ONLY to that collection. Do not delete variables, touch other collections, styles, layers, or",
+    "   any local file. Report how many variables you created and updated.",
+  ].join("\n");
+}
 
 /** Rename a token across the token file + every component reference (var(), Tailwind arbitrary, plain). */
 function renamePrompt(oldName: string, newName: string): string {
@@ -128,6 +154,9 @@ export function Inspector({
   // figma-cli is the PRIMARY reader; the Figma MCP (figmaEnv) is the fallback.
   const [figmaCli, setFigmaCli] = useState<FigmaConnection | null>(null);
   const [cliSyncing, setCliSyncing] = useState(false);
+  // True only while a *slow* (cold) auto-connect is in flight, so the warm path
+  // (already connected → resolves in ms) doesn't flash a "reconnecting" hint.
+  const [connecting, setConnecting] = useState(false);
 
   // Gated rename/delete via a scoped Claude Code run (touches the token file +
   // component sources); snapshotted before the run so it can be reverted.
@@ -140,6 +169,19 @@ export function Inspector({
   // reconciles locally on the next read. VortSpec never talks to Figma directly.
   const figmaSync = useAgentRun();
 
+  // Code→Figma push: plan is computed locally + previewed; the confirmed plan is
+  // applied by figma-cli (preferred) or a scoped Claude Code run (MCP fallback).
+  const pushRun = useAgentRun();
+  const [pushPlan, setPushPlan] = useState<PushPlan | null>(null);
+  const [pushing, setPushing] = useState(false);
+  // New-token creation form.
+  const [creating, setCreating] = useState(false);
+  const [newTok, setNewTok] = useState<{ name: string; value: string; type: TokenType }>({
+    name: "",
+    value: "",
+    type: "color",
+  });
+
   async function reloadTokens(): Promise<void> {
     const r = await api.inspectorTokens(project.path);
     setTokens(r.tokens);
@@ -150,9 +192,26 @@ export function Inspector({
   }
 
   useEffect(() => {
+    let alive = true;
     void reloadTokens();
     void api.verifyFigmaMcp().then(setFigmaEnv);
-    void api.figmaStatus().then(setFigmaCli);
+    // ensureConnected auto-connects if needed (single-flight with the on-open
+    // warm-up) so the sync/push buttons reflect a live connection without a
+    // manual connect; falls back to plain status shape when not installed.
+    // Show the "reconnecting" hint only if the connect is still pending after a
+    // beat — the already-connected path resolves too fast to be worth flashing.
+    const slow = setTimeout(() => alive && setConnecting(true), 500);
+    void api
+      .figmaEnsureConnected()
+      .then((c) => {
+        if (!alive) return;
+        setFigmaCli(c);
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        clearTimeout(slow);
+        if (alive) setConnecting(false);
+      });
     // Build the component → file map for "where used" navigation.
     void api.inspectorComponents(project.path).then((r) => {
       const map: Record<string, string> = {};
@@ -166,6 +225,9 @@ export function Inspector({
       }
       setComponentFile(map);
     });
+    return () => {
+      alive = false;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project.path]);
 
@@ -211,6 +273,67 @@ export function Inspector({
     void reloadTokens().then(() => flash("Reconciled with Figma variables"));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [figmaSync.model.status]);
+
+  // ── Code → Figma push ──────────────────────────────────────────────
+  // Compute the plan locally (never calls Figma) and open the confirm gate.
+  async function startPush(): Promise<void> {
+    if (!figmaConnected) {
+      flash("Connect figma-cli (preferred) or the Figma MCP to push tokens to Figma.");
+      return;
+    }
+    const plan = await api.figmaComputePushPlan(project.path);
+    if (plan.entries.length === 0) {
+      flash("Figma is already in sync — nothing to push.");
+      return;
+    }
+    setPushPlan(plan);
+  }
+  // Apply the confirmed plan: figma-cli when connected, else the MCP fallback run.
+  async function confirmPush(): Promise<void> {
+    if (!pushPlan) return;
+    if (cliConnected) {
+      setPushing(true);
+      try {
+        const r = await api.figmaPushVariables(project.path, pushPlan);
+        setPushPlan(null);
+        if (r.ok) {
+          await api.figmaSyncVariables(project.path).catch(() => undefined); // refresh cache
+          await reloadTokens();
+        }
+        flash(r.message);
+      } finally {
+        setPushing(false);
+      }
+      return;
+    }
+    // MCP fallback: hand the confirmed plan to a scoped Claude Code run.
+    const plan = pushPlan;
+    setPushPlan(null);
+    await pushRun.start({ prompt: pushPrompt(plan), cwd: project.path, bypassPermissions: true });
+  }
+  // After the MCP push run, refresh the cache + tokens so drift clears.
+  useEffect(() => {
+    if (pushRun.model.status !== "done") return;
+    void api
+      .figmaSyncVariables(project.path)
+      .catch(() => undefined)
+      .then(() => reloadTokens())
+      .then(() => flash("Pushed to Figma — reconciled"));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pushRun.model.status]);
+
+  async function submitNewToken(): Promise<void> {
+    try {
+      const r = await api.createToken(project.path, newTok.name, newTok.value);
+      setTokens(r.tokens);
+      setUsage(r.usage);
+      setCreating(false);
+      setNewTok({ name: "", value: "", type: "color" });
+      flash(`Created --${newTok.name.trim().replace(/^--/, "")}`);
+    } catch (e) {
+      flash(e instanceof Error ? e.message : "Couldn't create the token.");
+    }
+  }
 
   function flash(msg: string): void {
     setToast(msg);
@@ -339,14 +462,38 @@ export function Inspector({
               {tokenFile && <span> · {tokenFile}</span>}
             </span>
             <div className="flex-1" />
-            <FigmaSyncButton
-              connected={figmaConnected}
-              source={syncSource}
-              running={figmaSync.running || cliSyncing}
-              synced={figmaSynced}
-              onSync={() => void syncFigma()}
-              onConnect={() => figmaEnv?.fix?.url && void api.openInstall(figmaEnv.fix.url)}
-            />
+            <button
+              onClick={() => setCreating(true)}
+              className="rounded-lg border border-vs-border-strong bg-vs-bg-surface px-3 py-1.5 text-xs text-vs-text-secondary hover:border-vs-border-strong hover:text-vs-text-primary"
+            >
+              + New token
+            </button>
+            <button
+              onClick={() => void startPush()}
+              disabled={!figmaConnected || pushing || pushRun.running}
+              title={figmaConnected ? "Push code token changes to the Figma Variables collection" : "Connect figma-cli or the Figma MCP to push tokens to Figma"}
+              className="rounded-lg border border-vs-accent bg-vs-bg-elevated px-3 py-1.5 text-xs font-medium text-vs-text-primary hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {pushing || pushRun.running ? "Sending…" : "Send to Figma"}
+            </button>
+            {connecting ? (
+              <span
+                title="Connecting figma-cli to Figma Desktop…"
+                className="flex items-center gap-1.5 rounded-full border border-vs-border-default bg-vs-bg-surface px-3 py-1 text-xs text-vs-text-secondary"
+              >
+                <Spinner />
+                Reconnecting to Figma…
+              </span>
+            ) : (
+              <FigmaSyncButton
+                connected={figmaConnected}
+                source={syncSource}
+                running={figmaSync.running || cliSyncing}
+                synced={figmaSynced}
+                onSync={() => void syncFigma()}
+                onConnect={() => figmaEnv?.fix?.url && void api.openInstall(figmaEnv.fix.url)}
+              />
+            )}
           </div>
           {figmaSynced && (total > 0) && (
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-md border border-vs-border-default bg-vs-bg-surface px-3 py-2 text-[11px]">
@@ -443,6 +590,7 @@ export function Inspector({
                     key={t.name}
                     token={t}
                     selected={t.name === selected}
+                    figmaSynced={figmaSynced}
                     onSelect={() => setSelected(t.name)}
                     onCopy={(text, what) => {
                       void navigator.clipboard?.writeText(text);
@@ -552,6 +700,163 @@ export function Inspector({
         </div>
       )}
 
+      {/* Code → Figma push — preview + confirm gate (nothing is written until confirmed) */}
+      {pushPlan && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-6">
+          <div className="flex max-h-[80vh] w-[600px] flex-col gap-3 rounded-xl border border-vs-border-strong bg-vs-bg-surface p-4 shadow-2xl">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-semibold text-vs-text-primary">Send to Figma</span>
+              <span className="font-mono text-[11px] text-vs-text-muted">
+                {cliConnected ? "figma-cli" : "Claude Code · Figma MCP"} · collection “{pushPlan.collection}”
+              </span>
+            </div>
+            <p className="text-[11px] text-vs-text-muted">
+              {pushPlan.entries.filter((e) => e.op === "create").length} to create ·{" "}
+              {pushPlan.entries.filter((e) => e.op === "update").length} to update. Nothing is written to
+              Figma until you confirm.
+            </p>
+            <div className="min-h-0 flex-1 overflow-y-auto rounded-md border border-vs-border-default">
+              <table className="w-full text-left font-mono text-[11px]">
+                <thead className="sticky top-0 bg-vs-bg-elevated text-vs-text-muted">
+                  <tr>
+                    <th className="px-2 py-1.5 font-normal">Op</th>
+                    <th className="px-2 py-1.5 font-normal">Variable</th>
+                    <th className="px-2 py-1.5 font-normal">New value</th>
+                    <th className="px-2 py-1.5 font-normal">Current in Figma</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {pushPlan.entries.map((e) => (
+                    <tr key={e.variable} className="border-t border-vs-border-default">
+                      <td className="px-2 py-1.5">
+                        <span className={e.op === "create" ? "text-vs-success" : "text-vs-warning"}>
+                          {e.op}
+                        </span>
+                      </td>
+                      <td className="px-2 py-1.5 text-vs-text-primary">{e.variable}</td>
+                      <td className="px-2 py-1.5 text-vs-text-secondary">
+                        {e.aliasTarget ? `→ alias ${e.aliasTarget}` : e.value}
+                      </td>
+                      <td className="px-2 py-1.5 text-vs-text-muted">{e.currentFigmaValue ?? "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="flex items-center justify-end gap-3 border-t border-vs-border-default pt-3">
+              <button
+                onClick={() => setPushPlan(null)}
+                className="rounded-lg border border-vs-border-strong px-3.5 py-2 text-xs text-vs-text-secondary hover:bg-vs-bg-elevated hover:text-vs-text-primary"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => void confirmPush()}
+                disabled={pushing}
+                className="rounded-lg bg-vs-accent px-4 py-2 text-xs font-medium text-white hover:brightness-110 disabled:opacity-40"
+              >
+                {pushing ? "Sending…" : `Push ${pushPlan.entries.length} to Figma`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MCP-fallback push run — progress only */}
+      {(pushRun.running || pushRun.model.status === "error") && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-6">
+          <div className="flex max-h-[80vh] w-[560px] flex-col gap-3 rounded-xl border border-vs-border-strong bg-vs-bg-surface p-4 shadow-2xl">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-semibold text-vs-text-primary">Pushing tokens to Figma</span>
+              <span className="font-mono text-[11px] text-vs-text-muted">Claude Code · Figma MCP</span>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              <RunPanel model={pushRun.model} />
+            </div>
+            <div className="flex items-center justify-end border-t border-vs-border-default pt-3">
+              {pushRun.running ? (
+                <button
+                  onClick={() => void pushRun.cancel()}
+                  className="rounded-lg border border-vs-border-strong px-3.5 py-2 text-xs text-vs-text-secondary hover:border-vs-error hover:text-vs-error"
+                >
+                  Cancel push
+                </button>
+              ) : (
+                <button
+                  onClick={() => pushRun.reset()}
+                  className="rounded-lg border border-vs-border-strong px-3.5 py-2 text-xs text-vs-text-secondary hover:bg-vs-bg-elevated hover:text-vs-text-primary"
+                >
+                  Close
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* New token form */}
+      {creating && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-6">
+          <div className="flex w-[420px] flex-col gap-3 rounded-xl border border-vs-border-strong bg-vs-bg-surface p-4 shadow-2xl">
+            <span className="text-sm font-semibold text-vs-text-primary">New token</span>
+            <label className="flex flex-col gap-1 text-[11px] text-vs-text-muted">
+              Name
+              <div className="flex items-center rounded-md border border-vs-border-default bg-vs-bg-surface px-2.5 focus-within:ring-2 focus-within:ring-vs-accent-subtle">
+                <span className="font-mono text-xs text-vs-text-muted">--</span>
+                <input
+                  autoFocus
+                  value={newTok.name}
+                  onChange={(e) => setNewTok((s) => ({ ...s, name: e.target.value }))}
+                  placeholder="color-brand"
+                  className="flex-1 bg-transparent py-1.5 pl-1 font-mono text-xs text-vs-text-primary placeholder:text-vs-text-muted focus:outline-none"
+                />
+              </div>
+            </label>
+            <label className="flex flex-col gap-1 text-[11px] text-vs-text-muted">
+              Value
+              <input
+                value={newTok.value}
+                onChange={(e) => setNewTok((s) => ({ ...s, value: e.target.value }))}
+                placeholder="#7C6FF0"
+                className="rounded-md border border-vs-border-default bg-vs-bg-surface px-2.5 py-1.5 font-mono text-xs text-vs-text-primary placeholder:text-vs-text-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-vs-accent-subtle"
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-[11px] text-vs-text-muted">
+              Type
+              <select
+                value={newTok.type}
+                onChange={(e) => setNewTok((s) => ({ ...s, type: e.target.value as TokenType }))}
+                className="rounded-md border border-vs-border-default bg-vs-bg-surface px-2.5 py-1.5 text-xs text-vs-text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-vs-accent-subtle"
+              >
+                {TYPE_ORDER.map((t) => (
+                  <option key={t} value={t}>
+                    {TYPE_LABEL[t]}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <div className="flex items-center justify-end gap-3 border-t border-vs-border-default pt-3">
+              <button
+                onClick={() => {
+                  setCreating(false);
+                  setNewTok({ name: "", value: "", type: "color" });
+                }}
+                className="rounded-lg border border-vs-border-strong px-3.5 py-2 text-xs text-vs-text-secondary hover:bg-vs-bg-elevated hover:text-vs-text-primary"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => void submitNewToken()}
+                disabled={!newTok.name.trim() || !newTok.value.trim()}
+                className="rounded-lg bg-vs-accent px-4 py-2 text-xs font-medium text-white hover:brightness-110 disabled:opacity-40"
+              >
+                Create token
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {toast && (
         <div className="fixed bottom-6 left-1/2 z-[60] flex -translate-x-1/2 items-center gap-2 rounded-lg border border-vs-border-strong bg-vs-bg-elevated px-4 py-2.5 text-xs text-vs-text-primary shadow-lg">
           <span className="text-vs-success">✓</span>
@@ -642,16 +947,21 @@ function Empty({ text }: { text: string }): React.JSX.Element {
 function TokenRow({
   token,
   selected,
+  figmaSynced,
   onSelect,
   onCopy,
 }: {
   token: InspectorToken;
   selected: boolean;
+  /** whether a Figma export has been reconciled (so "code-only" means "pushable, not yet in Figma"). */
+  figmaSynced: boolean;
   onSelect: () => void;
   onCopy: (text: string, what: string) => void;
 }): React.JSX.Element {
   const [menu, setMenu] = useState(false);
   const src = SOURCE[token.source];
+  // Pushable: drifted (value differs) or code-only once a Figma sync exists (would be created on push).
+  const pushableNew = figmaSynced && !token.drift && token.source !== "figma-variable";
   return (
     <div
       onClick={onSelect}
@@ -682,6 +992,13 @@ function TokenRow({
       ) : token.drift === "in-sync" ? (
         <span title="Matches the Figma variable" className="text-[10px] text-vs-success">
           ✓ Figma
+        </span>
+      ) : pushableNew ? (
+        <span
+          title="Not in Figma yet — will be created by “Send to Figma”"
+          className="rounded-full border border-vs-accent bg-vs-bg-elevated px-1.5 py-0.5 text-[10px] font-medium text-vs-accent"
+        >
+          ↑ push
         </span>
       ) : null}
       <span className="font-mono text-xs text-vs-text-muted">

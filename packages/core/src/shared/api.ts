@@ -8,7 +8,7 @@
  * it cannot drift. Return types are derived from the zod IPC contract
  * (`IpcResponse<channel>`), so they cannot drift from the handlers either.
  */
-import type { IpcResponse, StageStatus, SetupAnswers, FileSnapshot, Profile } from "./ipc";
+import type { IpcResponse, StageStatus, SetupAnswers, FileSnapshot, Profile, PushPlan } from "./ipc";
 import type { CommentThread } from "./comment";
 import type { AgentRunOptions, AgentEventEnvelope, AgentRawEnvelope } from "./run-events";
 import type { DevServerUpdate } from "./dev-server";
@@ -146,6 +146,8 @@ export interface VortSpecApi {
   inspectorTokens(projectPath: string): Promise<IpcResponse<"inspector:getTokens">>;
   inspectorComponents(projectPath: string): Promise<IpcResponse<"inspector:getComponents">>;
   setTokenValue(projectPath: string, name: string, value: string): Promise<IpcResponse<"inspector:setTokenValue">>;
+  /** Create a new design token (name + value) in the project token file, marked hand-edited. */
+  createToken(projectPath: string, name: string, value: string): Promise<IpcResponse<"inspector:createToken">>;
   getVerification(projectPath: string): Promise<IpcResponse<"inspector:getVerification">>;
   snapshotComponent(projectPath: string, file: string): Promise<IpcResponse<"inspector:snapshotComponent">>;
   snapshotTokenScope(projectPath: string): Promise<IpcResponse<"inspector:snapshotTokenScope">>;
@@ -189,6 +191,8 @@ export interface VortSpecApi {
 
   // Figma connection (figma-cli — primary; MCP bridge + token are fallbacks)
   figmaStatus(): Promise<IpcResponse<"figma:status">>;
+  /** Ensure figma-cli is connected, auto-connecting if needed (warm-up on project open + self-heal). */
+  figmaEnsureConnected(): Promise<IpcResponse<"figma:ensureConnected">>;
   figmaOpenAppManagement(): Promise<IpcResponse<"figma:openAppManagement">>;
   figmaConnect(mode: FigmaCliMode): Promise<IpcResponse<"figma:connect">>;
   /** Read design variables from Figma into the reconcile cache (figma-cli primary). */
@@ -203,6 +207,10 @@ export interface VortSpecApi {
   figmaTokenStatus(): Promise<IpcResponse<"figma:tokenStatus">>;
   /** Write-through a new Figma token into the user's own Figma MCP config (VortSpec keeps no copy). */
   setFigmaToken(req: { token: string }): Promise<IpcResponse<"figma:setToken">>;
+  /** Compute the code→Figma push plan locally (diff token file vs. Figma-variable cache). Never calls Figma. */
+  figmaComputePushPlan(projectPath: string): Promise<IpcResponse<"figma:computePushPlan">>;
+  /** Apply a confirmed push plan to Figma Variables via figma-cli (source: null → use the MCP fallback). */
+  figmaPushVariables(projectPath: string, plan: PushPlan): Promise<IpcResponse<"figma:pushVariables">>;
 
   // IDE MCP integration (IDE app only)
   /** Start (once) the IDE MCP bridge and get the `--mcp-config` path for runs. */

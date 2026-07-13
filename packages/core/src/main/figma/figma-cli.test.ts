@@ -6,7 +6,18 @@ import {
   mapDtcgType,
   parseComponentsEval,
   parseSelectionEval,
+  connectModeOrder,
 } from "./figma-cli";
+
+describe("connectModeOrder (auto-connect)", () => {
+  it("prefers yolo by default and when yolo last worked", () => {
+    expect(connectModeOrder(null)).toEqual(["yolo", "safe"]);
+    expect(connectModeOrder("yolo")).toEqual(["yolo", "safe"]);
+  });
+  it("prefers the last-working mode when it was safe", () => {
+    expect(connectModeOrder("safe")).toEqual(["safe", "yolo"]);
+  });
+});
 
 describe("parseFilesJson", () => {
   it("parses a JSON array of file names (string or object)", () => {
