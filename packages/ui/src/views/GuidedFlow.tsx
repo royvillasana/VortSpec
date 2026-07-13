@@ -32,6 +32,8 @@ import { Button, Card, Spinner } from "../components/ui";
 import { RunPanel } from "../components/RunPanel";
 import { RunProgress } from "../components/RunProgress";
 import { RunLimitNotice } from "../components/RunLimitNotice";
+import { UsageWarning } from "../components/UsageWarning";
+import { useUsageWarning } from "../lib/useUsageWarning";
 import { FigmaHealthCheck } from "../components/FigmaHealthCheck";
 import { ProjectRail, projectRailItems } from "../components/ProjectRail";
 
@@ -145,6 +147,9 @@ export function GuidedFlow({
 
   const run = useAgentRun();
   const latest = useLatestRun();
+  // Proactive session-usage warnings (75% → +10% steps). Reads the local /usage
+  // snapshot; refreshed after each run (below), since runs are what move it.
+  const usageWarn = useUsageWarning();
   const [runLabel, setRunLabel] = useState("");
   const [opKind, setOpKind] = useState<OpKind>("other");
   const [pipelineTotal, setPipelineTotal] = useState<number | undefined>(undefined);
@@ -251,6 +256,8 @@ export function GuidedFlow({
         flash("Your Claude plan runs everything on its default model — model routing is off.");
       }
       void reload();
+      // A run is what moves session usage — re-check the warning thresholds now.
+      usageWarn.refresh();
       // Refresh resume state (a completed run clears it) after this run finishes.
       void api.lastRun(project.path).then(setResume);
       if (opKind === "verify" || opKind === "pipeline") {
@@ -661,6 +668,8 @@ export function GuidedFlow({
           {/* Content: banners + toolbar + table + outputs. */}
           <div className="min-w-0 flex-1 overflow-y-auto px-8 pb-16 pt-6">
           <div className="mx-auto flex max-w-[900px] flex-col gap-5">
+            {/* Approaching the Claude session limit (75% → +10% steps). */}
+            {usageWarn.warning && <UsageWarning warning={usageWarn.warning} onDismiss={usageWarn.dismiss} />}
             {/* The previous run was interrupted — offer to pick up where it stopped. */}
             {resume?.sessionId && !busy && !showRunCard && (
               <Card className="flex items-center gap-3 border-vs-warning-border bg-vs-warning-muted p-3 text-xs">

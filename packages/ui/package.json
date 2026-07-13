@@ -56,6 +56,14 @@
       "types": "./src/components/RunLimitNotice.tsx",
       "default": "./src/components/RunLimitNotice.tsx"
     },
+    "./UsageWarning": {
+      "types": "./src/components/UsageWarning.tsx",
+      "default": "./src/components/UsageWarning.tsx"
+    },
+    "./useUsageWarning": {
+      "types": "./src/lib/useUsageWarning.ts",
+      "default": "./src/lib/useUsageWarning.ts"
+    },
     "./AssistantDock": {
       "types": "./src/components/AssistantDock.tsx",
       "default": "./src/components/AssistantDock.tsx"
