@@ -146,6 +146,7 @@ const STATUS_BADGE: Record<RunStatus, { label: string; color: string; border: st
   done: { label: "complete", color: "#30A46C", border: "rgba(48,164,108,0.35)", bg: "rgba(48,164,108,0.08)" },
   error: { label: "failed", color: "#E5484D", border: "rgba(229,72,77,0.4)", bg: "rgba(229,72,77,0.06)" },
   canceled: { label: "canceled", color: "#E5484D", border: "rgba(229,72,77,0.4)", bg: "rgba(229,72,77,0.06)" },
+  paused: { label: "paused · usage limit", color: "#F5A623", border: "rgba(245,166,35,0.4)", bg: "rgba(245,166,35,0.08)" },
 };
 
 function currentLabel(model: RunModel): string {

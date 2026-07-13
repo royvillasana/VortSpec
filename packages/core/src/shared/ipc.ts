@@ -154,6 +154,7 @@ export type {
   AgentEventEnvelope,
   AgentRawEnvelope,
   LastRun,
+  RunLimit,
 } from "./run-events";
 export type { TaskAuth, TaskProject, TaskIssue, TaskResult, IssueType, IssueLinks } from "./task";
 export type { UsageResult, UsageLimit } from "./usage";

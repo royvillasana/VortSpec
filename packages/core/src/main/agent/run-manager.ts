@@ -9,7 +9,7 @@ import {
   type RunEvent,
 } from "@vortspec/core/run-events";
 import { newAccumulator, recordRun, patchLastRun, readLastRun, runTitle } from "./run-recorder";
-import type { LastRun } from "@vortspec/core/run-events";
+import type { LastRun, RunLimit } from "@vortspec/core/run-events";
 
 /**
  * Owns the set of active agent runs and forwards their events to the renderer.
@@ -35,6 +35,9 @@ export function startRun(
   const adapter = new AgentAdapter();
   runs.set(runId, { adapter, cwd: opts.cwd });
   const acc = newAccumulator();
+  // Set when the run stops on the usage limit — makes the run resumable and
+  // keeps `exit` from overwriting the paused status with failed/passed.
+  let pausedLimit: RunLimit | null = null;
 
   // Seed the last-run pointer as "running" so an app crash/close mid-run is
   // detectable next launch (status "running" with no live process = interrupted).
@@ -63,11 +66,16 @@ export function startRun(
       if (event.costUsd !== undefined) acc.costUsd = event.costUsd;
     }
     // Capture the session id so an interrupted run can be `--resume`d.
-    if ((event.kind === "system-init" || event.kind === "result") && event.sessionId) {
+    if ((event.kind === "system-init" || event.kind === "result" || event.kind === "limit-reached") && event.sessionId) {
       if (acc.sessionId !== event.sessionId) {
         acc.sessionId = event.sessionId;
         void patchLastRun(opts.cwd, { sessionId: event.sessionId });
       }
+    }
+    // Usage-limit stop: persist a resumable "paused" pointer with its reset time.
+    if (event.kind === "limit-reached") {
+      pausedLimit = { scope: event.scope, resetLabel: event.resetLabel, resetsAt: event.resetsAt };
+      void patchLastRun(opts.cwd, { status: "paused", limit: pausedLimit });
     }
 
     if (!sender.isDestroyed()) {
@@ -75,9 +83,15 @@ export function startRun(
     }
     if (event.kind === "exit") {
       runs.delete(runId);
-      const status: LastRun["status"] =
-        event.code === null ? "cancelled" : acc.isError || event.code !== 0 ? "failed" : "passed";
-      void patchLastRun(opts.cwd, { status });
+      if (pausedLimit) {
+        // Keep the paused pointer (resumable once the limit resets) — don't
+        // downgrade it to failed just because the process exited non-zero.
+        void patchLastRun(opts.cwd, { status: "paused", limit: pausedLimit });
+      } else {
+        const status: LastRun["status"] =
+          event.code === null ? "cancelled" : acc.isError || event.code !== 0 ? "failed" : "passed";
+        void patchLastRun(opts.cwd, { status });
+      }
       void recordRun(opts, acc, event.code);
     }
   });

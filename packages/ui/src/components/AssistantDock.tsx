@@ -5,6 +5,7 @@ import { useAgentRun } from "../lib/useAgentRun";
 import type { ChatMessage } from "@vortspec/ui/run-model";
 import { Spinner } from "@vortspec/ui/ui";
 import { Response } from "./ai/Response";
+import { RunLimitNotice } from "./RunLimitNotice";
 import { Shimmer } from "./ai/Shimmer";
 import { ToolSteps } from "./ai/Tool";
 import { Reasoning } from "./ai/Reasoning";
@@ -114,6 +115,8 @@ export function AssistantDock({
   const [draft, setDraft] = useState("");
   const [firstPrompt, setFirstPrompt] = useState<string | null>(null);
   const [sessionOpen, setSessionOpen] = useState(false);
+  // Opt-in auto-resume when a usage-limit pause resets (per pause).
+  const [autoResumePaused, setAutoResumePaused] = useState(false);
   // Meta-command result cards (/mcp, /model, /context…) shown inline.
   const [cards, setCards] = useState<{ id: number; name: string }[]>([]);
   const cardSeq = useRef(0);
@@ -488,6 +491,21 @@ export function AssistantDock({
           </div>
         )}
       </div>
+
+      {run.model.status === "paused" && run.model.limit && (
+        <div className="flex-none border-t border-vs-border-default px-3 py-2.5">
+          <RunLimitNotice
+            limit={run.model.limit}
+            onResume={() =>
+              void run.send("Continue where you left off and finish the remaining work.", "↻ Resumed after the usage limit")
+            }
+            resumeLabel="Resume"
+            busy={run.running}
+            autoResume={autoResumePaused}
+            onAutoResumeChange={setAutoResumePaused}
+          />
+        </div>
+      )}
 
       {taskReturn && (run.model.status === "done" || run.model.status === "error") && (
         <button

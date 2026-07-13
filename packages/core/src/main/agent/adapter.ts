@@ -2,6 +2,7 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { EventEmitter } from "node:events";
 import { parseStreamLine } from "./events";
 import type { AgentRunOptions, RunEvent } from "@vortspec/core/run-events";
+import { detectUsageLimit } from "@vortspec/core/usage-limit";
 
 /**
  * The AgentAdapter — the single boundary that knows how to invoke Claude Code
@@ -68,7 +69,20 @@ export class AgentAdapter extends EventEmitter {
     this.child.stdout?.on("data", (chunk: Buffer) => this.onStdout(chunk.toString()));
     this.child.stderr?.on("data", (chunk: Buffer) => {
       const text = chunk.toString().trim();
-      if (text) this.emitEvent({ kind: "notice", text });
+      if (!text) return;
+      // The usage-limit message can surface on stderr — treat it as a pause, not
+      // a stray notice, so the run halts with a resumable "limit reached" state.
+      const limit = detectUsageLimit(text);
+      if (limit) {
+        this.emitEvent({
+          kind: "limit-reached",
+          scope: limit.scope,
+          resetLabel: limit.resetLabel,
+          resetsAt: limit.resetsAt,
+          raw: limit.raw,
+        });
+      }
+      this.emitEvent({ kind: "notice", text });
     });
     this.child.on("error", (err: Error) => {
       this.emitEvent({

@@ -52,6 +52,10 @@
       "types": "./src/lib/assistant-task.ts",
       "default": "./src/lib/assistant-task.ts"
     },
+    "./RunLimitNotice": {
+      "types": "./src/components/RunLimitNotice.tsx",
+      "default": "./src/components/RunLimitNotice.tsx"
+    },
     "./AssistantDock": {
       "types": "./src/components/AssistantDock.tsx",
       "default": "./src/components/AssistantDock.tsx"

@@ -1,7 +1,8 @@
-import type { RunEvent } from "@vortspec/core/ipc";
+import type { RunEvent, RunLimit } from "@vortspec/core/ipc";
 
-/** The renderer-side accumulated view of a wrapped Claude Code run. */
-export type RunStatus = "idle" | "running" | "done" | "error" | "canceled";
+/** The renderer-side accumulated view of a wrapped Claude Code run.
+ *  `paused` = stopped on the Claude usage limit; resumable once it resets. */
+export type RunStatus = "idle" | "running" | "done" | "error" | "canceled" | "paused";
 
 export interface Activity {
   key: string;
@@ -66,6 +67,8 @@ export interface RunModel {
     costUsd?: number;
     usage?: { inputTokens: number; outputTokens: number; cacheReadTokens?: number; cacheCreationTokens?: number };
   };
+  /** Set when status is "paused" — the usage-limit reason + reset time. */
+  limit?: RunLimit;
 }
 
 export const initialRun: RunModel = {
@@ -213,8 +216,19 @@ function applyEvent(state: RunModel, event: RunEvent): RunModel {
       };
     case "error":
       return pushActivity({ ...state, status: "error" }, event.message, "error");
+    case "limit-reached":
+      // A pause, not an error — arrives after the `result`, so it wins the status.
+      return {
+        ...state,
+        status: "paused",
+        messages: commitStreaming(state),
+        streamingText: "",
+        sessionId: event.sessionId ?? state.sessionId,
+        limit: { scope: event.scope, resetLabel: event.resetLabel, resetsAt: event.resetsAt },
+      };
     case "exit":
-      // Terminal fallback if no `result` arrived (e.g. crash/cancel): still commit prose.
+      // Terminal fallback if no `result` arrived (e.g. crash/cancel): still commit
+      // prose. A paused run keeps its paused status through the process exit.
       return state.status === "running"
         ? {
             ...state,

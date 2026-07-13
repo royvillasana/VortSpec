@@ -106,6 +106,31 @@ describe("parseStreamLine", () => {
     });
   });
 
+  it("emits limit-reached (plus the result) when the result is a usage-limit stop", () => {
+    const out = parseStreamLine(
+      JSON.stringify({
+        type: "result",
+        is_error: true,
+        result: "You've hit your session limit · resets 3:45pm",
+        session_id: "sess-lim",
+      }),
+    );
+    expect(out.map((e) => e.kind)).toEqual(["result", "limit-reached"]);
+    expect(out.find((e) => e.kind === "limit-reached")).toMatchObject({
+      kind: "limit-reached",
+      scope: "session",
+      resetLabel: "3:45pm",
+      sessionId: "sess-lim",
+    });
+  });
+
+  it("does NOT emit limit-reached for an ordinary error result", () => {
+    const out = parseStreamLine(
+      JSON.stringify({ type: "result", is_error: true, result: "Error: build failed", session_id: "s" }),
+    );
+    expect(out.map((e) => e.kind)).toEqual(["result"]);
+  });
+
   it("captures a Bash command as the tool input and the result text", () => {
     const use = parseStreamLine(
       JSON.stringify({ type: "assistant", message: { content: [{ type: "tool_use", id: "t1", name: "Bash", input: { command: "npm test" } }] } }),

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { usageLimitScopeSchema } from "./usage-limit";
 
 /**
  * Token usage for one run — captured from the CLI result line's `usage` block so
@@ -77,8 +78,28 @@ export const runEventSchema = z.discriminatedUnion("kind", [
   }),
   z.object({ kind: z.literal("error"), message: z.string() }),
   z.object({ kind: z.literal("exit"), code: z.number().nullable() }),
+  // The run stopped because the user hit their Claude usage limit — a PAUSE, not
+  // an error: it can be resumed once the limit resets. Carries when it resets.
+  z.object({
+    kind: z.literal("limit-reached"),
+    scope: usageLimitScopeSchema,
+    /** Human reset label as the CLI printed it (e.g. "3:45pm"), when given. */
+    resetLabel: z.string().optional(),
+    /** Reset time as epoch ms, when known explicitly (the legacy pipe form). */
+    resetsAt: z.number().optional(),
+    sessionId: z.string().optional(),
+    raw: z.string().optional(),
+  }),
 ]);
 export type RunEvent = z.infer<typeof runEventSchema>;
+
+/** Persisted usage-limit info for a paused run (drives the resume notice). */
+export const runLimitSchema = z.object({
+  scope: usageLimitScopeSchema,
+  resetLabel: z.string().optional(),
+  resetsAt: z.number().optional(),
+});
+export type RunLimit = z.infer<typeof runLimitSchema>;
 
 /** Options for launching one SDD-DE step through Claude Code headless. */
 export const agentRunOptionsSchema = z.object({
@@ -137,7 +158,11 @@ export const lastRunSchema = z.object({
   kind: z.string().optional(),
   label: z.string().optional(),
   total: z.number().nullable().optional(),
-  status: z.enum(["running", "passed", "cancelled", "failed"]),
+  // "paused" = stopped on the usage limit; resumable once it resets (like an
+  // interrupted "running", but with a known reason + reset time).
+  status: z.enum(["running", "passed", "cancelled", "failed", "paused"]),
+  /** Set when status is "paused" — the usage-limit reason + reset time. */
+  limit: runLimitSchema.optional(),
   updatedAt: z.string(),
 });
 export type LastRun = z.infer<typeof lastRunSchema>;

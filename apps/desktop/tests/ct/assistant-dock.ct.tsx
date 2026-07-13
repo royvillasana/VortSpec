@@ -30,7 +30,34 @@ const TOOLRUN: RunEvent[] = [
   { kind: "result", isError: false, text: "done", sessionId: "s" },
 ];
 
+// A run that stops on the weekly usage limit (weekday label → no countdown, so
+// Resume is immediately enabled).
+const LIMIT: RunEvent[] = [
+  { kind: "system-init", model: "claude-opus-4-8", sessionId: "s", tools: ["Read"], mcpServers: [], mcpErrors: [] },
+  { kind: "assistant-text", text: "Working on it…" },
+  { kind: "result", isError: true, sessionId: "s" },
+  { kind: "limit-reached", scope: "weekly", resetLabel: "Mon 12:00am", sessionId: "s" },
+];
+
 const noop = (): void => {};
+
+test("a usage-limit stop pauses the run and offers Resume (continuing the session)", async ({ mount }) => {
+  const c = await mount(<AssistantDock project={PROJECT} onClose={noop} />, {
+    hooksConfig: { mock: { runScript: LIMIT } },
+  });
+  await c.getByPlaceholder(/@ a file/).fill("build the thing");
+  await c.getByRole("button", { name: "Send" }).click();
+  // The agnostic paused notice — reason + reset + the honesty note.
+  await expect(c.getByText(/hit your weekly Claude usage limit/i)).toBeVisible();
+  await expect(c.getByText(/Resets Mon 12:00am/)).toBeVisible();
+  await expect(c.getByText(/VortSpec adds no usage and stores no keys/)).toBeVisible();
+  // Resume continues the SAME session (a resume prompt is sent).
+  const resume = c.getByRole("button", { name: "Resume" });
+  await expect(resume).toBeEnabled();
+  await resume.click();
+  const prompts = await c.page().evaluate(() => (window as unknown as { __runPrompts: string[] }).__runPrompts);
+  expect(prompts.some((p) => p.includes("Continue where you left off"))).toBe(true);
+});
 
 test("shows the empty prompt state and spends no usage until first send", async ({ mount }) => {
   const c = await mount(<AssistantDock project={PROJECT} onClose={noop} />, {

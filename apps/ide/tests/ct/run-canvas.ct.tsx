@@ -148,10 +148,22 @@ const UNRECOGNIZED: Selection = {
   variants: [],
   sections: [],
 };
+const comp = (name: string, level: "atom" | "molecule" | "organism", variants?: string[]): InspectorComponent => ({
+  name,
+  level,
+  file: `src/components/ui/${name}.tsx`,
+  props: [],
+  tokens: [],
+  status: "built",
+  issues: [],
+  specPath: null,
+  reportPath: null,
+  ...(variants ? { variants } : {}),
+});
 const ROSTER: InspectorComponent[] = [
-  { name: "Button", level: "atom", file: "src/components/ui/Button.tsx", tokens: [], status: "built", variants: ["variant", "size"] },
-  { name: "ButtonGroup", level: "molecule", file: "src/components/ui/ButtonGroup.tsx", tokens: [], status: "built" },
-  { name: "Card", level: "molecule", file: "src/components/ui/Card.tsx", tokens: [], status: "built" },
+  comp("Button", "atom", ["variant", "size"]),
+  comp("ButtonGroup", "molecule"),
+  comp("Card", "molecule"),
 ];
 
 test("assign picker: lists the whole roster (recommended first) and assigns any component to all matches", async ({ mount }) => {

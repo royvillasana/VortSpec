@@ -1,4 +1,5 @@
 import { runEventSchema, type RunEvent } from "@vortspec/core/run-events";
+import { detectUsageLimit } from "@vortspec/core/usage-limit";
 
 /**
  * The parser that turns raw Claude Code `stream-json` NDJSON lines into
@@ -220,17 +221,34 @@ function mapObject(obj: Record<string, unknown>): RunEvent[] {
       }
       return [];
     }
-    case "result":
-      return [
+    case "result": {
+      const sessionId = typeof obj.session_id === "string" ? obj.session_id : undefined;
+      const resultText = typeof obj.result === "string" ? obj.result : undefined;
+      const events: RunEvent[] = [
         {
           kind: "result",
           isError: obj.is_error === true || obj.subtype === "error",
-          text: typeof obj.result === "string" ? obj.result : undefined,
+          text: resultText,
           costUsd: typeof obj.total_cost_usd === "number" ? obj.total_cost_usd : undefined,
-          sessionId: typeof obj.session_id === "string" ? obj.session_id : undefined,
+          sessionId,
           usage: mapUsage(obj.usage),
         },
       ];
+      // A usage-limit stop looks like an error result, but it's a PAUSE we can
+      // resume — surface it as such (this event wins over the result in the model).
+      const limit = detectUsageLimit(resultText);
+      if (limit) {
+        events.push({
+          kind: "limit-reached",
+          scope: limit.scope,
+          resetLabel: limit.resetLabel,
+          resetsAt: limit.resetsAt,
+          sessionId,
+          raw: limit.raw,
+        });
+      }
+      return events;
+    }
     default:
       return [];
   }

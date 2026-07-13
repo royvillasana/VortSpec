@@ -70,4 +70,22 @@ describe("reduceRun — chat transcript", () => {
     );
     expect(reduceRun(withHistory, { type: "start" }).messages).toHaveLength(0);
   });
+
+  it("a usage-limit stop pauses the run (paused wins over the error result) and keeps its reset", () => {
+    const model = run(
+      { type: "start" },
+      { type: "event", event: { kind: "assistant-text", text: "working" } },
+      // The CLI's terminal result looks like an error, then limit-reached follows.
+      { type: "event", event: { kind: "result", isError: true, sessionId: "sess-x" } },
+      {
+        type: "event",
+        event: { kind: "limit-reached", scope: "session", resetLabel: "3:45pm", sessionId: "sess-x" },
+      },
+      { type: "event", event: { kind: "exit", code: 1 } },
+    );
+    expect(model.status).toBe("paused");
+    expect(model.limit).toEqual({ scope: "session", resetLabel: "3:45pm", resetsAt: undefined });
+    expect(model.sessionId).toBe("sess-x"); // captured so we can --resume
+    expect(model.messages).toEqual([expect.objectContaining({ text: "working" })]);
+  });
 });

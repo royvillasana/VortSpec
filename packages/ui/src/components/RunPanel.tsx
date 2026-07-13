@@ -74,6 +74,7 @@ function StatusBar({ model }: { model: RunModel }): React.JSX.Element {
     done: "Completed",
     error: "Failed",
     canceled: "Canceled",
+    paused: "Paused — usage limit",
   };
   const tone: Record<RunStatus, string> = {
     idle: "text-vs-text-muted",
@@ -81,6 +82,7 @@ function StatusBar({ model }: { model: RunModel }): React.JSX.Element {
     done: "text-vs-success",
     error: "text-vs-error",
     canceled: "text-vs-text-secondary",
+    paused: "text-vs-warning",
   };
   return (
     <div className="flex items-center gap-2 text-xs">

@@ -31,6 +31,7 @@ import { routedModel, modelHonored, disableRouting, isRoutingDisabled, type Mode
 import { Button, Card, Spinner } from "../components/ui";
 import { RunPanel } from "../components/RunPanel";
 import { RunProgress } from "../components/RunProgress";
+import { RunLimitNotice } from "../components/RunLimitNotice";
 import { FigmaHealthCheck } from "../components/FigmaHealthCheck";
 import { ProjectRail, projectRailItems } from "../components/ProjectRail";
 
@@ -311,6 +312,22 @@ export function GuidedFlow({
     });
   }
 
+  // Auto-resume the usage-limit pause once the limit resets (opt-in per pause).
+  const [autoResume, setAutoResume] = useState(false);
+
+  /** Resume a run that paused on the usage limit — continues the same session. */
+  async function resumePaused(): Promise<void> {
+    const sid = run.model.sessionId;
+    if (!sid || running) return;
+    setAutoResume(false);
+    if (opKind === "verify" || opKind === "pipeline") await ensureHarness();
+    await op(runLabel || "Resuming after the usage limit", RESUME_PROMPT, {
+      kind: opKind,
+      total: pipelineTotal,
+      resumeSessionId: sid,
+    });
+  }
+
   /**
    * Bring the project's managed dev/storybook server up so a verify run has a
    * live surface to inspect, and return its URL. Idempotent; returns null (and
@@ -418,10 +435,12 @@ export function GuidedFlow({
   }, [components]);
 
   const running = run.running;
+  // Stopped on the Claude usage limit — resumable once it resets.
+  const paused = run.model.status === "paused";
   // A run is in flight either here or (adopted) elsewhere for this project, or a
   // chunked build is between chunks (queue still draining).
   const busy = running || externalRun || chunksActive;
-  const showRunCard = running || (run.model.status === "done" && !runDismissRef.current);
+  const showRunCard = running || paused || (run.model.status === "done" && !runDismissRef.current);
   const showsOutcome = opKind === "verify" || opKind === "pipeline";
   const openFindings = verifyResult?.findings.filter((f) => f.status === "open") ?? [];
   // Holistic stage/progress view of the current run (build, verify, pipeline, …).
@@ -537,6 +556,18 @@ export function GuidedFlow({
 
                   {/* Holistic stage/progress view — the same structure for every action. */}
                   <RunProgress progress={progress} running={running} />
+
+                  {/* Paused on the Claude usage limit — resume once it resets. */}
+                  {paused && run.model.limit && (
+                    <RunLimitNotice
+                      limit={run.model.limit}
+                      onResume={() => void resumePaused()}
+                      resumeLabel="Resume"
+                      busy={running}
+                      autoResume={autoResume}
+                      onAutoResumeChange={setAutoResume}
+                    />
+                  )}
 
                   {running && (
                     <p className="text-[11.5px] leading-relaxed text-vs-text-muted">
