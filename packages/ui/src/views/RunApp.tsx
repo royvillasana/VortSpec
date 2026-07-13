@@ -872,6 +872,20 @@ export function RunApp({
                   colorTokens={colorTokens}
                   tokens={tokens}
                   resembles={selection?.resembles ?? null}
+                  components={components}
+                  onAssignComponent={
+                    onSendToChat && selection
+                      ? (component, opts) =>
+                          onSendToChat(
+                            `Refactor the selected element to use the existing "${component.name}" design-system component instead of hand-written markup, choosing the variant/props that match its current appearance. Preserve look and behavior and remove the duplicated styles.` +
+                              (opts.allSimilar
+                                ? ` Then find every OTHER occurrence of this same hand-written pattern across the app and refactor each one to use "${component.name}" as well, so all matching instances reference the component (not just this selection).`
+                                : "") +
+                              `\n\n${buildSelectionContext(selection)}`,
+                            component.file,
+                          )
+                      : undefined
+                  }
                   onUseComponent={
                     onSendToChat && selection?.resembles
                       ? () =>

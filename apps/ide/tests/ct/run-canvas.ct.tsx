@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/experimental-ct-react";
 import App from "../../src/renderer/src/App";
 import { DesignPanel } from "@vortspec/ui/DesignPanel";
-import type { Project, Selection, InspectorToken } from "@vortspec/core/ipc";
+import type { Project, Selection, InspectorToken, InspectorComponent } from "@vortspec/core/ipc";
 
 const PROJECT = {
   id: "p1",
@@ -135,4 +135,68 @@ test("removing the edit (a fresh readout) snaps the field back to the node's rea
   );
   await expect(c.getByTitle(/Variable: space-20/)).toBeVisible();
   await expect(c.getByRole("textbox")).toHaveValue("20px");
+});
+
+// An unrecognized element that resembles Button — the assign picker case.
+const UNRECOGNIZED: Selection = {
+  nodeId: "n2",
+  label: "div",
+  component: null,
+  file: null,
+  resembles: { name: "Button", file: "src/components/ui/Button.tsx" },
+  rect: { x: 0, y: 0, width: 80, height: 32 },
+  variants: [],
+  sections: [],
+};
+const ROSTER: InspectorComponent[] = [
+  { name: "Button", level: "atom", file: "src/components/ui/Button.tsx", tokens: [], status: "built", variants: ["variant", "size"] },
+  { name: "ButtonGroup", level: "molecule", file: "src/components/ui/ButtonGroup.tsx", tokens: [], status: "built" },
+  { name: "Card", level: "molecule", file: "src/components/ui/Card.tsx", tokens: [], status: "built" },
+];
+
+test("assign picker: lists the whole roster (recommended first) and assigns any component to all matches", async ({ mount }) => {
+  const assigned: { name: string; allSimilar: boolean }[] = [];
+  const c = await mount(
+    <DesignPanel
+      selection={UNRECOGNIZED}
+      tree={null}
+      tokens={[]}
+      components={ROSTER}
+      resembles={{ name: "Button", file: "src/components/ui/Button.tsx" }}
+      onSelectNode={() => {}}
+      onFieldChange={() => {}}
+      onAssignComponent={(comp, opts) => assigned.push({ name: comp.name, allSimilar: opts.allSimilar })}
+    />,
+  );
+  // The picker is open for an unrecognized element, with the whole roster listed.
+  await expect(c.getByPlaceholder("Search components…")).toBeVisible();
+  await expect(c.getByRole("button", { name: /ButtonGroup/ })).toBeVisible();
+  await expect(c.getByRole("button", { name: /^Card/ })).toBeVisible();
+  // The resembled component is flagged Recommended.
+  await expect(c.getByText("Recommended")).toBeVisible();
+  // "Apply to every matching element" defaults on.
+  const allBox = c.getByRole("checkbox");
+  await expect(allBox).toBeChecked();
+  // Assign a DIFFERENT component than the recommendation — ButtonGroup — to all matches.
+  await c.getByRole("button", { name: /ButtonGroup/ }).click();
+  expect(assigned).toEqual([{ name: "ButtonGroup", allSimilar: true }]);
+});
+
+test("assign picker: a recognized component shows its badge and only assigns via Reassign", async ({ mount }) => {
+  const c = await mount(
+    <DesignPanel
+      selection={GAP_SELECTION}
+      tree={null}
+      tokens={[]}
+      components={ROSTER}
+      onSelectNode={() => {}}
+      onFieldChange={() => {}}
+      onAssignComponent={() => {}}
+    />,
+  );
+  await expect(c.getByText(/This is your/)).toBeVisible();
+  // Collapsed by default — the picker only opens on Reassign.
+  await expect(c.getByPlaceholder("Search components…")).toHaveCount(0);
+  await c.getByRole("button", { name: "Reassign" }).click();
+  await expect(c.getByPlaceholder("Search components…")).toBeVisible();
 });
