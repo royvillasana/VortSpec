@@ -7,6 +7,7 @@ import type {
   SetupAnswers,
   FileSnapshot,
   Profile,
+  PushPlan,
 } from "@vortspec/core/ipc";
 import {
   AGENT_EVENT_CHANNEL,
@@ -206,6 +207,7 @@ const api: VortSpecApi = {
 
   // Figma connection (figma-cli)
   figmaStatus: () => invoke("figma:status", undefined),
+  figmaEnsureConnected: () => invoke("figma:ensureConnected", undefined),
   figmaOpenAppManagement: () => invoke("figma:openAppManagement", undefined),
   figmaConnect: (mode: FigmaCliMode) => invoke("figma:connect", { mode }),
   figmaSyncVariables: (projectPath: string) => invoke("figma:syncVariables", { projectPath }),
@@ -214,6 +216,9 @@ const api: VortSpecApi = {
   checkFigmaHealth: (req) => invoke("figma:checkHealth", req),
   figmaTokenStatus: () => invoke("figma:tokenStatus", undefined),
   setFigmaToken: (req) => invoke("figma:setToken", req),
+  figmaComputePushPlan: (projectPath: string) => invoke("figma:computePushPlan", projectPath),
+  figmaPushVariables: (projectPath: string, plan: PushPlan) =>
+    invoke("figma:pushVariables", { projectPath, plan }),
   setPublishTarget: (projectPath: string, repoUrl: string) =>
     invoke("flow:setPublishTarget", { projectPath, repoUrl }),
   readArtifact: (projectPath: string, relPath: string) =>
@@ -225,6 +230,8 @@ const api: VortSpecApi = {
   inspectorComponents: (projectPath: string) => invoke("inspector:getComponents", projectPath),
   setTokenValue: (projectPath: string, name: string, value: string) =>
     invoke("inspector:setTokenValue", { projectPath, name, value }),
+  createToken: (projectPath: string, name: string, value: string) =>
+    invoke("inspector:createToken", { projectPath, name, value }),
   getVerification: (projectPath: string) => invoke("inspector:getVerification", projectPath),
   snapshotComponent: (projectPath: string, file: string) =>
     invoke("inspector:snapshotComponent", { projectPath, file }),

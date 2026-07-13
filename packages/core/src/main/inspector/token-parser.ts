@@ -253,6 +253,78 @@ export async function setInspectorTokenValue(
   return getInspectorTokens(projectPath);
 }
 
+/** Index just before the closing `}` of the first `@theme` block, or -1 if none. */
+export function themeBlockInsertIndex(css: string): number {
+  const at = css.search(/@theme\b/);
+  if (at === -1) return -1;
+  const open = css.indexOf("{", at);
+  if (open === -1) return -1;
+  let depth = 0;
+  for (let i = open; i < css.length; i++) {
+    if (css[i] === "{") depth++;
+    else if (css[i] === "}") {
+      depth--;
+      if (depth === 0) return i; // the block's closing brace
+    }
+  }
+  return -1;
+}
+
+/**
+ * Insert a new `--name: value;` declaration into the token file. Returns the new
+ * CSS, or null when a token with the same normalized name already exists (caller
+ * surfaces a human-readable rejection). Prefers the `@theme` block; falls back to
+ * a `:root` block, else prepends a fresh `:root` block. Pure + exported for tests.
+ */
+export function insertTokenDeclaration(
+  css: string,
+  name: string,
+  value: string,
+): string | null {
+  const existing = new Set(parseTokensFromCss(css).map((t) => normName(t.name)));
+  if (existing.has(normName(name))) return null;
+  const decl = `  --${name}: ${value.trim()};\n`;
+  const themeIdx = themeBlockInsertIndex(css);
+  if (themeIdx !== -1) return css.slice(0, themeIdx) + decl + css.slice(themeIdx);
+  const rootIdx = css.search(/:root\b[^{]*\{/);
+  if (rootIdx !== -1) {
+    const open = css.indexOf("{", rootIdx);
+    const close = css.indexOf("}", open);
+    if (close !== -1) return css.slice(0, close) + decl + css.slice(close);
+  }
+  return `:root {\n${decl}}\n\n${css}`;
+}
+
+/**
+ * Create a new design token: validate the name, reject a normalized-name
+ * duplicate, write the declaration into the token file, and mark it hand-edited
+ * so its provenance is correct on reload. A newly created token is immediately
+ * pushable (change: add-code-to-figma-token-push). Throws with a human-readable
+ * message on a bad name, missing token file, or duplicate.
+ */
+export async function createInspectorToken(
+  projectPath: string,
+  name: string,
+  value: string,
+): Promise<InspectorTokensResult> {
+  const clean = name.trim().replace(/^--/, "");
+  if (!/^[a-zA-Z][\w-]*$/.test(clean)) {
+    throw new Error(`"${name}" isn't a valid token name. Use letters, numbers, and hyphens (e.g. color-brand).`);
+  }
+  if (!value.trim()) throw new Error("A token needs a value.");
+  const config = await readProjectConfig(projectPath);
+  const tokenFile = config?.tokenFile;
+  if (!tokenFile) throw new Error("This project has no configured token file to write to.");
+  const path = join(projectPath, tokenFile);
+  const css = await readFile(path, "utf8").catch(() => null);
+  if (css === null) throw new Error(`Couldn't read the token file at ${tokenFile}.`);
+  const next = insertTokenDeclaration(css, clean, value);
+  if (next === null) throw new Error(`A token named --${clean} already exists.`);
+  await writeFile(path, next, "utf8");
+  await markOverridden(projectPath, clean);
+  return getInspectorTokens(projectPath);
+}
+
 /**
  * Capture the files a token rename/delete would touch — the token file plus every
  * component source under `component_dir` — before a gated Claude Code modify run,

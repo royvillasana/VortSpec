@@ -57,6 +57,57 @@ export const figmaVariableSchema = z.object({
 });
 export type FigmaVariable = z.infer<typeof figmaVariableSchema>;
 
+/**
+ * Code→Figma push (change: add-code-to-figma-token-push). A push plan is computed
+ * locally by diffing the code token file against the Figma-variable cache; it is
+ * what the user previews and confirms before any Figma write. VortSpec never
+ * writes Figma directly — figma-cli or a scoped Claude Code run applies the plan.
+ */
+
+/** The scalar Figma variable type a code token maps to on push. */
+export const figmaVariableTypeSchema = z.enum(["COLOR", "FLOAT", "STRING"]);
+export type FigmaVariableType = z.infer<typeof figmaVariableTypeSchema>;
+
+export const pushPlanEntrySchema = z.object({
+  /** The Figma variable name to create/update (may be a composite sub-variable, e.g. `shadow-md-blur`). */
+  variable: z.string(),
+  /** create = no matching Figma variable yet; update = exists but drifted. */
+  op: z.enum(["create", "update"]),
+  /** Scalar Figma variable type to write. */
+  figmaType: figmaVariableTypeSchema,
+  /** Concrete value to set, when not an alias. */
+  value: z.string().optional(),
+  /** Normalized name of the Figma variable to alias to, when the code token is a `var(--x)` reference. */
+  aliasTarget: z.string().optional(),
+  /** The current Figma value being replaced (update only), for the preview. */
+  currentFigmaValue: z.string().optional(),
+  /** The source code token this entry derives from. */
+  tokenName: z.string(),
+  /** The source token's classified type (color/typography/…). */
+  tokenType: tokenTypeSchema,
+});
+export type PushPlanEntry = z.infer<typeof pushPlanEntrySchema>;
+
+export const pushPlanSchema = z.object({
+  /** The Figma Variables collection the push targets (from `figma_token_collection`, default `Tokens`). */
+  collection: z.string(),
+  entries: z.array(pushPlanEntrySchema),
+});
+export type PushPlan = z.infer<typeof pushPlanSchema>;
+
+export const figmaPushResultSchema = z.object({
+  ok: z.boolean(),
+  /** how many variables were created. */
+  created: z.number(),
+  /** how many variables were updated. */
+  updated: z.number(),
+  /** what applied the push, or null when no writer was available (→ MCP fallback / fix-it). */
+  source: z.enum(["cli"]).nullable(),
+  /** a human, next-step message. */
+  message: z.string(),
+});
+export type FigmaPushResult = z.infer<typeof figmaPushResultSchema>;
+
 /** One "where used" entry for the token detail drawer. */
 export const tokenUsageSchema = z.object({
   component: z.string(),
