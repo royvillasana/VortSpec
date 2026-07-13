@@ -561,7 +561,9 @@ export async function syncVariablesToCache(projectPath: string): Promise<FigmaSy
  * updates each variable in VortSpec's own collection — auto-creating that
  * collection when it doesn't exist — binding aliases where the plan specifies
  * one, and returns a JSON summary as its last expression:
- *   { error: null, created, updated, createdCollection }
+ *   { error: null, created, updated, createdCollection, failed, errors[] }
+ * Each entry is coerced to the variable's actual resolved type and wrapped in a
+ * try/catch, so one bad token is skipped-and-reported, not fatal to the push.
  */
 export function buildPushScript(plan: PushPlan): string {
   return `(async function () {
@@ -574,8 +576,11 @@ export function buildPushScript(plan: PushPlan): string {
     var a = h.length >= 8 ? parseInt(h.slice(6,8),16)/255 : 1;
     return { r:r, g:g, b:b, a:a };
   }
+  // Coerce a raw string to the value shape Figma requires for a variable's
+  // ACTUAL resolved type — so setValueForMode never sees a mismatched type.
   function toValue(type, raw){
     if (type === 'FLOAT'){ var m = String(raw).match(/-?\\d*\\.?\\d+/); return m ? Number(m[0]) : 0; }
+    if (type === 'BOOLEAN'){ return String(raw).trim().toLowerCase() === 'true'; }
     if (type === 'COLOR'){ var s = String(raw).trim(); return s[0] === '#' ? hexToRgba(s) : { r:0,g:0,b:0,a:1 }; }
     return String(raw);
   }
@@ -587,26 +592,42 @@ export function buildPushScript(plan: PushPlan): string {
   var vars = await figma.variables.getLocalVariablesAsync();
   var byNorm = {};
   vars.forEach(function(v){ if (v.variableCollectionId === col.id) byNorm[norm(v.name)] = v; });
-  var created = 0, updated = 0;
+  var created = 0, updated = 0, errors = [];
   for (var i = 0; i < PLAN.entries.length; i++){
     var e = PLAN.entries[i];
-    var v = byNorm[norm(e.variable)];
-    if (!v){ v = figma.variables.createVariable(e.variable, col, e.figmaType); byNorm[norm(e.variable)] = v; created++; }
-    else { updated++; }
-    if (e.aliasTarget){
-      var target = byNorm[norm(e.aliasTarget)];
-      if (target){ v.setValueForMode(modeId, figma.variables.createVariableAlias(target)); continue; }
+    try {
+      var target = e.aliasTarget ? byNorm[norm(e.aliasTarget)] : null;
+      var v = byNorm[norm(e.variable)];
+      if (!v){
+        // New variable: match an alias target's type so the alias binds cleanly;
+        // otherwise use the planned scalar type.
+        var newType = (target && target.resolvedType) ? target.resolvedType : e.figmaType;
+        v = figma.variables.createVariable(e.variable, col, newType);
+        byNorm[norm(e.variable)] = v; created++;
+      } else { updated++; }
+      // Alias only when the target's type matches; else fall back to a concrete value.
+      if (target && target.resolvedType === v.resolvedType){
+        v.setValueForMode(modeId, figma.variables.createVariableAlias(target));
+      } else {
+        v.setValueForMode(modeId, toValue(v.resolvedType, e.value));
+      }
+    } catch (err) {
+      errors.push({ variable: e.variable, error: String((err && err.message) || err) });
     }
-    v.setValueForMode(modeId, toValue(e.figmaType, e.value));
   }
-  return { error: null, created: created, updated: updated, createdCollection: createdCollection };
+  return { error: null, created: created, updated: updated, createdCollection: createdCollection, failed: errors.length, errors: errors.slice(0, 5) };
 })();`;
 }
 
 /** Parse the push `eval` output (a JSON object behind a possible banner). Pure + exported. */
-export function parsePushEval(
-  raw: string,
-): { error: string | null; created: number; updated: number; createdCollection: boolean } | null {
+export function parsePushEval(raw: string): {
+  error: string | null;
+  created: number;
+  updated: number;
+  createdCollection: boolean;
+  failed: number;
+  firstError?: string;
+} | null {
   const start = raw.indexOf("{");
   const end = raw.lastIndexOf("}");
   if (start === -1 || end === -1 || end < start) return null;
@@ -618,11 +639,18 @@ export function parsePushEval(
   }
   if (!obj || typeof obj !== "object") return null;
   const r = obj as Record<string, unknown>;
+  const errs = Array.isArray(r.errors) ? (r.errors as Array<Record<string, unknown>>) : [];
+  const firstError =
+    errs.length && typeof errs[0]?.error === "string"
+      ? `${errs[0].variable ?? "?"}: ${errs[0].error}`
+      : undefined;
   return {
     error: typeof r.error === "string" ? r.error : null,
     created: typeof r.created === "number" ? r.created : 0,
     updated: typeof r.updated === "number" ? r.updated : 0,
     createdCollection: r.createdCollection === true,
+    failed: typeof r.failed === "number" ? r.failed : 0,
+    firstError,
   };
 }
 
@@ -656,12 +684,15 @@ export async function pushVariablesToFigma(plan: PushPlan): Promise<FigmaPushRes
       return { ok: false, created: 0, updated: 0, source: "cli", message: `figma-cli reported an error applying the push (${parsed.error}).` };
     }
     const madeCol = parsed.createdCollection ? ` (created the "${plan.collection}" collection)` : "";
+    const failedNote = parsed.failed
+      ? ` · ${parsed.failed} skipped${parsed.firstError ? ` (e.g. ${parsed.firstError})` : ""}`
+      : "";
     return {
-      ok: true,
+      ok: parsed.failed === 0,
       created: parsed.created,
       updated: parsed.updated,
       source: "cli",
-      message: `Pushed to Figma — created ${parsed.created}, updated ${parsed.updated} variable${parsed.created + parsed.updated === 1 ? "" : "s"} in "${plan.collection}"${madeCol}.`,
+      message: `Pushed to Figma — created ${parsed.created}, updated ${parsed.updated} variable${parsed.created + parsed.updated === 1 ? "" : "s"} in "${plan.collection}"${madeCol}${failedNote}.`,
     };
   } finally {
     await rm(tmp, { force: true }).catch(() => undefined);
