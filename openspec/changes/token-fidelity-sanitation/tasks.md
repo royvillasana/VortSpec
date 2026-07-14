@@ -14,16 +14,16 @@
 
 ## 3. Reconcile via the resolver
 
-- [ ] 3.1 Route `reconcile()` / `getInspectorTokens` through `resolveToken` (value/link/alias on top of name); behavior-compatible when only names are used.
-- [ ] 3.2 Represent the match signal on each reconciled token (so the UI can show "matched by value/link").
-- [ ] 3.3 Unit-test: value-equal token under a different name reconciles instead of showing unmatched.
+- [x] 3.1 Route `reconcile()` / `getInspectorTokens` through `resolveToken` (value/link/alias on top of name); behavior-compatible when only names are used.
+- [x] 3.2 Represent the match signal on each reconciled token (so the UI can show "matched by value/link").
+- [x] 3.3 Unit-test: value-equal token under a different name reconciles instead of showing unmatched.
 
 ## 4. Dedup-before-create + sanitation analysis
 
-- [ ] 4.1 Route `createInspectorToken` + literal promotion through the resolver; refuse to create on a match, return the reused token + message.
-- [ ] 4.2 Orphan detection: tokens resolving to `none`, each with usages from `buildUsage` (component + section/property).
-- [ ] 4.3 Duplicate + flattened-semantic analysis over the token set; exclude cross-brand primitive collisions (D7).
-- [ ] 4.4 Unit-test dedup refusal, orphan report (with usages), duplicate/flattened detection, cross-brand exclusion.
+- [x] 4.1 Route `createInspectorToken` + literal promotion through the resolver; refuse to create on a match, return the reused token + message.
+- [x] 4.2 Orphan detection: tokens resolving to `none`, each with usages from `buildUsage` (component + section/property).
+- [x] 4.3 Duplicate + flattened-semantic analysis over the token set; exclude cross-brand primitive collisions (D7).
+- [x] 4.4 Unit-test dedup refusal, orphan report (with usages), duplicate/flattened detection, cross-brand exclusion.
 
 ## 5. Push-back + collapse
 

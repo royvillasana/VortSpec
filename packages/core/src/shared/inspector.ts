@@ -30,6 +30,14 @@ export type TokenSource = z.infer<typeof tokenSourceSchema>;
 export const tokenDriftSchema = z.enum(["in-sync", "drifted"]);
 export type TokenDrift = z.infer<typeof tokenDriftSchema>;
 
+/**
+ * Which resolver layer matched a token to its Figma variable (change:
+ * token-fidelity-sanitation): a persisted link, normalized name, resolved value,
+ * or shared alias target — `none` when unresolved.
+ */
+export const matchSignalSchema = z.enum(["link", "name", "value", "alias", "none"]);
+export type MatchSignal = z.infer<typeof matchSignalSchema>;
+
 export const inspectorTokenSchema = z.object({
   /** CSS custom-property name without the leading `--` (e.g. `color-primary`). */
   name: z.string(),
@@ -45,6 +53,8 @@ export const inspectorTokenSchema = z.object({
   figmaValue: z.string().optional(),
   /** In-sync/drifted vs the matched Figma variable; absent when unmatched/no export. */
   drift: tokenDriftSchema.optional(),
+  /** Which resolver layer matched this token to its Figma variable (change: token-fidelity-sanitation). */
+  matchSignal: matchSignalSchema.optional(),
   /**
    * The authoritative slash path of the matched Figma variable (e.g.
    * `primitive/color/primary`), else a best-effort path split from the code name.
@@ -140,16 +150,6 @@ export const figmaVariableModelSchema = z.object({
 export type FigmaVariableModel = z.infer<typeof figmaVariableModelSchema>;
 
 /**
- * Token resolver contracts (change: token-fidelity-sanitation). The resolver maps
- * a code token or a Figma-variable binding to its counterpart across arbitrary
- * naming, via layered signals tried in precedence order: link → name → value →
- * alias. This is the engine behind reconcile, dedup-before-create, orphan
- * detection, and component-token binding.
- */
-export const matchSignalSchema = z.enum(["link", "name", "value", "alias", "none"]);
-export type MatchSignal = z.infer<typeof matchSignalSchema>;
-
-/**
  * The persisted convention-free escape hatch (`.vortspec/token-links.json`):
  * normalized code-token name → the Figma variable's slash path. Read first by the
  * resolver so a user-confirmed match survives later renames on either side.
@@ -220,6 +220,36 @@ export const tokenUsageSchema = z.object({
   property: z.string().optional(),
 });
 export type TokenUsage = z.infer<typeof tokenUsageSchema>;
+
+/**
+ * Token sanitation report (change: token-fidelity-sanitation). Surfaces code-only
+ * tokens (orphans) with where they're used so the user can push them back to
+ * Figma, and value look-alikes (duplicates) that should collapse to a canonical
+ * token — so VortSpec stops minting tokens that already exist.
+ */
+export const orphanTokenSchema = z.object({
+  name: z.string(),
+  value: z.string(),
+  /** Components/props that use this code-only token. */
+  uses: z.array(tokenUsageSchema),
+});
+export type OrphanToken = z.infer<typeof orphanTokenSchema>;
+
+export const duplicateGroupSchema = z.object({
+  /** The shared resolved value. */
+  value: z.string(),
+  /** The differently-named tokens holding it. */
+  tokens: z.array(z.string()),
+  /** semantic-primitive = a flattened alias (semantic duplicating a primitive); semantic-semantic = two roles. */
+  kind: z.enum(["semantic-primitive", "semantic-semantic"]),
+});
+export type DuplicateGroup = z.infer<typeof duplicateGroupSchema>;
+
+export const tokenSanitationSchema = z.object({
+  orphans: z.array(orphanTokenSchema).default([]),
+  duplicates: z.array(duplicateGroupSchema).default([]),
+});
+export type TokenSanitation = z.infer<typeof tokenSanitationSchema>;
 
 export const inspectorTokensResultSchema = z.object({
   /** Project-relative path of the token file that was parsed, or null if none. */
