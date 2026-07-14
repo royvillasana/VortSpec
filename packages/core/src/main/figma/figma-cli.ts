@@ -703,30 +703,63 @@ export function buildPushScript(plan: PushPlan): string {
     if (type === 'COLOR'){ var s = String(raw).trim(); return s[0] === '#' ? hexToRgba(s) : { r:0,g:0,b:0,a:1 }; }
     return String(raw);
   }
+  function cap(s){ return s ? s.charAt(0).toUpperCase()+s.slice(1) : s; }
+  // Layer of a variable name — mirrors pushLayerOf (both '/' and '-' separators).
+  function layerOf(name){ var n=String(name).replace(/^--/,''); if(/^primitive[-\\/]/i.test(n)) return 'primitive'; if(/^component[-\\/]/i.test(n)) return 'component'; return 'semantic'; }
+  function famOf(tt){ return tt==='color'?'Color':tt==='spacing'?'Spacing':tt==='radius'?'Radius':tt==='shadow'?'Effects':tt==='typography'?'Typography':'Color'; }
+  // Standard collection name to fall back to when no sibling collection exists.
+  function fallbackName(layer, tt, name){
+    if (layer==='component'){ var seg=String(name).replace(/^--/,'').split(/[\\/-]/)[1]||'Tokens'; return 'Component / '+cap(seg); }
+    return cap(layer)+' / '+famOf(tt);
+  }
+
   var cols = await figma.variables.getLocalVariableCollectionsAsync();
-  var col = cols.find(function(c){ return c.name === PLAN.collection; });
-  var createdCollection = false;
-  if (!col){ col = figma.variables.createVariableCollection(PLAN.collection); createdCollection = true; }
-  // Write into the plan's target mode (by name) when given; else the default mode.
-  var modeId = col.defaultModeId || (col.modes[0] && col.modes[0].modeId);
-  if (PLAN.mode){ var pm = col.modes.filter(function(m){ return m.name === PLAN.mode; })[0]; if (pm) modeId = pm.modeId; }
   var vars = await figma.variables.getLocalVariablesAsync();
-  var byNorm = {};
-  vars.forEach(function(v){ if (v.variableCollectionId === col.id) byNorm[norm(v.name)] = v; });
-  var created = 0, updated = 0, errors = [];
+  var colById = {}; cols.forEach(function(c){ colById[c.id]=c; });
+  var colsByName = {}; cols.forEach(function(c){ colsByName[c.name]=c; });
+  // Global index across ALL collections, so a semantic can alias a primitive that
+  // lives in a different collection, and same-name variables update in place.
+  var globalByNorm = {}; vars.forEach(function(v){ var k=norm(v.name); if(!(k in globalByNorm)) globalByNorm[k]=v; });
+  var created = 0, updated = 0, createdCollections = [], errors = [];
+
+  function modeIdFor(col){
+    var id = col.defaultModeId || (col.modes[0] && col.modes[0].modeId);
+    if (PLAN.mode){ var pm = col.modes.filter(function(m){ return m.name===PLAN.mode; })[0]; if (pm) id = pm.modeId; }
+    return id;
+  }
+  // Adaptive routing: put each variable where its siblings already live, else a
+  // standard-named collection (created on demand). Never moves an existing var.
+  function pickCollection(e){
+    var existing = globalByNorm[norm(e.variable)];
+    if (existing) return colById[existing.variableCollectionId];      // update in place
+    var best=null, bestN=0;                                           // most siblings of same layer + type
+    cols.forEach(function(c){
+      var n=0;
+      vars.forEach(function(v){ if (v.variableCollectionId===c.id && layerOf(v.name)===e.layer && v.resolvedType===e.figmaType) n++; });
+      if (n>bestN){ bestN=n; best=c; }
+    });
+    if (best) return best;
+    var name = fallbackName(e.layer, e.tokenType, e.variable);        // standard fallback
+    if (colsByName[name]) return colsByName[name];
+    var nc = figma.variables.createVariableCollection(name);
+    colsByName[name]=nc; colById[nc.id]=nc; cols.push(nc); createdCollections.push(name);
+    return nc;
+  }
+
   for (var i = 0; i < PLAN.entries.length; i++){
     var e = PLAN.entries[i];
     try {
-      var target = e.aliasTarget ? byNorm[norm(e.aliasTarget)] : null;
-      var v = byNorm[norm(e.variable)];
+      var col = pickCollection(e);
+      var modeId = modeIdFor(col);
+      var target = e.aliasTarget ? globalByNorm[norm(e.aliasTarget)] : null;
+      var v = globalByNorm[norm(e.variable)];
+      if (v && v.variableCollectionId !== col.id) v = null;           // don't reuse a var from another collection
       if (!v){
-        // New variable: match an alias target's type so the alias binds cleanly;
-        // otherwise use the planned scalar type.
         var newType = (target && target.resolvedType) ? target.resolvedType : e.figmaType;
         v = figma.variables.createVariable(e.variable, col, newType);
-        byNorm[norm(e.variable)] = v; created++;
+        globalByNorm[norm(e.variable)] = v; vars.push(v); created++;
       } else { updated++; }
-      // Alias only when the target's type matches; else fall back to a concrete value.
+      // Alias (possibly cross-collection) when the target's type matches; else concrete.
       if (target && target.resolvedType === v.resolvedType){
         v.setValueForMode(modeId, figma.variables.createVariableAlias(target));
       } else {
@@ -736,7 +769,7 @@ export function buildPushScript(plan: PushPlan): string {
       errors.push({ variable: e.variable, error: String((err && err.message) || err) });
     }
   }
-  return { error: null, created: created, updated: updated, createdCollection: createdCollection, failed: errors.length, errors: errors.slice(0, 5) };
+  return { error: null, created: created, updated: updated, createdCollection: createdCollections.length>0, createdCollections: createdCollections, failed: errors.length, errors: errors.slice(0, 5) };
 })();`;
 }
 

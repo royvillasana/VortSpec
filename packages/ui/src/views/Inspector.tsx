@@ -52,23 +52,26 @@ function pushPrompt(plan: PushPlan): string {
   const creates = plan.entries.filter((e) => e.op === "create");
   const updates = plan.entries.filter((e) => e.op === "update");
   const modeLine = plan.mode
-    ? ` Write values into the "${plan.mode}" mode of the collection (leave other modes untouched).`
+    ? ` Write values into the "${plan.mode}" mode (leave other modes untouched).`
     : "";
   return [
-    `Apply this pre-approved token push to the Figma Variables collection "${plan.collection}".${modeLine}`,
+    `Apply this pre-approved token push to the Figma Variables, following the file's layered token architecture.${modeLine}`,
     "",
-    `1. Ensure a variable collection named exactly "${plan.collection}" exists. If it does NOT exist, CREATE`,
-    "   it (figma_create_variable_collection) — do not ask the user to make it.",
-    "2. Create the following NEW variables (figma_batch_create_variables), each in that collection. Keep the",
-    "   FULL slash path in the name so Figma folders it (e.g. `color/primary`, not `color-primary`). Use the",
-    "   given type; for entries with an `aliasTarget`, bind the variable as an ALIAS to that existing variable",
+    "Routing — place each variable by its `layer`, beside where its siblings already live:",
+    "  • `primitive` → the Primitive color/number collection (raw values).",
+    "  • `semantic`  → the Semantic collection; when an entry has an `aliasTarget`, bind it as an ALIAS",
+    "     to that variable EVEN IF the target lives in another collection (cross-collection aliases are fine).",
+    "  • `component` → a Component collection; alias to the semantic it references.",
+    "  If no matching collection exists yet, create one named `<Layer> / <Family>` (e.g. `Semantic / Color`).",
+    "  Never MOVE an existing variable — update it in place in whatever collection already holds it.",
+    "1. Create the following NEW variables (figma_batch_create_variables). Keep the FULL slash path in the",
+    "   name so Figma folders it (e.g. `primitive/red/500`). For entries with an `aliasTarget`, bind an alias",
     plan.mode ? `   in the "${plan.mode}" mode instead of a raw value:` : "   instead of a raw value:",
     `   ${JSON.stringify(creates)}`,
-    "3. Update the following EXISTING variables to the given value/alias (figma_batch_update_variables)" +
+    "2. Update these EXISTING variables to the given value/alias (figma_batch_update_variables)" +
       (plan.mode ? ` in the "${plan.mode}" mode:` : ":"),
     `   ${JSON.stringify(updates)}`,
-    `4. Write ONLY to the "${plan.collection}" collection. Do not delete variables, touch other collections,`,
-    "   styles, layers, or any local file. Report how many variables you created and updated.",
+    "3. Do not delete variables, restyle layers, or touch any local file. Report how many you created and updated.",
   ].join("\n");
 }
 
@@ -941,19 +944,22 @@ export function Inspector({
             <div className="flex items-center justify-between">
               <span className="text-sm font-semibold text-vs-text-primary">Send to Figma</span>
               <span className="font-mono text-[11px] text-vs-text-muted">
-                {cliConnected ? "figma-cli" : "Claude Code · Figma MCP"} · collection “{pushPlan.collection}”
+                {cliConnected ? "figma-cli" : "Claude Code · Figma MCP"}
+                {pushPlan.mode ? ` · ${pushPlan.mode} mode` : ""}
               </span>
             </div>
             <p className="text-[11px] text-vs-text-muted">
               {pushPlan.entries.filter((e) => e.op === "create").length} to create ·{" "}
-              {pushPlan.entries.filter((e) => e.op === "update").length} to update. Nothing is written to
-              Figma until you confirm.
+              {pushPlan.entries.filter((e) => e.op === "update").length} to update. Each variable is routed
+              to the collection its siblings live in (primitive · semantic · component); semantics alias
+              their primitives. Nothing is written until you confirm.
             </p>
             <div className="min-h-0 flex-1 overflow-y-auto rounded-md border border-vs-border-default">
               <table className="w-full text-left font-mono text-[11px]">
                 <thead className="sticky top-0 bg-vs-bg-elevated text-vs-text-muted">
                   <tr>
                     <th className="px-2 py-1.5 font-normal">Op</th>
+                    <th className="px-2 py-1.5 font-normal">Layer</th>
                     <th className="px-2 py-1.5 font-normal">Variable</th>
                     <th className="px-2 py-1.5 font-normal">New value</th>
                     <th className="px-2 py-1.5 font-normal">Current in Figma</th>
@@ -967,6 +973,7 @@ export function Inspector({
                           {e.op}
                         </span>
                       </td>
+                      <td className="px-2 py-1.5 text-vs-text-muted">{e.layer}</td>
                       <td className="px-2 py-1.5 text-vs-text-primary">{e.variable}</td>
                       <td className="px-2 py-1.5 text-vs-text-secondary">
                         {e.aliasTarget ? `→ alias ${e.aliasTarget}` : e.value}
