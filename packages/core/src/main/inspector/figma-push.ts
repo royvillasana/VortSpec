@@ -23,6 +23,21 @@ import { normName, normValue, variableValueInMode } from "./figma-reconcile";
  */
 export const VORTSPEC_COLLECTION = "VortSpec";
 
+/**
+ * The token-architecture layer a variable belongs to, inferred from its name
+ * (change: figma-native-token-model). `primitive/*` is the raw palette,
+ * `component/*` is component-scoped, everything else is a semantic role. Drives
+ * adaptive collection routing so a push lands each variable beside its siblings
+ * (primitives with primitives, semantics aliasing primitives) instead of dumping
+ * everything into one flat collection. Handles both `/` and `-` separators.
+ */
+export function pushLayerOf(name: string): "primitive" | "semantic" | "component" {
+  const n = name.replace(/^--/, "");
+  if (/^primitive[-/]/i.test(n)) return "primitive";
+  if (/^component[-/]/i.test(n)) return "component";
+  return "semantic";
+}
+
 /** Leading numeric magnitude of a dimension value (`16px` → 16, `1.5rem` → 1.5). null when not numeric. */
 function numericValue(value: string): number | null {
   const m = value.trim().match(/^-?\d*\.?\d+/);
@@ -178,6 +193,7 @@ export function computePushPlan(
         ...(figmaValue !== undefined ? { currentFigmaValue: figmaValue } : {}),
         tokenName: token.name,
         tokenType: token.type,
+        layer: pushLayerOf(e.variable),
       });
     }
   }

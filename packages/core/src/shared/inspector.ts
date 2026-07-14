@@ -164,6 +164,13 @@ export const pushPlanEntrySchema = z.object({
   tokenName: z.string(),
   /** The source token's classified type (color/typography/…). */
   tokenType: tokenTypeSchema,
+  /**
+   * Token architecture layer, inferred from the name (change:
+   * figma-native-token-model). Drives adaptive collection routing on push:
+   * `primitive/*` land beside other primitives, `component/*` in a component
+   * collection, everything else in the semantic collection.
+   */
+  layer: z.enum(["primitive", "semantic", "component"]).default("semantic"),
 });
 export type PushPlanEntry = z.infer<typeof pushPlanEntrySchema>;
 

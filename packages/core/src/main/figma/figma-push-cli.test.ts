@@ -5,23 +5,34 @@ import type { PushPlan } from "@vortspec/core/inspector";
 const plan: PushPlan = {
   collection: "VortSpec",
   entries: [
-    { variable: "color-primary", op: "update", figmaType: "COLOR", value: "#7C6FF0", tokenName: "color-primary", tokenType: "color" },
-    { variable: "button-bg", op: "create", figmaType: "COLOR", aliasTarget: "color-primary", tokenName: "button-bg", tokenType: "color" },
+    { variable: "primitive/red/500", op: "create", figmaType: "COLOR", value: "#DC3545", tokenName: "primitive-red-500", tokenType: "color", layer: "primitive" },
+    { variable: "destructive", op: "create", figmaType: "COLOR", aliasTarget: "primitive-red-500", tokenName: "destructive", tokenType: "color", layer: "semantic" },
   ],
 };
 
 describe("buildPushScript", () => {
-  it("embeds the plan, targets VortSpec's collection, and auto-creates it when absent", () => {
+  it("embeds the plan and coerces to the variable's actual resolved type", () => {
     const script = buildPushScript(plan);
-    expect(script).toContain('"collection":"VortSpec"');
     expect(script).toContain("getLocalVariableCollectionsAsync");
     expect(script).toContain("createVariableAlias");
-    // Auto-create the collection instead of erroring when it's missing.
-    expect(script).toContain("createVariableCollection");
     expect(script).not.toContain("collection-missing");
-    // Coerce to the variable's actual resolved type + per-entry try/catch (no fatal mismatch).
     expect(script).toContain("v.resolvedType");
     expect(script).toContain("errors.push");
+  });
+
+  it("routes adaptively by layer and resolves aliases across all collections", () => {
+    const script = buildPushScript(plan);
+    // Layer inference + sibling-based collection selection + standard fallback.
+    expect(script).toContain("layerOf");
+    expect(script).toContain("pickCollection");
+    expect(script).toContain("fallbackName");
+    expect(script).toContain("createVariableCollection");
+    // A GLOBAL index (not one scoped to a single collection) so a semantic can
+    // alias a primitive in another collection.
+    expect(script).toContain("globalByNorm");
+    // The plan's layer travels into the embedded script.
+    expect(script).toContain('"layer":"primitive"');
+    expect(script).toContain('"layer":"semantic"');
   });
 });
 

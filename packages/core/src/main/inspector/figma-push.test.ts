@@ -3,6 +3,7 @@ import {
   computePushPlan,
   decomposeShadow,
   figmaTypeFor,
+  pushLayerOf,
   VORTSPEC_COLLECTION,
 } from "./figma-push";
 import type { FigmaVariable, InspectorToken } from "@vortspec/core/inspector";
@@ -114,6 +115,29 @@ describe("computePushPlan", () => {
   it("defaults to VortSpec's own collection", () => {
     expect(computePushPlan([], []).collection).toBe(VORTSPEC_COLLECTION);
     expect(VORTSPEC_COLLECTION).toBe("VortSpec");
+  });
+
+  it("tags each entry with its architecture layer (for adaptive routing)", () => {
+    const tokens = [
+      tok("primitive-red-500", "#DC3545", "color"),
+      tok("color-primary", "#7C6FF0", "color"),
+      tok("component-button-bg", "#000000", "color"),
+    ];
+    const byToken = Object.fromEntries(computePushPlan(tokens, []).entries.map((e) => [e.tokenName, e.layer]));
+    expect(byToken["primitive-red-500"]).toBe("primitive");
+    expect(byToken["color-primary"]).toBe("semantic");
+    expect(byToken["component-button-bg"]).toBe("component");
+  });
+});
+
+describe("pushLayerOf", () => {
+  it("classifies by name prefix across both separators", () => {
+    expect(pushLayerOf("primitive/red/500")).toBe("primitive");
+    expect(pushLayerOf("--primitive-red-500")).toBe("primitive");
+    expect(pushLayerOf("component/button/bg")).toBe("component");
+    expect(pushLayerOf("component-button-bg")).toBe("component");
+    expect(pushLayerOf("primary")).toBe("semantic");
+    expect(pushLayerOf("color/status/danger")).toBe("semantic");
   });
 
   it("names the pushed variable with its Figma group path (folders preserved)", () => {
