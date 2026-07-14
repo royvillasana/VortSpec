@@ -37,6 +37,12 @@ describe("normValue", () => {
   it("collapses whitespace for multi-part values", () => {
     expect(normValue("0 1px  2px   rgba(0,0,0,0.05)")).toBe("0 1px 2px rgba(0,0,0,0.05)");
   });
+  it("normalizes dimension units so px/rem/unitless match (Figma FLOATs are unitless)", () => {
+    expect(normValue("18px")).toBe("18");
+    expect(normValue("18")).toBe("18");
+    expect(normValue("1.5rem")).toBe("1.5");
+    expect(normValue("0")).toBe(normValue("0px"));
+  });
 });
 
 describe("reconcile", () => {

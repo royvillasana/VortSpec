@@ -48,8 +48,13 @@ export function normValue(value: string): string {
     let h = hex[1];
     if (h.length === 3 || h.length === 4) h = h.split("").map((c) => c + c).join("");
     if (h.length === 8 && h.endsWith("ff")) h = h.slice(0, 6); // opaque alpha is noise
-    s = `#${h}`;
+    return `#${h}`;
   }
+  // Dimensions: Figma stores FLOATs unitless (18), code carries a unit (18px). Compare
+  // the number so `18px`/`18rem`/`18` all match — otherwise every dimension token reads
+  // as an orphan against its Figma variable (change: token-fidelity-sanitation).
+  const dim = s.match(/^(-?\d*\.?\d+)(px|rem|em|%|pt|vh|vw)?$/);
+  if (dim) return String(Number(dim[1]));
   return s;
 }
 
