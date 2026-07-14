@@ -77,12 +77,21 @@ describe("findDuplicates", () => {
     expect(groups).toEqual([]);
   });
 
-  it("flags two semantics sharing a value", () => {
+  it("does not flag a token that is already an alias (var()) as a duplicate", () => {
+    const aliased: InspectorToken = {
+      ...tok("color-surface-control", "#007AC3"),
+      rawValue: "var(--color-excellus-blue-500)",
+    };
+    const groups = findDuplicates(result([tok("color-excellus-blue-500", "#007AC3"), aliased]));
+    expect(groups).toEqual([]); // the semantic is properly aliased — nothing to collapse
+  });
+
+  it("does NOT flag two distinct semantic roles sharing a value (not a duplicate)", () => {
+    // Two legitimate roles that happen to share a value are not collapsible.
     const groups = findDuplicates(
       result([tok("color-surface-default", "#221F1F"), tok("color-text-body", "#221F1F")]),
     );
-    expect(groups).toHaveLength(1);
-    expect(groups[0].kind).toBe("semantic-semantic");
+    expect(groups).toEqual([]);
   });
 });
 

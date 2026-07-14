@@ -55,6 +55,9 @@ export function findDuplicates(result: InspectorTokensResult): DuplicateGroup[] 
   const byValue = new Map<string, string[]>();
   for (const t of result.tokens) {
     if (!t.resolvedValue) continue;
+    // A token that already references another (`var(--x)`) is not a flattened
+    // duplicate — it's the desired state. Only raw-valued tokens can collapse.
+    if (t.rawValue.trim().startsWith("var(")) continue;
     const v = normValue(t.resolvedValue);
     const arr = byValue.get(v) ?? [];
     if (!arr.some((n) => n === t.name)) arr.push(t.name);
@@ -69,10 +72,10 @@ export function findDuplicates(result: InspectorTokensResult): DuplicateGroup[] 
       // Only the semantics collapse — onto a primitive canonical. Never suggest
       // re-aliasing one brand primitive to another (that would break a brand).
       groups.push({ value, canonical: primitives[0], tokens: semantics, kind: "semantic-primitive" });
-    } else if (semantics.length >= 2) {
-      groups.push({ value, canonical: semantics[0], tokens: semantics.slice(1), kind: "semantic-semantic" });
     }
-    // else: all-primitive (cross-brand) or single-tier → not a duplicate to collapse.
+    // Two semantics sharing a value (e.g. font-family-buttons == font-family-headings)
+    // are distinct roles, NOT a duplicate to eliminate — left alone. All-primitive
+    // (cross-brand) collisions are legitimate per-brand rungs — also left alone.
   }
   return groups;
 }
