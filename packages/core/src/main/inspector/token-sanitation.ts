@@ -66,9 +66,11 @@ export function findDuplicates(result: InspectorTokensResult): DuplicateGroup[] 
     const semantics = names.filter((n) => looksSemantic(n) && !looksPrimitive(n));
     const primitives = names.filter((n) => looksPrimitive(n) && !looksSemantic(n));
     if (semantics.length >= 1 && primitives.length >= 1) {
-      groups.push({ value, tokens: [...primitives, ...semantics], kind: "semantic-primitive" });
+      // Only the semantics collapse — onto a primitive canonical. Never suggest
+      // re-aliasing one brand primitive to another (that would break a brand).
+      groups.push({ value, canonical: primitives[0], tokens: semantics, kind: "semantic-primitive" });
     } else if (semantics.length >= 2) {
-      groups.push({ value, tokens: semantics, kind: "semantic-semantic" });
+      groups.push({ value, canonical: semantics[0], tokens: semantics.slice(1), kind: "semantic-semantic" });
     }
     // else: all-primitive (cross-brand) or single-tier → not a duplicate to collapse.
   }

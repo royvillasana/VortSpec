@@ -46,8 +46,24 @@ describe("findDuplicates", () => {
       result([tok("color-excellus-blue-500", "#007AC3"), tok("color-surface-surface-control", "#007AC3")]),
     );
     expect(groups).toHaveLength(1);
-    expect(groups[0]).toMatchObject({ value: "#007ac3", kind: "semantic-primitive" });
-    expect(groups[0].tokens).toContain("color-surface-surface-control");
+    expect(groups[0]).toMatchObject({ value: "#007ac3", kind: "semantic-primitive", canonical: "color-excellus-blue-500" });
+    // Only the semantic collapses — never a sibling primitive.
+    expect(groups[0].tokens).toEqual(["color-surface-surface-control"]);
+  });
+
+  it("never suggests collapsing one brand primitive onto another", () => {
+    // 3 brand primitives share a value AND a semantic does too → only the semantic collapses.
+    const groups = findDuplicates(
+      result([
+        tok("color-excellus-blue-500", "#007AC3"),
+        tok("color-univera-blue-500", "#007AC3"),
+        tok("color-cdphp-blue-500", "#007AC3"),
+        tok("color-surface-control", "#007AC3"),
+      ]),
+    );
+    expect(groups).toHaveLength(1);
+    expect(groups[0].tokens).toEqual(["color-surface-control"]); // no brand primitive here
+    expect(groups[0].canonical).toBe("color-excellus-blue-500");
   });
 
   it("does NOT flag cross-brand primitives that share a value", () => {

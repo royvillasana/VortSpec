@@ -732,27 +732,26 @@ export function Inspector({
                         Same value under different names — collapse the look-alike to alias the canonical token:
                       </span>
                       <ul className="flex flex-col gap-1">
-                        {sanitation.duplicates.slice(0, 6).map((d) => {
-                          const [canonical, ...rest] = d.tokens;
-                          const dup = rest[0];
-                          return (
-                            <li key={d.value + d.tokens.join()} className="flex items-center gap-2 font-mono text-vs-text-muted">
-                              <span className="inline-block h-2.5 w-2.5 rounded-sm border border-vs-border-strong" style={{ background: d.value }} />
+                        {sanitation.duplicates
+                          .flatMap((d) => d.tokens.map((dup) => ({ dup, canonical: d.canonical, value: d.value })))
+                          .slice(0, 8)
+                          .map(({ dup, canonical, value }) => (
+                            <li key={dup} className="flex items-center gap-2 font-mono text-vs-text-muted">
+                              <span className="inline-block h-2.5 w-2.5 rounded-sm border border-vs-border-strong" style={{ background: value }} />
                               <span className="text-vs-text-secondary">--{dup}</span>
-                              <span>= --{canonical}</span>
-                              {dup && canonical && (
-                                <button
-                                  onClick={() => void collapseDuplicate(dup, canonical)}
-                                  className="ml-1 rounded-full border border-vs-border-strong px-2 py-0.5 text-[10px] text-vs-text-secondary hover:border-vs-accent hover:text-vs-text-primary"
-                                >
-                                  → alias
-                                </button>
-                              )}
+                              <span>→ var(--{canonical})</span>
+                              <button
+                                onClick={() => void collapseDuplicate(dup, canonical)}
+                                className="ml-1 rounded-full border border-vs-border-strong px-2 py-0.5 text-[10px] text-vs-text-secondary hover:border-vs-accent hover:text-vs-text-primary"
+                              >
+                                → alias
+                              </button>
                             </li>
-                          );
-                        })}
-                        {sanitation.duplicates.length > 6 && (
-                          <li className="text-vs-text-muted">+{sanitation.duplicates.length - 6} more</li>
+                          ))}
+                        {sanitation.duplicates.flatMap((d) => d.tokens).length > 8 && (
+                          <li className="text-vs-text-muted">
+                            +{sanitation.duplicates.flatMap((d) => d.tokens).length - 8} more
+                          </li>
                         )}
                       </ul>
                     </div>

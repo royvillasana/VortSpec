@@ -238,7 +238,9 @@ export type OrphanToken = z.infer<typeof orphanTokenSchema>;
 export const duplicateGroupSchema = z.object({
   /** The shared resolved value. */
   value: z.string(),
-  /** The differently-named tokens holding it. */
+  /** The canonical token the others should alias (a primitive for semantic-primitive). */
+  canonical: z.string(),
+  /** The look-alike tokens to collapse onto `canonical` (semantics only — never a sibling primitive). */
   tokens: z.array(z.string()),
   /** semantic-primitive = a flattened alias (semantic duplicating a primitive); semantic-semantic = two roles. */
   kind: z.enum(["semantic-primitive", "semantic-semantic"]),
