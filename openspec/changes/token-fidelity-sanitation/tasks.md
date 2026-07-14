@@ -28,22 +28,22 @@
 ## 5. Push-back + collapse
 
 - [ ] 5.1 Orphan push: build a plan via `computePushPlan` (layered routing/aliasing) for the confirmed orphan set; gated.
-- [ ] 5.2 Collapse action: re-alias a duplicate/ flattened semantic to its canonical token in the token file, gated + previewed.
-- [ ] 5.3 IPC + preload + api wiring for: resolve, orphan/duplicate report, write link, push orphans, collapse.
+- [x] 5.2 Collapse action: re-alias a duplicate/ flattened semantic to its canonical token in the token file, gated + previewed.
+- [x] 5.3 IPC + preload + api wiring for: resolve, orphan/duplicate report, write link, push orphans, collapse.
 - [ ] 5.4 Unit-test push-plan for orphans + gated collapse rewrite.
 
 ## 6. UI (Inspector)
 
 - [ ] 6.1 Show the match signal on tokens (name/value/link/alias) and a link-confirm affordance for ambiguous/suggested matches.
-- [ ] 6.2 Duplicates section: value-equal tokens grouped, with a gated "collapse to canonical" action.
-- [ ] 6.3 Orphans prompt: batched list with where-used and a single "Add to Figma" (push-back) action; dismiss leaves Figma untouched.
-- [ ] 6.4 Dedup-on-create feedback: when creation is refused, show which existing token was reused.
+- [x] 6.2 Duplicates section: value-equal tokens grouped, with a gated "collapse to canonical" action.
+- [x] 6.3 Orphans prompt: batched list with where-used and a single "Add to Figma" (push-back) action; dismiss leaves Figma untouched.
+- [x] 6.4 Dedup-on-create feedback: when creation is refused, show which existing token was reused.
 
 ## 7. Component-token binding
 
 - [ ] 7.1 At component generation, resolve each Figma-bound variable → project token via the resolver; emit `var(--match)`.
 - [ ] 7.2 On `none`, surface (dedup-checked create or orphan flag) — never hardcode a hex or emit a raw Figma name / broken ref.
-- [ ] 7.3 Validate on the Excellus Accordion: 11/11 bindings resolve to real project tokens (4 name + 7 value), zero hardcoded values.
+- [x] 7.3 Validate on the Excellus Accordion: 11/11 bindings resolve to real project tokens (4 name + 7 value), zero hardcoded values.
 
 ## 8. Docs + verification
 

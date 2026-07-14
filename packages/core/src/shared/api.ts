@@ -159,8 +159,27 @@ export interface VortSpecApi {
     projectPath: string,
     map: Record<string, string>,
   ): Promise<IpcResponse<"inspector:setTokenModeMap">>;
-  /** Create a new design token (name + value) in the project token file, marked hand-edited. */
-  createToken(projectPath: string, name: string, value: string): Promise<IpcResponse<"inspector:createToken">>;
+  /** Create a new design token (name + value); refuses a name/value that already exists in Figma unless allowDuplicate. */
+  createToken(
+    projectPath: string,
+    name: string,
+    value: string,
+    allowDuplicate?: boolean,
+  ): Promise<IpcResponse<"inspector:createToken">>;
+  /** Sanitation report: code-only tokens (orphans, with where-used) + value duplicates. */
+  getSanitation(projectPath: string): Promise<IpcResponse<"inspector:getSanitation">>;
+  /** Re-point a duplicate/flattened token to alias a canonical one (`var(--canonical)`), gated. */
+  collapseToken(
+    projectPath: string,
+    tokenName: string,
+    canonicalName: string,
+  ): Promise<IpcResponse<"inspector:collapseToken">>;
+  /** Persist a code-token → Figma-variable link so the match survives future renames. */
+  linkToken(
+    projectPath: string,
+    codeToken: string,
+    figmaPath: string,
+  ): Promise<IpcResponse<"inspector:linkToken">>;
   getVerification(projectPath: string): Promise<IpcResponse<"inspector:getVerification">>;
   snapshotComponent(projectPath: string, file: string): Promise<IpcResponse<"inspector:snapshotComponent">>;
   snapshotTokenScope(projectPath: string): Promise<IpcResponse<"inspector:snapshotTokenScope">>;

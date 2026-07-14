@@ -236,8 +236,13 @@ const api: VortSpecApi = {
     invoke("inspector:setTokenValue", { projectPath, name, value, context }),
   setTokenModeMap: (projectPath: string, map: Record<string, string>) =>
     invoke("inspector:setTokenModeMap", { projectPath, map }),
-  createToken: (projectPath: string, name: string, value: string) =>
-    invoke("inspector:createToken", { projectPath, name, value }),
+  createToken: (projectPath: string, name: string, value: string, allowDuplicate?: boolean) =>
+    invoke("inspector:createToken", { projectPath, name, value, allowDuplicate }),
+  getSanitation: (projectPath: string) => invoke("inspector:getSanitation", projectPath),
+  collapseToken: (projectPath: string, tokenName: string, canonicalName: string) =>
+    invoke("inspector:collapseToken", { projectPath, tokenName, canonicalName }),
+  linkToken: (projectPath: string, codeToken: string, figmaPath: string) =>
+    invoke("inspector:linkToken", { projectPath, codeToken, figmaPath }),
   getVerification: (projectPath: string) => invoke("inspector:getVerification", projectPath),
   snapshotComponent: (projectPath: string, file: string) =>
     invoke("inspector:snapshotComponent", { projectPath, file }),

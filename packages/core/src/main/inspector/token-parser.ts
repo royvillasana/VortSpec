@@ -754,6 +754,36 @@ export async function createInspectorToken(
 }
 
 /**
+ * Sanitation collapse (change: token-fidelity-sanitation): rewrite a token's raw
+ * value to a `var(--canonical)` reference, reclaiming a flattened alias /
+ * duplicate. Only the value of the existing declaration changes; the token keeps
+ * its name and every usage. Gated — the UI previews this before calling. Returns
+ * the refreshed token set (a no-op when either token is missing).
+ */
+export async function collapseTokenToAlias(
+  projectPath: string,
+  tokenName: string,
+  canonicalName: string,
+): Promise<InspectorTokensResult> {
+  const name = tokenName.replace(/^--/, "");
+  const canonical = canonicalName.replace(/^--/, "");
+  const config = await readProjectConfig(projectPath);
+  const tokenFile = config?.tokenFile;
+  if (tokenFile && name !== canonical) {
+    const path = join(projectPath, tokenFile);
+    const css = await readFile(path, "utf8").catch(() => null);
+    if (css) {
+      const next = replaceDecl(css, name, `var(--${canonical})`);
+      if (next !== null) {
+        await writeFile(path, next, "utf8");
+        await markOverridden(projectPath, name);
+      }
+    }
+  }
+  return getInspectorTokens(projectPath);
+}
+
+/**
  * Capture the files a token rename/delete would touch — the token file plus every
  * component source under `component_dir` — before a gated Claude Code modify run,
  * so the change can be reverted verbatim if the user rejects it.

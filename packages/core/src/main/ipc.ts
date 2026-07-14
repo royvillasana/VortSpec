@@ -35,7 +35,10 @@ import {
   createInspectorToken,
   snapshotTokenScope,
   writeTokenModeMap,
+  collapseTokenToAlias,
 } from "./inspector/token-parser";
+import { getTokenSanitation } from "./inspector/token-sanitation";
+import { writeTokenLink } from "./inspector/token-resolver";
 import { computePushPlan, VORTSPEC_COLLECTION } from "./inspector/figma-push";
 import { readFigmaVariables } from "./inspector/figma-reconcile";
 import type { PushPlan } from "@vortspec/core/ipc";
@@ -369,8 +372,26 @@ const handlers: Record<IpcChannel, Handler> = {
   }) => setInspectorTokenValue(req.projectPath, req.name, req.value, req.context)) as Handler,
   "inspector:setTokenModeMap": ((req: { projectPath: string; map: Record<string, string> }) =>
     writeTokenModeMap(req.projectPath, req.map)) as Handler,
-  "inspector:createToken": ((req: { projectPath: string; name: string; value: string }) =>
-    createInspectorToken(req.projectPath, req.name, req.value)) as Handler,
+  "inspector:createToken": ((req: {
+    projectPath: string;
+    name: string;
+    value: string;
+    allowDuplicate?: boolean;
+  }) => createInspectorToken(req.projectPath, req.name, req.value, req.allowDuplicate)) as Handler,
+  "inspector:getSanitation": ((projectPath: string) => getTokenSanitation(projectPath)) as Handler,
+  "inspector:collapseToken": ((req: {
+    projectPath: string;
+    tokenName: string;
+    canonicalName: string;
+  }) => collapseTokenToAlias(req.projectPath, req.tokenName, req.canonicalName)) as Handler,
+  "inspector:linkToken": ((req: {
+    projectPath: string;
+    codeToken: string;
+    figmaPath: string;
+  }) =>
+    writeTokenLink(req.projectPath, req.codeToken, req.figmaPath).then(() =>
+      getInspectorTokens(req.projectPath),
+    )) as Handler,
   "inspector:getVerification": ((projectPath: string) => getVerification(projectPath)) as Handler,
   "inspector:snapshotComponent": ((req: { projectPath: string; file: string }) =>
     snapshotComponent(req.projectPath, req.file)) as Handler,

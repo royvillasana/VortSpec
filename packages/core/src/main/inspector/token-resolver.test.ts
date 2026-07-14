@@ -85,6 +85,49 @@ describe("resolveToken — ambiguity + misses", () => {
   });
 });
 
+describe("component-token binding — the Accordion (11/11)", () => {
+  // The Accordion's 11 bound Figma variables (name + value), from get_design_context.
+  const figmaBindings: ResolveCandidate[] = [
+    c("color/surface/surface-on-color", "#FFFFFF"),
+    c("color/borders/border-muted-01", "#D6D6D6"),
+    c("color/text/text-body", "#221F1F"),
+    c("color/container/container", "#FFFFFF"),
+    c("spacing/padding/10", "10px"),
+    c("spacing/padding/20", "20px"),
+    c("spacing/padding/30", "30px"),
+    c("typography/font-family/font-family-buttons", "Open Sans"),
+    c("typography/font-weight/semibold-(600)", "semibold"),
+    c("typography/line-height/md", "27px"),
+    c("typography/font-size/md", "18px"),
+  ];
+  // The project's actual tokens (the generator renamed 7 of them) — value recovers those.
+  const projectTokens: ResolveCandidate[] = [
+    c("--color-surface-surface-on-color", "#FFFFFF"),
+    c("--color-borders-border-muted-01", "#D6D6D6"),
+    c("--color-text-text-body", "#221F1F"),
+    c("--color-container-container", "#FFFFFF"),
+    c("--spacing-10", "10px"),
+    c("--spacing-20", "20px"),
+    c("--spacing-30", "30px"),
+    c("--font-family-buttons", "Open Sans"),
+    c("--font-weight-semibold", "semibold"),
+    c("--line-height-md", "27px"),
+    c("--font-size-md", "18px"),
+  ];
+
+  it("resolves every Figma binding to a real project token — 4 by name, 7 by value", () => {
+    const results = figmaBindings.map((b) => resolveToken(b, projectTokens));
+    expect(results.every((r) => r.match !== null)).toBe(true); // 11/11
+    const byName = results.filter((r) => r.signal === "name").length;
+    const byValue = results.filter((r) => r.signal === "value").length;
+    expect(byName).toBe(4);
+    expect(byValue).toBe(7);
+    // The component would bind var(--font-size-md) for Figma's typography/font-size/md.
+    const fontSize = resolveToken(c("typography/font-size/md", "18px"), projectTokens);
+    expect(fontSize.match?.name).toBe("--font-size-md");
+  });
+});
+
 describe("token link store", () => {
   let dir: string;
   beforeEach(async () => {
