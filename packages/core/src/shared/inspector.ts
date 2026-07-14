@@ -140,6 +140,24 @@ export const figmaVariableModelSchema = z.object({
 export type FigmaVariableModel = z.infer<typeof figmaVariableModelSchema>;
 
 /**
+ * Token resolver contracts (change: token-fidelity-sanitation). The resolver maps
+ * a code token or a Figma-variable binding to its counterpart across arbitrary
+ * naming, via layered signals tried in precedence order: link → name → value →
+ * alias. This is the engine behind reconcile, dedup-before-create, orphan
+ * detection, and component-token binding.
+ */
+export const matchSignalSchema = z.enum(["link", "name", "value", "alias", "none"]);
+export type MatchSignal = z.infer<typeof matchSignalSchema>;
+
+/**
+ * The persisted convention-free escape hatch (`.vortspec/token-links.json`):
+ * normalized code-token name → the Figma variable's slash path. Read first by the
+ * resolver so a user-confirmed match survives later renames on either side.
+ */
+export const tokenLinkMapSchema = z.record(z.string(), z.string());
+export type TokenLinkMap = z.infer<typeof tokenLinkMapSchema>;
+
+/**
  * Code→Figma push (change: add-code-to-figma-token-push, extended by
  * figma-native-token-model). A push plan is computed locally by diffing the code
  * token file against the Figma-variable cache; it is what the user previews and
