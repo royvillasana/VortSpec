@@ -8,6 +8,7 @@ import {
   normName,
   normValue,
 } from "./figma-reconcile";
+import { resolveToken, readTokenLinks, type ResolveCandidate } from "./token-resolver";
 import type {
   FigmaCollection,
   FigmaVariable,
@@ -439,6 +440,28 @@ export async function getInspectorTokens(
     : null;
   const modeNames = activeCollection?.modes.map((m) => m.name) ?? [];
   const defMode = defaultModeName(activeCollection);
+
+  // Layered token resolution (change: token-fidelity-sanitation): match code
+  // tokens to Figma variables by link → name → value → alias, so a token that
+  // exists under a different name (e.g. `--font-size-md` ↔ `typography/font-size/md`)
+  // still reconciles instead of showing as unmatched. Value equality uses the
+  // default mode's resolved value; ambiguous value matches don't auto-bind.
+  const links = await readTokenLinks(projectPath);
+  const figmaIndex: ResolveCandidate[] = [...figmaByNorm.values()].map((v) => ({
+    name: v.name,
+    value: variableValueInMode(v, defMode, defMode ?? undefined) ?? v.resolvedValue,
+    aliasOf: defMode ? v.valuesByMode?.[defMode]?.aliasOf : undefined,
+  }));
+  const resolveMatch = (t: (typeof parsed)[number]): { match?: FigmaVariable; signal: InspectorToken["matchSignal"] } => {
+    if (!model) return { signal: undefined };
+    const ref = t.rawValue.trim().match(/^var\(\s*--([\w-]+)/);
+    const res = resolveToken(
+      { name: t.name, value: t.resolvedValue, aliasOf: ref ? ref[1] : undefined },
+      figmaIndex,
+      { links },
+    );
+    return { match: res.match ? figmaByNorm.get(normName(res.match.name)) : undefined, signal: res.signal };
+  };
   const modeMap = {
     ...deriveModeMap(activeCollection, parse.contexts),
     ...(await readModeMapOverrides(projectPath)),
@@ -453,8 +476,10 @@ export async function getInspectorTokens(
         ? ("in-sync" as const)
         : ("drifted" as const);
 
+  const matchedFigma = new Set<string>(); // figma variables claimed by a code token (any signal)
   const tokens: InspectorToken[] = parsed.map((t) => {
-    const match = figmaByNorm.get(normName(t.name));
+    const { match, signal: matchSignal } = resolveMatch(t);
+    if (match) matchedFigma.add(normName(match.name));
     const source = edited.has(t.name) ? "hand-edited" : match ? "figma-variable" : "generated-code";
     const figmaPath = match ? match.name : undefined;
     const group = match ? figmaGroup(match.name) : undefined;
@@ -509,6 +534,7 @@ export async function getInspectorTokens(
       uses: usage[t.name]?.length ?? 0,
       figmaValue,
       drift,
+      matchSignal: match ? matchSignal : undefined,
       figmaPath,
       group,
       modes,
@@ -523,7 +549,8 @@ export async function getInspectorTokens(
       const k = normName(v.name);
       if (seenOnly.has(k)) continue;
       seenOnly.add(k);
-      if (!codeNorms.has(k)) figmaOnly.push(v);
+      // Excluded when a code token claimed it by ANY resolver signal (not just name).
+      if (!codeNorms.has(k) && !matchedFigma.has(k)) figmaOnly.push(v);
     }
   }
 
@@ -685,6 +712,7 @@ export async function createInspectorToken(
   projectPath: string,
   name: string,
   value: string,
+  allowDuplicate = false,
 ): Promise<InspectorTokensResult> {
   const clean = name.trim().replace(/^--/, "");
   if (!/^[a-zA-Z][\w-]*$/.test(clean)) {
@@ -697,10 +725,61 @@ export async function createInspectorToken(
   const path = join(projectPath, tokenFile);
   const css = await readFile(path, "utf8").catch(() => null);
   if (css === null) throw new Error(`Couldn't read the token file at ${tokenFile}.`);
+
+  // Dedup-before-create (change: token-fidelity-sanitation): refuse to mint a
+  // token whose name or value already exists in Figma — reuse it instead. The
+  // user can override with `allowDuplicate` after seeing what it collides with.
+  if (!allowDuplicate) {
+    const model = await readFigmaVariableModel(projectPath);
+    if (model) {
+      const links = await readTokenLinks(projectPath);
+      const idx = model.variables.map((v) => ({ name: v.name, value: v.resolvedValue }));
+      const res = resolveToken({ name: clean, value: value.trim() }, idx, { links });
+      const existing = res.match ? [res.match.name] : (res.suggestions ?? []).map((s) => s.name);
+      if (existing.length > 0) {
+        throw new Error(
+          `That ${res.match?.name === clean ? "name" : "value"} already exists in Figma as ${existing
+            .slice(0, 3)
+            .join(", ")}${existing.length > 3 ? ", …" : ""}. Reuse it instead of creating a duplicate — name your token to match it, or link it.`,
+        );
+      }
+    }
+  }
+
   const next = insertTokenDeclaration(css, clean, value);
   if (next === null) throw new Error(`A token named --${clean} already exists.`);
   await writeFile(path, next, "utf8");
   await markOverridden(projectPath, clean);
+  return getInspectorTokens(projectPath);
+}
+
+/**
+ * Sanitation collapse (change: token-fidelity-sanitation): rewrite a token's raw
+ * value to a `var(--canonical)` reference, reclaiming a flattened alias /
+ * duplicate. Only the value of the existing declaration changes; the token keeps
+ * its name and every usage. Gated — the UI previews this before calling. Returns
+ * the refreshed token set (a no-op when either token is missing).
+ */
+export async function collapseTokenToAlias(
+  projectPath: string,
+  tokenName: string,
+  canonicalName: string,
+): Promise<InspectorTokensResult> {
+  const name = tokenName.replace(/^--/, "");
+  const canonical = canonicalName.replace(/^--/, "");
+  const config = await readProjectConfig(projectPath);
+  const tokenFile = config?.tokenFile;
+  if (tokenFile && name !== canonical) {
+    const path = join(projectPath, tokenFile);
+    const css = await readFile(path, "utf8").catch(() => null);
+    if (css) {
+      const next = replaceDecl(css, name, `var(--${canonical})`);
+      if (next !== null) {
+        await writeFile(path, next, "utf8");
+        await markOverridden(projectPath, name);
+      }
+    }
+  }
   return getInspectorTokens(projectPath);
 }
 

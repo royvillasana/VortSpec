@@ -8,6 +8,7 @@ import type {
   InspectorToken,
   Project,
   PushPlan,
+  TokenSanitation,
   TokenSource,
   TokenType,
   TokenUsage,
@@ -244,6 +245,11 @@ export function Inspector({
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [modeMapOpen, setModeMapOpen] = useState(false);
 
+  // Token sanitation (change: token-fidelity-sanitation): code-only orphans +
+  // value duplicates, surfaced so the user can push orphans back / collapse dupes.
+  const [sanitation, setSanitation] = useState<TokenSanitation | null>(null);
+  const [sanOpen, setSanOpen] = useState(false);
+
   async function reloadTokens(preferredCollection?: string): Promise<void> {
     const r = await api.inspectorTokens(project.path, preferredCollection);
     setTokens(r.tokens);
@@ -255,6 +261,14 @@ export function Inspector({
     setModeMap(r.modeMap);
     setPickedCollection(r.activeCollection);
     setActiveMode(r.activeMode);
+    void api.getSanitation(project.path).then(setSanitation).catch(() => undefined);
+  }
+
+  async function collapseDuplicate(tokenName: string, canonicalName: string): Promise<void> {
+    const r = await api.collapseToken(project.path, tokenName, canonicalName);
+    setTokens(r.tokens);
+    await reloadTokens();
+    flash(`Collapsed --${tokenName} → var(--${canonicalName})`);
   }
 
   useEffect(() => {
@@ -653,6 +667,96 @@ export function Inspector({
                     {figmaOnly.length > 4 ? ` +${figmaOnly.length - 4}` : ""}
                   </span>
                 </span>
+              )}
+            </div>
+          )}
+
+          {/* Token sanitation — orphans (code-only) + duplicates (value look-alikes) */}
+          {sanitation && (sanitation.orphans.length > 0 || sanitation.duplicates.length > 0) && (
+            <div className="rounded-md border border-vs-border-default bg-vs-bg-surface text-[11px]">
+              <button
+                onClick={() => setSanOpen((v) => !v)}
+                className="flex w-full items-center gap-3 px-3 py-2 text-left"
+              >
+                <span className="font-semibold uppercase tracking-wide text-vs-text-muted">Sanitation</span>
+                {sanitation.orphans.length > 0 && (
+                  <span className="flex items-center gap-1.5 text-vs-text-secondary">
+                    <span className="inline-block h-1.5 w-1.5 rounded-full bg-vs-warning" />
+                    {sanitation.orphans.length} not in Figma
+                  </span>
+                )}
+                {sanitation.duplicates.length > 0 && (
+                  <span className="flex items-center gap-1.5 text-vs-text-secondary">
+                    <span className="inline-block h-1.5 w-1.5 rounded-full bg-vs-accent" />
+                    {sanitation.duplicates.length} duplicate value{sanitation.duplicates.length === 1 ? "" : "s"}
+                  </span>
+                )}
+                <span className="ml-auto text-vs-text-muted">{sanOpen ? "▾" : "▸"}</span>
+              </button>
+              {sanOpen && (
+                <div className="flex flex-col gap-3 border-t border-vs-border-default px-3 py-2.5">
+                  {sanitation.orphans.length > 0 && (
+                    <div className="flex flex-col gap-1.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-vs-text-secondary">
+                          Used in components but not in Figma — add them back so they stay in sync:
+                        </span>
+                        <button
+                          onClick={() => void startPush()}
+                          disabled={!figmaConnected || pushing}
+                          className="rounded-full border border-vs-accent bg-vs-bg-elevated px-2.5 py-1 text-[10px] font-medium text-vs-accent hover:brightness-110 disabled:opacity-40"
+                        >
+                          Add {sanitation.orphans.length} to Figma
+                        </button>
+                      </div>
+                      <ul className="flex flex-col gap-0.5">
+                        {sanitation.orphans.slice(0, 8).map((o) => (
+                          <li key={o.name} className="flex items-center gap-2 font-mono text-vs-text-muted">
+                            <span className="inline-block h-2.5 w-2.5 rounded-sm border border-vs-border-strong" style={{ background: o.value }} />
+                            <span className="text-vs-text-secondary">--{o.name}</span>
+                            <span>{o.value}</span>
+                            {o.uses.length > 0 && (
+                              <span className="text-vs-text-muted">· {o.uses.map((u) => u.component).slice(0, 3).join(", ")}{o.uses.length > 3 ? "…" : ""}</span>
+                            )}
+                          </li>
+                        ))}
+                        {sanitation.orphans.length > 8 && (
+                          <li className="text-vs-text-muted">+{sanitation.orphans.length - 8} more</li>
+                        )}
+                      </ul>
+                    </div>
+                  )}
+                  {sanitation.duplicates.length > 0 && (
+                    <div className="flex flex-col gap-1.5 border-t border-vs-border-default pt-2.5">
+                      <span className="text-vs-text-secondary">
+                        Same value under different names — collapse the look-alike to alias the canonical token:
+                      </span>
+                      <ul className="flex flex-col gap-1">
+                        {sanitation.duplicates
+                          .flatMap((d) => d.tokens.map((dup) => ({ dup, canonical: d.canonical, value: d.value })))
+                          .slice(0, 8)
+                          .map(({ dup, canonical, value }) => (
+                            <li key={dup} className="flex items-center gap-2 font-mono text-vs-text-muted">
+                              <span className="inline-block h-2.5 w-2.5 rounded-sm border border-vs-border-strong" style={{ background: value }} />
+                              <span className="text-vs-text-secondary">--{dup}</span>
+                              <span>→ var(--{canonical})</span>
+                              <button
+                                onClick={() => void collapseDuplicate(dup, canonical)}
+                                className="ml-1 rounded-full border border-vs-border-strong px-2 py-0.5 text-[10px] text-vs-text-secondary hover:border-vs-accent hover:text-vs-text-primary"
+                              >
+                                → alias
+                              </button>
+                            </li>
+                          ))}
+                        {sanitation.duplicates.flatMap((d) => d.tokens).length > 8 && (
+                          <li className="text-vs-text-muted">
+                            +{sanitation.duplicates.flatMap((d) => d.tokens).length - 8} more
+                          </li>
+                        )}
+                      </ul>
+                    </div>
+                  )}
+                </div>
               )}
             </div>
           )}

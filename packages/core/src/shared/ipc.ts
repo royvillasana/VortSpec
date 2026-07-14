@@ -98,6 +98,7 @@ import {
   fileSnapshotListSchema,
   pushPlanSchema,
   figmaPushResultSchema,
+  tokenSanitationSchema,
 } from "./inspector";
 
 export type { SetupAnswers, ProjectConfig } from "./setup";
@@ -108,6 +109,10 @@ export type {
   TokenSource,
   TokenUsage,
   TokenDrift,
+  MatchSignal,
+  TokenSanitation,
+  OrphanToken,
+  DuplicateGroup,
   FigmaVariable,
   FigmaCollection,
   FigmaMode,
@@ -599,6 +604,32 @@ export const ipcContract = {
       projectPath: z.string(),
       name: z.string(),
       value: z.string(),
+      /** Override the dedup-before-create guard (create even though the value/name exists). */
+      allowDuplicate: z.boolean().optional(),
+    }),
+    response: inspectorTokensResultSchema,
+  },
+  "inspector:getSanitation": {
+    request: z.string(),
+    response: tokenSanitationSchema,
+  },
+  "inspector:collapseToken": {
+    request: z.object({
+      projectPath: z.string(),
+      /** The duplicate/flattened token to re-point. */
+      tokenName: z.string(),
+      /** The canonical token it should alias (`var(--canonical)`). */
+      canonicalName: z.string(),
+    }),
+    response: inspectorTokensResultSchema,
+  },
+  "inspector:linkToken": {
+    request: z.object({
+      projectPath: z.string(),
+      /** The code token being linked. */
+      codeToken: z.string(),
+      /** The Figma variable slash path to link it to. */
+      figmaPath: z.string(),
     }),
     response: inspectorTokensResultSchema,
   },
