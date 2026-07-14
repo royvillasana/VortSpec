@@ -66,7 +66,11 @@ export function Dashboard({
             <ProjectCard
               key={project.id}
               project={project}
-              onOpen={() => (project.toolkit.present ? onOpenProject(project) : onSetup(project))}
+              // A set-up project (has .sdd-de/project.yaml) opens straight into the
+              // guided flow. An empty or not-yet-set-up folder goes to intake first
+              // — same path as creating a new project — instead of jumping into
+              // component extraction on a folder that was never configured.
+              onOpen={() => (project.toolkit.configured ? onOpenProject(project) : onSetup(project))}
             />
           ))}
         </div>
@@ -82,7 +86,7 @@ function ProjectCard({
   project: Project;
   onOpen: () => void;
 }): React.JSX.Element {
-  const ready = project.toolkit.present;
+  const ready = project.toolkit.configured ?? false;
   return (
     <div className="flex flex-col overflow-hidden rounded-lg border border-vs-border-default bg-vs-bg-surface transition-colors hover:border-vs-border-strong">
       <button

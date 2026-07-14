@@ -74,6 +74,21 @@ export default function App(): JSX.Element {
 
   const wf = useWorkspaceFiles(workspace?.path ?? null);
 
+  // Central routing for opening a folder. A set-up project (has
+  // .sdd-de/project.yaml → toolkit.configured) opens directly in the workspace.
+  // An empty or not-yet-configured folder goes through intake first — the same
+  // ProjectSetup stepper as "New Project" — instead of landing on the Foundation
+  // with no design system to extract. Mirrors the cockpit dashboard's routing.
+  const openProject = useCallback((p: Project): void => {
+    if (p.toolkit.configured) {
+      setNewProject(null);
+      setWorkspace(p);
+    } else {
+      setWorkspace(null);
+      setNewProject(p);
+    }
+  }, []);
+
   // Clear the selection when the active file changes (a fresh file has no
   // carried-over highlight); the editor re-reports as the user selects.
   useEffect(() => {
@@ -167,7 +182,7 @@ export default function App(): JSX.Element {
   const ideMcp = useIdeMcp({
     state: ideState,
     onOpenFile: (path) => void wf.openFile(path),
-    onOpenWorkspace: (p) => setWorkspace(p),
+    onOpenWorkspace: openProject,
   });
 
   useEffect(() => {
@@ -224,12 +239,12 @@ export default function App(): JSX.Element {
         case "openRecent": {
           if (!path) return;
           const fresh = await api.refreshProject(path).catch(() => null);
-          if (fresh) setWorkspace(fresh);
+          if (fresh) openProject(fresh);
           return;
         }
         case "openFolder": {
           const p = await api.pickFolder(false);
-          if (p) setWorkspace(p);
+          if (p) openProject(p);
           return;
         }
         case "createProject": {
@@ -271,7 +286,7 @@ export default function App(): JSX.Element {
         }
       }
     });
-  }, [dispatch]);
+  }, [dispatch, openProject]);
 
   const go = (activity: Activity) => (): void => dispatch({ type: "setActivity", activity });
 
@@ -362,7 +377,7 @@ export default function App(): JSX.Element {
               </div>
             ) : (
               <WorkspacePicker
-                onOpen={(p) => setWorkspace(p)}
+                onOpen={openProject}
                 autoClone={welcomeIntent === "clone"}
                 onCloneShown={() => setWelcomeIntent(null)}
                 onCreateProject={() => {

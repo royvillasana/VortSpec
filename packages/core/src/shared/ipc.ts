@@ -256,6 +256,14 @@ export type EnvReport = z.infer<typeof envReportSchema>;
 
 export const toolkitStatusSchema = z.object({
   present: z.boolean(),
+  /**
+   * true when the folder is a set-up SDD-DE project (`.sdd-de/project.yaml`
+   * exists). Distinct from `present` (toolkit skills scaffolded): an empty or
+   * partially-scaffolded folder is falsy here and must go through intake, not
+   * straight into the guided flow / component extraction. Optional so synthetic
+   * and mock projects that never inspect disk can omit it (treated as false).
+   */
+  configured: z.boolean().optional(),
   version: z.string().nullable(),
   /** true when a newer toolkit version is available to install */
   updateAvailable: z.boolean(),

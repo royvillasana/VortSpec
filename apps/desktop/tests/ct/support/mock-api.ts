@@ -229,8 +229,8 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
     revealPath: async () => undefined,
     refreshProject: async (path: string) => ({ id: "p", name: "p", path }),
     createProject: async () => null,
-    toolkitStatus: async () => ({ present: true, version: "1.0.0", updateAvailable: false }),
-    installToolkit: async () => ({ present: true, version: "1.0.0", updateAvailable: false }),
+    toolkitStatus: async () => ({ present: true, configured: true, version: "1.0.0", updateAvailable: false }),
+    installToolkit: async () => ({ present: true, configured: true, version: "1.0.0", updateAvailable: false }),
 
     startRun,
     cancelRun: async () => undefined,

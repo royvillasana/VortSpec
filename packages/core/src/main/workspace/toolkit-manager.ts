@@ -32,12 +32,15 @@ async function exists(path: string): Promise<boolean> {
 
 export async function getToolkitStatus(projectPath: string): Promise<ToolkitStatus> {
   const sdde = join(projectPath, ".sdd-de");
-  const present =
-    (await exists(join(sdde, "project.yaml"))) ||
-    (await exists(join(sdde, "ai-specs", "skills")));
+  // `configured` is the real "this is a set-up project" signal — the setup wizard
+  // (and the CLI) write project.yaml only after intake. `present` is the looser
+  // "toolkit skills are scaffolded" signal used for the installed badge. An empty
+  // folder has neither, so it routes to intake instead of the extraction flow.
+  const configured = await exists(join(sdde, "project.yaml"));
+  const present = configured || (await exists(join(sdde, "ai-specs", "skills")));
   // The CLI does not write an installed-version marker, so version is unknown
   // when present; the dashboard shows "installed". Update detection is deferred.
-  return { present, version: null, updateAvailable: false };
+  return { present, configured, version: null, updateAvailable: false };
 }
 
 export async function installToolkit(projectPath: string): Promise<ToolkitStatus> {

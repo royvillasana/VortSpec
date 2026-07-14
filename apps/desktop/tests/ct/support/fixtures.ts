@@ -10,7 +10,7 @@ export const PROJECT: Project = {
   id: "proj-1",
   name: "Acme DS",
   path: "/tmp/acme-ds",
-  toolkit: { present: true, version: "1.0.0", updateAvailable: false },
+  toolkit: { present: true, configured: true, version: "1.0.0", updateAvailable: false },
   lastRunStatus: "approved",
   addedAt: "2026-01-01T00:00:00.000Z",
 };
