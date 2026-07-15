@@ -1,3 +1,4 @@
+/// <reference path="./raw-modules.d.ts" />
 import net from "node:net";
 import fs from "node:fs";
 import os from "node:os";

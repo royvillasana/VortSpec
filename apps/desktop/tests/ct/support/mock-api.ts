@@ -132,6 +132,10 @@ export const EMPTY_TOKENS: InspectorTokensResult = {
   usage: {},
   figmaOnly: [],
   figmaSynced: false,
+  collections: [],
+  activeCollection: null,
+  activeMode: null,
+  modeMap: {},
 };
 /** A minimal "founded" token result — a project whose design-system foundation exists. */
 export const FOUNDED_TOKENS: InspectorTokensResult = {
@@ -142,6 +146,10 @@ export const FOUNDED_TOKENS: InspectorTokensResult = {
   usage: {},
   figmaOnly: [],
   figmaSynced: false,
+  collections: [],
+  activeCollection: null,
+  activeMode: null,
+  modeMap: {},
 };
 const EMPTY_COMPONENTS: InspectorComponentsResult = {
   componentDir: null,
