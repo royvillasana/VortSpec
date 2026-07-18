@@ -18,6 +18,7 @@ import {
   classifyFieldEdit,
   classifyVariantEdit,
   buildEditPrompt,
+  groupEditsByElement,
   isTokenBinding,
   type PendingEdit,
 } from "../components/run-canvas/pending";
@@ -736,12 +737,25 @@ export function RunApp({
       const sel = selectionRef.current;
       if (!sel) return;
       const fp = readoutRef.current?.fingerprint || undefined;
+      const nodeId = selectedIdRef.current ?? undefined;
+      const text = readoutRef.current?.text ?? null;
+      const elementKey = fp || nodeId || "•";
       const uses = (n: string): number => tokensRef.current.find((t) => t.name === n)?.uses ?? 0;
       setPending((p) => {
         const next = { ...p };
         for (const e of edits) {
           const edit = classifyFieldEdit(sel, e.key, e.value, e.cssProps, uses, forceStyle, e.css, e.token);
-          next[edit.key] = { ...edit, fingerprint: fp }; // stamp the target for replay
+          // Key by element + field so the SAME property on two elements doesn't collide.
+          const id = `${elementKey}::${edit.key}`;
+          next[id] = {
+            ...edit,
+            id,
+            fingerprint: fp,
+            nodeId,
+            file: sel.file,
+            elementLabel: sel.label,
+            elementText: text,
+          };
         }
         return next;
       });
@@ -826,7 +840,19 @@ export function RunApp({
         variantDraftRef.current[key] = value;
       }
       const fp = readoutRef.current?.fingerprint || undefined;
-      setPending((p) => ({ ...p, [`variant:${key}`]: { ...classifyVariantEdit(key, value, remove, add), fingerprint: fp } }));
+      const editId = `${fp || id || "•"}::variant:${key}`;
+      setPending((p) => ({
+        ...p,
+        [editId]: {
+          ...classifyVariantEdit(key, value, remove, add),
+          id: editId,
+          fingerprint: fp,
+          nodeId: id ?? undefined,
+          file: sel?.file ?? null,
+          elementLabel: sel?.label,
+          elementText: readoutRef.current?.text ?? null,
+        },
+      }));
     },
     [setClass],
   );
@@ -853,12 +879,20 @@ export function RunApp({
         setTokens(r.tokens);
       }
       if (structural.length > 0) {
-        const snap = selection?.file
-          ? await api.snapshotComponent(project.path, selection.file)
-          : await api.snapshotTokenScope(project.path);
-        setSnapshot(snap);
+        // Group by element (edits can span multiple elements + files now). Snapshot
+        // every distinct affected file so discard restores all of them; if any element
+        // has no known file, fall back to the broad token scope.
+        const targets = groupEditsByElement(structural);
+        const files = [...new Set(targets.map((t) => t.file).filter((f): f is string => !!f))];
+        const snap =
+          files.length > 0 && files.length === targets.length
+            ? (await Promise.all(files.map((f) => api.snapshotComponent(project.path, f)))).flat()
+            : await api.snapshotTokenScope(project.path);
+        // Dedupe snapshot entries by path.
+        const seen = new Set<string>();
+        setSnapshot(snap.filter((s) => (seen.has(s.path) ? false : (seen.add(s.path), true))));
         await structuralMod.start({
-          prompt: buildEditPrompt(selection?.file ?? null, selection?.component ?? null, structural),
+          prompt: buildEditPrompt(targets),
           cwd: project.path,
           allowedTools: ["Read", "Edit", "Write"],
           bypassPermissions: true,
@@ -895,22 +929,25 @@ export function RunApp({
     setPending({});
     refreshReadout(); // the canvas reverted — re-read so the panel fields follow
   }
-  // Drop a single pending edit before applying: restore the node to its original,
-  // then re-apply every remaining edit on top so the live preview stays exact.
-  function removePending(key: string): void {
-    const id = selectedIdRef.current;
+  // Drop a single pending edit before applying: restore ITS element to the original,
+  // then re-apply that element's remaining edits so the live preview stays exact. Edits
+  // now span multiple elements, so target the removed edit's own node, not the selection.
+  function removePending(editId: string): void {
+    const removed = pending[editId];
     const next = { ...pending };
-    delete next[key];
-    if (id) {
-      bridge.clearOverride(id);
+    delete next[editId];
+    const targetNode = removed?.nodeId ?? selectedIdRef.current ?? undefined;
+    if (targetNode) {
+      bridge.clearOverride(targetNode);
       for (const e of Object.values(next)) {
-        if (e.css && Object.keys(e.css).length > 0) bridge.applyOverride(id, e.css);
-        else if (e.key === "content") setText(id, e.value);
-        else if (e.kind === "variant") setClass(id, e.removeClasses ?? [], e.addClasses ?? []);
+        if (e.nodeId !== targetNode) continue; // only re-apply this element's edits
+        if (e.css && Object.keys(e.css).length > 0) bridge.applyOverride(targetNode, e.css);
+        else if (e.key === "content") setText(targetNode, e.value);
+        else if (e.kind === "variant") setClass(targetNode, e.removeClasses ?? [], e.addClasses ?? []);
       }
-      // The removed edit is gone from the canvas — re-read so its Design-panel field
-      // snaps back to the node's actual value/token (not the removed override).
-      refreshReadout(id);
+      // If the removed edit was on the current selection, re-read so its Design-panel
+      // field snaps back to the node's actual value (not the removed override).
+      if (selectedIdRef.current === targetNode) refreshReadout(targetNode);
     }
     setPending(next);
   }

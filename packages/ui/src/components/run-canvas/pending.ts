@@ -12,11 +12,22 @@ import type { Selection } from "@vortspec/core/ipc";
 export type EditKind = "token" | "style" | "variant";
 
 export interface PendingEdit {
-  /** Map key: the section field key, or `variant:<prop>`. */
+  /** The section field key, or `variant:<prop>` — WHICH property was edited. */
   key: string;
+  /** Unique ledger id: `<element>::<key>` — so the SAME property edited on two
+   *  different elements are distinct entries (not a collision on `key` alone). */
+  id: string;
   /** Durable fingerprint of the edited element — lets the un-saved override be replayed
    *  onto the same element after the preview reloads (persist + replay across navigation). */
   fingerprint?: string;
+  /** Live node id of the edited element (for re-applying overrides after a per-edit removal). */
+  nodeId?: string;
+  /** The element's source file, when known — Apply groups edits by file and element. */
+  file?: string | null;
+  /** The element's label (component name or tag) — locates it in the Apply prompt + list. */
+  elementLabel?: string;
+  /** The element's leading text — disambiguates it among similar siblings in the prompt. */
+  elementText?: string | null;
   /** Human label for the apply summary (e.g. `Radius`, `Variant · size`). */
   label: string;
   kind: EditKind;
@@ -61,6 +72,7 @@ export function classifyFieldEdit(
       : (field?.token ?? null);
   return {
     key,
+    id: key, // RunApp overrides with `<element>::<key>` once it knows the target
     label: field?.label ?? key,
     kind: token ? "token" : "style",
     value,
@@ -79,6 +91,7 @@ export function classifyVariantEdit(
 ): PendingEdit {
   return {
     key: `variant:${prop}`,
+    id: `variant:${prop}`, // RunApp overrides with `<element>::<key>`
     label: `Variant · ${prop}`,
     kind: "variant",
     value,
@@ -137,20 +150,64 @@ export function describeEdit(edit: PendingEdit): string {
   }
 }
 
-/** A concise prompt for the gated Claude Code run that commits the structural edits. */
-export function buildEditPrompt(
-  componentFile: string | null,
-  componentName: string | null,
-  edits: PendingEdit[],
-): string {
-  const target = componentFile
-    ? `the component source at \`${componentFile}\`${componentName ? ` (${componentName})` : ""}`
-    : `the relevant component source`;
-  const lines = edits.map((e) => `- ${describeEdit(e)}`);
+/** One element's worth of edits for the Apply prompt — its locator + the edits on it. */
+export interface EditTarget {
+  /** Source file the element lives in, when known. */
+  file: string | null;
+  /** Component name of the element, when recognized. */
+  component: string | null;
+  /** Human label (component name or tag) to locate the element. */
+  label: string;
+  /** The element's leading text — disambiguates it among similar siblings. */
+  text: string | null;
+  edits: PendingEdit[];
+}
+
+/**
+ * Group a flat pending ledger by element (fingerprint), so edits spanning multiple
+ * elements/files become one target each. Falls back to the field key when an edit
+ * carries no target (legacy/synthetic edits).
+ */
+export function groupEditsByElement(edits: PendingEdit[]): EditTarget[] {
+  const groups = new Map<string, EditTarget>();
+  for (const e of edits) {
+    const gkey = e.fingerprint || e.nodeId || e.elementLabel || "•";
+    let g = groups.get(gkey);
+    if (!g) {
+      g = { file: e.file ?? null, component: null, label: e.elementLabel ?? "the element", text: e.elementText ?? null, edits: [] };
+      groups.set(gkey, g);
+    }
+    g.edits.push(e);
+  }
+  return [...groups.values()];
+}
+
+/**
+ * A concise prompt for the gated Claude Code run that commits the structural edits.
+ * Edits are grouped per element so the run knows WHICH element each change targets —
+ * essential once edits span more than one element (and possibly more than one file).
+ */
+export function buildEditPrompt(targets: EditTarget[]): string {
+  const single = targets.length === 1;
+  const head = single
+    ? `Apply these visual edits made in the VortSpec Run Canvas to ${
+        targets[0].file ? `\`${targets[0].file}\`${targets[0].component ? ` (${targets[0].component})` : ""}` : "the relevant component source"
+      }.`
+    : `Apply these visual edits made in the VortSpec Run Canvas. They span ${targets.length} elements — apply each group to its own element, in its own source location.`;
+  const blocks = targets.map((t) => {
+    const where = single
+      ? []
+      : [
+          ``,
+          `On the "${t.label}" element${t.text ? ` whose leading text is "${t.text.slice(0, 120)}"` : ""}${
+            t.file ? `, in \`${t.file}\`` : ""
+          }${t.component ? ` (${t.component})` : ""}:`,
+        ];
+    return [...where, ...t.edits.map((e) => `- ${describeEdit(e)}`)];
+  });
   return [
-    `Apply these visual edits made in the VortSpec Run Canvas to ${target}.`,
+    head,
     `Make the minimal change so the rendered result matches; preserve existing design-token usage and do not touch unrelated code.`,
-    ``,
-    ...lines,
+    ...blocks.flat(),
   ].join("\n");
 }
