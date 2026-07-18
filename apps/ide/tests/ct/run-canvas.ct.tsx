@@ -294,3 +294,37 @@ test("the Design panel no longer carries the assign section", async ({ mount }) 
   await expect(c.getByText(/This is your/)).toHaveCount(0);
   await expect(c.getByPlaceholder("Search components…")).toHaveCount(0);
 });
+
+test("the Design panel header can open the assign dialog on demand", async ({ mount }) => {
+  let opened = 0;
+  const c = await mount(
+    <DesignPanel
+      selection={GAP_SELECTION}
+      tree={null}
+      tokens={[]}
+      onSelectNode={() => {}}
+      onFieldChange={() => {}}
+      onAssign={() => (opened += 1)}
+    />,
+  );
+  // A recognized component offers "Replace"; an unrecognized one offers "Assign".
+  await c.getByRole("button", { name: "Replace" }).click();
+  expect(opened).toBe(1);
+});
+
+test("a dialog is draggable by its header", async ({ mount, page }) => {
+  await mount(
+    <AssignDialog recognized="Card" recommended={null} components={ROSTER} onAssign={() => {}} onClose={() => {}} />,
+  );
+  // The testid is on the component root, so target it page-level (not as a descendant).
+  const panel = page.getByTestId("assign-dialog");
+  await expect(panel).toHaveCSS("transform", "none"); // starts unmoved
+  const handle = page.getByTestId("dialog-drag-handle");
+  const box = (await handle.boundingBox())!;
+  await page.mouse.move(box.x + 30, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 30 - 120, box.y + box.height / 2 + 60, { steps: 5 });
+  await page.mouse.up();
+  // The panel moved (a non-identity transform is now applied).
+  await expect(panel).not.toHaveCSS("transform", "none");
+});

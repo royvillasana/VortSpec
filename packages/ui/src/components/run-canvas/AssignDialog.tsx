@@ -1,6 +1,7 @@
 import type { JSX } from "react";
 import type { InspectorComponent } from "@vortspec/core/ipc";
 import { ComponentPicker } from "./ComponentPicker";
+import { useDraggable } from "../../lib/useDraggable";
 
 /**
  * The assign-a-component dialog (change: canvas-compose-and-preview-bar).
@@ -34,13 +35,15 @@ export function AssignDialog({
   /** A live Storybook iframe URL for a component's initial state, or null (hover preview). */
   getStoryUrl?: (name: string) => string | null;
 }): JSX.Element {
+  const drag = useDraggable();
   return (
     <div
       data-testid="assign-dialog"
       data-vs-overlay
+      style={drag.style}
       className="pointer-events-auto absolute right-3 top-3 z-40 flex w-72 flex-col gap-2 rounded-lg border border-vs-border-default bg-vs-bg-elevated/95 p-3 text-[12px] text-vs-text-secondary shadow-2xl backdrop-blur"
     >
-      <div className="flex items-center gap-2">
+      <div {...drag.handleProps} data-testid="dialog-drag-handle" className="flex items-center gap-2 select-none">
         <span aria-hidden>🧩</span>
         <span className="font-semibold text-vs-text-primary">Assign a component</span>
         <button

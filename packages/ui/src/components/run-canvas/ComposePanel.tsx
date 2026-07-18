@@ -4,6 +4,7 @@ import { Spinner } from "@vortspec/ui/ui";
 import type { InspectorComponent } from "@vortspec/core/ipc";
 import type { UseComposeRun } from "../../lib/useComposeRun";
 import { ComponentPicker } from "./ComponentPicker";
+import { useDraggable } from "../../lib/useDraggable";
 
 /**
  * The composition panel over an insert placeholder (§6.5–6.15).
@@ -42,13 +43,15 @@ export function ComposePanel({
     setSelected((cur) => (cur.some((x) => x.name === c.name) ? cur.filter((x) => x.name !== c.name) : [...cur, c]));
   const { phase, result, activeOption } = compose;
 
+  const drag = useDraggable();
   return (
     <div
       data-testid="compose-panel"
       data-vs-overlay
+      style={drag.style}
       className="pointer-events-auto absolute right-3 top-3 z-40 flex w-72 flex-col gap-2 rounded-lg border border-vs-border-default bg-vs-bg-elevated/95 p-3 text-[12px] text-vs-text-secondary shadow-2xl backdrop-blur"
     >
-      <div className="flex items-center gap-2">
+      <div {...drag.handleProps} data-testid="dialog-drag-handle" className="flex items-center gap-2 select-none">
         <span aria-hidden>🎯</span>
         <span className="font-semibold text-vs-text-primary">Compose here</span>
         <button

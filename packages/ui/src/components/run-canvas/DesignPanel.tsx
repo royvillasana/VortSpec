@@ -42,6 +42,7 @@ export function DesignPanel({
   onRevert,
   colorTokens = [],
   tokens = [],
+  onAssign,
 }: {
   selection: Selection | null;
   tree: BridgeTree | null;
@@ -70,6 +71,8 @@ export function DesignPanel({
   colorTokens?: ColorToken[];
   /** All project tokens — length fields offer/recognize spacing/radius/typography ones. */
   tokens?: InspectorToken[];
+  /** Open the assign/replace-component dialog for the current selection (on demand). */
+  onAssign?: () => void;
 }): JSX.Element {
   return (
     <div className="flex h-full min-h-0 flex-col bg-vs-bg-primary text-vs-text-primary">
@@ -92,7 +95,7 @@ export function DesignPanel({
           </p>
         ) : (
           <>
-            <SelectionHeader selection={selection} />
+            <SelectionHeader selection={selection} onAssign={onAssign} />
             {/* Assigning / reusing / extracting a component moved to the inspect
                 AssignDialog (change: canvas-compose-and-preview-bar) — this panel is
                 now just identity + editable properties. */}
@@ -307,7 +310,7 @@ function LayersRegion({
   );
 }
 
-function SelectionHeader({ selection }: { selection: Selection }): JSX.Element {
+function SelectionHeader({ selection, onAssign }: { selection: Selection; onAssign?: () => void }): JSX.Element {
   return (
     <div className="flex items-center gap-2 border-b border-vs-border-subtle px-3 py-2">
       <span className="truncate text-[13px] font-semibold">{selection.label}</span>
@@ -315,6 +318,16 @@ function SelectionHeader({ selection }: { selection: Selection }): JSX.Element {
         <span className="rounded border border-vs-border-default px-1 py-px text-[9px] uppercase tracking-wide text-vs-text-muted">
           component
         </span>
+      )}
+      {onAssign && (
+        <button
+          type="button"
+          onClick={onAssign}
+          title={selection.component ? "Replace with another component" : "Assign a component to this element"}
+          className="rounded border border-vs-border-default px-1.5 py-px text-[10px] text-vs-text-secondary hover:bg-vs-bg-hover"
+        >
+          {selection.component ? "Replace" : "Assign"}
+        </button>
       )}
       <span className="ml-auto font-mono text-[10px] text-vs-text-muted">
         {Math.round(selection.rect.width)}×{Math.round(selection.rect.height)}

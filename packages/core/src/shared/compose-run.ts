@@ -224,6 +224,7 @@ export function buildComposePrompt(input: ComposePromptInput): string {
     `Every marker MUST contain the literal run id "${input.runId}". The dev server will hot-reload each option in place.`,
     "",
     "Also add a `data-vs-option=\"N\"` attribute to each option's root element so the canvas can preview one option at a time.",
+    "For EACH roster component you place, add a `data-component=\"<ComponentName>\"` attribute on its usage (e.g. `<Card data-component=\"Card\" … />`) so the inspector recognizes it as that component afterwards, not as hand-written markup. (Components that forward props will pass it through to the DOM.)",
     "",
     "Finally, output a single fenced JSON block (```json) as the LAST thing you emit, matching this shape exactly:",
     '{ "options": [ { "index": 0, "title": "…", "axis": "which axis makes it distinct", "componentsUsed": ["Card", …], "note": "one line" } ], "fewerReason": null | "why fewer than requested", "noMatch": null | { "reason": "…", "suggestedName": "…" }, "stopped": null | { "reason": "why you could not place the insertion", "candidates": ["file:line", …] }, "writtenFile": "the project-relative file you wrote the options into, or null if you wrote nothing" }',

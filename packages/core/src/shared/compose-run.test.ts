@@ -147,6 +147,10 @@ describe("buildComposePrompt", () => {
     expect(p).toContain("```json");
   });
 
+  it("instructs data-component tagging so inserts are detected as components, not markup", () => {
+    expect(buildComposePrompt(input())).toContain('data-component="<ComponentName>"');
+  });
+
   it("tells the run to escalate ambiguity and refuse generated files", () => {
     const p = buildComposePrompt(input());
     expect(p).toMatch(/MORE THAN ONE location/);

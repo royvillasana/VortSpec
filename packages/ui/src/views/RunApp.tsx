@@ -481,11 +481,16 @@ export function RunApp({
   const composeActive =
     mode === "insert" && (!!bridge.placeholder || compose.phase !== "idle" || !!compose.screenUpdateOwed);
 
-  // Inspect-click assign dialog (§ dialog slice): shows the roster to assign/reuse a
-  // component for the selected element. Dismissable per selection; re-selecting a
-  // different element re-opens it.
+  // Inspect-click assign dialog (§ dialog slice): the roster to assign/reuse a
+  // component for the selected element. It auto-opens ONLY for elements not already
+  // recognized as a component (genuine hand-written markup), so a real component
+  // isn't nagged — but any element can open it on demand (assignForced).
   const [assignDismissed, setAssignDismissed] = useState<string | null>(null);
-  const assignActive = mode === "inspect" && !!selection && selection.nodeId !== assignDismissed;
+  const [assignForced, setAssignForced] = useState<string | null>(null);
+  const assignActive =
+    mode === "inspect" &&
+    !!selection &&
+    ((!selection.component && selection.nodeId !== assignDismissed) || selection.nodeId === assignForced);
   const assignSelection = selection; // narrowed for the handlers below
   const onAssignComponent = useCallback(
     (component: { name: string; file: string | null }, opts: { allSimilar: boolean }) => {
@@ -1014,6 +1019,14 @@ export function RunApp({
                   onRevert={() => void revertEdits()}
                   colorTokens={colorTokens}
                   tokens={tokens}
+                  onAssign={
+                    onSendToChat && selection
+                      ? () => {
+                          setAssignForced(selection.nodeId);
+                          setAssignDismissed((d) => (d === selection.nodeId ? null : d));
+                        }
+                      : undefined
+                  }
                 />
                 )}
               </aside>
@@ -1042,7 +1055,10 @@ export function RunApp({
                     components={components}
                     onAssign={onAssignComponent}
                     onExtract={onAssignExtract}
-                    onClose={() => setAssignDismissed(assignSelection.nodeId)}
+                    onClose={() => {
+                      setAssignDismissed(assignSelection.nodeId);
+                      setAssignForced((f) => (f === assignSelection.nodeId ? null : f));
+                    }}
                     getStoryUrl={storyUrlFor}
                   />
                 )}
