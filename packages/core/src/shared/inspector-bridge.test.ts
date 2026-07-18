@@ -177,4 +177,45 @@ describe("inspector-bridge contracts", () => {
       t: "placeholderLost",
     });
   });
+
+  it("round-trips drag-move commands and events (§5)", () => {
+    // Host can abort a drag.
+    expect(bridgeCommandSchema.parse({ t: "cancelDrag" }).t).toBe("cancelDrag");
+
+    const target = {
+      anchorFingerprint: "main>section>div#3",
+      position: "before" as const,
+      axis: "row" as const,
+      line: { x1: 120, y1: 0, x2: 120, y2: 60 },
+    };
+    const ghost = { x: 40, y: 12, width: 108, height: 38 };
+
+    expect(
+      bridgeEventSchema.parse({ t: "dragStart", sourceFingerprint: "fp-card", nodeId: "n7", rect: ghost }),
+    ).toMatchObject({ t: "dragStart", sourceFingerprint: "fp-card" });
+
+    // A per-frame update carries the slot, the ghost, and pop-out state (defaults false).
+    const over = bridgeEventSchema.parse({ t: "dragTarget", target, ghost });
+    expect(over).toMatchObject({ t: "dragTarget", poppedOut: false, target: { position: "before" } });
+    // target may be null (no valid slot → no-drop cursor).
+    expect(bridgeEventSchema.parse({ t: "dragTarget", target: null, ghost, poppedOut: true })).toMatchObject({
+      target: null,
+      poppedOut: true,
+    });
+
+    // A drop with a slot, and a refused drop (null target).
+    expect(
+      bridgeEventSchema.parse({ t: "dragDrop", sourceFingerprint: "fp-card", target, poppedOut: true }),
+    ).toMatchObject({ t: "dragDrop", target: { axis: "row" }, poppedOut: true });
+    expect(bridgeEventSchema.parse({ t: "dragDrop", sourceFingerprint: "fp-card", target: null })).toMatchObject({
+      target: null,
+      poppedOut: false, // default
+    });
+
+    // Cancel: a plain Escape (null message) and a forced cancel with a sentence.
+    expect(bridgeEventSchema.parse({ t: "dragCancel" }).t).toBe("dragCancel");
+    expect(bridgeEventSchema.parse({ t: "dragCancel", message: "Lost the element after a reload — drag it again." })).toMatchObject({
+      t: "dragCancel",
+    });
+  });
 });

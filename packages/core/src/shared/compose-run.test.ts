@@ -3,9 +3,11 @@ import {
   composeResultSchema,
   MAX_COMPOSE_OPTIONS,
   buildComposePrompt,
+  buildMovePrompt,
   hasUsableRoster,
   parseComposeResult,
   type ComposePromptInput,
+  type MovePromptInput,
 } from "./compose-run";
 import type { InspectorComponent } from "./inspector";
 
@@ -189,6 +191,67 @@ describe("buildComposePrompt", () => {
       input({ insertSpec: { placement: "new-column", axis: "column", slotCount: 3 } }),
     );
     expect(p).toContain("Create a NEW column container with 3 slot(s)");
+  });
+});
+
+describe("buildMovePrompt", () => {
+  const moveInput = (over: Partial<MovePromptInput> = {}): MovePromptInput => ({
+    runId: "mv1",
+    source: { fingerprint: "fp-card", label: "Card", text: "Featured" },
+    sourceFile: "src/Home.tsx",
+    target: { anchorLabel: "Sidebar", anchorText: "Filters", position: "after", axis: "column", file: "src/Home.tsx" },
+    snapshotFiles: ["src/Home.tsx"],
+    ...over,
+  });
+
+  it("frames the run as a CUT + RE-INSERT move that preserves the element", () => {
+    const p = buildMovePrompt(moveInput());
+    expect(p).toMatch(/CUT it/);
+    expect(p).toMatch(/RE-INSERT/);
+    expect(p).toContain("This is a MOVE");
+    // Both ends are named with their disambiguating leading text.
+    expect(p).toContain('"Card" element whose leading text is "Featured"');
+    expect(p).toContain('after the "Sidebar" element whose leading text is "Filters"');
+    expect(p).toContain("vertical (column) flow");
+  });
+
+  it("wraps the re-inserted element in exactly one option=0 scaffold carrying the run id", () => {
+    const p = buildMovePrompt(moveInput({ runId: "run-move-xyz" }));
+    expect(p).toContain("run-move-xyz");
+    expect(p).toContain("option=0");
+    expect(p).toContain('data-vs-option="0"');
+    // A move is N=1 — never asks for multiple options.
+    expect(p).not.toMatch(/at most 3 option/);
+  });
+
+  it("instructs a stop on ambiguous/missing origin or destination", () => {
+    const p = buildMovePrompt(moveInput());
+    expect(p).toMatch(/MORE THAN ONE location.*STOP/s);
+    expect(p).toMatch(/cannot be found.*STOP/s);
+    expect(p).toMatch(/destination is ambiguous.*STOP|STOP with candidates/s);
+    expect(p).toMatch(/belongs to no container.*STOP/s);
+  });
+
+  it("names the snapshot set and forbids editing outside it (Decision 6)", () => {
+    const p = buildMovePrompt(moveInput({ snapshotFiles: ["src/Home.tsx", "src/components/Card.tsx"] }));
+    expect(p).toContain("src/Home.tsx, src/components/Card.tsx");
+    expect(p).toMatch(/NOT in that set.*STOP/s);
+    expect(p).toMatch(/generated, build-output, or git-ignored/);
+  });
+
+  it("carries no source file gracefully when the host could not resolve one", () => {
+    const p = buildMovePrompt(moveInput({ sourceFile: null, target: { anchorLabel: "Sidebar", anchorText: null, position: "before", axis: "row", file: null } }));
+    expect(p).toContain('The element to move: the "Card" element');
+    expect(p).not.toContain("in null");
+    expect(p).toContain("horizontal (row) flow");
+  });
+
+  it("its result parses with the shared compose contract (N=1)", () => {
+    // A realistic move result the run would emit → reuses composeResultSchema.
+    const text = '```json\n{ "options": [ { "index": 0, "title": "Moved Card", "axis": "relocation", "componentsUsed": ["Card"] } ], "fewerReason": null, "noMatch": null, "stopped": null, "writtenFile": "src/Home.tsx" }\n```';
+    const r = parseComposeResult(text);
+    expect(r?.options).toHaveLength(1);
+    expect(r?.writtenFile).toBe("src/Home.tsx");
   });
 });
 

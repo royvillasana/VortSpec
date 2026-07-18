@@ -301,6 +301,13 @@ export const bridgeCommandSchema = z.discriminatedUnion("t", [
    * `nodeId` scopes the scan to that container's subtree; null scans from the body.
    */
   z.object({ t: z.literal("requestStructure"), nodeId: z.string().nullable().default(null) }),
+  /**
+   * Abort an in-flight drag from the host side (change: canvas-live-structural-editing,
+   * §5) — e.g. the move panel closed or the flow reset. The guest tears down the
+   * gesture and clears the ghost without emitting a drop. The guest also self-cancels
+   * on Escape or a lost fingerprint (those arrive as a `dragCancel` event).
+   */
+  z.object({ t: z.literal("cancelDrag") }),
 ]);
 export type BridgeCommand = z.infer<typeof bridgeCommandSchema>;
 
@@ -355,6 +362,49 @@ export const bridgeEventSchema = z.discriminatedUnion("t", [
   z.object({ t: z.literal("placeholderLost"), message: z.string() }),
   /** The requested structural snapshot of a subtree (change: canvas-live-structural-editing). */
   z.object({ t: z.literal("structure"), snapshot: structureSnapshotSchema }),
+  /**
+   * Drag-move (change: canvas-live-structural-editing, §5). A drag began on the
+   * selected element in inspect mode — the guest owns the gesture (Decision 3). The
+   * host mounts the ghost/overlay and the move affordance.
+   */
+  z.object({
+    t: z.literal("dragStart"),
+    /** Stable fingerprint of the dragged element — the move run's origin anchor. */
+    sourceFingerprint: z.string(),
+    nodeId: z.string(),
+    /** The dragged element's rect at grab time (the ghost's initial size). */
+    rect: rectSchema,
+  }),
+  /**
+   * A per-frame drag update (throttled to one per rAF — Decision 8). Carries the
+   * drop slot under the pointer (null when over none → the "no-drop" cursor hint),
+   * the ghost rect trailing the pointer, and whether the pop-out modifier is lifting
+   * the target to the parent container's slot (Decision 4). Merged into ONE event so
+   * the whole drag stays within the existing single-flight rAF budget.
+   */
+  z.object({
+    t: z.literal("dragTarget"),
+    target: insertTargetSchema.nullable(),
+    ghost: rectSchema,
+    poppedOut: z.boolean().default(false),
+  }),
+  /**
+   * The drag ended (pointerup). `target` null → the drop belonged to no container and
+   * is refused (no run). Otherwise the host opens the gated move to relocate the
+   * element's JSX into that slot (Decision 2).
+   */
+  z.object({
+    t: z.literal("dragDrop"),
+    sourceFingerprint: z.string(),
+    target: insertTargetSchema.nullable(),
+    poppedOut: z.boolean().default(false),
+  }),
+  /**
+   * The drag was abandoned without a drop — Escape, or the dragged fingerprint could
+   * not be re-acquired after a mid-drag HMR patch (Decision 8). `message` is a human
+   * sentence for the canvas when the cancel was forced (null for a plain Escape).
+   */
+  z.object({ t: z.literal("dragCancel"), message: z.string().nullable().default(null) }),
 ]);
 export type BridgeEvent = z.infer<typeof bridgeEventSchema>;
 

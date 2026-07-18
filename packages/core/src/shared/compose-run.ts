@@ -259,6 +259,83 @@ export function buildComposePrompt(input: ComposePromptInput): string {
   return lines.filter((l) => l !== "").join("\n");
 }
 
+// ── Move-run prompt builder (change: canvas-live-structural-editing, §5) ──
+
+/** The dragged element's origin — anchor identity for finding and cutting its JSX. */
+export interface MoveSource {
+  /** Stable fingerprint of the dragged element (origin anchor reference). */
+  fingerprint: string;
+  /** The dragged element's label (component name or tag). */
+  label: string;
+  /** Its leading text — the documented disambiguator for locating its JSX. */
+  text: string | null;
+}
+
+export interface MovePromptInput {
+  /** Marker-safe run id — the single re-inserted option's markers carry it. */
+  runId: string;
+  source: MoveSource;
+  /** The resolved origin file, when the host could derive it (else null). */
+  sourceFile: string | null;
+  /** The destination slot (normalized anchor + position + axis + resolved file). */
+  target: ComposeSlot;
+  /**
+   * Every file the host snapshotted before the run (Decision 6). The run MUST stop
+   * rather than edit a file OUTSIDE this set, so a discard can always restore exactly.
+   */
+  snapshotFiles: string[];
+}
+
+/**
+ * Build the move-run prompt (Decision 2): relocate the dragged element's JSX from
+ * its origin to the destination slot, written as a SINGLE `option=0` scaffold so the
+ * whole compose accept/discard/commit-guard/sweep machinery covers it unchanged. A
+ * move is strictly harder than an insert — two edit sites, possibly two files — so
+ * the prompt front-loads the honest-failure clauses: stop on an ambiguous or missing
+ * origin/destination, on a drop belonging to no container, on a generated/ignored
+ * file, or on any edit that would escape the snapshot set.
+ */
+export function buildMovePrompt(input: MovePromptInput): string {
+  const { source, target } = input;
+  const axisWord = target.axis === "row" ? "horizontal (row)" : "vertical (column)";
+  const scope = input.snapshotFiles.length
+    ? input.snapshotFiles.join(", ")
+    : "(the snapshot set could not be pre-resolved)";
+  const lines: string[] = [
+    "Relocate an existing element in this project's source: CUT it from where it is now and RE-INSERT it, unchanged, at a new layout slot. This is a MOVE — preserve the element's props, children, and behavior exactly; do not redesign it.",
+    "",
+    `The element to move: the "${source.label}" element${
+      source.text ? ` whose leading text is "${source.text.slice(0, 120)}"` : ""
+    }${input.sourceFile ? `, in ${input.sourceFile}` : ""}.`,
+    `Where it goes: insert it ${target.position} the "${target.anchorLabel}" element${
+      target.anchorText ? ` whose leading text is "${target.anchorText.slice(0, 120)}"` : ""
+    }, in a ${axisWord} flow${target.file ? `, in ${target.file}` : ""}.`,
+    "",
+    "Resolve BOTH ends before writing anything:",
+    "- Find the element's CURRENT JSX using its label and leading text. If it matches MORE THAN ONE location and you cannot tell which, STOP and return a `stopped` result with the candidate locations — do NOT guess.",
+    "- If the element's JSX cannot be found at all, STOP and return a `stopped` result saying so.",
+    "- Find the DESTINATION anchor the same way. If the destination is ambiguous or cannot be found, STOP with candidates — write nothing.",
+    "- The destination must be a real layout slot in a row/column container. If the drop belongs to no container, STOP and say so.",
+    "",
+    `Stay within the snapshotted files: ${scope}. If relocating the element would require editing ANY file NOT in that set, STOP and return a \`stopped\` result naming the file — do NOT write outside the snapshot (a discard could not restore it).`,
+    "- Never write into a generated, build-output, or git-ignored file; if either end resolves into one, STOP and explain which file and why. (An untracked but non-ignored file — normal uncommitted source — is fine.)",
+    "",
+    "Then perform the move:",
+    "1. DELETE the element's JSX at its origin (remove it cleanly — no empty wrappers left behind that change the layout).",
+    `2. RE-INSERT the SAME element at the destination slot, wrapped in exactly ONE option scaffold (0-based):`,
+    `  ${scaffoldBegin(input.runId, 0)}`,
+    "  …the relocated element's JSX, unchanged…",
+    `  ${scaffoldEnd(input.runId, 0)}`,
+    `Every marker MUST contain the literal run id "${input.runId}". The dev server will hot-reload the relocated element in place.`,
+    "",
+    'Add a `data-vs-option="0"` attribute to the re-inserted element\'s root so the canvas can preview it. Preserve any existing `data-component` attribute so the inspector still recognizes it.',
+    "",
+    "Finally, output a single fenced JSON block (```json) as the LAST thing you emit, matching this shape exactly:",
+    '{ "options": [ { "index": 0, "title": "Moved <element>", "axis": "relocation", "componentsUsed": ["<ComponentName>"], "note": "one line" } ], "fewerReason": null, "noMatch": null, "stopped": null | { "reason": "why you could not complete the move", "candidates": ["file:line", …] }, "writtenFile": "the project-relative file the re-inserted option scaffold was written into, or null if you wrote nothing" }',
+  ];
+  return lines.filter((l) => l !== "").join("\n");
+}
+
 /** Extract and validate the composition result from a run's final message text (§6.3, §7). */
 export function parseComposeResult(text: string): ComposeResult | null {
   // Prefer a fenced ```json block; fall back to the last balanced object.
