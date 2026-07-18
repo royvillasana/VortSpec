@@ -368,11 +368,58 @@ export function RunApp({
   }
 
   // ── Pending edits + gated commit ──────────────────────────────────────────
-  const [pending, setPending] = useState<Record<string, PendingEdit>>({});
+  // Un-saved canvas edits persist locally (keyed by project) so leaving the Playground
+  // for another app section — or restarting — doesn't lose them; they're replayed into
+  // the preview by fingerprint on return (change: persist + replay).
+  const pendingKey = `vortspec:pending:${project.path}`;
+  const [pending, setPending] = useState<Record<string, PendingEdit>>(() => {
+    try {
+      const raw = typeof localStorage !== "undefined" ? localStorage.getItem(pendingKey) : null;
+      return raw ? (JSON.parse(raw) as Record<string, PendingEdit>) : {};
+    } catch {
+      return {};
+    }
+  });
   const [applying, setApplying] = useState(false);
   const [review, setReview] = useState(false);
   const [snapshot, setSnapshot] = useState<FileSnapshot[] | null>(null);
   const structuralMod = useAgentRun();
+
+  // Persist the ledger on every change (removed when empty — nothing owed).
+  useEffect(() => {
+    try {
+      if (Object.keys(pending).length > 0) localStorage.setItem(pendingKey, JSON.stringify(pending));
+      else localStorage.removeItem(pendingKey);
+    } catch {
+      /* storage unavailable — in-memory only */
+    }
+  }, [pending, pendingKey]);
+
+  // Replay un-saved edits into the preview once the bridge (re)attaches — i.e. when
+  // the page reloads after returning to the Playground. Idempotent; the guest resolves
+  // each edit by fingerprint and re-applies its style/class/text.
+  const pendingRef = useRef(pending);
+  pendingRef.current = pending;
+  const replayedRef = useRef(false);
+  useEffect(() => {
+    if (!bridge.ready) {
+      replayedRef.current = false;
+      return;
+    }
+    if (replayedRef.current) return;
+    replayedRef.current = true;
+    const edits = Object.values(pendingRef.current)
+      .filter((e) => e.fingerprint)
+      .map((e) => ({
+        fingerprint: e.fingerprint as string,
+        css: e.css,
+        text: e.key === "content" ? e.value : undefined,
+        removeClasses: e.removeClasses,
+        addClasses: e.addClasses,
+      }));
+    if (edits.length) bridge.replayOverrides(edits);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bridge.ready]);
 
   // Unsaved canvas edits — the dirty state behind Save / Ctrl+S and the header dot.
   const dirty = Object.keys(pending).length > 0;
@@ -695,12 +742,13 @@ export function RunApp({
     ) => {
       const sel = selectionRef.current;
       if (!sel) return;
+      const fp = readoutRef.current?.fingerprint || undefined;
       const uses = (n: string): number => tokensRef.current.find((t) => t.name === n)?.uses ?? 0;
       setPending((p) => {
         const next = { ...p };
         for (const e of edits) {
           const edit = classifyFieldEdit(sel, e.key, e.value, e.cssProps, uses, forceStyle, e.css, e.token);
-          next[edit.key] = edit;
+          next[edit.key] = { ...edit, fingerprint: fp }; // stamp the target for replay
         }
         return next;
       });
@@ -784,7 +832,8 @@ export function RunApp({
         if (remove.length || add.length) setClass(id, remove, add);
         variantDraftRef.current[key] = value;
       }
-      setPending((p) => ({ ...p, [`variant:${key}`]: classifyVariantEdit(key, value, remove, add) }));
+      const fp = readoutRef.current?.fingerprint || undefined;
+      setPending((p) => ({ ...p, [`variant:${key}`]: { ...classifyVariantEdit(key, value, remove, add), fingerprint: fp } }));
     },
     [setClass],
   );

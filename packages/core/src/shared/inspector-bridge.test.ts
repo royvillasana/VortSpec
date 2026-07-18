@@ -123,6 +123,31 @@ describe("inspector-bridge contracts", () => {
     expect(() => bridgeCommandSchema.parse({ t: "nope" })).toThrow();
   });
 
+  it("round-trips replayOverrides (persist + replay by fingerprint)", () => {
+    const cmd = bridgeCommandSchema.parse({
+      t: "replayOverrides",
+      edits: [
+        { fingerprint: "main>div#2", css: { "padding-left": "16px" } },
+        { fingerprint: "main>button", addClasses: ["bg-primary"], removeClasses: ["bg-ghost"] },
+        { fingerprint: "main>h1", text: "New title" },
+      ],
+    });
+    expect(cmd.t).toBe("replayOverrides");
+    if (cmd.t === "replayOverrides") {
+      expect(cmd.edits).toHaveLength(3);
+      expect(cmd.edits[0].css).toMatchObject({ "padding-left": "16px" });
+      expect(cmd.edits[0].addClasses).toEqual([]); // default
+      expect(cmd.edits[1].addClasses).toEqual(["bg-primary"]);
+      expect(cmd.edits[2].text).toBe("New title");
+    }
+    // A readout now carries a durable fingerprint (default "" for legacy shapes).
+    expect(nodeReadoutSchema.parse({ nodeId: "n1", rect: { x: 0, y: 0, width: 1, height: 1 } }).fingerprint).toBe("");
+    expect(
+      nodeReadoutSchema.parse({ nodeId: "n1", fingerprint: "main>div", rect: { x: 0, y: 0, width: 1, height: 1 } })
+        .fingerprint,
+    ).toBe("main>div");
+  });
+
   it("round-trips insert-mode placeholder commands", () => {
     const target = {
       anchorFingerprint: "div>ul>li#2",

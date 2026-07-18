@@ -328,6 +328,7 @@ function readoutOf(el: Element, id: string): NodeReadout {
   }
   return {
     nodeId: id,
+    fingerprint: fingerprintFor(el),
     rect: rectOf(el),
     computed,
     customProps,
@@ -922,6 +923,31 @@ function handleCommand(cmd: BridgeCommand): void {
       clearOverride(cmd.nodeId);
       if (selectedId) emitGeometry(selectedId);
       return;
+    case "replayOverrides": {
+      // Restore un-saved visual edits after a full reload (returning to the Playground):
+      // resolve each edit by its durable fingerprint and re-apply the style/class/text.
+      for (const e of cmd.edits) {
+        const el = resolveFingerprint(e.fingerprint) as HTMLElement | undefined;
+        if (!el) continue;
+        // Ensure the element is tracked so the override store + HMR reapply cover it.
+        let id = uidOf.get(el);
+        if (!id || byId.get(id) !== el) {
+          id = `n${uidSeq++}`;
+          uidOf.set(el, id);
+          byId.set(id, el);
+        }
+        if (e.css) applyOverride(id, e.css);
+        if (e.removeClasses.length || e.addClasses.length) {
+          let c = classOverrides.get(id);
+          if (!c) classOverrides.set(id, (c = emptyClassOverride()));
+          mergeClass(c, e.removeClasses, e.addClasses);
+          for (const name of e.removeClasses) if (name) el.classList.remove(name);
+          for (const name of e.addClasses) if (name) el.classList.add(name);
+        }
+        if (e.text !== undefined) setTextOverride(id, el, e.text);
+      }
+      return;
+    }
     case "setText": {
       const el = resolve(cmd.nodeId);
       // Only ever rewrite genuine text leaves — never clobber an element that has

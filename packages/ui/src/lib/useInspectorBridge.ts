@@ -118,6 +118,10 @@ export interface InspectorBridge {
   captureThumbnail: (rect: Rect) => Promise<string>;
   applyOverride: (id: string, css: Record<string, string>) => void;
   clearOverride: (id?: string) => void;
+  /** Re-apply a set of unsaved visual edits by fingerprint after a reload (persist + replay). */
+  replayOverrides: (
+    edits: { fingerprint: string; css?: Record<string, string>; text?: string; removeClasses?: string[]; addClasses?: string[] }[],
+  ) => void;
   /** Re-request the selected node's readout so the panel reflects its actual state
    *  after a discrete edit or a cleared override. Defaults to the current selection. */
   refreshReadout: (id?: string) => void;
@@ -405,6 +409,20 @@ export function useInspectorBridge(): InspectorBridge {
     [send],
   );
   const clearOverride = useCallback((id?: string) => send({ t: "clearOverride", nodeId: id }), [send]);
+  const replayOverrides = useCallback<InspectorBridge["replayOverrides"]>(
+    (edits) =>
+      send({
+        t: "replayOverrides",
+        edits: edits.map((e) => ({
+          fingerprint: e.fingerprint,
+          css: e.css,
+          text: e.text,
+          removeClasses: e.removeClasses ?? [],
+          addClasses: e.addClasses ?? [],
+        })),
+      }),
+    [send],
+  );
   // Re-read the selected node's computed styles after a discrete edit or a clear, so
   // the Design panel reflects the element's *actual* state (ephemeral overrides only
   // emit geometry, not a fresh readout, so the panel would otherwise go stale). Sent
@@ -467,6 +485,7 @@ export function useInspectorBridge(): InspectorBridge {
     setMode,
     applyOverride,
     clearOverride,
+    replayOverrides,
     refreshReadout,
     requestTree,
     reload,

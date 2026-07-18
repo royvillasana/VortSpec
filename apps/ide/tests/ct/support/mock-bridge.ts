@@ -55,6 +55,7 @@ export function makeBridge(overrides: Partial<InspectorBridge> = {}): InspectorB
     captureThumbnail: async () => "",
     applyOverride: noop,
     clearOverride: noop,
+    replayOverrides: noop,
     refreshReadout: noop,
     requestTree: noop,
     reload: noop,

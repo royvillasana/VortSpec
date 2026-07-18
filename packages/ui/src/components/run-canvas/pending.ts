@@ -14,6 +14,9 @@ export type EditKind = "token" | "style" | "variant";
 export interface PendingEdit {
   /** Map key: the section field key, or `variant:<prop>`. */
   key: string;
+  /** Durable fingerprint of the edited element — lets the un-saved override be replayed
+   *  onto the same element after the preview reloads (persist + replay across navigation). */
+  fingerprint?: string;
   /** Human label for the apply summary (e.g. `Radius`, `Variant · size`). */
   label: string;
   kind: EditKind;

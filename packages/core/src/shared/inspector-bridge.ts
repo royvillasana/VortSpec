@@ -66,6 +66,9 @@ export type Rect = z.infer<typeof rectSchema>;
  */
 export const nodeReadoutSchema = z.object({
   nodeId: z.string(),
+  /** Durable fingerprint of the element — survives a reload, so an unsaved edit can be
+   *  re-applied to the same element after navigating away and back (persist + replay). */
+  fingerprint: z.string().default(""),
   rect: rectSchema,
   /** Computed style subset (padding, margin, border-radius, color, font, …). */
   computed: z.record(z.string(), z.string()).default({}),
@@ -263,6 +266,26 @@ export const bridgeCommandSchema = z.discriminatedUnion("t", [
   }),
   /** Clear overrides for one node, or all when `nodeId` is omitted. */
   z.object({ t: z.literal("clearOverride"), nodeId: z.string().optional() }),
+  /**
+   * Re-apply a set of unsaved visual edits by DURABLE FINGERPRINT after a full page
+   * reload (change: persist + replay). Used when returning to the Playground from
+   * another app section: the guest resolves each fingerprint to its current element
+   * and re-applies the style/class/text override, restoring the un-saved preview.
+   */
+  z.object({
+    t: z.literal("replayOverrides"),
+    edits: z
+      .array(
+        z.object({
+          fingerprint: z.string(),
+          css: z.record(z.string(), z.string()).optional(),
+          text: z.string().optional(),
+          removeClasses: z.array(z.string()).default([]),
+          addClasses: z.array(z.string()).default([]),
+        }),
+      )
+      .default([]),
+  }),
   /** Set the visible text of a node (live text-content edit). */
   z.object({ t: z.literal("setText"), nodeId: z.string(), text: z.string() }),
   /** Swap classes on a node for a live variant preview (remove old, add new). */

@@ -29,6 +29,7 @@ function readout(over: Partial<NodeReadout> = {}): NodeReadout {
       ...(over.computed ?? {}),
     },
     customProps: over.customProps ?? {},
+    fingerprint: over.fingerprint ?? "fp",
     dataComponent: over.dataComponent ?? "button",
     componentCandidates: over.componentCandidates ?? [],
     className: over.className ?? "btn",
