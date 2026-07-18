@@ -385,22 +385,37 @@ export function RunApp({
 
   // Storybook-backed component previews: the picker shows each component's story in
   // its initial state (from the project's running Storybook), the same way the
-  // Playground shows the app. Null when Storybook isn't running or has no story.
+  // Playground shows the app. Storybook is started alongside the app on entry so the
+  // preview works without first visiting the Storybook activity. Null until it's up.
   const [storyUrl, setStoryUrl] = useState<string | null>(null);
   const [storyIndex, setStoryIndex] = useState<StorybookEntry[]>([]);
   useEffect(() => {
-    if (!canvas) return;
+    if (!canvas || !isApp) return;
     let alive = true;
-    void api.devServerStatus(project.path).then(async (sb) => {
-      if (!alive || !sb.url) return;
-      setStoryUrl(sb.url);
-      const idx = await api.storybookIndex(sb.url).catch(() => [] as StorybookEntry[]);
+    const applyStorybook = async (status: DevServerStatus | null): Promise<void> => {
+      if (!alive || !status?.url) return;
+      setStoryUrl(status.url);
+      const idx = await api.storybookIndex(status.url).catch(() => [] as StorybookEntry[]);
       if (alive) setStoryIndex(idx);
+    };
+    void (async () => {
+      const running = await api.devServerStatus(project.path).catch(() => null);
+      if (!alive) return;
+      if (running?.url) return void applyStorybook(running);
+      // Start Storybook in the background only if it's installed (don't provision here).
+      const sb = await api.storybookStatus(project.path).catch(() => null);
+      if (!alive || !sb?.installed) return;
+      void applyStorybook(await api.startDevServer(project.path).catch(() => null));
+    })();
+    // Storybook takes a moment to boot — pick up its URL when the status flips to running.
+    const off = api.onDevServerUpdate(({ projectPath, kind: k, status }) => {
+      if (projectPath === project.path && k === "storybook") void applyStorybook(status);
     });
     return () => {
       alive = false;
+      off();
     };
-  }, [canvas, project.path]);
+  }, [canvas, isApp, project.path]);
   const storyUrlFor = useCallback(
     (name: string): string | null => {
       if (!storyUrl) return null;

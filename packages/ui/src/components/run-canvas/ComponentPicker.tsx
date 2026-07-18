@@ -133,38 +133,34 @@ function ComponentPreview({
   actionLabel: string;
 }): JSX.Element {
   // A fixed height in both states, so hovering a row doesn't reflow the list below.
+  // Just the component itself renders here — the name/variants already show on the
+  // list row, so no label block sits over the preview.
   if (!component) {
     return (
-      <div className="grid h-[148px] place-items-center rounded border border-dashed border-vs-border-subtle px-2 text-center text-[10px] text-vs-text-muted">
+      <div className="grid h-[132px] place-items-center rounded border border-dashed border-vs-border-subtle px-2 text-center text-[10px] text-vs-text-muted">
         Hover a component to preview it · click to {actionLabel}
       </div>
     );
   }
   const storyUrl = getStoryUrl?.(component.name) ?? null;
   return (
-    <div data-testid="component-preview" className="h-[148px] overflow-hidden rounded border border-vs-border-subtle bg-vs-bg-primary">
-      <div className="grid h-24 place-items-center overflow-hidden border-b border-vs-border-subtle bg-white">
-        {storyUrl ? (
-          <iframe
-            key={storyUrl}
-            src={storyUrl}
-            title={`${component.name} — Storybook preview`}
-            data-testid="component-preview-frame"
-            className="h-full w-full border-0"
-          />
-        ) : (
-          <span className="px-2 text-center text-[10px] text-vs-text-muted">
-            No Storybook preview — start Storybook to see this component.
-          </span>
-        )}
-      </div>
-      <div className="p-2">
-        <div className="truncate text-[11px] font-medium text-vs-text-primary">{component.name}</div>
-        {component.description && <div className="truncate text-[10px] text-vs-text-secondary">{component.description}</div>}
-        {component.variants && component.variants.length > 0 && (
-          <div className="mt-0.5 truncate font-mono text-[9px] text-vs-text-muted">variants: {component.variants.join(", ")}</div>
-        )}
-      </div>
+    <div
+      data-testid="component-preview"
+      className="grid h-[132px] place-items-center overflow-hidden rounded border border-vs-border-subtle bg-white"
+    >
+      {storyUrl ? (
+        <iframe
+          key={storyUrl}
+          src={storyUrl}
+          title={`${component.name} — Storybook preview`}
+          data-testid="component-preview-frame"
+          className="h-full w-full border-0"
+        />
+      ) : (
+        <span className="px-3 text-center text-[10px] text-vs-text-muted">
+          No Storybook preview — start Storybook to see this component.
+        </span>
+      )}
     </div>
   );
 }

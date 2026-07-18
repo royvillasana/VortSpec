@@ -16,6 +16,13 @@ const runWith = (text: string): RunEvent[] => [
   { kind: "system-init", model: "claude-opus-4-8", sessionId: "s", tools: ["Read", "Edit", "Write"], mcpServers: [], mcpErrors: [] },
   { kind: "result", isError: false, text, sessionId: "s" },
 ];
+// A realistic multi-step run: the JSON lands in an assistant message, and the final
+// `result` event is just a summary — the parser must find it in the transcript.
+const runWithAssistantJson = (json: string): RunEvent[] => [
+  { kind: "system-init", model: "claude-opus-4-8", sessionId: "s", tools: ["Read", "Edit", "Write"], mcpServers: [], mcpErrors: [] },
+  { kind: "assistant-text", text: `I composed two options.\n\`\`\`json\n${json}\n\`\`\`` },
+  { kind: "result", isError: false, text: "Done — wrote 2 options to src/Home.tsx.", sessionId: "s" },
+];
 
 const composeOps = (c: import("@playwright/test").Locator): Promise<Array<Record<string, unknown>>> =>
   c.page().evaluate(() => (window as unknown as { __composeOps: Array<Record<string, unknown>> }).__composeOps);
@@ -131,6 +138,16 @@ test("while generating, the button is a Stop that cancels and restores", async (
   await c.getByRole("button", { name: "Stop" }).click();
   const ops = await composeOps(c);
   expect(ops.some((o) => o.op === "restore")).toBe(true);
+});
+
+test("parses the result from the transcript when it's not in the final result event", async ({ mount }) => {
+  const c = await mount(<ComposeHarness />, {
+    hooksConfig: { mock: { runScript: runWithAssistantJson(OPTIONS_JSON) } },
+  });
+  await c.getByPlaceholder(/Describe what belongs here/).fill("a filters row");
+  await c.getByRole("button", { name: "Generate" }).click();
+  // Options surface even though the JSON was in an assistant message, not result.text.
+  await expect(c.getByTestId("compose-option-index")).toContainText("Option 1 of 2");
 });
 
 test("discard restores the snapshot and writes no accept", async ({ mount }) => {

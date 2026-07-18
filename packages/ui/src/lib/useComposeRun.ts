@@ -127,9 +127,24 @@ export function useComposeRun(args: {
   useEffect(() => {
     if (phase !== "generating") return;
     if (run.model.status === "done") {
-      const parsed = parseComposeResult(run.model.result?.text ?? "");
+      // The run's final JSON can land in the result summary, the last assistant
+      // message, or the streamed text — a multi-step run doesn't always echo it into
+      // `result.text`. Search the whole transcript for the last valid block.
+      const transcript = [
+        ...run.model.messages.filter((m) => m.role === "assistant").map((m) => m.text),
+        run.model.streamingText,
+        run.model.result?.text ?? "",
+      ]
+        .filter(Boolean)
+        .join("\n\n");
+      const parsed = parseComposeResult(transcript);
       if (!parsed) {
-        setError("The composition run finished but returned no usable result. Try again or discard.");
+        const tail = transcript.trim().slice(-200);
+        setError(
+          `The composition run finished but didn't return a usable result. Discard and try again.${
+            tail ? `\n\nLast output: …${tail}` : ""
+          }`,
+        );
         setPhase("error");
         return;
       }

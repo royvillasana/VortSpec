@@ -121,50 +121,52 @@ export function ComposePanel({
               />
             </div>
           ) : (
-            // The prompt input with its action button INSIDE the field: Generate
-            // while idle, a Stop button + a thinking spinner while a run is in flight.
-            <div className="relative rounded border border-vs-border-default bg-vs-bg-primary focus-within:ring-2 focus-within:ring-vs-accent-subtle">
-              <textarea
-                value={draft}
-                onChange={(e) => setDraft(e.target.value)}
-                disabled={phase === "generating"}
-                placeholder={
-                  selected.length > 0
-                    ? `Describe what to build with ${selected.map((c) => c.name).join(", ")}…`
-                    : "Describe what belongs here…"
-                }
-                className="min-h-[72px] w-full resize-none bg-transparent px-2 pb-9 pt-1.5 text-vs-text-primary focus:outline-none disabled:opacity-70"
-              />
-              <div className="absolute inset-x-1.5 bottom-1.5 flex items-center gap-2">
-                {phase === "generating" && (
-                  <span data-testid="compose-progress" className="flex min-w-0 items-center gap-1.5 text-vs-text-muted">
-                    <Spinner />
-                    <span className="truncate">{compose.progress ?? "Composing options…"}</span>
-                  </span>
-                )}
-                {phase === "generating" ? (
-                  <button
-                    type="button"
-                    onClick={() => void compose.cancel()}
-                    title="Stop composing"
-                    className="ml-auto flex items-center gap-1 rounded-md bg-vs-bg-hover px-2.5 py-1 text-xs font-medium text-vs-text-primary ring-1 ring-vs-border-default hover:bg-vs-bg-elevated"
-                  >
-                    Stop
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    disabled={!draft.trim()}
-                    title={draft.trim() ? "Compose options for this slot" : "Describe what belongs here first"}
-                    onClick={() => void compose.generate(draft, selected.map((c) => c.name))}
-                    className={`ml-auto rounded-md px-2.5 py-1 text-xs font-medium text-white ${
-                      draft.trim() ? "bg-vs-accent hover:opacity-90" : "cursor-not-allowed bg-vs-accent/40"
-                    }`}
-                  >
-                    Generate
-                  </button>
-                )}
+            // The prompt input with its action button inside the field; the thinking
+            // spinner lives BELOW the input (not over the prompt text).
+            <div className="flex flex-col gap-1.5">
+              <div className="relative rounded border border-vs-border-default bg-vs-bg-primary focus-within:ring-2 focus-within:ring-vs-accent-subtle">
+                <textarea
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                  disabled={phase === "generating"}
+                  placeholder={
+                    selected.length > 0
+                      ? `Describe what to build with ${selected.map((c) => c.name).join(", ")}…`
+                      : "Describe what belongs here…"
+                  }
+                  className="min-h-[72px] w-full resize-none bg-transparent px-2 pb-9 pt-1.5 text-vs-text-primary focus:outline-none disabled:opacity-70"
+                />
+                <div className="absolute inset-x-1.5 bottom-1.5 flex justify-end">
+                  {phase === "generating" ? (
+                    <button
+                      type="button"
+                      onClick={() => void compose.cancel()}
+                      title="Stop composing"
+                      className="flex items-center gap-1 rounded-md bg-vs-bg-hover px-2.5 py-1 text-xs font-medium text-vs-text-primary ring-1 ring-vs-border-default hover:bg-vs-bg-elevated"
+                    >
+                      Stop
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={!draft.trim()}
+                      title={draft.trim() ? "Compose options for this slot" : "Describe what belongs here first"}
+                      onClick={() => void compose.generate(draft, selected.map((c) => c.name))}
+                      className={`rounded-md px-2.5 py-1 text-xs font-medium text-white ${
+                        draft.trim() ? "bg-vs-accent hover:opacity-90" : "cursor-not-allowed bg-vs-accent/40"
+                      }`}
+                    >
+                      Generate
+                    </button>
+                  )}
+                </div>
               </div>
+              {phase === "generating" && (
+                <div data-testid="compose-progress" className="flex min-w-0 items-center gap-1.5 text-[11px] text-vs-text-muted">
+                  <Spinner />
+                  <span className="min-w-0 flex-1 truncate">{compose.progress ?? "Composing options…"}</span>
+                </div>
+              )}
             </div>
           )}
         </>
@@ -233,8 +235,12 @@ export function ComposePanel({
 
             {result.options[activeOption] && (
               <div className="rounded border border-vs-border-subtle bg-vs-bg-primary px-2 py-1.5">
-                <div className="font-medium text-vs-text-primary">{result.options[activeOption].title}</div>
-                <div className="text-vs-text-muted">axis: {result.options[activeOption].axis}</div>
+                <div className="font-medium text-vs-text-primary">
+                  {result.options[activeOption].title || `Option ${activeOption + 1}`}
+                </div>
+                {result.options[activeOption].axis && (
+                  <div className="text-vs-text-muted">axis: {result.options[activeOption].axis}</div>
+                )}
                 {result.options[activeOption].note && <div className="mt-0.5">{result.options[activeOption].note}</div>}
                 <div data-testid="compose-provenance" className="mt-1 text-[11px] text-vs-text-muted">
                   Uses: {result.options[activeOption].componentsUsed.join(", ") || "—"}

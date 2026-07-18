@@ -89,13 +89,11 @@ describe("composeResultSchema", () => {
     expect(() => composeResultSchema.parse({ options: [] })).toThrow();
   });
 
-  it("rejects non-contiguous option indices (they key the scaffold markers)", () => {
-    expect(() => composeResultSchema.parse({ options: [option(0), option(2)] })).toThrow();
-  });
-
-  it("requires a title and an axis on every option", () => {
-    expect(() => composeResultSchema.parse({ options: [option(0, { title: "" })] })).toThrow();
-    expect(() => composeResultSchema.parse({ options: [option(0, { axis: "" })] })).toThrow();
+  it("tolerates real-run variance: missing title/axis and gappy indices still parse", () => {
+    // A run's JSON isn't always perfect — don't reject the whole result over it.
+    const r = composeResultSchema.parse({ options: [{ componentsUsed: ["Card"] }, { index: 2, title: "B" }] });
+    expect(r.options).toHaveLength(2);
+    expect(r.options[0].title).toBe(""); // defaulted, not rejected
   });
 });
 

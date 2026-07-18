@@ -20,18 +20,20 @@ import { SCAFFOLD_SENTINEL, scaffoldBegin, scaffoldEnd } from "./compose-scaffol
 /** The ceiling on options. R2: 1–3, defaulting to 3 — a maximum, never a target. */
 export const MAX_COMPOSE_OPTIONS = 3;
 
-/** One composed option — its provenance and the axis that makes it distinct. */
+/**
+ * One composed option — its provenance and the axis that makes it distinct.
+ * Fields beyond the composition itself are best-effort: a real run's JSON varies,
+ * and rejecting a whole result over a missing title helps no one. The cycler falls
+ * back to the option's position. Options are keyed for accept by their position in
+ * the array (which matches the 0-based scaffold markers), not this `index`.
+ */
 export const composeOptionSchema = z.object({
-  /** 0-based index, matching this option's scaffold markers in source. */
-  index: z.number().int().nonnegative(),
+  /** Informational 0-based index the run reported (the array position is authoritative). */
+  index: z.number().int().nonnegative().optional(),
   /** Short human title for the option cycler. */
-  title: z.string().min(1),
-  /**
-   * The distinct composition axis this option explores (Decision 8: each option
-   * differs along a DIFFERENT axis — which components, which variants, what layout —
-   * not incidental values).
-   */
-  axis: z.string().min(1),
+  title: z.string().default(""),
+  /** The distinct composition axis this option explores (Decision 8). */
+  axis: z.string().default(""),
   /** Roster component names this option composes, for inspectable provenance. */
   componentsUsed: z.array(z.string()).default([]),
   /** One-line rationale shown beneath the option. */
@@ -81,9 +83,6 @@ export const composeResultSchema = z
   })
   .refine((r) => r.noMatch !== null || r.stopped !== null || r.options.length > 0, {
     message: "a composition result must carry options, a no-component-match, or a stop reason",
-  })
-  .refine((r) => r.options.every((o, i) => o.index === i), {
-    message: "option indices must be 0-based and contiguous (they key the scaffold markers)",
   });
 export type ComposeResult = z.infer<typeof composeResultSchema>;
 
