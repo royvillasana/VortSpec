@@ -73,6 +73,13 @@ export const nodeReadoutSchema = z.object({
   customProps: z.record(z.string(), z.string()).default({}),
   /** `data-component` value, when present. */
   dataComponent: z.string().nullable().default(null),
+  /**
+   * Component display-names that rendered this element, nearest-first, read from the
+   * React fiber (change: canvas — component detection). The host matches these against
+   * the roster so a design-system component instance is recognized even when it never
+   * forwards a `data-component` attribute to its DOM root. Empty for non-React pages.
+   */
+  componentCandidates: z.array(z.string()).default([]),
   /** The element's full className string, for component/token heuristics. */
   className: z.string().default(""),
   /** Direct element children's border-boxes (guest coords) — used to place gap bands. */

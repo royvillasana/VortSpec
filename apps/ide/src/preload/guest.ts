@@ -267,6 +267,49 @@ function buildTree(): BridgeTree {
   return { roots, nodes, children };
 }
 
+/** Internal React fiber "types" whose names are wrappers, not real components. */
+const FIBER_SKIP = new Set([
+  "Fragment", "ForwardRef", "Memo", "Profiler", "StrictMode", "Suspense", "SuspenseList",
+  "Provider", "Consumer", "Anonymous", "Unknown",
+]);
+
+/**
+ * Component display-names that rendered `el`, nearest-first, read from its React fiber
+ * (change: component detection). Design-system components rarely forward a
+ * `data-component` attribute to their DOM root, so the attribute-only heuristic flags
+ * them as hand-written markup. The fiber knows the real component that produced the
+ * element — the host matches these names against the roster. Best-effort and defensive:
+ * returns [] on any non-React page or internals mismatch.
+ */
+function reactComponentNames(el: Element): string[] {
+  try {
+    const key = Object.keys(el).find(
+      (k) => k.startsWith("__reactFiber$") || k.startsWith("__reactInternalInstance$"),
+    );
+    if (!key) return [];
+    let fiber = (el as unknown as Record<string, { return: unknown; type: unknown } | null>)[key] ?? null;
+    const names: string[] = [];
+    let depth = 0;
+    while (fiber && depth < 40) {
+      const t = (fiber as { type: unknown }).type as
+        | ((...a: unknown[]) => unknown)
+        | { displayName?: string; name?: string; render?: { displayName?: string; name?: string }; type?: { displayName?: string; name?: string } }
+        | string
+        | null;
+      let name: string | undefined;
+      if (typeof t === "function") name = (t as { displayName?: string; name?: string }).displayName || t.name;
+      else if (t && typeof t === "object")
+        name = t.displayName || t.render?.displayName || t.render?.name || t.type?.displayName || t.type?.name;
+      if (name && /^[A-Z][A-Za-z0-9]*$/.test(name) && !FIBER_SKIP.has(name) && !names.includes(name)) names.push(name);
+      fiber = (fiber as { return: { return: unknown; type: unknown } | null }).return;
+      depth++;
+    }
+    return names.slice(0, 8);
+  } catch {
+    return [];
+  }
+}
+
 function readoutOf(el: Element, id: string): NodeReadout {
   const cs = getComputedStyle(el);
   const computed: Record<string, string> = {};
@@ -289,6 +332,7 @@ function readoutOf(el: Element, id: string): NodeReadout {
     computed,
     customProps,
     dataComponent: el.getAttribute("data-component"),
+    componentCandidates: reactComponentNames(el),
     className: typeof el.className === "string" ? el.className : "",
     children: Array.from(el.children)
       .filter((c) => !SKIP_TAGS.has(c.tagName) && !c.hasAttribute("data-vs-overlay"))

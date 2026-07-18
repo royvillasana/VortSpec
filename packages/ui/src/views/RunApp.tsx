@@ -336,7 +336,10 @@ export function RunApp({
     if (!bridge.readout) return null;
     try {
       const node = bridge.tree?.nodes[bridge.readout.nodeId];
-      const component = resolveComponent(node, components);
+      // Recognize via data-component OR the React-fiber component names the guest read
+      // (so a design-system component with no data-component attribute isn't mislabeled
+      // as hand-written markup).
+      const component = resolveComponent(node, components, bridge.readout.componentCandidates);
       // If it's not a component instance, see whether it *resembles* one (should reuse it).
       const resembles = component ? null : resembleComponent(bridge.readout.className, components);
       return buildSelection(bridge.readout, { tokens, component, resembles, tag: node?.tag });

@@ -72,16 +72,21 @@ export function resembleComponent(
   return best;
 }
 
-/** Resolve a selected node to a project component via `data-component` / tag heuristics. */
+/**
+ * Resolve a selected node to a project component. Recognition order: an explicit
+ * `data-component` attribute, then the React-fiber component candidates (nearest-first
+ * — so a design-system component that never forwards `data-component` to its DOM root
+ * is still recognized), then the tag capitalized to a roster name. Matching against
+ * the roster filters fiber noise (wrapper components that aren't project components).
+ */
 export function resolveComponent(
   node: BridgeNode | undefined,
   components: InspectorComponent[],
+  candidates: string[] = [],
 ): ComponentBinding | null {
-  if (!node) return null;
-  const wanted = (node.component ?? node.tag).toLowerCase();
-  const match =
-    components.find((c) => c.name.toLowerCase() === wanted) ??
-    components.find((c) => c.name.toLowerCase() === capitalize(node.tag).toLowerCase());
+  const wanted = [node?.component, ...candidates].filter((s): s is string => !!s).map((s) => s.toLowerCase());
+  let match = wanted.length ? components.find((c) => wanted.includes(c.name.toLowerCase())) : undefined;
+  if (!match && node) match = components.find((c) => c.name.toLowerCase() === capitalize(node.tag).toLowerCase());
   if (!match) return null;
   const variants: VariantControl[] = match.props.map((p) => ({
     ...p,

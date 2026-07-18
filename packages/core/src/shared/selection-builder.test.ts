@@ -30,6 +30,7 @@ function readout(over: Partial<NodeReadout> = {}): NodeReadout {
     },
     customProps: over.customProps ?? {},
     dataComponent: over.dataComponent ?? "button",
+    componentCandidates: over.componentCandidates ?? [],
     className: over.className ?? "btn",
     children: over.children ?? [],
     text: over.text,
