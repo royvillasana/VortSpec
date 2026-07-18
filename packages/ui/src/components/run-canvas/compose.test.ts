@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   resembleComponent,
+  resolveComponent,
   matchTokenName,
   tokenNameFromVar,
   tokensForField,
@@ -8,7 +9,7 @@ import {
   buildSelectionContext,
 } from "./compose";
 import { classifyFieldEdit, classifyVariantEdit } from "./pending";
-import type { InspectorComponent, Selection } from "@vortspec/core/ipc";
+import type { InspectorComponent, Selection, BridgeNode } from "@vortspec/core/ipc";
 
 describe("matchTokenName", () => {
   const tokens = [
@@ -138,5 +139,31 @@ describe("resembleComponent", () => {
 
   it("returns null when no variant class set is fully present", () => {
     expect(resembleComponent("grid gap-4 bg-primary", [button])).toBeNull(); // only 1 of primary's 2 classes
+  });
+});
+
+describe("resolveComponent — recognition signals", () => {
+  const div = (over: Partial<BridgeNode> = {}): BridgeNode =>
+    ({ id: "n1", tag: "div", classes: [], childCount: 0, ...over }) as BridgeNode;
+
+  it("recognizes via the data-component attribute", () => {
+    expect(resolveComponent(div({ component: "Button" }), [button])?.name).toBe("Button");
+  });
+
+  it("recognizes a design-system component via React-fiber candidates (no data-component)", () => {
+    // The DOM node is a bare <div> with no data-component, but the fiber says Button.
+    expect(resolveComponent(div(), [button], ["Slot", "Button"])?.name).toBe("Button");
+  });
+
+  it("ignores fiber candidates that aren't project components (wrapper noise)", () => {
+    expect(resolveComponent(div(), [button], ["Slot", "ForwardRef"])).toBeNull();
+  });
+
+  it("still recognizes a <button> tag as the Button component when nothing else matches", () => {
+    expect(resolveComponent(div({ tag: "button" }), [button])?.name).toBe("Button");
+  });
+
+  it("returns null for genuine markup with no signal", () => {
+    expect(resolveComponent(div(), [button], [])).toBeNull();
   });
 });

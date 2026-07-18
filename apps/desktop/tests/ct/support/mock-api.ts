@@ -49,6 +49,10 @@ export interface MockConfig {
   ensureStorybook?: { state: "present" | "installed" | "failed"; installed: boolean; storyCount: number; error?: string };
   /** Replayed to onAgentEvent subscribers (with the started run's id) on startRun. */
   runScript?: RunEvent[];
+  /** FileSnapshot[] returned by snapshotTokenScope() (compose flow). */
+  snapshot?: { path: string; content: string }[];
+  /** When false, composeCheckTarget() reports the run's file is not committable (§6.8). */
+  composeTargetOk?: boolean;
   /** Manifest returned by getManifest(). */
   manifest?: ManifestResult;
   /** Manifest returned by getManifest() after a run transcript completes (design-doc wrote it). */
@@ -124,6 +128,12 @@ export interface MockConfig {
   figmaSyncComponents?: import("@vortspec/core/ipc").FigmaSyncResult;
   /** Result returned by figmaSelection(). */
   figmaSelection?: import("@vortspec/core/ipc").FigmaSelection;
+  /** Report returned by getSanitation() — orphan/duplicate tokens for the sanitation UI. */
+  sanitation?: import("@vortspec/core/ipc").TokenSanitation;
+  /** Plan returned by figmaComputePushPlan() — the code→Figma push confirm gate. */
+  pushPlan?: import("@vortspec/core/ipc").PushPlan;
+  /** Result returned by figmaPushVariables(). */
+  figmaPush?: import("@vortspec/core/ipc").FigmaPushResult;
 }
 
 export const EMPTY_TOKENS: InspectorTokensResult = {
@@ -177,6 +187,7 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
   const comments: CommentThread[] = [...(cfg.comments ?? [])];
   // Records Explorer file operations (create/rename/trash) for assertions.
   const fsOps: { op: string; path: string; to?: string }[] = [];
+  const composeOps: { op: string; file?: string; runId?: string; keepOption?: number; files?: string[] }[] = [];
   // Records URLs passed to openInstall (e.g. the Preview bar's Open Browser).
   const installOpens: string[] = [];
   let runSeq = 0;
@@ -188,10 +199,12 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
   // what was sent to Claude (injected grounding, agent tools/system prompt, …).
   const runPrompts: string[] = [];
   const runOpts: Record<string, unknown>[] = [];
+  let lastRunId: string | null = null;
   const startRun = async (opts?: { prompt?: string }): Promise<{ runId: string }> => {
     if (typeof opts?.prompt === "string") runPrompts.push(opts.prompt);
     if (opts) runOpts.push(opts as Record<string, unknown>);
     const runId = `run-${runSeq++}`;
+    lastRunId = runId;
     // Replay AFTER useAgentRun stores runIdRef (a microtask after this resolves),
     // so its `runId === runIdRef.current` filter passes — hence a macrotask.
     setTimeout(() => {
@@ -235,13 +248,31 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
     removeProject: async (id: string) => (cfg.projects ?? []).filter((p) => p.id !== id),
     openFolder: async () => undefined,
     revealPath: async () => undefined,
-    refreshProject: async (path: string) => ({ id: "p", name: "p", path }),
+    refreshProject: async (path: string) => ({
+      id: "p",
+      name: "p",
+      path,
+      // A refreshed recent/opened project is a set-up one by default, so the ide
+      // App's `openProject` routes it to the workspace (not the intake stepper).
+      // Tests that want the un-configured intake path pass an explicit project.
+      toolkit: { present: true, configured: true, version: "1.0.0", updateAvailable: false },
+    }),
     createProject: async () => null,
     toolkitStatus: async () => ({ present: true, configured: true, version: "1.0.0", updateAvailable: false }),
     installToolkit: async () => ({ present: true, configured: true, version: "1.0.0", updateAvailable: false }),
 
     startRun,
-    cancelRun: async () => undefined,
+    // Cancelling ends the run — emit a terminal result so the UI leaves its
+    // running state (Stop → Send), as a real cancel would.
+    cancelRun: async () => {
+      if (lastRunId) {
+        const id = lastRunId;
+        setTimeout(() => {
+          for (const sub of eventSubs) sub({ runId: id, event: { kind: "result", isError: true, sessionId: "s" } });
+        }, 0);
+      }
+      return undefined;
+    },
     hasActiveRun: async () => cfg.hasActiveRun ?? false,
     lastRun: async () => cfg.lastRun ?? null,
     getUsage: async () =>
@@ -420,6 +451,21 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
         appName: "VortSpec",
         message: "figma-cli isn't installed yet.",
       },
+    // Warm-up call the IDE fires whenever a workspace opens (App.tsx). It is
+    // fire-and-forget in the app, but a MISSING mock method is a TypeError at the
+    // call site, not a rejected promise — so `.catch()` never sees it, React
+    // unmounts, and every workspace-scoped CT times out on an empty page.
+    figmaEnsureConnected: async () =>
+      cfg.figma ?? {
+        installed: false,
+        cliDir: "/Users/dev/figma-cli",
+        daemonRunning: false,
+        connected: false,
+        mode: null,
+        openFiles: [],
+        appName: "VortSpec",
+        message: "figma-cli isn't installed yet.",
+      },
     figmaOpenAppManagement: async () => undefined,
     figmaConnect: async () =>
       cfg.figma ?? {
@@ -479,10 +525,41 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
     inspectorComponents: async () =>
       (generated && cfg.componentsAfterRun) || cfg.components || EMPTY_COMPONENTS,
     setTokenValue: async () => cfg.tokens ?? EMPTY_TOKENS,
+    // Token sanitation + edit methods (change: token-fidelity-sanitation). The
+    // Inspector calls getSanitation on mount — a missing mock method is a synchronous
+    // TypeError that unmounts React and blanks the page (see figmaEnsureConnected note
+    // above), so every one of these must exist even when a test doesn't exercise it.
+    getSanitation: async () => cfg.sanitation ?? { orphans: [], duplicates: [] },
+    collapseToken: async () => cfg.tokens ?? EMPTY_TOKENS,
+    createToken: async () => cfg.tokens ?? EMPTY_TOKENS,
+    setTokenModeMap: async () => cfg.tokens ?? EMPTY_TOKENS,
+    figmaComputePushPlan: async () => cfg.pushPlan ?? { collection: "VortSpec", entries: [] },
+    figmaPushVariables: async () =>
+      cfg.figmaPush ?? { ok: true, created: 0, updated: 0, source: "cli", message: "Pushed to Figma." },
     getVerification: async () => cfg.verification ?? { findings: [] },
     snapshotComponent: async () => [],
-    snapshotTokenScope: async () => [],
-    restoreFiles: async () => undefined,
+    snapshotTokenScope: async () => cfg.snapshot ?? [],
+    snapshotSourceScope: async () => cfg.snapshot ?? [],
+    restoreFiles: async (_p: string, files: { path: string }[]) => {
+      composeOps.push({ op: "restore", files: files.map((f) => f.path) });
+      return undefined;
+    },
+    composeAccept: async (_p: string, file: string, runId: string, keepOption: number) => {
+      composeOps.push({ op: "accept", file, runId, keepOption });
+      return { ok: true, file };
+    },
+    composeSweep: async (_p: string, files: string[]) => {
+      composeOps.push({ op: "sweep", files });
+      return undefined;
+    },
+    composeCheckTarget: async (_p: string, file: string) =>
+      cfg.composeTargetOk === false
+        ? { ok: false, reason: `${file} is git-ignored (a generated or build file) — an edit there would be lost.` }
+        : { ok: true },
+    composeSweepProject: async (_p: string) => {
+      composeOps.push({ op: "sweepProject" });
+      return { swept: [] };
+    },
 
     // Stateful in-memory comment store (mirrors the repo-backed store's merge/append).
     listComments: async () => [...comments].sort((a, b) => a.id.localeCompare(b.id)),
@@ -517,5 +594,6 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
   };
   (window as unknown as { __ideResolutions: IdeActionResult[] }).__ideResolutions = ideResolutions;
   (window as unknown as { __fsOps: typeof fsOps }).__fsOps = fsOps;
+  (window as unknown as { __composeOps: typeof composeOps }).__composeOps = composeOps;
   (window as unknown as { __openInstalls: string[] }).__openInstalls = installOpens;
 }

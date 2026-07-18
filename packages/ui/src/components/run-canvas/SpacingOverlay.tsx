@@ -96,6 +96,18 @@ export function SpacingOverlay({
     return (e: React.PointerEvent): void => {
       e.preventDefault();
       e.stopPropagation();
+      // Capture the pointer to THIS band element so the drag keeps receiving move/up
+      // even while the cursor is over the embedded <webview> — without this the guest
+      // swallows the events and pointerup never fires, so the drag stays stuck until
+      // the next click. (Capture retargets to the element but events still bubble to
+      // the window listeners below.)
+      const el = e.currentTarget as HTMLElement;
+      const pointerId = e.pointerId;
+      try {
+        el.setPointerCapture(pointerId);
+      } catch {
+        /* capture unsupported — window listeners still cover the non-webview case */
+      }
       setActive(band.prop);
       const startX = e.clientX;
       const startY = e.clientY;
@@ -113,16 +125,25 @@ export function SpacingOverlay({
         if (!raf) raf = requestAnimationFrame(flush);
       };
       const up = (): void => {
-        window.removeEventListener("pointermove", move);
-        window.removeEventListener("pointerup", up);
+        el.removeEventListener("pointermove", move);
+        el.removeEventListener("pointerup", up);
+        el.removeEventListener("lostpointercapture", up);
+        try {
+          el.releasePointerCapture(pointerId);
+        } catch {
+          /* already released */
+        }
         if (raf) cancelAnimationFrame(raf);
         const value = `${Math.max(0, Math.round(latest))}px`;
         onLive({ [band.prop]: value });
         onCommit({ key: band.prop, value, cssProps: [band.prop] });
         setActive(null);
       };
-      window.addEventListener("pointermove", move);
-      window.addEventListener("pointerup", up);
+      // With pointer capture, events are dispatched to `el` — listen there. Also end on
+      // lostpointercapture (e.g. the element unmounts) so the drag never gets stuck.
+      el.addEventListener("pointermove", move);
+      el.addEventListener("pointerup", up);
+      el.addEventListener("lostpointercapture", up);
     };
   }
 

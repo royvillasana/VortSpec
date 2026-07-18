@@ -34,6 +34,7 @@ import {
   setInspectorTokenValue,
   createInspectorToken,
   snapshotTokenScope,
+  snapshotSourceScope,
   writeTokenModeMap,
   collapseTokenToAlias,
 } from "./inspector/token-parser";
@@ -47,6 +48,12 @@ import {
   snapshotComponent,
   restoreFiles,
 } from "./inspector/component-reader";
+import {
+  acceptComposition,
+  sweepComposition,
+  checkComposeTarget,
+  sweepProjectScaffold,
+} from "./compose/compose-apply";
 import type { FileSnapshot } from "@vortspec/core/ipc";
 import { listThreads } from "./workspace/comment-store";
 import { postComment, resolveComment, shareComments } from "./workspace/comment-sync";
@@ -397,8 +404,17 @@ const handlers: Record<IpcChannel, Handler> = {
     snapshotComponent(req.projectPath, req.file)) as Handler,
   "inspector:snapshotTokenScope": ((projectPath: string) =>
     snapshotTokenScope(projectPath)) as Handler,
+  "inspector:snapshotSourceScope": ((projectPath: string) =>
+    snapshotSourceScope(projectPath)) as Handler,
   "inspector:restoreFiles": ((req: { projectPath: string; files: FileSnapshot[] }) =>
     restoreFiles(req.projectPath, req.files).then(() => undefined)) as Handler,
+  "compose:accept": ((req: { projectPath: string; file: string; runId: string; keepOption: number }) =>
+    acceptComposition(req.projectPath, req.file, req.runId, req.keepOption)) as Handler,
+  "compose:sweep": ((req: { projectPath: string; files: string[] }) =>
+    sweepComposition(req.projectPath, req.files).then(() => undefined)) as Handler,
+  "compose:checkTarget": ((req: { projectPath: string; file: string }) =>
+    checkComposeTarget(req.projectPath, req.file)) as Handler,
+  "compose:sweepProject": ((projectPath: string) => sweepProjectScaffold(projectPath)) as Handler,
   "comments:list": ((projectPath: string) => listThreads(projectPath)) as Handler,
   "comments:upsert": ((req: { projectPath: string; thread: CommentThread }) =>
     postComment(req.projectPath, req.thread)) as Handler,

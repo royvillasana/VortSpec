@@ -1,0 +1,291 @@
+import { describe, it, expect } from "vitest";
+import {
+  composeResultSchema,
+  MAX_COMPOSE_OPTIONS,
+  buildComposePrompt,
+  buildMovePrompt,
+  hasUsableRoster,
+  parseComposeResult,
+  type ComposePromptInput,
+  type MovePromptInput,
+} from "./compose-run";
+import type { InspectorComponent } from "./inspector";
+
+const comp = (over: Partial<InspectorComponent> & { name: string }): InspectorComponent =>
+  ({
+    level: "molecule",
+    description: "",
+    file: `src/${over.name}.tsx`,
+    props: [],
+    tokens: [],
+    status: "built",
+    issues: [],
+    specPath: null,
+    reportPath: null,
+    ...over,
+  }) as InspectorComponent;
+
+const ROSTER: InspectorComponent[] = [
+  comp({ name: "Card", description: "A content card", tokens: ["--space-4", "--radius-md"], variants: ["padding"] }),
+  comp({
+    name: "Button",
+    description: "A primary action",
+    props: [{ key: "variant", kind: "enum", options: ["primary", "ghost"], classes: {} }],
+  }),
+];
+
+const input = (over: Partial<ComposePromptInput> = {}): ComposePromptInput => ({
+  runId: "r1",
+  roster: ROSTER,
+  tokens: ["--space-4", "--radius-md", "--color-accent"],
+  designMd: "# Design\nUse generous spacing.",
+  intent: "a filters row",
+  slot: { anchorLabel: "Card", anchorText: "Featured", position: "before", axis: "row", file: "src/Home.tsx" },
+  ...over,
+});
+
+const option = (index: number, over: Record<string, unknown> = {}) => ({
+  index,
+  title: `Option ${index}`,
+  axis: "layout",
+  componentsUsed: ["Card"],
+  ...over,
+});
+
+describe("composeResultSchema", () => {
+  it("accepts up to three distinct options with provenance", () => {
+    const r = composeResultSchema.parse({
+      options: [option(0), option(1, { axis: "density" }), option(2, { axis: "components" })],
+    });
+    expect(r.options).toHaveLength(3);
+    expect(r.options[0].componentsUsed).toEqual(["Card"]);
+    expect(r.fewerReason).toBeNull();
+    expect(r.noMatch).toBeNull();
+  });
+
+  it("accepts fewer options with a stated reason (R2)", () => {
+    const r = composeResultSchema.parse({
+      options: [option(0), option(1)],
+      fewerReason: "The roster has only a Card and a Button; a third distinct composition would be a near-duplicate.",
+    });
+    expect(r.options).toHaveLength(2);
+    expect(r.fewerReason).toContain("near-duplicate");
+  });
+
+  it("rejects more than three options (the count is never exceeded)", () => {
+    expect(() =>
+      composeResultSchema.parse({ options: [option(0), option(1), option(2), option(3)] }),
+    ).toThrow();
+    expect(MAX_COMPOSE_OPTIONS).toBe(3);
+  });
+
+  it("accepts a no-component-match result that offers extraction", () => {
+    const r = composeResultSchema.parse({
+      options: [],
+      noMatch: { reason: "No roster component renders a testimonial card.", suggestedName: "TestimonialCard" },
+    });
+    expect(r.noMatch?.suggestedName).toBe("TestimonialCard");
+  });
+
+  it("rejects an empty result that is neither options nor a no-match", () => {
+    expect(() => composeResultSchema.parse({ options: [] })).toThrow();
+  });
+
+  it("tolerates real-run variance: missing title/axis and gappy indices still parse", () => {
+    // A run's JSON isn't always perfect — don't reject the whole result over it.
+    const r = composeResultSchema.parse({ options: [{ componentsUsed: ["Card"] }, { index: 2, title: "B" }] });
+    expect(r.options).toHaveLength(2);
+    expect(r.options[0].title).toBe(""); // defaulted, not rejected
+  });
+});
+
+describe("hasUsableRoster", () => {
+  it("is false for an empty roster (the no-silent-markup signal)", () => {
+    expect(hasUsableRoster([])).toBe(false);
+    expect(hasUsableRoster(ROSTER)).toBe(true);
+  });
+});
+
+describe("buildComposePrompt", () => {
+  it("carries the user's intent so the composition reflects what they asked for", () => {
+    expect(buildComposePrompt(input({ intent: "a testimonials carousel" }))).toContain("a testimonials carousel");
+  });
+
+  it("emphasizes the components the user picked to build from", () => {
+    const p = buildComposePrompt(input({ preferredComponents: ["Card", "Button"] }));
+    expect(p).toContain("specifically chose these components");
+    expect(p).toContain("Card, Button");
+    // No such line when none are picked.
+    expect(buildComposePrompt(input({ preferredComponents: [] }))).not.toContain("specifically chose");
+  });
+
+  it("grounds in the roster, tokens, DESIGN.md, and the anchor's leading text", () => {
+    const p = buildComposePrompt(input());
+    expect(p).toContain("Card");
+    expect(p).toContain("Button");
+    expect(p).toContain("variant=[primary|ghost]"); // prop options surfaced
+    expect(p).toContain("--space-4"); // token grounding
+    expect(p).toContain("Use generous spacing."); // DESIGN.md included
+    expect(p).toContain('leading text is "Featured"'); // the disambiguator
+    expect(p).toContain("before");
+  });
+
+  it("encodes the distinctness discipline and the count ceiling", () => {
+    const p = buildComposePrompt(input({ count: 3 }));
+    expect(p).toContain("DIFFERENT axis");
+    expect(p).toContain("Squint test");
+    expect(p).toMatch(/Never exceed 3/);
+  });
+
+  it("clamps the requested count into 1..3", () => {
+    expect(buildComposePrompt(input({ count: 9 }))).toMatch(/at most 3 option/);
+    expect(buildComposePrompt(input({ count: 0 }))).toMatch(/at most 1 option/);
+  });
+
+  it("instructs marker-wrapped writes carrying the run id, and a JSON result", () => {
+    const p = buildComposePrompt(input({ runId: "run-xyz" }));
+    expect(p).toContain("VORTSPEC:COMPOSE:BEGIN run=run-xyz option=N");
+    expect(p).toContain("VORTSPEC:COMPOSE:END run=run-xyz option=N");
+    expect(p).toContain("```json");
+  });
+
+  it("instructs data-component tagging so inserts are detected as components, not markup", () => {
+    expect(buildComposePrompt(input())).toContain('data-component="<ComponentName>"');
+  });
+
+  it("tells the run to escalate ambiguity and refuse generated files", () => {
+    const p = buildComposePrompt(input());
+    expect(p).toMatch(/MORE THAN ONE location/);
+    expect(p).toMatch(/generated, build-output, or git-ignored file/);
+    expect(p).toMatch(/stopped/);
+    expect(p).toMatch(/no roster component fits/i);
+  });
+
+  it("carries the size hint as a soft hint when present", () => {
+    const p = buildComposePrompt(input({ sizeHint: { width: 320, height: 120 } }));
+    expect(p).toContain("320×120");
+    expect(p).toContain("SOFT hint");
+  });
+
+  it("lets the user override the inferred axis", () => {
+    // The slot infers row, but the user chose column.
+    const p = buildComposePrompt(
+      input({ insertSpec: { placement: "into-existing", axis: "column", slotCount: 1 } }),
+    );
+    expect(p).toContain("vertical (column) flow");
+    expect(p).toContain("Insert as a column");
+    expect(p).not.toContain("horizontal (row) flow");
+  });
+
+  it("keeps slot count independent of the AI option count", () => {
+    // slotCount 4 with the default option count (3) — the two never conflate.
+    const p = buildComposePrompt(
+      input({ count: 3, insertSpec: { placement: "into-existing", axis: "row", slotCount: 4 } }),
+    );
+    expect(p).toContain("Create 4 items"); // the layout quantity
+    expect(p).toMatch(/at most 3 option/); // the AI-option ceiling, unchanged
+  });
+
+  it("instructs a new-container placement for new-row / new-column", () => {
+    const p = buildComposePrompt(
+      input({ insertSpec: { placement: "new-column", axis: "column", slotCount: 3 } }),
+    );
+    expect(p).toContain("Create a NEW column container with 3 slot(s)");
+  });
+});
+
+describe("buildMovePrompt", () => {
+  const moveInput = (over: Partial<MovePromptInput> = {}): MovePromptInput => ({
+    runId: "mv1",
+    source: { fingerprint: "fp-card", label: "Card", text: "Featured" },
+    sourceFile: "src/Home.tsx",
+    target: { anchorLabel: "Sidebar", anchorText: "Filters", position: "after", axis: "column", file: "src/Home.tsx" },
+    snapshotFiles: ["src/Home.tsx"],
+    ...over,
+  });
+
+  it("frames the run as a CUT + RE-INSERT move that preserves the element", () => {
+    const p = buildMovePrompt(moveInput());
+    expect(p).toMatch(/CUT it/);
+    expect(p).toMatch(/RE-INSERT/);
+    expect(p).toContain("This is a MOVE");
+    // Both ends are named with their disambiguating leading text.
+    expect(p).toContain('"Card" element whose leading text is "Featured"');
+    expect(p).toContain('after the "Sidebar" element whose leading text is "Filters"');
+    expect(p).toContain("vertical (column) flow");
+  });
+
+  it("wraps the re-inserted element in exactly one option=0 scaffold carrying the run id", () => {
+    const p = buildMovePrompt(moveInput({ runId: "run-move-xyz" }));
+    expect(p).toContain("run-move-xyz");
+    expect(p).toContain("option=0");
+    expect(p).toContain('data-vs-option="0"');
+    // A move is N=1 — never asks for multiple options.
+    expect(p).not.toMatch(/at most 3 option/);
+  });
+
+  it("instructs a stop on ambiguous/missing origin or destination", () => {
+    const p = buildMovePrompt(moveInput());
+    expect(p).toMatch(/MORE THAN ONE location.*STOP/s);
+    expect(p).toMatch(/cannot be found.*STOP/s);
+    expect(p).toMatch(/destination is ambiguous.*STOP|STOP with candidates/s);
+    expect(p).toMatch(/belongs to no container.*STOP/s);
+  });
+
+  it("names the snapshot set and forbids editing outside it (Decision 6)", () => {
+    const p = buildMovePrompt(moveInput({ snapshotFiles: ["src/Home.tsx", "src/components/Card.tsx"] }));
+    expect(p).toContain("src/Home.tsx, src/components/Card.tsx");
+    expect(p).toMatch(/NOT in that set.*STOP/s);
+    expect(p).toMatch(/generated, build-output, or git-ignored/);
+  });
+
+  it("carries no source file gracefully when the host could not resolve one", () => {
+    const p = buildMovePrompt(moveInput({ sourceFile: null, target: { anchorLabel: "Sidebar", anchorText: null, position: "before", axis: "row", file: null } }));
+    expect(p).toContain('The element to move: the "Card" element');
+    expect(p).not.toContain("in null");
+    expect(p).toContain("horizontal (row) flow");
+  });
+
+  it("its result parses with the shared compose contract (N=1)", () => {
+    // A realistic move result the run would emit → reuses composeResultSchema.
+    const text = '```json\n{ "options": [ { "index": 0, "title": "Moved Card", "axis": "relocation", "componentsUsed": ["Card"] } ], "fewerReason": null, "noMatch": null, "stopped": null, "writtenFile": "src/Home.tsx" }\n```';
+    const r = parseComposeResult(text);
+    expect(r?.options).toHaveLength(1);
+    expect(r?.writtenFile).toBe("src/Home.tsx");
+  });
+});
+
+describe("parseComposeResult", () => {
+  it("extracts and validates a fenced JSON result from run output", () => {
+    const text = [
+      "I composed two options.",
+      "```json",
+      '{ "options": [ { "index": 0, "title": "A", "axis": "layout", "componentsUsed": ["Card"] } ], "fewerReason": "only one fits", "noMatch": null }',
+      "```",
+    ].join("\n");
+    const r = parseComposeResult(text);
+    expect(r?.options).toHaveLength(1);
+    expect(r?.fewerReason).toBe("only one fits");
+  });
+
+  it("returns null when the JSON is invalid against the contract (e.g. >3 options)", () => {
+    const text = '```json\n{ "options": [ {"index":0,"title":"a","axis":"x"},{"index":1,"title":"b","axis":"y"},{"index":2,"title":"c","axis":"z"},{"index":3,"title":"d","axis":"w"} ] }\n```';
+    expect(parseComposeResult(text)).toBeNull();
+  });
+
+  it("returns null when there is no JSON at all", () => {
+    expect(parseComposeResult("I could not do it.")).toBeNull();
+  });
+
+  it("parses a no-component-match result", () => {
+    const text = '```json\n{ "options": [], "noMatch": { "reason": "nothing fits", "suggestedName": "Hero" } }\n```';
+    expect(parseComposeResult(text)?.noMatch?.suggestedName).toBe("Hero");
+  });
+
+  it("parses a stopped result (ambiguous/not-found anchor) with candidates", () => {
+    const text = '```json\n{ "options": [], "stopped": { "reason": "The anchor matched two <Card> siblings.", "candidates": ["Home.tsx:20", "Home.tsx:41"] } }\n```';
+    const r = parseComposeResult(text);
+    expect(r?.stopped?.reason).toContain("two <Card>");
+    expect(r?.stopped?.candidates).toEqual(["Home.tsx:20", "Home.tsx:41"]);
+  });
+});

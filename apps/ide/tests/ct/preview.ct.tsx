@@ -6,7 +6,7 @@ const PROJECT = {
   id: "p1",
   name: "acme-design-system",
   path: "/Users/dev/acme-design-system",
-  toolkit: { present: true, version: "1.0.0", updateAvailable: false },
+  toolkit: { present: true, configured: true, version: "1.0.0", updateAvailable: false },
 } as Project;
 
 const RUNNING: DevServerStatus = { state: "running", url: "http://localhost:5199", script: "dev", message: null };

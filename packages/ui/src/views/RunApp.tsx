@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { DevServerStatus, Project, InspectorToken, InspectorComponent, FileSnapshot } from "@vortspec/core/ipc";
+import type { DevServerStatus, Project, InspectorToken, InspectorComponent, FileSnapshot, StorybookEntry } from "@vortspec/core/ipc";
 import { buildSelection, alignToCss, flowToCss } from "@vortspec/core/selection-builder";
 import { api } from "../lib/api";
 import { Button, Spinner } from "@vortspec/ui/ui";
 import { ProjectRail, projectRailItems } from "@vortspec/ui/ProjectRail";
-import { DesignPanel } from "../components/run-canvas/DesignPanel";
+import { DesignPanel, ChangesBar } from "../components/run-canvas/DesignPanel";
 import { RunCanvas } from "../components/run-canvas/RunCanvas";
 import {
   resolveComponent,
@@ -28,6 +28,11 @@ import { CommentsPanel } from "../components/run-canvas/CommentsPanel";
 import type { Anchor } from "@vortspec/core/comment";
 import { useAgentRun } from "../lib/useAgentRun";
 import { useAssistantTask } from "../lib/assistant-task";
+import { usePublishCanvasSelection } from "../lib/canvas-selection";
+import { useComposeRun } from "../lib/useComposeRun";
+import { useDragMove } from "../lib/useDragMove";
+import { ComposePanel } from "../components/run-canvas/ComposePanel";
+import { AssignDialog } from "../components/run-canvas/AssignDialog";
 import { routedModel } from "../lib/model-routing";
 import { RunDoctor, type DoctorState } from "../components/run-canvas/RunDoctor";
 import { buildDoctorPrompt, buildEnvSetupPrompt, relFileFromSource } from "../components/run-canvas/doctor";
@@ -53,6 +58,7 @@ export function RunApp({
   onHistory,
   onSource,
   onSendToChat,
+  saveSignal,
 }: {
   project: Project;
   /** Which server to run: the project's own `app` (default) or its `storybook`. */
@@ -71,6 +77,8 @@ export function RunApp({
   onSource: () => void;
   /** Send the current canvas selection to the assistant chat as context (IDE). */
   onSendToChat?: (text: string, file?: string | null) => void;
+  /** Bumped by File > Save / Ctrl+S — flush pending canvas edits to disk. */
+  saveSignal?: number;
 }): React.JSX.Element {
   const [dev, setDev] = useState<DevServerStatus>({ state: "stopped", url: null, script: null, message: null });
   const [frameLoading, setFrameLoading] = useState(true);
@@ -327,10 +335,15 @@ export function RunApp({
     if (!bridge.readout) return null;
     try {
       const node = bridge.tree?.nodes[bridge.readout.nodeId];
-      const component = resolveComponent(node, components);
+      // Recognize via data-component OR the React-fiber component names the guest read
+      // (so a design-system component with no data-component attribute isn't mislabeled
+      // as hand-written markup).
+      const component = resolveComponent(node, components, bridge.readout.componentCandidates);
       // If it's not a component instance, see whether it *resembles* one (should reuse it).
       const resembles = component ? null : resembleComponent(bridge.readout.className, components);
-      return buildSelection(bridge.readout, { tokens, component, resembles, tag: node?.tag });
+      // Label a non-roster React component by its real fiber name (not the bare tag).
+      const componentHint = component ? null : (bridge.readout.componentCandidates[0] ?? null);
+      return buildSelection(bridge.readout, { tokens, component, resembles, tag: node?.tag, componentHint });
     } catch (err) {
       // Never let a selection-building error blank the whole Run view.
       console.error("[run-canvas] failed to build selection:", err);
@@ -355,11 +368,300 @@ export function RunApp({
   }
 
   // ── Pending edits + gated commit ──────────────────────────────────────────
-  const [pending, setPending] = useState<Record<string, PendingEdit>>({});
+  // Un-saved canvas edits persist locally (keyed by project) so leaving the Playground
+  // for another app section — or restarting — doesn't lose them; they're replayed into
+  // the preview by fingerprint on return (change: persist + replay).
+  const pendingKey = `vortspec:pending:${project.path}`;
+  const [pending, setPending] = useState<Record<string, PendingEdit>>(() => {
+    try {
+      const raw = typeof localStorage !== "undefined" ? localStorage.getItem(pendingKey) : null;
+      return raw ? (JSON.parse(raw) as Record<string, PendingEdit>) : {};
+    } catch {
+      return {};
+    }
+  });
   const [applying, setApplying] = useState(false);
   const [review, setReview] = useState(false);
   const [snapshot, setSnapshot] = useState<FileSnapshot[] | null>(null);
   const structuralMod = useAgentRun();
+
+  // Persist the ledger on every change (removed when empty — nothing owed).
+  useEffect(() => {
+    try {
+      if (Object.keys(pending).length > 0) localStorage.setItem(pendingKey, JSON.stringify(pending));
+      else localStorage.removeItem(pendingKey);
+    } catch {
+      /* storage unavailable — in-memory only */
+    }
+  }, [pending, pendingKey]);
+
+  // Replay un-saved edits into the preview once the bridge (re)attaches — i.e. when
+  // the page reloads after returning to the Playground. Idempotent; the guest resolves
+  // each edit by fingerprint and re-applies its style/class/text.
+  const pendingRef = useRef(pending);
+  pendingRef.current = pending;
+  const replayedRef = useRef(false);
+  useEffect(() => {
+    if (!bridge.ready) {
+      replayedRef.current = false;
+      return;
+    }
+    if (replayedRef.current) return;
+    replayedRef.current = true;
+    const edits = Object.values(pendingRef.current)
+      .filter((e) => e.fingerprint)
+      .map((e) => ({
+        fingerprint: e.fingerprint as string,
+        css: e.css,
+        text: e.key === "content" ? e.value : undefined,
+        removeClasses: e.removeClasses,
+        addClasses: e.addClasses,
+      }));
+    if (edits.length) bridge.replayOverrides(edits);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bridge.ready]);
+
+  // Unsaved canvas edits — the dirty state behind Save / Ctrl+S and the header dot.
+  const dirty = Object.keys(pending).length > 0;
+  // File > Save / Ctrl+S flushes pending edits to disk (same as the Apply bar).
+  const lastSaveRef = useRef(saveSignal);
+  useEffect(() => {
+    if (saveSignal === undefined || saveSignal === lastSaveRef.current) return;
+    lastSaveRef.current = saveSignal;
+    if (Object.keys(pending).length > 0) void applyEdits();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [saveSignal]);
+
+  // Publish the current selection as ambient context for the assistant (tasks §4):
+  // it appears as a persistent, detachable chip on the composer, grounds every
+  // turn while the selection holds, and never triggers a run. Withdrawn when the
+  // selection clears, the element is lost after a reload, or the canvas unmounts.
+  const publishSelection = usePublishCanvasSelection();
+  useEffect(() => {
+    publishSelection(
+      selection
+        ? {
+            key: selection.nodeId,
+            label: selection.component ?? selection.label,
+            payload: buildSelectionContext(selection, Object.values(pending)),
+          }
+        : null,
+    );
+  }, [selection, pending, publishSelection]);
+  useEffect(() => () => publishSelection(null), [publishSelection]);
+
+  // Storybook-backed component previews: the picker shows each component's story in
+  // its initial state (from the project's running Storybook), the same way the
+  // Playground shows the app. Storybook is started alongside the app on entry so the
+  // preview works without first visiting the Storybook activity. Null until it's up.
+  const [storyUrl, setStoryUrl] = useState<string | null>(null);
+  const [storyIndex, setStoryIndex] = useState<StorybookEntry[]>([]);
+  useEffect(() => {
+    if (!canvas || !isApp) return;
+    let alive = true;
+    const applyStorybook = async (status: DevServerStatus | null): Promise<void> => {
+      if (!alive || !status?.url) return;
+      setStoryUrl(status.url);
+      const idx = await api.storybookIndex(status.url).catch(() => [] as StorybookEntry[]);
+      if (alive) setStoryIndex(idx);
+    };
+    void (async () => {
+      const running = await api.devServerStatus(project.path).catch(() => null);
+      if (!alive) return;
+      if (running?.url) return void applyStorybook(running);
+      // Start Storybook in the background only if it's installed (don't provision here).
+      const sb = await api.storybookStatus(project.path).catch(() => null);
+      if (!alive || !sb?.installed) return;
+      void applyStorybook(await api.startDevServer(project.path).catch(() => null));
+    })();
+    // Storybook takes a moment to boot — pick up its URL when the status flips to running.
+    const off = api.onDevServerUpdate(({ projectPath, kind: k, status }) => {
+      if (projectPath === project.path && k === "storybook") void applyStorybook(status);
+    });
+    return () => {
+      alive = false;
+      off();
+    };
+  }, [canvas, isApp, project.path]);
+  const storyUrlFor = useCallback(
+    (name: string): string | null => {
+      if (!storyUrl) return null;
+      const entry = storyIndex.find(
+        (e) =>
+          e.type === "story" &&
+          (e.title === name || e.title.endsWith(`/${name}`) || (e.importPath ?? "").includes(`/${name}.`)),
+      );
+      if (!entry) return null;
+      return `${storyUrl.replace(/\/+$/, "")}/iframe.html?id=${encodeURIComponent(entry.id)}&viewMode=story&shortcuts=false&singleStory=true`;
+    },
+    [storyUrl, storyIndex],
+  );
+
+  // Crash recovery (§6.14, §7.4): when the canvas opens, sweep any composition
+  // scaffold a prior session left orphaned in source (accept/discard clean up the
+  // happy path; a crash between write and accept does not). Idempotent + file-
+  // derived, so it needs no in-memory record of the interrupted run.
+  useEffect(() => {
+    if (canvas) void api.composeSweepProject(project.path);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canvas, project.path]);
+
+  // Insert-mode composition run (§6): placeholder → prompt → options → accept/discard.
+  const compose = useComposeRun({
+    project,
+    bridge,
+    roster: components,
+    tokenNames: tokens.map((t) => t.name),
+    designMd: null,
+  });
+  // No roster component fits → route into the existing extract-component flow.
+  const onComposeExtract = useCallback(
+    (suggestedName: string | null) => {
+      onSendToChat?.(
+        `Extract a new reusable ${suggestedName ? `"${suggestedName}" ` : ""}component into the design system (with variants + tokens) for the slot I was composing, then use it there.`,
+        null,
+      );
+    },
+    [onSendToChat],
+  );
+  // An accepted insert owes an SDD-DE Screen Creation *update* (design R3) — offer it.
+  const onComposeScreenUpdate = useCallback(
+    (file: string) => {
+      dispatchTask?.({
+        title: "Update screen spec",
+        prompt: `A new composition was inserted into ${file}. Run the SDD-DE Screen Creation update to reflect it: UPDATE the existing screen's spec to match what was inserted. Do NOT create a new screen.`,
+        allowModify: true,
+      });
+    },
+    [dispatchTask],
+  );
+  // "Later" defers the owed update to a Save-changes bar at the bottom of the Design
+  // sidebar (so the spec debt stays visible through the insert session, not lost).
+  const [owedScreenUpdates, setOwedScreenUpdates] = useState<string[]>([]);
+  const onComposeScreenLater = useCallback((file: string) => {
+    setOwedScreenUpdates((cur) => (cur.includes(file) ? cur : [...cur, file]));
+  }, []);
+  const dismissScreenUpdate = useCallback((file: string) => {
+    setOwedScreenUpdates((cur) => cur.filter((f) => f !== file));
+  }, []);
+  const saveScreenUpdates = useCallback(() => {
+    owedScreenUpdates.forEach((f) => onComposeScreenUpdate(f));
+    setOwedScreenUpdates([]);
+  }, [owedScreenUpdates, onComposeScreenUpdate]);
+  // Cancel the insert entirely: drop the placeholder, clear any preview, reset the
+  // flow. Closes the dialog and un-picks the segment the user was targeting.
+  const onComposeClose = useCallback(() => {
+    bridge.dismissPlaceholder();
+    bridge.previewOption(null);
+    compose.reset();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bridge.dismissPlaceholder, bridge.previewOption, compose.reset]);
+  // The panel is present through the whole flow: an active placeholder, an in-flight
+  // or resolved run, or an owed screen-update notice.
+  const composeActive =
+    mode === "insert" && (!!bridge.placeholder || compose.phase !== "idle" || !!compose.screenUpdateOwed);
+
+  // ── Live drag-and-drop move (§5.8) ────────────────────────────────────────
+  // Behind a feature flag (Decision 3): when off, a drag is simply never opened as
+  // a move and inspect works as before.
+  const dragMoveEnabled = true;
+  const move = useDragMove({ project, bridge });
+  // A completed drop over a valid slot opens the gated move. The dragged element was
+  // the selected node, so its label grounds the origin anchor; the drop clears once
+  // consumed so a re-render can't re-open it.
+  const selectionRefForMove = useRef(selection);
+  selectionRefForMove.current = selection;
+  useEffect(() => {
+    if (!dragMoveEnabled || !bridge.dragDrop || move.phase !== "idle") return;
+    const drop = bridge.dragDrop;
+    bridge.clearDragDrop();
+    // The guest already moved the element live — register it for Keep/Revert (no run).
+    // Use the guest-reported label + leading text so the reconcile run can locate the
+    // element's JSX (a bare tag alone is ambiguous across a screen).
+    move.onDrop(
+      {
+        fingerprint: drop.sourceFingerprint,
+        label: drop.sourceLabel || selectionRefForMove.current?.label || "the selected element",
+        text: drop.sourceText,
+      },
+      drop.target,
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bridge.dragDrop]);
+  // An invalid drop / forced cancel surfaces a transient sentence, auto-cleared.
+  useEffect(() => {
+    if (!bridge.dragMessage) return;
+    const id = setTimeout(() => bridge.clearDragMessage(), 4000);
+    return () => clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bridge.dragMessage]);
+  // The move's Keep/Revert gate, docked in the Design sidebar (no floating dialog).
+  // Keep is the ONE action — it reconciles the JSX and is done; no second "Save
+  // changes" prompt for a move.
+  const moveBar =
+    dragMoveEnabled && mode === "inspect" && move.phase !== "idle"
+      ? {
+          phase: move.phase as "moved" | "reconciling" | "error",
+          error: move.error,
+          progress: move.progress,
+          onKeep: () => void move.keep(),
+          onRevert: () => void move.revert(),
+          onStop: () => void move.cancel(),
+        }
+      : null;
+  // The one set of props behind the persistent sidebar changes-footer, shared by the
+  // DesignPanel bar and the comment-mode footer so un-saved work shows in every mode.
+  const changesBarProps = {
+    pending: Object.values(pending),
+    applying,
+    applyStatus: applying ? (structuralMod.model.activity.at(-1)?.label ?? null) : null,
+    review,
+    onApply: () => void applyEdits(),
+    onDiscard: discardEdits,
+    onRemovePending: removePending,
+    onKeep: keepEdits,
+    onRevert: () => void revertEdits(),
+    owedScreenUpdates,
+    onSaveScreenUpdates: saveScreenUpdates,
+    onDismissScreenUpdate: dismissScreenUpdate,
+    move: moveBar,
+  };
+
+  // Inspect-click assign dialog (§ dialog slice): the roster to assign/reuse a
+  // component for the selected element. It auto-opens ONLY for elements not already
+  // recognized as a component (genuine hand-written markup), so a real component
+  // isn't nagged — but any element can open it on demand (assignForced).
+  const [assignDismissed, setAssignDismissed] = useState<string | null>(null);
+  const [assignForced, setAssignForced] = useState<string | null>(null);
+  // On-demand only: the assign/replace-component picker opens when the user clicks
+  // "Assign" in the Design panel — it no longer auto-opens for anything it fails to
+  // recognize as a component (that nagged real components whose recognition signal
+  // the heuristics miss). Never while dragging.
+  const assignActive = mode === "inspect" && !!selection && !bridge.drag && selection.nodeId === assignForced;
+  const assignSelection = selection; // narrowed for the handlers below
+  const onAssignComponent = useCallback(
+    (component: { name: string; file: string | null }, opts: { allSimilar: boolean }) => {
+      if (!onSendToChat || !assignSelection) return;
+      onSendToChat(
+        `Refactor the selected element to use the existing "${component.name}" design-system component instead of hand-written markup, choosing the variant/props that match its current appearance. Preserve look and behavior and remove the duplicated styles.` +
+          (opts.allSimilar
+            ? ` Then find every OTHER occurrence of this same hand-written pattern across the app and refactor each one to use "${component.name}" as well, so all matching instances reference the component (not just this selection).`
+            : "") +
+          `\n\n${buildSelectionContext(assignSelection)}`,
+        component.file,
+      );
+      setAssignDismissed(assignSelection.nodeId);
+    },
+    [onSendToChat, assignSelection],
+  );
+  const onAssignExtract = useCallback(() => {
+    if (!onSendToChat || !assignSelection) return;
+    onSendToChat(
+      `The selected element is hand-written markup that resembles a reusable pattern. Extract it into a new reusable component in the design system (with variants + tokens), then replace this usage with the new component.\n\n${buildSelectionContext(assignSelection)}`,
+      assignSelection.file,
+    );
+    setAssignDismissed(assignSelection.nodeId);
+  }, [onSendToChat, assignSelection]);
 
   // Stable methods (the hook memoizes these) + refs to current state, so the
   // Design-panel callbacks keep a stable identity across the 60fps geometry
@@ -433,12 +735,13 @@ export function RunApp({
     ) => {
       const sel = selectionRef.current;
       if (!sel) return;
+      const fp = readoutRef.current?.fingerprint || undefined;
       const uses = (n: string): number => tokensRef.current.find((t) => t.name === n)?.uses ?? 0;
       setPending((p) => {
         const next = { ...p };
         for (const e of edits) {
           const edit = classifyFieldEdit(sel, e.key, e.value, e.cssProps, uses, forceStyle, e.css, e.token);
-          next[edit.key] = edit;
+          next[edit.key] = { ...edit, fingerprint: fp }; // stamp the target for replay
         }
         return next;
       });
@@ -522,7 +825,8 @@ export function RunApp({
         if (remove.length || add.length) setClass(id, remove, add);
         variantDraftRef.current[key] = value;
       }
-      setPending((p) => ({ ...p, [`variant:${key}`]: classifyVariantEdit(key, value, remove, add) }));
+      const fp = readoutRef.current?.fingerprint || undefined;
+      setPending((p) => ({ ...p, [`variant:${key}`]: { ...classifyVariantEdit(key, value, remove, add), fingerprint: fp } }));
     },
     [setClass],
   );
@@ -675,6 +979,16 @@ export function RunApp({
       <main className="flex min-w-0 flex-1 flex-col bg-vs-bg-primary">
         <header className="flex flex-none items-center gap-3 border-b border-vs-border-default px-5 py-3">
           <span className="text-[15px] font-semibold">{isApp ? "Playground" : "Storybook"}</span>
+          {dirty && (
+            <span
+              data-testid="canvas-dirty"
+              title="Unsaved canvas edits — Save (⌘S) to write them to disk"
+              className="flex items-center gap-1 text-[11px] text-vs-text-muted"
+            >
+              <span className="h-1.5 w-1.5 rounded-full bg-amber-500" aria-hidden />
+              Unsaved
+            </span>
+          )}
           <span className="rounded border border-vs-border-default px-1.5 py-px text-[10px] uppercase tracking-wide text-vs-text-muted">
             localhost
           </span>
@@ -829,16 +1143,16 @@ export function RunApp({
             <div className="relative flex h-full min-h-0">
               <aside
                 style={{ width: panelW }}
-                className="flex-none overflow-hidden border-r border-vs-border-default bg-vs-bg-surface"
+                className="flex flex-none flex-col overflow-hidden border-r border-vs-border-default bg-vs-bg-surface"
               >
                 {mode === "comment" ? (
+                  <>
+                  <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
                   <CommentsPanel
                     threads={comments.threads}
                     anchorRects={bridge.anchorRects}
                     activeId={comments.activeId}
                     me={{ login: comments.author.githubLogin, name: comments.author.name }}
-                    mode={mode}
-                    onModeChange={setMode}
                     onSelect={(t) => {
                       comments.setActiveId(t.id);
                       bridge.scrollToAnchor(t.anchor.fingerprint);
@@ -846,6 +1160,10 @@ export function RunApp({
                     onResolve={(id, resolved) => void resolveComment(id, resolved)}
                     onShare={() => void comments.share()}
                   />
+                  </div>
+                  {/* Un-saved canvas work stays visible + saveable even in comment mode. */}
+                  <ChangesBar {...changesBarProps} />
+                  </>
                 ) : (
                 <DesignPanel
                   selection={selection}
@@ -864,46 +1182,20 @@ export function RunApp({
                   onRemovePending={removePending}
                   onKeep={keepEdits}
                   onRevert={() => void revertEdits()}
-                  mode={mode}
-                  onModeChange={setMode}
-                  zoom={zoom}
-                  onZoomBy={zoomBy}
-                  onZoomReset={resetZoom}
                   colorTokens={colorTokens}
                   tokens={tokens}
-                  resembles={selection?.resembles ?? null}
-                  components={components}
-                  onAssignComponent={
+                  onAssign={
                     onSendToChat && selection
-                      ? (component, opts) =>
-                          onSendToChat(
-                            `Refactor the selected element to use the existing "${component.name}" design-system component instead of hand-written markup, choosing the variant/props that match its current appearance. Preserve look and behavior and remove the duplicated styles.` +
-                              (opts.allSimilar
-                                ? ` Then find every OTHER occurrence of this same hand-written pattern across the app and refactor each one to use "${component.name}" as well, so all matching instances reference the component (not just this selection).`
-                                : "") +
-                              `\n\n${buildSelectionContext(selection)}`,
-                            component.file,
-                          )
+                      ? () => {
+                          setAssignForced(selection.nodeId);
+                          setAssignDismissed((d) => (d === selection.nodeId ? null : d));
+                        }
                       : undefined
                   }
-                  onUseComponent={
-                    onSendToChat && selection?.resembles
-                      ? () =>
-                          onSendToChat(
-                            `Refactor the selected element to use the existing "${selection.resembles!.name}" design-system component instead of hand-written markup, picking the variant that matches its current appearance. Preserve look and behavior and remove the duplicated styles.\n\n${buildSelectionContext(selection)}`,
-                            selection.resembles!.file,
-                          )
-                      : undefined
-                  }
-                  onExtractComponent={
-                    onSendToChat && selection
-                      ? () =>
-                          onSendToChat(
-                            `The selected element is hand-written markup that resembles a reusable pattern. Extract it into a new reusable component in the design system (with variants + tokens), then replace this usage with the new component.\n\n${buildSelectionContext(selection)}`,
-                            selection.file,
-                          )
-                      : undefined
-                  }
+                  owedScreenUpdates={owedScreenUpdates}
+                  onSaveScreenUpdates={saveScreenUpdates}
+                  onDismissScreenUpdate={dismissScreenUpdate}
+                  move={moveBar}
                 />
                 )}
               </aside>
@@ -914,13 +1206,51 @@ export function RunApp({
                 onPointerDown={startPanelResize}
                 className="w-1 flex-none cursor-col-resize bg-vs-border-default/40 hover:bg-vs-accent"
               />
-              <div className="min-w-0 flex-1">
+              <div className="relative min-w-0 flex-1">
+                {composeActive && (
+                  <ComposePanel
+                    compose={compose}
+                    components={components}
+                    onExtract={onComposeExtract}
+                    onScreenUpdate={onComposeScreenUpdate}
+                    onScreenLater={onComposeScreenLater}
+                    onClose={onComposeClose}
+                    getStoryUrl={storyUrlFor}
+                    defaultAxis={bridge.placeholder?.target.axis ?? "row"}
+                    onInsertSpecChange={(s) => bridge.setPlaceholderSpec(s.axis, s.slotCount)}
+                  />
+                )}
+                {assignActive && onSendToChat && assignSelection && (
+                  <AssignDialog
+                    recognized={assignSelection.component}
+                    recommended={assignSelection.resembles?.name ?? null}
+                    components={components}
+                    onAssign={onAssignComponent}
+                    onExtract={onAssignExtract}
+                    onClose={() => {
+                      setAssignDismissed(assignSelection.nodeId);
+                      setAssignForced((f) => (f === assignSelection.nodeId ? null : f));
+                    }}
+                    getStoryUrl={storyUrlFor}
+                  />
+                )}
+                {bridge.dragMessage && (
+                  <div
+                    data-testid="drag-message"
+                    className="pointer-events-none absolute left-1/2 top-3 z-40 -translate-x-1/2 rounded-md border border-vs-border-default bg-vs-bg-elevated/95 px-3 py-1.5 text-[12px] text-vs-text-secondary shadow-lg backdrop-blur"
+                  >
+                    {bridge.dragMessage}
+                  </div>
+                )}
                 <RunCanvas
                   src={embedUrl}
                   guestPreloadUrl={guestPreload}
                   bridge={bridge}
                   mode={mode}
+                  onModeChange={setMode}
                   zoom={zoom}
+                  onZoomBy={zoomBy}
+                  onZoomReset={resetZoom}
                   onLiveEdit={applyLive}
                   onCommitEdit={commitStyleEdits}
                   onSendToChat={

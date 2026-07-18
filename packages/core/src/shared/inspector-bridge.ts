@@ -66,6 +66,9 @@ export type Rect = z.infer<typeof rectSchema>;
  */
 export const nodeReadoutSchema = z.object({
   nodeId: z.string(),
+  /** Durable fingerprint of the element — survives a reload, so an unsaved edit can be
+   *  re-applied to the same element after navigating away and back (persist + replay). */
+  fingerprint: z.string().default(""),
   rect: rectSchema,
   /** Computed style subset (padding, margin, border-radius, color, font, …). */
   computed: z.record(z.string(), z.string()).default({}),
@@ -73,6 +76,13 @@ export const nodeReadoutSchema = z.object({
   customProps: z.record(z.string(), z.string()).default({}),
   /** `data-component` value, when present. */
   dataComponent: z.string().nullable().default(null),
+  /**
+   * Component display-names that rendered this element, nearest-first, read from the
+   * React fiber (change: canvas — component detection). The host matches these against
+   * the roster so a design-system component instance is recognized even when it never
+   * forwards a `data-component` attribute to its DOM root. Empty for non-React pages.
+   */
+  componentCandidates: z.array(z.string()).default([]),
   /** The element's full className string, for component/token heuristics. */
   className: z.string().default(""),
   /** Direct element children's border-boxes (guest coords) — used to place gap bands. */
@@ -177,6 +187,55 @@ export const selectionSchema = z.object({
 });
 export type Selection = z.infer<typeof selectionSchema>;
 
+// ── Insert-mode target (guest ⇄ host) ────────────────────────────────
+
+/**
+ * A resolved insertion slot (change: canvas-compose-and-preview-bar). The guest
+ * computes it from `insert-geometry` and streams it as the pointer moves; the
+ * host draws the line. Normalized to an anchor element (by fingerprint, so it
+ * survives a re-render) plus a before/after position, so the two names for one
+ * slot resolve identically.
+ */
+export const insertTargetSchema = z.object({
+  /** Stable fingerprint of the anchor element (from `dom-fingerprint`). */
+  anchorFingerprint: z.string(),
+  position: z.enum(["before", "after"]),
+  /** Container flow axis — drives the cursor and the line orientation. */
+  axis: z.enum(["row", "column"]),
+  /** The insertion line, a segment drawn ACROSS the flow axis, in guest coords. */
+  line: z.object({ x1: z.number(), y1: z.number(), x2: z.number(), y2: z.number() }),
+  /** The anchor's human label (component name or tag), for the composition prompt. */
+  anchorLabel: z.string().optional(),
+  /** The anchor's leading text — the documented disambiguator for the run. */
+  anchorText: z.string().nullable().optional(),
+});
+export type InsertTargetWire = z.infer<typeof insertTargetSchema>;
+
+// ── Structure snapshot (guest → host) ────────────────────────────────
+
+/**
+ * One element in a serialized layout subtree (change: canvas-live-structural-editing).
+ * A container has `childIds`; a leaf has none. The host feeds these to the pure
+ * `structure-model` to recognize sections/rows/columns and their drop slots.
+ */
+export const structureNodeSchema = z.object({
+  id: z.string(),
+  fingerprint: z.string(),
+  rect: rectSchema,
+  /** Computed layout subset: display, flex-direction, grid-auto-flow, gap. */
+  computed: z.record(z.string(), z.string()).default({}),
+  /** Element-child ids in DOM order (empty for a leaf). */
+  childIds: z.array(z.string()).default([]),
+});
+export type StructureNodeWire = z.infer<typeof structureNodeSchema>;
+
+/** A flat snapshot of a scanned subtree: the root plus every node under it. */
+export const structureSnapshotSchema = z.object({
+  rootId: z.string(),
+  nodes: z.record(z.string(), structureNodeSchema).default({}),
+});
+export type StructureSnapshotWire = z.infer<typeof structureSnapshotSchema>;
+
 // ── Wire protocol (discriminated unions) ─────────────────────────────
 
 /** Messages the host renderer sends into the guest bridge. */
@@ -187,9 +246,10 @@ export const bridgeCommandSchema = z.discriminatedUnion("t", [
   /**
    * Toggle guest input handling: `inspect` intercepts hover/click to drive
    * selection from the canvas; `interact` lets clicks reach the app normally;
-   * `comment` intercepts a click to anchor a new comment to the target element.
+   * `comment` intercepts a click to anchor a new comment to the target element;
+   * `insert` hit-tests the gaps between siblings to place a composition slot.
    */
-  z.object({ t: z.literal("setMode"), mode: z.enum(["inspect", "interact", "comment"]) }),
+  z.object({ t: z.literal("setMode"), mode: z.enum(["inspect", "interact", "comment", "insert"]) }),
   /**
    * Track these comment-anchor fingerprints — the guest resolves each to a live
    * rect and streams `anchorRects` (re-emitting on scroll/resize/re-render) so pins
@@ -206,6 +266,26 @@ export const bridgeCommandSchema = z.discriminatedUnion("t", [
   }),
   /** Clear overrides for one node, or all when `nodeId` is omitted. */
   z.object({ t: z.literal("clearOverride"), nodeId: z.string().optional() }),
+  /**
+   * Re-apply a set of unsaved visual edits by DURABLE FINGERPRINT after a full page
+   * reload (change: persist + replay). Used when returning to the Playground from
+   * another app section: the guest resolves each fingerprint to its current element
+   * and re-applies the style/class/text override, restoring the un-saved preview.
+   */
+  z.object({
+    t: z.literal("replayOverrides"),
+    edits: z
+      .array(
+        z.object({
+          fingerprint: z.string(),
+          css: z.record(z.string(), z.string()).optional(),
+          text: z.string().optional(),
+          removeClasses: z.array(z.string()).default([]),
+          addClasses: z.array(z.string()).default([]),
+        }),
+      )
+      .default([]),
+  }),
   /** Set the visible text of a node (live text-content edit). */
   z.object({ t: z.literal("setText"), nodeId: z.string(), text: z.string() }),
   /** Swap classes on a node for a live variant preview (remove old, add new). */
@@ -215,6 +295,58 @@ export const bridgeCommandSchema = z.discriminatedUnion("t", [
     remove: z.array(z.string()).default([]),
     add: z.array(z.string()).default([]),
   }),
+  /**
+   * Insert mode (change: canvas-compose-and-preview-bar). Materialize an ephemeral
+   * placeholder at the given slot — the guest inserts a real DOM node that
+   * participates in layout so the user sees the true size in context. Writes
+   * nothing to disk.
+   */
+  z.object({ t: z.literal("createPlaceholder"), target: insertTargetSchema }),
+  /** Resize the active placeholder live (soft hint, not a constraint). */
+  z.object({
+    t: z.literal("resizePlaceholder"),
+    width: z.number().optional(),
+    height: z.number().optional(),
+  }),
+  /** Remove the active placeholder (discard / cancel / mode change). */
+  z.object({ t: z.literal("dismissPlaceholder") }),
+  /**
+   * Re-render the active placeholder to the user's chosen axis and slot count
+   * (change: canvas-live-structural-editing, §3) — the placeholder reflects the
+   * layout the composition will use before the run.
+   */
+  z.object({
+    t: z.literal("setPlaceholderSpec"),
+    axis: z.enum(["row", "column"]),
+    slotCount: z.number().int().min(1),
+  }),
+  /**
+   * Preview one composed option in place: hide every `[data-vs-option]` whose index
+   * differs from `option` (null shows them all). Lets the cycler render one option
+   * at a time in the real slot without rewriting source per cycle.
+   */
+  z.object({ t: z.literal("previewOption"), option: z.number().int().nonnegative().nullable() }),
+  /**
+   * Request a structural snapshot of a subtree (change: canvas-live-structural-editing).
+   * `nodeId` scopes the scan to that container's subtree; null scans from the body.
+   */
+  z.object({ t: z.literal("requestStructure"), nodeId: z.string().nullable().default(null) }),
+  /**
+   * Abort an in-flight drag from the host side (change: canvas-live-structural-editing,
+   * §5) — e.g. the move panel closed or the flow reset. The guest tears down the
+   * gesture and clears the ghost without emitting a drop. The guest also self-cancels
+   * on Escape or a lost fingerprint (those arrive as a `dragCancel` event).
+   */
+  z.object({ t: z.literal("cancelDrag") }),
+  /**
+   * Direct-manipulation move (change: canvas-direct-manipulation-move). A drop
+   * reparents the dragged element in the live DOM immediately; these gate the
+   * ephemeral result. `revertMove` re-inserts the element at its origin (instant
+   * undo, nothing written); `clearMove` forgets the tracked move without moving
+   * anything (used once Keep reloads real source).
+   */
+  z.object({ t: z.literal("revertMove") }),
+  z.object({ t: z.literal("clearMove") }),
 ]);
 export type BridgeCommand = z.infer<typeof bridgeCommandSchema>;
 
@@ -253,6 +385,69 @@ export const bridgeEventSchema = z.discriminatedUnion("t", [
   }),
   /** Live rects for the watched comment anchors (fingerprint → rect, null = lost). */
   z.object({ t: z.literal("anchorRects"), rects: z.record(z.string(), rectSchema.nullable()) }),
+  /** The insertion slot under the pointer in insert mode (null when over none). */
+  z.object({ t: z.literal("insertTarget"), target: insertTargetSchema.nullable() }),
+  /** A placeholder was materialized — its live rect and the slot it holds. */
+  z.object({
+    t: z.literal("placeholderReady"),
+    target: insertTargetSchema,
+    rect: rectSchema,
+  }),
+  /**
+   * The placeholder could not be re-acquired after a hot reload and was removed.
+   * `message` is a human sentence for the canvas (never reattached to the wrong
+   * element).
+   */
+  z.object({ t: z.literal("placeholderLost"), message: z.string() }),
+  /** The requested structural snapshot of a subtree (change: canvas-live-structural-editing). */
+  z.object({ t: z.literal("structure"), snapshot: structureSnapshotSchema }),
+  /**
+   * Drag-move (change: canvas-live-structural-editing, §5). A drag began on the
+   * selected element in inspect mode — the guest owns the gesture (Decision 3). The
+   * host mounts the ghost/overlay and the move affordance.
+   */
+  z.object({
+    t: z.literal("dragStart"),
+    /** Stable fingerprint of the dragged element — the move run's origin anchor. */
+    sourceFingerprint: z.string(),
+    nodeId: z.string(),
+    /** The dragged element's rect at grab time (the ghost's initial size). */
+    rect: rectSchema,
+  }),
+  /**
+   * A per-frame drag update (throttled to one per rAF — Decision 8). Carries the
+   * drop slot under the pointer (null when over none → the "no-drop" cursor hint),
+   * the ghost rect trailing the pointer, and whether the pop-out modifier is lifting
+   * the target to the parent container's slot (Decision 4). Merged into ONE event so
+   * the whole drag stays within the existing single-flight rAF budget.
+   */
+  z.object({
+    t: z.literal("dragTarget"),
+    target: insertTargetSchema.nullable(),
+    ghost: rectSchema,
+    poppedOut: z.boolean().default(false),
+  }),
+  /**
+   * The drag ended (pointerup). `target` null → the drop belonged to no container and
+   * is refused (no run). Otherwise the host opens the gated move to relocate the
+   * element's JSX into that slot (Decision 2).
+   */
+  z.object({
+    t: z.literal("dragDrop"),
+    sourceFingerprint: z.string(),
+    /** The dragged element's label (component name or tag) — the move run's origin anchor. */
+    sourceLabel: z.string().default(""),
+    /** Its leading text — the documented disambiguator for locating its JSX. */
+    sourceText: z.string().nullable().default(null),
+    target: insertTargetSchema.nullable(),
+    poppedOut: z.boolean().default(false),
+  }),
+  /**
+   * The drag was abandoned without a drop — Escape, or the dragged fingerprint could
+   * not be re-acquired after a mid-drag HMR patch (Decision 8). `message` is a human
+   * sentence for the canvas when the cancel was forced (null for a plain Escape).
+   */
+  z.object({ t: z.literal("dragCancel"), message: z.string().nullable().default(null) }),
 ]);
 export type BridgeEvent = z.infer<typeof bridgeEventSchema>;
 

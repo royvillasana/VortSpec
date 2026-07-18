@@ -6,6 +6,8 @@ import {
   type BridgeTree,
   type NodeReadout,
   type Rect,
+  type InsertTargetWire,
+  type StructureSnapshotWire,
 } from "@vortspec/core/ipc";
 
 /** Minimal shape of an Electron <webview> element (typed loosely to avoid the dep). */
@@ -14,8 +16,14 @@ interface WebviewEl extends HTMLElement {
   reload(): void;
 }
 
-/** Canvas input mode: select (inspect), use the app (interact), or pin a comment. */
-export type CanvasMode = "inspect" | "interact" | "comment";
+/** Canvas input mode: select (inspect), use the app (interact), pin a comment, or place an insert slot. */
+export type CanvasMode = "inspect" | "interact" | "comment" | "insert";
+
+/** The live placeholder the guest has materialized for a composition slot. */
+export interface PlaceholderState {
+  target: InsertTargetWire;
+  rect: Rect;
+}
 type WebviewIpcEvent = Event & { channel: string; args: unknown[] };
 
 export interface InspectorBridge {
@@ -55,6 +63,51 @@ export interface InspectorBridge {
   /** A comment-mode click's anchor payload (the target to pin a new thread to), or null. */
   commentTarget: { nodeId: string; fingerprint: string; label: string; component: string | null; rect: Rect } | null;
   clearCommentTarget: () => void;
+  /** The insertion slot under the pointer in insert mode (null when over none). */
+  insertTarget: InsertTargetWire | null;
+  /** The materialized composition placeholder, or null when none is placed. */
+  placeholder: PlaceholderState | null;
+  /** A human sentence when the placeholder was lost after a reload (else null). */
+  placeholderLost: string | null;
+  clearPlaceholderLost: () => void;
+  /** Resize the active placeholder (soft hint) — drives the guest's live resize. */
+  resizePlaceholder: (size: { width?: number; height?: number }) => void;
+  /** Dismiss the active placeholder (discard / cancel). */
+  dismissPlaceholder: () => void;
+  /** Re-render the placeholder to a chosen axis + slot count (the user's layout choice). */
+  setPlaceholderSpec: (axis: "row" | "column", slotCount: number) => void;
+  /** Preview one composed option in place (null shows all) — drives the option cycler. */
+  previewOption: (option: number | null) => void;
+  /** The latest structural snapshot of a subtree (from `requestStructure`), or null. */
+  structure: StructureSnapshotWire | null;
+  /** Ask the guest for a subtree's structural snapshot (null nodeId scans from the body). */
+  requestStructure: (nodeId?: string | null) => void;
+  /** The live drag in progress (ghost rect trailing the pointer + current drop slot), or null. */
+  drag: {
+    sourceFingerprint: string;
+    nodeId: string;
+    ghost: Rect;
+    target: InsertTargetWire | null;
+    poppedOut: boolean;
+  } | null;
+  /** A completed drop over a valid slot the host should turn into a gated move, or null. */
+  dragDrop: {
+    sourceFingerprint: string;
+    sourceLabel: string;
+    sourceText: string | null;
+    target: InsertTargetWire;
+    poppedOut: boolean;
+  } | null;
+  clearDragDrop: () => void;
+  /** A human sentence for an invalid drop or a force-cancelled drag (HMR-lost), else null. */
+  dragMessage: string | null;
+  clearDragMessage: () => void;
+  /** Abort an in-flight drag from the host (the move panel closed / the flow reset). */
+  cancelDrag: () => void;
+  /** Undo an ephemeral live-DOM move (Revert) — re-insert the element at its origin. */
+  revertMove: () => void;
+  /** Forget the tracked ephemeral move without moving anything (after Keep reloads source). */
+  clearMove: () => void;
   /** Live rects of the watched comment anchors (fingerprint → rect, null = currently lost). */
   anchorRects: Record<string, Rect | null>;
   /** Tell the guest which anchor fingerprints to track (for pin placement). */
@@ -65,6 +118,10 @@ export interface InspectorBridge {
   captureThumbnail: (rect: Rect) => Promise<string>;
   applyOverride: (id: string, css: Record<string, string>) => void;
   clearOverride: (id?: string) => void;
+  /** Re-apply a set of unsaved visual edits by fingerprint after a reload (persist + replay). */
+  replayOverrides: (
+    edits: { fingerprint: string; css?: Record<string, string>; text?: string; removeClasses?: string[]; addClasses?: string[] }[],
+  ) => void;
   /** Re-request the selected node's readout so the panel reflects its actual state
    *  after a discrete edit or a cleared override. Defaults to the current selection. */
   refreshReadout: (id?: string) => void;
@@ -97,6 +154,13 @@ export function useInspectorBridge(): InspectorBridge {
   const [selectionLost, setSelectionLost] = useState(false);
   const [commentTarget, setCommentTarget] = useState<InspectorBridge["commentTarget"]>(null);
   const [anchorRects, setAnchorRects] = useState<Record<string, Rect | null>>({});
+  const [insertTarget, setInsertTarget] = useState<InsertTargetWire | null>(null);
+  const [placeholder, setPlaceholder] = useState<PlaceholderState | null>(null);
+  const [placeholderLost, setPlaceholderLost] = useState<string | null>(null);
+  const [structure, setStructure] = useState<StructureSnapshotWire | null>(null);
+  const [drag, setDrag] = useState<InspectorBridge["drag"]>(null);
+  const [dragDrop, setDragDrop] = useState<InspectorBridge["dragDrop"]>(null);
+  const [dragMessage, setDragMessage] = useState<string | null>(null);
 
   const send = useCallback((cmd: BridgeCommand) => {
     // `<webview>.send` throws until the view is attached + `dom-ready`. An early
@@ -167,6 +231,54 @@ export function useInspectorBridge(): InspectorBridge {
       case "anchorRects":
         setAnchorRects(event.rects);
         return;
+      case "insertTarget":
+        setInsertTarget(event.target);
+        return;
+      case "placeholderReady":
+        setPlaceholder({ target: event.target, rect: event.rect });
+        setInsertTarget(null); // the line gives way to the placeholder
+        setPlaceholderLost(null);
+        return;
+      case "placeholderLost":
+        // The slot's anchor couldn't be re-acquired after a reload — surface the
+        // reason and drop the placeholder (never point at the wrong element).
+        setPlaceholder(null);
+        setPlaceholderLost(event.message);
+        return;
+      case "structure":
+        setStructure(event.snapshot);
+        return;
+      case "dragStart":
+        setDrag({ sourceFingerprint: event.sourceFingerprint, nodeId: event.nodeId, ghost: event.rect, target: null, poppedOut: false });
+        setDragMessage(null);
+        setDragDrop(null);
+        return;
+      case "dragTarget":
+        // Per-frame update: keep the drag's identity, refresh the ghost + slot.
+        setDrag((cur) =>
+          cur ? { ...cur, ghost: event.ghost, target: event.target, poppedOut: event.poppedOut } : cur,
+        );
+        return;
+      case "dragDrop":
+        setDrag(null);
+        if (event.target) {
+          // A valid slot → hand it to the host to open the gated move.
+          setDragDrop({
+            sourceFingerprint: event.sourceFingerprint,
+            sourceLabel: event.sourceLabel,
+            sourceText: event.sourceText,
+            target: event.target,
+            poppedOut: event.poppedOut,
+          });
+        } else {
+          // A drop belonging to no container is refused (never guessed).
+          setDragMessage("That spot isn't a layout slot — drop the element onto a row or column.");
+        }
+        return;
+      case "dragCancel":
+        setDrag(null);
+        if (event.message) setDragMessage(event.message);
+        return;
     }
   }, []);
 
@@ -220,9 +332,48 @@ export function useInspectorBridge(): InspectorBridge {
   );
 
   const setMode = useCallback(
-    (mode: CanvasMode) => send({ t: "setMode", mode }),
+    (mode: CanvasMode) => {
+      // Leaving insert mode clears its transient host state right away (the guest
+      // tears down its own affordances in parallel).
+      if (mode !== "insert") {
+        setInsertTarget(null);
+        setPlaceholder(null);
+        setPlaceholderLost(null);
+      }
+      // Drag lives inside inspect mode (Decision 3) — leaving it drops any drag state.
+      if (mode !== "inspect") {
+        setDrag(null);
+        setDragDrop(null);
+        setDragMessage(null);
+      }
+      send({ t: "setMode", mode });
+    },
     [send],
   );
+  const resizePlaceholder = useCallback(
+    (size: { width?: number; height?: number }) => send({ t: "resizePlaceholder", ...size }),
+    [send],
+  );
+  const dismissPlaceholder = useCallback(() => {
+    setPlaceholder(null);
+    setInsertTarget(null);
+    send({ t: "dismissPlaceholder" });
+  }, [send]);
+  const previewOption = useCallback((option: number | null) => send({ t: "previewOption", option }), [send]);
+  const setPlaceholderSpec = useCallback(
+    (axis: "row" | "column", slotCount: number) => send({ t: "setPlaceholderSpec", axis, slotCount }),
+    [send],
+  );
+  const requestStructure = useCallback(
+    (nodeId: string | null = null) => send({ t: "requestStructure", nodeId }),
+    [send],
+  );
+  const cancelDrag = useCallback(() => {
+    setDrag(null);
+    send({ t: "cancelDrag" });
+  }, [send]);
+  const revertMove = useCallback(() => send({ t: "revertMove" }), [send]);
+  const clearMove = useCallback(() => send({ t: "clearMove" }), [send]);
   const watchAnchors = useCallback((fingerprints: string[]) => send({ t: "watchAnchors", fingerprints }), [send]);
   const scrollToAnchor = useCallback((fingerprint: string) => send({ t: "scrollToAnchor", fingerprint }), [send]);
   const captureThumbnail = useCallback(async (rect: Rect): Promise<string> => {
@@ -258,6 +409,20 @@ export function useInspectorBridge(): InspectorBridge {
     [send],
   );
   const clearOverride = useCallback((id?: string) => send({ t: "clearOverride", nodeId: id }), [send]);
+  const replayOverrides = useCallback<InspectorBridge["replayOverrides"]>(
+    (edits) =>
+      send({
+        t: "replayOverrides",
+        edits: edits.map((e) => ({
+          fingerprint: e.fingerprint,
+          css: e.css,
+          text: e.text,
+          removeClasses: e.removeClasses ?? [],
+          addClasses: e.addClasses ?? [],
+        })),
+      }),
+    [send],
+  );
   // Re-read the selected node's computed styles after a discrete edit or a clear, so
   // the Design panel reflects the element's *actual* state (ephemeral overrides only
   // emit geometry, not a fresh readout, so the panel would otherwise go stale). Sent
@@ -291,6 +456,24 @@ export function useInspectorBridge(): InspectorBridge {
     clearSelectionLost: useCallback(() => setSelectionLost(false), []),
     commentTarget,
     clearCommentTarget: useCallback(() => setCommentTarget(null), []),
+    insertTarget,
+    placeholder,
+    placeholderLost,
+    clearPlaceholderLost: useCallback(() => setPlaceholderLost(null), []),
+    resizePlaceholder,
+    dismissPlaceholder,
+    setPlaceholderSpec,
+    previewOption,
+    structure,
+    requestStructure,
+    drag,
+    dragDrop,
+    clearDragDrop: useCallback(() => setDragDrop(null), []),
+    dragMessage,
+    clearDragMessage: useCallback(() => setDragMessage(null), []),
+    cancelDrag,
+    revertMove,
+    clearMove,
     anchorRects,
     watchAnchors,
     scrollToAnchor,
@@ -302,6 +485,7 @@ export function useInspectorBridge(): InspectorBridge {
     setMode,
     applyOverride,
     clearOverride,
+    replayOverrides,
     refreshReadout,
     requestTree,
     reload,

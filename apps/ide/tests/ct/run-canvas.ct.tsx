@@ -1,19 +1,31 @@
 import { test, expect } from "@playwright/experimental-ct-react";
 import App from "../../src/renderer/src/App";
 import { DesignPanel } from "@vortspec/ui/DesignPanel";
-import type { Project, Selection, InspectorToken, InspectorComponent } from "@vortspec/core/ipc";
+import { CanvasToolbar } from "@vortspec/ui/CanvasToolbar";
+import { AssignDialog } from "@vortspec/ui/AssignDialog";
+import type { Project, Selection, InspectorToken, InspectorComponent, FsEntry } from "@vortspec/core/ipc";
 
+// `configured: true` matters: App.openProject routes an unconfigured folder to the
+// intake walkthrough instead of the workspace, so the activity bar never mounts and
+// every test here times out looking for it. The field is optional and treated as
+// false, so omitting it silently routes away from the workbench.
 const PROJECT = {
   id: "p1",
   name: "acme-design-system",
   path: "/Users/dev/acme-design-system",
-  toolkit: { present: true, version: "1.0.0", updateAvailable: false },
+  toolkit: { present: true, configured: true, version: "1.0.0", updateAvailable: false },
 } as Project;
+
+const fsTree: Record<string, FsEntry[]> = {
+  "": [{ name: "README.md", path: "README.md", type: "file" }],
+};
 
 const base = {
   profile: { name: "Dev", avatarDataUrl: null, preferences: {} },
   projects: [PROJECT],
   pickFolderResult: PROJECT,
+  fsTree,
+  fsFiles: { "README.md": "# Acme\n" },
 };
 
 const rail = (c: import("@playwright/test").Locator) =>
@@ -49,17 +61,92 @@ test("the Run view offers to create a missing .env", async ({ mount }) => {
   await expect(c.getByRole("button", { name: /Create \.env from \.env\.example/ })).toBeVisible();
 });
 
-test("the Layers header carries the mode toggle and a zoom control at the bottom", async ({ mount }) => {
+test("the canvas toolbar carries the modes and zoom, bottom-center over the canvas", async ({ mount }) => {
   const c = await mount(<App />, { hooksConfig: { mock: base } });
   await openRun(c);
-  // Inspect / Interact live beside the Layers label (the canvas viewport stays clean).
-  await expect(c.getByRole("button", { name: "Inspect" })).toBeVisible();
-  await expect(c.getByRole("button", { name: "Interact" })).toBeVisible();
-  await expect(c.getByRole("button", { name: "Pan" })).toHaveCount(0); // Pan removed
-  // Zoom readout sits at the bottom of the Layers region.
-  await expect(c.getByRole("button", { name: "100%" })).toBeVisible();
-  // The Design panel is a resizable sidebar (like the Explorer rail).
+  const bar = c.getByTestId("canvas-toolbar");
+  await expect(bar).toBeVisible();
+  // The modes moved out of the Layers header onto the toolbar the canvas owns.
+  await expect(bar.getByRole("button", { name: "Interact" })).toBeVisible();
+  await expect(bar.getByRole("button", { name: "Inspect" })).toBeVisible();
+  await expect(bar.getByRole("button", { name: "Comment" })).toBeVisible();
+  await expect(bar.getByRole("button", { name: "Insert" })).toBeVisible();
+  await expect(c.getByRole("button", { name: "Pan" })).toHaveCount(0); // never existed
+  await expect(bar.getByRole("button", { name: "100%" })).toBeVisible();
+  // The Design panel is still a resizable sidebar (like the Explorer rail).
   await expect(c.getByRole("separator", { name: "Resize Design panel" })).toBeVisible();
+});
+
+test("the mode and zoom controls exist exactly once, and survive collapsing Layers", async ({ mount }) => {
+  const c = await mount(<App />, { hooksConfig: { mock: base } });
+  await openRun(c);
+  // The Comments panel used to re-implement this toggle; the Design panel used to
+  // own it. Exactly one implementation now, wherever we are.
+  await expect(c.getByRole("button", { name: "Inspect" })).toHaveCount(1);
+  await expect(c.getByRole("button", { name: "100%" })).toHaveCount(1);
+  // Zoom used to live in the Layers footer and vanish with it.
+  await c.getByRole("button", { name: /Layers/ }).click();
+  await expect(c.getByTestId("canvas-toolbar").getByRole("button", { name: "100%" })).toBeVisible();
+  await expect(c.getByRole("button", { name: "Inspect" })).toHaveCount(1);
+});
+
+test("interact is the resting default mode", async ({ mount }) => {
+  const c = await mount(<App />, { hooksConfig: { mock: base } });
+  await openRun(c);
+  const bar = c.getByTestId("canvas-toolbar");
+  await expect(bar.getByRole("button", { name: "Interact" })).toHaveAttribute("aria-pressed", "true");
+  await expect(bar.getByRole("button", { name: "Inspect" })).toHaveAttribute("aria-pressed", "false");
+});
+
+test("a bridge that is still connecting does not disable anything", async ({ mount }) => {
+  const c = await mount(<App />, { hooksConfig: { mock: base } });
+  await openRun(c);
+  // No guest preload mounts in the CT browser, so the bridge is attaching and has
+  // NOT failed. This is the same state every live reload passes through
+  // (`did-start-loading` → ready=false), so it must not disable a thing —
+  // otherwise Inspect/Comment die on each agent-driven reload.
+  const bar = c.getByTestId("canvas-toolbar");
+  await expect(bar.getByTestId("canvas-bridge-status")).toHaveAttribute("data-state", "connecting");
+  await expect(bar.getByRole("button", { name: "Inspect" })).toBeEnabled();
+  await expect(bar.getByRole("button", { name: "Comment" })).toBeEnabled();
+  await expect(bar.getByRole("button", { name: "Interact" })).toBeEnabled();
+});
+
+// The failed state can't be reached through <App /> in CT (no <webview> means the
+// guest never sends the ok:false `ready` event that sets bridge.error), so the
+// toolbar — a pure presentational component — is driven directly here.
+const barProps = {
+  mode: "interact" as const,
+  onModeChange: () => {},
+  zoom: 1,
+  onZoomBy: () => {},
+  onZoomReset: () => {},
+};
+
+test("a failed bridge disables the modes that need it, but never Interact", async ({ mount }) => {
+  const c = await mount(
+    <CanvasToolbar {...barProps} bridgeReady={false} bridgeError="the page blocked the inspector script" />,
+  );
+  await expect(c.getByTestId("canvas-bridge-status")).toHaveAttribute("data-state", "failed");
+  await expect(c.getByRole("button", { name: "Inspect" })).toBeDisabled();
+  await expect(c.getByRole("button", { name: "Comment" })).toBeDisabled();
+  await expect(c.getByRole("button", { name: "Insert" })).toBeDisabled();
+  // Interact never needs the bridge — the app has to stay usable.
+  await expect(c.getByRole("button", { name: "Interact" })).toBeEnabled();
+  // The reason reads as a human sentence naming the cause and the next step.
+  await expect(c.getByTestId("canvas-bridge-status")).toHaveAttribute(
+    "aria-label",
+    /blocked the inspector script.*still use the app in Interact/,
+  );
+});
+
+test("an attached bridge enables every mode", async ({ mount }) => {
+  const c = await mount(<CanvasToolbar {...barProps} bridgeReady bridgeError={null} />);
+  await expect(c.getByTestId("canvas-bridge-status")).toHaveAttribute("data-state", "live");
+  await expect(c.getByRole("button", { name: "Inspect" })).toBeEnabled();
+  await expect(c.getByRole("button", { name: "Comment" })).toBeEnabled();
+  await expect(c.getByRole("button", { name: "Insert" })).toBeEnabled();
+  await expect(c.getByRole("button", { name: "Interact" })).toBeEnabled();
 });
 
 // A gap bound to space-20; the project has space-16 too.
@@ -166,49 +253,78 @@ const ROSTER: InspectorComponent[] = [
   comp("Card", "molecule"),
 ];
 
-test("assign picker: lists the whole roster (recommended first) and assigns any component to all matches", async ({ mount }) => {
+test("assign dialog: lists the whole roster (recommended first) and assigns any component to all matches", async ({ mount }) => {
   const assigned: { name: string; allSimilar: boolean }[] = [];
   const c = await mount(
-    <DesignPanel
-      selection={UNRECOGNIZED}
-      tree={null}
-      tokens={[]}
+    <AssignDialog
+      recognized={null}
+      recommended="Button"
       components={ROSTER}
-      resembles={{ name: "Button", file: "src/components/ui/Button.tsx" }}
-      onSelectNode={() => {}}
-      onFieldChange={() => {}}
-      onAssignComponent={(comp, opts) => assigned.push({ name: comp.name, allSimilar: opts.allSimilar })}
+      onAssign={(comp, opts) => assigned.push({ name: comp.name, allSimilar: opts.allSimilar })}
+      onClose={() => {}}
     />,
   );
-  // The picker is open for an unrecognized element, with the whole roster listed.
-  await expect(c.getByPlaceholder("Search components…")).toBeVisible();
-  await expect(c.getByRole("button", { name: /ButtonGroup/ })).toBeVisible();
-  await expect(c.getByRole("button", { name: /^Card/ })).toBeVisible();
+  // The whole roster is listed, in the shared picker.
+  const list = c.getByTestId("component-picker-list");
+  await expect(list.getByRole("button", { name: /ButtonGroup/ })).toBeVisible();
+  await expect(list.getByRole("button", { name: /^Card/ })).toBeVisible();
   // The resembled component is flagged Recommended.
   await expect(c.getByText("Recommended")).toBeVisible();
   // "Apply to every matching element" defaults on.
-  const allBox = c.getByRole("checkbox");
-  await expect(allBox).toBeChecked();
+  await expect(c.getByRole("checkbox")).toBeChecked();
   // Assign a DIFFERENT component than the recommendation — ButtonGroup — to all matches.
-  await c.getByRole("button", { name: /ButtonGroup/ }).click();
+  await list.getByRole("button", { name: /ButtonGroup/ }).click();
   expect(assigned).toEqual([{ name: "ButtonGroup", allSimilar: true }]);
 });
 
-test("assign picker: a recognized component shows its badge and only assigns via Reassign", async ({ mount }) => {
+test("assign dialog: a recognized component shows its badge but still lets you reassign", async ({ mount }) => {
+  const c = await mount(
+    <AssignDialog recognized="Card" recommended={null} components={ROSTER} onAssign={() => {}} onClose={() => {}} />,
+  );
+  await expect(c.getByText(/This is your/)).toBeVisible();
+  // The roster is available to reassign right away (no separate expand step).
+  await expect(c.getByTestId("component-picker-list").getByRole("button", { name: /ButtonGroup/ })).toBeVisible();
+});
+
+test("the Design panel no longer carries the assign section", async ({ mount }) => {
+  const c = await mount(
+    <DesignPanel selection={GAP_SELECTION} tree={null} tokens={[]} onSelectNode={() => {}} onFieldChange={() => {}} />,
+  );
+  // Assigning moved to the canvas AssignDialog — the sidebar shows properties only.
+  await expect(c.getByText(/This is your/)).toHaveCount(0);
+  await expect(c.getByPlaceholder("Search components…")).toHaveCount(0);
+});
+
+test("the Design panel header can open the assign dialog on demand", async ({ mount }) => {
+  let opened = 0;
   const c = await mount(
     <DesignPanel
       selection={GAP_SELECTION}
       tree={null}
       tokens={[]}
-      components={ROSTER}
       onSelectNode={() => {}}
       onFieldChange={() => {}}
-      onAssignComponent={() => {}}
+      onAssign={() => (opened += 1)}
     />,
   );
-  await expect(c.getByText(/This is your/)).toBeVisible();
-  // Collapsed by default — the picker only opens on Reassign.
-  await expect(c.getByPlaceholder("Search components…")).toHaveCount(0);
-  await c.getByRole("button", { name: "Reassign" }).click();
-  await expect(c.getByPlaceholder("Search components…")).toBeVisible();
+  // A recognized component offers "Replace"; an unrecognized one offers "Assign".
+  await c.getByRole("button", { name: "Replace" }).click();
+  expect(opened).toBe(1);
+});
+
+test("a dialog is draggable by its header", async ({ mount, page }) => {
+  await mount(
+    <AssignDialog recognized="Card" recommended={null} components={ROSTER} onAssign={() => {}} onClose={() => {}} />,
+  );
+  // The testid is on the component root, so target it page-level (not as a descendant).
+  const panel = page.getByTestId("assign-dialog");
+  await expect(panel).toHaveCSS("transform", "none"); // starts unmoved
+  const handle = page.getByTestId("dialog-drag-handle");
+  const box = (await handle.boundingBox())!;
+  await page.mouse.move(box.x + 30, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 30 - 120, box.y + box.height / 2 + 60, { steps: 5 });
+  await page.mouse.up();
+  // The panel moved (a non-identity transform is now applied).
+  await expect(panel).not.toHaveCSS("transform", "none");
 });

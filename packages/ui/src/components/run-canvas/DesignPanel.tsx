@@ -7,10 +7,8 @@ import type {
   SectionField,
   VariantControl,
   InspectorToken,
-  InspectorComponent,
 } from "@vortspec/core/ipc";
 import { NodeTree } from "./NodeTree";
-import type { CanvasMode } from "../../lib/useInspectorBridge";
 import type { PendingEdit } from "./pending";
 import { matchTokenName, tokenNameFromVar, tokensForField } from "./compose";
 import { ColorTokenField, type ColorToken } from "./ColorPicker";
@@ -42,18 +40,13 @@ export function DesignPanel({
   onRemovePending,
   onKeep,
   onRevert,
-  mode = "inspect",
-  onModeChange,
-  zoom = 1,
-  onZoomBy,
-  onZoomReset,
   colorTokens = [],
   tokens = [],
-  resembles = null,
-  onUseComponent,
-  onExtractComponent,
-  components = [],
-  onAssignComponent,
+  onAssign,
+  owedScreenUpdates = [],
+  onSaveScreenUpdates,
+  onDismissScreenUpdate,
+  move,
 }: {
   selection: Selection | null;
   tree: BridgeTree | null;
@@ -78,43 +71,40 @@ export function DesignPanel({
   onRemovePending?: (key: string) => void;
   onKeep?: () => void;
   onRevert?: () => void;
-  /** Canvas input mode (Inspect / Interact) — shown beside the Layers label. */
-  mode?: CanvasMode;
-  onModeChange?: (mode: CanvasMode) => void;
-  /** Canvas zoom — controls sit at the bottom of the Layers region. */
-  zoom?: number;
-  onZoomBy?: (factor: number) => void;
-  onZoomReset?: () => void;
   /** Project color tokens for the Figma-style color picker (Libraries tab). */
   colorTokens?: ColorToken[];
   /** All project tokens — length fields offer/recognize spacing/radius/typography ones. */
   tokens?: InspectorToken[];
-  /** A component this element resembles but isn't using (the recommended pick), or null. */
-  resembles?: { name: string; file: string | null } | null;
-  /** Ask the assistant to refactor this element to use the resembled component. */
-  onUseComponent?: () => void;
-  /** Ask the assistant to extract this element as a new reusable component. */
-  onExtractComponent?: () => void;
-  /** The full component roster — the assignable list surfaced in the picker. */
-  components?: InspectorComponent[];
-  /** Assign a chosen component to the selection (and optionally all similar elements). */
-  onAssignComponent?: (component: { name: string; file: string | null }, opts: { allSimilar: boolean }) => void;
+  /** Open the assign/replace-component dialog for the current selection (on demand). */
+  onAssign?: () => void;
+  /** Screen files whose spec owes a Screen Creation update (deferred from an insert). */
+  owedScreenUpdates?: string[];
+  /** Run the owed Screen Creation update for every deferred screen. */
+  onSaveScreenUpdates?: () => void;
+  /** Drop one owed screen update without running it. */
+  onDismissScreenUpdate?: (file: string) => void;
+  /** An in-flight drag-move's Keep/Revert gate — surfaced here instead of a floating dialog. */
+  move?: {
+    phase: "moved" | "reconciling" | "error";
+    error?: string | null;
+    progress?: string | null;
+    onKeep: () => void;
+    onRevert: () => void;
+    onStop: () => void;
+  } | null;
 }): JSX.Element {
   return (
-    <div className="flex h-full min-h-0 flex-col bg-vs-bg-primary text-vs-text-primary">
-      {/* Layers — node tree, with the Inspect/Interact toggle in the header and
-          the zoom controls at the bottom (keeps the canvas viewport clean). */}
+    <div className="flex h-full min-h-0 flex-1 flex-col bg-vs-bg-primary text-vs-text-primary">
+      {/* Layers — just the node tree. The mode toggle and zoom controls moved to
+          the canvas toolbar (change: canvas-compose-and-preview-bar), so they no
+          longer disappear with this region and are no longer duplicated by the
+          Comments panel that replaces this one in comment mode. */}
       <LayersRegion
         tree={tree}
         selectedId={selection?.nodeId ?? null}
         hoveredId={hoveredId}
         onSelectNode={onSelectNode}
         onHoverNode={onHoverNode}
-        mode={mode}
-        onModeChange={onModeChange}
-        zoom={zoom}
-        onZoomBy={onZoomBy}
-        onZoomReset={onZoomReset}
       />
 
       <div className="min-h-0 flex-1 overflow-y-auto">
@@ -124,46 +114,10 @@ export function DesignPanel({
           </p>
         ) : (
           <>
-            <SelectionHeader selection={selection} />
-            {onAssignComponent ? (
-              <ComponentAssign
-                key={selection.nodeId}
-                recognized={selection.component}
-                recommended={resembles?.name ?? null}
-                components={components}
-                onAssign={onAssignComponent}
-                onExtract={onExtractComponent}
-              />
-            ) : (
-              resembles && (
-                <div className="border-b border-vs-border-subtle bg-vs-accent-subtle/40 px-3 py-2.5">
-                  <p className="text-[11px] leading-relaxed text-vs-text-primary">
-                    Looks like your <b>{resembles.name}</b> component, but this is hand-written markup — reuse
-                    the component so its variants and tokens stay connected.
-                  </p>
-                  <div className="mt-2 flex flex-wrap gap-1.5">
-                    {onUseComponent && (
-                      <button
-                        type="button"
-                        onClick={onUseComponent}
-                        className="rounded bg-vs-accent px-2 py-1 text-[11px] font-medium text-white hover:brightness-110"
-                      >
-                        Use &lt;{resembles.name}&gt;
-                      </button>
-                    )}
-                    {onExtractComponent && (
-                      <button
-                        type="button"
-                        onClick={onExtractComponent}
-                        className="rounded border border-vs-border-default px-2 py-1 text-[11px] text-vs-text-secondary hover:bg-vs-bg-hover"
-                      >
-                        Extract as component
-                      </button>
-                    )}
-                  </div>
-                </div>
-              )
-            )}
+            <SelectionHeader selection={selection} onAssign={onAssign} />
+            {/* Assigning / reusing / extracting a component moved to the inspect
+                AssignDialog (change: canvas-compose-and-preview-bar) — this panel is
+                now just identity + editable properties. */}
             {selection.variants.length > 0 && (
               <VariantSection variants={selection.variants} onChange={onVariantChange} />
             )}
@@ -180,142 +134,212 @@ export function DesignPanel({
         )}
       </div>
 
-      {review ? (
-        <ReviewBar onKeep={onKeep} onRevert={onRevert} />
-      ) : pending.length > 0 ? (
-        <ApplyBar
-          pending={pending}
-          applying={applying}
-          applyStatus={applyStatus}
-          onApply={onApply}
-          onDiscard={onDiscard}
-          onRemove={onRemovePending}
-        />
-      ) : null}
+      <ChangesBar
+        pending={pending}
+        applying={applying}
+        applyStatus={applyStatus}
+        review={review}
+        onApply={onApply}
+        onDiscard={onDiscard}
+        onRemovePending={onRemovePending}
+        onKeep={onKeep}
+        onRevert={onRevert}
+        owedScreenUpdates={owedScreenUpdates}
+        onSaveScreenUpdates={onSaveScreenUpdates}
+        onDismissScreenUpdate={onDismissScreenUpdate}
+        move={move}
+      />
     </div>
   );
 }
 
-const LEVEL_ORDER: Record<string, number> = { atom: 0, molecule: 1, organism: 2 };
-
 /**
- * Assign a design-system component to the selected element. When the element
- * isn't already a recognized component, this offers the FULL roster (not just
- * one auto-suggestion) as a searchable, pickable list — the recommended match
- * pinned first — plus an "apply to every matching element" option so assigning,
- * say, ButtonGroup to a pair of buttons updates all the sibling instances too.
+ * The persistent "changes" footer for the Run sidebar (change: unified pending
+ * changes). Renders exactly ONE bar at the bottom, never stacked, by priority:
+ * an in-flight move → a post-apply review → pending inspect edits → owed screen
+ * updates. Rendered in EVERY canvas mode (inspect/insert/comment/interact) so
+ * un-saved work is always visible and one save/discard away, regardless of what
+ * the panel above it shows.
  */
-function ComponentAssign({
-  recognized,
-  recommended,
-  components,
-  onAssign,
-  onExtract,
+export function ChangesBar({
+  pending = [],
+  applying = false,
+  applyStatus = null,
+  review = false,
+  onApply,
+  onDiscard,
+  onRemovePending,
+  onKeep,
+  onRevert,
+  owedScreenUpdates = [],
+  onSaveScreenUpdates,
+  onDismissScreenUpdate,
+  move,
 }: {
-  recognized: string | null;
-  recommended: string | null;
-  components: InspectorComponent[];
-  onAssign: (component: { name: string; file: string | null }, opts: { allSimilar: boolean }) => void;
-  onExtract?: () => void;
+  pending?: PendingEdit[];
+  applying?: boolean;
+  applyStatus?: string | null;
+  review?: boolean;
+  onApply?: () => void;
+  onDiscard?: () => void;
+  onRemovePending?: (key: string) => void;
+  onKeep?: () => void;
+  onRevert?: () => void;
+  owedScreenUpdates?: string[];
+  onSaveScreenUpdates?: () => void;
+  onDismissScreenUpdate?: (file: string) => void;
+  move?: {
+    phase: "moved" | "reconciling" | "error";
+    error?: string | null;
+    progress?: string | null;
+    onKeep: () => void;
+    onRevert: () => void;
+    onStop: () => void;
+  } | null;
+}): JSX.Element | null {
+  if (move) return <MoveBar {...move} />;
+  if (review) return <ReviewBar onKeep={onKeep} onRevert={onRevert} />;
+  if (pending.length > 0)
+    return (
+      <ApplyBar
+        pending={pending}
+        applying={applying}
+        applyStatus={applyStatus}
+        onApply={onApply}
+        onDiscard={onDiscard}
+        onRemove={onRemovePending}
+      />
+    );
+  if (owedScreenUpdates.length > 0)
+    return <SaveChangesBar files={owedScreenUpdates} onSave={onSaveScreenUpdates} onDismiss={onDismissScreenUpdate} />;
+  return null;
+}
+
+/** The drag-move gate, docked in the sidebar (no floating dialog): Keep / Revert,
+ *  with an in-flight reconcile shown as progress, and a stop-with-reason on error. */
+function MoveBar({
+  phase,
+  error,
+  progress,
+  onKeep,
+  onRevert,
+  onStop,
+}: {
+  phase: "moved" | "reconciling" | "error";
+  error?: string | null;
+  progress?: string | null;
+  onKeep: () => void;
+  onRevert: () => void;
+  onStop: () => void;
 }): JSX.Element {
-  // Recognized elements start collapsed (just the badge + a Reassign affordance);
-  // unrecognized ones open straight to the picker so assigning is one step.
-  const [open, setOpen] = useState(!recognized);
-  const [query, setQuery] = useState("");
-  const [allSimilar, setAllSimilar] = useState(true);
-
-  const q = query.trim().toLowerCase();
-  const sorted = [...components].sort((a, b) => {
-    // Recommended first, then by level (atom→organism), then name.
-    if (a.name === recommended) return -1;
-    if (b.name === recommended) return 1;
-    const lv = (LEVEL_ORDER[a.level ?? ""] ?? 3) - (LEVEL_ORDER[b.level ?? ""] ?? 3);
-    return lv !== 0 ? lv : a.name.localeCompare(b.name);
-  });
-  const shown = q ? sorted.filter((c) => c.name.toLowerCase().includes(q)) : sorted;
-
-  function pick(c: InspectorComponent): void {
-    onAssign({ name: c.name, file: c.file }, { allSimilar });
-    setOpen(false);
-    setQuery("");
-  }
-
   return (
-    <div className="border-b border-vs-border-subtle bg-vs-accent-subtle/30 px-3 py-2.5">
-      {recognized ? (
-        <div className="flex items-center gap-2">
-          <span className="text-[11px] text-vs-text-primary">
-            ✓ This is your <b>{recognized}</b> component.
-          </span>
-          <button
-            type="button"
-            onClick={() => setOpen((v) => !v)}
-            className="ml-auto rounded border border-vs-border-default px-1.5 py-0.5 text-[10px] text-vs-text-secondary hover:bg-vs-bg-hover"
-          >
-            {open ? "Cancel" : "Reassign"}
-          </button>
-        </div>
-      ) : (
-        <p className="text-[11px] leading-relaxed text-vs-text-primary">
-          {recommended ? (
-            <>
-              Looks like your <b>{recommended}</b> component — or pick another to assign. Reusing a component keeps its
-              variants and tokens connected.
-            </>
-          ) : (
-            <>This is hand-written markup. Assign the design-system component it should be.</>
-          )}
-        </p>
-      )}
-
-      {open && (
-        <div className="mt-2 flex flex-col gap-1.5">
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search components…"
-            className="w-full rounded border border-vs-border-default bg-vs-bg-primary px-2 py-1 text-[11px] text-vs-text-primary placeholder:text-vs-text-muted focus:outline-none focus:ring-1 focus:ring-vs-accent"
-          />
-          <div className="max-h-52 overflow-y-auto rounded border border-vs-border-subtle">
-            {shown.length === 0 ? (
-              <p className="px-2 py-3 text-center text-[10px] text-vs-text-muted">No matching components.</p>
-            ) : (
-              shown.map((c) => (
-                <button
-                  key={c.name}
-                  type="button"
-                  onClick={() => pick(c)}
-                  className="flex w-full items-center gap-2 px-2 py-1.5 text-left text-[11px] hover:bg-vs-bg-hover"
-                >
-                  <span className="min-w-0 flex-1 truncate text-vs-text-primary">{c.name}</span>
-                  {c.name === recommended && (
-                    <span className="rounded-full bg-vs-accent px-1.5 py-px text-[9px] font-medium text-white">
-                      Recommended
-                    </span>
-                  )}
-                  {c.level && <span className="text-[9px] uppercase text-vs-text-muted">{c.level}</span>}
-                  {c.variants && c.variants.length > 0 && (
-                    <span className="font-mono text-[9px] text-vs-text-muted">⎇ {c.variants.join("·")}</span>
-                  )}
-                </button>
-              ))
-            )}
-          </div>
-          <label className="flex cursor-pointer items-center gap-1.5 text-[10px] text-vs-text-secondary">
-            <input type="checkbox" checked={allSimilar} onChange={(e) => setAllSimilar(e.target.checked)} className="accent-vs-accent" />
-            Apply to every matching element, not just this one
-          </label>
-          {onExtract && (
+    <div data-testid="move-bar" className="flex-none border-t border-vs-border-default bg-vs-bg-surface p-2.5">
+      {phase === "moved" ? (
+        <>
+          <p data-testid="move-review" className="mb-2 text-[11px] text-vs-text-secondary">
+            Moved here. Keep it to save the change to source, or revert.
+          </p>
+          <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={onExtract}
-              className="self-start text-[10px] text-vs-text-muted hover:text-vs-text-secondary"
+              onClick={onKeep}
+              className="flex-1 rounded-md bg-vs-accent px-3 py-1.5 text-[12px] font-medium text-white hover:brightness-110"
             >
-              None fit — extract this as a new component →
+              Keep
             </button>
-          )}
-        </div>
+            <button
+              type="button"
+              onClick={onRevert}
+              className="rounded-md border border-vs-border-default px-3 py-1.5 text-[12px] text-vs-text-secondary hover:bg-vs-bg-hover"
+            >
+              Revert
+            </button>
+          </div>
+        </>
+      ) : phase === "reconciling" ? (
+        <>
+          <div className="mb-2 h-1 w-full overflow-hidden rounded-full bg-vs-bg-hover">
+            <div className="h-full w-full animate-pulse rounded-full bg-vs-accent" />
+          </div>
+          <div className="flex items-center gap-2 text-[10px] text-vs-text-muted">
+            <span data-testid="move-progress" className="min-w-0 flex-1 truncate">
+              {progress ?? "Saving the move to source…"}
+            </span>
+            <button
+              type="button"
+              onClick={onStop}
+              className="flex-none rounded border border-vs-border-default px-2 py-0.5 text-vs-text-secondary hover:bg-vs-bg-hover"
+            >
+              Stop
+            </button>
+          </div>
+        </>
+      ) : (
+        <>
+          <p data-testid="move-error" className="mb-2 text-[11px] text-vs-text-primary">
+            {error}
+          </p>
+          <button
+            type="button"
+            onClick={onRevert}
+            className="rounded-md border border-vs-border-default px-3 py-1.5 text-[12px] text-vs-text-secondary hover:bg-vs-bg-hover"
+          >
+            Revert
+          </button>
+        </>
       )}
+    </div>
+  );
+}
+
+/** Owed Screen Creation updates deferred from an insert — the sidebar save-changes gate. */
+function SaveChangesBar({
+  files,
+  onSave,
+  onDismiss,
+}: {
+  files: string[];
+  onSave?: () => void;
+  onDismiss?: (file: string) => void;
+}): JSX.Element {
+  return (
+    <div
+      data-testid="screen-update-bar"
+      className="flex-none border-t border-vs-border-default bg-vs-bg-surface p-2.5"
+    >
+      <div className="mb-2 flex flex-col gap-1">
+        <span className="text-[11px] font-semibold text-vs-text-primary">
+          {files.length} screen spec{files.length === 1 ? "" : "s"} to update
+        </span>
+        <ul className="flex flex-col gap-0.5">
+          {files.map((f) => (
+            <li key={f} className="group flex items-center gap-1.5 text-[11px] text-vs-text-secondary">
+              <span className="min-w-0 flex-1 truncate font-mono">{f}</span>
+              {onDismiss && (
+                <button
+                  type="button"
+                  onClick={() => onDismiss(f)}
+                  aria-label={`Dismiss ${f} spec update`}
+                  title="Dismiss without updating the spec"
+                  className="flex-none rounded p-0.5 text-vs-text-muted opacity-60 hover:bg-vs-bg-hover hover:text-vs-error hover:opacity-100"
+                >
+                  <TrashIcon />
+                </button>
+              )}
+            </li>
+          ))}
+        </ul>
+        <p className="text-[10px] text-vs-text-muted">
+          An inserted composition changed these screens — update each spec to match.
+        </p>
+      </div>
+      <button
+        type="button"
+        onClick={onSave}
+        className="w-full rounded-md bg-vs-accent px-3 py-1.5 text-[12px] font-medium text-white hover:brightness-110"
+      >
+        Save changes
+      </button>
     </div>
   );
 }
@@ -457,29 +481,19 @@ function ReviewBar({ onKeep, onRevert }: { onKeep?: () => void; onRevert?: () =>
   );
 }
 
-/** The Layers region: header (title + Inspect/Interact) · node tree · zoom footer. */
+/** The Layers region: collapsible header · node tree. Modes and zoom live on the canvas toolbar. */
 function LayersRegion({
   tree,
   selectedId,
   hoveredId,
   onSelectNode,
   onHoverNode,
-  mode,
-  onModeChange,
-  zoom,
-  onZoomBy,
-  onZoomReset,
 }: {
   tree: BridgeTree | null;
   selectedId: string | null;
   hoveredId?: string | null;
   onSelectNode: (id: string) => void;
   onHoverNode?: (id: string | null) => void;
-  mode: CanvasMode;
-  onModeChange?: (mode: CanvasMode) => void;
-  zoom: number;
-  onZoomBy?: (factor: number) => void;
-  onZoomReset?: () => void;
 }): JSX.Element {
   const [open, setOpen] = useState(true);
   return (
@@ -493,69 +507,23 @@ function LayersRegion({
           <span className="text-[9px] text-vs-text-muted">{open ? "▾" : "▸"}</span>
           Layers
         </button>
-        <div className="ml-auto flex overflow-hidden rounded border border-vs-border-default text-[10px]">
-          <ModeBtn active={mode === "inspect"} onClick={() => onModeChange?.("inspect")} label="Inspect" />
-          <ModeBtn active={mode === "interact"} onClick={() => onModeChange?.("interact")} label="Interact" />
-          <ModeBtn active={mode === "comment"} onClick={() => onModeChange?.("comment")} label="Comment" />
-        </div>
       </div>
       {open && (
-        <>
-          <div className="max-h-64 overflow-y-auto">
-            <NodeTree
-              tree={tree}
-              selectedId={selectedId}
-              hoveredId={hoveredId}
-              onSelect={onSelectNode}
-              onHover={onHoverNode}
-            />
-          </div>
-          <div className="flex items-center gap-1 border-t border-vs-border-subtle px-3 py-1.5 text-[10px] text-vs-text-muted">
-            <span className="mr-auto uppercase tracking-wide">Zoom</span>
-            <ZoomBtn onClick={() => onZoomBy?.(1 / 1.2)} label="−" />
-            <button
-              type="button"
-              onClick={() => onZoomReset?.()}
-              title="Reset to 100%"
-              className="min-w-[2.75rem] rounded px-1 py-0.5 text-center text-vs-text-secondary hover:bg-vs-bg-hover"
-            >
-              {Math.round(zoom * 100)}%
-            </button>
-            <ZoomBtn onClick={() => onZoomBy?.(1.2)} label="+" />
-          </div>
-        </>
+        <div className="max-h-64 overflow-y-auto">
+          <NodeTree
+            tree={tree}
+            selectedId={selectedId}
+            hoveredId={hoveredId}
+            onSelect={onSelectNode}
+            onHover={onHoverNode}
+          />
+        </div>
       )}
     </section>
   );
 }
 
-function ModeBtn({ active, onClick, label }: { active: boolean; onClick: () => void; label: string }): JSX.Element {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`px-2 py-0.5 ${
-        active ? "bg-vs-accent text-white" : "text-vs-text-secondary hover:bg-vs-bg-hover"
-      }`}
-    >
-      {label}
-    </button>
-  );
-}
-
-function ZoomBtn({ onClick, label }: { onClick: () => void; label: string }): JSX.Element {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="grid h-5 w-5 place-items-center rounded text-vs-text-secondary hover:bg-vs-bg-hover"
-    >
-      {label}
-    </button>
-  );
-}
-
-function SelectionHeader({ selection }: { selection: Selection }): JSX.Element {
+function SelectionHeader({ selection, onAssign }: { selection: Selection; onAssign?: () => void }): JSX.Element {
   return (
     <div className="flex items-center gap-2 border-b border-vs-border-subtle px-3 py-2">
       <span className="truncate text-[13px] font-semibold">{selection.label}</span>
@@ -563,6 +531,16 @@ function SelectionHeader({ selection }: { selection: Selection }): JSX.Element {
         <span className="rounded border border-vs-border-default px-1 py-px text-[9px] uppercase tracking-wide text-vs-text-muted">
           component
         </span>
+      )}
+      {onAssign && (
+        <button
+          type="button"
+          onClick={onAssign}
+          title={selection.component ? "Replace with another component" : "Assign a component to this element"}
+          className="rounded border border-vs-border-default px-1.5 py-px text-[10px] text-vs-text-secondary hover:bg-vs-bg-hover"
+        >
+          {selection.component ? "Replace" : "Assign"}
+        </button>
       )}
       <span className="ml-auto font-mono text-[10px] text-vs-text-muted">
         {Math.round(selection.rect.width)}×{Math.round(selection.rect.height)}
@@ -756,7 +734,7 @@ function LengthTokenField({
             type="button"
             onClick={() => setOpen((o) => !o)}
             title={matched ? `Variable: ${matched} — pick another or detach` : "Bind a variable"}
-            className={`flex max-w-[58%] flex-none items-center gap-1 rounded-l px-1.5 py-1 text-[10px] ${
+            className={`m-0.5 flex max-w-[58%] flex-none items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] ${
               matched
                 ? "bg-vs-accent-subtle text-vs-accent"
                 : "text-vs-text-muted hover:bg-vs-bg-hover hover:text-vs-text-secondary"

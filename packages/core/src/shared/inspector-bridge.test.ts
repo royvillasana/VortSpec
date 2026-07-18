@@ -122,4 +122,137 @@ describe("inspector-bridge contracts", () => {
   it("rejects an unknown command discriminant", () => {
     expect(() => bridgeCommandSchema.parse({ t: "nope" })).toThrow();
   });
+
+  it("round-trips replayOverrides (persist + replay by fingerprint)", () => {
+    const cmd = bridgeCommandSchema.parse({
+      t: "replayOverrides",
+      edits: [
+        { fingerprint: "main>div#2", css: { "padding-left": "16px" } },
+        { fingerprint: "main>button", addClasses: ["bg-primary"], removeClasses: ["bg-ghost"] },
+        { fingerprint: "main>h1", text: "New title" },
+      ],
+    });
+    expect(cmd.t).toBe("replayOverrides");
+    if (cmd.t === "replayOverrides") {
+      expect(cmd.edits).toHaveLength(3);
+      expect(cmd.edits[0].css).toMatchObject({ "padding-left": "16px" });
+      expect(cmd.edits[0].addClasses).toEqual([]); // default
+      expect(cmd.edits[1].addClasses).toEqual(["bg-primary"]);
+      expect(cmd.edits[2].text).toBe("New title");
+    }
+    // A readout now carries a durable fingerprint (default "" for legacy shapes).
+    expect(nodeReadoutSchema.parse({ nodeId: "n1", rect: { x: 0, y: 0, width: 1, height: 1 } }).fingerprint).toBe("");
+    expect(
+      nodeReadoutSchema.parse({ nodeId: "n1", fingerprint: "main>div", rect: { x: 0, y: 0, width: 1, height: 1 } })
+        .fingerprint,
+    ).toBe("main>div");
+  });
+
+  it("round-trips insert-mode placeholder commands", () => {
+    const target = {
+      anchorFingerprint: "div>ul>li#2",
+      position: "before" as const,
+      axis: "row" as const,
+      line: { x1: 95, y1: 0, x2: 95, y2: 40 },
+    };
+    const create = bridgeCommandSchema.parse({ t: "createPlaceholder", target });
+    expect(create).toMatchObject({ t: "createPlaceholder", target: { position: "before", axis: "row" } });
+    // resize may carry width, height, or both
+    expect(bridgeCommandSchema.parse({ t: "resizePlaceholder", width: 240 })).toMatchObject({ width: 240 });
+    expect(bridgeCommandSchema.parse({ t: "dismissPlaceholder" }).t).toBe("dismissPlaceholder");
+    // a bad axis is rejected
+    expect(() =>
+      bridgeCommandSchema.parse({ t: "createPlaceholder", target: { ...target, axis: "diagonal" } }),
+    ).toThrow();
+  });
+
+  it("round-trips the structure request + snapshot", () => {
+    expect(bridgeCommandSchema.parse({ t: "requestStructure" })).toMatchObject({ t: "requestStructure", nodeId: null });
+    expect(bridgeCommandSchema.parse({ t: "requestStructure", nodeId: "n1" })).toMatchObject({ nodeId: "n1" });
+    const snapshot = {
+      rootId: "sec",
+      nodes: {
+        sec: { id: "sec", fingerprint: "fp", rect: { x: 0, y: 0, width: 100, height: 80 }, computed: { display: "flex" }, childIds: ["a"] },
+        a: { id: "a", fingerprint: "fpa", rect: { x: 0, y: 0, width: 40, height: 80 } },
+      },
+    };
+    const ev = bridgeEventSchema.parse({ t: "structure", snapshot });
+    expect(ev.t).toBe("structure");
+    // leaf defaults applied (childIds → [], computed → {}).
+    if (ev.t === "structure") expect(ev.snapshot.nodes.a.childIds).toEqual([]);
+  });
+
+  it("round-trips insert-mode guest events", () => {
+    const target = {
+      anchorFingerprint: "main>section>div",
+      position: "after" as const,
+      axis: "column" as const,
+      line: { x1: 0, y1: 50, x2: 200, y2: 50 },
+    };
+    expect(bridgeEventSchema.parse({ t: "insertTarget", target }).t).toBe("insertTarget");
+    // insertTarget may be null (pointer over no slot)
+    expect(bridgeEventSchema.parse({ t: "insertTarget", target: null })).toMatchObject({ target: null });
+    const ready = bridgeEventSchema.parse({
+      t: "placeholderReady",
+      target,
+      rect: { x: 0, y: 50, width: 200, height: 80 },
+    });
+    expect(ready).toMatchObject({ t: "placeholderReady", target: { position: "after" } });
+    expect(bridgeEventSchema.parse({ t: "placeholderLost", message: "The slot moved after a reload." })).toMatchObject({
+      t: "placeholderLost",
+    });
+  });
+
+  it("round-trips drag-move commands and events (§5)", () => {
+    // Host can abort a drag, and gate an instant move.
+    expect(bridgeCommandSchema.parse({ t: "cancelDrag" }).t).toBe("cancelDrag");
+    expect(bridgeCommandSchema.parse({ t: "revertMove" }).t).toBe("revertMove");
+    expect(bridgeCommandSchema.parse({ t: "clearMove" }).t).toBe("clearMove");
+
+    const target = {
+      anchorFingerprint: "main>section>div#3",
+      position: "before" as const,
+      axis: "row" as const,
+      line: { x1: 120, y1: 0, x2: 120, y2: 60 },
+    };
+    const ghost = { x: 40, y: 12, width: 108, height: 38 };
+
+    expect(
+      bridgeEventSchema.parse({ t: "dragStart", sourceFingerprint: "fp-card", nodeId: "n7", rect: ghost }),
+    ).toMatchObject({ t: "dragStart", sourceFingerprint: "fp-card" });
+
+    // A per-frame update carries the slot, the ghost, and pop-out state (defaults false).
+    const over = bridgeEventSchema.parse({ t: "dragTarget", target, ghost });
+    expect(over).toMatchObject({ t: "dragTarget", poppedOut: false, target: { position: "before" } });
+    // target may be null (no valid slot → no-drop cursor).
+    expect(bridgeEventSchema.parse({ t: "dragTarget", target: null, ghost, poppedOut: true })).toMatchObject({
+      target: null,
+      poppedOut: true,
+    });
+
+    // A drop with a slot carries the source label + leading text for the reconcile run.
+    expect(
+      bridgeEventSchema.parse({
+        t: "dragDrop",
+        sourceFingerprint: "fp-card",
+        sourceLabel: "Card",
+        sourceText: "Handpicked homes",
+        target,
+        poppedOut: true,
+      }),
+    ).toMatchObject({ t: "dragDrop", sourceLabel: "Card", sourceText: "Handpicked homes", target: { axis: "row" }, poppedOut: true });
+    // A refused drop (null target); source label/text default when absent.
+    expect(bridgeEventSchema.parse({ t: "dragDrop", sourceFingerprint: "fp-card", target: null })).toMatchObject({
+      target: null,
+      poppedOut: false, // default
+      sourceLabel: "", // default
+      sourceText: null, // default
+    });
+
+    // Cancel: a plain Escape (null message) and a forced cancel with a sentence.
+    expect(bridgeEventSchema.parse({ t: "dragCancel" }).t).toBe("dragCancel");
+    expect(bridgeEventSchema.parse({ t: "dragCancel", message: "Lost the element after a reload — drag it again." })).toMatchObject({
+      t: "dragCancel",
+    });
+  });
 });

@@ -52,6 +52,10 @@
       "types": "./src/lib/assistant-task.ts",
       "default": "./src/lib/assistant-task.ts"
     },
+    "./canvas-selection": {
+      "types": "./src/lib/canvas-selection.tsx",
+      "default": "./src/lib/canvas-selection.tsx"
+    },
     "./RunLimitNotice": {
       "types": "./src/components/RunLimitNotice.tsx",
       "default": "./src/components/RunLimitNotice.tsx"
@@ -132,6 +136,30 @@
     "./DesignPanel": {
       "types": "./src/components/run-canvas/DesignPanel.tsx",
       "default": "./src/components/run-canvas/DesignPanel.tsx"
+    },
+    "./CanvasToolbar": {
+      "types": "./src/components/run-canvas/CanvasToolbar.tsx",
+      "default": "./src/components/run-canvas/CanvasToolbar.tsx"
+    },
+    "./ComposePanel": {
+      "types": "./src/components/run-canvas/ComposePanel.tsx",
+      "default": "./src/components/run-canvas/ComposePanel.tsx"
+    },
+    "./MovePanel": {
+      "types": "./src/components/run-canvas/MovePanel.tsx",
+      "default": "./src/components/run-canvas/MovePanel.tsx"
+    },
+    "./AssignDialog": {
+      "types": "./src/components/run-canvas/AssignDialog.tsx",
+      "default": "./src/components/run-canvas/AssignDialog.tsx"
+    },
+    "./useComposeRun": {
+      "types": "./src/lib/useComposeRun.ts",
+      "default": "./src/lib/useComposeRun.ts"
+    },
+    "./useDragMove": {
+      "types": "./src/lib/useDragMove.ts",
+      "default": "./src/lib/useDragMove.ts"
     },
     "./CommentsLayer": {
       "types": "./src/components/run-canvas/CommentsLayer.tsx",

@@ -9,7 +9,7 @@ const base = {
     id: "wt",
     name: "sdd-walkthrough",
     path: "/Users/dev/sdd-walkthrough",
-    toolkit: { present: true, version: "1.0.0", updateAvailable: false },
+    toolkit: { present: true, configured: true, version: "1.0.0", updateAvailable: false },
   } as Project,
 };
 

@@ -26,7 +26,7 @@ const me = { login: "ana", name: "Ana" };
 
 test("filters narrow the list", async ({ mount }) => {
   const c = await mount(
-    <CommentsPanel threads={THREADS} anchorRects={RECTS} activeId={null} me={me} mode="comment" onModeChange={noop} onSelect={noop} onResolve={noop} />,
+    <CommentsPanel threads={THREADS} anchorRects={RECTS} activeId={null} me={me} onSelect={noop} onResolve={noop} />,
   );
   // Default filter is Open → the resolved thread is hidden.
   await expect(c.getByText("Open one")).toBeVisible();
@@ -44,7 +44,7 @@ test("filters narrow the list", async ({ mount }) => {
 test("clicking a thread jumps to its pin (selects it)", async ({ mount }) => {
   const selected: string[] = [];
   const c = await mount(
-    <CommentsPanel threads={THREADS} anchorRects={RECTS} activeId={null} me={me} mode="comment" onModeChange={noop} onSelect={(t) => selected.push(t.id)} onResolve={noop} />,
+    <CommentsPanel threads={THREADS} anchorRects={RECTS} activeId={null} me={me} onSelect={(t) => selected.push(t.id)} onResolve={noop} />,
   );
   await c.getByText("Open one").click();
   expect(selected).toEqual(["t1-open"]);
@@ -57,8 +57,6 @@ test("an unanchored thread is grouped under 'Not on this view'", async ({ mount 
       anchorRects={{ ...RECTS, "t1-open": null }}
       activeId={null}
       me={me}
-      mode="comment"
-      onModeChange={noop}
       onSelect={noop}
       onResolve={noop}
     />,
@@ -66,11 +64,6 @@ test("an unanchored thread is grouped under 'Not on this view'", async ({ mount 
   await expect(c.getByText(/Not on this view/)).toBeVisible();
 });
 
-test("the mode toggle can switch back out of comment mode", async ({ mount }) => {
-  const modes: string[] = [];
-  const c = await mount(
-    <CommentsPanel threads={THREADS} anchorRects={RECTS} activeId={null} me={me} mode="comment" onModeChange={(m) => modes.push(m)} onSelect={noop} onResolve={noop} />,
-  );
-  await c.getByRole("button", { name: "inspect" }).click();
-  expect(modes).toEqual(["inspect"]);
-});
+// The mode toggle moved to the canvas toolbar, which stays mounted through the
+// Design→Comments panel swap — so the panel no longer needs its own copy to keep
+// the user from being stranded. Coverage moved to run-canvas.ct.tsx.

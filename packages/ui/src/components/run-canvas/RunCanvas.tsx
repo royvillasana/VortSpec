@@ -4,6 +4,8 @@ import type { Rect } from "@vortspec/core/ipc";
 import type { InspectorBridge, CanvasMode } from "../../lib/useInspectorBridge";
 import { SpacingOverlay } from "./SpacingOverlay";
 import { CommentsLayer, type CommentsLayerProps } from "./CommentsLayer";
+import { CanvasToolbar } from "./CanvasToolbar";
+import { bridgeStatusMessage } from "./bridge-status";
 
 const px = (s?: string): number => Math.max(0, parseFloat(s ?? "") || 0);
 
@@ -14,16 +16,19 @@ const px = (s?: string): number => Math.max(0, parseFloat(s ?? "") || 0);
  * guest preload, and draws the hover/selection overlay on top. A single CSS
  * transform (translate + scale) wraps BOTH the webview and the overlay, so guest
  * viewport rects map 1:1 into the overlay at any zoom (no manual coordinate
- * conversion). Three modes: Inspect (hover/click selects), Interact (use the
- * app), Pan (drag to move the canvas — reliable since the webview isolates
- * keyboard/wheel events). Resize handles drag width/height, previewing live.
+ * conversion). Modes: Interact (use the app — the resting default), Inspect
+ * (hover/click selects), Comment (pin a thread). Resize handles drag
+ * width/height, previewing live.
  */
 export function RunCanvas({
   src,
   guestPreloadUrl,
   bridge,
   mode,
+  onModeChange,
   zoom,
+  onZoomBy,
+  onZoomReset,
   onLiveEdit,
   onCommitEdit,
   onSendToChat,
@@ -32,10 +37,13 @@ export function RunCanvas({
   src: string;
   guestPreloadUrl: string | null;
   bridge: InspectorBridge;
-  /** Input mode — driven from the sidebar Layers header. */
+  /** Input mode — owned by RunApp, surfaced on the canvas toolbar. */
   mode: CanvasMode;
-  /** Zoom factor — driven from the sidebar Layers footer. */
+  onModeChange: (mode: CanvasMode) => void;
+  /** Zoom factor — owned by RunApp, surfaced on the canvas toolbar. */
   zoom: number;
+  onZoomBy: (factor: number) => void;
+  onZoomReset: () => void;
   /** Apply a CSS override live (per animation frame while dragging a handle). */
   onLiveEdit?: (css: Record<string, string>) => void;
   /** Record the final edit(s) once, on drag end. */
@@ -91,8 +99,20 @@ export function RunCanvas({
       }`
     : undefined;
 
+  // In insert mode the cursor telegraphs the flow axis: a vertical divider (row
+  // flow) reads as a horizontal move, and vice-versa.
+  const insertCursor =
+    mode === "insert" && !bridge.placeholder
+      ? bridge.insertTarget?.axis === "column"
+        ? "row-resize"
+        : "col-resize"
+      : undefined;
+
   return (
-    <div className="relative h-full min-h-[340px] w-full overflow-hidden bg-white">
+    <div
+      className="relative h-full min-h-[340px] w-full overflow-hidden bg-white"
+      style={insertCursor ? { cursor: insertCursor } : undefined}
+    >
       {/* Stage — the webview + overlay share one transform, so rects align at any zoom. */}
       <div className="absolute inset-0 origin-top-left" style={{ transform: `scale(${zoom})` }}>
         {guestPreloadUrl ? (
@@ -148,6 +168,31 @@ export function RunCanvas({
               }}
             />
           )}
+
+          {/* Insert mode: the slot line follows the pointer until a click
+              materializes the placeholder, which then shows resize handles. */}
+          {mode === "insert" && !bridge.placeholder && bridge.insertTarget && (
+            <InsertLine line={bridge.insertTarget.line} axis={bridge.insertTarget.axis} />
+          )}
+          {mode === "insert" && bridge.placeholder && (
+            <PlaceholderBox
+              rect={bridge.placeholder.rect}
+              zoom={zoom}
+              onResize={(size) => bridge.resizePlaceholder(size)}
+            />
+          )}
+
+          {/* Drag-move (inspect mode): a ghost of the dragged element trails the
+              pointer, and the drop slot draws the same InsertLine as insert mode
+              (change: canvas-live-structural-editing, §5.4). */}
+          {mode === "inspect" && bridge.drag && (
+            <>
+              <DragGhost rect={bridge.drag.ghost} />
+              {bridge.drag.target && (
+                <InsertLine line={bridge.drag.target.line} axis={bridge.drag.target.axis} />
+              )}
+            </>
+          )}
         </div>
       </div>
 
@@ -178,23 +223,52 @@ export function RunCanvas({
         </div>
       )}
 
-      {bridge.error && (
-        <div className="absolute bottom-3 left-1/2 -translate-x-1/2 rounded-md border border-vs-border-default bg-vs-bg-elevated px-3 py-1.5 text-[11px] text-vs-text-secondary shadow">
-          Visual editing unavailable on this page — {bridge.error}
-        </div>
-      )}
+      {/* The one canvas toolbar — modes + zoom + bridge status. Owned by the
+          canvas, so it survives the Design→Comments panel swap. */}
+      <CanvasToolbar
+        mode={mode}
+        onModeChange={onModeChange}
+        zoom={zoom}
+        onZoomBy={onZoomBy}
+        onZoomReset={onZoomReset}
+        bridgeReady={bridge.ready}
+        bridgeError={bridge.error}
+      />
 
-      {bridge.selectionLost && (
-        <div className="absolute bottom-3 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-md border border-vs-border-default bg-vs-bg-elevated px-3 py-1.5 text-[11px] text-vs-text-secondary shadow">
-          The element you were editing was removed by a live reload — pick another to keep going.
-          <button
-            className="rounded px-1.5 py-0.5 text-vs-text-primary hover:bg-vs-bg-hover"
-            onClick={() => bridge.clearSelectionLost()}
-          >
-            Dismiss
-          </button>
-        </div>
-      )}
+      {/* Notices sit ABOVE the toolbar (which owns bottom-3), stacked in one column
+          so a second notice pushes the first up instead of drawing over it. */}
+      <div className="pointer-events-none absolute bottom-14 left-1/2 z-30 flex -translate-x-1/2 flex-col items-center gap-1.5">
+        {bridge.error && (
+          <div className="rounded-md border border-vs-border-default bg-vs-bg-elevated px-3 py-1.5 text-[11px] text-vs-text-secondary shadow">
+            {/* Same sentence the toolbar shows as its disabled reason — one source. */}
+            {bridgeStatusMessage("failed", bridge.error)}
+          </div>
+        )}
+
+        {bridge.selectionLost && (
+          <div className="pointer-events-auto flex items-center gap-2 rounded-md border border-vs-border-default bg-vs-bg-elevated px-3 py-1.5 text-[11px] text-vs-text-secondary shadow">
+            The element you were editing was removed by a live reload — pick another to keep going.
+            <button
+              className="rounded px-1.5 py-0.5 text-vs-text-primary hover:bg-vs-bg-hover"
+              onClick={() => bridge.clearSelectionLost()}
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
+
+        {bridge.placeholderLost && (
+          <div className="pointer-events-auto flex items-center gap-2 rounded-md border border-vs-border-default bg-vs-bg-elevated px-3 py-1.5 text-[11px] text-vs-text-secondary shadow">
+            {bridge.placeholderLost}
+            <button
+              className="rounded px-1.5 py-0.5 text-vs-text-primary hover:bg-vs-bg-hover"
+              onClick={() => bridge.clearPlaceholderLost()}
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -236,6 +310,15 @@ function Box({
       if (!axis || !onLiveEdit) return;
       e.preventDefault();
       e.stopPropagation();
+      // Capture the pointer so the drag survives the cursor passing over the guest
+      // <webview> (which would otherwise swallow move/up and strand the drag).
+      const el = e.currentTarget as HTMLElement;
+      const pointerId = e.pointerId;
+      try {
+        el.setPointerCapture(pointerId);
+      } catch {
+        /* capture unsupported */
+      }
       const startX = e.clientX;
       const startY = e.clientY;
       const start = { x: rect.x, y: rect.y, w: rect.width, h: rect.height };
@@ -259,8 +342,14 @@ function Box({
         if (!raf) raf = requestAnimationFrame(flush);
       };
       const up = (): void => {
-        window.removeEventListener("pointermove", move);
-        window.removeEventListener("pointerup", up);
+        el.removeEventListener("pointermove", move);
+        el.removeEventListener("pointerup", up);
+        el.removeEventListener("lostpointercapture", up);
+        try {
+          el.releasePointerCapture(pointerId);
+        } catch {
+          /* already released */
+        }
         if (raf) cancelAnimationFrame(raf);
         // Flush the EXACT release size to the guest (the throttled stream may have
         // skipped the final frame), so the element locks in where the user let go.
@@ -276,8 +365,9 @@ function Box({
         if (axis.h) edits.push({ key: "height", value: `${latest.h}px`, cssProps: ["height"] });
         onCommitEdit?.(edits);
       };
-      window.addEventListener("pointermove", move);
-      window.addEventListener("pointerup", up);
+      el.addEventListener("pointermove", move);
+      el.addEventListener("pointerup", up);
+      el.addEventListener("lostpointercapture", up);
     };
   }
 
@@ -332,3 +422,125 @@ const HANDLES: { pos: string; style: React.CSSProperties }[] = [
   { pos: "sw", style: { left: -4, bottom: -4 } },
   { pos: "w", style: { left: -4, top: "calc(50% - 4px)" } },
 ];
+
+/** The insertion line drawn across the flow axis at the current slot (guest coords). */
+function InsertLine({
+  line,
+  axis,
+}: {
+  line: { x1: number; y1: number; x2: number; y2: number };
+  axis: "row" | "column";
+}): JSX.Element {
+  // Row flow (items horizontal) → a vertical divider; column flow → horizontal.
+  const vertical = axis === "row";
+  const left = Math.min(line.x1, line.x2);
+  const top = Math.min(line.y1, line.y2);
+  const length = vertical ? Math.abs(line.y2 - line.y1) : Math.abs(line.x2 - line.x1);
+  return (
+    <div
+      data-testid="insert-line"
+      data-axis={axis}
+      className="pointer-events-none absolute z-10 rounded-full"
+      style={{
+        left: vertical ? left - 1.5 : left,
+        top: vertical ? top : top - 1.5,
+        width: vertical ? 3 : length,
+        height: vertical ? length : 3,
+        background: "var(--color-vs-accent)",
+        boxShadow: "0 0 0 1px rgba(124,111,240,0.35)",
+      }}
+    />
+  );
+}
+
+/** A faint ghost of the dragged element trailing the pointer during a drag-move (§5.4). */
+function DragGhost({ rect }: { rect: Rect }): JSX.Element {
+  return (
+    <div
+      data-testid="drag-ghost"
+      className="pointer-events-none absolute z-10 rounded"
+      style={{
+        left: rect.x,
+        top: rect.y,
+        width: rect.width,
+        height: rect.height,
+        background: "rgba(124,111,240,0.12)",
+        border: "1.5px solid var(--color-vs-accent)",
+        opacity: 0.85,
+      }}
+    />
+  );
+}
+
+/** The resize handles for placement — n/w edges omitted (they'd fight the anchor). */
+const PLACEHOLDER_HANDLES: { dir: "e" | "s" | "se"; style: React.CSSProperties }[] = [
+  { dir: "e", style: { right: -4, top: "calc(50% - 4px)", cursor: "ew-resize" } },
+  { dir: "s", style: { left: "calc(50% - 4px)", bottom: -4, cursor: "ns-resize" } },
+  { dir: "se", style: { right: -4, bottom: -4, cursor: "nwse-resize" } },
+];
+
+/** The composition placeholder overlay: an outline over the guest's real placeholder,
+ *  with e/s/se handles whose drags stream a soft size hint to the guest. */
+function PlaceholderBox({
+  rect,
+  zoom,
+  onResize,
+}: {
+  rect: Rect;
+  zoom: number;
+  onResize: (size: { width?: number; height?: number }) => void;
+}): JSX.Element {
+  function startResize(dir: "e" | "s" | "se") {
+    return (e: React.PointerEvent): void => {
+      e.preventDefault();
+      e.stopPropagation();
+      // Capture so the drag survives the cursor moving over the guest <webview>.
+      const el = e.currentTarget as HTMLElement;
+      const pointerId = e.pointerId;
+      try {
+        el.setPointerCapture(pointerId);
+      } catch {
+        /* capture unsupported */
+      }
+      const startX = e.clientX;
+      const startY = e.clientY;
+      const w0 = rect.width;
+      const h0 = rect.height;
+      const move = (ev: PointerEvent): void => {
+        // Client-px delta ÷ zoom = guest-px delta (the stage is scaled).
+        const width = dir !== "s" ? Math.max(24, Math.round(w0 + (ev.clientX - startX) / zoom)) : undefined;
+        const height = dir !== "e" ? Math.max(24, Math.round(h0 + (ev.clientY - startY) / zoom)) : undefined;
+        onResize({ width, height });
+      };
+      const up = (): void => {
+        el.removeEventListener("pointermove", move);
+        el.removeEventListener("pointerup", up);
+        el.removeEventListener("lostpointercapture", up);
+        try {
+          el.releasePointerCapture(pointerId);
+        } catch {
+          /* already released */
+        }
+      };
+      el.addEventListener("pointermove", move);
+      el.addEventListener("pointerup", up);
+      el.addEventListener("lostpointercapture", up);
+    };
+  }
+  return (
+    <div
+      data-testid="placeholder-box"
+      className="absolute"
+      style={{ left: rect.x, top: rect.y, width: rect.width, height: rect.height, outline: "2px solid var(--color-vs-accent)", outlineOffset: -1 }}
+    >
+      {PLACEHOLDER_HANDLES.map((h) => (
+        <span
+          key={h.dir}
+          onPointerDown={startResize(h.dir)}
+          className="pointer-events-auto absolute h-2 w-2 rounded-[2px] border border-white bg-vs-accent"
+          style={h.style}
+        />
+      ))}
+    </div>
+  );
+}

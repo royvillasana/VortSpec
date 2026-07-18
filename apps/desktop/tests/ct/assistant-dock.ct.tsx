@@ -188,3 +188,21 @@ test("read-only mode is the default labelling", async ({ mount }) => {
   await expect(c.getByText("Assistant")).toBeVisible();
   await expect(c.getByText("Ask about this project")).toBeVisible();
 });
+
+test("Send becomes a Stop button while a run is in flight, and stops it", async ({ mount }) => {
+  // A run that never emits a result stays in flight, so the Stop state is stable.
+  const stuck: RunEvent[] = [
+    { kind: "system-init", model: "claude-opus-4-8", sessionId: "s", tools: ["Read"], mcpServers: [], mcpErrors: [] },
+  ];
+  const c = await mount(<AssistantDock project={PROJECT} onClose={() => undefined} />, {
+    hooksConfig: { mock: { runScript: stuck } },
+  });
+  await c.getByPlaceholder(/@ a file/).fill("do a thing");
+  await c.getByRole("button", { name: "Send" }).click();
+  // Send morphs into Stop.
+  await expect(c.getByRole("button", { name: "Stop" })).toBeVisible();
+  await expect(c.getByRole("button", { name: "Send" })).toHaveCount(0);
+  // Clicking Stop cancels the run (the composer returns to an idle Send).
+  await c.getByRole("button", { name: "Stop" }).click();
+  await expect(c.getByRole("button", { name: "Send" })).toBeVisible();
+});

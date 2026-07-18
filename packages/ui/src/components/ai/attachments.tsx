@@ -13,16 +13,17 @@ import { FileTree } from "./FileTree";
  */
 export interface ChatAttachment {
   id: string;
-  kind: "file" | "dir" | "selection" | "conversation" | "text" | "image";
+  kind: "file" | "dir" | "selection" | "canvas-selection" | "conversation" | "text" | "image";
   /** Workspace-relative path (file/dir/selection), or absolute temp path (image). */
   path?: string;
   /** For a selection: the 1-based line range and the selected text. */
   startLine?: number;
   endLine?: number;
+  /** For a selection/canvas-selection/text: the payload prose. */
   text?: string;
   /** For a conversation reference: the target id. */
   convId?: string;
-  /** Display label + source (conversation/text/image). */
+  /** Display label + source (conversation/text/image/canvas-selection). */
   label?: string;
   /** For a pasted image: a small data-URL thumbnail for the chip. */
   dataUrl?: string;
@@ -34,13 +35,22 @@ export interface ConversationRegistry {
   transcript: (id: string) => ChatMessage[];
 }
 
-/** An "Open in Chat" request from the editor — a selection to attach. `nonce`
- *  bumps each time so the dock re-adds it even for the same range. */
+/** An "Open in Chat" request — a selection to attach. `nonce` bumps each time so
+ *  the dock re-adds it even for the same target.
+ *
+ *  Two sources: an **editor** selection carries a real file path and 1-based line
+ *  range; a **canvas** selection has neither (it is a rendered element, not a text
+ *  range) and MUST NOT invent one — it carries a label and its grounding prose. */
 export interface PendingSelectionRef {
-  path: string;
-  startLine: number;
-  endLine: number;
+  /** Defaults to "editor" when omitted, for the existing editor call sites. */
+  source?: "editor" | "canvas";
+  /** Editor: the workspace file. Canvas: unused (there is no honest path). */
+  path?: string;
+  startLine?: number;
+  endLine?: number;
   text: string;
+  /** Canvas: the chip label (e.g. the component name or the sentinel view name). */
+  label?: string;
   nonce: number;
 }
 
@@ -48,6 +58,7 @@ export interface PendingSelectionRef {
 export function attachmentLabel(a: ChatAttachment): string {
   if (a.kind === "conversation") return a.label ?? "conversation";
   if (a.kind === "text") return a.label ? `${a.label} ⧉` : "snippet";
+  if (a.kind === "canvas-selection") return a.label ?? "canvas selection";
   if (a.kind === "image") return a.label ?? "image";
   const base = (a.path ?? "").split("/").pop() || (a.path ?? "");
   if (a.kind === "selection" && a.startLine) {
@@ -84,6 +95,9 @@ export function expandAttachments(atts: ChatAttachment[], registry?: Conversatio
     if (a.kind === "text") {
       return `[From ${a.label ?? "another conversation"}]\n\`\`\`\n${a.text ?? ""}\n\`\`\``;
     }
+    if (a.kind === "canvas-selection") {
+      return `[Canvas selection${a.label ? ` — ${a.label}` : ""}]\n${a.text ?? ""}`;
+    }
     if (a.kind === "image") {
       return `[Attached image — a pasted screenshot saved at ${a.path}. Use the Read tool to view it.]`;
     }
@@ -101,6 +115,7 @@ const ICON: Record<ChatAttachment["kind"], string> = {
   file: "📄",
   dir: "📁",
   selection: "⧉",
+  "canvas-selection": "🎯",
   conversation: "💬",
   text: "❝",
   image: "🖼️",

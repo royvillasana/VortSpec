@@ -1,9 +1,13 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, beforeEach, afterEach } from "vitest";
+import { mkdtemp, rm, mkdir, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   parseTokensFromCss,
   parseCssContexts,
   resolveInContext,
   deriveModeMap,
+  snapshotSourceScope,
   DEFAULT_CONTEXT,
 } from "./token-parser";
 import type { FigmaCollection } from "@vortspec/core/inspector";
@@ -119,5 +123,37 @@ describe("deriveModeMap", () => {
   it("leaves a mode unmapped when no matching context exists", () => {
     const map = deriveModeMap(collection, [":root"]);
     expect(map.Dark).toBe("");
+  });
+});
+
+describe("snapshotSourceScope (drag-move broad snapshot, Decision 6)", () => {
+  let dir: string;
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), "vs-src-scope-"));
+    await mkdir(join(dir, "src", "components"), { recursive: true });
+    await mkdir(join(dir, "node_modules", "dep"), { recursive: true });
+    await mkdir(join(dir, "dist"), { recursive: true });
+  });
+  afterEach(async () => {
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  it("captures a screen file outside component_dir (the case the token scope misses)", async () => {
+    await writeFile(join(dir, "src", "App.tsx"), "export const App = () => <main/>;\n", "utf8");
+    await writeFile(join(dir, "src", "components", "Card.tsx"), "export const Card = () => <div/>;\n", "utf8");
+    const snap = await snapshotSourceScope(dir);
+    const paths = snap.map((s) => s.path);
+    expect(paths).toContain("src/App.tsx"); // the screen file
+    expect(paths).toContain("src/components/Card.tsx"); // a component file
+  });
+
+  it("skips dependencies and build output", async () => {
+    await writeFile(join(dir, "src", "App.tsx"), "x", "utf8");
+    await writeFile(join(dir, "node_modules", "dep", "index.tsx"), "x", "utf8");
+    await writeFile(join(dir, "dist", "App.tsx"), "x", "utf8");
+    const paths = (await snapshotSourceScope(dir)).map((s) => s.path);
+    expect(paths).toContain("src/App.tsx");
+    expect(paths.some((p) => p.includes("node_modules"))).toBe(false);
+    expect(paths.some((p) => p.startsWith("dist/"))).toBe(false);
   });
 });
