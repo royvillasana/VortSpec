@@ -525,8 +525,14 @@ export function RunApp({
     const drop = bridge.dragDrop;
     bridge.clearDragDrop();
     // The guest already moved the element live — register it for Keep/Revert (no run).
+    // Use the guest-reported label + leading text so the reconcile run can locate the
+    // element's JSX (a bare tag alone is ambiguous across a screen).
     move.onDrop(
-      { fingerprint: drop.sourceFingerprint, label: selectionRefForMove.current?.label ?? "the selected element", text: null },
+      {
+        fingerprint: drop.sourceFingerprint,
+        label: drop.sourceLabel || selectionRefForMove.current?.label || "the selected element",
+        text: drop.sourceText,
+      },
       drop.target,
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps

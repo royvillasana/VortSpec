@@ -91,7 +91,13 @@ export interface InspectorBridge {
     poppedOut: boolean;
   } | null;
   /** A completed drop over a valid slot the host should turn into a gated move, or null. */
-  dragDrop: { sourceFingerprint: string; target: InsertTargetWire; poppedOut: boolean } | null;
+  dragDrop: {
+    sourceFingerprint: string;
+    sourceLabel: string;
+    sourceText: string | null;
+    target: InsertTargetWire;
+    poppedOut: boolean;
+  } | null;
   clearDragDrop: () => void;
   /** A human sentence for an invalid drop or a force-cancelled drag (HMR-lost), else null. */
   dragMessage: string | null;
@@ -253,7 +259,13 @@ export function useInspectorBridge(): InspectorBridge {
         setDrag(null);
         if (event.target) {
           // A valid slot → hand it to the host to open the gated move.
-          setDragDrop({ sourceFingerprint: event.sourceFingerprint, target: event.target, poppedOut: event.poppedOut });
+          setDragDrop({
+            sourceFingerprint: event.sourceFingerprint,
+            sourceLabel: event.sourceLabel,
+            sourceText: event.sourceText,
+            target: event.target,
+            poppedOut: event.poppedOut,
+          });
         } else {
           // A drop belonging to no container is refused (never guessed).
           setDragMessage("That spot isn't a layout slot — drop the element onto a row or column.");

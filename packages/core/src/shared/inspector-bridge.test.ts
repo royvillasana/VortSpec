@@ -205,13 +205,23 @@ describe("inspector-bridge contracts", () => {
       poppedOut: true,
     });
 
-    // A drop with a slot, and a refused drop (null target).
+    // A drop with a slot carries the source label + leading text for the reconcile run.
     expect(
-      bridgeEventSchema.parse({ t: "dragDrop", sourceFingerprint: "fp-card", target, poppedOut: true }),
-    ).toMatchObject({ t: "dragDrop", target: { axis: "row" }, poppedOut: true });
+      bridgeEventSchema.parse({
+        t: "dragDrop",
+        sourceFingerprint: "fp-card",
+        sourceLabel: "Card",
+        sourceText: "Handpicked homes",
+        target,
+        poppedOut: true,
+      }),
+    ).toMatchObject({ t: "dragDrop", sourceLabel: "Card", sourceText: "Handpicked homes", target: { axis: "row" }, poppedOut: true });
+    // A refused drop (null target); source label/text default when absent.
     expect(bridgeEventSchema.parse({ t: "dragDrop", sourceFingerprint: "fp-card", target: null })).toMatchObject({
       target: null,
       poppedOut: false, // default
+      sourceLabel: "", // default
+      sourceText: null, // default
     });
 
     // Cancel: a plain Escape (null message) and a forced cancel with a sentence.

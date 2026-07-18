@@ -405,6 +405,10 @@ export const bridgeEventSchema = z.discriminatedUnion("t", [
   z.object({
     t: z.literal("dragDrop"),
     sourceFingerprint: z.string(),
+    /** The dragged element's label (component name or tag) — the move run's origin anchor. */
+    sourceLabel: z.string().default(""),
+    /** Its leading text — the documented disambiguator for locating its JSX. */
+    sourceText: z.string().nullable().default(null),
     target: insertTargetSchema.nullable(),
     poppedOut: z.boolean().default(false),
   }),

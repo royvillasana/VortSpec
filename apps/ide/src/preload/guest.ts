@@ -615,10 +615,14 @@ function reapplyLiveMove(): void {
 function dropDrag(x: number, y: number, alt: boolean): void {
   if (!dragging) return;
   const resolved = dragSlotUnder(x, y, alt);
+  // Carry the dragged element's label + leading text so the reconcile run can find
+  // its JSX — a bare tag ("div") is ambiguous across a screen; the text disambiguates.
+  const sourceLabel = labelFor(dragging.el);
+  const sourceText = (dragging.el.textContent ?? "").trim().slice(0, 160) || null;
   // Instant feedback: reparent the real element into the slot before any agent runs,
   // using the live anchor element we already have (no lossy fingerprint round-trip).
   if (resolved) applyLiveMove(dragging.el, resolved.anchorEl, resolved.wire.position);
-  send({ t: "dragDrop", sourceFingerprint: dragging.fp, target: resolved?.wire ?? null, poppedOut: alt });
+  send({ t: "dragDrop", sourceFingerprint: dragging.fp, sourceLabel, sourceText, target: resolved?.wire ?? null, poppedOut: alt });
   dragging = null;
 }
 
@@ -968,6 +972,38 @@ function attach(): void {
     }
     return null;
   };
+  // The tracked id of an element (only if it's still in the current tree), else null.
+  const trackedId = (el: Element | null): string | null => {
+    if (!el) return null;
+    const uid = uidOf.get(el);
+    return uid && byId.get(uid) === el ? uid : null;
+  };
+  // Ids of the `data-component` elements from the pointer target up to <body>, INNERMOST
+  // first — the nested-component chain the pointer is inside (Figma-style select depth).
+  const componentChainUnder = (target: EventTarget | null): string[] => {
+    const ids: string[] = [];
+    let el = target as Element | null;
+    while (el && el !== document.body) {
+      if (el.hasAttribute("data-component")) {
+        const id = trackedId(el);
+        if (id && !ids.includes(id)) ids.push(id);
+      }
+      el = el.parentElement;
+    }
+    return ids;
+  };
+  // A single click selects the OUTERMOST component under the pointer (the parent), so a
+  // click on a component that nests another selects the container, not the inner one.
+  // Outside any component, fall back to the deepest tracked element.
+  const clickTarget = (target: EventTarget | null): string | null => {
+    const chain = componentChainUnder(target);
+    return chain.length ? chain[chain.length - 1] : idUnder(target);
+  };
+  // A double click drills IN: the innermost component under the pointer (the child).
+  const drillTarget = (target: EventTarget | null): string | null => {
+    const chain = componentChainUnder(target);
+    return chain.length ? chain[0] : idUnder(target);
+  };
   let rafPending = false;
   let lastHover: string | null = null;
   window.addEventListener(
@@ -1023,17 +1059,17 @@ function attach(): void {
         return;
       }
       if (mode !== "inspect" && mode !== "comment") return;
-      const id = idUnder(e.target);
-      if (id === null) return;
+      const deepId = idUnder(e.target);
+      if (deepId === null) return;
       e.preventDefault();
       e.stopPropagation();
-      const el = resolve(id);
-      if (!el) return;
       if (mode === "comment") {
-        // Anchor a new comment to this element (fingerprint re-locates it later).
+        // Anchor a new comment to the exact element under the pointer.
+        const el = resolve(deepId);
+        if (!el) return;
         send({
           t: "commentTarget",
-          nodeId: id,
+          nodeId: deepId,
           fingerprint: fingerprintFor(el),
           label: labelFor(el),
           component: el.getAttribute("data-component"),
@@ -1041,6 +1077,15 @@ function attach(): void {
         });
         return;
       }
+      // Inspect: a single click selects the OUTERMOST component under the pointer
+      // (the parent) — double-click drills into the nested one. But a press INSIDE the
+      // current selection keeps it, so a drilled-in child stays selected and draggable.
+      const deepEl = resolve(deepId);
+      const selectedEl = selectedId ? resolve(selectedId) : null;
+      const withinSelection = !!selectedEl && !!deepEl && (selectedEl === deepEl || selectedEl.contains(deepEl));
+      const id = withinSelection ? (selectedId as string) : (clickTarget(e.target) ?? deepId);
+      const el = resolve(id);
+      if (!el) return;
       // Pressing the already-selected element arms a drag (select-then-move; Decision 3).
       if (id === selectedId) armDrag(id, el, e.clientX, e.clientY);
       selectedId = id;
@@ -1109,7 +1154,8 @@ function attach(): void {
     { capture: true },
   );
 
-  // Double-click a text leaf to edit its content inline; commit on blur / Enter.
+  // Double-click a text leaf to edit its content inline; double-click a container to
+  // drill into the nested component under the pointer (Figma-style select depth).
   window.addEventListener(
     "dblclick",
     (e: MouseEvent) => {
@@ -1117,9 +1163,19 @@ function attach(): void {
       const id = idUnder(e.target);
       if (id === null) return;
       const el = resolve(id) as HTMLElement | undefined;
-      // Only genuine text leaves are editable; double-clicking anything else is an
-      // inert no-op (never a partial/destructive edit of an element with children).
-      if (!el || !isTextLeaf(el)) return;
+      if (!el) return;
+      // A non-text element: drill IN — select the innermost component under the pointer.
+      if (!isTextLeaf(el)) {
+        const inner = drillTarget(e.target) ?? id;
+        const innerEl = resolve(inner);
+        if (!innerEl || inner === selectedId) return; // already there → inert
+        e.preventDefault();
+        e.stopPropagation();
+        selectedId = inner;
+        send({ t: "readout", readout: readoutOf(innerEl, inner) });
+        return;
+      }
+      // A genuine text leaf: edit its content inline.
       e.preventDefault();
       e.stopPropagation();
       selectedId = id;
