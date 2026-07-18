@@ -181,6 +181,18 @@ export function RunCanvas({
               onResize={(size) => bridge.resizePlaceholder(size)}
             />
           )}
+
+          {/* Drag-move (inspect mode): a ghost of the dragged element trails the
+              pointer, and the drop slot draws the same InsertLine as insert mode
+              (change: canvas-live-structural-editing, §5.4). */}
+          {mode === "inspect" && bridge.drag && (
+            <>
+              <DragGhost rect={bridge.drag.ghost} />
+              {bridge.drag.target && (
+                <InsertLine line={bridge.drag.target.line} axis={bridge.drag.target.axis} />
+              )}
+            </>
+          )}
         </div>
       </div>
 
@@ -420,6 +432,25 @@ function InsertLine({
         height: vertical ? length : 3,
         background: "var(--color-vs-accent)",
         boxShadow: "0 0 0 1px rgba(124,111,240,0.35)",
+      }}
+    />
+  );
+}
+
+/** A faint ghost of the dragged element trailing the pointer during a drag-move (§5.4). */
+function DragGhost({ rect }: { rect: Rect }): JSX.Element {
+  return (
+    <div
+      data-testid="drag-ghost"
+      className="pointer-events-none absolute z-10 rounded"
+      style={{
+        left: rect.x,
+        top: rect.y,
+        width: rect.width,
+        height: rect.height,
+        background: "rgba(124,111,240,0.12)",
+        border: "1.5px solid var(--color-vs-accent)",
+        opacity: 0.85,
       }}
     />
   );

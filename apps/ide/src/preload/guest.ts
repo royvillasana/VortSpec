@@ -25,6 +25,7 @@ import {
   type StructureNodeWire,
 } from "@vortspec/core/inspector-bridge";
 import { resolveInsertTarget, placeholderSizing, type FlowAxis } from "@vortspec/core/insert-geometry";
+import { buildStructuralModel, slotAt, type StructuralNode, type Slot } from "@vortspec/core/structure-model";
 
 /**
  * Run-Canvas inspector bridge — guest preload (change: run-canvas-visual-editor).
@@ -423,6 +424,7 @@ function rebuildAndReacquire(): void {
   reapplyOverrides(); // a re-render reset the DOM — re-paint our ephemeral edits
   emitAnchorRects(); // pins re-resolve to their (possibly moved) elements
   reacquirePlaceholder(); // a re-render drops our injected placeholder — re-establish it
+  reacquireDrag(); // a mid-drag HMR patch invalidates every rect — re-lock or cancel (Decision 8)
   applyOptionPreview(); // keep the one-option preview filter attached across re-renders
   if (!selectedId) return;
   const el = resolve(selectedId);
@@ -468,11 +470,16 @@ function structureIdOf(el: Element): string {
   return uid;
 }
 
+/** id → live element for the most recent structure snapshot (drag targeting resolves slots through it). */
+const structureEls = new Map<string, Element>();
+
 /** Serialize a subtree (rect + computed flow + child ids per element) for the host model. */
 function buildStructureSnapshot(rootEl: Element): StructureSnapshotWire {
   const nodes: Record<string, StructureNodeWire> = {};
+  structureEls.clear();
   const walk = (el: Element): string => {
     const id = structureIdOf(el);
+    structureEls.set(id, el);
     const kids = childElementsOf(el);
     nodes[id] = {
       id,
@@ -485,6 +492,102 @@ function buildStructureSnapshot(rootEl: Element): StructureSnapshotWire {
     return id;
   };
   return { rootId: walk(rootEl), nodes };
+}
+
+// ── Drag-move gesture (change: canvas-live-structural-editing, §5.2–5.3) ────────
+
+/** How far the pointer must travel from the press point before a click becomes a drag. */
+const DRAG_THRESHOLD = 4;
+/** A press on the selected element, armed but not yet past the movement threshold. */
+let dragArm: { id: string; el: Element; startX: number; startY: number; grabX: number; grabY: number } | null = null;
+/** The live drag: the dragged element, its fingerprint, the cached structural model, and the grab offset. */
+let dragging: {
+  id: string;
+  el: Element;
+  fp: string;
+  model: StructuralNode | null;
+  grabX: number;
+  grabY: number;
+  rect: Rect;
+} | null = null;
+
+/** Map a resolved structural slot back to the host wire shape (anchor by fingerprint + label/text). */
+function slotToWire(slot: Slot): InsertTargetWire | null {
+  const anchorEl = structureEls.get(slot.anchorId);
+  if (!anchorEl?.isConnected) return null;
+  return {
+    anchorFingerprint: fingerprintFor(anchorEl),
+    position: slot.position,
+    axis: slot.axis,
+    line: slot.line,
+    anchorLabel: labelFor(anchorEl),
+    anchorText: (anchorEl.textContent ?? "").trim().slice(0, 160) || null,
+  };
+}
+
+/** Arm a potential drag when the user presses the already-selected element (Decision 3). */
+function armDrag(id: string, el: Element, x: number, y: number): void {
+  const r = rectOf(el);
+  dragArm = { id, el, startX: x, startY: y, grabX: x - r.x, grabY: y - r.y };
+}
+
+/** Cross the movement threshold → begin the drag: cache the structural model, tell the host. */
+function beginDrag(): void {
+  const arm = dragArm;
+  dragArm = null;
+  if (!arm || !arm.el.isConnected) return;
+  const model = buildStructuralModel(buildStructureSnapshot(document.body));
+  dragging = { id: arm.id, el: arm.el, fp: fingerprintFor(arm.el), model, grabX: arm.grabX, grabY: arm.grabY, rect: rectOf(arm.el) };
+  send({ t: "dragStart", sourceFingerprint: dragging.fp, nodeId: dragging.id, rect: dragging.rect });
+}
+
+/** Resolve the drop slot under the pointer (excluding the dragged subtree; Alt = pop out one level). */
+function dragSlotUnder(x: number, y: number, popOut: boolean): InsertTargetWire | null {
+  if (!dragging?.model) return null;
+  const slot = slotAt(dragging.model, { x, y }, { excludeSubtree: [dragging.id], popOut: popOut ? 1 : 0 });
+  return slot ? slotToWire(slot) : null;
+}
+
+/** Per-frame drag update: current slot + the ghost rect trailing the pointer (one event/rAF). */
+function updateDrag(x: number, y: number, alt: boolean): void {
+  if (!dragging) return;
+  const ghost = { x: x - dragging.grabX, y: y - dragging.grabY, width: dragging.rect.width, height: dragging.rect.height };
+  send({ t: "dragTarget", target: dragSlotUnder(x, y, alt), ghost, poppedOut: alt });
+}
+
+/** Finish the drag (pointerup): emit the drop, then clear state. */
+function dropDrag(x: number, y: number, alt: boolean): void {
+  if (!dragging) return;
+  const target = dragSlotUnder(x, y, alt);
+  send({ t: "dragDrop", sourceFingerprint: dragging.fp, target, poppedOut: alt });
+  dragging = null;
+}
+
+/** Abandon the drag (Escape / host cancel / lost element). `message` set only on a forced cancel. */
+function cancelDrag(message: string | null): void {
+  dragArm = null;
+  if (!dragging) return;
+  dragging = null;
+  send({ t: "dragCancel", message });
+}
+
+/**
+ * Re-acquire the dragged element after a mid-drag DOM mutation (HMR patch, Decision 8):
+ * rebuild the structural model against the fresh DOM and re-lock the dragged element by
+ * fingerprint. If it can't be re-acquired, cancel with a human sentence rather than
+ * hit-testing stale rects.
+ */
+function reacquireDrag(): void {
+  if (!dragging) return;
+  const el = resolveFingerprint(dragging.fp);
+  if (!el?.isConnected) {
+    cancelDrag("Lost the element after a live reload — select it and drag again.");
+    return;
+  }
+  dragging.el = el;
+  dragging.rect = rectOf(el);
+  dragging.id = structureIdOf(el);
+  dragging.model = buildStructuralModel(buildStructureSnapshot(document.body));
 }
 
 // ── Insert-mode geometry + placeholder (change: canvas-compose-and-preview-bar) ─
@@ -695,6 +798,11 @@ function handleCommand(cmd: BridgeCommand): void {
         dismissPlaceholder();
         send({ t: "insertTarget", target: null });
       }
+      // Drag lives inside inspect mode — leaving it abandons any drag (Decision 3).
+      if (cmd.mode !== "inspect") {
+        dragArm = null;
+        dragging = null;
+      }
       mode = cmd.mode;
       return;
     case "applyOverride":
@@ -766,6 +874,11 @@ function handleCommand(cmd: BridgeCommand): void {
       if (rootEl) send({ t: "structure", snapshot: buildStructureSnapshot(rootEl) });
       return;
     }
+    case "cancelDrag":
+      // Host-initiated abort (the move panel closed) — tear down without an event.
+      dragArm = null;
+      dragging = null;
+      return;
   }
 }
 
@@ -796,9 +909,23 @@ function attach(): void {
       if (mode !== "inspect" && mode !== "comment" && mode !== "insert") return;
       if (rafPending) return;
       rafPending = true;
-      const { clientX, clientY, target } = e;
+      const { clientX, clientY, target, altKey } = e;
       requestAnimationFrame(() => {
         rafPending = false;
+        // Drag-move takes precedence in inspect mode (Decision 3): an armed press
+        // that moves past the threshold begins the drag; a live drag streams its
+        // slot + ghost (one dragTarget per rAF — Decision 8).
+        if (dragging) {
+          updateDrag(clientX, clientY, altKey);
+          return;
+        }
+        if (dragArm && mode === "inspect") {
+          if (Math.hypot(clientX - dragArm.startX, clientY - dragArm.startY) >= DRAG_THRESHOLD) {
+            beginDrag();
+            updateDrag(clientX, clientY, altKey);
+          }
+          return;
+        }
         if (mode === "insert") {
           // Once a placeholder is placed the user is sizing/prompting — stop retargeting.
           if (placeholder) return;
@@ -846,8 +973,35 @@ function attach(): void {
         });
         return;
       }
+      // Pressing the already-selected element arms a drag (select-then-move; Decision 3).
+      if (id === selectedId) armDrag(id, el, e.clientX, e.clientY);
       selectedId = id;
       send({ t: "readout", readout: readoutOf(el, id) });
+    },
+    { capture: true },
+  );
+  // End (or abandon) a drag on release. A press that never moved past the threshold
+  // was just a click — drop the arm and let selection stand.
+  window.addEventListener(
+    "pointerup",
+    (e: PointerEvent) => {
+      if (dragging) {
+        e.preventDefault();
+        e.stopPropagation();
+        dropDrag(e.clientX, e.clientY, e.altKey);
+      }
+      dragArm = null;
+    },
+    { capture: true },
+  );
+  // Escape abandons an in-flight drag (plain cancel — no forced-loss message).
+  window.addEventListener(
+    "keydown",
+    (e: KeyboardEvent) => {
+      if (e.key === "Escape" && (dragging || dragArm)) {
+        e.preventDefault();
+        cancelDrag(null);
+      }
     },
     { capture: true },
   );
