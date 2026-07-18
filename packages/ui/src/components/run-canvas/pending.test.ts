@@ -3,6 +3,7 @@ import {
   classifyFieldEdit,
   classifyVariantEdit,
   buildEditPrompt,
+  groupEditsByElement,
   editProvenance,
   describeEdit,
   isTokenBinding,
@@ -59,7 +60,7 @@ describe("pending-edit classification", () => {
 });
 
 describe("edit provenance (Phase 6)", () => {
-  const text: PendingEdit = { key: "content", label: "Text", kind: "style", value: "Hi", token: null, shared: false, cssProps: [] };
+  const text: PendingEdit = { key: "content", id: "content", label: "Text", kind: "style", value: "Hi", token: null, shared: false, cssProps: [] };
   const token = classifyFieldEdit(selection, "radius", "12px", ["border-radius"], () => 5);
   const variant = classifyVariantEdit("size", "large");
   const freeform = classifyFieldEdit(selection, "opacity", "0.5", ["opacity"], () => 1);
@@ -110,21 +111,53 @@ describe("isTokenBinding — a var() binding is a source edit, not a token-value
 
 describe("gated-run prompt", () => {
   it("phrases a content edit as an exact visible-text change", () => {
-    const prompt = buildEditPrompt(null, null, [
-      { key: "content", label: "Text", kind: "style", value: "New label", token: null, shared: false, cssProps: [] },
+    const prompt = buildEditPrompt([
+      {
+        file: null,
+        component: null,
+        label: "the element",
+        text: null,
+        edits: [{ key: "content", id: "content", label: "Text", kind: "style", value: "New label", token: null, shared: false, cssProps: [] }],
+      },
     ]);
     expect(prompt).toContain("Set the element's visible text to `New label` (exact).");
   });
 
   it("names the component file; variant edits read as exact, freeform as approximate", () => {
-    const prompt = buildEditPrompt("src/components/Button.tsx", "Button", [
-      classifyFieldEdit(selection, "opacity", "0.5", ["opacity"], () => 1),
-      classifyVariantEdit("size", "large"),
+    const prompt = buildEditPrompt([
+      {
+        file: "src/components/Button.tsx",
+        component: "Button",
+        label: "Button",
+        text: null,
+        edits: [classifyFieldEdit(selection, "opacity", "0.5", ["opacity"], () => 1), classifyVariantEdit("size", "large")],
+      },
     ]);
     expect(prompt).toContain("src/components/Button.tsx");
     expect(prompt).toContain("Button");
     expect(prompt).toContain("Approximate visual target — set opacity to about `0.5`");
     expect(prompt).toContain("Set the `size` variant to `large` (exact");
     expect(prompt).toContain("preserve existing design-token usage");
+  });
+
+  it("groups edits per element when they span more than one (multi-element apply)", () => {
+    const prompt = buildEditPrompt([
+      { file: "src/App.tsx", component: null, label: "Card", text: "Featured", edits: [classifyFieldEdit(selection, "opacity", "0.5", ["opacity"], () => 1)] },
+      { file: "src/App.tsx", component: null, label: "Sidebar", text: "Filters", edits: [classifyFieldEdit(selection, "radius", "12px", ["border-radius"], () => 1)] },
+    ]);
+    expect(prompt).toContain("span 2 elements");
+    expect(prompt).toContain('On the "Card" element whose leading text is "Featured"');
+    expect(prompt).toContain('On the "Sidebar" element whose leading text is "Filters"');
+  });
+});
+
+describe("groupEditsByElement", () => {
+  it("keeps the same property on two elements as distinct groups", () => {
+    const a = { ...classifyFieldEdit(selection, "opacity", "0.4", ["opacity"], () => 1), fingerprint: "fp-a", nodeId: "n1", file: "src/A.tsx", elementLabel: "Card", elementText: "A" };
+    const b = { ...classifyFieldEdit(selection, "opacity", "0.9", ["opacity"], () => 1), fingerprint: "fp-b", nodeId: "n2", file: "src/A.tsx", elementLabel: "Row", elementText: "B" };
+    const groups = groupEditsByElement([a, b]);
+    expect(groups).toHaveLength(2);
+    expect(groups[0].edits[0].value).toBe("0.4");
+    expect(groups[1].edits[0].value).toBe("0.9");
   });
 });

@@ -370,8 +370,11 @@ function ApplyBar({
         </span>
         <ul className="flex flex-col gap-0.5">
           {pending.map((p) => (
-            <li key={p.key} className="group flex items-center gap-1.5 text-[11px] text-vs-text-secondary">
+            <li key={p.id} className="group flex items-center gap-1.5 text-[11px] text-vs-text-secondary">
               <span className="min-w-0 flex-1 truncate">
+                {p.elementLabel && (
+                  <span className="text-vs-text-muted">{p.elementLabel} · </span>
+                )}
                 {p.label} → <span className="font-mono">{p.value}</span>
               </span>
               {p.shared && (
@@ -383,8 +386,8 @@ function ApplyBar({
               {onRemove && !applying && (
                 <button
                   type="button"
-                  onClick={() => onRemove(p.key)}
-                  aria-label={`Remove ${p.label} change`}
+                  onClick={() => onRemove(p.id)}
+                  aria-label={`Remove ${p.elementLabel ? `${p.elementLabel} ` : ""}${p.label} change`}
                   title="Remove this change"
                   className="flex-none rounded p-0.5 text-vs-text-muted opacity-60 hover:bg-vs-bg-hover hover:text-vs-error hover:opacity-100"
                 >
