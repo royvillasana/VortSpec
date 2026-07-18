@@ -255,6 +255,10 @@ const api: VortSpecApi = {
   composeSweep: (projectPath: string, files: string[]) => invoke("compose:sweep", { projectPath, files }),
   composeCheckTarget: (projectPath: string, file: string) => invoke("compose:checkTarget", { projectPath, file }),
   composeSweepProject: (projectPath: string) => invoke("compose:sweepProject", projectPath),
+  componentThumbnail: (projectPath: string, name: string) =>
+    invoke("compose:componentThumbnail", { projectPath, name }),
+  storeComponentThumbnail: (projectPath: string, name: string, pngBase64: string) =>
+    invoke("compose:storeThumbnail", { projectPath, name, pngBase64 }),
   listComments: (projectPath: string) => invoke("comments:list", projectPath),
   upsertComment: (projectPath: string, thread: CommentThread) =>
     invoke("comments:upsert", { projectPath, thread }),

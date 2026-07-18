@@ -43,6 +43,33 @@ test("the close button cancels the insert (drops the placeholder)", async ({ mou
   expect(closed).toBe(true);
 });
 
+test("the dialog has Generate and Components tabs; picking a component inserts it", async ({ mount }) => {
+  const c = await mount(<ComposeHarness />, {
+    hooksConfig: { mock: { runScript: runWith(`\`\`\`json\n${OPTIONS_JSON}\n\`\`\``) } },
+  });
+  await expect(c.getByRole("tab", { name: "Generate" })).toBeVisible();
+  await c.getByRole("tab", { name: "Components" }).click();
+  const list = c.getByTestId("component-picker-list");
+  await expect(list).toContainText("Card");
+  await expect(list).toContainText("Button");
+  // Hovering a row previews that component.
+  await list.getByRole("button", { name: /Card/ }).hover();
+  await expect(c.getByTestId("component-preview")).toContainText("Card");
+  // Clicking it starts a directed insert naming that component.
+  await list.getByRole("button", { name: /Card/ }).click();
+  await expect(c.getByTestId("compose-option-index")).toBeVisible();
+  const sent = await runPrompts(c);
+  expect(sent[0]).toContain('Insert the "Card" component');
+});
+
+test("a cached thumbnail renders in the component preview", async ({ mount }) => {
+  const png = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
+  const c = await mount(<ComposeHarness />, { hooksConfig: { mock: { componentThumbnail: png } } });
+  await c.getByRole("tab", { name: "Components" }).click();
+  await c.getByTestId("component-picker-list").getByRole("button", { name: /Card/ }).hover();
+  await expect(c.getByTestId("component-preview").getByRole("img")).toHaveAttribute("src", png);
+});
+
 test("generating snapshots first, then cycles options with provenance and accepts one", async ({ mount }) => {
   const c = await mount(<ComposeHarness />, {
     hooksConfig: { mock: { runScript: runWith(`\`\`\`json\n${OPTIONS_JSON}\n\`\`\``) } },

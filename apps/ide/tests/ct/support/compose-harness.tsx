@@ -3,6 +3,7 @@ import React from "react";
 import type { JSX } from "react";
 import { useComposeRun } from "@vortspec/ui/useComposeRun";
 import { ComposePanel } from "@vortspec/ui/ComposePanel";
+import { api } from "@vortspec/ui/api";
 import { makeBridge } from "./mock-bridge";
 import type { Project, InspectorComponent, InsertTargetWire } from "@vortspec/core/ipc";
 
@@ -61,6 +62,7 @@ export function ComposeHarness({ roster = "full" }: { roster?: "full" | "empty" 
     <div style={{ width: 640, height: 360, position: "relative" }}>
       <ComposePanel
         compose={compose}
+        components={roster === "empty" ? [] : ROSTER}
         onExtract={(name) => {
           (window as unknown as { __extract?: string }).__extract = name ?? "(none)";
         }}
@@ -70,6 +72,7 @@ export function ComposeHarness({ roster = "full" }: { roster?: "full" | "empty" 
         onClose={() => {
           (window as unknown as { __closed?: boolean }).__closed = true;
         }}
+        getThumbnail={(name) => api.componentThumbnail(PROJECT.path, name)}
       />
     </div>
   );

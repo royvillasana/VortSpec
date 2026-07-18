@@ -113,6 +113,8 @@ export interface ComposePromptInput {
   /** The DESIGN.md hand-off contents, when present. */
   designMd: string | null;
   slot: ComposeSlot;
+  /** What the user wants in the slot — their typed description, or a component-pick directive. */
+  intent: string;
   /** The placeholder's soft size hint (px) — guidance the composition may deviate from. */
   sizeHint?: { width?: number; height?: number };
   /** How many options to attempt (1–3, default 3). A ceiling, never a target. */
@@ -175,6 +177,8 @@ export function buildComposePrompt(input: ComposePromptInput): string {
 
   const lines: string[] = [
     `Compose new UI for an insertion slot in this project, using ONLY the project's own components.`,
+    "",
+    `What the user wants here: ${input.intent.trim() || "(no description given — infer something sensible for this slot)"}`,
     "",
     `The slot: insert ${slot.position} the "${slot.anchorLabel}" element${
       slot.anchorText ? ` whose leading text is "${slot.anchorText.slice(0, 120)}"` : ""

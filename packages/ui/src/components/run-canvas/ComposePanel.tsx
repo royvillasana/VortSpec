@@ -1,7 +1,9 @@
 import { useState } from "react";
 import type { JSX } from "react";
 import { Spinner } from "@vortspec/ui/ui";
+import type { InspectorComponent } from "@vortspec/core/ipc";
 import type { UseComposeRun } from "../../lib/useComposeRun";
+import { ComponentPicker } from "./ComponentPicker";
 
 /**
  * The composition panel over an insert placeholder (§6.5–6.15).
@@ -13,19 +15,26 @@ import type { UseComposeRun } from "../../lib/useComposeRun";
  */
 export function ComposePanel({
   compose,
+  components,
   onExtract,
   onScreenUpdate,
   onClose,
+  getThumbnail,
 }: {
   compose: UseComposeRun;
+  /** The project roster, for the Components tab. */
+  components: InspectorComponent[];
   /** Route a no-match into the existing extract-component flow. */
   onExtract: (suggestedName: string | null) => void;
   /** Run the owed SDD-DE Screen Creation update for the accepted screen. */
   onScreenUpdate: (file: string) => void;
   /** Cancel the insert: dismiss the placeholder and drop out of the flow. */
   onClose: () => void;
+  /** Fetch a cached thumbnail (data URL) for a component (hover preview). */
+  getThumbnail?: (name: string) => Promise<string | null>;
 }): JSX.Element {
   const [draft, setDraft] = useState("");
+  const [tab, setTab] = useState<"generate" | "components">("generate");
   const { phase, result, activeOption } = compose;
 
   return (
@@ -54,47 +63,71 @@ export function ComposePanel({
           first, then try again — VortSpec won't hand-write markup for a slot.
         </p>
       ) : phase === "idle" || phase === "generating" ? (
-        // The prompt input with its action button INSIDE the field: Generate while
-        // idle, a Stop button + a thinking spinner while a run is in flight.
-        <div className="relative rounded border border-vs-border-default bg-vs-bg-primary focus-within:ring-2 focus-within:ring-vs-accent-subtle">
-          <textarea
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            disabled={phase === "generating"}
-            placeholder="Describe what belongs here…"
-            className="min-h-[72px] w-full resize-none bg-transparent px-2 pb-9 pt-1.5 text-vs-text-primary focus:outline-none disabled:opacity-70"
-          />
-          <div className="absolute inset-x-1.5 bottom-1.5 flex items-center gap-2">
-            {phase === "generating" && (
-              <span data-testid="compose-progress" className="flex min-w-0 items-center gap-1.5 text-vs-text-muted">
-                <Spinner />
-                <span className="truncate">{compose.progress ?? "Composing options…"}</span>
-              </span>
-            )}
-            {phase === "generating" ? (
-              <button
-                type="button"
-                onClick={() => void compose.cancel()}
-                title="Stop composing"
-                className="ml-auto flex items-center gap-1 rounded-md bg-vs-bg-hover px-2.5 py-1 text-xs font-medium text-vs-text-primary ring-1 ring-vs-border-default hover:bg-vs-bg-elevated"
-              >
-                Stop
-              </button>
-            ) : (
-              <button
-                type="button"
-                disabled={!draft.trim()}
-                title={draft.trim() ? "Compose options for this slot" : "Describe what belongs here first"}
-                onClick={() => void compose.generate(draft)}
-                className={`ml-auto rounded-md px-2.5 py-1 text-xs font-medium text-white ${
-                  draft.trim() ? "bg-vs-accent hover:opacity-90" : "cursor-not-allowed bg-vs-accent/40"
-                }`}
-              >
+        <>
+          {/* Two ways to fill the slot: describe it (AI) or pick a component. */}
+          {phase === "idle" && (
+            <div role="tablist" aria-label="Insert mode" className="flex gap-1 border-b border-vs-border-subtle">
+              <TabButton active={tab === "generate"} onClick={() => setTab("generate")}>
                 Generate
-              </button>
-            )}
-          </div>
-        </div>
+              </TabButton>
+              <TabButton active={tab === "components"} onClick={() => setTab("components")}>
+                Components
+              </TabButton>
+            </div>
+          )}
+
+          {tab === "components" && phase === "idle" ? (
+            <ComponentPicker
+              components={components}
+              actionLabel="Insert"
+              getThumbnail={getThumbnail}
+              onPick={(c) => void compose.generate(`Insert the "${c.name}" component here with sensible default props.`)}
+              onExtract={() => onExtract(null)}
+            />
+          ) : (
+            // The prompt input with its action button INSIDE the field: Generate
+            // while idle, a Stop button + a thinking spinner while a run is in flight.
+            <div className="relative rounded border border-vs-border-default bg-vs-bg-primary focus-within:ring-2 focus-within:ring-vs-accent-subtle">
+              <textarea
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                disabled={phase === "generating"}
+                placeholder="Describe what belongs here…"
+                className="min-h-[72px] w-full resize-none bg-transparent px-2 pb-9 pt-1.5 text-vs-text-primary focus:outline-none disabled:opacity-70"
+              />
+              <div className="absolute inset-x-1.5 bottom-1.5 flex items-center gap-2">
+                {phase === "generating" && (
+                  <span data-testid="compose-progress" className="flex min-w-0 items-center gap-1.5 text-vs-text-muted">
+                    <Spinner />
+                    <span className="truncate">{compose.progress ?? "Composing options…"}</span>
+                  </span>
+                )}
+                {phase === "generating" ? (
+                  <button
+                    type="button"
+                    onClick={() => void compose.cancel()}
+                    title="Stop composing"
+                    className="ml-auto flex items-center gap-1 rounded-md bg-vs-bg-hover px-2.5 py-1 text-xs font-medium text-vs-text-primary ring-1 ring-vs-border-default hover:bg-vs-bg-elevated"
+                  >
+                    Stop
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={!draft.trim()}
+                    title={draft.trim() ? "Compose options for this slot" : "Describe what belongs here first"}
+                    onClick={() => void compose.generate(draft)}
+                    className={`ml-auto rounded-md px-2.5 py-1 text-xs font-medium text-white ${
+                      draft.trim() ? "bg-vs-accent hover:opacity-90" : "cursor-not-allowed bg-vs-accent/40"
+                    }`}
+                  >
+                    Generate
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+        </>
       ) : phase === "no-match" ? (
         <>
           <p data-testid="compose-no-match">{result?.noMatch?.reason}</p>
@@ -223,5 +256,31 @@ export function ComposePanel({
         </div>
       )}
     </div>
+  );
+}
+
+function TabButton({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}): JSX.Element {
+  return (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={active}
+      onClick={onClick}
+      className={`-mb-px border-b-2 px-2 py-1 text-[11px] ${
+        active
+          ? "border-vs-accent font-medium text-vs-text-primary"
+          : "border-transparent text-vs-text-secondary hover:text-vs-text-primary"
+      }`}
+    >
+      {children}
+    </button>
   );
 }

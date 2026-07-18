@@ -983,9 +983,11 @@ export function RunApp({
                 {composeActive && (
                   <ComposePanel
                     compose={compose}
+                    components={components}
                     onExtract={onComposeExtract}
                     onScreenUpdate={onComposeScreenUpdate}
                     onClose={onComposeClose}
+                    getThumbnail={(name) => api.componentThumbnail(project.path, name)}
                   />
                 )}
                 <RunCanvas

@@ -97,6 +97,7 @@ export function useComposeRun(args: {
         roster,
         tokens: tokenNames,
         designMd,
+        intent: prompt,
         slot: {
           anchorLabel: target.anchorLabel ?? "the anchored element",
           anchorText: target.anchorText ?? null,

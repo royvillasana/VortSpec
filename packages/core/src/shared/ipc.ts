@@ -680,6 +680,14 @@ export const ipcContract = {
     request: z.string(),
     response: z.object({ swept: z.array(z.string()) }),
   },
+  "compose:componentThumbnail": {
+    request: z.object({ projectPath: z.string(), name: z.string() }),
+    response: z.string().nullable(),
+  },
+  "compose:storeThumbnail": {
+    request: z.object({ projectPath: z.string(), name: z.string(), pngBase64: z.string() }),
+    response: z.void(),
+  },
   // Run-canvas comments — repo-backed threads under .vortspec/comments/.
   "comments:list": {
     request: z.string(),

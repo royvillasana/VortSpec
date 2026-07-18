@@ -197,6 +197,10 @@ export interface VortSpecApi {
   composeCheckTarget(projectPath: string, file: string): Promise<IpcResponse<"compose:checkTarget">>;
   /** Find and sweep any composition scaffold orphaned in the project (crash recovery). */
   composeSweepProject(projectPath: string): Promise<IpcResponse<"compose:sweepProject">>;
+  /** A cached component thumbnail (data URL) for the picker's hover preview, or null. */
+  componentThumbnail(projectPath: string, name: string): Promise<IpcResponse<"compose:componentThumbnail">>;
+  /** Store a rendered component thumbnail (PNG base64) in the project's cache. */
+  storeComponentThumbnail(projectPath: string, name: string, pngBase64: string): Promise<IpcResponse<"compose:storeThumbnail">>;
 
   // run-canvas comments (repo-backed threads under .vortspec/comments/)
   listComments(projectPath: string): Promise<IpcResponse<"comments:list">>;

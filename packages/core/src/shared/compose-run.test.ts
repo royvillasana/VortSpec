@@ -37,6 +37,7 @@ const input = (over: Partial<ComposePromptInput> = {}): ComposePromptInput => ({
   roster: ROSTER,
   tokens: ["--space-4", "--radius-md", "--color-accent"],
   designMd: "# Design\nUse generous spacing.",
+  intent: "a filters row",
   slot: { anchorLabel: "Card", anchorText: "Featured", position: "before", axis: "row", file: "src/Home.tsx" },
   ...over,
 });
@@ -106,6 +107,10 @@ describe("hasUsableRoster", () => {
 });
 
 describe("buildComposePrompt", () => {
+  it("carries the user's intent so the composition reflects what they asked for", () => {
+    expect(buildComposePrompt(input({ intent: "a testimonials carousel" }))).toContain("a testimonials carousel");
+  });
+
   it("grounds in the roster, tokens, DESIGN.md, and the anchor's leading text", () => {
     const p = buildComposePrompt(input());
     expect(p).toContain("Card");
