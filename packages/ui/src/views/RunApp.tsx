@@ -4,7 +4,7 @@ import { buildSelection, alignToCss, flowToCss } from "@vortspec/core/selection-
 import { api } from "../lib/api";
 import { Button, Spinner } from "@vortspec/ui/ui";
 import { ProjectRail, projectRailItems } from "@vortspec/ui/ProjectRail";
-import { DesignPanel } from "../components/run-canvas/DesignPanel";
+import { DesignPanel, ChangesBar } from "../components/run-canvas/DesignPanel";
 import { RunCanvas } from "../components/run-canvas/RunCanvas";
 import {
   resolveComponent,
@@ -565,10 +565,27 @@ export function RunApp({
           error: move.error,
           progress: move.progress,
           onKeep: () => void move.keep(),
-          onRevert: () => move.revert(),
+          onRevert: () => void move.revert(),
           onStop: () => void move.cancel(),
         }
       : null;
+  // The one set of props behind the persistent sidebar changes-footer, shared by the
+  // DesignPanel bar and the comment-mode footer so un-saved work shows in every mode.
+  const changesBarProps = {
+    pending: Object.values(pending),
+    applying,
+    applyStatus: applying ? (structuralMod.model.activity.at(-1)?.label ?? null) : null,
+    review,
+    onApply: () => void applyEdits(),
+    onDiscard: discardEdits,
+    onRemovePending: removePending,
+    onKeep: keepEdits,
+    onRevert: () => void revertEdits(),
+    owedScreenUpdates,
+    onSaveScreenUpdates: saveScreenUpdates,
+    onDismissScreenUpdate: dismissScreenUpdate,
+    move: moveBar,
+  };
 
   // Inspect-click assign dialog (§ dialog slice): the roster to assign/reuse a
   // component for the selected element. It auto-opens ONLY for elements not already
@@ -1084,9 +1101,11 @@ export function RunApp({
             <div className="relative flex h-full min-h-0">
               <aside
                 style={{ width: panelW }}
-                className="flex-none overflow-hidden border-r border-vs-border-default bg-vs-bg-surface"
+                className="flex flex-none flex-col overflow-hidden border-r border-vs-border-default bg-vs-bg-surface"
               >
                 {mode === "comment" ? (
+                  <>
+                  <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
                   <CommentsPanel
                     threads={comments.threads}
                     anchorRects={bridge.anchorRects}
@@ -1099,6 +1118,10 @@ export function RunApp({
                     onResolve={(id, resolved) => void resolveComment(id, resolved)}
                     onShare={() => void comments.share()}
                   />
+                  </div>
+                  {/* Un-saved canvas work stays visible + saveable even in comment mode. */}
+                  <ChangesBar {...changesBarProps} />
+                  </>
                 ) : (
                 <DesignPanel
                   selection={selection}

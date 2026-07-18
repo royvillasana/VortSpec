@@ -94,7 +94,7 @@ export function DesignPanel({
   } | null;
 }): JSX.Element {
   return (
-    <div className="flex h-full min-h-0 flex-col bg-vs-bg-primary text-vs-text-primary">
+    <div className="flex h-full min-h-0 flex-1 flex-col bg-vs-bg-primary text-vs-text-primary">
       {/* Layers — just the node tree. The mode toggle and zoom controls moved to
           the canvas toolbar (change: canvas-compose-and-preview-bar), so they no
           longer disappear with this region and are no longer duplicated by the
@@ -134,26 +134,85 @@ export function DesignPanel({
         )}
       </div>
 
-      {/* Exactly ONE bar at the bottom (never stacked) — priority: an in-flight move,
-          a post-apply review, pending inspect edits, then owed screen-spec updates. */}
-      {move ? (
-        <MoveBar {...move} />
-      ) : review ? (
-        <ReviewBar onKeep={onKeep} onRevert={onRevert} />
-      ) : pending.length > 0 ? (
-        <ApplyBar
-          pending={pending}
-          applying={applying}
-          applyStatus={applyStatus}
-          onApply={onApply}
-          onDiscard={onDiscard}
-          onRemove={onRemovePending}
-        />
-      ) : owedScreenUpdates.length > 0 ? (
-        <SaveChangesBar files={owedScreenUpdates} onSave={onSaveScreenUpdates} onDismiss={onDismissScreenUpdate} />
-      ) : null}
+      <ChangesBar
+        pending={pending}
+        applying={applying}
+        applyStatus={applyStatus}
+        review={review}
+        onApply={onApply}
+        onDiscard={onDiscard}
+        onRemovePending={onRemovePending}
+        onKeep={onKeep}
+        onRevert={onRevert}
+        owedScreenUpdates={owedScreenUpdates}
+        onSaveScreenUpdates={onSaveScreenUpdates}
+        onDismissScreenUpdate={onDismissScreenUpdate}
+        move={move}
+      />
     </div>
   );
+}
+
+/**
+ * The persistent "changes" footer for the Run sidebar (change: unified pending
+ * changes). Renders exactly ONE bar at the bottom, never stacked, by priority:
+ * an in-flight move → a post-apply review → pending inspect edits → owed screen
+ * updates. Rendered in EVERY canvas mode (inspect/insert/comment/interact) so
+ * un-saved work is always visible and one save/discard away, regardless of what
+ * the panel above it shows.
+ */
+export function ChangesBar({
+  pending = [],
+  applying = false,
+  applyStatus = null,
+  review = false,
+  onApply,
+  onDiscard,
+  onRemovePending,
+  onKeep,
+  onRevert,
+  owedScreenUpdates = [],
+  onSaveScreenUpdates,
+  onDismissScreenUpdate,
+  move,
+}: {
+  pending?: PendingEdit[];
+  applying?: boolean;
+  applyStatus?: string | null;
+  review?: boolean;
+  onApply?: () => void;
+  onDiscard?: () => void;
+  onRemovePending?: (key: string) => void;
+  onKeep?: () => void;
+  onRevert?: () => void;
+  owedScreenUpdates?: string[];
+  onSaveScreenUpdates?: () => void;
+  onDismissScreenUpdate?: (file: string) => void;
+  move?: {
+    phase: "moved" | "reconciling" | "error";
+    error?: string | null;
+    progress?: string | null;
+    onKeep: () => void;
+    onRevert: () => void;
+    onStop: () => void;
+  } | null;
+}): JSX.Element | null {
+  if (move) return <MoveBar {...move} />;
+  if (review) return <ReviewBar onKeep={onKeep} onRevert={onRevert} />;
+  if (pending.length > 0)
+    return (
+      <ApplyBar
+        pending={pending}
+        applying={applying}
+        applyStatus={applyStatus}
+        onApply={onApply}
+        onDiscard={onDiscard}
+        onRemove={onRemovePending}
+      />
+    );
+  if (owedScreenUpdates.length > 0)
+    return <SaveChangesBar files={owedScreenUpdates} onSave={onSaveScreenUpdates} onDismiss={onDismissScreenUpdate} />;
+  return null;
 }
 
 /** The drag-move gate, docked in the sidebar (no floating dialog): Keep / Revert,
