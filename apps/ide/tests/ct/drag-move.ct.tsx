@@ -35,22 +35,22 @@ test("a drop registers the move instantly — Keep/Revert, no run yet", async ({
   expect(await runPrompts(c)).toEqual([]);
 });
 
-test("Keep reconciles source: runs the move, auto-accepts keepOption 0, owes a screen update", async ({ mount }) => {
+test("Keep is the one action: reconciles, auto-accepts keepOption 0, reloads (no 2nd prompt)", async ({ mount }) => {
   const c = await mount(<MoveHarness />, {
     hooksConfig: { mock: { runScript: runWith(`\`\`\`json\n${MOVED_JSON}\n\`\`\``) } },
   });
   await c.getByRole("button", { name: "Start move" }).click();
   await c.getByRole("button", { name: "Keep" }).click();
-  // The whole keep chain (snapshot → run → auto-accept → reload) is async; the owed
-  // screen-update surfacing means it finished, so the recorded ops are settled.
-  await expect(c.getByTestId("move-screen-update")).toContainText("src/Home.tsx");
+  // The whole keep chain (snapshot → run → auto-accept → reload) is async; the recorded
+  // reload marks it settled. Keep forgets the ephemeral move + reloads real source.
+  await expect.poll(() => bridgeOps(c)).toEqual(expect.arrayContaining(["clear", "reload"]));
   const sent = await runPrompts(c);
   expect(sent[0]).toContain("This is a MOVE");
   expect(sent[0]).toContain("option=0"); // a single option scaffold
   const ops = await composeOps(c);
   expect(ops.find((o) => o.op === "accept")).toMatchObject({ file: "src/Home.tsx", keepOption: 0 });
-  // Keep forgets the ephemeral move + reloads real source.
-  expect(await bridgeOps(c)).toEqual(expect.arrayContaining(["clear", "reload"]));
+  // The move panel is gone — no second "save the screen spec" prompt.
+  await expect(c.getByTestId("move-panel")).toHaveCount(0);
 });
 
 test("Revert undoes the move — nothing written, no run", async ({ mount }) => {

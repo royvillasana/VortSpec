@@ -595,16 +595,9 @@ export function RunApp({
     return () => clearTimeout(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bridge.dragMessage]);
-  // After a kept move reconciles, its owed screen-spec update flows into the SAME
-  // sidebar Save-changes bar as an insert's (one place for all owed updates), instead
-  // of a separate notice.
-  useEffect(() => {
-    if (!move.screenUpdateOwed) return;
-    onComposeScreenLater(move.screenUpdateOwed);
-    move.clearScreenUpdate();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [move.screenUpdateOwed]);
   // The move's Keep/Revert gate, docked in the Design sidebar (no floating dialog).
+  // Keep is the ONE action — it reconciles the JSX and is done; no second "Save
+  // changes" prompt for a move.
   const moveBar =
     dragMoveEnabled && mode === "inspect" && move.phase !== "idle"
       ? {

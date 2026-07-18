@@ -14,15 +14,9 @@ import { useDraggable } from "../../lib/useDraggable";
  */
 export function MovePanel({
   move,
-  onScreenUpdate,
-  onScreenLater,
   onClose,
 }: {
   move: UseDragMove;
-  /** Run the owed SDD-DE Screen Creation update for the kept move. */
-  onScreenUpdate: (file: string) => void;
-  /** Defer the owed update to the sidebar Save-changes bar. */
-  onScreenLater?: (file: string) => void;
   /** Dismiss the panel (revert the ephemeral move first). */
   onClose: () => void;
 }): JSX.Element {
@@ -94,37 +88,6 @@ export function MovePanel({
           </button>
         </>
       ) : null}
-
-      {move.screenUpdateOwed && (
-        <div data-testid="move-screen-update" className="mt-1 rounded border border-vs-border-subtle bg-vs-bg-primary px-2 py-1.5">
-          <p>
-            The <span className="font-mono text-vs-text-primary">{move.screenUpdateOwed}</span> screen's spec now needs
-            a Screen Creation update to match the moved element.
-          </p>
-          <div className="mt-1 flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                onScreenUpdate(move.screenUpdateOwed as string);
-                move.clearScreenUpdate();
-              }}
-              className="rounded bg-vs-accent px-2 py-0.5 text-white hover:opacity-90"
-            >
-              Update the screen spec
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                if (move.screenUpdateOwed) onScreenLater?.(move.screenUpdateOwed);
-                move.clearScreenUpdate();
-              }}
-              className="rounded px-1.5 hover:bg-vs-bg-hover"
-            >
-              Later
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

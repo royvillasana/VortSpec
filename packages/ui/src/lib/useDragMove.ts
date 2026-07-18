@@ -33,17 +33,14 @@ export interface UseDragMove {
   /** The latest run activity label while reconciling, or null. */
   progress: string | null;
   error: string | null;
-  /** After a kept move, the screen file whose spec now owes a Screen Creation update. */
-  screenUpdateOwed: string | null;
   /** Register the just-dropped (already live-moved) element for Keep/Revert. */
   onDrop: (source: MoveSource, target: InsertTargetWire) => void;
-  /** Reconcile source to the moved DOM (gated run + auto-accept). */
+  /** Reconcile source to the moved DOM (gated run + auto-accept). The one action. */
   keep: () => Promise<void>;
   /** Undo the ephemeral move in the live DOM — nothing written. */
   revert: () => void;
   /** Abort an in-flight reconcile: cancel the run, restore the snapshot, revert the DOM. */
   cancel: () => Promise<void>;
-  clearScreenUpdate: () => void;
   reset: () => void;
 }
 
@@ -52,7 +49,6 @@ export function useDragMove(args: { project: Project; bridge: InspectorBridge })
   const [phase, setPhase] = useState<MovePhase>("idle");
   const [result, setResult] = useState<ComposeResult | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [screenUpdateOwed, setScreenUpdateOwed] = useState<string | null>(null);
 
   // Refs so the callbacks stay stable but read the latest inputs (the bridge is a
   // fresh reference every render).
@@ -171,11 +167,12 @@ export function useDragMove(args: { project: Project; bridge: InspectorBridge })
           return;
         }
         // The user already approved by keeping — auto-accept (strip the scaffold),
-        // forget the ephemeral move, and reload so the DOM reflects real source.
+        // forget the ephemeral move, and reload so the DOM reflects real source. Keep
+        // is the ONE action: no separate screen-spec "Save changes" prompt for a move
+        // (a relocation is a layout tweak; the spec sync isn't worth a second confirm).
         await api.composeAccept(ctx.current.project.path, file, runIdRef.current, 0);
         ctx.current.bridge.clearMove();
         ctx.current.bridge.reload();
-        setScreenUpdateOwed(file);
         reset();
       });
     } else if (run.model.status === "error") {
@@ -199,12 +196,10 @@ export function useDragMove(args: { project: Project; bridge: InspectorBridge })
     result,
     progress: run.model.activity.at(-1)?.label ?? null,
     error,
-    screenUpdateOwed,
     onDrop,
     keep,
     revert,
     cancel,
-    clearScreenUpdate: useCallback(() => setScreenUpdateOwed(null), []),
     reset,
   };
 }

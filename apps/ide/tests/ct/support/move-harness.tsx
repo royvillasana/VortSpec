@@ -50,12 +50,9 @@ export function MoveHarness(): JSX.Element {
       >
         Start move
       </button>
-      {(move.phase !== "idle" || move.screenUpdateOwed) && (
+      {move.phase !== "idle" && (
         <MovePanel
           move={move}
-          onScreenUpdate={(file) => {
-            (window as unknown as { __screenUpdate?: string }).__screenUpdate = file;
-          }}
           onClose={() => {
             (window as unknown as { __closed?: boolean }).__closed = true;
           }}
