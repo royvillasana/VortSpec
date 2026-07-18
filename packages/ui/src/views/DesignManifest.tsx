@@ -171,7 +171,7 @@ export function DesignManifest({
   }, [manifest]);
 
   return (
-    <div className="flex h-[calc(100vh-3rem)] w-full overflow-hidden bg-vs-bg-primary text-[13px] text-vs-text-primary">
+    <div className="flex h-full min-h-0 w-full overflow-hidden bg-vs-bg-primary text-[13px] text-vs-text-primary">
       {!hideRail && (
         <ProjectRail
         project={project}
