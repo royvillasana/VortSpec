@@ -147,6 +147,7 @@ export type {
   Selection,
   BridgeCommand,
   BridgeEvent,
+  InsertTargetWire,
 } from "./inspector-bridge";
 export {
   INSPECTOR_BRIDGE_CHANNEL,
@@ -656,6 +657,28 @@ export const ipcContract = {
   "inspector:restoreFiles": {
     request: z.object({ projectPath: z.string(), files: fileSnapshotListSchema }),
     response: z.void(),
+  },
+  // Composition preview scaffold — accept keeps one option, sweep clears all (§6).
+  "compose:accept": {
+    request: z.object({
+      projectPath: z.string(),
+      file: z.string(),
+      runId: z.string(),
+      keepOption: z.number().int().nonnegative(),
+    }),
+    response: z.object({ ok: z.boolean(), file: z.string(), message: z.string().optional() }),
+  },
+  "compose:sweep": {
+    request: z.object({ projectPath: z.string(), files: z.array(z.string()) }),
+    response: z.void(),
+  },
+  "compose:checkTarget": {
+    request: z.object({ projectPath: z.string(), file: z.string() }),
+    response: z.object({ ok: z.boolean(), reason: z.string().optional() }),
+  },
+  "compose:sweepProject": {
+    request: z.string(),
+    response: z.object({ swept: z.array(z.string()) }),
   },
   // Run-canvas comments — repo-backed threads under .vortspec/comments/.
   "comments:list": {

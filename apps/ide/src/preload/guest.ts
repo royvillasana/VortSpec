@@ -20,7 +20,9 @@ import {
   type ClassOverride,
   type NodeReadout,
   type Rect,
+  type InsertTargetWire,
 } from "@vortspec/core/inspector-bridge";
+import { resolveInsertTarget, placeholderSizing, type FlowAxis } from "@vortspec/core/insert-geometry";
 
 /**
  * Run-Canvas inspector bridge — guest preload (change: run-canvas-visual-editor).
@@ -98,8 +100,41 @@ const classOverrides = new Map<string, ClassOverride>();
 /** Ephemeral inline text edits, keyed by node uid (survive a re-render until persisted). */
 const textOverrides = new Map<string, { applied: string; original: string }>();
 let selectedId: string | null = null;
-/** Input mode: `interact` (default) lets the app work; `inspect` intercepts hover/click to select. */
-let mode: "inspect" | "interact" | "comment" = "interact";
+/** Input mode: `interact` (default) lets the app work; `inspect` intercepts hover/click to
+ *  select; `comment` pins a thread; `insert` hit-tests gaps to place a composition slot. */
+let mode: "inspect" | "interact" | "comment" | "insert" = "interact";
+
+// ── Insert mode (change: canvas-compose-and-preview-bar) ───────────────────────
+// An ephemeral placeholder injected into the page so the user sees the slot they
+// are about to fill, at its true size, in real layout. It writes NOTHING to disk.
+// It carries `data-vs-overlay` so the tree scan and future hit-tests skip it, and
+// `pointer-events: none` so it never eats the pointer. Its anchor is remembered by
+// fingerprint so it can be re-established across an HMR re-render.
+/** The live placeholder element, or null when none is placed. */
+let placeholder: HTMLElement | null = null;
+/** The slot the placeholder holds (anchor fingerprint + before/after + axis + line). */
+let placeholderTarget: InsertTargetWire | null = null;
+/** The user's soft size hint from edge-drag resize (px), re-applied across re-renders. */
+let placeholderSize: { width?: number; height?: number } = {};
+/** The option index currently previewed in place, or null to show all written options. */
+let previewedOption: number | null = null;
+/** A persistent <style> in <head> that hides the non-previewed options (survives HMR). */
+let previewStyleEl: HTMLStyleElement | null = null;
+
+/** Show only `[data-vs-option="<previewedOption>"]`; null clears the filter. */
+function applyOptionPreview(): void {
+  if (previewedOption === null) {
+    previewStyleEl?.remove();
+    previewStyleEl = null;
+    return;
+  }
+  if (!previewStyleEl || !previewStyleEl.isConnected) {
+    previewStyleEl = document.createElement("style");
+    previewStyleEl.setAttribute("data-vs-overlay", "");
+    document.head.appendChild(previewStyleEl);
+  }
+  previewStyleEl.textContent = `[data-vs-option]:not([data-vs-option="${previewedOption}"]){display:none !important;}`;
+}
 
 function send(event: BridgeEvent): void {
   ipcRenderer.sendToHost(INSPECTOR_BRIDGE_CHANNEL, event);
@@ -385,6 +420,8 @@ function rebuildAndReacquire(): void {
   send({ t: "tree", tree: buildTree() });
   reapplyOverrides(); // a re-render reset the DOM — re-paint our ephemeral edits
   emitAnchorRects(); // pins re-resolve to their (possibly moved) elements
+  reacquirePlaceholder(); // a re-render drops our injected placeholder — re-establish it
+  applyOptionPreview(); // keep the one-option preview filter attached across re-renders
   if (!selectedId) return;
   const el = resolve(selectedId);
   if (el) {
@@ -406,6 +443,149 @@ function scheduleRebuild(): void {
   }, 150);
 }
 
+// ── Insert-mode geometry + placeholder (change: canvas-compose-and-preview-bar) ─
+
+/** An element's inspectable element children (skipping chrome and our own overlay). */
+function childElementsOf(el: Element): Element[] {
+  return Array.from(el.children).filter((c) => !SKIP_TAGS.has(c.tagName) && !c.hasAttribute("data-vs-overlay"));
+}
+
+/**
+ * The container whose children we insert among, under a point. A gap between
+ * siblings hit-tests to the container itself (the gap is its background), so when
+ * the point lands on an element that HAS children we treat it as the container;
+ * otherwise the point is over a leaf and its parent is the container.
+ */
+function containerAndChildren(x: number, y: number): { container: Element; childEls: Element[] } | null {
+  let el = document.elementFromPoint(x, y) as Element | null;
+  while (el && el.hasAttribute("data-vs-overlay")) el = el.parentElement; // skip our own chrome
+  if (!el) return null;
+  const own = childElementsOf(el);
+  if (own.length >= 1) return { container: el, childEls: own };
+  const parent = el.parentElement;
+  if (!parent) return null;
+  const sibs = childElementsOf(parent);
+  return sibs.length ? { container: parent, childEls: sibs } : null;
+}
+
+/** Resolve the insertion slot under a point, with the anchor element to place against. */
+function insertTargetUnder(
+  x: number,
+  y: number,
+): { wire: InsertTargetWire; container: Element; anchorEl: Element } | null {
+  const found = containerAndChildren(x, y);
+  if (!found) return null;
+  const cs = getComputedStyle(found.container);
+  const computed = { display: cs.display, "flex-direction": cs.flexDirection, "grid-auto-flow": cs.gridAutoFlow };
+  const target = resolveInsertTarget({ x, y }, { computed, children: found.childEls.map(rectOf) });
+  if (!target) return null;
+  const anchorEl = found.childEls[target.anchorIndex];
+  if (!anchorEl) return null;
+  return {
+    wire: {
+      anchorFingerprint: fingerprintFor(anchorEl),
+      position: target.position,
+      axis: target.axis,
+      line: target.line,
+      anchorLabel: labelFor(anchorEl),
+      anchorText: (anchorEl.textContent ?? "").trim().slice(0, 160) || null,
+    },
+    container: found.container,
+    anchorEl,
+  };
+}
+
+/** Build the visible placeholder element, implicitly sized for its axis. */
+function makePlaceholderEl(axis: FlowAxis): HTMLElement {
+  const el = document.createElement("div");
+  el.setAttribute("data-vs-overlay", ""); // excluded from the tree scan and child rects
+  el.setAttribute("data-vs-placeholder", "");
+  el.textContent = "Compose here";
+  for (const [k, v] of Object.entries(placeholderSizing(axis))) el.style.setProperty(k, v);
+  el.style.setProperty("box-sizing", "border-box");
+  el.style.setProperty("display", "flex");
+  el.style.setProperty("align-items", "center");
+  el.style.setProperty("justify-content", "center");
+  el.style.setProperty("padding", "12px");
+  el.style.setProperty("border", "2px dashed #7c6ff0");
+  el.style.setProperty("border-radius", "8px");
+  el.style.setProperty("background", "rgba(124,111,240,0.08)");
+  el.style.setProperty("color", "#7c6ff0");
+  el.style.setProperty("font", "12px system-ui, sans-serif");
+  el.style.setProperty("pointer-events", "none"); // never eat the pointer or block hit-testing
+  return el;
+}
+
+/** Apply the user's soft size hint; an explicit size overrides the implicit flex sizing. */
+function applyPlaceholderSize(el: HTMLElement): void {
+  if (placeholderSize.width !== undefined) {
+    el.style.setProperty("width", `${placeholderSize.width}px`);
+    el.style.setProperty("flex", "0 0 auto");
+  }
+  if (placeholderSize.height !== undefined) el.style.setProperty("height", `${placeholderSize.height}px`);
+}
+
+function insertPlaceholderAt(el: HTMLElement, container: Element, anchorEl: Element, position: "before" | "after"): void {
+  if (position === "before") container.insertBefore(el, anchorEl);
+  else container.insertBefore(el, anchorEl.nextSibling);
+}
+
+/** Materialize a placeholder at a slot and tell the host (nothing is written to disk). */
+function materializePlaceholder(wire: InsertTargetWire, container: Element, anchorEl: Element): void {
+  dismissPlaceholder();
+  const el = makePlaceholderEl(wire.axis);
+  applyPlaceholderSize(el);
+  insertPlaceholderAt(el, container, anchorEl, wire.position);
+  placeholder = el;
+  placeholderTarget = wire;
+  send({ t: "insertTarget", target: null }); // the line gives way to the placeholder
+  send({ t: "placeholderReady", target: wire, rect: rectOf(el) });
+}
+
+/** Resize the placeholder live; the size ships to the run as a hint, not a constraint. */
+function resizePlaceholder(width?: number, height?: number): void {
+  if (!placeholder || !placeholderTarget) return;
+  placeholderSize = { width, height };
+  applyPlaceholderSize(placeholder);
+  send({ t: "placeholderReady", target: placeholderTarget, rect: rectOf(placeholder) });
+}
+
+/** Remove the placeholder and forget its slot. Idempotent. */
+function dismissPlaceholder(): void {
+  placeholder?.parentElement?.removeChild(placeholder);
+  placeholder = null;
+  placeholderTarget = null;
+  placeholderSize = {};
+}
+
+/**
+ * Re-establish the placeholder after an HMR re-render replaced the DOM. If it
+ * survived (still connected), just re-echo its rect; otherwise re-acquire the
+ * anchor by fingerprint and re-insert. If the anchor is gone, dismiss with a human
+ * sentence — never reattach to the wrong element.
+ */
+function reacquirePlaceholder(): void {
+  if (!placeholderTarget) return;
+  if (placeholder?.isConnected) {
+    send({ t: "placeholderReady", target: placeholderTarget, rect: rectOf(placeholder) });
+    return;
+  }
+  const anchorEl = resolveFingerprint(placeholderTarget.anchorFingerprint);
+  if (!anchorEl?.parentElement) {
+    dismissPlaceholder();
+    send({
+      t: "placeholderLost",
+      message: "The spot you were composing into changed after a reload — pick the spot again.",
+    });
+    return;
+  }
+  const el = placeholder ?? makePlaceholderEl(placeholderTarget.axis);
+  applyPlaceholderSize(el);
+  insertPlaceholderAt(el, anchorEl.parentElement, anchorEl, placeholderTarget.position);
+  placeholder = el;
+  send({ t: "placeholderReady", target: placeholderTarget, rect: rectOf(el) });
+}
+
 function handleCommand(cmd: BridgeCommand): void {
   switch (cmd.t) {
     case "requestTree":
@@ -421,6 +601,11 @@ function handleCommand(cmd: BridgeCommand): void {
       if (cmd.nodeId !== null) emitGeometry(cmd.nodeId);
       return;
     case "setMode":
+      // Leaving insert mode tears down its ephemeral affordances.
+      if (mode === "insert" && cmd.mode !== "insert") {
+        dismissPlaceholder();
+        send({ t: "insertTarget", target: null });
+      }
       mode = cmd.mode;
       return;
     case "applyOverride":
@@ -467,6 +652,23 @@ function handleCommand(cmd: BridgeCommand): void {
       }
       return;
     }
+    case "createPlaceholder": {
+      // Host-initiated placement — re-acquire the anchor by fingerprint.
+      const anchorEl = resolveFingerprint(cmd.target.anchorFingerprint);
+      if (anchorEl?.parentElement) materializePlaceholder(cmd.target, anchorEl.parentElement, anchorEl);
+      return;
+    }
+    case "resizePlaceholder":
+      resizePlaceholder(cmd.width, cmd.height);
+      return;
+    case "dismissPlaceholder":
+      dismissPlaceholder();
+      send({ t: "insertTarget", target: null });
+      return;
+    case "previewOption":
+      previewedOption = cmd.option;
+      applyOptionPreview();
+      return;
   }
 }
 
@@ -493,12 +695,21 @@ function attach(): void {
   window.addEventListener(
     "pointermove",
     (e: PointerEvent) => {
-      // Hover feedback in both inspect and comment mode (so the user sees the target).
-      if ((mode !== "inspect" && mode !== "comment") || rafPending) return;
+      // Hover feedback in inspect/comment (the target element) and insert (the slot).
+      if (mode !== "inspect" && mode !== "comment" && mode !== "insert") return;
+      if (rafPending) return;
       rafPending = true;
+      const { clientX, clientY, target } = e;
       requestAnimationFrame(() => {
         rafPending = false;
-        const id = idUnder(e.target);
+        if (mode === "insert") {
+          // Once a placeholder is placed the user is sizing/prompting — stop retargeting.
+          if (placeholder) return;
+          const t = insertTargetUnder(clientX, clientY);
+          send({ t: "insertTarget", target: t ? t.wire : null });
+          return;
+        }
+        const id = idUnder(target);
         if (id === lastHover) return;
         lastHover = id;
         const el = id ? resolve(id) : null;
@@ -510,6 +721,15 @@ function attach(): void {
   window.addEventListener(
     "pointerdown",
     (e: PointerEvent) => {
+      if (mode === "insert") {
+        if (placeholder) return; // already placed; ignore until dismissed
+        const t = insertTargetUnder(e.clientX, e.clientY);
+        if (!t) return;
+        e.preventDefault();
+        e.stopPropagation();
+        materializePlaceholder(t.wire, t.container, t.anchorEl);
+        return;
+      }
       if (mode !== "inspect" && mode !== "comment") return;
       const id = idUnder(e.target);
       if (id === null) return;
@@ -534,10 +754,15 @@ function attach(): void {
     },
     { capture: true },
   );
-  // Swallow the follow-up click so an inspected/commented control doesn't also activate.
+  // Swallow the follow-up click so an inspected/commented/insert control doesn't also activate.
   window.addEventListener(
     "click",
     (e: MouseEvent) => {
+      if (mode === "insert") {
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+      }
       if (mode !== "inspect" && mode !== "comment") return;
       if (idUnder(e.target) !== null) {
         e.preventDefault();

@@ -6,6 +6,7 @@ import {
   type BridgeTree,
   type NodeReadout,
   type Rect,
+  type InsertTargetWire,
 } from "@vortspec/core/ipc";
 
 /** Minimal shape of an Electron <webview> element (typed loosely to avoid the dep). */
@@ -14,8 +15,14 @@ interface WebviewEl extends HTMLElement {
   reload(): void;
 }
 
-/** Canvas input mode: select (inspect), use the app (interact), or pin a comment. */
-export type CanvasMode = "inspect" | "interact" | "comment";
+/** Canvas input mode: select (inspect), use the app (interact), pin a comment, or place an insert slot. */
+export type CanvasMode = "inspect" | "interact" | "comment" | "insert";
+
+/** The live placeholder the guest has materialized for a composition slot. */
+export interface PlaceholderState {
+  target: InsertTargetWire;
+  rect: Rect;
+}
 type WebviewIpcEvent = Event & { channel: string; args: unknown[] };
 
 export interface InspectorBridge {
@@ -55,6 +62,19 @@ export interface InspectorBridge {
   /** A comment-mode click's anchor payload (the target to pin a new thread to), or null. */
   commentTarget: { nodeId: string; fingerprint: string; label: string; component: string | null; rect: Rect } | null;
   clearCommentTarget: () => void;
+  /** The insertion slot under the pointer in insert mode (null when over none). */
+  insertTarget: InsertTargetWire | null;
+  /** The materialized composition placeholder, or null when none is placed. */
+  placeholder: PlaceholderState | null;
+  /** A human sentence when the placeholder was lost after a reload (else null). */
+  placeholderLost: string | null;
+  clearPlaceholderLost: () => void;
+  /** Resize the active placeholder (soft hint) — drives the guest's live resize. */
+  resizePlaceholder: (size: { width?: number; height?: number }) => void;
+  /** Dismiss the active placeholder (discard / cancel). */
+  dismissPlaceholder: () => void;
+  /** Preview one composed option in place (null shows all) — drives the option cycler. */
+  previewOption: (option: number | null) => void;
   /** Live rects of the watched comment anchors (fingerprint → rect, null = currently lost). */
   anchorRects: Record<string, Rect | null>;
   /** Tell the guest which anchor fingerprints to track (for pin placement). */
@@ -97,6 +117,9 @@ export function useInspectorBridge(): InspectorBridge {
   const [selectionLost, setSelectionLost] = useState(false);
   const [commentTarget, setCommentTarget] = useState<InspectorBridge["commentTarget"]>(null);
   const [anchorRects, setAnchorRects] = useState<Record<string, Rect | null>>({});
+  const [insertTarget, setInsertTarget] = useState<InsertTargetWire | null>(null);
+  const [placeholder, setPlaceholder] = useState<PlaceholderState | null>(null);
+  const [placeholderLost, setPlaceholderLost] = useState<string | null>(null);
 
   const send = useCallback((cmd: BridgeCommand) => {
     // `<webview>.send` throws until the view is attached + `dom-ready`. An early
@@ -167,6 +190,20 @@ export function useInspectorBridge(): InspectorBridge {
       case "anchorRects":
         setAnchorRects(event.rects);
         return;
+      case "insertTarget":
+        setInsertTarget(event.target);
+        return;
+      case "placeholderReady":
+        setPlaceholder({ target: event.target, rect: event.rect });
+        setInsertTarget(null); // the line gives way to the placeholder
+        setPlaceholderLost(null);
+        return;
+      case "placeholderLost":
+        // The slot's anchor couldn't be re-acquired after a reload — surface the
+        // reason and drop the placeholder (never point at the wrong element).
+        setPlaceholder(null);
+        setPlaceholderLost(event.message);
+        return;
     }
   }, []);
 
@@ -220,9 +257,28 @@ export function useInspectorBridge(): InspectorBridge {
   );
 
   const setMode = useCallback(
-    (mode: CanvasMode) => send({ t: "setMode", mode }),
+    (mode: CanvasMode) => {
+      // Leaving insert mode clears its transient host state right away (the guest
+      // tears down its own affordances in parallel).
+      if (mode !== "insert") {
+        setInsertTarget(null);
+        setPlaceholder(null);
+        setPlaceholderLost(null);
+      }
+      send({ t: "setMode", mode });
+    },
     [send],
   );
+  const resizePlaceholder = useCallback(
+    (size: { width?: number; height?: number }) => send({ t: "resizePlaceholder", ...size }),
+    [send],
+  );
+  const dismissPlaceholder = useCallback(() => {
+    setPlaceholder(null);
+    setInsertTarget(null);
+    send({ t: "dismissPlaceholder" });
+  }, [send]);
+  const previewOption = useCallback((option: number | null) => send({ t: "previewOption", option }), [send]);
   const watchAnchors = useCallback((fingerprints: string[]) => send({ t: "watchAnchors", fingerprints }), [send]);
   const scrollToAnchor = useCallback((fingerprint: string) => send({ t: "scrollToAnchor", fingerprint }), [send]);
   const captureThumbnail = useCallback(async (rect: Rect): Promise<string> => {
@@ -291,6 +347,13 @@ export function useInspectorBridge(): InspectorBridge {
     clearSelectionLost: useCallback(() => setSelectionLost(false), []),
     commentTarget,
     clearCommentTarget: useCallback(() => setCommentTarget(null), []),
+    insertTarget,
+    placeholder,
+    placeholderLost,
+    clearPlaceholderLost: useCallback(() => setPlaceholderLost(null), []),
+    resizePlaceholder,
+    dismissPlaceholder,
+    previewOption,
     anchorRects,
     watchAnchors,
     scrollToAnchor,

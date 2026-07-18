@@ -20,6 +20,8 @@ import {
   type ConversationRegistry,
   type MentionOption,
 } from "./ai/attachments";
+import { CanvasSelectionChip } from "./ai/CanvasSelectionChip";
+import { useCanvasSelection } from "../lib/canvas-selection";
 
 export type { PendingSelectionRef } from "./ai/attachments";
 import {
@@ -125,6 +127,15 @@ export function AssistantDock({
   const [menuIndex, setMenuIndex] = useState(0);
   // Context attachments (@-mentions, dragged files, "Open in Chat" selections).
   const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
+  // Ambient canvas selection — live context published by the canvas, shown as a
+  // persistent chip. Not in `attachments`, so submitting never clears it; it goes
+  // only when the selection itself changes or clears.
+  const ambientSelection = useCanvasSelection();
+  // The selection the user detached for the current selection instance. Keyed on
+  // the selection's identity so a re-select (new key) surfaces the chip again.
+  const [detachedKey, setDetachedKey] = useState<string | null>(null);
+  const activeSelection =
+    ambientSelection && ambientSelection.key !== detachedKey ? ambientSelection : null;
   const [mentionResults, setMentionResults] = useState<FsEntry[]>([]);
   const [mentionIndex, setMentionIndex] = useState(0);
   const attachSeq = useRef(0);
@@ -182,24 +193,38 @@ export function AssistantDock({
 
   function addAttachment(att: Omit<ChatAttachment, "id">): void {
     setAttachments((cur) => {
-      // De-dupe identical file/dir refs; always add distinct selections.
-      if (att.kind !== "selection" && cur.some((a) => a.kind === att.kind && a.path === att.path)) return cur;
+      // De-dupe identical file/dir refs; always add distinct selections (each
+      // editor range or canvas instruction is its own thing, even without a path).
+      const alwaysAdd = att.kind === "selection" || att.kind === "canvas-selection";
+      if (!alwaysAdd && cur.some((a) => a.kind === att.kind && a.path === att.path)) return cur;
       return [...cur, { ...att, id: `att-${attachSeq.current++}` }];
     });
   }
 
-  // "Open in Chat" from the editor → attach the selection.
+  // "Open in Chat" (editor selection) or "Send to chat" (canvas element) → attach.
+  // A canvas selection has no honest line range, so it rides as its own kind
+  // carrying label + prose rather than a fabricated file range.
   useEffect(() => {
     if (!pendingRef) return;
-    addAttachment({
-      path: pendingRef.path,
-      kind: "selection",
-      startLine: pendingRef.startLine,
-      endLine: pendingRef.endLine,
-      text: pendingRef.text,
-    });
+    if (pendingRef.source === "canvas") {
+      addAttachment({ kind: "canvas-selection", text: pendingRef.text, label: pendingRef.label ?? "canvas selection" });
+    } else {
+      addAttachment({
+        path: pendingRef.path,
+        kind: "selection",
+        startLine: pendingRef.startLine,
+        endLine: pendingRef.endLine,
+        text: pendingRef.text,
+      });
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingRef?.nonce]);
+
+  // A re-selection surfaces the ambient chip again; a full deselect resets the
+  // detach so the same element re-selected later isn't stuck hidden.
+  useEffect(() => {
+    if (!ambientSelection) setDetachedKey(null);
+  }, [ambientSelection]);
 
   // Report the transcript up (first prompt + committed turns) so other
   // conversations can @-reference it.
@@ -363,9 +388,17 @@ export function AssistantDock({
       return;
     }
     setDraft("");
-    // Referenced attachments (@-mentions, dragged files, selections) + the live
-    // grounding (open file / selection) ride along so the assistant sees them.
-    const grounding = [expandAttachments(attachments, conversations), liveContext].filter(Boolean).join("\n\n");
+    // Referenced attachments (@-mentions, dragged files, selections) + the ambient
+    // canvas selection + the live grounding (open file / selection) ride along so
+    // the assistant sees them. The ambient selection is appended (not stored in
+    // `attachments`) so submitting never consumes it — it persists across turns.
+    const grounded = activeSelection
+      ? [
+          ...attachments,
+          { id: "canvas-selection", kind: "canvas-selection" as const, text: activeSelection.payload, label: activeSelection.label },
+        ]
+      : attachments;
+    const grounding = [expandAttachments(grounded, conversations), liveContext].filter(Boolean).join("\n\n");
     const withLive = grounding ? `${grounding}\n\n${text}` : text;
     setAttachments([]);
     const runOpts = buildRunOpts();
@@ -555,6 +588,9 @@ export function AssistantDock({
         )}
         {/* A shadcn/ai PromptInput-style shell: attachments + textarea in one box. */}
         <div className="rounded-lg border border-vs-border-default bg-vs-bg-primary p-2 focus-within:ring-2 focus-within:ring-vs-accent-subtle">
+          {activeSelection && (
+            <CanvasSelectionChip selection={activeSelection} onDetach={() => setDetachedKey(activeSelection.key)} />
+          )}
           <AttachmentChips
             attachments={attachments}
             onRemove={(id) => setAttachments((a) => a.filter((x) => x.id !== id))}

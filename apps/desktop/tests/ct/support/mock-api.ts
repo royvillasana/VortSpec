@@ -49,6 +49,10 @@ export interface MockConfig {
   ensureStorybook?: { state: "present" | "installed" | "failed"; installed: boolean; storyCount: number; error?: string };
   /** Replayed to onAgentEvent subscribers (with the started run's id) on startRun. */
   runScript?: RunEvent[];
+  /** FileSnapshot[] returned by snapshotTokenScope() (compose flow). */
+  snapshot?: { path: string; content: string }[];
+  /** When false, composeCheckTarget() reports the run's file is not committable (§6.8). */
+  composeTargetOk?: boolean;
   /** Manifest returned by getManifest(). */
   manifest?: ManifestResult;
   /** Manifest returned by getManifest() after a run transcript completes (design-doc wrote it). */
@@ -177,6 +181,7 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
   const comments: CommentThread[] = [...(cfg.comments ?? [])];
   // Records Explorer file operations (create/rename/trash) for assertions.
   const fsOps: { op: string; path: string; to?: string }[] = [];
+  const composeOps: { op: string; file?: string; runId?: string; keepOption?: number; files?: string[] }[] = [];
   // Records URLs passed to openInstall (e.g. the Preview bar's Open Browser).
   const installOpens: string[] = [];
   let runSeq = 0;
@@ -420,6 +425,21 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
         appName: "VortSpec",
         message: "figma-cli isn't installed yet.",
       },
+    // Warm-up call the IDE fires whenever a workspace opens (App.tsx). It is
+    // fire-and-forget in the app, but a MISSING mock method is a TypeError at the
+    // call site, not a rejected promise — so `.catch()` never sees it, React
+    // unmounts, and every workspace-scoped CT times out on an empty page.
+    figmaEnsureConnected: async () =>
+      cfg.figma ?? {
+        installed: false,
+        cliDir: "/Users/dev/figma-cli",
+        daemonRunning: false,
+        connected: false,
+        mode: null,
+        openFiles: [],
+        appName: "VortSpec",
+        message: "figma-cli isn't installed yet.",
+      },
     figmaOpenAppManagement: async () => undefined,
     figmaConnect: async () =>
       cfg.figma ?? {
@@ -481,8 +501,27 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
     setTokenValue: async () => cfg.tokens ?? EMPTY_TOKENS,
     getVerification: async () => cfg.verification ?? { findings: [] },
     snapshotComponent: async () => [],
-    snapshotTokenScope: async () => [],
-    restoreFiles: async () => undefined,
+    snapshotTokenScope: async () => cfg.snapshot ?? [],
+    restoreFiles: async (_p: string, files: { path: string }[]) => {
+      composeOps.push({ op: "restore", files: files.map((f) => f.path) });
+      return undefined;
+    },
+    composeAccept: async (_p: string, file: string, runId: string, keepOption: number) => {
+      composeOps.push({ op: "accept", file, runId, keepOption });
+      return { ok: true, file };
+    },
+    composeSweep: async (_p: string, files: string[]) => {
+      composeOps.push({ op: "sweep", files });
+      return undefined;
+    },
+    composeCheckTarget: async (_p: string, file: string) =>
+      cfg.composeTargetOk === false
+        ? { ok: false, reason: `${file} is git-ignored (a generated or build file) — an edit there would be lost.` }
+        : { ok: true },
+    composeSweepProject: async (_p: string) => {
+      composeOps.push({ op: "sweepProject" });
+      return { swept: [] };
+    },
 
     // Stateful in-memory comment store (mirrors the repo-backed store's merge/append).
     listComments: async () => [...comments].sort((a, b) => a.id.localeCompare(b.id)),
@@ -517,5 +556,6 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
   };
   (window as unknown as { __ideResolutions: IdeActionResult[] }).__ideResolutions = ideResolutions;
   (window as unknown as { __fsOps: typeof fsOps }).__fsOps = fsOps;
+  (window as unknown as { __composeOps: typeof composeOps }).__composeOps = composeOps;
   (window as unknown as { __openInstalls: string[] }).__openInstalls = installOpens;
 }

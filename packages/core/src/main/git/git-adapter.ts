@@ -1,4 +1,7 @@
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 import { execFileSafe } from "../util/exec";
+import { SCAFFOLD_SENTINEL } from "@vortspec/core/compose-scaffold";
 import type {
   GitStatus,
   GitChange,
@@ -267,9 +270,75 @@ export async function unstage(cwd: string, paths: string[]): Promise<GitResult> 
   return r.ok ? ok(`Unstaged ${paths.length} path(s).`) : fail(r, "Unstaging failed.");
 }
 
+/**
+ * Staged files that still carry a composition preview scaffold (§6.16, design R4).
+ * Derived from the files themselves — not renderer state — so the guard holds even
+ * with no canvas mounted (after a reload, a crash, or in a second window).
+ */
+async function stagedFilesWithScaffold(cwd: string): Promise<string[]> {
+  const listed = await git(cwd, ["diff", "--cached", "--name-only", "-z"]);
+  if (!listed.ok) return [];
+  const paths = listed.stdout.split("\0").filter(Boolean);
+  const flagged: string[] = [];
+  for (const rel of paths) {
+    const content = await readFile(join(cwd, rel), "utf8").catch(() => "");
+    if (content.includes(SCAFFOLD_SENTINEL)) flagged.push(rel);
+  }
+  return flagged;
+}
+
 export async function commit(cwd: string, message: string): Promise<GitResult> {
+  // Refuse to commit while a composition preview is live in the staged files —
+  // it must be accepted or discarded first, or a marker-delimited scaffold reaches
+  // history. VortSpec's commit path is guarded; the terminal is not, so cleanup
+  // remains the real defence.
+  const scaffolded = await stagedFilesWithScaffold(cwd);
+  if (scaffolded.length > 0) {
+    return {
+      ok: false,
+      message: `A composition preview is still live in ${scaffolded.join(", ")}. Accept or discard it in the canvas before committing.`,
+    };
+  }
   const r = await git(cwd, ["commit", "-m", message]);
   return r.ok ? ok("Committed.") : fail(r, "Commit failed (nothing staged?).");
+}
+
+/**
+ * Whether a path is real, committable source — tracked by git and not ignored
+ * (§6.8). A generated, build-output, or git-ignored file, or an untracked one, is
+ * refused: an edit there is silent data loss when the generator next runs.
+ */
+export async function isCommittableSource(cwd: string, file: string): Promise<{ ok: boolean; reason?: string }> {
+  // Not a git repo → nothing to assess (no generator/tracking concern to enforce).
+  const repo = await git(cwd, ["rev-parse", "--is-inside-work-tree"]);
+  if (!repo.ok || repo.stdout.trim() !== "true") return { ok: true };
+  // `check-ignore --quiet` exits 0 when the path IS ignored.
+  const ignored = await git(cwd, ["check-ignore", "--quiet", "--", file]);
+  if (ignored.ok) {
+    return { ok: false, reason: `${file} is git-ignored (a generated or build file) — an edit there would be lost.` };
+  }
+  // `ls-files --error-unmatch` exits non-zero when the path is NOT tracked.
+  const tracked = await git(cwd, ["ls-files", "--error-unmatch", "--", file]);
+  if (!tracked.ok) {
+    return { ok: false, reason: `${file} isn't tracked by git (a new or generated file) — an edit there could be lost.` };
+  }
+  return { ok: true };
+}
+
+/**
+ * Project-relative paths of tracked or untracked (non-ignored) files whose
+ * contents contain `needle` (a fixed string). Used to find a crash-orphaned
+ * composition scaffold with no in-memory record of which file it landed in.
+ * Returns [] outside a git repo or when nothing matches.
+ */
+export async function findFilesContaining(cwd: string, needle: string): Promise<string[]> {
+  // `git grep` exits 1 on no matches (not an error here); -F fixed string, -I skip
+  // binary, --untracked also searches untracked-but-not-ignored files.
+  const r = await git(cwd, ["grep", "--untracked", "-I", "-l", "-F", "-e", needle]);
+  return r.stdout
+    .split("\n")
+    .map((s) => s.trim())
+    .filter(Boolean);
 }
 
 export async function checkout(cwd: string, name: string): Promise<GitResult> {

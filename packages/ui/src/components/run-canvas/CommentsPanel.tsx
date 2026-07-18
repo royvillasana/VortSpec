@@ -2,7 +2,6 @@ import { useState } from "react";
 import type { JSX } from "react";
 import type { CommentThread } from "@vortspec/core/comment";
 import type { Rect } from "@vortspec/core/ipc";
-import type { CanvasMode } from "../../lib/useInspectorBridge";
 import { COMMENT_FILTERS, filterThreads, type CommentFilter, type Me } from "../../lib/comment-filters";
 
 /**
@@ -17,8 +16,6 @@ export interface CommentsPanelProps {
   anchorRects: Record<string, Rect | null>;
   activeId: string | null;
   me: Me;
-  mode: CanvasMode;
-  onModeChange: (m: CanvasMode) => void;
   /** Jump the canvas to a thread's pin. */
   onSelect: (thread: CommentThread) => void;
   onResolve: (id: string, resolved: boolean) => void;
@@ -30,8 +27,6 @@ export function CommentsPanel({
   anchorRects,
   activeId,
   me,
-  mode,
-  onModeChange,
   onSelect,
   onResolve,
   onShare,
@@ -47,21 +42,9 @@ export function CommentsPanel({
   return (
     <div className="flex h-full min-h-0 flex-col bg-vs-bg-primary text-vs-text-primary">
       <div className="flex flex-none items-center gap-2 border-b border-vs-border-subtle px-3 py-2">
+        {/* No mode toggle here — the canvas toolbar owns it and stays mounted
+            through the Design→Comments panel swap that used to strand the user. */}
         <span className="text-[11px] font-semibold uppercase tracking-wide text-vs-text-secondary">Comments</span>
-        <div className="ml-auto flex overflow-hidden rounded border border-vs-border-default text-[10px]">
-          {(["inspect", "interact", "comment"] as const).map((m) => (
-            <button
-              key={m}
-              type="button"
-              onClick={() => onModeChange(m)}
-              className={`px-2 py-0.5 capitalize ${
-                mode === m ? "bg-vs-accent text-white" : "text-vs-text-secondary hover:bg-vs-bg-hover"
-              }`}
-            >
-              {m}
-            </button>
-          ))}
-        </div>
       </div>
 
       <div className="flex flex-none flex-wrap gap-1 border-b border-vs-border-subtle px-3 py-2">

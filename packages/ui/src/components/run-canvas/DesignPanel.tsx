@@ -10,7 +10,6 @@ import type {
   InspectorComponent,
 } from "@vortspec/core/ipc";
 import { NodeTree } from "./NodeTree";
-import type { CanvasMode } from "../../lib/useInspectorBridge";
 import type { PendingEdit } from "./pending";
 import { matchTokenName, tokenNameFromVar, tokensForField } from "./compose";
 import { ColorTokenField, type ColorToken } from "./ColorPicker";
@@ -42,11 +41,6 @@ export function DesignPanel({
   onRemovePending,
   onKeep,
   onRevert,
-  mode = "inspect",
-  onModeChange,
-  zoom = 1,
-  onZoomBy,
-  onZoomReset,
   colorTokens = [],
   tokens = [],
   resembles = null,
@@ -78,13 +72,6 @@ export function DesignPanel({
   onRemovePending?: (key: string) => void;
   onKeep?: () => void;
   onRevert?: () => void;
-  /** Canvas input mode (Inspect / Interact) — shown beside the Layers label. */
-  mode?: CanvasMode;
-  onModeChange?: (mode: CanvasMode) => void;
-  /** Canvas zoom — controls sit at the bottom of the Layers region. */
-  zoom?: number;
-  onZoomBy?: (factor: number) => void;
-  onZoomReset?: () => void;
   /** Project color tokens for the Figma-style color picker (Libraries tab). */
   colorTokens?: ColorToken[];
   /** All project tokens — length fields offer/recognize spacing/radius/typography ones. */
@@ -102,19 +89,16 @@ export function DesignPanel({
 }): JSX.Element {
   return (
     <div className="flex h-full min-h-0 flex-col bg-vs-bg-primary text-vs-text-primary">
-      {/* Layers — node tree, with the Inspect/Interact toggle in the header and
-          the zoom controls at the bottom (keeps the canvas viewport clean). */}
+      {/* Layers — just the node tree. The mode toggle and zoom controls moved to
+          the canvas toolbar (change: canvas-compose-and-preview-bar), so they no
+          longer disappear with this region and are no longer duplicated by the
+          Comments panel that replaces this one in comment mode. */}
       <LayersRegion
         tree={tree}
         selectedId={selection?.nodeId ?? null}
         hoveredId={hoveredId}
         onSelectNode={onSelectNode}
         onHoverNode={onHoverNode}
-        mode={mode}
-        onModeChange={onModeChange}
-        zoom={zoom}
-        onZoomBy={onZoomBy}
-        onZoomReset={onZoomReset}
       />
 
       <div className="min-h-0 flex-1 overflow-y-auto">
@@ -457,29 +441,19 @@ function ReviewBar({ onKeep, onRevert }: { onKeep?: () => void; onRevert?: () =>
   );
 }
 
-/** The Layers region: header (title + Inspect/Interact) · node tree · zoom footer. */
+/** The Layers region: collapsible header · node tree. Modes and zoom live on the canvas toolbar. */
 function LayersRegion({
   tree,
   selectedId,
   hoveredId,
   onSelectNode,
   onHoverNode,
-  mode,
-  onModeChange,
-  zoom,
-  onZoomBy,
-  onZoomReset,
 }: {
   tree: BridgeTree | null;
   selectedId: string | null;
   hoveredId?: string | null;
   onSelectNode: (id: string) => void;
   onHoverNode?: (id: string | null) => void;
-  mode: CanvasMode;
-  onModeChange?: (mode: CanvasMode) => void;
-  zoom: number;
-  onZoomBy?: (factor: number) => void;
-  onZoomReset?: () => void;
 }): JSX.Element {
   const [open, setOpen] = useState(true);
   return (
@@ -493,65 +467,19 @@ function LayersRegion({
           <span className="text-[9px] text-vs-text-muted">{open ? "▾" : "▸"}</span>
           Layers
         </button>
-        <div className="ml-auto flex overflow-hidden rounded border border-vs-border-default text-[10px]">
-          <ModeBtn active={mode === "inspect"} onClick={() => onModeChange?.("inspect")} label="Inspect" />
-          <ModeBtn active={mode === "interact"} onClick={() => onModeChange?.("interact")} label="Interact" />
-          <ModeBtn active={mode === "comment"} onClick={() => onModeChange?.("comment")} label="Comment" />
-        </div>
       </div>
       {open && (
-        <>
-          <div className="max-h-64 overflow-y-auto">
-            <NodeTree
-              tree={tree}
-              selectedId={selectedId}
-              hoveredId={hoveredId}
-              onSelect={onSelectNode}
-              onHover={onHoverNode}
-            />
-          </div>
-          <div className="flex items-center gap-1 border-t border-vs-border-subtle px-3 py-1.5 text-[10px] text-vs-text-muted">
-            <span className="mr-auto uppercase tracking-wide">Zoom</span>
-            <ZoomBtn onClick={() => onZoomBy?.(1 / 1.2)} label="−" />
-            <button
-              type="button"
-              onClick={() => onZoomReset?.()}
-              title="Reset to 100%"
-              className="min-w-[2.75rem] rounded px-1 py-0.5 text-center text-vs-text-secondary hover:bg-vs-bg-hover"
-            >
-              {Math.round(zoom * 100)}%
-            </button>
-            <ZoomBtn onClick={() => onZoomBy?.(1.2)} label="+" />
-          </div>
-        </>
+        <div className="max-h-64 overflow-y-auto">
+          <NodeTree
+            tree={tree}
+            selectedId={selectedId}
+            hoveredId={hoveredId}
+            onSelect={onSelectNode}
+            onHover={onHoverNode}
+          />
+        </div>
       )}
     </section>
-  );
-}
-
-function ModeBtn({ active, onClick, label }: { active: boolean; onClick: () => void; label: string }): JSX.Element {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`px-2 py-0.5 ${
-        active ? "bg-vs-accent text-white" : "text-vs-text-secondary hover:bg-vs-bg-hover"
-      }`}
-    >
-      {label}
-    </button>
-  );
-}
-
-function ZoomBtn({ onClick, label }: { onClick: () => void; label: string }): JSX.Element {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="grid h-5 w-5 place-items-center rounded text-vs-text-secondary hover:bg-vs-bg-hover"
-    >
-      {label}
-    </button>
   );
 }
 

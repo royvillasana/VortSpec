@@ -177,6 +177,30 @@ export const selectionSchema = z.object({
 });
 export type Selection = z.infer<typeof selectionSchema>;
 
+// ── Insert-mode target (guest ⇄ host) ────────────────────────────────
+
+/**
+ * A resolved insertion slot (change: canvas-compose-and-preview-bar). The guest
+ * computes it from `insert-geometry` and streams it as the pointer moves; the
+ * host draws the line. Normalized to an anchor element (by fingerprint, so it
+ * survives a re-render) plus a before/after position, so the two names for one
+ * slot resolve identically.
+ */
+export const insertTargetSchema = z.object({
+  /** Stable fingerprint of the anchor element (from `dom-fingerprint`). */
+  anchorFingerprint: z.string(),
+  position: z.enum(["before", "after"]),
+  /** Container flow axis — drives the cursor and the line orientation. */
+  axis: z.enum(["row", "column"]),
+  /** The insertion line, a segment drawn ACROSS the flow axis, in guest coords. */
+  line: z.object({ x1: z.number(), y1: z.number(), x2: z.number(), y2: z.number() }),
+  /** The anchor's human label (component name or tag), for the composition prompt. */
+  anchorLabel: z.string().optional(),
+  /** The anchor's leading text — the documented disambiguator for the run. */
+  anchorText: z.string().nullable().optional(),
+});
+export type InsertTargetWire = z.infer<typeof insertTargetSchema>;
+
 // ── Wire protocol (discriminated unions) ─────────────────────────────
 
 /** Messages the host renderer sends into the guest bridge. */
@@ -187,9 +211,10 @@ export const bridgeCommandSchema = z.discriminatedUnion("t", [
   /**
    * Toggle guest input handling: `inspect` intercepts hover/click to drive
    * selection from the canvas; `interact` lets clicks reach the app normally;
-   * `comment` intercepts a click to anchor a new comment to the target element.
+   * `comment` intercepts a click to anchor a new comment to the target element;
+   * `insert` hit-tests the gaps between siblings to place a composition slot.
    */
-  z.object({ t: z.literal("setMode"), mode: z.enum(["inspect", "interact", "comment"]) }),
+  z.object({ t: z.literal("setMode"), mode: z.enum(["inspect", "interact", "comment", "insert"]) }),
   /**
    * Track these comment-anchor fingerprints — the guest resolves each to a live
    * rect and streams `anchorRects` (re-emitting on scroll/resize/re-render) so pins
@@ -215,6 +240,27 @@ export const bridgeCommandSchema = z.discriminatedUnion("t", [
     remove: z.array(z.string()).default([]),
     add: z.array(z.string()).default([]),
   }),
+  /**
+   * Insert mode (change: canvas-compose-and-preview-bar). Materialize an ephemeral
+   * placeholder at the given slot — the guest inserts a real DOM node that
+   * participates in layout so the user sees the true size in context. Writes
+   * nothing to disk.
+   */
+  z.object({ t: z.literal("createPlaceholder"), target: insertTargetSchema }),
+  /** Resize the active placeholder live (soft hint, not a constraint). */
+  z.object({
+    t: z.literal("resizePlaceholder"),
+    width: z.number().optional(),
+    height: z.number().optional(),
+  }),
+  /** Remove the active placeholder (discard / cancel / mode change). */
+  z.object({ t: z.literal("dismissPlaceholder") }),
+  /**
+   * Preview one composed option in place: hide every `[data-vs-option]` whose index
+   * differs from `option` (null shows them all). Lets the cycler render one option
+   * at a time in the real slot without rewriting source per cycle.
+   */
+  z.object({ t: z.literal("previewOption"), option: z.number().int().nonnegative().nullable() }),
 ]);
 export type BridgeCommand = z.infer<typeof bridgeCommandSchema>;
 
@@ -253,6 +299,20 @@ export const bridgeEventSchema = z.discriminatedUnion("t", [
   }),
   /** Live rects for the watched comment anchors (fingerprint → rect, null = lost). */
   z.object({ t: z.literal("anchorRects"), rects: z.record(z.string(), rectSchema.nullable()) }),
+  /** The insertion slot under the pointer in insert mode (null when over none). */
+  z.object({ t: z.literal("insertTarget"), target: insertTargetSchema.nullable() }),
+  /** A placeholder was materialized — its live rect and the slot it holds. */
+  z.object({
+    t: z.literal("placeholderReady"),
+    target: insertTargetSchema,
+    rect: rectSchema,
+  }),
+  /**
+   * The placeholder could not be re-acquired after a hot reload and was removed.
+   * `message` is a human sentence for the canvas (never reattached to the wrong
+   * element).
+   */
+  z.object({ t: z.literal("placeholderLost"), message: z.string() }),
 ]);
 export type BridgeEvent = z.infer<typeof bridgeEventSchema>;
 

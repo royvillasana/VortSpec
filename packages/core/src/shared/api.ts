@@ -184,6 +184,19 @@ export interface VortSpecApi {
   snapshotComponent(projectPath: string, file: string): Promise<IpcResponse<"inspector:snapshotComponent">>;
   snapshotTokenScope(projectPath: string): Promise<IpcResponse<"inspector:snapshotTokenScope">>;
   restoreFiles(projectPath: string, files: FileSnapshot[]): Promise<IpcResponse<"inspector:restoreFiles">>;
+  /** Accept a composition: keep one option's content in the file, remove the rest + markers. */
+  composeAccept(
+    projectPath: string,
+    file: string,
+    runId: string,
+    keepOption: number,
+  ): Promise<IpcResponse<"compose:accept">>;
+  /** Sweep composition scaffolding from files (cancel/error/close cleanup). */
+  composeSweep(projectPath: string, files: string[]): Promise<IpcResponse<"compose:sweep">>;
+  /** Whether a run's target file is real, committable source (refuse generated/untracked). */
+  composeCheckTarget(projectPath: string, file: string): Promise<IpcResponse<"compose:checkTarget">>;
+  /** Find and sweep any composition scaffold orphaned in the project (crash recovery). */
+  composeSweepProject(projectPath: string): Promise<IpcResponse<"compose:sweepProject">>;
 
   // run-canvas comments (repo-backed threads under .vortspec/comments/)
   listComments(projectPath: string): Promise<IpcResponse<"comments:list">>;

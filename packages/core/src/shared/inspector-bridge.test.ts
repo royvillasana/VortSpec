@@ -122,4 +122,43 @@ describe("inspector-bridge contracts", () => {
   it("rejects an unknown command discriminant", () => {
     expect(() => bridgeCommandSchema.parse({ t: "nope" })).toThrow();
   });
+
+  it("round-trips insert-mode placeholder commands", () => {
+    const target = {
+      anchorFingerprint: "div>ul>li#2",
+      position: "before" as const,
+      axis: "row" as const,
+      line: { x1: 95, y1: 0, x2: 95, y2: 40 },
+    };
+    const create = bridgeCommandSchema.parse({ t: "createPlaceholder", target });
+    expect(create).toMatchObject({ t: "createPlaceholder", target: { position: "before", axis: "row" } });
+    // resize may carry width, height, or both
+    expect(bridgeCommandSchema.parse({ t: "resizePlaceholder", width: 240 })).toMatchObject({ width: 240 });
+    expect(bridgeCommandSchema.parse({ t: "dismissPlaceholder" }).t).toBe("dismissPlaceholder");
+    // a bad axis is rejected
+    expect(() =>
+      bridgeCommandSchema.parse({ t: "createPlaceholder", target: { ...target, axis: "diagonal" } }),
+    ).toThrow();
+  });
+
+  it("round-trips insert-mode guest events", () => {
+    const target = {
+      anchorFingerprint: "main>section>div",
+      position: "after" as const,
+      axis: "column" as const,
+      line: { x1: 0, y1: 50, x2: 200, y2: 50 },
+    };
+    expect(bridgeEventSchema.parse({ t: "insertTarget", target }).t).toBe("insertTarget");
+    // insertTarget may be null (pointer over no slot)
+    expect(bridgeEventSchema.parse({ t: "insertTarget", target: null })).toMatchObject({ target: null });
+    const ready = bridgeEventSchema.parse({
+      t: "placeholderReady",
+      target,
+      rect: { x: 0, y: 50, width: 200, height: 80 },
+    });
+    expect(ready).toMatchObject({ t: "placeholderReady", target: { position: "after" } });
+    expect(bridgeEventSchema.parse({ t: "placeholderLost", message: "The slot moved after a reload." })).toMatchObject({
+      t: "placeholderLost",
+    });
+  });
 });

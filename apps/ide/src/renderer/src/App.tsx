@@ -6,6 +6,7 @@ import { api } from "@vortspec/ui/api";
 import { AssistantDock, type PendingSelectionRef } from "@vortspec/ui/AssistantDock";
 import { ConversationTabs, type IncomingTask } from "@vortspec/ui/ConversationTabs";
 import { AssistantTaskProvider, type AssistantTask } from "@vortspec/ui/assistant-task";
+import { CanvasSelectionProvider } from "@vortspec/ui/canvas-selection";
 import { SourceControl } from "@vortspec/ui/SourceControl";
 import { Inspector } from "@vortspec/ui/Inspector";
 import { GuidedFlow } from "@vortspec/ui/GuidedFlow";
@@ -537,7 +538,9 @@ export default function App(): JSX.Element {
         <RunApp project={p} kind="app" hideRail canvas onBack={go("explorer")} onFlow={go("flow")} onRun={go("run")} onPlayground={go("play")} onTokens={go("tokens")} onManifest={go("manifest")} onHistory={go("explorer")} onSource={go("source")}
           onSendToChat={(text, file) => {
             if (!layout.secondaryOpen) dispatch({ type: "toggleSecondary" });
-            setPendingRef({ path: file ?? "Run canvas selection", startLine: 1, endLine: 1, text, nonce: ++refNonce.current });
+            // A canvas selection has no honest line range — carry it as a canvas
+            // selection with a label, not a fabricated file+line reference.
+            setPendingRef({ source: "canvas", label: file ?? "Run canvas selection", text, nonce: ++refNonce.current });
           }}
         />
       ) : a === "play" ? (
@@ -559,6 +562,7 @@ export default function App(): JSX.Element {
   return (
     <IdeContext.Provider value={{ activeFile: wf.activePath, previewUrl, setActiveFile: () => {}, setPreviewUrl: () => {} }}>
      <AssistantTaskProvider value={dispatchAssistantTask}>
+      <CanvasSelectionProvider>
       <div className="flex h-screen w-screen flex-col overflow-hidden bg-vs-bg-primary text-vs-text-primary">
         <header
           className="flex h-9 shrink-0 items-center justify-center border-b border-vs-border-default bg-vs-bg-surface text-xs text-vs-text-muted"
@@ -708,6 +712,7 @@ export default function App(): JSX.Element {
       {ideMcp.pending && (
         <IdeActionDialog pending={ideMcp.pending} onConfirm={ideMcp.confirm} onCancel={ideMcp.cancel} />
       )}
+      </CanvasSelectionProvider>
      </AssistantTaskProvider>
     </IdeContext.Provider>
   );

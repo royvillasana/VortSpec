@@ -28,6 +28,9 @@ import { CommentsPanel } from "../components/run-canvas/CommentsPanel";
 import type { Anchor } from "@vortspec/core/comment";
 import { useAgentRun } from "../lib/useAgentRun";
 import { useAssistantTask } from "../lib/assistant-task";
+import { usePublishCanvasSelection } from "../lib/canvas-selection";
+import { useComposeRun } from "../lib/useComposeRun";
+import { ComposePanel } from "../components/run-canvas/ComposePanel";
 import { routedModel } from "../lib/model-routing";
 import { RunDoctor, type DoctorState } from "../components/run-canvas/RunDoctor";
 import { buildDoctorPrompt, buildEnvSetupPrompt, relFileFromSource } from "../components/run-canvas/doctor";
@@ -360,6 +363,67 @@ export function RunApp({
   const [review, setReview] = useState(false);
   const [snapshot, setSnapshot] = useState<FileSnapshot[] | null>(null);
   const structuralMod = useAgentRun();
+
+  // Publish the current selection as ambient context for the assistant (tasks §4):
+  // it appears as a persistent, detachable chip on the composer, grounds every
+  // turn while the selection holds, and never triggers a run. Withdrawn when the
+  // selection clears, the element is lost after a reload, or the canvas unmounts.
+  const publishSelection = usePublishCanvasSelection();
+  useEffect(() => {
+    publishSelection(
+      selection
+        ? {
+            key: selection.nodeId,
+            label: selection.component ?? selection.label,
+            payload: buildSelectionContext(selection, Object.values(pending)),
+          }
+        : null,
+    );
+  }, [selection, pending, publishSelection]);
+  useEffect(() => () => publishSelection(null), [publishSelection]);
+
+  // Crash recovery (§6.14, §7.4): when the canvas opens, sweep any composition
+  // scaffold a prior session left orphaned in source (accept/discard clean up the
+  // happy path; a crash between write and accept does not). Idempotent + file-
+  // derived, so it needs no in-memory record of the interrupted run.
+  useEffect(() => {
+    if (canvas) void api.composeSweepProject(project.path);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canvas, project.path]);
+
+  // Insert-mode composition run (§6): placeholder → prompt → options → accept/discard.
+  const compose = useComposeRun({
+    project,
+    bridge,
+    roster: components,
+    tokenNames: tokens.map((t) => t.name),
+    designMd: null,
+  });
+  // No roster component fits → route into the existing extract-component flow.
+  const onComposeExtract = useCallback(
+    (suggestedName: string | null) => {
+      onSendToChat?.(
+        `Extract a new reusable ${suggestedName ? `"${suggestedName}" ` : ""}component into the design system (with variants + tokens) for the slot I was composing, then use it there.`,
+        null,
+      );
+    },
+    [onSendToChat],
+  );
+  // An accepted insert owes an SDD-DE Screen Creation *update* (design R3) — offer it.
+  const onComposeScreenUpdate = useCallback(
+    (file: string) => {
+      dispatchTask?.({
+        title: "Update screen spec",
+        prompt: `A new composition was inserted into ${file}. Run the SDD-DE Screen Creation update to reflect it: UPDATE the existing screen's spec to match what was inserted. Do NOT create a new screen.`,
+        allowModify: true,
+      });
+    },
+    [dispatchTask],
+  );
+  // The panel is present through the whole flow: an active placeholder, an in-flight
+  // or resolved run, or an owed screen-update notice.
+  const composeActive =
+    mode === "insert" && (!!bridge.placeholder || compose.phase !== "idle" || !!compose.screenUpdateOwed);
 
   // Stable methods (the hook memoizes these) + refs to current state, so the
   // Design-panel callbacks keep a stable identity across the 60fps geometry
@@ -837,8 +901,6 @@ export function RunApp({
                     anchorRects={bridge.anchorRects}
                     activeId={comments.activeId}
                     me={{ login: comments.author.githubLogin, name: comments.author.name }}
-                    mode={mode}
-                    onModeChange={setMode}
                     onSelect={(t) => {
                       comments.setActiveId(t.id);
                       bridge.scrollToAnchor(t.anchor.fingerprint);
@@ -864,11 +926,6 @@ export function RunApp({
                   onRemovePending={removePending}
                   onKeep={keepEdits}
                   onRevert={() => void revertEdits()}
-                  mode={mode}
-                  onModeChange={setMode}
-                  zoom={zoom}
-                  onZoomBy={zoomBy}
-                  onZoomReset={resetZoom}
                   colorTokens={colorTokens}
                   tokens={tokens}
                   resembles={selection?.resembles ?? null}
@@ -914,13 +971,23 @@ export function RunApp({
                 onPointerDown={startPanelResize}
                 className="w-1 flex-none cursor-col-resize bg-vs-border-default/40 hover:bg-vs-accent"
               />
-              <div className="min-w-0 flex-1">
+              <div className="relative min-w-0 flex-1">
+                {composeActive && (
+                  <ComposePanel
+                    compose={compose}
+                    onExtract={onComposeExtract}
+                    onScreenUpdate={onComposeScreenUpdate}
+                  />
+                )}
                 <RunCanvas
                   src={embedUrl}
                   guestPreloadUrl={guestPreload}
                   bridge={bridge}
                   mode={mode}
+                  onModeChange={setMode}
                   zoom={zoom}
+                  onZoomBy={zoomBy}
+                  onZoomReset={resetZoom}
                   onLiveEdit={applyLive}
                   onCommitEdit={commitStyleEdits}
                   onSendToChat={
