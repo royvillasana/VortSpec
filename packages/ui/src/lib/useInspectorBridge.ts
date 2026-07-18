@@ -82,6 +82,22 @@ export interface InspectorBridge {
   structure: StructureSnapshotWire | null;
   /** Ask the guest for a subtree's structural snapshot (null nodeId scans from the body). */
   requestStructure: (nodeId?: string | null) => void;
+  /** The live drag in progress (ghost rect trailing the pointer + current drop slot), or null. */
+  drag: {
+    sourceFingerprint: string;
+    nodeId: string;
+    ghost: Rect;
+    target: InsertTargetWire | null;
+    poppedOut: boolean;
+  } | null;
+  /** A completed drop over a valid slot the host should turn into a gated move, or null. */
+  dragDrop: { sourceFingerprint: string; target: InsertTargetWire; poppedOut: boolean } | null;
+  clearDragDrop: () => void;
+  /** A human sentence for an invalid drop or a force-cancelled drag (HMR-lost), else null. */
+  dragMessage: string | null;
+  clearDragMessage: () => void;
+  /** Abort an in-flight drag from the host (the move panel closed / the flow reset). */
+  cancelDrag: () => void;
   /** Live rects of the watched comment anchors (fingerprint → rect, null = currently lost). */
   anchorRects: Record<string, Rect | null>;
   /** Tell the guest which anchor fingerprints to track (for pin placement). */
@@ -128,6 +144,9 @@ export function useInspectorBridge(): InspectorBridge {
   const [placeholder, setPlaceholder] = useState<PlaceholderState | null>(null);
   const [placeholderLost, setPlaceholderLost] = useState<string | null>(null);
   const [structure, setStructure] = useState<StructureSnapshotWire | null>(null);
+  const [drag, setDrag] = useState<InspectorBridge["drag"]>(null);
+  const [dragDrop, setDragDrop] = useState<InspectorBridge["dragDrop"]>(null);
+  const [dragMessage, setDragMessage] = useState<string | null>(null);
 
   const send = useCallback((cmd: BridgeCommand) => {
     // `<webview>.send` throws until the view is attached + `dom-ready`. An early
@@ -215,6 +234,31 @@ export function useInspectorBridge(): InspectorBridge {
       case "structure":
         setStructure(event.snapshot);
         return;
+      case "dragStart":
+        setDrag({ sourceFingerprint: event.sourceFingerprint, nodeId: event.nodeId, ghost: event.rect, target: null, poppedOut: false });
+        setDragMessage(null);
+        setDragDrop(null);
+        return;
+      case "dragTarget":
+        // Per-frame update: keep the drag's identity, refresh the ghost + slot.
+        setDrag((cur) =>
+          cur ? { ...cur, ghost: event.ghost, target: event.target, poppedOut: event.poppedOut } : cur,
+        );
+        return;
+      case "dragDrop":
+        setDrag(null);
+        if (event.target) {
+          // A valid slot → hand it to the host to open the gated move.
+          setDragDrop({ sourceFingerprint: event.sourceFingerprint, target: event.target, poppedOut: event.poppedOut });
+        } else {
+          // A drop belonging to no container is refused (never guessed).
+          setDragMessage("That spot isn't a layout slot — drop the element onto a row or column.");
+        }
+        return;
+      case "dragCancel":
+        setDrag(null);
+        if (event.message) setDragMessage(event.message);
+        return;
     }
   }, []);
 
@@ -276,6 +320,12 @@ export function useInspectorBridge(): InspectorBridge {
         setPlaceholder(null);
         setPlaceholderLost(null);
       }
+      // Drag lives inside inspect mode (Decision 3) — leaving it drops any drag state.
+      if (mode !== "inspect") {
+        setDrag(null);
+        setDragDrop(null);
+        setDragMessage(null);
+      }
       send({ t: "setMode", mode });
     },
     [send],
@@ -298,6 +348,10 @@ export function useInspectorBridge(): InspectorBridge {
     (nodeId: string | null = null) => send({ t: "requestStructure", nodeId }),
     [send],
   );
+  const cancelDrag = useCallback(() => {
+    setDrag(null);
+    send({ t: "cancelDrag" });
+  }, [send]);
   const watchAnchors = useCallback((fingerprints: string[]) => send({ t: "watchAnchors", fingerprints }), [send]);
   const scrollToAnchor = useCallback((fingerprint: string) => send({ t: "scrollToAnchor", fingerprint }), [send]);
   const captureThumbnail = useCallback(async (rect: Rect): Promise<string> => {
@@ -376,6 +430,12 @@ export function useInspectorBridge(): InspectorBridge {
     previewOption,
     structure,
     requestStructure,
+    drag,
+    dragDrop,
+    clearDragDrop: useCallback(() => setDragDrop(null), []),
+    dragMessage,
+    clearDragMessage: useCallback(() => setDragMessage(null), []),
+    cancelDrag,
     anchorRects,
     watchAnchors,
     scrollToAnchor,

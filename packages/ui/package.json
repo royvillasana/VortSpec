@@ -153,6 +153,10 @@
       "types": "./src/lib/useComposeRun.ts",
       "default": "./src/lib/useComposeRun.ts"
     },
+    "./useDragMove": {
+      "types": "./src/lib/useDragMove.ts",
+      "default": "./src/lib/useDragMove.ts"
+    },
     "./CommentsLayer": {
       "types": "./src/components/run-canvas/CommentsLayer.tsx",
       "default": "./src/components/run-canvas/CommentsLayer.tsx"
