@@ -420,6 +420,14 @@ export function RunApp({
     },
     [dispatchTask],
   );
+  // Cancel the insert entirely: drop the placeholder, clear any preview, reset the
+  // flow. Closes the dialog and un-picks the segment the user was targeting.
+  const onComposeClose = useCallback(() => {
+    bridge.dismissPlaceholder();
+    bridge.previewOption(null);
+    compose.reset();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bridge.dismissPlaceholder, bridge.previewOption, compose.reset]);
   // The panel is present through the whole flow: an active placeholder, an in-flight
   // or resolved run, or an owed screen-update notice.
   const composeActive =
@@ -977,6 +985,7 @@ export function RunApp({
                     compose={compose}
                     onExtract={onComposeExtract}
                     onScreenUpdate={onComposeScreenUpdate}
+                    onClose={onComposeClose}
                   />
                 )}
                 <RunCanvas

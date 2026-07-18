@@ -67,6 +67,9 @@ export function ComposeHarness({ roster = "full" }: { roster?: "full" | "empty" 
         onScreenUpdate={(file) => {
           (window as unknown as { __screenUpdate?: string }).__screenUpdate = file;
         }}
+        onClose={() => {
+          (window as unknown as { __closed?: boolean }).__closed = true;
+        }}
       />
     </div>
   );

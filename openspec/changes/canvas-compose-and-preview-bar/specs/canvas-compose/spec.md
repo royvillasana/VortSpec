@@ -177,8 +177,9 @@ To preview options in the running app with real framework behavior, the run SHAL
 
 #### Scenario: Generated files are refused
 
-- **WHEN** the target slot resolves into a generated or untracked file rather than real source
+- **WHEN** the target slot resolves into a generated / git-ignored file (build output that is regenerated) rather than real source
 - **THEN** VortSpec SHALL refuse to write and SHALL explain why, rather than making an edit that would be silently lost
+- **AND** an untracked but non-ignored file (normal uncommitted source) SHALL NOT be refused on that basis alone
 
 ### Requirement: One composition run at a time, cancellable, with visible progress
 

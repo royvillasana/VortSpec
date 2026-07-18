@@ -193,10 +193,12 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
   // what was sent to Claude (injected grounding, agent tools/system prompt, …).
   const runPrompts: string[] = [];
   const runOpts: Record<string, unknown>[] = [];
+  let lastRunId: string | null = null;
   const startRun = async (opts?: { prompt?: string }): Promise<{ runId: string }> => {
     if (typeof opts?.prompt === "string") runPrompts.push(opts.prompt);
     if (opts) runOpts.push(opts as Record<string, unknown>);
     const runId = `run-${runSeq++}`;
+    lastRunId = runId;
     // Replay AFTER useAgentRun stores runIdRef (a microtask after this resolves),
     // so its `runId === runIdRef.current` filter passes — hence a macrotask.
     setTimeout(() => {
@@ -246,7 +248,17 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
     installToolkit: async () => ({ present: true, configured: true, version: "1.0.0", updateAvailable: false }),
 
     startRun,
-    cancelRun: async () => undefined,
+    // Cancelling ends the run — emit a terminal result so the UI leaves its
+    // running state (Stop → Send), as a real cancel would.
+    cancelRun: async () => {
+      if (lastRunId) {
+        const id = lastRunId;
+        setTimeout(() => {
+          for (const sub of eventSubs) sub({ runId: id, event: { kind: "result", isError: true, sessionId: "s" } });
+        }, 0);
+      }
+      return undefined;
+    },
     hasActiveRun: async () => cfg.hasActiveRun ?? false,
     lastRun: async () => cfg.lastRun ?? null,
     getUsage: async () =>

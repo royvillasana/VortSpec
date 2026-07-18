@@ -304,23 +304,20 @@ export async function commit(cwd: string, message: string): Promise<GitResult> {
 }
 
 /**
- * Whether a path is real, committable source — tracked by git and not ignored
- * (§6.8). A generated, build-output, or git-ignored file, or an untracked one, is
- * refused: an edit there is silent data loss when the generator next runs.
+ * Whether a path is real source safe to write a composition into (§6.8). The
+ * silent-data-loss risk is a **git-ignored** file (build output / generated code
+ * that gets regenerated over an accept), so that is what's refused. An untracked
+ * but non-ignored file is normal uncommitted source — a fresh project's `App.tsx`
+ * is untracked until first commit — and is allowed.
  */
 export async function isCommittableSource(cwd: string, file: string): Promise<{ ok: boolean; reason?: string }> {
-  // Not a git repo → nothing to assess (no generator/tracking concern to enforce).
+  // Not a git repo → nothing to assess (no generator concern to enforce).
   const repo = await git(cwd, ["rev-parse", "--is-inside-work-tree"]);
   if (!repo.ok || repo.stdout.trim() !== "true") return { ok: true };
   // `check-ignore --quiet` exits 0 when the path IS ignored.
   const ignored = await git(cwd, ["check-ignore", "--quiet", "--", file]);
   if (ignored.ok) {
     return { ok: false, reason: `${file} is git-ignored (a generated or build file) — an edit there would be lost.` };
-  }
-  // `ls-files --error-unmatch` exits non-zero when the path is NOT tracked.
-  const tracked = await git(cwd, ["ls-files", "--error-unmatch", "--", file]);
-  if (!tracked.ok) {
-    return { ok: false, reason: `${file} isn't tracked by git (a new or generated file) — an edit there could be lost.` };
   }
   return { ok: true };
 }

@@ -685,13 +685,24 @@ export function AssistantDock({
           <span className="min-w-0 flex-1 truncate text-[10px] text-vs-text-muted">
             {mentionOpen ? "↑↓ attach" : menuOpen ? "↑↓ pick" : "Enter · / · @"}
           </span>
-          <button
-            onClick={submit}
-            disabled={run.running || draft.trim().length === 0}
-            className="rounded-md bg-vs-accent px-3 py-1.5 text-xs font-medium text-white hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            Send
-          </button>
+          {run.running ? (
+            <button
+              onClick={() => void run.cancel()}
+              title="Stop the run"
+              className="flex items-center gap-1.5 rounded-md bg-vs-bg-hover px-3 py-1.5 text-xs font-medium text-vs-text-primary ring-1 ring-vs-border-default hover:bg-vs-bg-elevated"
+            >
+              <Spinner />
+              Stop
+            </button>
+          ) : (
+            <button
+              onClick={submit}
+              disabled={draft.trim().length === 0}
+              className="rounded-md bg-vs-accent px-3 py-1.5 text-xs font-medium text-white hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Send
+            </button>
+          )}
         </div>
       </div>
       {sendSel && conversations && onSendSelection && (

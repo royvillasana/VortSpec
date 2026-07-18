@@ -89,14 +89,12 @@ describe("acceptComposition — generated/untracked refusal (§6.8)", () => {
     await rm(dir, { recursive: true, force: true });
   });
 
-  it("refuses to accept into an untracked file, leaving it unchanged", async () => {
+  it("accepts into an untracked-but-not-ignored file (normal uncommitted source)", async () => {
     const rel = "src/New.tsx";
-    const before = scaffolded();
-    await writeFile(join(dir, rel), before, "utf8"); // written but never `git add`ed
+    await writeFile(join(dir, rel), scaffolded(), "utf8"); // written but never `git add`ed
     const res = await acceptComposition(dir, rel, "r1", 0);
-    expect(res.ok).toBe(false);
-    expect(res.message).toMatch(/isn't tracked/);
-    expect(await readFile(join(dir, rel), "utf8")).toBe(before); // untouched
+    expect(res.ok).toBe(true);
+    expect(hasScaffold(await readFile(join(dir, rel), "utf8"))).toBe(false);
   });
 
   it("refuses to accept into a git-ignored file", async () => {
@@ -117,13 +115,12 @@ describe("acceptComposition — generated/untracked refusal (§6.8)", () => {
     expect(hasScaffold(await readFile(join(dir, rel), "utf8"))).toBe(false);
   });
 
-  it("checkComposeTarget mirrors the refusal for the host pre-check", async () => {
+  it("checkComposeTarget mirrors the guard: ignored is refused, untracked source is fine", async () => {
+    await mkdir(join(dir, "dist"), { recursive: true });
+    await writeFile(join(dir, "dist/Built.tsx"), "x", "utf8");
+    expect((await checkComposeTarget(dir, "dist/Built.tsx")).ok).toBe(false); // ignored
     await writeFile(join(dir, "src/Untracked.tsx"), "x", "utf8");
-    expect((await checkComposeTarget(dir, "src/Untracked.tsx")).ok).toBe(false);
-    const tracked = "src/Tracked.tsx";
-    await writeFile(join(dir, tracked), "x", "utf8");
-    execFileSync("git", ["add", tracked], { cwd: dir });
-    expect((await checkComposeTarget(dir, tracked)).ok).toBe(true);
+    expect((await checkComposeTarget(dir, "src/Untracked.tsx")).ok).toBe(true); // uncommitted source
   });
 });
 

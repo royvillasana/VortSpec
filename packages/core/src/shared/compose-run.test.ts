@@ -139,7 +139,7 @@ describe("buildComposePrompt", () => {
   it("tells the run to escalate ambiguity and refuse generated files", () => {
     const p = buildComposePrompt(input());
     expect(p).toMatch(/MORE THAN ONE location/);
-    expect(p).toMatch(/generated.*untracked file/);
+    expect(p).toMatch(/generated, build-output, or git-ignored file/);
     expect(p).toMatch(/stopped/);
     expect(p).toMatch(/no roster component fits/i);
   });

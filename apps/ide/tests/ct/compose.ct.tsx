@@ -36,6 +36,13 @@ test("Generate is gated on an expressed intent", async ({ mount }) => {
   await expect(generate).toBeEnabled();
 });
 
+test("the close button cancels the insert (drops the placeholder)", async ({ mount }) => {
+  const c = await mount(<ComposeHarness />, { hooksConfig: { mock: {} } });
+  await c.getByRole("button", { name: "Cancel insert" }).click();
+  const closed = await c.page().evaluate(() => (window as unknown as { __closed?: boolean }).__closed);
+  expect(closed).toBe(true);
+});
+
 test("generating snapshots first, then cycles options with provenance and accepts one", async ({ mount }) => {
   const c = await mount(<ComposeHarness />, {
     hooksConfig: { mock: { runScript: runWith(`\`\`\`json\n${OPTIONS_JSON}\n\`\`\``) } },
@@ -64,6 +71,26 @@ test("generating snapshots first, then cycles options with provenance and accept
   await expect(c.getByTestId("compose-screen-update")).toContainText("src/Home.tsx");
 });
 
+test("while generating, the button is a Stop that cancels and restores", async ({ mount }) => {
+  // A run that never emits a result stays in flight, so the Stop state is stable.
+  const stuck: RunEvent[] = [
+    { kind: "system-init", model: "claude-opus-4-8", sessionId: "s", tools: ["Read"], mcpServers: [], mcpErrors: [] },
+  ];
+  const c = await mount(<ComposeHarness />, {
+    hooksConfig: { mock: { runScript: stuck, snapshot: [{ path: "src/Home.tsx", content: "original" }] } },
+  });
+  await c.getByPlaceholder(/Describe what belongs here/).fill("a filters row");
+  await c.getByRole("button", { name: "Generate" }).click();
+  // The Generate button became Stop, with a thinking indicator.
+  await expect(c.getByRole("button", { name: "Stop" })).toBeVisible();
+  await expect(c.getByRole("button", { name: "Generate" })).toHaveCount(0);
+  await expect(c.getByTestId("compose-progress")).toBeVisible();
+  // Stop cancels the run and restores the snapshot.
+  await c.getByRole("button", { name: "Stop" }).click();
+  const ops = await composeOps(c);
+  expect(ops.some((o) => o.op === "restore")).toBe(true);
+});
+
 test("discard restores the snapshot and writes no accept", async ({ mount }) => {
   const c = await mount(<ComposeHarness />, {
     hooksConfig: { mock: { runScript: runWith(`\`\`\`json\n${OPTIONS_JSON}\n\`\`\``), snapshot: [{ path: "src/Home.tsx", content: "original" }] } },
@@ -78,7 +105,7 @@ test("discard restores the snapshot and writes no accept", async ({ mount }) => 
   expect(ops.some((o) => o.op === "accept")).toBe(false);
 });
 
-test("a generated/untracked target is refused, offering only discard (§6.8)", async ({ mount }) => {
+test("a generated/git-ignored target is refused, offering only discard (§6.8)", async ({ mount }) => {
   const c = await mount(<ComposeHarness />, {
     hooksConfig: { mock: { runScript: runWith(`\`\`\`json\n${OPTIONS_JSON}\n\`\`\``), composeTargetOk: false } },
   });

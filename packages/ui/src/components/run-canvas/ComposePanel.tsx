@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { JSX } from "react";
+import { Spinner } from "@vortspec/ui/ui";
 import type { UseComposeRun } from "../../lib/useComposeRun";
 
 /**
@@ -14,12 +15,15 @@ export function ComposePanel({
   compose,
   onExtract,
   onScreenUpdate,
+  onClose,
 }: {
   compose: UseComposeRun;
   /** Route a no-match into the existing extract-component flow. */
   onExtract: (suggestedName: string | null) => void;
   /** Run the owed SDD-DE Screen Creation update for the accepted screen. */
   onScreenUpdate: (file: string) => void;
+  /** Cancel the insert: dismiss the placeholder and drop out of the flow. */
+  onClose: () => void;
 }): JSX.Element {
   const [draft, setDraft] = useState("");
   const { phase, result, activeOption } = compose;
@@ -33,6 +37,15 @@ export function ComposePanel({
       <div className="flex items-center gap-2">
         <span aria-hidden>🎯</span>
         <span className="font-semibold text-vs-text-primary">Compose here</span>
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Cancel insert"
+          title="Cancel — remove the placeholder"
+          className="ml-auto rounded px-1 leading-none text-vs-text-muted hover:bg-vs-bg-hover hover:text-vs-text-primary"
+        >
+          ✕
+        </button>
       </div>
 
       {!compose.hasRoster ? (
@@ -41,41 +54,47 @@ export function ComposePanel({
           first, then try again — VortSpec won't hand-write markup for a slot.
         </p>
       ) : phase === "idle" || phase === "generating" ? (
-        <>
+        // The prompt input with its action button INSIDE the field: Generate while
+        // idle, a Stop button + a thinking spinner while a run is in flight.
+        <div className="relative rounded border border-vs-border-default bg-vs-bg-primary focus-within:ring-2 focus-within:ring-vs-accent-subtle">
           <textarea
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             disabled={phase === "generating"}
             placeholder="Describe what belongs here…"
-            className="min-h-[64px] resize-none rounded border border-vs-border-default bg-vs-bg-primary px-2 py-1.5 text-vs-text-primary focus:outline-none focus:ring-2 focus:ring-vs-accent-subtle"
+            className="min-h-[72px] w-full resize-none bg-transparent px-2 pb-9 pt-1.5 text-vs-text-primary focus:outline-none disabled:opacity-70"
           />
-          {phase === "generating" ? (
-            <div className="flex items-center justify-between gap-2">
-              <span data-testid="compose-progress" className="truncate text-vs-text-muted">
-                {compose.progress ?? "Composing options…"}
+          <div className="absolute inset-x-1.5 bottom-1.5 flex items-center gap-2">
+            {phase === "generating" && (
+              <span data-testid="compose-progress" className="flex min-w-0 items-center gap-1.5 text-vs-text-muted">
+                <Spinner />
+                <span className="truncate">{compose.progress ?? "Composing options…"}</span>
               </span>
+            )}
+            {phase === "generating" ? (
               <button
                 type="button"
                 onClick={() => void compose.cancel()}
-                className="rounded border border-vs-border-default px-2 py-0.5 text-vs-text-primary hover:bg-vs-bg-hover"
+                title="Stop composing"
+                className="ml-auto flex items-center gap-1 rounded-md bg-vs-bg-hover px-2.5 py-1 text-xs font-medium text-vs-text-primary ring-1 ring-vs-border-default hover:bg-vs-bg-elevated"
               >
-                Cancel
+                Stop
               </button>
-            </div>
-          ) : (
-            <button
-              type="button"
-              disabled={!draft.trim()}
-              title={draft.trim() ? "Compose options for this slot" : "Describe what belongs here first"}
-              onClick={() => void compose.generate(draft)}
-              className={`rounded px-2 py-1 text-white ${
-                draft.trim() ? "bg-vs-accent hover:opacity-90" : "cursor-not-allowed bg-vs-accent/40"
-              }`}
-            >
-              Generate
-            </button>
-          )}
-        </>
+            ) : (
+              <button
+                type="button"
+                disabled={!draft.trim()}
+                title={draft.trim() ? "Compose options for this slot" : "Describe what belongs here first"}
+                onClick={() => void compose.generate(draft)}
+                className={`ml-auto rounded-md px-2.5 py-1 text-xs font-medium text-white ${
+                  draft.trim() ? "bg-vs-accent hover:opacity-90" : "cursor-not-allowed bg-vs-accent/40"
+                }`}
+              >
+                Generate
+              </button>
+            )}
+          </div>
+        </div>
       ) : phase === "no-match" ? (
         <>
           <p data-testid="compose-no-match">{result?.noMatch?.reason}</p>

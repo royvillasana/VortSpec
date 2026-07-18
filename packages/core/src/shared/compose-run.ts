@@ -202,7 +202,7 @@ export function buildComposePrompt(input: ComposePromptInput): string {
     `- Find the exact spot in ${slot.file ?? "the source"} — the anchor element identified above (use its leading text to disambiguate between similar siblings).`,
     "- If the anchor matches MORE THAN ONE location and you cannot tell which, STOP and return a `stopped` result with the candidate locations — do NOT write to an arbitrary one.",
     "- If the anchor cannot be found at all, STOP and return a `stopped` result saying so — write nothing.",
-    "- Never write into a generated, build-output, git-ignored, or untracked file; if the slot resolves into one, STOP and return a `stopped` result explaining which file and why.",
+    "- Never write into a generated, build-output, or git-ignored file; if the slot resolves into one, STOP and return a `stopped` result explaining which file and why. (An untracked but non-ignored file — normal uncommitted source — is fine to write into.)",
     "",
     "Write EACH option into the source at the slot, wrapped in its own markers so the preview can be swept deterministically. For option N (0-based), wrap it exactly:",
     `  ${scaffoldBegin(input.runId, 0).replace("option=0", "option=N")}`,
