@@ -310,6 +310,15 @@ function Box({
       if (!axis || !onLiveEdit) return;
       e.preventDefault();
       e.stopPropagation();
+      // Capture the pointer so the drag survives the cursor passing over the guest
+      // <webview> (which would otherwise swallow move/up and strand the drag).
+      const el = e.currentTarget as HTMLElement;
+      const pointerId = e.pointerId;
+      try {
+        el.setPointerCapture(pointerId);
+      } catch {
+        /* capture unsupported */
+      }
       const startX = e.clientX;
       const startY = e.clientY;
       const start = { x: rect.x, y: rect.y, w: rect.width, h: rect.height };
@@ -333,8 +342,14 @@ function Box({
         if (!raf) raf = requestAnimationFrame(flush);
       };
       const up = (): void => {
-        window.removeEventListener("pointermove", move);
-        window.removeEventListener("pointerup", up);
+        el.removeEventListener("pointermove", move);
+        el.removeEventListener("pointerup", up);
+        el.removeEventListener("lostpointercapture", up);
+        try {
+          el.releasePointerCapture(pointerId);
+        } catch {
+          /* already released */
+        }
         if (raf) cancelAnimationFrame(raf);
         // Flush the EXACT release size to the guest (the throttled stream may have
         // skipped the final frame), so the element locks in where the user let go.
@@ -350,8 +365,9 @@ function Box({
         if (axis.h) edits.push({ key: "height", value: `${latest.h}px`, cssProps: ["height"] });
         onCommitEdit?.(edits);
       };
-      window.addEventListener("pointermove", move);
-      window.addEventListener("pointerup", up);
+      el.addEventListener("pointermove", move);
+      el.addEventListener("pointerup", up);
+      el.addEventListener("lostpointercapture", up);
     };
   }
 
@@ -478,6 +494,14 @@ function PlaceholderBox({
     return (e: React.PointerEvent): void => {
       e.preventDefault();
       e.stopPropagation();
+      // Capture so the drag survives the cursor moving over the guest <webview>.
+      const el = e.currentTarget as HTMLElement;
+      const pointerId = e.pointerId;
+      try {
+        el.setPointerCapture(pointerId);
+      } catch {
+        /* capture unsupported */
+      }
       const startX = e.clientX;
       const startY = e.clientY;
       const w0 = rect.width;
@@ -489,11 +513,18 @@ function PlaceholderBox({
         onResize({ width, height });
       };
       const up = (): void => {
-        window.removeEventListener("pointermove", move);
-        window.removeEventListener("pointerup", up);
+        el.removeEventListener("pointermove", move);
+        el.removeEventListener("pointerup", up);
+        el.removeEventListener("lostpointercapture", up);
+        try {
+          el.releasePointerCapture(pointerId);
+        } catch {
+          /* already released */
+        }
       };
-      window.addEventListener("pointermove", move);
-      window.addEventListener("pointerup", up);
+      el.addEventListener("pointermove", move);
+      el.addEventListener("pointerup", up);
+      el.addEventListener("lostpointercapture", up);
     };
   }
   return (
