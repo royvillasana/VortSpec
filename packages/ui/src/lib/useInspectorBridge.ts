@@ -82,6 +82,9 @@ export interface InspectorBridge {
   structure: StructureSnapshotWire | null;
   /** Ask the guest for a subtree's structural snapshot (null nodeId scans from the body). */
   requestStructure: (nodeId?: string | null) => void;
+  /** The outcome of the last override replay after a reload — how many were restored vs lost. */
+  replayResult: { applied: number; missing: number } | null;
+  clearReplayResult: () => void;
   /** The live drag in progress (ghost rect trailing the pointer + current drop slot), or null. */
   drag: {
     sourceFingerprint: string;
@@ -161,6 +164,7 @@ export function useInspectorBridge(): InspectorBridge {
   const [drag, setDrag] = useState<InspectorBridge["drag"]>(null);
   const [dragDrop, setDragDrop] = useState<InspectorBridge["dragDrop"]>(null);
   const [dragMessage, setDragMessage] = useState<string | null>(null);
+  const [replayResult, setReplayResult] = useState<InspectorBridge["replayResult"]>(null);
 
   const send = useCallback((cmd: BridgeCommand) => {
     // `<webview>.send` throws until the view is attached + `dom-ready`. An early
@@ -247,6 +251,9 @@ export function useInspectorBridge(): InspectorBridge {
         return;
       case "structure":
         setStructure(event.snapshot);
+        return;
+      case "replayResult":
+        setReplayResult({ applied: event.applied, missing: event.missing });
         return;
       case "dragStart":
         setDrag({ sourceFingerprint: event.sourceFingerprint, nodeId: event.nodeId, ghost: event.rect, target: null, poppedOut: false });
@@ -466,6 +473,8 @@ export function useInspectorBridge(): InspectorBridge {
     previewOption,
     structure,
     requestStructure,
+    replayResult,
+    clearReplayResult: useCallback(() => setReplayResult(null), []),
     drag,
     dragDrop,
     clearDragDrop: useCallback(() => setDragDrop(null), []),

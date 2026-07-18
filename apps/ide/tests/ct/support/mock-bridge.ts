@@ -41,6 +41,8 @@ export function makeBridge(overrides: Partial<InspectorBridge> = {}): InspectorB
     previewOption: noop,
     structure: null,
     requestStructure: noop,
+    replayResult: null,
+    clearReplayResult: noop,
     drag: null,
     dragDrop: null,
     clearDragDrop: noop,

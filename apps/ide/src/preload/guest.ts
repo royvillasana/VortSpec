@@ -926,9 +926,14 @@ function handleCommand(cmd: BridgeCommand): void {
     case "replayOverrides": {
       // Restore un-saved visual edits after a full reload (returning to the Playground):
       // resolve each edit by its durable fingerprint and re-apply the style/class/text.
+      let applied = 0;
+      let missing = 0;
       for (const e of cmd.edits) {
         const el = resolveFingerprint(e.fingerprint) as HTMLElement | undefined;
-        if (!el) continue;
+        if (!el) {
+          missing++;
+          continue;
+        }
         // Ensure the element is tracked so the override store + HMR reapply cover it.
         let id = uidOf.get(el);
         if (!id || byId.get(id) !== el) {
@@ -945,7 +950,10 @@ function handleCommand(cmd: BridgeCommand): void {
           for (const name of e.addClasses) if (name) el.classList.add(name);
         }
         if (e.text !== undefined) setTextOverride(id, el, e.text);
+        applied++;
       }
+      // Tell the host how many un-saved edits could not be restored (element gone).
+      if (cmd.edits.length > 0) send({ t: "replayResult", applied, missing });
       return;
     }
     case "setText": {

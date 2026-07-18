@@ -402,6 +402,17 @@ export const bridgeEventSchema = z.discriminatedUnion("t", [
   /** The requested structural snapshot of a subtree (change: canvas-live-structural-editing). */
   z.object({ t: z.literal("structure"), snapshot: structureSnapshotSchema }),
   /**
+   * The outcome of a `replayOverrides` pass (change: persist + replay). `missing` is
+   * how many un-saved edits could not be re-applied because their element could not be
+   * re-acquired after the reload (structure changed) — the host surfaces a hint rather
+   * than letting them vanish silently.
+   */
+  z.object({
+    t: z.literal("replayResult"),
+    applied: z.number().int().nonnegative(),
+    missing: z.number().int().nonnegative(),
+  }),
+  /**
    * Drag-move (change: canvas-live-structural-editing, §5). A drag began on the
    * selected element in inspect mode — the guest owns the gesture (Decision 3). The
    * host mounts the ghost/overlay and the move affordance.
