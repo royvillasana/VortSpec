@@ -44,7 +44,6 @@ export function AssignDialog({
       className="pointer-events-auto absolute right-3 top-3 z-40 flex w-72 flex-col gap-2 rounded-lg border border-vs-border-default bg-vs-bg-elevated/95 p-3 text-[12px] text-vs-text-secondary shadow-2xl backdrop-blur"
     >
       <div {...drag.handleProps} data-testid="dialog-drag-handle" className="flex items-center gap-2 select-none">
-        <span aria-hidden>🧩</span>
         <span className="font-semibold text-vs-text-primary">Assign a component</span>
         <button
           type="button"

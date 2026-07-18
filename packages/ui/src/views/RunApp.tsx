@@ -57,6 +57,7 @@ export function RunApp({
   onHistory,
   onSource,
   onSendToChat,
+  saveSignal,
 }: {
   project: Project;
   /** Which server to run: the project's own `app` (default) or its `storybook`. */
@@ -75,6 +76,8 @@ export function RunApp({
   onSource: () => void;
   /** Send the current canvas selection to the assistant chat as context (IDE). */
   onSendToChat?: (text: string, file?: string | null) => void;
+  /** Bumped by File > Save / Ctrl+S — flush pending canvas edits to disk. */
+  saveSignal?: number;
 }): React.JSX.Element {
   const [dev, setDev] = useState<DevServerStatus>({ state: "stopped", url: null, script: null, message: null });
   const [frameLoading, setFrameLoading] = useState(true);
@@ -364,6 +367,17 @@ export function RunApp({
   const [review, setReview] = useState(false);
   const [snapshot, setSnapshot] = useState<FileSnapshot[] | null>(null);
   const structuralMod = useAgentRun();
+
+  // Unsaved canvas edits — the dirty state behind Save / Ctrl+S and the header dot.
+  const dirty = Object.keys(pending).length > 0;
+  // File > Save / Ctrl+S flushes pending edits to disk (same as the Apply bar).
+  const lastSaveRef = useRef(saveSignal);
+  useEffect(() => {
+    if (saveSignal === undefined || saveSignal === lastSaveRef.current) return;
+    lastSaveRef.current = saveSignal;
+    if (Object.keys(pending).length > 0) void applyEdits();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [saveSignal]);
 
   // Publish the current selection as ambient context for the assistant (tasks §4):
   // it appears as a persistent, detachable chip on the composer, grounds every
@@ -830,6 +844,16 @@ export function RunApp({
       <main className="flex min-w-0 flex-1 flex-col bg-vs-bg-primary">
         <header className="flex flex-none items-center gap-3 border-b border-vs-border-default px-5 py-3">
           <span className="text-[15px] font-semibold">{isApp ? "Playground" : "Storybook"}</span>
+          {dirty && (
+            <span
+              data-testid="canvas-dirty"
+              title="Unsaved canvas edits — Save (⌘S) to write them to disk"
+              className="flex items-center gap-1 text-[11px] text-vs-text-muted"
+            >
+              <span className="h-1.5 w-1.5 rounded-full bg-amber-500" aria-hidden />
+              Unsaved
+            </span>
+          )}
           <span className="rounded border border-vs-border-default px-1.5 py-px text-[10px] uppercase tracking-wide text-vs-text-muted">
             localhost
           </span>

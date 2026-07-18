@@ -44,6 +44,9 @@ function template(
     submenu: [
       // "New" opens a fresh file in the open workspace (VS Code's File > New).
       { label: "New", accelerator: "CmdOrCtrl+N", click: () => send("newFile") },
+      // Persist pending canvas edits to disk (the Playground's visual edits are
+      // ephemeral until saved; editor files autosave separately).
+      { label: "Save Project", accelerator: "CmdOrCtrl+S", click: () => send("saveProject") },
       { type: "separator" },
       { label: "Create New Project", click: () => send("createProject") },
       { label: "Open Folder…", accelerator: "CmdOrCtrl+O", click: () => send("openFolder") },

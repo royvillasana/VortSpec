@@ -69,6 +69,7 @@ export default function App(): JSX.Element {
   const [welcomeIntent, setWelcomeIntent] = useState<"clone" | null>(null);
   // Bumped by File → New to ask the Explorer to start a new-file input at root.
   const [newFileSignal, setNewFileSignal] = useState(0);
+  const [saveSignal, setSaveSignal] = useState(0);
   const [winW, setWinW] = useState<number>(() =>
     typeof window === "undefined" ? 1440 : window.innerWidth,
   );
@@ -278,6 +279,12 @@ export default function App(): JSX.Element {
         case "newFile": {
           dispatch({ type: "setActivity", activity: "explorer" });
           setNewFileSignal((n) => n + 1);
+          return;
+        }
+        case "saveProject": {
+          // Flush the Playground's pending visual edits to disk (editor files
+          // autosave separately). RunApp watches this signal.
+          setSaveSignal((n) => n + 1);
           return;
         }
         case "settings": {
@@ -535,7 +542,7 @@ export default function App(): JSX.Element {
           onOpenTasks={go("tasks")}
         />
       ) : a === "run" ? (
-        <RunApp project={p} kind="app" hideRail canvas onBack={go("explorer")} onFlow={go("flow")} onRun={go("run")} onPlayground={go("play")} onTokens={go("tokens")} onManifest={go("manifest")} onHistory={go("explorer")} onSource={go("source")}
+        <RunApp project={p} kind="app" hideRail canvas saveSignal={saveSignal} onBack={go("explorer")} onFlow={go("flow")} onRun={go("run")} onPlayground={go("play")} onTokens={go("tokens")} onManifest={go("manifest")} onHistory={go("explorer")} onSource={go("source")}
           onSendToChat={(text, file) => {
             if (!layout.secondaryOpen) dispatch({ type: "toggleSecondary" });
             // A canvas selection has no honest line range — carry it as a canvas
