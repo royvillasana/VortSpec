@@ -5,6 +5,8 @@ import { api } from "../lib/api";
 import { Button, Spinner } from "@vortspec/ui/ui";
 import { ProjectRail, projectRailItems } from "@vortspec/ui/ProjectRail";
 import { DesignPanel, ChangesBar } from "../components/run-canvas/DesignPanel";
+import { Sitemap } from "../components/run-canvas/Sitemap";
+import type { RouteDiscovery } from "@vortspec/core/ipc";
 import { RunCanvas } from "../components/run-canvas/RunCanvas";
 import {
   resolveComponent,
@@ -237,6 +239,18 @@ export function RunApp({
   const embedUrl = dev.url ? dev.url.replace(/\/+$/, "") + "/" : "";
   const canvasReady = canvas && isApp && !!embedUrl;
 
+  // ── Sitemap: the app's page/route tree, read from source (change: sitemap-tree) ──
+  const [routes, setRoutes] = useState<RouteDiscovery | null>(null);
+  const [currentPath, setCurrentPath] = useState("/");
+  useEffect(() => {
+    if (!canvas) return;
+    let alive = true;
+    void api.discoverRoutes(project.path).then((r) => alive && setRoutes(r));
+    return () => {
+      alive = false;
+    };
+  }, [canvas, project.path]);
+
   // ── Storybook provisioning (the deterministic backstop) ─────────────────────
   // The Playground guarantees a REAL Storybook to serve once components exist,
   // instead of silently falling back to the improvised Vite gallery. On open we
@@ -293,6 +307,18 @@ export function RunApp({
 
   // ── Run Canvas (visual editing) state — only used when `canvas` is on ──────
   const bridge = useInspectorBridge();
+
+  // Navigate the preview to a route (SPA fallback or a real Next.js URL both work).
+  const navigateTo = useCallback(
+    (path: string) => {
+      if (!dev.url) return;
+      const url = new URL(path.startsWith("/") ? path.slice(1) : path, dev.url.replace(/\/+$/, "") + "/").href;
+      bridge.loadUrl(url);
+      setCurrentPath(path);
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [dev.url, bridge.loadUrl],
+  );
 
   // Reload the live preview: reload the canvas webview via the bridge, and
   // remount the plain iframe by bumping its key nonce.
@@ -1196,6 +1222,8 @@ export function RunApp({
                 style={{ width: panelW }}
                 className="flex flex-none flex-col overflow-hidden border-r border-vs-border-default bg-vs-bg-surface"
               >
+                {/* Sitemap: navigate the preview to the app's pages, in any mode. */}
+                <Sitemap discovery={routes} currentPath={currentPath} onNavigate={navigateTo} />
                 {mode === "comment" ? (
                   <>
                   <div className="flex min-h-0 flex-1 flex-col overflow-hidden">

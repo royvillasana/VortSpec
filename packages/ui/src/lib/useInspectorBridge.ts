@@ -14,6 +14,7 @@ import {
 interface WebviewEl extends HTMLElement {
   send(channel: string, ...args: unknown[]): void;
   reload(): void;
+  loadURL(url: string): void;
 }
 
 /** Canvas input mode: select (inspect), use the app (interact), pin a comment, or place an insert slot. */
@@ -131,6 +132,8 @@ export interface InspectorBridge {
   requestTree: () => void;
   /** Reload the guest page (e.g. after a committed edit) — the bridge re-attaches. */
   reload: () => void;
+  /** Navigate the preview to a URL (sitemap navigation) — the bridge re-attaches on load. */
+  loadUrl: (url: string) => void;
 }
 
 /**
@@ -443,6 +446,13 @@ export function useInspectorBridge(): InspectorBridge {
   );
   const requestTree = useCallback(() => send({ t: "requestTree" }), [send]);
   const reload = useCallback(() => webviewRef.current?.reload(), []);
+  const loadUrl = useCallback((url: string) => {
+    try {
+      webviewRef.current?.loadURL(url);
+    } catch {
+      /* webview not ready — the caller can retry */
+    }
+  }, []);
 
   return {
     attach,
@@ -498,5 +508,6 @@ export function useInspectorBridge(): InspectorBridge {
     refreshReadout,
     requestTree,
     reload,
+    loadUrl,
   };
 }

@@ -250,6 +250,7 @@ const api: VortSpecApi = {
     invoke("inspector:snapshotTokenScope", projectPath),
   snapshotSourceScope: (projectPath: string) =>
     invoke("inspector:snapshotSourceScope", projectPath),
+  discoverRoutes: (projectPath: string) => invoke("routes:discover", projectPath),
   restoreFiles: (projectPath: string, files: FileSnapshot[]) =>
     invoke("inspector:restoreFiles", { projectPath, files }),
   composeAccept: (projectPath: string, file: string, runId: string, keepOption: number) =>
