@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { JSX } from "react";
 import type { InspectorComponent } from "@vortspec/core/ipc";
 
@@ -45,6 +45,20 @@ export function ComponentPicker({
   const [hovered, setHovered] = useState<InspectorComponent | null>(null);
   const selected = new Set(selectedNames ?? []);
 
+  // Debounce hover so passing the pointer over the list doesn't load a Storybook
+  // preview iframe for every row it crosses — only the one the pointer settles on.
+  const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hoverAfterPause = (c: InspectorComponent): void => {
+    if (hoverTimer.current) clearTimeout(hoverTimer.current);
+    hoverTimer.current = setTimeout(() => setHovered(c), 180);
+  };
+  useEffect(
+    () => () => {
+      if (hoverTimer.current) clearTimeout(hoverTimer.current);
+    },
+    [],
+  );
+
   const q = query.trim().toLowerCase();
   const sorted = [...components].sort((a, b) => {
     if (a.name === recommended) return -1;
@@ -78,7 +92,7 @@ export function ComponentPicker({
                 type="button"
                 aria-pressed={selectedNames ? isSelected : undefined}
                 onClick={() => onPick(c, { allSimilar })}
-                onMouseEnter={() => setHovered(c)}
+                onMouseEnter={() => hoverAfterPause(c)}
                 onFocus={() => setHovered(c)}
                 className={`flex w-full items-center gap-2 px-2 py-1.5 text-left text-[11px] hover:bg-vs-bg-hover ${
                   isSelected ? "bg-vs-accent-subtle/40" : ""
@@ -149,8 +163,9 @@ function ComponentPreview({
       className="grid h-[132px] place-items-center overflow-hidden rounded border border-vs-border-subtle bg-white"
     >
       {storyUrl ? (
+        // No `key` on the URL: reuse the one iframe and navigate it, instead of
+        // mounting a fresh iframe (and re-triggering Storybook's channel setup) per row.
         <iframe
-          key={storyUrl}
           src={storyUrl}
           title={`${component.name} — Storybook preview`}
           data-testid="component-preview-frame"
