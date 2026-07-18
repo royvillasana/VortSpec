@@ -818,3 +818,59 @@ export async function snapshotTokenScope(projectPath: string): Promise<FileSnaps
   }
   return snaps;
 }
+
+/** Directories a broad source snapshot never descends into (deps, build output, VCS, our own state). */
+const SNAPSHOT_SKIP_DIRS = new Set([
+  "node_modules", ".git", "dist", "build", "out", ".next", ".turbo", ".cache", "coverage", ".vortspec", ".sdd-de",
+]);
+/** Upper bound on files a single move snapshots — a backstop against a pathological repo. */
+const MAX_SOURCE_SNAPSHOT = 2000;
+
+/**
+ * A broad source snapshot for a drag-move (change: canvas-drag-move, Decision 6).
+ *
+ * The token scope covers only the token file + `component_dir`, but a relocation's
+ * origin or destination is often a SCREEN file outside that (e.g. `src/App.tsx`).
+ * Since the host cannot pre-resolve which files a move will touch (no fingerprint→
+ * file resolver), it falls back to snapshotting the whole source tree so a discard
+ * can always restore exactly. Bounded to `src/` when present (else the project root),
+ * skipping dependencies and build output, and capped so a huge repo can't stall a move.
+ */
+export async function snapshotSourceScope(projectPath: string): Promise<FileSnapshot[]> {
+  const config = await readProjectConfig(projectPath);
+  const snaps: FileSnapshot[] = [];
+  const seen = new Set<string>();
+  async function capture(rel: string): Promise<void> {
+    if (seen.has(rel) || snaps.length >= MAX_SOURCE_SNAPSHOT) return;
+    seen.add(rel);
+    const content = await readFile(join(projectPath, rel), "utf8").catch(() => null);
+    if (content !== null) snaps.push({ path: rel, content });
+  }
+  // Prefer a conventional `src/` root; otherwise walk from the project root.
+  const hasSrc = await readdir(join(projectPath, "src")).then(
+    () => true,
+    () => false,
+  );
+  const root = hasSrc ? join(projectPath, "src") : projectPath;
+  async function walk(d: string): Promise<void> {
+    if (snaps.length >= MAX_SOURCE_SNAPSHOT) return;
+    let entries;
+    try {
+      entries = await readdir(d, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      if (snaps.length >= MAX_SOURCE_SNAPSHOT) return;
+      if (entry.name.startsWith(".") && entry.isDirectory() && !SNAPSHOT_SKIP_DIRS.has(entry.name)) continue;
+      if (SNAPSHOT_SKIP_DIRS.has(entry.name)) continue;
+      const full = join(d, entry.name);
+      if (entry.isDirectory()) await walk(full);
+      else if (SOURCE_EXTS.has(extname(entry.name))) await capture(full.slice(projectPath.length + 1));
+    }
+  }
+  await walk(root);
+  // Always include the token file even if it lives outside the walked root.
+  if (config?.tokenFile) await capture(config.tokenFile);
+  return snaps;
+}

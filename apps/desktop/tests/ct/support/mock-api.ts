@@ -539,6 +539,7 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
     getVerification: async () => cfg.verification ?? { findings: [] },
     snapshotComponent: async () => [],
     snapshotTokenScope: async () => cfg.snapshot ?? [],
+    snapshotSourceScope: async () => cfg.snapshot ?? [],
     restoreFiles: async (_p: string, files: { path: string }[]) => {
       composeOps.push({ op: "restore", files: files.map((f) => f.path) });
       return undefined;

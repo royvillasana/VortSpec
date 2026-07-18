@@ -553,6 +553,10 @@ export function RunApp({
   const assignActive =
     mode === "inspect" &&
     !!selection &&
+    // Never nag the assign/component picker while the user is dragging or a move is
+    // in flight — the Move panel owns the surface then (they'd otherwise overlap).
+    !moveActive &&
+    !bridge.drag &&
     ((!selection.component && selection.nodeId !== assignDismissed) || selection.nodeId === assignForced);
   const assignSelection = selection; // narrowed for the handlers below
   const onAssignComponent = useCallback(

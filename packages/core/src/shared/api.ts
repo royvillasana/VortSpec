@@ -183,6 +183,8 @@ export interface VortSpecApi {
   getVerification(projectPath: string): Promise<IpcResponse<"inspector:getVerification">>;
   snapshotComponent(projectPath: string, file: string): Promise<IpcResponse<"inspector:snapshotComponent">>;
   snapshotTokenScope(projectPath: string): Promise<IpcResponse<"inspector:snapshotTokenScope">>;
+  /** A broad source snapshot (whole `src/` tree) for a drag-move — see Decision 6. */
+  snapshotSourceScope(projectPath: string): Promise<IpcResponse<"inspector:snapshotSourceScope">>;
   restoreFiles(projectPath: string, files: FileSnapshot[]): Promise<IpcResponse<"inspector:restoreFiles">>;
   /** Accept a composition: keep one option's content in the file, remove the rest + markers. */
   composeAccept(

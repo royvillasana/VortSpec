@@ -72,10 +72,12 @@ export function useDragMove(args: { project: Project; bridge: InspectorBridge })
       setError(null);
       setResult(null);
 
-      // Snapshot the source scope BEFORE any write; its file list bounds what the
-      // run may edit (Decision 6). The run resolves the exact origin/destination
-      // itself, so we can't pre-scope tighter than this.
-      const snap = await api.snapshotTokenScope(project.path);
+      // Snapshot the WHOLE source scope BEFORE any write (Decision 6): a move's
+      // origin/destination is often a screen file outside component_dir (e.g.
+      // src/App.tsx), which the narrower token scope would miss — the run would then
+      // stop on a scope escape. The broad snapshot lets the move touch any source
+      // file and still restore exactly on discard.
+      const snap = await api.snapshotSourceScope(project.path);
       snapshotRef.current = snap;
 
       const built = buildMovePrompt({

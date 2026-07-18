@@ -34,6 +34,7 @@ import {
   setInspectorTokenValue,
   createInspectorToken,
   snapshotTokenScope,
+  snapshotSourceScope,
   writeTokenModeMap,
   collapseTokenToAlias,
 } from "./inspector/token-parser";
@@ -403,6 +404,8 @@ const handlers: Record<IpcChannel, Handler> = {
     snapshotComponent(req.projectPath, req.file)) as Handler,
   "inspector:snapshotTokenScope": ((projectPath: string) =>
     snapshotTokenScope(projectPath)) as Handler,
+  "inspector:snapshotSourceScope": ((projectPath: string) =>
+    snapshotSourceScope(projectPath)) as Handler,
   "inspector:restoreFiles": ((req: { projectPath: string; files: FileSnapshot[] }) =>
     restoreFiles(req.projectPath, req.files).then(() => undefined)) as Handler,
   "compose:accept": ((req: { projectPath: string; file: string; runId: string; keepOption: number }) =>

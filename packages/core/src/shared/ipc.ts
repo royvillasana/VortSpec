@@ -656,6 +656,13 @@ export const ipcContract = {
     request: z.string(),
     response: fileSnapshotListSchema,
   },
+  // Broader than the token scope: every source file under the project tree, so a
+  // relocation whose origin/destination is a screen file (outside component_dir)
+  // is still fully snapshotted and reversible (change: canvas-drag-move, Decision 6).
+  "inspector:snapshotSourceScope": {
+    request: z.string(),
+    response: fileSnapshotListSchema,
+  },
   "inspector:restoreFiles": {
     request: z.object({ projectPath: z.string(), files: fileSnapshotListSchema }),
     response: z.void(),
