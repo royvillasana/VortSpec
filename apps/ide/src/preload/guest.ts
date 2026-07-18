@@ -512,17 +512,20 @@ let dragging: {
   rect: Rect;
 } | null = null;
 
-/** Map a resolved structural slot back to the host wire shape (anchor by fingerprint + label/text). */
-function slotToWire(slot: Slot): InsertTargetWire | null {
+/** Resolve a structural slot to the host wire shape PLUS the live anchor element it targets. */
+function slotResolve(slot: Slot): { wire: InsertTargetWire; anchorEl: Element } | null {
   const anchorEl = structureEls.get(slot.anchorId);
   if (!anchorEl?.isConnected) return null;
   return {
-    anchorFingerprint: fingerprintFor(anchorEl),
-    position: slot.position,
-    axis: slot.axis,
-    line: slot.line,
-    anchorLabel: labelFor(anchorEl),
-    anchorText: (anchorEl.textContent ?? "").trim().slice(0, 160) || null,
+    anchorEl,
+    wire: {
+      anchorFingerprint: fingerprintFor(anchorEl),
+      position: slot.position,
+      axis: slot.axis,
+      line: slot.line,
+      anchorLabel: labelFor(anchorEl),
+      anchorText: (anchorEl.textContent ?? "").trim().slice(0, 160) || null,
+    },
   };
 }
 
@@ -543,17 +546,17 @@ function beginDrag(): void {
 }
 
 /** Resolve the drop slot under the pointer (excluding the dragged subtree; Alt = pop out one level). */
-function dragSlotUnder(x: number, y: number, popOut: boolean): InsertTargetWire | null {
+function dragSlotUnder(x: number, y: number, popOut: boolean): { wire: InsertTargetWire; anchorEl: Element } | null {
   if (!dragging?.model) return null;
   const slot = slotAt(dragging.model, { x, y }, { excludeSubtree: [dragging.id], popOut: popOut ? 1 : 0 });
-  return slot ? slotToWire(slot) : null;
+  return slot ? slotResolve(slot) : null;
 }
 
 /** Per-frame drag update: current slot + the ghost rect trailing the pointer (one event/rAF). */
 function updateDrag(x: number, y: number, alt: boolean): void {
   if (!dragging) return;
   const ghost = { x: x - dragging.grabX, y: y - dragging.grabY, width: dragging.rect.width, height: dragging.rect.height };
-  send({ t: "dragTarget", target: dragSlotUnder(x, y, alt), ghost, poppedOut: alt });
+  send({ t: "dragTarget", target: dragSlotUnder(x, y, alt)?.wire ?? null, ghost, poppedOut: alt });
 }
 
 /**
@@ -577,17 +580,18 @@ function placeRelative(el: Element, anchor: Element, position: "before" | "after
 }
 
 /** Perform the instant reparent on a valid drop; remember origin + target for revert/reapply. */
-function applyLiveMove(el: Element, target: InsertTargetWire): void {
-  const anchor = resolveFingerprint(target.anchorFingerprint);
-  if (!anchor?.parentElement || anchor === el) return;
+function applyLiveMove(el: Element, anchor: Element, position: "before" | "after"): void {
+  // Never move into self/own descendant, or where it already sits.
+  if (!anchor.parentElement || anchor === el || el.contains(anchor)) return;
+  const already = position === "before" ? anchor.previousElementSibling === el : anchor.nextElementSibling === el;
   movedEl = {
     el,
     originParent: el.parentElement,
     originNext: el.nextElementSibling,
-    targetFp: target.anchorFingerprint,
-    position: target.position,
+    targetFp: fingerprintFor(anchor),
+    position,
   };
-  placeRelative(el, anchor, target.position);
+  if (!already) placeRelative(el, anchor, position);
 }
 
 /** Undo the ephemeral move — re-insert the element at its origin. Idempotent. */
@@ -610,10 +614,11 @@ function reapplyLiveMove(): void {
 /** Finish the drag (pointerup): move the element live NOW, emit the drop, then clear the drag. */
 function dropDrag(x: number, y: number, alt: boolean): void {
   if (!dragging) return;
-  const target = dragSlotUnder(x, y, alt);
-  // Instant feedback: reparent the real element into the slot before any agent runs.
-  if (target) applyLiveMove(dragging.el, target);
-  send({ t: "dragDrop", sourceFingerprint: dragging.fp, target, poppedOut: alt });
+  const resolved = dragSlotUnder(x, y, alt);
+  // Instant feedback: reparent the real element into the slot before any agent runs,
+  // using the live anchor element we already have (no lossy fingerprint round-trip).
+  if (resolved) applyLiveMove(dragging.el, resolved.anchorEl, resolved.wire.position);
+  send({ t: "dragDrop", sourceFingerprint: dragging.fp, target: resolved?.wire ?? null, poppedOut: alt });
   dragging = null;
 }
 
