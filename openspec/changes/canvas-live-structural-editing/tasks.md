@@ -49,7 +49,7 @@
 - [x] 6.1 Vitest: `structure-model.test.ts` (§2, done), `compose-run.test.ts` additions (insertSpec axis/placement/slotCount, `slotCount` ≠ `count`, new-container wording — done in §3/§4; move prompt + stop clauses — done in §5), `insert-geometry.test.ts` (chosen-axis + N-slot placeholder sizing — done in §3).
 - [x] 6.2 Vitest: `compose-apply.test.ts` additions — a two-file move discard restores both files byte-identical (real temp repo); a single-option move scaffold accepts to marker-free source. (The commit guard refusing a marker-bearing file is the identical guard already covered for compose — a move file carries the same markers.)
 - [x] 6.3 CT (mock bridge): §3.6, §4.5, §5.10 green in `apps/ide`.
-- [ ] 6.4 Green: `pnpm build && pnpm test && pnpm lint && pnpm check-types`, Playwright CT (ide + desktop), `openspec validate --all`.
+- [x] 6.4 Green: `pnpm check-types` (core/ui/ide/desktop), `pnpm test` (core 506), `pnpm lint`, Playwright CT (ide 122 + desktop 100), `openspec validate --all` (63/63).
 - [ ] 6.5 Manual end-to-end against a real dev server (the acceptance gate — only these are verifiable live):
   - Structure: hover nested rows/sections and confirm the model resolves the right slot and pops out one level correctly.
   - Axis/count: override a row→column, set a slot count, confirm the placeholder and the inserted composition match.
