@@ -734,7 +734,7 @@ function LengthTokenField({
             type="button"
             onClick={() => setOpen((o) => !o)}
             title={matched ? `Variable: ${matched} — pick another or detach` : "Bind a variable"}
-            className={`flex max-w-[58%] flex-none items-center gap-1 rounded-l px-1.5 py-1 text-[10px] ${
+            className={`m-0.5 flex max-w-[58%] flex-none items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] ${
               matched
                 ? "bg-vs-accent-subtle text-vs-accent"
                 : "text-vs-text-muted hover:bg-vs-bg-hover hover:text-vs-text-secondary"

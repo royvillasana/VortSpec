@@ -1,4 +1,5 @@
-import type { JSX } from "react";
+import type { JSX, ComponentType } from "react";
+import { MousePointer2, SquareMousePointer, MessageSquare, Plus } from "lucide-react";
 import type { CanvasMode } from "../../lib/useInspectorBridge";
 import { NEEDS_BRIDGE, bridgeState, bridgeStatusMessage, type BridgeState } from "./bridge-status";
 
@@ -22,12 +23,12 @@ import { NEEDS_BRIDGE, bridgeState, bridgeStatusMessage, type BridgeState } from
  * and when the bridge is down, Interact stays live so the app remains usable.
  */
 
-/** Modes and their labels, in bar order. Interact leads — it is the resting state. */
-const MODES: { key: CanvasMode; label: string; hint: string }[] = [
-  { key: "interact", label: "Interact", hint: "Use the running app — VortSpec doesn't intercept anything" },
-  { key: "inspect", label: "Inspect", hint: "Hover and click to select an element" },
-  { key: "comment", label: "Comment", hint: "Pin a comment thread to the page" },
-  { key: "insert", label: "Insert", hint: "Point at the gap between elements to compose something new there" },
+/** Modes, their labels + icons, in bar order. Interact leads — it is the resting state. */
+const MODES: { key: CanvasMode; label: string; hint: string; icon: ComponentType<{ size?: number; strokeWidth?: number }> }[] = [
+  { key: "interact", label: "Interact", hint: "Use the running app — VortSpec doesn't intercept anything", icon: MousePointer2 },
+  { key: "inspect", label: "Inspect", hint: "Hover and click to select an element", icon: SquareMousePointer },
+  { key: "comment", label: "Comment", hint: "Pin a comment thread to the page", icon: MessageSquare },
+  { key: "insert", label: "Insert", hint: "Point at the gap between elements to compose something new there", icon: Plus },
 ];
 
 export function CanvasToolbar({
@@ -77,7 +78,8 @@ export function CanvasToolbar({
               disabled={blocked}
               onClick={() => onModeChange(m.key)}
               label={m.label}
-              title={blocked ? reason : m.hint}
+              icon={m.icon}
+              tip={blocked ? reason : m.label}
             />
           );
         })}
@@ -132,31 +134,48 @@ function ModeBtn({
   disabled,
   onClick,
   label,
-  title,
+  icon: Icon,
+  tip,
 }: {
   active: boolean;
   disabled?: boolean;
   onClick: () => void;
   label: string;
-  title: string;
+  icon: ComponentType<{ size?: number; strokeWidth?: number }>;
+  tip: string;
 }): JSX.Element {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      title={title}
-      aria-pressed={active}
-      className={`rounded px-2 py-0.5 text-[11px] transition-colors ${
-        active
-          ? "bg-vs-accent text-white"
-          : disabled
-            ? "cursor-not-allowed text-vs-text-muted opacity-50"
-            : "text-vs-text-secondary hover:bg-vs-bg-hover hover:text-vs-text-primary"
-      }`}
+    <div className="group relative flex">
+      <button
+        type="button"
+        onClick={onClick}
+        disabled={disabled}
+        aria-label={label}
+        aria-pressed={active}
+        className={`grid h-7 w-7 place-items-center rounded transition-colors ${
+          active
+            ? "bg-vs-accent text-white"
+            : disabled
+              ? "cursor-not-allowed text-vs-text-muted opacity-50"
+              : "text-vs-text-secondary hover:bg-vs-bg-hover hover:text-vs-text-primary"
+        }`}
+      >
+        <Icon size={16} strokeWidth={2} />
+      </button>
+      <Tooltip>{tip}</Tooltip>
+    </div>
+  );
+}
+
+/** A small hover tooltip pinned above the control (the toolbar sits at the canvas bottom). */
+function Tooltip({ children }: { children: React.ReactNode }): JSX.Element {
+  return (
+    <span
+      role="tooltip"
+      className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 -translate-x-1/2 translate-y-1 whitespace-nowrap rounded-md border border-vs-border-default bg-vs-bg-elevated px-2 py-1 text-[11px] font-medium text-vs-text-primary opacity-0 shadow-lg transition-all duration-100 group-hover:translate-y-0 group-hover:opacity-100"
     >
-      {label}
-    </button>
+      {children}
+    </span>
   );
 }
 
