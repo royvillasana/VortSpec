@@ -12,31 +12,37 @@ import type { Project, FileSnapshot, InsertTargetWire } from "@vortspec/core/ipc
 import type { InspectorBridge } from "./useInspectorBridge";
 
 /**
- * The drag-move flow (change: canvas-live-structural-editing, §5.6).
+ * The direct-manipulation move flow (change: canvas-direct-manipulation-move).
  *
- * Mirrors `useComposeRun`, specialized to relocation: a dropped element opens a
- * gated Claude Code run that cuts its JSX from the origin and re-inserts it at the
- * destination as a single `option=0` scaffold (Decision 2), previewed via HMR and
- * accepted (keep option 0) or discarded (restore the snapshot). The snapshot is
- * taken over the token scope BEFORE any write and the move prompt is told to stop
- * rather than edit a file outside that set, so a discard always restores exactly
- * (Decision 6). One move in flight per workspace.
+ * The drop already reparented the element in the live DOM (the guest owns that),
+ * so this hook is the Keep/Revert gate over that ephemeral move — mirroring the
+ * inspector's ephemeral-edit → gated-commit discipline:
+ *
+ *   drop → `moved` (instant, no agent) → Keep runs the gated reconcile / Revert undoes.
+ *
+ * Keep snapshots the source scope, runs the same cut+re-insert move prompt as a
+ * single option scaffold, auto-accepts it (the user already approved by keeping),
+ * and reloads so source matches the moved DOM. Revert tells the guest to put the
+ * element back — nothing was ever written. One move at a time per workspace.
  */
-export type MovePhase = "idle" | "moving" | "review" | "error";
+export type MovePhase = "idle" | "moved" | "reconciling" | "error";
 
 export interface UseDragMove {
   phase: MovePhase;
   result: ComposeResult | null;
-  /** The latest run activity label while moving, or null. */
+  /** The latest run activity label while reconciling, or null. */
   progress: string | null;
   error: string | null;
-  /** After an accept, the screen file whose spec now owes a Screen Creation update (§5.9). */
+  /** After a kept move, the screen file whose spec now owes a Screen Creation update. */
   screenUpdateOwed: string | null;
-  /** Begin a gated move of `source` into `target`. No-op if a move is already in flight. */
-  start: (source: MoveSource, target: InsertTargetWire) => Promise<void>;
+  /** Register the just-dropped (already live-moved) element for Keep/Revert. */
+  onDrop: (source: MoveSource, target: InsertTargetWire) => void;
+  /** Reconcile source to the moved DOM (gated run + auto-accept). */
+  keep: () => Promise<void>;
+  /** Undo the ephemeral move in the live DOM — nothing written. */
+  revert: () => void;
+  /** Abort an in-flight reconcile: cancel the run, restore the snapshot, revert the DOM. */
   cancel: () => Promise<void>;
-  accept: () => Promise<void>;
-  discard: () => Promise<void>;
   clearScreenUpdate: () => void;
   reset: () => void;
 }
@@ -54,65 +60,75 @@ export function useDragMove(args: { project: Project; bridge: InspectorBridge })
   ctx.current = args;
   const snapshotRef = useRef<FileSnapshot[] | null>(null);
   const runIdRef = useRef<string>("");
+  // The just-dropped move (already applied in the live DOM), pending Keep/Revert.
+  const pendingRef = useRef<{ source: MoveSource; target: InsertTargetWire } | null>(null);
 
   const reset = useCallback(() => {
     setPhase("idle");
     setResult(null);
     setError(null);
     snapshotRef.current = null;
+    pendingRef.current = null;
     run.reset();
   }, [run]);
 
-  const start = useCallback(
-    async (source: MoveSource, target: InsertTargetWire) => {
-      const { project } = ctx.current;
-      if (phase === "moving") return; // one move in flight per workspace
-      const runId = `move-${Date.now()}`;
-      runIdRef.current = runId;
-      setError(null);
-      setResult(null);
+  const onDrop = useCallback((source: MoveSource, target: InsertTargetWire) => {
+    // The guest already moved the element — just gate it. No agent, no write yet.
+    pendingRef.current = { source, target };
+    setError(null);
+    setResult(null);
+    setPhase("moved");
+  }, []);
 
-      // Snapshot the WHOLE source scope BEFORE any write (Decision 6): a move's
-      // origin/destination is often a screen file outside component_dir (e.g.
-      // src/App.tsx), which the narrower token scope would miss — the run would then
-      // stop on a scope escape. The broad snapshot lets the move touch any source
-      // file and still restore exactly on discard.
-      const snap = await api.snapshotSourceScope(project.path);
-      snapshotRef.current = snap;
+  const revert = useCallback(() => {
+    ctx.current.bridge.revertMove();
+    reset();
+  }, [reset]);
 
-      const built = buildMovePrompt({
-        runId,
-        source,
-        sourceFile: null,
-        target: {
-          anchorLabel: target.anchorLabel ?? "the anchored element",
-          anchorText: target.anchorText ?? null,
-          position: target.position,
-          axis: target.axis,
-          file: null,
-        },
-        snapshotFiles: snap.map((f) => f.path),
-      });
+  const keep = useCallback(async () => {
+    const { project } = ctx.current;
+    const pending = pendingRef.current;
+    if (!pending || phase === "reconciling") return;
+    const runId = `move-${Date.now()}`;
+    runIdRef.current = runId;
+    setError(null);
 
-      setPhase("moving");
-      await run.start({
-        prompt: built,
-        cwd: project.path,
-        allowedTools: ["Read", "Edit", "Write"],
-        bypassPermissions: true,
-        strictMcp: true,
-        model: routedModel("sonnet"),
-      });
-    },
-    [phase, run],
-  );
+    // Snapshot the WHOLE source scope BEFORE any write (Decision 6): a move's
+    // origin/destination is often a screen file outside component_dir, which the
+    // narrower token scope would miss. The broad snapshot lets the run touch any
+    // source file and still restore exactly if it fails.
+    const snap = await api.snapshotSourceScope(project.path);
+    snapshotRef.current = snap;
 
-  // React to the run finishing: parse, gate the target, preview the moved element.
+    const built = buildMovePrompt({
+      runId,
+      source: pending.source,
+      sourceFile: null,
+      target: {
+        anchorLabel: pending.target.anchorLabel ?? "the anchored element",
+        anchorText: pending.target.anchorText ?? null,
+        position: pending.target.position,
+        axis: pending.target.axis,
+        file: null,
+      },
+      snapshotFiles: snap.map((f) => f.path),
+    });
+
+    setPhase("reconciling");
+    await run.start({
+      prompt: built,
+      cwd: project.path,
+      allowedTools: ["Read", "Edit", "Write"],
+      bypassPermissions: true,
+      strictMcp: true,
+      model: routedModel("sonnet"),
+    });
+  }, [phase, run]);
+
+  // React to the reconcile run finishing: gate the target, auto-accept, reload.
   useEffect(() => {
-    if (phase !== "moving") return;
+    if (phase !== "reconciling") return;
     if (run.model.status === "done") {
-      // The final JSON can land in the result summary, the last assistant message,
-      // or the streamed text — search the whole transcript for the last valid block.
       const transcript = [
         ...run.model.messages.filter((m) => m.role === "assistant").map((m) => m.text),
         run.model.streamingText,
@@ -124,7 +140,7 @@ export function useDragMove(args: { project: Project; bridge: InspectorBridge })
       if (!parsed) {
         const tail = transcript.trim().slice(-200);
         setError(
-          `The move finished but didn't return a usable result. Discard and try again.${
+          `The move finished but didn't return a usable result. Revert and try again.${
             tail ? `\n\nLast output: …${tail}` : ""
           }`,
         );
@@ -132,9 +148,9 @@ export function useDragMove(args: { project: Project; bridge: InspectorBridge })
         return;
       }
       setResult(parsed);
-      // The run stopped without moving anything (ambiguous/not-found origin or
-      // destination, no container, generated target, or a snapshot-scope escape) —
-      // surface its human sentence, offer only discard.
+      // The run stopped without writing the move (ambiguous/not-found origin or
+      // destination, no container, generated target, or a snapshot-scope escape).
+      // The element stays in its moved DOM position pending Revert.
       if (parsed.stopped) {
         const cands = parsed.stopped.candidates.length ? ` Candidates: ${parsed.stopped.candidates.join(", ")}.` : "";
         setError(`${parsed.stopped.reason}${cands}`);
@@ -143,24 +159,27 @@ export function useDragMove(args: { project: Project; bridge: InspectorBridge })
       }
       const file = parsed.writtenFile;
       if (!file) {
-        setError("The move reported no file it wrote into. Discard and try again.");
+        setError("The move reported no file it wrote into. Revert and try again.");
         setPhase("error");
         return;
       }
-      // §5.7 — refuse to accept into a generated/ignored destination the moment the
-      // run reports it (the origin is guarded by the prompt's stop clause).
-      void api.composeCheckTarget(ctx.current.project.path, file).then((check) => {
+      // Refuse a generated/ignored destination (the origin is guarded by the prompt).
+      void api.composeCheckTarget(ctx.current.project.path, file).then(async (check) => {
         if (!check.ok) {
-          setError(check.reason ?? `${file} is not a file this can safely write to. Discard and try again.`);
+          setError(check.reason ?? `${file} is not a file this can safely write to. Revert and try again.`);
           setPhase("error");
           return;
         }
-        // The relocated element is in real source — preview it in place (option 0).
-        ctx.current.bridge.previewOption(0);
-        setPhase("review");
+        // The user already approved by keeping — auto-accept (strip the scaffold),
+        // forget the ephemeral move, and reload so the DOM reflects real source.
+        await api.composeAccept(ctx.current.project.path, file, runIdRef.current, 0);
+        ctx.current.bridge.clearMove();
+        ctx.current.bridge.reload();
+        setScreenUpdateOwed(file);
+        reset();
       });
     } else if (run.model.status === "error") {
-      setError(run.model.result?.text ?? "The move run failed.");
+      setError(run.model.result?.text ?? "The move run failed. Revert and try again.");
       setPhase("error");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -170,33 +189,10 @@ export function useDragMove(args: { project: Project; bridge: InspectorBridge })
     await run.cancel();
     const { project, bridge } = ctx.current;
     if (snapshotRef.current) await api.restoreFiles(project.path, snapshotRef.current);
-    bridge.previewOption(null);
+    bridge.revertMove(); // undo the ephemeral move too — the user backed all the way out
     bridge.reload();
     reset();
   }, [run, reset]);
-
-  const discard = useCallback(async () => {
-    const { project, bridge } = ctx.current;
-    if (snapshotRef.current) await api.restoreFiles(project.path, snapshotRef.current);
-    bridge.previewOption(null);
-    bridge.reload();
-    reset();
-  }, [reset]);
-
-  const accept = useCallback(async () => {
-    const { project, bridge } = ctx.current;
-    const file = result?.writtenFile;
-    if (!file) {
-      setError("The move did not report which file it wrote, so it can't be accepted. Discard instead.");
-      setPhase("error");
-      return;
-    }
-    await api.composeAccept(project.path, file, runIdRef.current, 0);
-    bridge.previewOption(null);
-    bridge.reload();
-    setScreenUpdateOwed(file); // §5.9 — a relocation changes the screen composition
-    reset();
-  }, [result, reset]);
 
   return {
     phase,
@@ -204,10 +200,10 @@ export function useDragMove(args: { project: Project; bridge: InspectorBridge })
     progress: run.model.activity.at(-1)?.label ?? null,
     error,
     screenUpdateOwed,
-    start,
+    onDrop,
+    keep,
+    revert,
     cancel,
-    accept,
-    discard,
     clearScreenUpdate: useCallback(() => setScreenUpdateOwed(null), []),
     reset,
   };

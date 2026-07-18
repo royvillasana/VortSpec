@@ -4,12 +4,13 @@ import type { UseDragMove } from "../../lib/useDragMove";
 import { useDraggable } from "../../lib/useDraggable";
 
 /**
- * The drag-move panel (change: canvas-live-structural-editing, §5.8).
+ * The direct-manipulation move panel (change: canvas-direct-manipulation-move).
  *
- * A thin surface over the gated move run: watch it work (with a Stop), then review
- * the relocated element in place and accept or discard. A `stopped`/failed run
- * shows its human sentence with discard only. Mirrors the compose panel's
- * review/error phases — a move is a compose run with one option.
+ * The element is ALREADY moved in the live DOM by the time this shows — this is the
+ * Keep/Revert gate over that instant, ephemeral move. Keep reconciles source (a
+ * gated run that auto-accepts); Revert undoes the DOM move with nothing written. A
+ * stopped/failed keep shows its human sentence and leaves the element moved, so
+ * Revert still backs out cleanly.
  */
 export function MovePanel({
   move,
@@ -18,11 +19,11 @@ export function MovePanel({
   onClose,
 }: {
   move: UseDragMove;
-  /** Run the owed SDD-DE Screen Creation update for the accepted move. */
+  /** Run the owed SDD-DE Screen Creation update for the kept move. */
   onScreenUpdate: (file: string) => void;
   /** Defer the owed update to the sidebar Save-changes bar. */
   onScreenLater?: (file: string) => void;
-  /** Dismiss the panel (discard any in-flight move first). */
+  /** Dismiss the panel (revert the ephemeral move first). */
   onClose: () => void;
 }): JSX.Element {
   const { phase } = move;
@@ -40,17 +41,37 @@ export function MovePanel({
           type="button"
           onClick={onClose}
           aria-label="Cancel move"
-          title="Cancel — discard the move"
+          title="Cancel — revert the move"
           className="ml-auto rounded px-1 leading-none text-vs-text-muted hover:bg-vs-bg-hover hover:text-vs-text-primary"
         >
           ✕
         </button>
       </div>
 
-      {phase === "moving" ? (
+      {phase === "moved" ? (
+        <>
+          <p data-testid="move-review">Moved here. Keep it to save the change, or revert.</p>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => void move.keep()}
+              className="rounded bg-vs-accent px-2 py-1 text-white hover:opacity-90"
+            >
+              Keep
+            </button>
+            <button
+              type="button"
+              onClick={() => move.revert()}
+              className="rounded border border-vs-border-default px-2 py-0.5 hover:bg-vs-bg-hover"
+            >
+              Revert
+            </button>
+          </div>
+        </>
+      ) : phase === "reconciling" ? (
         <div data-testid="move-progress" className="flex min-w-0 items-center gap-1.5 text-[11px] text-vs-text-muted">
           <Spinner />
-          <span className="min-w-0 flex-1 truncate">{move.progress ?? "Relocating the element…"}</span>
+          <span className="min-w-0 flex-1 truncate">{move.progress ?? "Saving the move to source…"}</span>
           <button
             type="button"
             onClick={() => void move.cancel()}
@@ -66,31 +87,11 @@ export function MovePanel({
           </p>
           <button
             type="button"
-            onClick={() => void move.discard()}
+            onClick={() => move.revert()}
             className="self-start rounded border border-vs-border-default px-2 py-0.5 hover:bg-vs-bg-hover"
           >
-            Discard
+            Revert
           </button>
-        </>
-      ) : phase === "review" ? (
-        <>
-          <p data-testid="move-review">The element was relocated — keep it here or discard the move.</p>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => void move.accept()}
-              className="rounded bg-vs-accent px-2 py-1 text-white hover:opacity-90"
-            >
-              Accept
-            </button>
-            <button
-              type="button"
-              onClick={() => void move.discard()}
-              className="rounded border border-vs-border-default px-2 py-0.5 hover:bg-vs-bg-hover"
-            >
-              Discard
-            </button>
-          </div>
         </>
       ) : null}
 

@@ -47,6 +47,8 @@ export function makeBridge(overrides: Partial<InspectorBridge> = {}): InspectorB
     dragMessage: null,
     clearDragMessage: noop,
     cancelDrag: noop,
+    revertMove: noop,
+    clearMove: noop,
     anchorRects: {},
     watchAnchors: noop,
     scrollToAnchor: noop,

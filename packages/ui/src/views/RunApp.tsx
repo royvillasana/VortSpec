@@ -524,7 +524,8 @@ export function RunApp({
     if (!dragMoveEnabled || !bridge.dragDrop || move.phase !== "idle") return;
     const drop = bridge.dragDrop;
     bridge.clearDragDrop();
-    void move.start(
+    // The guest already moved the element live — register it for Keep/Revert (no run).
+    move.onDrop(
       { fingerprint: drop.sourceFingerprint, label: selectionRefForMove.current?.label ?? "the selected element", text: null },
       drop.target,
     );
@@ -537,11 +538,13 @@ export function RunApp({
     return () => clearTimeout(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bridge.dragMessage]);
-  // Cancel a move entirely: discard any in-flight run and reset.
+  // Cancel a move entirely: an in-flight reconcile cancels (restore + revert),
+  // otherwise just revert the ephemeral DOM move.
   const onMoveClose = useCallback(() => {
-    void move.discard();
+    if (move.phase === "reconciling") void move.cancel();
+    else move.revert();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [move.discard]);
+  }, [move.phase, move.cancel, move.revert]);
   const moveActive = dragMoveEnabled && mode === "inspect" && (move.phase !== "idle" || !!move.screenUpdateOwed);
 
   // Inspect-click assign dialog (§ dialog slice): the roster to assign/reuse a

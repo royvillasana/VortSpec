@@ -179,8 +179,10 @@ describe("inspector-bridge contracts", () => {
   });
 
   it("round-trips drag-move commands and events (§5)", () => {
-    // Host can abort a drag.
+    // Host can abort a drag, and gate an instant move.
     expect(bridgeCommandSchema.parse({ t: "cancelDrag" }).t).toBe("cancelDrag");
+    expect(bridgeCommandSchema.parse({ t: "revertMove" }).t).toBe("revertMove");
+    expect(bridgeCommandSchema.parse({ t: "clearMove" }).t).toBe("clearMove");
 
     const target = {
       anchorFingerprint: "main>section>div#3",

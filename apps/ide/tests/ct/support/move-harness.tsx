@@ -7,9 +7,10 @@ import { makeBridge } from "./mock-bridge";
 import type { Project, InsertTargetWire } from "@vortspec/core/ipc";
 
 /**
- * Drives the real `useDragMove` + `MovePanel` over the mock API. A drop is injected
- * by clicking "Start move" (the guest gesture that emits it is live-only), then the
- * gated run resolves via the mock and accept/discard record on `window.__composeOps`.
+ * Drives the real `useDragMove` + `MovePanel` over the mock API. "Start move"
+ * stands in for the guest's live reparent (which is DOM-only, live-session-only):
+ * it registers an already-moved element via `onDrop`. Keep runs the gated reconcile
+ * (recorded on `window.__composeOps`); Revert/clear/reload record on `__bridgeOps`.
  */
 
 const PROJECT = {
@@ -28,16 +29,24 @@ const TARGET: InsertTargetWire = {
   anchorText: "Filters",
 };
 
+const record = (op: string): void => {
+  const w = window as unknown as { __bridgeOps?: string[] };
+  (w.__bridgeOps ??= []).push(op);
+};
+
 export function MoveHarness(): JSX.Element {
-  const bridge = makeBridge();
+  const bridge = makeBridge({
+    revertMove: () => record("revert"),
+    clearMove: () => record("clear"),
+    reload: () => record("reload"),
+    previewOption: () => record("preview"),
+  });
   const move = useDragMove({ project: PROJECT, bridge });
   return (
     <div style={{ width: 640, height: 360, position: "relative" }}>
       <button
         type="button"
-        onClick={() =>
-          void move.start({ fingerprint: "fp-card", label: "Card", text: "Featured" }, TARGET)
-        }
+        onClick={() => move.onDrop({ fingerprint: "fp-card", label: "Card", text: "Featured" }, TARGET)}
       >
         Start move
       </button>

@@ -308,6 +308,15 @@ export const bridgeCommandSchema = z.discriminatedUnion("t", [
    * on Escape or a lost fingerprint (those arrive as a `dragCancel` event).
    */
   z.object({ t: z.literal("cancelDrag") }),
+  /**
+   * Direct-manipulation move (change: canvas-direct-manipulation-move). A drop
+   * reparents the dragged element in the live DOM immediately; these gate the
+   * ephemeral result. `revertMove` re-inserts the element at its origin (instant
+   * undo, nothing written); `clearMove` forgets the tracked move without moving
+   * anything (used once Keep reloads real source).
+   */
+  z.object({ t: z.literal("revertMove") }),
+  z.object({ t: z.literal("clearMove") }),
 ]);
 export type BridgeCommand = z.infer<typeof bridgeCommandSchema>;
 

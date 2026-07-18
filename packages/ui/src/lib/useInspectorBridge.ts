@@ -98,6 +98,10 @@ export interface InspectorBridge {
   clearDragMessage: () => void;
   /** Abort an in-flight drag from the host (the move panel closed / the flow reset). */
   cancelDrag: () => void;
+  /** Undo an ephemeral live-DOM move (Revert) — re-insert the element at its origin. */
+  revertMove: () => void;
+  /** Forget the tracked ephemeral move without moving anything (after Keep reloads source). */
+  clearMove: () => void;
   /** Live rects of the watched comment anchors (fingerprint → rect, null = currently lost). */
   anchorRects: Record<string, Rect | null>;
   /** Tell the guest which anchor fingerprints to track (for pin placement). */
@@ -352,6 +356,8 @@ export function useInspectorBridge(): InspectorBridge {
     setDrag(null);
     send({ t: "cancelDrag" });
   }, [send]);
+  const revertMove = useCallback(() => send({ t: "revertMove" }), [send]);
+  const clearMove = useCallback(() => send({ t: "clearMove" }), [send]);
   const watchAnchors = useCallback((fingerprints: string[]) => send({ t: "watchAnchors", fingerprints }), [send]);
   const scrollToAnchor = useCallback((fingerprint: string) => send({ t: "scrollToAnchor", fingerprint }), [send]);
   const captureThumbnail = useCallback(async (rect: Rect): Promise<string> => {
@@ -436,6 +442,8 @@ export function useInspectorBridge(): InspectorBridge {
     dragMessage,
     clearDragMessage: useCallback(() => setDragMessage(null), []),
     cancelDrag,
+    revertMove,
+    clearMove,
     anchorRects,
     watchAnchors,
     scrollToAnchor,

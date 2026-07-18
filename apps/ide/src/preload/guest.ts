@@ -425,6 +425,7 @@ function rebuildAndReacquire(): void {
   emitAnchorRects(); // pins re-resolve to their (possibly moved) elements
   reacquirePlaceholder(); // a re-render drops our injected placeholder — re-establish it
   reacquireDrag(); // a mid-drag HMR patch invalidates every rect — re-lock or cancel (Decision 8)
+  reapplyLiveMove(); // an app re-render may undo an ephemeral move — re-apply it until Keep reloads
   applyOptionPreview(); // keep the one-option preview filter attached across re-renders
   if (!selectedId) return;
   const el = resolve(selectedId);
@@ -555,10 +556,63 @@ function updateDrag(x: number, y: number, alt: boolean): void {
   send({ t: "dragTarget", target: dragSlotUnder(x, y, alt), ghost, poppedOut: alt });
 }
 
-/** Finish the drag (pointerup): emit the drop, then clear state. */
+/**
+ * An ephemeral live-DOM move awaiting Keep/Revert (change: canvas-direct-manipulation-move).
+ * Live element refs (valid through the review window — HMR only fires on a file save,
+ * which won't happen while the user decides); re-acquired best-effort after a re-render.
+ */
+let movedEl: {
+  el: Element;
+  originParent: Element | null;
+  originNext: Element | null;
+  targetFp: string;
+  position: "before" | "after";
+} | null = null;
+
+/** Insert `el` before/after the anchor element (via the anchor's parent). */
+function placeRelative(el: Element, anchor: Element, position: "before" | "after"): void {
+  const parent = anchor.parentElement;
+  if (!parent) return;
+  parent.insertBefore(el, position === "before" ? anchor : anchor.nextSibling);
+}
+
+/** Perform the instant reparent on a valid drop; remember origin + target for revert/reapply. */
+function applyLiveMove(el: Element, target: InsertTargetWire): void {
+  const anchor = resolveFingerprint(target.anchorFingerprint);
+  if (!anchor?.parentElement || anchor === el) return;
+  movedEl = {
+    el,
+    originParent: el.parentElement,
+    originNext: el.nextElementSibling,
+    targetFp: target.anchorFingerprint,
+    position: target.position,
+  };
+  placeRelative(el, anchor, target.position);
+}
+
+/** Undo the ephemeral move — re-insert the element at its origin. Idempotent. */
+function revertLiveMove(): void {
+  const m = movedEl;
+  movedEl = null;
+  if (!m || !m.el.isConnected) return;
+  if (m.originParent?.isConnected) {
+    m.originParent.insertBefore(m.el, m.originNext?.isConnected ? m.originNext : null);
+  }
+}
+
+/** Re-apply the ephemeral move after an app re-render put the element back (Decision 8 sibling). */
+function reapplyLiveMove(): void {
+  if (!movedEl?.el.isConnected) return;
+  const anchor = resolveFingerprint(movedEl.targetFp);
+  if (anchor && anchor !== movedEl.el && anchor.parentElement) placeRelative(movedEl.el, anchor, movedEl.position);
+}
+
+/** Finish the drag (pointerup): move the element live NOW, emit the drop, then clear the drag. */
 function dropDrag(x: number, y: number, alt: boolean): void {
   if (!dragging) return;
   const target = dragSlotUnder(x, y, alt);
+  // Instant feedback: reparent the real element into the slot before any agent runs.
+  if (target) applyLiveMove(dragging.el, target);
   send({ t: "dragDrop", sourceFingerprint: dragging.fp, target, poppedOut: alt });
   dragging = null;
 }
@@ -798,10 +852,12 @@ function handleCommand(cmd: BridgeCommand): void {
         dismissPlaceholder();
         send({ t: "insertTarget", target: null });
       }
-      // Drag lives inside inspect mode — leaving it abandons any drag (Decision 3).
+      // Drag lives inside inspect mode — leaving it abandons any drag (Decision 3)
+      // and reverts an unconfirmed ephemeral move (nothing was written).
       if (cmd.mode !== "inspect") {
         dragArm = null;
         dragging = null;
+        revertLiveMove();
       }
       mode = cmd.mode;
       return;
@@ -878,6 +934,13 @@ function handleCommand(cmd: BridgeCommand): void {
       // Host-initiated abort (the move panel closed) — tear down without an event.
       dragArm = null;
       dragging = null;
+      return;
+    case "revertMove":
+      revertLiveMove();
+      return;
+    case "clearMove":
+      // Keep reloaded real source — forget the ephemeral move (no DOM change).
+      movedEl = null;
       return;
   }
 }
