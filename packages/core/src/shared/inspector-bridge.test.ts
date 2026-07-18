@@ -141,6 +141,22 @@ describe("inspector-bridge contracts", () => {
     ).toThrow();
   });
 
+  it("round-trips the structure request + snapshot", () => {
+    expect(bridgeCommandSchema.parse({ t: "requestStructure" })).toMatchObject({ t: "requestStructure", nodeId: null });
+    expect(bridgeCommandSchema.parse({ t: "requestStructure", nodeId: "n1" })).toMatchObject({ nodeId: "n1" });
+    const snapshot = {
+      rootId: "sec",
+      nodes: {
+        sec: { id: "sec", fingerprint: "fp", rect: { x: 0, y: 0, width: 100, height: 80 }, computed: { display: "flex" }, childIds: ["a"] },
+        a: { id: "a", fingerprint: "fpa", rect: { x: 0, y: 0, width: 40, height: 80 } },
+      },
+    };
+    const ev = bridgeEventSchema.parse({ t: "structure", snapshot });
+    expect(ev.t).toBe("structure");
+    // leaf defaults applied (childIds → [], computed → {}).
+    if (ev.t === "structure") expect(ev.snapshot.nodes.a.childIds).toEqual([]);
+  });
+
   it("round-trips insert-mode guest events", () => {
     const target = {
       anchorFingerprint: "main>section>div",

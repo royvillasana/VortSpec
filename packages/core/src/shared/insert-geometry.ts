@@ -225,6 +225,54 @@ export function resolveInsertTarget(
 }
 
 /**
+ * Enumerate EVERY insertion slot in a container (change: canvas-live-structural-editing):
+ * before the first item of each visual row, the gaps between same-row siblings that
+ * overlap enough on the cross axis, and after the last item of each row. Each is a
+ * normalized `InsertTarget`. This is the pointer-independent companion to
+ * `resolveInsertTarget`, used by the structure model to expose a container's drop
+ * zones. Reuses the same clustering/overlap/line math, so it can't drift from it.
+ */
+export function enumerateInsertTargets(
+  container: { computed: Record<string, string>; children: Rect[] },
+  opts: HitOptions = {},
+): InsertTarget[] {
+  const axis = inferFlowAxis(container.computed);
+  const minOverlap = opts.minCrossOverlap ?? DEFAULTS.minCrossOverlap;
+  const rowThreshold = opts.rowThreshold ?? DEFAULTS.rowThreshold;
+  if (container.children.length === 0) return [];
+  const rows = visualRows(container.children, axis, rowThreshold).map((r) =>
+    r.map((index) => ({ index, rect: container.children[index] })),
+  );
+  const targets: InsertTarget[] = [];
+  for (const row of rows) {
+    const first = row[0];
+    targets.push({
+      anchorIndex: first.index,
+      position: "before",
+      axis,
+      line: lineAt(mainStart(first.rect, axis), crossStart(first.rect, axis), crossEnd(first.rect, axis), axis),
+    });
+    for (let i = 0; i < row.length - 1; i++) {
+      const a = row[i];
+      const b = row[i + 1];
+      if (crossOverlap(a.rect, b.rect, axis) < minOverlap) continue; // nonsense cross-row gap
+      const crossLo = Math.min(crossStart(a.rect, axis), crossStart(b.rect, axis));
+      const crossHi = Math.max(crossEnd(a.rect, axis), crossEnd(b.rect, axis));
+      const mid = (mainEnd(a.rect, axis) + mainStart(b.rect, axis)) / 2;
+      targets.push({ anchorIndex: b.index, position: "before", axis, line: lineAt(mid, crossLo, crossHi, axis) });
+    }
+    const last = row[row.length - 1];
+    targets.push({
+      anchorIndex: last.index,
+      position: "after",
+      axis,
+      line: lineAt(mainEnd(last.rect, axis), crossStart(last.rect, axis), crossEnd(last.rect, axis), axis),
+    });
+  }
+  return targets;
+}
+
+/**
  * Implicit placeholder sizing (task 5.7): fill the track in a flex/grid row rather
  * than adopt a fixed pixel width, so inserting into a row doesn't inherit the
  * parent's full width and blow up the layout. Returned as inline style props.

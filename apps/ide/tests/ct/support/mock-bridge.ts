@@ -38,6 +38,8 @@ export function makeBridge(overrides: Partial<InspectorBridge> = {}): InspectorB
     resizePlaceholder: noop,
     dismissPlaceholder: noop,
     previewOption: noop,
+    structure: null,
+    requestStructure: noop,
     anchorRects: {},
     watchAnchors: noop,
     scrollToAnchor: noop,

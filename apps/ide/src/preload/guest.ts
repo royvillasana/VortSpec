@@ -21,6 +21,8 @@ import {
   type NodeReadout,
   type Rect,
   type InsertTargetWire,
+  type StructureSnapshotWire,
+  type StructureNodeWire,
 } from "@vortspec/core/inspector-bridge";
 import { resolveInsertTarget, placeholderSizing, type FlowAxis } from "@vortspec/core/insert-geometry";
 
@@ -443,6 +445,48 @@ function scheduleRebuild(): void {
   }, 150);
 }
 
+// ── Structure snapshot (change: canvas-live-structural-editing) ────────────────
+
+/** The layout-computed subset the structure model needs, per element. */
+function layoutComputed(el: Element): Record<string, string> {
+  const cs = getComputedStyle(el);
+  return {
+    display: cs.display,
+    "flex-direction": cs.flexDirection,
+    "grid-auto-flow": cs.gridAutoFlow,
+    gap: cs.gap,
+  };
+}
+
+/** A stable id for an element in the structure scan — reuse its tree uid, else mint one. */
+function structureIdOf(el: Element): string {
+  let uid = uidOf.get(el);
+  if (!uid) {
+    uid = `n${uidSeq++}`;
+    uidOf.set(el, uid);
+  }
+  return uid;
+}
+
+/** Serialize a subtree (rect + computed flow + child ids per element) for the host model. */
+function buildStructureSnapshot(rootEl: Element): StructureSnapshotWire {
+  const nodes: Record<string, StructureNodeWire> = {};
+  const walk = (el: Element): string => {
+    const id = structureIdOf(el);
+    const kids = childElementsOf(el);
+    nodes[id] = {
+      id,
+      fingerprint: fingerprintFor(el),
+      rect: rectOf(el),
+      computed: layoutComputed(el),
+      childIds: kids.map(structureIdOf),
+    };
+    for (const k of kids) walk(k);
+    return id;
+  };
+  return { rootId: walk(rootEl), nodes };
+}
+
 // ── Insert-mode geometry + placeholder (change: canvas-compose-and-preview-bar) ─
 
 /** An element's inspectable element children (skipping chrome and our own overlay). */
@@ -669,6 +713,11 @@ function handleCommand(cmd: BridgeCommand): void {
       previewedOption = cmd.option;
       applyOptionPreview();
       return;
+    case "requestStructure": {
+      const rootEl = cmd.nodeId ? resolve(cmd.nodeId) : document.body;
+      if (rootEl) send({ t: "structure", snapshot: buildStructureSnapshot(rootEl) });
+      return;
+    }
   }
 }
 

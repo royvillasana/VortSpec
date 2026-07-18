@@ -7,6 +7,7 @@ import {
   type NodeReadout,
   type Rect,
   type InsertTargetWire,
+  type StructureSnapshotWire,
 } from "@vortspec/core/ipc";
 
 /** Minimal shape of an Electron <webview> element (typed loosely to avoid the dep). */
@@ -75,6 +76,10 @@ export interface InspectorBridge {
   dismissPlaceholder: () => void;
   /** Preview one composed option in place (null shows all) — drives the option cycler. */
   previewOption: (option: number | null) => void;
+  /** The latest structural snapshot of a subtree (from `requestStructure`), or null. */
+  structure: StructureSnapshotWire | null;
+  /** Ask the guest for a subtree's structural snapshot (null nodeId scans from the body). */
+  requestStructure: (nodeId?: string | null) => void;
   /** Live rects of the watched comment anchors (fingerprint → rect, null = currently lost). */
   anchorRects: Record<string, Rect | null>;
   /** Tell the guest which anchor fingerprints to track (for pin placement). */
@@ -120,6 +125,7 @@ export function useInspectorBridge(): InspectorBridge {
   const [insertTarget, setInsertTarget] = useState<InsertTargetWire | null>(null);
   const [placeholder, setPlaceholder] = useState<PlaceholderState | null>(null);
   const [placeholderLost, setPlaceholderLost] = useState<string | null>(null);
+  const [structure, setStructure] = useState<StructureSnapshotWire | null>(null);
 
   const send = useCallback((cmd: BridgeCommand) => {
     // `<webview>.send` throws until the view is attached + `dom-ready`. An early
@@ -204,6 +210,9 @@ export function useInspectorBridge(): InspectorBridge {
         setPlaceholder(null);
         setPlaceholderLost(event.message);
         return;
+      case "structure":
+        setStructure(event.snapshot);
+        return;
     }
   }, []);
 
@@ -279,6 +288,10 @@ export function useInspectorBridge(): InspectorBridge {
     send({ t: "dismissPlaceholder" });
   }, [send]);
   const previewOption = useCallback((option: number | null) => send({ t: "previewOption", option }), [send]);
+  const requestStructure = useCallback(
+    (nodeId: string | null = null) => send({ t: "requestStructure", nodeId }),
+    [send],
+  );
   const watchAnchors = useCallback((fingerprints: string[]) => send({ t: "watchAnchors", fingerprints }), [send]);
   const scrollToAnchor = useCallback((fingerprint: string) => send({ t: "scrollToAnchor", fingerprint }), [send]);
   const captureThumbnail = useCallback(async (rect: Rect): Promise<string> => {
@@ -354,6 +367,8 @@ export function useInspectorBridge(): InspectorBridge {
     resizePlaceholder,
     dismissPlaceholder,
     previewOption,
+    structure,
+    requestStructure,
     anchorRects,
     watchAnchors,
     scrollToAnchor,

@@ -201,6 +201,31 @@ export const insertTargetSchema = z.object({
 });
 export type InsertTargetWire = z.infer<typeof insertTargetSchema>;
 
+// ── Structure snapshot (guest → host) ────────────────────────────────
+
+/**
+ * One element in a serialized layout subtree (change: canvas-live-structural-editing).
+ * A container has `childIds`; a leaf has none. The host feeds these to the pure
+ * `structure-model` to recognize sections/rows/columns and their drop slots.
+ */
+export const structureNodeSchema = z.object({
+  id: z.string(),
+  fingerprint: z.string(),
+  rect: rectSchema,
+  /** Computed layout subset: display, flex-direction, grid-auto-flow, gap. */
+  computed: z.record(z.string(), z.string()).default({}),
+  /** Element-child ids in DOM order (empty for a leaf). */
+  childIds: z.array(z.string()).default([]),
+});
+export type StructureNodeWire = z.infer<typeof structureNodeSchema>;
+
+/** A flat snapshot of a scanned subtree: the root plus every node under it. */
+export const structureSnapshotSchema = z.object({
+  rootId: z.string(),
+  nodes: z.record(z.string(), structureNodeSchema).default({}),
+});
+export type StructureSnapshotWire = z.infer<typeof structureSnapshotSchema>;
+
 // ── Wire protocol (discriminated unions) ─────────────────────────────
 
 /** Messages the host renderer sends into the guest bridge. */
@@ -261,6 +286,11 @@ export const bridgeCommandSchema = z.discriminatedUnion("t", [
    * at a time in the real slot without rewriting source per cycle.
    */
   z.object({ t: z.literal("previewOption"), option: z.number().int().nonnegative().nullable() }),
+  /**
+   * Request a structural snapshot of a subtree (change: canvas-live-structural-editing).
+   * `nodeId` scopes the scan to that container's subtree; null scans from the body.
+   */
+  z.object({ t: z.literal("requestStructure"), nodeId: z.string().nullable().default(null) }),
 ]);
 export type BridgeCommand = z.infer<typeof bridgeCommandSchema>;
 
@@ -313,6 +343,8 @@ export const bridgeEventSchema = z.discriminatedUnion("t", [
    * element).
    */
   z.object({ t: z.literal("placeholderLost"), message: z.string() }),
+  /** The requested structural snapshot of a subtree (change: canvas-live-structural-editing). */
+  z.object({ t: z.literal("structure"), snapshot: structureSnapshotSchema }),
 ]);
 export type BridgeEvent = z.infer<typeof bridgeEventSchema>;
 

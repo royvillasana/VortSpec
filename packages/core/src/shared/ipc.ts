@@ -148,6 +148,8 @@ export type {
   BridgeCommand,
   BridgeEvent,
   InsertTargetWire,
+  StructureSnapshotWire,
+  StructureNodeWire,
 } from "./inspector-bridge";
 export {
   INSPECTOR_BRIDGE_CHANNEL,

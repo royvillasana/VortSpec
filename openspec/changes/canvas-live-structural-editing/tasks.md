@@ -4,13 +4,13 @@
 
 ## 2. Structure recognition — the shared foundation (canvas-structure-model)
 
-- [ ] 2.1 Add `packages/core/src/shared/structure-model.ts`: types `StructureSnapshot` (flat container descriptors `{ id, fingerprint, rect, computed: {display, flex-direction, grid-auto-flow, gap}, childIds }` + leaf rects) and `StructuralNode` (`kind: "section"|"row"|"column"|"leaf"`, `axis`, `gap`, `slots: Slot[]`, `dropZones`). Reuse `InsertTarget`'s anchor+before/after normalization for `Slot`.
-- [ ] 2.2 Implement `buildStructuralModel(snapshot)`: recursive walk composing the existing pure primitives per container — `inferFlowAxis`, `visualRows`, cross-overlap, slop/midpoint — from `insert-geometry.ts`. Do NOT reimplement geometry; call it.
-- [ ] 2.3 Implement `dropZonesFor(model, opts)` and `slotAt(model, point, { excludeSubtree })`: resolve the slot under a point, deepest-container-first, with an option to pop out one level and to exclude a dragged subtree's ids from candidate children.
-- [ ] 2.4 Unit tests (`structure-model.test.ts`): nested row-in-section, wrapped rows, grid, deepest-vs-parent slot resolution, subtree exclusion, empty containers, ambiguous-gap cases. Pure fixtures — no DOM.
-- [ ] 2.5 Extend the bridge protocol (`inspector-bridge.ts`): `requestStructure` command and `structure` event (carrying `StructureSnapshot`), zod-validated. Round-trip tests in `inspector-bridge.test.ts`.
-- [ ] 2.6 Guest structure scan (`guest.ts`): walk from a root (or the container under a point) collecting computed flow + child rects into a `StructureSnapshot`, skipping `data-vs-overlay` chrome (reuse `childElementsOf`). Emit on `requestStructure`; keep it behind the existing rAF/mutation coalescing.
-- [ ] 2.7 Renderer wiring (`useInspectorBridge.ts`): `requestStructure()` + `structure` state, typed. No UI yet — verified by typecheck + CT that a `structure` event lands.
+- [x] 2.1 `packages/core/src/shared/structure-model.ts`: `NodeDesc` + `StructureSnapshot` (flat descriptors: id, fingerprint, rect, computed, childIds) and `StructuralNode` (`kind: section|row|column|leaf`, axis, gap, children, `slots: Slot[]`). `Slot` reuses `InsertTarget`'s normalization (anchor + before/after + line).
+- [x] 2.2 `buildStructuralModel(snapshot)` recursively builds the tree; per container it composes the existing primitives (`inferFlowAxis`, and a new exported `enumerateInsertTargets` that reuses `visualRows`/cross-overlap/line math from `insert-geometry.ts` — not reimplemented). `classify` labels section vs row/column vs leaf.
+- [x] 2.3 `slotAt(model, point, { excludeSubtree, popOut })` resolves the slot deepest-container-first (skips a container whose only child is the dragged element, popping to its parent), excludes the dragged subtree, reuses `resolveInsertTarget`. Plus `containerDepthAt` (pop-out affordance) and `dropZonesFor` (all slots, minus a dragged subtree).
+- [x] 2.4 `structure-model.test.ts` (9 tests): nested section→rows→columns, slot enumeration, deepest-vs-pop-out resolution, subtree exclusion (can't drop into self / sole-child container pops up), no-container → null, depth, drop-zone enumeration. Pure fixtures. `insert-geometry.test.ts` unchanged/green.
+- [x] 2.5 Protocol (`inspector-bridge.ts`): `structureNodeSchema`/`structureSnapshotSchema`, a `requestStructure` command (nullable nodeId) and a `structure` event, zod-validated. Round-trip test added (incl. leaf-default application).
+- [x] 2.6 Guest (`guest.ts`): `buildStructureSnapshot(rootEl)` walks the subtree collecting rect + layout-computed (display/flex-direction/grid-auto-flow/gap) + child ids (reusing `childElementsOf` to skip chrome, `fingerprintFor` for durable anchors, tree uids where present); emits on `requestStructure` (scoped by nodeId or the body).
+- [x] 2.7 Renderer (`useInspectorBridge.ts`): `structure` state + `requestStructure(nodeId?)` command + the `structure` event handler; `StructureSnapshotWire` exported from the ipc barrel; mock bridge updated. No UI yet — verified by typecheck + the protocol round-trip; the live scan is a §6.5 item.
 
 ## 3. Dynamic row/column choice in compose (canvas-compose, modified)
 
