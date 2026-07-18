@@ -1,5 +1,6 @@
 import type { NodeReadout, Selection, SectionField, DesignSection, VariantControl } from "./inspector-bridge";
 import type { InspectorToken, TokenType } from "./inspector";
+import { detectSizeMode, SIZE_MODE_LABEL, type SizeDim } from "./sizing";
 
 /**
  * Selection builder (change: run-canvas-visual-editor, design D5/D8).
@@ -48,10 +49,10 @@ export function buildSelection(
       literal("y", "Y", "number", String(Math.round(readout.rect.y))),
       literal("rotation", "Rotation", "number", `${rotationDeg(c["transform"])}`),
     ]),
-    // Size — always present so every element can be resized from the panel.
+    // Size — Figma-style Fixed/Hug/Fill per dimension (axis-aware via the parent's flow).
     section("size", "Size", [
-      literal("width", "Width", "length", sizeVal(c["width"], readout.rect.width)),
-      literal("height", "Height", "length", sizeVal(c["height"], readout.rect.height)),
+      resizeField("width", "Width", readout, c, sizeVal(c["width"], readout.rect.width)),
+      resizeField("height", "Height", readout, c, sizeVal(c["height"], readout.rect.height)),
     ]),
     section("layout", "Auto layout", [
       literal("flow", "Flow", "segment", flow(c), ["block", "row", "column"]),
@@ -192,6 +193,20 @@ function literal(
 ): SectionField | null {
   if (value === undefined || value === "") return null;
   return { key, label, kind, value, token: null, options };
+}
+
+/** A Fixed/Hug/Fill resize field for a dimension — its current mode read from computed. */
+function resizeField(
+  dim: SizeDim,
+  label: string,
+  readout: NodeReadout,
+  computed: Record<string, string>,
+  fixedValue: string | undefined,
+): SectionField {
+  const mode = detectSizeMode(dim, computed, readout.parentFlow);
+  // When Fixed, the value is the px readout; otherwise the mode name reads in the field.
+  const value = mode === "fixed" ? (fixedValue ?? `${Math.round(readout.rect[dim])}px`) : SIZE_MODE_LABEL[mode];
+  return { key: dim, label, kind: "resize", value, mode, token: null, options: [] };
 }
 
 /**

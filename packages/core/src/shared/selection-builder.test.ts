@@ -32,6 +32,7 @@ function readout(over: Partial<NodeReadout> = {}): NodeReadout {
     fingerprint: over.fingerprint ?? "fp",
     dataComponent: over.dataComponent ?? "button",
     componentCandidates: over.componentCandidates ?? [],
+    parentFlow: over.parentFlow ?? "block",
     className: over.className ?? "btn",
     children: over.children ?? [],
     text: over.text,
@@ -62,6 +63,26 @@ describe("buildSelection", () => {
     expect(radius.token).toBe("radius-md");
     const strokeColor = sel.sections.find((s) => s.id === "stroke")!.fields.find((f) => f.key === "stroke-color")!;
     expect(strokeColor.token).toBe("color-border");
+  });
+
+  it("exposes Width/Height as Fixed/Hug/Fill resize fields, with the mode read from computed", () => {
+    // A fixed px width in a row parent → Fixed; auto height with no stretch → Hug.
+    const sel = buildSelection(readout({ computed: { width: "240px", height: "auto" }, parentFlow: "row" }), { tag: "div" });
+    const size = sel.sections.find((s) => s.id === "size")!;
+    const w = size.fields.find((f) => f.key === "width")!;
+    const h = size.fields.find((f) => f.key === "height")!;
+    expect(w.kind).toBe("resize");
+    expect(w.mode).toBe("fixed");
+    expect(w.value).toBe("240px");
+    expect(h.mode).toBe("hug");
+    expect(h.value).toBe("Hug");
+  });
+
+  it("reads Fill from a flex-grown main-axis width", () => {
+    const sel = buildSelection(readout({ computed: { width: "auto", "flex-grow": "1" }, parentFlow: "row" }), { tag: "div" });
+    const w = sel.sections.find((s) => s.id === "size")!.fields.find((f) => f.key === "width")!;
+    expect(w.mode).toBe("fill");
+    expect(w.value).toBe("Fill");
   });
 
   it("makes margins token-bindable to the spacing scale (Phase 5)", () => {

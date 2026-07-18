@@ -45,6 +45,8 @@ export interface PendingEdit {
   /** Class swap a `variant` edit applies live (to re-preview after a removal). */
   removeClasses?: string[];
   addClasses?: string[];
+  /** For a Figma-style width/height resize edit: the chosen Fixed/Hug/Fill mode. */
+  resizeMode?: "fixed" | "hug" | "fill";
 }
 
 /** Classify a Design-panel field edit into a `PendingEdit`, given the live selection + token usage. */
@@ -134,6 +136,17 @@ export function editProvenance(edit: PendingEdit): EditProvenance {
  * flagged as an approximate visual target for freeform geometry/style.
  */
 export function describeEdit(edit: PendingEdit): string {
+  // Resize edits describe intent, not raw CSS — the run realizes Fixed/Hug/Fill in the
+  // component's own idiom (utility classes, style props).
+  if (edit.resizeMode) {
+    const how =
+      edit.resizeMode === "fixed"
+        ? `a fixed ${edit.value}`
+        : edit.resizeMode === "hug"
+          ? "hug (size to) its content"
+          : "fill the available space in its container";
+    return `Set the element's ${edit.key} to ${how} (Figma-style resizing — realize it however best fits the component: a utility class like w-full/flex-1, or a style).`;
+  }
   switch (editProvenance(edit)) {
     case "variant": {
       const prop = edit.key.replace(/^variant:/, "");

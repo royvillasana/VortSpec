@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { DevServerStatus, Project, InspectorToken, InspectorComponent, FileSnapshot, StorybookEntry } from "@vortspec/core/ipc";
 import { buildSelection, alignToCss, flowToCss } from "@vortspec/core/selection-builder";
+import { sizeModeCss, SIZE_MODE_LABEL } from "@vortspec/core/sizing";
 import { api } from "../lib/api";
 import { Button, Spinner } from "@vortspec/ui/ui";
 import { ProjectRail, projectRailItems } from "@vortspec/ui/ProjectRail";
@@ -771,6 +772,7 @@ export function RunApp({
         cssProps: string[];
         css?: Record<string, string>;
         token?: string | null;
+        resizeMode?: "fixed" | "hug" | "fill";
       }[],
       forceStyle = false,
     ) => {
@@ -795,6 +797,7 @@ export function RunApp({
             file: sel.file,
             elementLabel: sel.label,
             elementText: text,
+            resizeMode: e.resizeMode,
           };
         }
         return next;
@@ -830,6 +833,19 @@ export function RunApp({
         const css = flowToCss(value);
         applyLive(css);
         commitEdits([{ key, value, cssProps: Object.keys(css), css }]);
+      } else if (key === "width" || key === "height") {
+        // Figma-style Fixed/Hug/Fill resize (axis-aware via the parent's flow). A mode
+        // change arrives as `@fixed`/`@hug`/`@fill`; a raw value is a Fixed px edit.
+        const dim = key as "width" | "height";
+        const parentFlow = readoutRef.current?.parentFlow ?? "block";
+        const mode = value.startsWith("@") ? (value.slice(1) as "fixed" | "hug" | "fill") : "fixed";
+        const fixedPx = value.startsWith("@")
+          ? `${Math.round(readoutRef.current?.rect[dim] ?? 0)}px`
+          : value;
+        const css = sizeModeCss(dim, mode, parentFlow, fixedPx);
+        applyLive(css);
+        const displayValue = mode === "fixed" ? fixedPx : SIZE_MODE_LABEL[mode];
+        commitEdits([{ key, value: displayValue, cssProps: Object.keys(css), css, resizeMode: mode }]);
       } else {
         const css = cssForField(key, value);
         applyLive(css);
