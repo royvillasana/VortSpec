@@ -29,14 +29,24 @@ const composeOps = (c: import("@playwright/test").Locator): Promise<Array<Record
 const runPrompts = (c: import("@playwright/test").Locator): Promise<string[]> =>
   c.page().evaluate(() => (window as unknown as { __runPrompts: string[] }).__runPrompts);
 
+// The insert is a two-step flow: pick the layout, then Continue into the compose
+// step. Most tests start from the compose step, so advance past the layout picker.
+const toCompose = async (c: import("@playwright/test").Locator): Promise<void> => {
+  await c.getByRole("button", { name: "Continue" }).click();
+};
+
 test("an empty roster blocks 'into gap' but allows a new container (§4)", async ({ mount }) => {
   const c = await mount(<ComposeHarness roster="empty" />, {
     hooksConfig: { mock: { runScript: runWith(`\`\`\`json\n${OPTIONS_JSON}\n\`\`\``) } },
   });
-  // Into gap with no roster → the empty-roster message, no Generate.
+  // Into gap (default) with no roster → step 2 shows the empty-roster message, no Generate.
+  await toCompose(c);
   await expect(c.getByTestId("compose-empty-roster")).toBeVisible();
-  // Switch to New row → the message goes and Generate works WITHOUT an intent.
-  await c.getByRole("button", { name: "New row" }).click();
+  // Back to the layout step, pick Columns (a new container) → the message goes and
+  // Generate works WITHOUT an intent.
+  await c.getByRole("button", { name: "Edit" }).click();
+  await c.getByRole("button", { name: "Columns" }).click();
+  await toCompose(c);
   await expect(c.getByTestId("compose-empty-roster")).toHaveCount(0);
   await c.getByRole("button", { name: "Generate" }).click();
   await expect(c.getByTestId("compose-option-index")).toBeVisible();
@@ -46,6 +56,7 @@ test("an empty roster blocks 'into gap' but allows a new container (§4)", async
 
 test("Generate is gated on an expressed intent", async ({ mount }) => {
   const c = await mount(<ComposeHarness />, { hooksConfig: { mock: { runScript: runWith(`\`\`\`json\n${OPTIONS_JSON}\n\`\`\``) } } });
+  await toCompose(c);
   const generate = c.getByRole("button", { name: "Generate" });
   await expect(generate).toBeDisabled();
   await c.getByPlaceholder(/Describe what belongs here/).fill("a filters row");
@@ -56,11 +67,12 @@ test("the layout controls set the insert axis and slot count (not the option cou
   const c = await mount(<ComposeHarness />, {
     hooksConfig: { mock: { runScript: runWith(`\`\`\`json\n${OPTIONS_JSON}\n\`\`\``) } },
   });
-  // Override the inferred axis (row → column) and bump the slot count to 3.
+  // Step 1: override the inferred axis (row → column) and pick 3 slots on the strip.
   await c.getByRole("button", { name: "Column", exact: true }).click();
-  await c.getByRole("button", { name: "More slots" }).click();
-  await c.getByRole("button", { name: "More slots" }).click();
+  await c.getByRole("button", { name: "3 slots" }).click();
   await expect(c.getByTestId("compose-slot-count")).toHaveText("3");
+  // Step 2: describe it and generate.
+  await toCompose(c);
   await c.getByPlaceholder(/Describe what belongs here/).fill("a filters column");
   await c.getByRole("button", { name: "Generate" }).click();
   const sent = await runPrompts(c);
@@ -81,6 +93,7 @@ test("the Components tab multi-selects components as context for Generate", asyn
   const c = await mount(<ComposeHarness />, {
     hooksConfig: { mock: { runScript: runWith(`\`\`\`json\n${OPTIONS_JSON}\n\`\`\``) } },
   });
+  await toCompose(c);
   await expect(c.getByRole("tab", { name: "Generate" })).toBeVisible();
   await c.getByRole("tab", { name: /Components/ }).click();
   const list = c.getByTestId("component-picker-list");
@@ -105,6 +118,7 @@ test("the Components tab multi-selects components as context for Generate", asyn
 
 test("a context chip is removable", async ({ mount }) => {
   const c = await mount(<ComposeHarness />, { hooksConfig: { mock: {} } });
+  await toCompose(c);
   await c.getByRole("tab", { name: /Components/ }).click();
   await c.getByTestId("component-picker-list").getByRole("button", { name: /Card/ }).click();
   await expect(c.getByTestId("compose-context-chips")).toContainText("Card");
@@ -114,6 +128,7 @@ test("a context chip is removable", async ({ mount }) => {
 
 test("the hover preview shows the component's Storybook story when available", async ({ mount }) => {
   const c = await mount(<ComposeHarness storyUrl="http://localhost:6006/iframe.html" />, { hooksConfig: { mock: {} } });
+  await toCompose(c);
   await c.getByRole("tab", { name: /Components/ }).click();
   await c.getByTestId("component-picker-list").getByRole("button", { name: /Card/ }).hover();
   await expect(c.getByTestId("component-preview-frame")).toHaveAttribute("src", /iframe\.html\?c=Card/);
@@ -123,6 +138,7 @@ test("generating snapshots first, then cycles options with provenance and accept
   const c = await mount(<ComposeHarness />, {
     hooksConfig: { mock: { runScript: runWith(`\`\`\`json\n${OPTIONS_JSON}\n\`\`\``) } },
   });
+  await toCompose(c);
   await c.getByPlaceholder(/Describe what belongs here/).fill("a filters row");
   await c.getByRole("button", { name: "Generate" }).click();
 
@@ -147,6 +163,40 @@ test("generating snapshots first, then cycles options with provenance and accept
   await expect(c.getByTestId("compose-screen-update")).toContainText("src/Home.tsx");
 });
 
+test("'Later' defers the owed screen update to the sidebar Save-changes bar", async ({ mount }) => {
+  const c = await mount(<ComposeHarness />, {
+    hooksConfig: { mock: { runScript: runWith(`\`\`\`json\n${OPTIONS_JSON}\n\`\`\``) } },
+  });
+  await toCompose(c);
+  await c.getByPlaceholder(/Describe what belongs here/).fill("a filters row");
+  await c.getByRole("button", { name: "Generate" }).click();
+  await c.getByRole("button", { name: "Accept" }).click();
+  // Defer it: the notice clears and the debt moves to the sidebar bar.
+  await c.getByRole("button", { name: "Later" }).click();
+  await expect(c.getByTestId("compose-screen-update")).toHaveCount(0);
+  const bar = c.getByTestId("screen-update-bar");
+  await expect(bar).toContainText("src/Home.tsx");
+  // Saving from the sidebar runs the update for the deferred screen.
+  await bar.getByRole("button", { name: "Save changes" }).click();
+  await expect(bar).toHaveCount(0);
+  const saved = await c.page().evaluate(() => (window as unknown as { __savedUpdates?: string[] }).__savedUpdates);
+  expect(saved).toContain("src/Home.tsx");
+});
+
+test("discarding a build returns to the layout step", async ({ mount }) => {
+  const c = await mount(<ComposeHarness />, {
+    hooksConfig: { mock: { runScript: runWith(`\`\`\`json\n${OPTIONS_JSON}\n\`\`\``) } },
+  });
+  await toCompose(c);
+  await expect(c.getByTestId("compose-layout")).toHaveCount(0); // now on the compose step
+  await c.getByPlaceholder(/Describe what belongs here/).fill("a filters row");
+  await c.getByRole("button", { name: "Generate" }).click();
+  await expect(c.getByTestId("compose-option-index")).toBeVisible();
+  await c.getByRole("button", { name: "Discard" }).click();
+  // Back to step 1 — the layout picker is shown again.
+  await expect(c.getByTestId("compose-layout")).toBeVisible();
+});
+
 test("while generating, the button is a Stop that cancels and restores", async ({ mount }) => {
   // A run that never emits a result stays in flight, so the Stop state is stable.
   const stuck: RunEvent[] = [
@@ -155,6 +205,7 @@ test("while generating, the button is a Stop that cancels and restores", async (
   const c = await mount(<ComposeHarness />, {
     hooksConfig: { mock: { runScript: stuck, snapshot: [{ path: "src/Home.tsx", content: "original" }] } },
   });
+  await toCompose(c);
   await c.getByPlaceholder(/Describe what belongs here/).fill("a filters row");
   await c.getByRole("button", { name: "Generate" }).click();
   // The Generate button became Stop, with a thinking indicator.
@@ -171,6 +222,7 @@ test("parses the result from the transcript when it's not in the final result ev
   const c = await mount(<ComposeHarness />, {
     hooksConfig: { mock: { runScript: runWithAssistantJson(OPTIONS_JSON) } },
   });
+  await toCompose(c);
   await c.getByPlaceholder(/Describe what belongs here/).fill("a filters row");
   await c.getByRole("button", { name: "Generate" }).click();
   // Options surface even though the JSON was in an assistant message, not result.text.
@@ -181,6 +233,7 @@ test("discard restores the snapshot and writes no accept", async ({ mount }) => 
   const c = await mount(<ComposeHarness />, {
     hooksConfig: { mock: { runScript: runWith(`\`\`\`json\n${OPTIONS_JSON}\n\`\`\``), snapshot: [{ path: "src/Home.tsx", content: "original" }] } },
   });
+  await toCompose(c);
   await c.getByPlaceholder(/Describe what belongs here/).fill("a filters row");
   await c.getByRole("button", { name: "Generate" }).click();
   await expect(c.getByTestId("compose-option-index")).toBeVisible();
@@ -195,6 +248,7 @@ test("a generated/git-ignored target is refused, offering only discard (§6.8)",
   const c = await mount(<ComposeHarness />, {
     hooksConfig: { mock: { runScript: runWith(`\`\`\`json\n${OPTIONS_JSON}\n\`\`\``), composeTargetOk: false } },
   });
+  await toCompose(c);
   await c.getByPlaceholder(/Describe what belongs here/).fill("a filters row");
   await c.getByRole("button", { name: "Generate" }).click();
   // The run wrote into a non-committable file → refused before any accept is offered.
@@ -210,6 +264,7 @@ test("an ambiguous/not-found anchor stops with a human sentence (§6.9)", async 
     writtenFile: null,
   });
   const c = await mount(<ComposeHarness />, { hooksConfig: { mock: { runScript: runWith(`\`\`\`json\n${stopped}\n\`\`\``) } } });
+  await toCompose(c);
   await c.getByPlaceholder(/Describe what belongs here/).fill("a filters row");
   await c.getByRole("button", { name: "Generate" }).click();
   await expect(c.getByTestId("compose-error")).toContainText("would not guess");
@@ -221,6 +276,7 @@ test("an ambiguous/not-found anchor stops with a human sentence (§6.9)", async 
 test("a no-component-match result routes into extract-component", async ({ mount }) => {
   const noMatch = JSON.stringify({ options: [], noMatch: { reason: "Nothing in the roster fits a testimonial.", suggestedName: "Testimonial" }, writtenFile: null });
   const c = await mount(<ComposeHarness />, { hooksConfig: { mock: { runScript: runWith(`\`\`\`json\n${noMatch}\n\`\`\``) } } });
+  await toCompose(c);
   await c.getByPlaceholder(/Describe what belongs here/).fill("a testimonial");
   await c.getByRole("button", { name: "Generate" }).click();
   await expect(c.getByTestId("compose-no-match")).toContainText("testimonial");

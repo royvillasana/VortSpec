@@ -482,6 +482,19 @@ export function RunApp({
     },
     [dispatchTask],
   );
+  // "Later" defers the owed update to a Save-changes bar at the bottom of the Design
+  // sidebar (so the spec debt stays visible through the insert session, not lost).
+  const [owedScreenUpdates, setOwedScreenUpdates] = useState<string[]>([]);
+  const onComposeScreenLater = useCallback((file: string) => {
+    setOwedScreenUpdates((cur) => (cur.includes(file) ? cur : [...cur, file]));
+  }, []);
+  const dismissScreenUpdate = useCallback((file: string) => {
+    setOwedScreenUpdates((cur) => cur.filter((f) => f !== file));
+  }, []);
+  const saveScreenUpdates = useCallback(() => {
+    owedScreenUpdates.forEach((f) => onComposeScreenUpdate(f));
+    setOwedScreenUpdates([]);
+  }, [owedScreenUpdates, onComposeScreenUpdate]);
   // Cancel the insert entirely: drop the placeholder, clear any preview, reset the
   // flow. Closes the dialog and un-picks the segment the user was targeting.
   const onComposeClose = useCallback(() => {
@@ -1051,6 +1064,9 @@ export function RunApp({
                         }
                       : undefined
                   }
+                  owedScreenUpdates={owedScreenUpdates}
+                  onSaveScreenUpdates={saveScreenUpdates}
+                  onDismissScreenUpdate={dismissScreenUpdate}
                 />
                 )}
               </aside>
@@ -1068,6 +1084,7 @@ export function RunApp({
                     components={components}
                     onExtract={onComposeExtract}
                     onScreenUpdate={onComposeScreenUpdate}
+                    onScreenLater={onComposeScreenLater}
                     onClose={onComposeClose}
                     getStoryUrl={storyUrlFor}
                     defaultAxis={bridge.placeholder?.target.axis ?? "row"}

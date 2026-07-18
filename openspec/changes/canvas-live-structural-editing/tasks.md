@@ -28,6 +28,8 @@
 - [x] 4.3 Multi-slot placeholder done in §3.4 (`fillPlaceholder` renders N sub-slot cells along the axis); driven here by the placement selector via `setPlaceholderSpec`.
 - [x] 4.4 Accept/discard/commit-guard reuse the compose machinery unchanged. Unit test added: a new-container scaffold (a flex `<div>` with cards) accepts to marker-free source.
 - [x] 4.5 CT: with an empty roster, "into gap" shows the empty-roster message; switching to "New row" clears it and Generate runs without an intent, and the run prompt carries "Create a NEW row container". Options surface (accept path is the shared one, already covered).
+- [x] 4.6 Stepped, Figma-like layout picker: `ComposePanel` is a two-step flow — step 1 (`compose-layout`) picks placement (Into gap / Columns / Rows) + a visual `SlotStrip` count / axis toggle; step 2 shows the chosen layout as an editable summary label, then the tabs + prompt. Placement relabelled to the user's mental model (Columns = flex-row, Rows = flex-column). Discard/cancel/error return to step 1. CT: layout controls set axis+count on the strip; discard returns to the layout step.
+- [x] 4.7 Deferred screen-spec update: the accepted-insert "Later" button hands the owed Screen Creation update to a persistent "Save changes" bar at the bottom of the Design sidebar (`screen-update-bar`, reusing the inspect Apply-bar style) instead of dropping it; Save runs the update per screen, dismiss drops one. CT covers Later → sidebar bar → Save.
 
 ## 5. Live component drag-and-drop (canvas-drag-move) — largest, flagged
 

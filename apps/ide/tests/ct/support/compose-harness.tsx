@@ -3,6 +3,7 @@ import React from "react";
 import type { JSX } from "react";
 import { useComposeRun } from "@vortspec/ui/useComposeRun";
 import { ComposePanel } from "@vortspec/ui/ComposePanel";
+import { DesignPanel } from "@vortspec/ui/DesignPanel";
 import { makeBridge } from "./mock-bridge";
 import type { Project, InspectorComponent, InsertTargetWire } from "@vortspec/core/ipc";
 
@@ -64,22 +65,40 @@ export function ComposeHarness({
     tokenNames: ["--space-4", "--radius-md"],
     designMd: null,
   });
+  // Mirror RunApp: "Later" defers an owed screen-spec update to the sidebar bar.
+  const [owed, setOwed] = React.useState<string[]>([]);
   return (
-    <div style={{ width: 640, height: 360, position: "relative" }}>
-      <ComposePanel
-        compose={compose}
-        components={roster === "empty" ? [] : ROSTER}
-        onExtract={(name) => {
-          (window as unknown as { __extract?: string }).__extract = name ?? "(none)";
-        }}
-        onScreenUpdate={(file) => {
-          (window as unknown as { __screenUpdate?: string }).__screenUpdate = file;
-        }}
-        onClose={() => {
-          (window as unknown as { __closed?: boolean }).__closed = true;
-        }}
-        getStoryUrl={storyUrl ? (name) => `${storyUrl}?c=${name}` : undefined}
-      />
+    <div style={{ width: 640, height: 360, position: "relative", display: "flex" }}>
+      <div style={{ width: 240 }}>
+        <DesignPanel
+          selection={null}
+          tree={null}
+          onSelectNode={() => {}}
+          owedScreenUpdates={owed}
+          onSaveScreenUpdates={() => {
+            (window as unknown as { __savedUpdates?: string[] }).__savedUpdates = owed;
+            setOwed([]);
+          }}
+          onDismissScreenUpdate={(file) => setOwed((cur) => cur.filter((f) => f !== file))}
+        />
+      </div>
+      <div style={{ flex: 1, position: "relative" }}>
+        <ComposePanel
+          compose={compose}
+          components={roster === "empty" ? [] : ROSTER}
+          onExtract={(name) => {
+            (window as unknown as { __extract?: string }).__extract = name ?? "(none)";
+          }}
+          onScreenUpdate={(file) => {
+            (window as unknown as { __screenUpdate?: string }).__screenUpdate = file;
+          }}
+          onScreenLater={(file) => setOwed((cur) => (cur.includes(file) ? cur : [...cur, file]))}
+          onClose={() => {
+            (window as unknown as { __closed?: boolean }).__closed = true;
+          }}
+          getStoryUrl={storyUrl ? (name) => `${storyUrl}?c=${name}` : undefined}
+        />
+      </div>
     </div>
   );
 }

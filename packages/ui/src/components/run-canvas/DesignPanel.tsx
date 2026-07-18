@@ -43,6 +43,9 @@ export function DesignPanel({
   colorTokens = [],
   tokens = [],
   onAssign,
+  owedScreenUpdates = [],
+  onSaveScreenUpdates,
+  onDismissScreenUpdate,
 }: {
   selection: Selection | null;
   tree: BridgeTree | null;
@@ -73,6 +76,12 @@ export function DesignPanel({
   tokens?: InspectorToken[];
   /** Open the assign/replace-component dialog for the current selection (on demand). */
   onAssign?: () => void;
+  /** Screen files whose spec owes a Screen Creation update (deferred from an insert). */
+  owedScreenUpdates?: string[];
+  /** Run the owed Screen Creation update for every deferred screen. */
+  onSaveScreenUpdates?: () => void;
+  /** Drop one owed screen update without running it. */
+  onDismissScreenUpdate?: (file: string) => void;
 }): JSX.Element {
   return (
     <div className="flex h-full min-h-0 flex-col bg-vs-bg-primary text-vs-text-primary">
@@ -127,6 +136,69 @@ export function DesignPanel({
           onRemove={onRemovePending}
         />
       ) : null}
+
+      {/* Deferred Screen Creation updates owed by an accepted insert (the "Later"
+          path from the compose panel), surfaced here so the spec debt is visible
+          and one-click resolvable — mirrors the inspect Apply bar. */}
+      {owedScreenUpdates.length > 0 && (
+        <SaveChangesBar
+          files={owedScreenUpdates}
+          onSave={onSaveScreenUpdates}
+          onDismiss={onDismissScreenUpdate}
+        />
+      )}
+    </div>
+  );
+}
+
+/** Owed Screen Creation updates deferred from an insert — the sidebar save-changes gate. */
+function SaveChangesBar({
+  files,
+  onSave,
+  onDismiss,
+}: {
+  files: string[];
+  onSave?: () => void;
+  onDismiss?: (file: string) => void;
+}): JSX.Element {
+  return (
+    <div
+      data-testid="screen-update-bar"
+      className="flex-none border-t border-vs-border-default bg-vs-bg-surface p-2.5"
+    >
+      <div className="mb-2 flex flex-col gap-1">
+        <span className="text-[11px] font-semibold text-vs-text-primary">
+          {files.length} screen spec{files.length === 1 ? "" : "s"} to update
+        </span>
+        <ul className="flex flex-col gap-0.5">
+          {files.map((f) => (
+            <li key={f} className="group flex items-center gap-1.5 text-[11px] text-vs-text-secondary">
+              <span className="min-w-0 flex-1 truncate font-mono">{f}</span>
+              {onDismiss && (
+                <button
+                  type="button"
+                  onClick={() => onDismiss(f)}
+                  aria-label={`Dismiss ${f} spec update`}
+                  title="Dismiss without updating the spec"
+                  className="flex-none rounded p-0.5 text-vs-text-muted opacity-60 hover:bg-vs-bg-hover hover:text-vs-error hover:opacity-100"
+                >
+                  <TrashIcon />
+                </button>
+              )}
+            </li>
+          ))}
+        </ul>
+        <p className="text-[10px] text-vs-text-muted">
+          An inserted composition changed these screens — update each spec to match.
+        </p>
+      </div>
+      <button
+        type="button"
+        onClick={onSave}
+        className="w-full rounded-md bg-vs-accent px-3 py-1.5 text-[12px] font-medium text-white hover:brightness-110"
+      >
+        Save changes
+      </button>
     </div>
   );
 }
