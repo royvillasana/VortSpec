@@ -7,7 +7,6 @@ import type {
   SectionField,
   VariantControl,
   InspectorToken,
-  InspectorComponent,
 } from "@vortspec/core/ipc";
 import { NodeTree } from "./NodeTree";
 import type { PendingEdit } from "./pending";
@@ -43,11 +42,6 @@ export function DesignPanel({
   onRevert,
   colorTokens = [],
   tokens = [],
-  resembles = null,
-  onUseComponent,
-  onExtractComponent,
-  components = [],
-  onAssignComponent,
 }: {
   selection: Selection | null;
   tree: BridgeTree | null;
@@ -76,16 +70,6 @@ export function DesignPanel({
   colorTokens?: ColorToken[];
   /** All project tokens — length fields offer/recognize spacing/radius/typography ones. */
   tokens?: InspectorToken[];
-  /** A component this element resembles but isn't using (the recommended pick), or null. */
-  resembles?: { name: string; file: string | null } | null;
-  /** Ask the assistant to refactor this element to use the resembled component. */
-  onUseComponent?: () => void;
-  /** Ask the assistant to extract this element as a new reusable component. */
-  onExtractComponent?: () => void;
-  /** The full component roster — the assignable list surfaced in the picker. */
-  components?: InspectorComponent[];
-  /** Assign a chosen component to the selection (and optionally all similar elements). */
-  onAssignComponent?: (component: { name: string; file: string | null }, opts: { allSimilar: boolean }) => void;
 }): JSX.Element {
   return (
     <div className="flex h-full min-h-0 flex-col bg-vs-bg-primary text-vs-text-primary">
@@ -109,45 +93,9 @@ export function DesignPanel({
         ) : (
           <>
             <SelectionHeader selection={selection} />
-            {onAssignComponent ? (
-              <ComponentAssign
-                key={selection.nodeId}
-                recognized={selection.component}
-                recommended={resembles?.name ?? null}
-                components={components}
-                onAssign={onAssignComponent}
-                onExtract={onExtractComponent}
-              />
-            ) : (
-              resembles && (
-                <div className="border-b border-vs-border-subtle bg-vs-accent-subtle/40 px-3 py-2.5">
-                  <p className="text-[11px] leading-relaxed text-vs-text-primary">
-                    Looks like your <b>{resembles.name}</b> component, but this is hand-written markup — reuse
-                    the component so its variants and tokens stay connected.
-                  </p>
-                  <div className="mt-2 flex flex-wrap gap-1.5">
-                    {onUseComponent && (
-                      <button
-                        type="button"
-                        onClick={onUseComponent}
-                        className="rounded bg-vs-accent px-2 py-1 text-[11px] font-medium text-white hover:brightness-110"
-                      >
-                        Use &lt;{resembles.name}&gt;
-                      </button>
-                    )}
-                    {onExtractComponent && (
-                      <button
-                        type="button"
-                        onClick={onExtractComponent}
-                        className="rounded border border-vs-border-default px-2 py-1 text-[11px] text-vs-text-secondary hover:bg-vs-bg-hover"
-                      >
-                        Extract as component
-                      </button>
-                    )}
-                  </div>
-                </div>
-              )
-            )}
+            {/* Assigning / reusing / extracting a component moved to the inspect
+                AssignDialog (change: canvas-compose-and-preview-bar) — this panel is
+                now just identity + editable properties. */}
             {selection.variants.length > 0 && (
               <VariantSection variants={selection.variants} onChange={onVariantChange} />
             )}
@@ -176,130 +124,6 @@ export function DesignPanel({
           onRemove={onRemovePending}
         />
       ) : null}
-    </div>
-  );
-}
-
-const LEVEL_ORDER: Record<string, number> = { atom: 0, molecule: 1, organism: 2 };
-
-/**
- * Assign a design-system component to the selected element. When the element
- * isn't already a recognized component, this offers the FULL roster (not just
- * one auto-suggestion) as a searchable, pickable list — the recommended match
- * pinned first — plus an "apply to every matching element" option so assigning,
- * say, ButtonGroup to a pair of buttons updates all the sibling instances too.
- */
-function ComponentAssign({
-  recognized,
-  recommended,
-  components,
-  onAssign,
-  onExtract,
-}: {
-  recognized: string | null;
-  recommended: string | null;
-  components: InspectorComponent[];
-  onAssign: (component: { name: string; file: string | null }, opts: { allSimilar: boolean }) => void;
-  onExtract?: () => void;
-}): JSX.Element {
-  // Recognized elements start collapsed (just the badge + a Reassign affordance);
-  // unrecognized ones open straight to the picker so assigning is one step.
-  const [open, setOpen] = useState(!recognized);
-  const [query, setQuery] = useState("");
-  const [allSimilar, setAllSimilar] = useState(true);
-
-  const q = query.trim().toLowerCase();
-  const sorted = [...components].sort((a, b) => {
-    // Recommended first, then by level (atom→organism), then name.
-    if (a.name === recommended) return -1;
-    if (b.name === recommended) return 1;
-    const lv = (LEVEL_ORDER[a.level ?? ""] ?? 3) - (LEVEL_ORDER[b.level ?? ""] ?? 3);
-    return lv !== 0 ? lv : a.name.localeCompare(b.name);
-  });
-  const shown = q ? sorted.filter((c) => c.name.toLowerCase().includes(q)) : sorted;
-
-  function pick(c: InspectorComponent): void {
-    onAssign({ name: c.name, file: c.file }, { allSimilar });
-    setOpen(false);
-    setQuery("");
-  }
-
-  return (
-    <div className="border-b border-vs-border-subtle bg-vs-accent-subtle/30 px-3 py-2.5">
-      {recognized ? (
-        <div className="flex items-center gap-2">
-          <span className="text-[11px] text-vs-text-primary">
-            ✓ This is your <b>{recognized}</b> component.
-          </span>
-          <button
-            type="button"
-            onClick={() => setOpen((v) => !v)}
-            className="ml-auto rounded border border-vs-border-default px-1.5 py-0.5 text-[10px] text-vs-text-secondary hover:bg-vs-bg-hover"
-          >
-            {open ? "Cancel" : "Reassign"}
-          </button>
-        </div>
-      ) : (
-        <p className="text-[11px] leading-relaxed text-vs-text-primary">
-          {recommended ? (
-            <>
-              Looks like your <b>{recommended}</b> component — or pick another to assign. Reusing a component keeps its
-              variants and tokens connected.
-            </>
-          ) : (
-            <>This is hand-written markup. Assign the design-system component it should be.</>
-          )}
-        </p>
-      )}
-
-      {open && (
-        <div className="mt-2 flex flex-col gap-1.5">
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search components…"
-            className="w-full rounded border border-vs-border-default bg-vs-bg-primary px-2 py-1 text-[11px] text-vs-text-primary placeholder:text-vs-text-muted focus:outline-none focus:ring-1 focus:ring-vs-accent"
-          />
-          <div className="max-h-52 overflow-y-auto rounded border border-vs-border-subtle">
-            {shown.length === 0 ? (
-              <p className="px-2 py-3 text-center text-[10px] text-vs-text-muted">No matching components.</p>
-            ) : (
-              shown.map((c) => (
-                <button
-                  key={c.name}
-                  type="button"
-                  onClick={() => pick(c)}
-                  className="flex w-full items-center gap-2 px-2 py-1.5 text-left text-[11px] hover:bg-vs-bg-hover"
-                >
-                  <span className="min-w-0 flex-1 truncate text-vs-text-primary">{c.name}</span>
-                  {c.name === recommended && (
-                    <span className="rounded-full bg-vs-accent px-1.5 py-px text-[9px] font-medium text-white">
-                      Recommended
-                    </span>
-                  )}
-                  {c.level && <span className="text-[9px] uppercase text-vs-text-muted">{c.level}</span>}
-                  {c.variants && c.variants.length > 0 && (
-                    <span className="font-mono text-[9px] text-vs-text-muted">⎇ {c.variants.join("·")}</span>
-                  )}
-                </button>
-              ))
-            )}
-          </div>
-          <label className="flex cursor-pointer items-center gap-1.5 text-[10px] text-vs-text-secondary">
-            <input type="checkbox" checked={allSimilar} onChange={(e) => setAllSimilar(e.target.checked)} className="accent-vs-accent" />
-            Apply to every matching element, not just this one
-          </label>
-          {onExtract && (
-            <button
-              type="button"
-              onClick={onExtract}
-              className="self-start text-[10px] text-vs-text-muted hover:text-vs-text-secondary"
-            >
-              None fit — extract this as a new component →
-            </button>
-          )}
-        </div>
-      )}
     </div>
   );
 }

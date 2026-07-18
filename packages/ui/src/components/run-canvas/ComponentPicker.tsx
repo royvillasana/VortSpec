@@ -141,15 +141,16 @@ function ComponentPreview({
     };
   }, [component, getThumbnail]);
 
+  // A fixed height in both states, so hovering a row doesn't reflow the list below.
   if (!component) {
     return (
-      <div className="rounded border border-dashed border-vs-border-subtle px-2 py-2 text-center text-[10px] text-vs-text-muted">
+      <div className="grid h-[132px] place-items-center rounded border border-dashed border-vs-border-subtle px-2 text-center text-[10px] text-vs-text-muted">
         Hover a component to preview it · click to {actionLabel.toLowerCase()}
       </div>
     );
   }
   return (
-    <div data-testid="component-preview" className="rounded border border-vs-border-subtle bg-vs-bg-primary p-2">
+    <div data-testid="component-preview" className="h-[132px] rounded border border-vs-border-subtle bg-vs-bg-primary p-2">
       <div className="grid h-20 place-items-center overflow-hidden rounded bg-vs-bg-elevated">
         {thumb ? (
           <img src={thumb} alt={`${component.name} preview`} className="max-h-20 max-w-full object-contain" />
@@ -157,10 +158,10 @@ function ComponentPreview({
           <span className="text-[10px] text-vs-text-muted">{getThumbnail ? "Rendering preview…" : "No preview"}</span>
         )}
       </div>
-      <div className="mt-1.5 text-[11px] font-medium text-vs-text-primary">{component.name}</div>
-      {component.description && <div className="text-[10px] text-vs-text-secondary">{component.description}</div>}
+      <div className="mt-1.5 truncate text-[11px] font-medium text-vs-text-primary">{component.name}</div>
+      {component.description && <div className="truncate text-[10px] text-vs-text-secondary">{component.description}</div>}
       {component.variants && component.variants.length > 0 && (
-        <div className="mt-0.5 font-mono text-[9px] text-vs-text-muted">variants: {component.variants.join(", ")}</div>
+        <div className="mt-0.5 truncate font-mono text-[9px] text-vs-text-muted">variants: {component.variants.join(", ")}</div>
       )}
     </div>
   );

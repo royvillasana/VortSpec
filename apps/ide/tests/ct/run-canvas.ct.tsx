@@ -2,6 +2,7 @@ import { test, expect } from "@playwright/experimental-ct-react";
 import App from "../../src/renderer/src/App";
 import { DesignPanel } from "@vortspec/ui/DesignPanel";
 import { CanvasToolbar } from "@vortspec/ui/CanvasToolbar";
+import { AssignDialog } from "@vortspec/ui/AssignDialog";
 import type { Project, Selection, InspectorToken, InspectorComponent, FsEntry } from "@vortspec/core/ipc";
 
 // `configured: true` matters: App.openProject routes an unconfigured folder to the
@@ -252,49 +253,44 @@ const ROSTER: InspectorComponent[] = [
   comp("Card", "molecule"),
 ];
 
-test("assign picker: lists the whole roster (recommended first) and assigns any component to all matches", async ({ mount }) => {
+test("assign dialog: lists the whole roster (recommended first) and assigns any component to all matches", async ({ mount }) => {
   const assigned: { name: string; allSimilar: boolean }[] = [];
   const c = await mount(
-    <DesignPanel
-      selection={UNRECOGNIZED}
-      tree={null}
-      tokens={[]}
+    <AssignDialog
+      recognized={null}
+      recommended="Button"
       components={ROSTER}
-      resembles={{ name: "Button", file: "src/components/ui/Button.tsx" }}
-      onSelectNode={() => {}}
-      onFieldChange={() => {}}
-      onAssignComponent={(comp, opts) => assigned.push({ name: comp.name, allSimilar: opts.allSimilar })}
+      onAssign={(comp, opts) => assigned.push({ name: comp.name, allSimilar: opts.allSimilar })}
+      onClose={() => {}}
     />,
   );
-  // The picker is open for an unrecognized element, with the whole roster listed.
-  await expect(c.getByPlaceholder("Search components…")).toBeVisible();
-  await expect(c.getByRole("button", { name: /ButtonGroup/ })).toBeVisible();
-  await expect(c.getByRole("button", { name: /^Card/ })).toBeVisible();
+  // The whole roster is listed, in the shared picker.
+  const list = c.getByTestId("component-picker-list");
+  await expect(list.getByRole("button", { name: /ButtonGroup/ })).toBeVisible();
+  await expect(list.getByRole("button", { name: /^Card/ })).toBeVisible();
   // The resembled component is flagged Recommended.
   await expect(c.getByText("Recommended")).toBeVisible();
   // "Apply to every matching element" defaults on.
-  const allBox = c.getByRole("checkbox");
-  await expect(allBox).toBeChecked();
+  await expect(c.getByRole("checkbox")).toBeChecked();
   // Assign a DIFFERENT component than the recommendation — ButtonGroup — to all matches.
-  await c.getByRole("button", { name: /ButtonGroup/ }).click();
+  await list.getByRole("button", { name: /ButtonGroup/ }).click();
   expect(assigned).toEqual([{ name: "ButtonGroup", allSimilar: true }]);
 });
 
-test("assign picker: a recognized component shows its badge and only assigns via Reassign", async ({ mount }) => {
+test("assign dialog: a recognized component shows its badge but still lets you reassign", async ({ mount }) => {
   const c = await mount(
-    <DesignPanel
-      selection={GAP_SELECTION}
-      tree={null}
-      tokens={[]}
-      components={ROSTER}
-      onSelectNode={() => {}}
-      onFieldChange={() => {}}
-      onAssignComponent={() => {}}
-    />,
+    <AssignDialog recognized="Card" recommended={null} components={ROSTER} onAssign={() => {}} onClose={() => {}} />,
   );
   await expect(c.getByText(/This is your/)).toBeVisible();
-  // Collapsed by default — the picker only opens on Reassign.
+  // The roster is available to reassign right away (no separate expand step).
+  await expect(c.getByTestId("component-picker-list").getByRole("button", { name: /ButtonGroup/ })).toBeVisible();
+});
+
+test("the Design panel no longer carries the assign section", async ({ mount }) => {
+  const c = await mount(
+    <DesignPanel selection={GAP_SELECTION} tree={null} tokens={[]} onSelectNode={() => {}} onFieldChange={() => {}} />,
+  );
+  // Assigning moved to the canvas AssignDialog — the sidebar shows properties only.
+  await expect(c.getByText(/This is your/)).toHaveCount(0);
   await expect(c.getByPlaceholder("Search components…")).toHaveCount(0);
-  await c.getByRole("button", { name: "Reassign" }).click();
-  await expect(c.getByPlaceholder("Search components…")).toBeVisible();
 });

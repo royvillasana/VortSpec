@@ -31,6 +31,7 @@ import { useAssistantTask } from "../lib/assistant-task";
 import { usePublishCanvasSelection } from "../lib/canvas-selection";
 import { useComposeRun } from "../lib/useComposeRun";
 import { ComposePanel } from "../components/run-canvas/ComposePanel";
+import { AssignDialog } from "../components/run-canvas/AssignDialog";
 import { routedModel } from "../lib/model-routing";
 import { RunDoctor, type DoctorState } from "../components/run-canvas/RunDoctor";
 import { buildDoctorPrompt, buildEnvSetupPrompt, relFileFromSource } from "../components/run-canvas/doctor";
@@ -432,6 +433,36 @@ export function RunApp({
   // or resolved run, or an owed screen-update notice.
   const composeActive =
     mode === "insert" && (!!bridge.placeholder || compose.phase !== "idle" || !!compose.screenUpdateOwed);
+
+  // Inspect-click assign dialog (§ dialog slice): shows the roster to assign/reuse a
+  // component for the selected element. Dismissable per selection; re-selecting a
+  // different element re-opens it.
+  const [assignDismissed, setAssignDismissed] = useState<string | null>(null);
+  const assignActive = mode === "inspect" && !!selection && selection.nodeId !== assignDismissed;
+  const assignSelection = selection; // narrowed for the handlers below
+  const onAssignComponent = useCallback(
+    (component: { name: string; file: string | null }, opts: { allSimilar: boolean }) => {
+      if (!onSendToChat || !assignSelection) return;
+      onSendToChat(
+        `Refactor the selected element to use the existing "${component.name}" design-system component instead of hand-written markup, choosing the variant/props that match its current appearance. Preserve look and behavior and remove the duplicated styles.` +
+          (opts.allSimilar
+            ? ` Then find every OTHER occurrence of this same hand-written pattern across the app and refactor each one to use "${component.name}" as well, so all matching instances reference the component (not just this selection).`
+            : "") +
+          `\n\n${buildSelectionContext(assignSelection)}`,
+        component.file,
+      );
+      setAssignDismissed(assignSelection.nodeId);
+    },
+    [onSendToChat, assignSelection],
+  );
+  const onAssignExtract = useCallback(() => {
+    if (!onSendToChat || !assignSelection) return;
+    onSendToChat(
+      `The selected element is hand-written markup that resembles a reusable pattern. Extract it into a new reusable component in the design system (with variants + tokens), then replace this usage with the new component.\n\n${buildSelectionContext(assignSelection)}`,
+      assignSelection.file,
+    );
+    setAssignDismissed(assignSelection.nodeId);
+  }, [onSendToChat, assignSelection]);
 
   // Stable methods (the hook memoizes these) + refs to current state, so the
   // Design-panel callbacks keep a stable identity across the 60fps geometry
@@ -936,39 +967,6 @@ export function RunApp({
                   onRevert={() => void revertEdits()}
                   colorTokens={colorTokens}
                   tokens={tokens}
-                  resembles={selection?.resembles ?? null}
-                  components={components}
-                  onAssignComponent={
-                    onSendToChat && selection
-                      ? (component, opts) =>
-                          onSendToChat(
-                            `Refactor the selected element to use the existing "${component.name}" design-system component instead of hand-written markup, choosing the variant/props that match its current appearance. Preserve look and behavior and remove the duplicated styles.` +
-                              (opts.allSimilar
-                                ? ` Then find every OTHER occurrence of this same hand-written pattern across the app and refactor each one to use "${component.name}" as well, so all matching instances reference the component (not just this selection).`
-                                : "") +
-                              `\n\n${buildSelectionContext(selection)}`,
-                            component.file,
-                          )
-                      : undefined
-                  }
-                  onUseComponent={
-                    onSendToChat && selection?.resembles
-                      ? () =>
-                          onSendToChat(
-                            `Refactor the selected element to use the existing "${selection.resembles!.name}" design-system component instead of hand-written markup, picking the variant that matches its current appearance. Preserve look and behavior and remove the duplicated styles.\n\n${buildSelectionContext(selection)}`,
-                            selection.resembles!.file,
-                          )
-                      : undefined
-                  }
-                  onExtractComponent={
-                    onSendToChat && selection
-                      ? () =>
-                          onSendToChat(
-                            `The selected element is hand-written markup that resembles a reusable pattern. Extract it into a new reusable component in the design system (with variants + tokens), then replace this usage with the new component.\n\n${buildSelectionContext(selection)}`,
-                            selection.file,
-                          )
-                      : undefined
-                  }
                 />
                 )}
               </aside>
@@ -987,6 +985,17 @@ export function RunApp({
                     onExtract={onComposeExtract}
                     onScreenUpdate={onComposeScreenUpdate}
                     onClose={onComposeClose}
+                    getThumbnail={(name) => api.componentThumbnail(project.path, name)}
+                  />
+                )}
+                {assignActive && onSendToChat && assignSelection && (
+                  <AssignDialog
+                    recognized={assignSelection.component}
+                    recommended={assignSelection.resembles?.name ?? null}
+                    components={components}
+                    onAssign={onAssignComponent}
+                    onExtract={onAssignExtract}
+                    onClose={() => setAssignDismissed(assignSelection.nodeId)}
                     getThumbnail={(name) => api.componentThumbnail(project.path, name)}
                   />
                 )}
