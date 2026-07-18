@@ -30,7 +30,9 @@ import { useAgentRun } from "../lib/useAgentRun";
 import { useAssistantTask } from "../lib/assistant-task";
 import { usePublishCanvasSelection } from "../lib/canvas-selection";
 import { useComposeRun } from "../lib/useComposeRun";
+import { useDragMove } from "../lib/useDragMove";
 import { ComposePanel } from "../components/run-canvas/ComposePanel";
+import { MovePanel } from "../components/run-canvas/MovePanel";
 import { AssignDialog } from "../components/run-canvas/AssignDialog";
 import { routedModel } from "../lib/model-routing";
 import { RunDoctor, type DoctorState } from "../components/run-canvas/RunDoctor";
@@ -507,6 +509,40 @@ export function RunApp({
   // or resolved run, or an owed screen-update notice.
   const composeActive =
     mode === "insert" && (!!bridge.placeholder || compose.phase !== "idle" || !!compose.screenUpdateOwed);
+
+  // ── Live drag-and-drop move (§5.8) ────────────────────────────────────────
+  // Behind a feature flag (Decision 3): when off, a drag is simply never opened as
+  // a move and inspect works as before.
+  const dragMoveEnabled = true;
+  const move = useDragMove({ project, bridge });
+  // A completed drop over a valid slot opens the gated move. The dragged element was
+  // the selected node, so its label grounds the origin anchor; the drop clears once
+  // consumed so a re-render can't re-open it.
+  const selectionRefForMove = useRef(selection);
+  selectionRefForMove.current = selection;
+  useEffect(() => {
+    if (!dragMoveEnabled || !bridge.dragDrop || move.phase !== "idle") return;
+    const drop = bridge.dragDrop;
+    bridge.clearDragDrop();
+    void move.start(
+      { fingerprint: drop.sourceFingerprint, label: selectionRefForMove.current?.label ?? "the selected element", text: null },
+      drop.target,
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bridge.dragDrop]);
+  // An invalid drop / forced cancel surfaces a transient sentence, auto-cleared.
+  useEffect(() => {
+    if (!bridge.dragMessage) return;
+    const id = setTimeout(() => bridge.clearDragMessage(), 4000);
+    return () => clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bridge.dragMessage]);
+  // Cancel a move entirely: discard any in-flight run and reset.
+  const onMoveClose = useCallback(() => {
+    void move.discard();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [move.discard]);
+  const moveActive = dragMoveEnabled && mode === "inspect" && (move.phase !== "idle" || !!move.screenUpdateOwed);
 
   // Inspect-click assign dialog (§ dialog slice): the roster to assign/reuse a
   // component for the selected element. It auto-opens ONLY for elements not already
@@ -1104,6 +1140,22 @@ export function RunApp({
                     }}
                     getStoryUrl={storyUrlFor}
                   />
+                )}
+                {moveActive && (
+                  <MovePanel
+                    move={move}
+                    onScreenUpdate={onComposeScreenUpdate}
+                    onScreenLater={onComposeScreenLater}
+                    onClose={onMoveClose}
+                  />
+                )}
+                {bridge.dragMessage && (
+                  <div
+                    data-testid="drag-message"
+                    className="pointer-events-none absolute left-1/2 top-3 z-40 -translate-x-1/2 rounded-md border border-vs-border-default bg-vs-bg-elevated/95 px-3 py-1.5 text-[12px] text-vs-text-secondary shadow-lg backdrop-blur"
+                  >
+                    {bridge.dragMessage}
+                  </div>
                 )}
                 <RunCanvas
                   src={embedUrl}

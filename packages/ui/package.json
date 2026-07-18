@@ -145,6 +145,10 @@
       "types": "./src/components/run-canvas/ComposePanel.tsx",
       "default": "./src/components/run-canvas/ComposePanel.tsx"
     },
+    "./MovePanel": {
+      "types": "./src/components/run-canvas/MovePanel.tsx",
+      "default": "./src/components/run-canvas/MovePanel.tsx"
+    },
     "./AssignDialog": {
       "types": "./src/components/run-canvas/AssignDialog.tsx",
       "default": "./src/components/run-canvas/AssignDialog.tsx"
