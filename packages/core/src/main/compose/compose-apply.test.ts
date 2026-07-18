@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { execFileSync } from "node:child_process";
 import { acceptComposition, sweepComposition, checkComposeTarget, sweepProjectScaffold } from "./compose-apply";
+import { restoreFiles } from "../inspector/component-reader";
 import { wrapOption, hasScaffold } from "../../shared/compose-scaffold";
 
 // A file the composition run wrote: two option blocks around real content.
@@ -87,6 +88,47 @@ describe("acceptComposition / sweepComposition", () => {
     const once = await readFile(join(dir, rel), "utf8");
     await sweepComposition(dir, [rel]);
     expect(await readFile(join(dir, rel), "utf8")).toBe(once);
+  });
+
+  // A move is a compose run with one option (§5, Decision 2): the relocated element
+  // is re-inserted at the destination wrapped in a single option=0 scaffold, so the
+  // same accept path strips it to marker-free source.
+  it("accepts a single-option move scaffold to marker-free source (§5)", async () => {
+    const relDest = "src/Sidebar.tsx";
+    const moved = `export const Sidebar = () => (\n  <aside>\n    <Filters />\n${wrapOption(
+      "mv1",
+      0,
+      '    <Card data-vs-option="0" data-component="Card" />',
+    )}\n  </aside>\n);\n`;
+    await writeFile(join(dir, relDest), moved, "utf8");
+    const res = await acceptComposition(dir, relDest, "mv1", 0);
+    expect(res.ok).toBe(true);
+    const out = await readFile(join(dir, relDest), "utf8");
+    expect(hasScaffold(out)).toBe(false);
+    expect(out).toContain('data-component="Card"');
+  });
+
+  // §6.2 — a two-file move discard restores BOTH files byte-identical (the origin
+  // file the JSX was cut from and the destination it was inserted into).
+  it("restores every snapshotted file byte-identical on a two-file discard", async () => {
+    const origin = "src/Home.tsx";
+    const dest = "src/Sidebar.tsx";
+    const originContent = "export const Home = () => (\n  <main>\n    <Card />\n  </main>\n);\n";
+    const destContent = "export const Sidebar = () => (\n  <aside>\n    <Filters />\n  </aside>\n);\n";
+    await writeFile(join(dir, origin), originContent, "utf8");
+    await writeFile(join(dir, dest), destContent, "utf8");
+    // The snapshot the host took over both files before the move.
+    const snapshot = [
+      { path: origin, content: originContent },
+      { path: dest, content: destContent },
+    ];
+    // The move edits both files (cut here, re-insert there).
+    await writeFile(join(dir, origin), "export const Home = () => (\n  <main>\n  </main>\n);\n", "utf8");
+    await writeFile(join(dir, dest), "export const Sidebar = () => (\n  <aside>\n    <Filters />\n    <Card />\n  </aside>\n);\n", "utf8");
+    // Discard → restore the snapshot.
+    await restoreFiles(dir, snapshot);
+    expect(await readFile(join(dir, origin), "utf8")).toBe(originContent);
+    expect(await readFile(join(dir, dest), "utf8")).toBe(destContent);
   });
 });
 
