@@ -32,7 +32,6 @@ import { usePublishCanvasSelection } from "../lib/canvas-selection";
 import { useComposeRun } from "../lib/useComposeRun";
 import { useDragMove } from "../lib/useDragMove";
 import { ComposePanel } from "../components/run-canvas/ComposePanel";
-import { MovePanel } from "../components/run-canvas/MovePanel";
 import { AssignDialog } from "../components/run-canvas/AssignDialog";
 import { routedModel } from "../lib/model-routing";
 import { RunDoctor, type DoctorState } from "../components/run-canvas/RunDoctor";
@@ -342,7 +341,9 @@ export function RunApp({
       const component = resolveComponent(node, components, bridge.readout.componentCandidates);
       // If it's not a component instance, see whether it *resembles* one (should reuse it).
       const resembles = component ? null : resembleComponent(bridge.readout.className, components);
-      return buildSelection(bridge.readout, { tokens, component, resembles, tag: node?.tag });
+      // Label a non-roster React component by its real fiber name (not the bare tag).
+      const componentHint = component ? null : (bridge.readout.componentCandidates[0] ?? null);
+      return buildSelection(bridge.readout, { tokens, component, resembles, tag: node?.tag, componentHint });
     } catch (err) {
       // Never let a selection-building error blank the whole Run view.
       console.error("[run-canvas] failed to build selection:", err);
@@ -547,14 +548,27 @@ export function RunApp({
     return () => clearTimeout(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bridge.dragMessage]);
-  // Cancel a move entirely: an in-flight reconcile cancels (restore + revert),
-  // otherwise just revert the ephemeral DOM move.
-  const onMoveClose = useCallback(() => {
-    if (move.phase === "reconciling") void move.cancel();
-    else move.revert();
+  // After a kept move reconciles, its owed screen-spec update flows into the SAME
+  // sidebar Save-changes bar as an insert's (one place for all owed updates), instead
+  // of a separate notice.
+  useEffect(() => {
+    if (!move.screenUpdateOwed) return;
+    onComposeScreenLater(move.screenUpdateOwed);
+    move.clearScreenUpdate();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [move.phase, move.cancel, move.revert]);
-  const moveActive = dragMoveEnabled && mode === "inspect" && (move.phase !== "idle" || !!move.screenUpdateOwed);
+  }, [move.screenUpdateOwed]);
+  // The move's Keep/Revert gate, docked in the Design sidebar (no floating dialog).
+  const moveBar =
+    dragMoveEnabled && mode === "inspect" && move.phase !== "idle"
+      ? {
+          phase: move.phase as "moved" | "reconciling" | "error",
+          error: move.error,
+          progress: move.progress,
+          onKeep: () => void move.keep(),
+          onRevert: () => move.revert(),
+          onStop: () => void move.cancel(),
+        }
+      : null;
 
   // Inspect-click assign dialog (§ dialog slice): the roster to assign/reuse a
   // component for the selected element. It auto-opens ONLY for elements not already
@@ -562,14 +576,11 @@ export function RunApp({
   // isn't nagged — but any element can open it on demand (assignForced).
   const [assignDismissed, setAssignDismissed] = useState<string | null>(null);
   const [assignForced, setAssignForced] = useState<string | null>(null);
-  const assignActive =
-    mode === "inspect" &&
-    !!selection &&
-    // Never nag the assign/component picker while the user is dragging or a move is
-    // in flight — the Move panel owns the surface then (they'd otherwise overlap).
-    !moveActive &&
-    !bridge.drag &&
-    ((!selection.component && selection.nodeId !== assignDismissed) || selection.nodeId === assignForced);
+  // On-demand only: the assign/replace-component picker opens when the user clicks
+  // "Assign" in the Design panel — it no longer auto-opens for anything it fails to
+  // recognize as a component (that nagged real components whose recognition signal
+  // the heuristics miss). Never while dragging.
+  const assignActive = mode === "inspect" && !!selection && !bridge.drag && selection.nodeId === assignForced;
   const assignSelection = selection; // narrowed for the handlers below
   const onAssignComponent = useCallback(
     (component: { name: string; file: string | null }, opts: { allSimilar: boolean }) => {
@@ -1119,6 +1130,7 @@ export function RunApp({
                   owedScreenUpdates={owedScreenUpdates}
                   onSaveScreenUpdates={saveScreenUpdates}
                   onDismissScreenUpdate={dismissScreenUpdate}
+                  move={moveBar}
                 />
                 )}
               </aside>
@@ -1155,14 +1167,6 @@ export function RunApp({
                       setAssignForced((f) => (f === assignSelection.nodeId ? null : f));
                     }}
                     getStoryUrl={storyUrlFor}
-                  />
-                )}
-                {moveActive && (
-                  <MovePanel
-                    move={move}
-                    onScreenUpdate={onComposeScreenUpdate}
-                    onScreenLater={onComposeScreenLater}
-                    onClose={onMoveClose}
                   />
                 )}
                 {bridge.dragMessage && (

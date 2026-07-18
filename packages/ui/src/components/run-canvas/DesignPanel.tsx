@@ -46,6 +46,7 @@ export function DesignPanel({
   owedScreenUpdates = [],
   onSaveScreenUpdates,
   onDismissScreenUpdate,
+  move,
 }: {
   selection: Selection | null;
   tree: BridgeTree | null;
@@ -82,6 +83,15 @@ export function DesignPanel({
   onSaveScreenUpdates?: () => void;
   /** Drop one owed screen update without running it. */
   onDismissScreenUpdate?: (file: string) => void;
+  /** An in-flight drag-move's Keep/Revert gate — surfaced here instead of a floating dialog. */
+  move?: {
+    phase: "moved" | "reconciling" | "error";
+    error?: string | null;
+    progress?: string | null;
+    onKeep: () => void;
+    onRevert: () => void;
+    onStop: () => void;
+  } | null;
 }): JSX.Element {
   return (
     <div className="flex h-full min-h-0 flex-col bg-vs-bg-primary text-vs-text-primary">
@@ -124,7 +134,11 @@ export function DesignPanel({
         )}
       </div>
 
-      {review ? (
+      {/* Exactly ONE bar at the bottom (never stacked) — priority: an in-flight move,
+          a post-apply review, pending inspect edits, then owed screen-spec updates. */}
+      {move ? (
+        <MoveBar {...move} />
+      ) : review ? (
         <ReviewBar onKeep={onKeep} onRevert={onRevert} />
       ) : pending.length > 0 ? (
         <ApplyBar
@@ -135,17 +149,85 @@ export function DesignPanel({
           onDiscard={onDiscard}
           onRemove={onRemovePending}
         />
+      ) : owedScreenUpdates.length > 0 ? (
+        <SaveChangesBar files={owedScreenUpdates} onSave={onSaveScreenUpdates} onDismiss={onDismissScreenUpdate} />
       ) : null}
+    </div>
+  );
+}
 
-      {/* Deferred Screen Creation updates owed by an accepted insert (the "Later"
-          path from the compose panel), surfaced here so the spec debt is visible
-          and one-click resolvable — mirrors the inspect Apply bar. */}
-      {owedScreenUpdates.length > 0 && (
-        <SaveChangesBar
-          files={owedScreenUpdates}
-          onSave={onSaveScreenUpdates}
-          onDismiss={onDismissScreenUpdate}
-        />
+/** The drag-move gate, docked in the sidebar (no floating dialog): Keep / Revert,
+ *  with an in-flight reconcile shown as progress, and a stop-with-reason on error. */
+function MoveBar({
+  phase,
+  error,
+  progress,
+  onKeep,
+  onRevert,
+  onStop,
+}: {
+  phase: "moved" | "reconciling" | "error";
+  error?: string | null;
+  progress?: string | null;
+  onKeep: () => void;
+  onRevert: () => void;
+  onStop: () => void;
+}): JSX.Element {
+  return (
+    <div data-testid="move-bar" className="flex-none border-t border-vs-border-default bg-vs-bg-surface p-2.5">
+      {phase === "moved" ? (
+        <>
+          <p data-testid="move-review" className="mb-2 text-[11px] text-vs-text-secondary">
+            Moved here. Keep it to save the change to source, or revert.
+          </p>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={onKeep}
+              className="flex-1 rounded-md bg-vs-accent px-3 py-1.5 text-[12px] font-medium text-white hover:brightness-110"
+            >
+              Keep
+            </button>
+            <button
+              type="button"
+              onClick={onRevert}
+              className="rounded-md border border-vs-border-default px-3 py-1.5 text-[12px] text-vs-text-secondary hover:bg-vs-bg-hover"
+            >
+              Revert
+            </button>
+          </div>
+        </>
+      ) : phase === "reconciling" ? (
+        <>
+          <div className="mb-2 h-1 w-full overflow-hidden rounded-full bg-vs-bg-hover">
+            <div className="h-full w-full animate-pulse rounded-full bg-vs-accent" />
+          </div>
+          <div className="flex items-center gap-2 text-[10px] text-vs-text-muted">
+            <span data-testid="move-progress" className="min-w-0 flex-1 truncate">
+              {progress ?? "Saving the move to source…"}
+            </span>
+            <button
+              type="button"
+              onClick={onStop}
+              className="flex-none rounded border border-vs-border-default px-2 py-0.5 text-vs-text-secondary hover:bg-vs-bg-hover"
+            >
+              Stop
+            </button>
+          </div>
+        </>
+      ) : (
+        <>
+          <p data-testid="move-error" className="mb-2 text-[11px] text-vs-text-primary">
+            {error}
+          </p>
+          <button
+            type="button"
+            onClick={onRevert}
+            className="rounded-md border border-vs-border-default px-3 py-1.5 text-[12px] text-vs-text-secondary hover:bg-vs-bg-hover"
+          >
+            Revert
+          </button>
+        </>
       )}
     </div>
   );

@@ -26,11 +26,15 @@ export function buildSelection(
     tag?: string;
     /** A component this element resembles but isn't using (from class-signature match). */
     resembles?: { name: string; file: string | null } | null;
+    /** The React-fiber component name that rendered this element, if any — used for the
+     *  display label when it isn't a roster component, so it reads as its real name
+     *  rather than an anonymous tag ("div"). */
+    componentHint?: string | null;
   } = {},
 ): Selection {
   const bind = makeTokenBinder(readout, opts.tokens ?? []);
   const c = readout.computed;
-  const label = opts.component?.name ?? opts.tag ?? "element";
+  const label = opts.component?.name ?? opts.componentHint ?? opts.tag ?? "element";
 
   const sections: DesignSection[] = [
     // Content — editable text for a text-leaf element.
