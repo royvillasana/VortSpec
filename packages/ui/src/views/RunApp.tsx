@@ -596,6 +596,20 @@ export function RunApp({
     return () => clearTimeout(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bridge.dragMessage]);
+  // If a replay-on-return couldn't restore some edits (their element changed), say so
+  // instead of dropping them silently — a transient hint, auto-cleared.
+  const [replayHint, setReplayHint] = useState<string | null>(null);
+  useEffect(() => {
+    const missing = bridge.replayResult?.missing ?? 0;
+    if (missing > 0) {
+      setReplayHint(`${missing} unsaved edit${missing === 1 ? "" : "s"} couldn't be restored — ${missing === 1 ? "its" : "their"} element changed since you left.`);
+      const id = setTimeout(() => setReplayHint(null), 6000);
+      bridge.clearReplayResult();
+      return () => clearTimeout(id);
+    }
+    bridge.clearReplayResult();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bridge.replayResult]);
   // The move's Keep/Revert gate, docked in the Design sidebar (no floating dialog).
   // Keep is the ONE action — it reconciles the JSX and is done; no second "Save
   // changes" prompt for a move.
@@ -1271,12 +1285,12 @@ export function RunApp({
                     getStoryUrl={storyUrlFor}
                   />
                 )}
-                {bridge.dragMessage && (
+                {(bridge.dragMessage || replayHint) && (
                   <div
-                    data-testid="drag-message"
+                    data-testid={bridge.dragMessage ? "drag-message" : "replay-hint"}
                     className="pointer-events-none absolute left-1/2 top-3 z-40 -translate-x-1/2 rounded-md border border-vs-border-default bg-vs-bg-elevated/95 px-3 py-1.5 text-[12px] text-vs-text-secondary shadow-lg backdrop-blur"
                   >
-                    {bridge.dragMessage}
+                    {bridge.dragMessage || replayHint}
                   </div>
                 )}
                 <RunCanvas

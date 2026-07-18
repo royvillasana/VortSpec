@@ -140,6 +140,10 @@ describe("inspector-bridge contracts", () => {
       expect(cmd.edits[1].addClasses).toEqual(["bg-primary"]);
       expect(cmd.edits[2].text).toBe("New title");
     }
+    // The replay outcome reports restored vs lost edits.
+    const rr = bridgeEventSchema.parse({ t: "replayResult", applied: 3, missing: 1 });
+    expect(rr).toMatchObject({ t: "replayResult", applied: 3, missing: 1 });
+
     // A readout now carries a durable fingerprint (default "" for legacy shapes).
     expect(nodeReadoutSchema.parse({ nodeId: "n1", rect: { x: 0, y: 0, width: 1, height: 1 } }).fingerprint).toBe("");
     expect(
