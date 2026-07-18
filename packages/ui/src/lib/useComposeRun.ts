@@ -79,9 +79,12 @@ export function useComposeRun(args: {
   const generate = useCallback(
     async (prompt: string, preferredComponents: string[] = [], insertSpec?: InsertSpec) => {
       const { project, bridge, roster, tokenNames, designMd } = ctx.current;
-      // One run in flight per workspace (§6.6); an empty roster never runs (§6.4);
-      // and an empty intent never runs (§6.5).
-      if (phase === "generating" || !hasUsableRoster(roster) || !bridge.placeholder || !prompt.trim()) return;
+      // Creating a NEW row/column container is structural — it needs neither a roster
+      // nor an intent (an empty band is valid). Filling an existing gap still needs
+      // both: one run in flight (§6.6), a non-empty roster (§6.4), and an intent (§6.5).
+      const newContainer = !!insertSpec && insertSpec.placement !== "into-existing";
+      if (phase === "generating" || !bridge.placeholder) return;
+      if (!newContainer && (!hasUsableRoster(roster) || !prompt.trim())) return;
       const target = bridge.placeholder.target;
       const rect = bridge.placeholder.rect;
       const runId = `compose-${Date.now()}`;

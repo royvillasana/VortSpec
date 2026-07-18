@@ -37,22 +37,37 @@ export function ComposePanel({
   getStoryUrl?: (name: string) => string | null;
   /** The axis inferred from the container — pre-sets the Row/Column toggle. */
   defaultAxis?: "row" | "column";
-  /** Notify the host when the axis/slot-count changes, so the placeholder re-renders. */
-  onInsertSpecChange?: (spec: { placement: "into-existing"; axis: "row" | "column"; slotCount: number }) => void;
+  /** Notify the host when placement/axis/slot-count changes, so the placeholder re-renders. */
+  onInsertSpecChange?: (spec: {
+    placement: "into-existing" | "new-row" | "new-column";
+    axis: "row" | "column";
+    slotCount: number;
+  }) => void;
 }): JSX.Element {
   const [draft, setDraft] = useState("");
   const [tab, setTab] = useState<"generate" | "components">("generate");
+  const [placement, setPlacement] = useState<"into-existing" | "new-row" | "new-column">("into-existing");
   const [axis, setAxis] = useState<"row" | "column">(defaultAxis ?? "row");
   const [slotCount, setSlotCount] = useState(1);
-  const spec = { placement: "into-existing" as const, axis, slotCount };
+  // A new row/column container fixes the axis; only "into gap" uses the axis toggle.
+  const effectiveAxis: "row" | "column" = placement === "new-row" ? "row" : placement === "new-column" ? "column" : axis;
+  const spec = { placement, axis: effectiveAxis, slotCount };
+  const isNewContainer = placement !== "into-existing";
+  const notify = (over: Partial<typeof spec>): void =>
+    onInsertSpecChange?.({ placement, axis: effectiveAxis, slotCount, ...over });
+  const setPlacementAndNotify = (p: typeof placement): void => {
+    setPlacement(p);
+    const a = p === "new-row" ? "row" : p === "new-column" ? "column" : axis;
+    onInsertSpecChange?.({ placement: p, axis: a, slotCount });
+  };
   const setAxisAndNotify = (a: "row" | "column"): void => {
     setAxis(a);
-    onInsertSpecChange?.({ placement: "into-existing", axis: a, slotCount });
+    notify({ axis: a });
   };
   const setSlotCountAndNotify = (n: number): void => {
     const c = Math.max(1, Math.min(6, n));
     setSlotCount(c);
-    onInsertSpecChange?.({ placement: "into-existing", axis, slotCount: c });
+    notify({ slotCount: c });
   };
   // Components the user picked to build from — shared across both tabs, sent as the
   // composition's preferred set. Multi-select: clicking a component toggles it.
@@ -82,12 +97,7 @@ export function ComposePanel({
         </button>
       </div>
 
-      {!compose.hasRoster ? (
-        <p data-testid="compose-empty-roster">
-          This project has no component roster yet, so there's nothing to compose from. Build or import components
-          first, then try again — VortSpec won't hand-write markup for a slot.
-        </p>
-      ) : phase === "idle" || phase === "generating" ? (
+      {phase === "idle" || phase === "generating" ? (
         <>
           {/* Components the user picked to build from — context for the AI, shown in
               both tabs, each removable. Chosen in the Components tab, used by Generate. */}
@@ -114,44 +124,72 @@ export function ComposePanel({
             </div>
           )}
 
-          {/* Layout of the insertion: row vs column (overrides the inferred axis) + how
-              many slots. Distinct from the number of AI options a run returns. */}
+          {/* Placement (into the gap, or a new row/column container) + axis + how many
+              slots. Slot count is distinct from the number of AI options a run returns. */}
           {phase === "idle" && (
-            <div data-testid="compose-layout" className="flex items-center gap-2 text-[10px] text-vs-text-muted">
-              <span>Layout</span>
-              <div role="group" aria-label="Insert axis" className="flex overflow-hidden rounded border border-vs-border-default">
-                <LayoutBtn active={axis === "row"} onClick={() => setAxisAndNotify("row")}>
-                  Row
-                </LayoutBtn>
-                <LayoutBtn active={axis === "column"} onClick={() => setAxisAndNotify("column")}>
-                  Column
-                </LayoutBtn>
+            <div data-testid="compose-layout" className="flex flex-col gap-1 text-[10px] text-vs-text-muted">
+              <div className="flex items-center gap-2">
+                <span>Placement</span>
+                <div role="group" aria-label="Placement" className="flex overflow-hidden rounded border border-vs-border-default">
+                  <LayoutBtn active={placement === "into-existing"} onClick={() => setPlacementAndNotify("into-existing")}>
+                    Into gap
+                  </LayoutBtn>
+                  <LayoutBtn active={placement === "new-row"} onClick={() => setPlacementAndNotify("new-row")}>
+                    New row
+                  </LayoutBtn>
+                  <LayoutBtn active={placement === "new-column"} onClick={() => setPlacementAndNotify("new-column")}>
+                    New column
+                  </LayoutBtn>
+                </div>
               </div>
-              <span className="ml-1">Slots</span>
-              <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  aria-label="Fewer slots"
-                  onClick={() => setSlotCountAndNotify(slotCount - 1)}
-                  className="rounded border border-vs-border-default px-1 leading-none hover:bg-vs-bg-hover"
-                >
-                  −
-                </button>
-                <span data-testid="compose-slot-count" className="min-w-[1ch] text-center text-vs-text-primary">
-                  {slotCount}
-                </span>
-                <button
-                  type="button"
-                  aria-label="More slots"
-                  onClick={() => setSlotCountAndNotify(slotCount + 1)}
-                  className="rounded border border-vs-border-default px-1 leading-none hover:bg-vs-bg-hover"
-                >
-                  +
-                </button>
+              <div className="flex items-center gap-2">
+                {placement === "into-existing" && (
+                  <>
+                    <span>Axis</span>
+                    <div role="group" aria-label="Insert axis" className="flex overflow-hidden rounded border border-vs-border-default">
+                      <LayoutBtn active={axis === "row"} onClick={() => setAxisAndNotify("row")}>
+                        Row
+                      </LayoutBtn>
+                      <LayoutBtn active={axis === "column"} onClick={() => setAxisAndNotify("column")}>
+                        Column
+                      </LayoutBtn>
+                    </div>
+                  </>
+                )}
+                <span className={placement === "into-existing" ? "ml-1" : ""}>Slots</span>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    aria-label="Fewer slots"
+                    onClick={() => setSlotCountAndNotify(slotCount - 1)}
+                    className="rounded border border-vs-border-default px-1 leading-none hover:bg-vs-bg-hover"
+                  >
+                    −
+                  </button>
+                  <span data-testid="compose-slot-count" className="min-w-[1ch] text-center text-vs-text-primary">
+                    {slotCount}
+                  </span>
+                  <button
+                    type="button"
+                    aria-label="More slots"
+                    onClick={() => setSlotCountAndNotify(slotCount + 1)}
+                    className="rounded border border-vs-border-default px-1 leading-none hover:bg-vs-bg-hover"
+                  >
+                    +
+                  </button>
+                </div>
               </div>
             </div>
           )}
 
+          {/* A new container needs no roster; filling an existing gap does. */}
+          {!compose.hasRoster && placement === "into-existing" ? (
+            <p data-testid="compose-empty-roster">
+              This project has no component roster yet, so there's nothing to compose into this gap. Build or import
+              components first — or create a new empty row/column container above.
+            </p>
+          ) : (
+            <>
           {/* Two ways to fill the slot: describe it (AI) or pick components to build with. */}
           {phase === "idle" && (
             <div role="tablist" aria-label="Insert mode" className="flex gap-1 border-b border-vs-border-subtle">
@@ -207,11 +245,15 @@ export function ComposePanel({
                   ) : (
                     <button
                       type="button"
-                      disabled={!draft.trim()}
-                      title={draft.trim() ? "Compose options for this slot" : "Describe what belongs here first"}
+                      disabled={!isNewContainer && !draft.trim()}
+                      title={
+                        isNewContainer || draft.trim()
+                          ? "Compose options for this slot"
+                          : "Describe what belongs here first"
+                      }
                       onClick={() => void compose.generate(draft, selected.map((c) => c.name), spec)}
                       className={`rounded-md px-2.5 py-1 text-xs font-medium text-white ${
-                        draft.trim() ? "bg-vs-accent hover:opacity-90" : "cursor-not-allowed bg-vs-accent/40"
+                        isNewContainer || draft.trim() ? "bg-vs-accent hover:opacity-90" : "cursor-not-allowed bg-vs-accent/40"
                       }`}
                     >
                       Generate
@@ -226,6 +268,8 @@ export function ComposePanel({
                 </div>
               )}
             </div>
+          )}
+            </>
           )}
         </>
       ) : phase === "no-match" ? (

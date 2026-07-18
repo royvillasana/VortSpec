@@ -29,10 +29,19 @@ const composeOps = (c: import("@playwright/test").Locator): Promise<Array<Record
 const runPrompts = (c: import("@playwright/test").Locator): Promise<string[]> =>
   c.page().evaluate(() => (window as unknown as { __runPrompts: string[] }).__runPrompts);
 
-test("an empty roster refuses to compose and says why", async ({ mount }) => {
-  const c = await mount(<ComposeHarness roster="empty" />, { hooksConfig: { mock: {} } });
+test("an empty roster blocks 'into gap' but allows a new container (§4)", async ({ mount }) => {
+  const c = await mount(<ComposeHarness roster="empty" />, {
+    hooksConfig: { mock: { runScript: runWith(`\`\`\`json\n${OPTIONS_JSON}\n\`\`\``) } },
+  });
+  // Into gap with no roster → the empty-roster message, no Generate.
   await expect(c.getByTestId("compose-empty-roster")).toBeVisible();
-  await expect(c.getByRole("button", { name: "Generate" })).toHaveCount(0);
+  // Switch to New row → the message goes and Generate works WITHOUT an intent.
+  await c.getByRole("button", { name: "New row" }).click();
+  await expect(c.getByTestId("compose-empty-roster")).toHaveCount(0);
+  await c.getByRole("button", { name: "Generate" }).click();
+  await expect(c.getByTestId("compose-option-index")).toBeVisible();
+  const sent = await runPrompts(c);
+  expect(sent[0]).toContain("Create a NEW row container");
 });
 
 test("Generate is gated on an expressed intent", async ({ mount }) => {
@@ -48,7 +57,7 @@ test("the layout controls set the insert axis and slot count (not the option cou
     hooksConfig: { mock: { runScript: runWith(`\`\`\`json\n${OPTIONS_JSON}\n\`\`\``) } },
   });
   // Override the inferred axis (row → column) and bump the slot count to 3.
-  await c.getByRole("button", { name: "Column" }).click();
+  await c.getByRole("button", { name: "Column", exact: true }).click();
   await c.getByRole("button", { name: "More slots" }).click();
   await c.getByRole("button", { name: "More slots" }).click();
   await expect(c.getByTestId("compose-slot-count")).toHaveText("3");

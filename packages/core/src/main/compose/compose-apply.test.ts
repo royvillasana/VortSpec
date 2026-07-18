@@ -42,6 +42,21 @@ describe("acceptComposition / sweepComposition", () => {
     expect(out).toContain("<Existing />");
   });
 
+  it("accepts a new-container scaffold to marker-free source (§4)", async () => {
+    const rel = "src/Page.tsx";
+    const withContainer = `export const Page = () => (\n  <main>\n${wrapOption(
+      "rc",
+      0,
+      '    <div style={{ display: "flex", gap: 8 }}><Card /><Card /></div>',
+    )}\n  </main>\n);\n`;
+    await writeFile(join(dir, rel), withContainer, "utf8");
+    const res = await acceptComposition(dir, rel, "rc", 0);
+    expect(res.ok).toBe(true);
+    const out = await readFile(join(dir, rel), "utf8");
+    expect(hasScaffold(out)).toBe(false);
+    expect(out).toContain('display: "flex"');
+  });
+
   it("accept is idempotent on an already-accepted file", async () => {
     await writeFile(join(dir, rel), scaffolded(), "utf8");
     await acceptComposition(dir, rel, "r1", 0);

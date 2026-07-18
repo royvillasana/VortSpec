@@ -216,7 +216,9 @@ export function buildComposePrompt(input: ComposePromptInput): string {
     slot.file ? `The slot resolves to source file: ${slot.file}.` : "",
     sizeHint,
     "",
-    "Component roster — compose ONLY from these, choosing their variants/props:",
+    input.roster.length
+      ? "Component roster — compose ONLY from these, choosing their variants/props:"
+      : "This project has no component roster — create empty placeholder slots in the new container (do not hand-write component markup).",
     ...input.roster.map(rosterLine),
     "",
     input.preferredComponents && input.preferredComponents.length

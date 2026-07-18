@@ -23,11 +23,11 @@
 
 ## 4. Insert new rows/columns (canvas-insert-container)
 
-- [ ] 4.1 Prompt: extend `buildComposePrompt` for `placement: "new-row"|"new-column"` — instruct the run to scaffold a NEW flex container (chosen axis, `slotCount` children), each child empty or filled per intent, wrapped in the existing option markers. Unit-test the new-container wording and that empty children are allowed without a roster.
-- [ ] 4.2 `ComposePanel`: a placement selector (Into gap · New row · New column) that switches the sub-flow; when a new empty container is requested, allow generate with no roster (bypass the `hasUsableRoster` gate for the empty case only).
-- [ ] 4.3 Multi-slot placeholder in the guest (from 3.4): render the N sub-slots at true size so the user sees the band before filling it.
-- [ ] 4.4 Accept/discard/commit-guard: reuse `acceptComposition`/`sweepComposition`/marker guard unchanged (a new container is just option-0 scaffold). Unit test that a new-container scaffold accepts to marker-free source.
-- [ ] 4.5 CT: new-row placement produces a container-scaffolding prompt; empty new container generates without a roster; accept records `keepOption` 0.
+- [x] 4.1 `buildComposePrompt` emits the new-container instruction for `new-row`/`new-column` (a NEW flex container, chosen axis, `slotCount` children), and now tolerates an empty roster (says "create empty placeholder slots"). Unit-tested (new-container wording; empty-roster prompt).
+- [x] 4.2 `ComposePanel` gained a Placement selector (Into gap · New row · New column); the axis toggle shows only for "into gap" (a new row/column fixes the axis). The empty-roster message now blocks only "into gap" — a new container generates with no roster and no intent. `useComposeRun.generate` bypasses the roster+intent gate when `placement !== "into-existing"`.
+- [x] 4.3 Multi-slot placeholder done in §3.4 (`fillPlaceholder` renders N sub-slot cells along the axis); driven here by the placement selector via `setPlaceholderSpec`.
+- [x] 4.4 Accept/discard/commit-guard reuse the compose machinery unchanged. Unit test added: a new-container scaffold (a flex `<div>` with cards) accepts to marker-free source.
+- [x] 4.5 CT: with an empty roster, "into gap" shows the empty-roster message; switching to "New row" clears it and Generate runs without an intent, and the run prompt carries "Create a NEW row container". Options surface (accept path is the shared one, already covered).
 
 ## 5. Live component drag-and-drop (canvas-drag-move) — largest, flagged
 
