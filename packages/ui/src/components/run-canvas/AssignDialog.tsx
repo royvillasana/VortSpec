@@ -18,7 +18,7 @@ export function AssignDialog({
   onAssign,
   onExtract,
   onClose,
-  getThumbnail,
+  getStoryUrl,
 }: {
   /** The component the selected element already IS, when recognized (else null). */
   recognized: string | null;
@@ -31,8 +31,8 @@ export function AssignDialog({
   onExtract?: () => void;
   /** Dismiss the dialog for this selection. */
   onClose: () => void;
-  /** Fetch a cached thumbnail (data URL) for a component (hover preview). */
-  getThumbnail?: (name: string) => Promise<string | null>;
+  /** A live Storybook iframe URL for a component's initial state, or null (hover preview). */
+  getStoryUrl?: (name: string) => string | null;
 }): JSX.Element {
   return (
     <div
@@ -72,10 +72,10 @@ export function AssignDialog({
       <ComponentPicker
         components={components}
         recommended={recommended}
-        actionLabel="Assign"
+        actionLabel="assign"
         showAllSimilar
         onExtract={onExtract}
-        getThumbnail={getThumbnail}
+        getStoryUrl={getStoryUrl}
         onPick={(c, opts) => onAssign({ name: c.name, file: c.file }, opts)}
       />
     </div>

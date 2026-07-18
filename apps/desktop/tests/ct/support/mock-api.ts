@@ -53,8 +53,6 @@ export interface MockConfig {
   snapshot?: { path: string; content: string }[];
   /** When false, composeCheckTarget() reports the run's file is not committable (§6.8). */
   composeTargetOk?: boolean;
-  /** Data URL returned by componentThumbnail() (the picker's hover preview). */
-  componentThumbnail?: string | null;
   /** Manifest returned by getManifest(). */
   manifest?: ManifestResult;
   /** Manifest returned by getManifest() after a run transcript completes (design-doc wrote it). */
@@ -536,8 +534,6 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
       composeOps.push({ op: "sweepProject" });
       return { swept: [] };
     },
-    componentThumbnail: async () => cfg.componentThumbnail ?? null,
-    storeComponentThumbnail: async () => undefined,
 
     // Stateful in-memory comment store (mirrors the repo-backed store's merge/append).
     listComments: async () => [...comments].sort((a, b) => a.id.localeCompare(b.id)),

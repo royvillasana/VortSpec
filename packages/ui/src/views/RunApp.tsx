@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { DevServerStatus, Project, InspectorToken, InspectorComponent, FileSnapshot } from "@vortspec/core/ipc";
+import type { DevServerStatus, Project, InspectorToken, InspectorComponent, FileSnapshot, StorybookEntry } from "@vortspec/core/ipc";
 import { buildSelection, alignToCss, flowToCss } from "@vortspec/core/selection-builder";
 import { api } from "../lib/api";
 import { Button, Spinner } from "@vortspec/ui/ui";
@@ -382,6 +382,38 @@ export function RunApp({
     );
   }, [selection, pending, publishSelection]);
   useEffect(() => () => publishSelection(null), [publishSelection]);
+
+  // Storybook-backed component previews: the picker shows each component's story in
+  // its initial state (from the project's running Storybook), the same way the
+  // Playground shows the app. Null when Storybook isn't running or has no story.
+  const [storyUrl, setStoryUrl] = useState<string | null>(null);
+  const [storyIndex, setStoryIndex] = useState<StorybookEntry[]>([]);
+  useEffect(() => {
+    if (!canvas) return;
+    let alive = true;
+    void api.devServerStatus(project.path).then(async (sb) => {
+      if (!alive || !sb.url) return;
+      setStoryUrl(sb.url);
+      const idx = await api.storybookIndex(sb.url).catch(() => [] as StorybookEntry[]);
+      if (alive) setStoryIndex(idx);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [canvas, project.path]);
+  const storyUrlFor = useCallback(
+    (name: string): string | null => {
+      if (!storyUrl) return null;
+      const entry = storyIndex.find(
+        (e) =>
+          e.type === "story" &&
+          (e.title === name || e.title.endsWith(`/${name}`) || (e.importPath ?? "").includes(`/${name}.`)),
+      );
+      if (!entry) return null;
+      return `${storyUrl.replace(/\/+$/, "")}/iframe.html?id=${encodeURIComponent(entry.id)}&viewMode=story&shortcuts=false&singleStory=true`;
+    },
+    [storyUrl, storyIndex],
+  );
 
   // Crash recovery (§6.14, §7.4): when the canvas opens, sweep any composition
   // scaffold a prior session left orphaned in source (accept/discard clean up the
@@ -985,7 +1017,7 @@ export function RunApp({
                     onExtract={onComposeExtract}
                     onScreenUpdate={onComposeScreenUpdate}
                     onClose={onComposeClose}
-                    getThumbnail={(name) => api.componentThumbnail(project.path, name)}
+                    getStoryUrl={storyUrlFor}
                   />
                 )}
                 {assignActive && onSendToChat && assignSelection && (
@@ -996,7 +1028,7 @@ export function RunApp({
                     onAssign={onAssignComponent}
                     onExtract={onAssignExtract}
                     onClose={() => setAssignDismissed(assignSelection.nodeId)}
-                    getThumbnail={(name) => api.componentThumbnail(project.path, name)}
+                    getStoryUrl={storyUrlFor}
                   />
                 )}
                 <RunCanvas

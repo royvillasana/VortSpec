@@ -34,7 +34,7 @@ export interface UseComposeRun {
   error: string | null;
   /** After an accept, the screen file whose spec now owes a Screen Creation update (§6.15). */
   screenUpdateOwed: string | null;
-  generate: (prompt: string) => Promise<void>;
+  generate: (prompt: string, preferredComponents?: string[]) => Promise<void>;
   cancel: () => Promise<void>;
   accept: () => Promise<void>;
   discard: () => Promise<void>;
@@ -76,7 +76,7 @@ export function useComposeRun(args: {
   }, [run]);
 
   const generate = useCallback(
-    async (prompt: string) => {
+    async (prompt: string, preferredComponents: string[] = []) => {
       const { project, bridge, roster, tokenNames, designMd } = ctx.current;
       // One run in flight per workspace (§6.6); an empty roster never runs (§6.4);
       // and an empty intent never runs (§6.5).
@@ -98,6 +98,7 @@ export function useComposeRun(args: {
         tokens: tokenNames,
         designMd,
         intent: prompt,
+        preferredComponents,
         slot: {
           anchorLabel: target.anchorLabel ?? "the anchored element",
           anchorText: target.anchorText ?? null,

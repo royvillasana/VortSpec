@@ -43,31 +43,46 @@ test("the close button cancels the insert (drops the placeholder)", async ({ mou
   expect(closed).toBe(true);
 });
 
-test("the dialog has Generate and Components tabs; picking a component inserts it", async ({ mount }) => {
+test("the Components tab multi-selects components as context for Generate", async ({ mount }) => {
   const c = await mount(<ComposeHarness />, {
     hooksConfig: { mock: { runScript: runWith(`\`\`\`json\n${OPTIONS_JSON}\n\`\`\``) } },
   });
   await expect(c.getByRole("tab", { name: "Generate" })).toBeVisible();
-  await c.getByRole("tab", { name: "Components" }).click();
+  await c.getByRole("tab", { name: /Components/ }).click();
   const list = c.getByTestId("component-picker-list");
   await expect(list).toContainText("Card");
   await expect(list).toContainText("Button");
-  // Hovering a row previews that component.
-  await list.getByRole("button", { name: /Card/ }).hover();
-  await expect(c.getByTestId("component-preview")).toContainText("Card");
-  // Clicking it starts a directed insert naming that component.
+  // Selecting components adds them as context chips (not an immediate insert).
   await list.getByRole("button", { name: /Card/ }).click();
-  await expect(c.getByTestId("compose-option-index")).toBeVisible();
+  await list.getByRole("button", { name: /^Button/ }).click();
+  await expect(c.getByTestId("compose-context-chips")).toContainText("Card");
+  await expect(c.getByTestId("compose-context-chips")).toContainText("Button");
+  // No run started just from selecting.
+  expect(await runPrompts(c)).toEqual([]);
+  // Describe it in Generate → the run carries the chosen components as preferred.
+  await c.getByRole("tab", { name: "Generate" }).click();
+  await c.getByPlaceholder(/Describe what to build with/).fill("a filters toolbar");
+  await c.getByRole("button", { name: "Generate" }).click();
   const sent = await runPrompts(c);
-  expect(sent[0]).toContain('Insert the "Card" component');
+  expect(sent[0]).toContain("a filters toolbar");
+  expect(sent[0]).toContain("specifically chose these components");
+  expect(sent[0]).toContain("Card, Button");
 });
 
-test("a cached thumbnail renders in the component preview", async ({ mount }) => {
-  const png = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
-  const c = await mount(<ComposeHarness />, { hooksConfig: { mock: { componentThumbnail: png } } });
-  await c.getByRole("tab", { name: "Components" }).click();
+test("a context chip is removable", async ({ mount }) => {
+  const c = await mount(<ComposeHarness />, { hooksConfig: { mock: {} } });
+  await c.getByRole("tab", { name: /Components/ }).click();
+  await c.getByTestId("component-picker-list").getByRole("button", { name: /Card/ }).click();
+  await expect(c.getByTestId("compose-context-chips")).toContainText("Card");
+  await c.getByRole("button", { name: "Remove Card" }).click();
+  await expect(c.getByTestId("compose-context-chips")).toHaveCount(0);
+});
+
+test("the hover preview shows the component's Storybook story when available", async ({ mount }) => {
+  const c = await mount(<ComposeHarness storyUrl="http://localhost:6006/iframe.html" />, { hooksConfig: { mock: {} } });
+  await c.getByRole("tab", { name: /Components/ }).click();
   await c.getByTestId("component-picker-list").getByRole("button", { name: /Card/ }).hover();
-  await expect(c.getByTestId("component-preview").getByRole("img")).toHaveAttribute("src", png);
+  await expect(c.getByTestId("component-preview-frame")).toHaveAttribute("src", /iframe\.html\?c=Card/);
 });
 
 test("generating snapshots first, then cycles options with provenance and accepts one", async ({ mount }) => {

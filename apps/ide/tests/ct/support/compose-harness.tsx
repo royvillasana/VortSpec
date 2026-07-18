@@ -3,7 +3,6 @@ import React from "react";
 import type { JSX } from "react";
 import { useComposeRun } from "@vortspec/ui/useComposeRun";
 import { ComposePanel } from "@vortspec/ui/ComposePanel";
-import { api } from "@vortspec/ui/api";
 import { makeBridge } from "./mock-bridge";
 import type { Project, InspectorComponent, InsertTargetWire } from "@vortspec/core/ipc";
 
@@ -49,7 +48,14 @@ const placeholder = {
   rect: { x: 0, y: 0, width: 220, height: 90 },
 };
 
-export function ComposeHarness({ roster = "full" }: { roster?: "full" | "empty" }): JSX.Element {
+export function ComposeHarness({
+  roster = "full",
+  storyUrl,
+}: {
+  roster?: "full" | "empty";
+  /** A fake Storybook URL builder for the preview iframe (tests pass a fixed URL). */
+  storyUrl?: string;
+}): JSX.Element {
   const bridge = makeBridge({ placeholder });
   const compose = useComposeRun({
     project: PROJECT,
@@ -72,7 +78,7 @@ export function ComposeHarness({ roster = "full" }: { roster?: "full" | "empty" 
         onClose={() => {
           (window as unknown as { __closed?: boolean }).__closed = true;
         }}
-        getThumbnail={(name) => api.componentThumbnail(PROJECT.path, name)}
+        getStoryUrl={storyUrl ? (name) => `${storyUrl}?c=${name}` : undefined}
       />
     </div>
   );

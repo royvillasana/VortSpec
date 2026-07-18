@@ -19,7 +19,7 @@ export function ComposePanel({
   onExtract,
   onScreenUpdate,
   onClose,
-  getThumbnail,
+  getStoryUrl,
 }: {
   compose: UseComposeRun;
   /** The project roster, for the Components tab. */
@@ -30,11 +30,16 @@ export function ComposePanel({
   onScreenUpdate: (file: string) => void;
   /** Cancel the insert: dismiss the placeholder and drop out of the flow. */
   onClose: () => void;
-  /** Fetch a cached thumbnail (data URL) for a component (hover preview). */
-  getThumbnail?: (name: string) => Promise<string | null>;
+  /** A live Storybook iframe URL for a component's initial state, or null (hover preview). */
+  getStoryUrl?: (name: string) => string | null;
 }): JSX.Element {
   const [draft, setDraft] = useState("");
   const [tab, setTab] = useState<"generate" | "components">("generate");
+  // Components the user picked to build from — shared across both tabs, sent as the
+  // composition's preferred set. Multi-select: clicking a component toggles it.
+  const [selected, setSelected] = useState<InspectorComponent[]>([]);
+  const toggleComponent = (c: InspectorComponent): void =>
+    setSelected((cur) => (cur.some((x) => x.name === c.name) ? cur.filter((x) => x.name !== c.name) : [...cur, c]));
   const { phase, result, activeOption } = compose;
 
   return (
@@ -64,26 +69,57 @@ export function ComposePanel({
         </p>
       ) : phase === "idle" || phase === "generating" ? (
         <>
-          {/* Two ways to fill the slot: describe it (AI) or pick a component. */}
+          {/* Components the user picked to build from — context for the AI, shown in
+              both tabs, each removable. Chosen in the Components tab, used by Generate. */}
+          {selected.length > 0 && (
+            <div data-testid="compose-context-chips" className="flex flex-wrap gap-1">
+              {selected.map((c) => (
+                <span
+                  key={c.name}
+                  className="inline-flex items-center gap-1 rounded border border-vs-accent-subtle bg-vs-accent-subtle/40 px-1.5 py-0.5 text-[10px] text-vs-text-secondary"
+                >
+                  <span className="font-mono">{c.name}</span>
+                  {phase === "idle" && (
+                    <button
+                      type="button"
+                      onClick={() => toggleComponent(c)}
+                      aria-label={`Remove ${c.name}`}
+                      className="rounded px-0.5 leading-none text-vs-text-muted hover:text-vs-text-primary"
+                    >
+                      ×
+                    </button>
+                  )}
+                </span>
+              ))}
+            </div>
+          )}
+
+          {/* Two ways to fill the slot: describe it (AI) or pick components to build with. */}
           {phase === "idle" && (
             <div role="tablist" aria-label="Insert mode" className="flex gap-1 border-b border-vs-border-subtle">
               <TabButton active={tab === "generate"} onClick={() => setTab("generate")}>
                 Generate
               </TabButton>
               <TabButton active={tab === "components"} onClick={() => setTab("components")}>
-                Components
+                Components{selected.length > 0 ? ` (${selected.length})` : ""}
               </TabButton>
             </div>
           )}
 
           {tab === "components" && phase === "idle" ? (
-            <ComponentPicker
-              components={components}
-              actionLabel="Insert"
-              getThumbnail={getThumbnail}
-              onPick={(c) => void compose.generate(`Insert the "${c.name}" component here with sensible default props.`)}
-              onExtract={() => onExtract(null)}
-            />
+            <div className="flex flex-col gap-1.5">
+              <p className="text-[10px] text-vs-text-muted">
+                Pick the components to build with, then describe it in <b>Generate</b>.
+              </p>
+              <ComponentPicker
+                components={components}
+                actionLabel="select"
+                getStoryUrl={getStoryUrl}
+                selectedNames={selected.map((c) => c.name)}
+                onPick={(c) => toggleComponent(c)}
+                onExtract={() => onExtract(null)}
+              />
+            </div>
           ) : (
             // The prompt input with its action button INSIDE the field: Generate
             // while idle, a Stop button + a thinking spinner while a run is in flight.
@@ -92,7 +128,11 @@ export function ComposePanel({
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
                 disabled={phase === "generating"}
-                placeholder="Describe what belongs here…"
+                placeholder={
+                  selected.length > 0
+                    ? `Describe what to build with ${selected.map((c) => c.name).join(", ")}…`
+                    : "Describe what belongs here…"
+                }
                 className="min-h-[72px] w-full resize-none bg-transparent px-2 pb-9 pt-1.5 text-vs-text-primary focus:outline-none disabled:opacity-70"
               />
               <div className="absolute inset-x-1.5 bottom-1.5 flex items-center gap-2">
@@ -116,7 +156,7 @@ export function ComposePanel({
                     type="button"
                     disabled={!draft.trim()}
                     title={draft.trim() ? "Compose options for this slot" : "Describe what belongs here first"}
-                    onClick={() => void compose.generate(draft)}
+                    onClick={() => void compose.generate(draft, selected.map((c) => c.name))}
                     className={`ml-auto rounded-md px-2.5 py-1 text-xs font-medium text-white ${
                       draft.trim() ? "bg-vs-accent hover:opacity-90" : "cursor-not-allowed bg-vs-accent/40"
                     }`}

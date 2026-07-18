@@ -111,6 +111,14 @@ describe("buildComposePrompt", () => {
     expect(buildComposePrompt(input({ intent: "a testimonials carousel" }))).toContain("a testimonials carousel");
   });
 
+  it("emphasizes the components the user picked to build from", () => {
+    const p = buildComposePrompt(input({ preferredComponents: ["Card", "Button"] }));
+    expect(p).toContain("specifically chose these components");
+    expect(p).toContain("Card, Button");
+    // No such line when none are picked.
+    expect(buildComposePrompt(input({ preferredComponents: [] }))).not.toContain("specifically chose");
+  });
+
   it("grounds in the roster, tokens, DESIGN.md, and the anchor's leading text", () => {
     const p = buildComposePrompt(input());
     expect(p).toContain("Card");

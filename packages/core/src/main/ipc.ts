@@ -53,7 +53,6 @@ import {
   checkComposeTarget,
   sweepProjectScaffold,
 } from "./compose/compose-apply";
-import { readComponentThumbnail, writeComponentThumbnail } from "./compose/thumbnails";
 import type { FileSnapshot } from "@vortspec/core/ipc";
 import { listThreads } from "./workspace/comment-store";
 import { postComment, resolveComment, shareComments } from "./workspace/comment-sync";
@@ -413,10 +412,6 @@ const handlers: Record<IpcChannel, Handler> = {
   "compose:checkTarget": ((req: { projectPath: string; file: string }) =>
     checkComposeTarget(req.projectPath, req.file)) as Handler,
   "compose:sweepProject": ((projectPath: string) => sweepProjectScaffold(projectPath)) as Handler,
-  "compose:componentThumbnail": ((req: { projectPath: string; name: string }) =>
-    readComponentThumbnail(req.projectPath, req.name)) as Handler,
-  "compose:storeThumbnail": ((req: { projectPath: string; name: string; pngBase64: string }) =>
-    writeComponentThumbnail(req.projectPath, req.name, req.pngBase64).then(() => undefined)) as Handler,
   "comments:list": ((projectPath: string) => listThreads(projectPath)) as Handler,
   "comments:upsert": ((req: { projectPath: string; thread: CommentThread }) =>
     postComment(req.projectPath, req.thread)) as Handler,

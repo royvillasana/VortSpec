@@ -115,6 +115,12 @@ export interface ComposePromptInput {
   slot: ComposeSlot;
   /** What the user wants in the slot — their typed description, or a component-pick directive. */
   intent: string;
+  /**
+   * Components the user explicitly picked to build from (the Components tab). When
+   * present, the composition composes PRIMARILY from these; when empty, the whole
+   * roster is fair game.
+   */
+  preferredComponents?: string[];
   /** The placeholder's soft size hint (px) — guidance the composition may deviate from. */
   sizeHint?: { width?: number; height?: number };
   /** How many options to attempt (1–3, default 3). A ceiling, never a target. */
@@ -188,6 +194,10 @@ export function buildComposePrompt(input: ComposePromptInput): string {
     "",
     "Component roster — compose ONLY from these, choosing their variants/props:",
     ...input.roster.map(rosterLine),
+    "",
+    input.preferredComponents && input.preferredComponents.length
+      ? `The user specifically chose these components to build this from: ${input.preferredComponents.join(", ")}. Compose PRIMARILY from them; reach for other roster components only if the intent genuinely needs one.`
+      : "",
     "",
     input.tokens.length
       ? `Ground every value in the project's design tokens (${input.tokens.slice(0, 40).join(", ")}${

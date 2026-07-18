@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import type { JSX } from "react";
 import type { InspectorComponent } from "@vortspec/core/ipc";
 
@@ -6,10 +6,10 @@ import type { InspectorComponent } from "@vortspec/core/ipc";
  * The shared design-system component picker (change: canvas-compose-and-preview-bar).
  *
  * One searchable roster list, reused wherever the user picks a component: the
- * insert dialog's Components tab (pick → insert into the slot) and the inspect
- * dialog (pick → assign to the selected element). Hovering a row reveals a preview
- * with the component's rendered thumbnail (fetched on demand via `getThumbnail`
- * and cached), so the user sees what they're about to place.
+ * insert dialog's Components tab (multi-select → build context) and the inspect
+ * dialog (single pick → assign to the selected element). Hovering a row previews
+ * the component **live from Storybook** — its story in its initial state, shown
+ * the same way the Playground shows the running app — rather than a captured image.
  */
 
 const LEVEL_ORDER: Record<string, number> = { atom: 0, molecule: 1, organism: 2 };
@@ -18,28 +18,32 @@ export function ComponentPicker({
   components,
   onPick,
   recommended = null,
-  actionLabel = "Insert",
+  actionLabel = "pick",
   showAllSimilar = false,
   onExtract,
-  getThumbnail,
+  getStoryUrl,
+  selectedNames,
 }: {
   components: InspectorComponent[];
-  /** Pick a component — opts.allSimilar only meaningful when `showAllSimilar`. */
+  /** Click a row — opts.allSimilar only meaningful when `showAllSimilar`. */
   onPick: (component: InspectorComponent, opts: { allSimilar: boolean }) => void;
   /** A recommended component pinned first with a badge (assign mode). */
   recommended?: string | null;
-  /** Verb shown in the empty-hover hint ("Insert" / "Assign"). */
+  /** Verb shown in the empty-hover hint ("insert" / "assign"). */
   actionLabel?: string;
   /** Show the "apply to every matching element" toggle (assign mode). */
   showAllSimilar?: boolean;
   /** Offer extract-a-new-component when nothing fits. */
   onExtract?: () => void;
-  /** Fetch a cached thumbnail (data URL) for a component; null when none yet. */
-  getThumbnail?: (name: string) => Promise<string | null>;
+  /** A Storybook iframe URL for a component's initial state, or null when unavailable. */
+  getStoryUrl?: (name: string) => string | null;
+  /** Names currently selected (multi-select mode) — shown with a check; click toggles. */
+  selectedNames?: string[];
 }): JSX.Element {
   const [query, setQuery] = useState("");
   const [allSimilar, setAllSimilar] = useState(true);
   const [hovered, setHovered] = useState<InspectorComponent | null>(null);
+  const selected = new Set(selectedNames ?? []);
 
   const q = query.trim().toLowerCase();
   const sorted = [...components].sort((a, b) => {
@@ -59,32 +63,43 @@ export function ComponentPicker({
         className="w-full rounded border border-vs-border-default bg-vs-bg-primary px-2 py-1 text-[11px] text-vs-text-primary placeholder:text-vs-text-muted focus:outline-none focus:ring-1 focus:ring-vs-accent"
       />
 
-      {/* Hover preview — the component's thumbnail + details for the row under the pointer. */}
-      <ComponentPreview component={hovered} getThumbnail={getThumbnail} actionLabel={actionLabel} />
+      {/* Hover preview — the component rendered live from Storybook. */}
+      <ComponentPreview component={hovered} getStoryUrl={getStoryUrl} actionLabel={actionLabel} />
 
       <div className="max-h-56 overflow-y-auto rounded border border-vs-border-subtle" data-testid="component-picker-list">
         {shown.length === 0 ? (
           <p className="px-2 py-3 text-center text-[10px] text-vs-text-muted">No matching components.</p>
         ) : (
-          shown.map((c) => (
-            <button
-              key={c.name}
-              type="button"
-              onClick={() => onPick(c, { allSimilar })}
-              onMouseEnter={() => setHovered(c)}
-              onFocus={() => setHovered(c)}
-              className="flex w-full items-center gap-2 px-2 py-1.5 text-left text-[11px] hover:bg-vs-bg-hover"
-            >
-              <span className="min-w-0 flex-1 truncate text-vs-text-primary">{c.name}</span>
-              {c.name === recommended && (
-                <span className="rounded-full bg-vs-accent px-1.5 py-px text-[9px] font-medium text-white">Recommended</span>
-              )}
-              {c.level && <span className="text-[9px] uppercase text-vs-text-muted">{c.level}</span>}
-              {c.variants && c.variants.length > 0 && (
-                <span className="font-mono text-[9px] text-vs-text-muted">⎇ {c.variants.join("·")}</span>
-              )}
-            </button>
-          ))
+          shown.map((c) => {
+            const isSelected = selected.has(c.name);
+            return (
+              <button
+                key={c.name}
+                type="button"
+                aria-pressed={selectedNames ? isSelected : undefined}
+                onClick={() => onPick(c, { allSimilar })}
+                onMouseEnter={() => setHovered(c)}
+                onFocus={() => setHovered(c)}
+                className={`flex w-full items-center gap-2 px-2 py-1.5 text-left text-[11px] hover:bg-vs-bg-hover ${
+                  isSelected ? "bg-vs-accent-subtle/40" : ""
+                }`}
+              >
+                {selectedNames && (
+                  <span className={`text-[11px] ${isSelected ? "text-vs-accent" : "text-vs-text-muted/40"}`} aria-hidden>
+                    {isSelected ? "✓" : "＋"}
+                  </span>
+                )}
+                <span className="min-w-0 flex-1 truncate text-vs-text-primary">{c.name}</span>
+                {c.name === recommended && (
+                  <span className="rounded-full bg-vs-accent px-1.5 py-px text-[9px] font-medium text-white">Recommended</span>
+                )}
+                {c.level && <span className="text-[9px] uppercase text-vs-text-muted">{c.level}</span>}
+                {c.variants && c.variants.length > 0 && (
+                  <span className="font-mono text-[9px] text-vs-text-muted">⎇ {c.variants.join("·")}</span>
+                )}
+              </button>
+            );
+          })
         )}
       </div>
 
@@ -107,62 +122,49 @@ export function ComponentPicker({
   );
 }
 
-/** The hover preview: the component's rendered thumbnail (on demand) + its details. */
+/** The hover preview: the component rendered live from Storybook (its initial state). */
 function ComponentPreview({
   component,
-  getThumbnail,
+  getStoryUrl,
   actionLabel,
 }: {
   component: InspectorComponent | null;
-  getThumbnail?: (name: string) => Promise<string | null>;
+  getStoryUrl?: (name: string) => string | null;
   actionLabel: string;
 }): JSX.Element {
-  const [thumb, setThumb] = useState<string | null>(null);
-  // Cache thumbnails across hovers so re-hovering a component is instant.
-  const cache = useRef<Map<string, string | null>>(new Map());
-
-  useEffect(() => {
-    if (!component || !getThumbnail) {
-      setThumb(null);
-      return;
-    }
-    const name = component.name;
-    if (cache.current.has(name)) {
-      setThumb(cache.current.get(name) ?? null);
-      return;
-    }
-    let alive = true;
-    void getThumbnail(name).then((url) => {
-      cache.current.set(name, url);
-      if (alive) setThumb(url);
-    });
-    return () => {
-      alive = false;
-    };
-  }, [component, getThumbnail]);
-
   // A fixed height in both states, so hovering a row doesn't reflow the list below.
   if (!component) {
     return (
-      <div className="grid h-[132px] place-items-center rounded border border-dashed border-vs-border-subtle px-2 text-center text-[10px] text-vs-text-muted">
-        Hover a component to preview it · click to {actionLabel.toLowerCase()}
+      <div className="grid h-[148px] place-items-center rounded border border-dashed border-vs-border-subtle px-2 text-center text-[10px] text-vs-text-muted">
+        Hover a component to preview it · click to {actionLabel}
       </div>
     );
   }
+  const storyUrl = getStoryUrl?.(component.name) ?? null;
   return (
-    <div data-testid="component-preview" className="h-[132px] rounded border border-vs-border-subtle bg-vs-bg-primary p-2">
-      <div className="grid h-20 place-items-center overflow-hidden rounded bg-vs-bg-elevated">
-        {thumb ? (
-          <img src={thumb} alt={`${component.name} preview`} className="max-h-20 max-w-full object-contain" />
+    <div data-testid="component-preview" className="h-[148px] overflow-hidden rounded border border-vs-border-subtle bg-vs-bg-primary">
+      <div className="grid h-24 place-items-center overflow-hidden border-b border-vs-border-subtle bg-white">
+        {storyUrl ? (
+          <iframe
+            key={storyUrl}
+            src={storyUrl}
+            title={`${component.name} — Storybook preview`}
+            data-testid="component-preview-frame"
+            className="h-full w-full border-0"
+          />
         ) : (
-          <span className="text-[10px] text-vs-text-muted">{getThumbnail ? "Rendering preview…" : "No preview"}</span>
+          <span className="px-2 text-center text-[10px] text-vs-text-muted">
+            No Storybook preview — start Storybook to see this component.
+          </span>
         )}
       </div>
-      <div className="mt-1.5 truncate text-[11px] font-medium text-vs-text-primary">{component.name}</div>
-      {component.description && <div className="truncate text-[10px] text-vs-text-secondary">{component.description}</div>}
-      {component.variants && component.variants.length > 0 && (
-        <div className="mt-0.5 truncate font-mono text-[9px] text-vs-text-muted">variants: {component.variants.join(", ")}</div>
-      )}
+      <div className="p-2">
+        <div className="truncate text-[11px] font-medium text-vs-text-primary">{component.name}</div>
+        {component.description && <div className="truncate text-[10px] text-vs-text-secondary">{component.description}</div>}
+        {component.variants && component.variants.length > 0 && (
+          <div className="mt-0.5 truncate font-mono text-[9px] text-vs-text-muted">variants: {component.variants.join(", ")}</div>
+        )}
+      </div>
     </div>
   );
 }
