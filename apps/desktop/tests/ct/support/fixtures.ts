@@ -20,6 +20,13 @@ export const TOKENS: InspectorTokensResult = {
   tokenFile: "src/tokens.css",
   figmaSynced: true,
   figmaOnly: [{ name: "color/surface", resolvedValue: "#141518", type: "color" }],
+  // The mode-aware fields (change: figma-native-token-model). The mock returns this
+  // fixture verbatim (no zod defaults applied), so these MUST be present — the
+  // Inspector does `collections.find(...)` during render and crashes on undefined.
+  collections: [],
+  activeCollection: null,
+  activeMode: null,
+  modeMap: {},
   usage: {
     "color-primary": [{ component: "Button", property: "background" }],
     "radius-md": [{ component: "Card", property: "rounded" }],

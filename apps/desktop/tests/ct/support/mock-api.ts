@@ -128,6 +128,12 @@ export interface MockConfig {
   figmaSyncComponents?: import("@vortspec/core/ipc").FigmaSyncResult;
   /** Result returned by figmaSelection(). */
   figmaSelection?: import("@vortspec/core/ipc").FigmaSelection;
+  /** Report returned by getSanitation() — orphan/duplicate tokens for the sanitation UI. */
+  sanitation?: import("@vortspec/core/ipc").TokenSanitation;
+  /** Plan returned by figmaComputePushPlan() — the code→Figma push confirm gate. */
+  pushPlan?: import("@vortspec/core/ipc").PushPlan;
+  /** Result returned by figmaPushVariables(). */
+  figmaPush?: import("@vortspec/core/ipc").FigmaPushResult;
 }
 
 export const EMPTY_TOKENS: InspectorTokensResult = {
@@ -242,7 +248,15 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
     removeProject: async (id: string) => (cfg.projects ?? []).filter((p) => p.id !== id),
     openFolder: async () => undefined,
     revealPath: async () => undefined,
-    refreshProject: async (path: string) => ({ id: "p", name: "p", path }),
+    refreshProject: async (path: string) => ({
+      id: "p",
+      name: "p",
+      path,
+      // A refreshed recent/opened project is a set-up one by default, so the ide
+      // App's `openProject` routes it to the workspace (not the intake stepper).
+      // Tests that want the un-configured intake path pass an explicit project.
+      toolkit: { present: true, configured: true, version: "1.0.0", updateAvailable: false },
+    }),
     createProject: async () => null,
     toolkitStatus: async () => ({ present: true, configured: true, version: "1.0.0", updateAvailable: false }),
     installToolkit: async () => ({ present: true, configured: true, version: "1.0.0", updateAvailable: false }),
@@ -511,6 +525,17 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
     inspectorComponents: async () =>
       (generated && cfg.componentsAfterRun) || cfg.components || EMPTY_COMPONENTS,
     setTokenValue: async () => cfg.tokens ?? EMPTY_TOKENS,
+    // Token sanitation + edit methods (change: token-fidelity-sanitation). The
+    // Inspector calls getSanitation on mount — a missing mock method is a synchronous
+    // TypeError that unmounts React and blanks the page (see figmaEnsureConnected note
+    // above), so every one of these must exist even when a test doesn't exercise it.
+    getSanitation: async () => cfg.sanitation ?? { orphans: [], duplicates: [] },
+    collapseToken: async () => cfg.tokens ?? EMPTY_TOKENS,
+    createToken: async () => cfg.tokens ?? EMPTY_TOKENS,
+    setTokenModeMap: async () => cfg.tokens ?? EMPTY_TOKENS,
+    figmaComputePushPlan: async () => cfg.pushPlan ?? { collection: "VortSpec", entries: [] },
+    figmaPushVariables: async () =>
+      cfg.figmaPush ?? { ok: true, created: 0, updated: 0, source: "cli", message: "Pushed to Figma." },
     getVerification: async () => cfg.verification ?? { findings: [] },
     snapshotComponent: async () => [],
     snapshotTokenScope: async () => cfg.snapshot ?? [],
