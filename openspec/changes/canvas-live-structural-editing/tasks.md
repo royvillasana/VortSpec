@@ -14,12 +14,12 @@
 
 ## 3. Dynamic row/column choice in compose (canvas-compose, modified)
 
-- [ ] 3.1 Add `insertSpec: { placement: "into-existing"|"new-row"|"new-column"; axis: "row"|"column"; slotCount: number }` to `ComposePromptInput` (`compose-run.ts`). Keep `count` (AI options, 1–3) untouched and distinct — a code comment making the distinction explicit.
-- [ ] 3.2 Thread `insertSpec` into the prompt body: state the chosen axis explicitly ("insert as a {row|column}"), overriding inference; unit-test the axis wording and that `count` vs `slotCount` are independent.
-- [ ] 3.3 `ComposePanel.tsx`: a Row/Column segmented control pre-set to the slot axis and overridable, plus a slot-count stepper. Wire both into `compose.generate`.
-- [ ] 3.4 Placeholder geometry: extend `placeholderSizing(axis)` (`insert-geometry.ts`) to render the chosen axis, and add a variant laying out N sub-slots for a count > 1. Guest re-materializes the placeholder on axis/count change (extend `createPlaceholder` payload with `insertSpec`; `resizePlaceholder` unchanged).
-- [ ] 3.5 `useComposeRun.generate` passes `insertSpec` (axis from the control, `slotCount` from the stepper) into `buildComposePrompt`. Snapshot/accept/discard paths unchanged.
-- [ ] 3.6 CT (`compose.ct.tsx`): axis toggle changes the generated prompt's axis line; slot-count changes `slotCount` (and never the option `count`); placeholder reflects the chosen axis via the mock bridge.
+- [x] 3.1 `InsertSpec { placement: "into-existing"|"new-row"|"new-column"; axis: "row"|"column"; slotCount }` added to `ComposePromptInput` (`compose-run.ts`), with a comment making `slotCount` (layout) explicitly distinct from `count` (AI options, 1–3).
+- [x] 3.2 `buildComposePrompt` uses `insertSpec.axis` to override the inferred flow wording and emits an explicit placement line ("Insert as a {axis}", or "Create a NEW {row|column} container with N slots"). Unit-tested: axis override, `slotCount` ≠ `count`, new-container wording.
+- [x] 3.3 `ComposePanel` gained a Row/Column segmented control (pre-set to the inferred `defaultAxis`, overridable) and a slot-count stepper (1–6); both flow into `compose.generate(draft, preferred, spec)`.
+- [x] 3.4 Guest: `fillPlaceholder(el, axis, slotCount)` re-renders the placeholder to the chosen axis and N sub-slot cells; `placeholderSizing` covers the axis. New `setPlaceholderSpec` command re-renders the live placeholder and re-emits its rect; `RunApp` wires the panel's `onInsertSpecChange` to it. (Visual is a §6.5 live item.)
+- [x] 3.5 `useComposeRun.generate(prompt, preferred?, insertSpec?)` threads `insertSpec` into `buildComposePrompt`; snapshot/accept/discard unchanged.
+- [x] 3.6 CT: toggling to Column + bumping slots to 3 makes the run prompt carry "vertical (column) flow" / "Insert as a column" / "Create 3 items" while the option count stays "at most 3 options".
 
 ## 4. Insert new rows/columns (canvas-insert-container)
 

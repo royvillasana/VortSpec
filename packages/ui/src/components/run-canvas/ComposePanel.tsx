@@ -21,6 +21,8 @@ export function ComposePanel({
   onScreenUpdate,
   onClose,
   getStoryUrl,
+  defaultAxis,
+  onInsertSpecChange,
 }: {
   compose: UseComposeRun;
   /** The project roster, for the Components tab. */
@@ -33,9 +35,25 @@ export function ComposePanel({
   onClose: () => void;
   /** A live Storybook iframe URL for a component's initial state, or null (hover preview). */
   getStoryUrl?: (name: string) => string | null;
+  /** The axis inferred from the container — pre-sets the Row/Column toggle. */
+  defaultAxis?: "row" | "column";
+  /** Notify the host when the axis/slot-count changes, so the placeholder re-renders. */
+  onInsertSpecChange?: (spec: { placement: "into-existing"; axis: "row" | "column"; slotCount: number }) => void;
 }): JSX.Element {
   const [draft, setDraft] = useState("");
   const [tab, setTab] = useState<"generate" | "components">("generate");
+  const [axis, setAxis] = useState<"row" | "column">(defaultAxis ?? "row");
+  const [slotCount, setSlotCount] = useState(1);
+  const spec = { placement: "into-existing" as const, axis, slotCount };
+  const setAxisAndNotify = (a: "row" | "column"): void => {
+    setAxis(a);
+    onInsertSpecChange?.({ placement: "into-existing", axis: a, slotCount });
+  };
+  const setSlotCountAndNotify = (n: number): void => {
+    const c = Math.max(1, Math.min(6, n));
+    setSlotCount(c);
+    onInsertSpecChange?.({ placement: "into-existing", axis, slotCount: c });
+  };
   // Components the user picked to build from — shared across both tabs, sent as the
   // composition's preferred set. Multi-select: clicking a component toggles it.
   const [selected, setSelected] = useState<InspectorComponent[]>([]);
@@ -96,6 +114,44 @@ export function ComposePanel({
             </div>
           )}
 
+          {/* Layout of the insertion: row vs column (overrides the inferred axis) + how
+              many slots. Distinct from the number of AI options a run returns. */}
+          {phase === "idle" && (
+            <div data-testid="compose-layout" className="flex items-center gap-2 text-[10px] text-vs-text-muted">
+              <span>Layout</span>
+              <div role="group" aria-label="Insert axis" className="flex overflow-hidden rounded border border-vs-border-default">
+                <LayoutBtn active={axis === "row"} onClick={() => setAxisAndNotify("row")}>
+                  Row
+                </LayoutBtn>
+                <LayoutBtn active={axis === "column"} onClick={() => setAxisAndNotify("column")}>
+                  Column
+                </LayoutBtn>
+              </div>
+              <span className="ml-1">Slots</span>
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  aria-label="Fewer slots"
+                  onClick={() => setSlotCountAndNotify(slotCount - 1)}
+                  className="rounded border border-vs-border-default px-1 leading-none hover:bg-vs-bg-hover"
+                >
+                  −
+                </button>
+                <span data-testid="compose-slot-count" className="min-w-[1ch] text-center text-vs-text-primary">
+                  {slotCount}
+                </span>
+                <button
+                  type="button"
+                  aria-label="More slots"
+                  onClick={() => setSlotCountAndNotify(slotCount + 1)}
+                  className="rounded border border-vs-border-default px-1 leading-none hover:bg-vs-bg-hover"
+                >
+                  +
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Two ways to fill the slot: describe it (AI) or pick components to build with. */}
           {phase === "idle" && (
             <div role="tablist" aria-label="Insert mode" className="flex gap-1 border-b border-vs-border-subtle">
@@ -153,7 +209,7 @@ export function ComposePanel({
                       type="button"
                       disabled={!draft.trim()}
                       title={draft.trim() ? "Compose options for this slot" : "Describe what belongs here first"}
-                      onClick={() => void compose.generate(draft, selected.map((c) => c.name))}
+                      onClick={() => void compose.generate(draft, selected.map((c) => c.name), spec)}
                       className={`rounded-md px-2.5 py-1 text-xs font-medium text-white ${
                         draft.trim() ? "bg-vs-accent hover:opacity-90" : "cursor-not-allowed bg-vs-accent/40"
                       }`}
@@ -326,6 +382,29 @@ function TabButton({
         active
           ? "border-vs-accent font-medium text-vs-text-primary"
           : "border-transparent text-vs-text-secondary hover:text-vs-text-primary"
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function LayoutBtn({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}): JSX.Element {
+  return (
+    <button
+      type="button"
+      aria-pressed={active}
+      onClick={onClick}
+      className={`px-1.5 py-0.5 text-[10px] ${
+        active ? "bg-vs-accent text-white" : "text-vs-text-secondary hover:bg-vs-bg-hover"
       }`}
     >
       {children}

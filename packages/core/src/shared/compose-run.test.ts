@@ -164,6 +164,32 @@ describe("buildComposePrompt", () => {
     expect(p).toContain("320×120");
     expect(p).toContain("SOFT hint");
   });
+
+  it("lets the user override the inferred axis", () => {
+    // The slot infers row, but the user chose column.
+    const p = buildComposePrompt(
+      input({ insertSpec: { placement: "into-existing", axis: "column", slotCount: 1 } }),
+    );
+    expect(p).toContain("vertical (column) flow");
+    expect(p).toContain("Insert as a column");
+    expect(p).not.toContain("horizontal (row) flow");
+  });
+
+  it("keeps slot count independent of the AI option count", () => {
+    // slotCount 4 with the default option count (3) — the two never conflate.
+    const p = buildComposePrompt(
+      input({ count: 3, insertSpec: { placement: "into-existing", axis: "row", slotCount: 4 } }),
+    );
+    expect(p).toContain("Create 4 items"); // the layout quantity
+    expect(p).toMatch(/at most 3 option/); // the AI-option ceiling, unchanged
+  });
+
+  it("instructs a new-container placement for new-row / new-column", () => {
+    const p = buildComposePrompt(
+      input({ insertSpec: { placement: "new-column", axis: "column", slotCount: 3 } }),
+    );
+    expect(p).toContain("Create a NEW column container with 3 slot(s)");
+  });
 });
 
 describe("parseComposeResult", () => {

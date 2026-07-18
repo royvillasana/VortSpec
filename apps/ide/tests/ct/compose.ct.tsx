@@ -43,6 +43,24 @@ test("Generate is gated on an expressed intent", async ({ mount }) => {
   await expect(generate).toBeEnabled();
 });
 
+test("the layout controls set the insert axis and slot count (not the option count)", async ({ mount }) => {
+  const c = await mount(<ComposeHarness />, {
+    hooksConfig: { mock: { runScript: runWith(`\`\`\`json\n${OPTIONS_JSON}\n\`\`\``) } },
+  });
+  // Override the inferred axis (row → column) and bump the slot count to 3.
+  await c.getByRole("button", { name: "Column" }).click();
+  await c.getByRole("button", { name: "More slots" }).click();
+  await c.getByRole("button", { name: "More slots" }).click();
+  await expect(c.getByTestId("compose-slot-count")).toHaveText("3");
+  await c.getByPlaceholder(/Describe what belongs here/).fill("a filters column");
+  await c.getByRole("button", { name: "Generate" }).click();
+  const sent = await runPrompts(c);
+  expect(sent[0]).toContain("vertical (column) flow");
+  expect(sent[0]).toContain("Insert as a column");
+  expect(sent[0]).toContain("Create 3 items"); // the layout slot count
+  expect(sent[0]).toMatch(/at most 3 option/); // AI option count unaffected
+});
+
 test("the close button cancels the insert (drops the placeholder)", async ({ mount }) => {
   const c = await mount(<ComposeHarness />, { hooksConfig: { mock: {} } });
   await c.getByRole("button", { name: "Cancel insert" }).click();

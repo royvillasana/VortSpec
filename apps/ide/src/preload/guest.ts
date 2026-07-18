@@ -539,24 +539,57 @@ function insertTargetUnder(
   };
 }
 
-/** Build the visible placeholder element, implicitly sized for its axis. */
-function makePlaceholderEl(axis: FlowAxis): HTMLElement {
-  const el = document.createElement("div");
-  el.setAttribute("data-vs-overlay", ""); // excluded from the tree scan and child rects
-  el.setAttribute("data-vs-placeholder", "");
-  el.textContent = "Compose here";
+/** The user's chosen layout for the placeholder (axis + how many sub-slots). */
+let placeholderSpec: { axis: FlowAxis; slotCount: number } = { axis: "row", slotCount: 1 };
+
+/** One dashed sub-slot cell inside a multi-slot placeholder. */
+function makeSlotCell(label: string): HTMLElement {
+  const cell = document.createElement("div");
+  cell.textContent = label;
+  cell.style.setProperty("flex", "1 1 0");
+  cell.style.setProperty("min-width", "36px");
+  cell.style.setProperty("min-height", "24px");
+  cell.style.setProperty("display", "flex");
+  cell.style.setProperty("align-items", "center");
+  cell.style.setProperty("justify-content", "center");
+  cell.style.setProperty("border", "1px dashed rgba(124,111,240,0.6)");
+  cell.style.setProperty("border-radius", "6px");
+  return cell;
+}
+
+/** Fill/refill the placeholder for a given axis + slot count. */
+function fillPlaceholder(el: HTMLElement, axis: FlowAxis, slotCount: number): void {
   for (const [k, v] of Object.entries(placeholderSizing(axis))) el.style.setProperty(k, v);
   el.style.setProperty("box-sizing", "border-box");
   el.style.setProperty("display", "flex");
-  el.style.setProperty("align-items", "center");
-  el.style.setProperty("justify-content", "center");
-  el.style.setProperty("padding", "12px");
+  el.style.setProperty("flex-direction", axis === "row" ? "row" : "column");
+  el.style.setProperty("align-items", "stretch");
+  el.style.setProperty("gap", "8px");
+  el.style.setProperty("padding", "8px");
   el.style.setProperty("border", "2px dashed #7c6ff0");
   el.style.setProperty("border-radius", "8px");
   el.style.setProperty("background", "rgba(124,111,240,0.08)");
   el.style.setProperty("color", "#7c6ff0");
   el.style.setProperty("font", "12px system-ui, sans-serif");
-  el.style.setProperty("pointer-events", "none"); // never eat the pointer or block hit-testing
+  el.style.setProperty("pointer-events", "none");
+  el.replaceChildren();
+  const n = Math.max(1, slotCount);
+  if (n === 1) {
+    el.style.setProperty("align-items", "center");
+    el.style.setProperty("justify-content", "center");
+    el.style.setProperty("padding", "12px");
+    el.textContent = "Compose here";
+  } else {
+    for (let i = 0; i < n; i++) el.appendChild(makeSlotCell(`Slot ${i + 1}`));
+  }
+}
+
+/** Build the visible placeholder element, sized for the current spec. */
+function makePlaceholderEl(axis: FlowAxis): HTMLElement {
+  const el = document.createElement("div");
+  el.setAttribute("data-vs-overlay", ""); // excluded from the tree scan and child rects
+  el.setAttribute("data-vs-placeholder", "");
+  fillPlaceholder(el, axis, placeholderSpec.slotCount);
   return el;
 }
 
@@ -577,6 +610,7 @@ function insertPlaceholderAt(el: HTMLElement, container: Element, anchorEl: Elem
 /** Materialize a placeholder at a slot and tell the host (nothing is written to disk). */
 function materializePlaceholder(wire: InsertTargetWire, container: Element, anchorEl: Element): void {
   dismissPlaceholder();
+  placeholderSpec = { axis: wire.axis, slotCount: 1 };
   const el = makePlaceholderEl(wire.axis);
   applyPlaceholderSize(el);
   insertPlaceholderAt(el, container, anchorEl, wire.position);
@@ -594,12 +628,23 @@ function resizePlaceholder(width?: number, height?: number): void {
   send({ t: "placeholderReady", target: placeholderTarget, rect: rectOf(placeholder) });
 }
 
+/** Re-render the placeholder to a chosen axis + slot count (the user's layout choice). */
+function setPlaceholderSpec(axis: FlowAxis, slotCount: number): void {
+  if (!placeholder || !placeholderTarget) return;
+  placeholderSpec = { axis, slotCount };
+  placeholderTarget = { ...placeholderTarget, axis };
+  fillPlaceholder(placeholder, axis, slotCount);
+  applyPlaceholderSize(placeholder);
+  send({ t: "placeholderReady", target: placeholderTarget, rect: rectOf(placeholder) });
+}
+
 /** Remove the placeholder and forget its slot. Idempotent. */
 function dismissPlaceholder(): void {
   placeholder?.parentElement?.removeChild(placeholder);
   placeholder = null;
   placeholderTarget = null;
   placeholderSize = {};
+  placeholderSpec = { axis: "row", slotCount: 1 };
 }
 
 /**
@@ -708,6 +753,9 @@ function handleCommand(cmd: BridgeCommand): void {
     case "dismissPlaceholder":
       dismissPlaceholder();
       send({ t: "insertTarget", target: null });
+      return;
+    case "setPlaceholderSpec":
+      setPlaceholderSpec(cmd.axis, cmd.slotCount);
       return;
     case "previewOption":
       previewedOption = cmd.option;

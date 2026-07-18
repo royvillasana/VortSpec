@@ -74,6 +74,8 @@ export interface InspectorBridge {
   resizePlaceholder: (size: { width?: number; height?: number }) => void;
   /** Dismiss the active placeholder (discard / cancel). */
   dismissPlaceholder: () => void;
+  /** Re-render the placeholder to a chosen axis + slot count (the user's layout choice). */
+  setPlaceholderSpec: (axis: "row" | "column", slotCount: number) => void;
   /** Preview one composed option in place (null shows all) — drives the option cycler. */
   previewOption: (option: number | null) => void;
   /** The latest structural snapshot of a subtree (from `requestStructure`), or null. */
@@ -288,6 +290,10 @@ export function useInspectorBridge(): InspectorBridge {
     send({ t: "dismissPlaceholder" });
   }, [send]);
   const previewOption = useCallback((option: number | null) => send({ t: "previewOption", option }), [send]);
+  const setPlaceholderSpec = useCallback(
+    (axis: "row" | "column", slotCount: number) => send({ t: "setPlaceholderSpec", axis, slotCount }),
+    [send],
+  );
   const requestStructure = useCallback(
     (nodeId: string | null = null) => send({ t: "requestStructure", nodeId }),
     [send],
@@ -366,6 +372,7 @@ export function useInspectorBridge(): InspectorBridge {
     clearPlaceholderLost: useCallback(() => setPlaceholderLost(null), []),
     resizePlaceholder,
     dismissPlaceholder,
+    setPlaceholderSpec,
     previewOption,
     structure,
     requestStructure,

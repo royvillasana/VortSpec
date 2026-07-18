@@ -1070,6 +1070,8 @@ export function RunApp({
                     onScreenUpdate={onComposeScreenUpdate}
                     onClose={onComposeClose}
                     getStoryUrl={storyUrlFor}
+                    defaultAxis={bridge.placeholder?.target.axis ?? "row"}
+                    onInsertSpecChange={(s) => bridge.setPlaceholderSpec(s.axis, s.slotCount)}
                   />
                 )}
                 {assignActive && onSendToChat && assignSelection && (

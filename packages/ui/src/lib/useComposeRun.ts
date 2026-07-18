@@ -7,6 +7,7 @@ import {
   parseComposeResult,
   hasUsableRoster,
   type ComposeResult,
+  type InsertSpec,
 } from "@vortspec/core/compose-run";
 import type { Project, InspectorComponent, FileSnapshot } from "@vortspec/core/ipc";
 import type { InspectorBridge } from "./useInspectorBridge";
@@ -34,7 +35,7 @@ export interface UseComposeRun {
   error: string | null;
   /** After an accept, the screen file whose spec now owes a Screen Creation update (§6.15). */
   screenUpdateOwed: string | null;
-  generate: (prompt: string, preferredComponents?: string[]) => Promise<void>;
+  generate: (prompt: string, preferredComponents?: string[], insertSpec?: InsertSpec) => Promise<void>;
   cancel: () => Promise<void>;
   accept: () => Promise<void>;
   discard: () => Promise<void>;
@@ -76,7 +77,7 @@ export function useComposeRun(args: {
   }, [run]);
 
   const generate = useCallback(
-    async (prompt: string, preferredComponents: string[] = []) => {
+    async (prompt: string, preferredComponents: string[] = [], insertSpec?: InsertSpec) => {
       const { project, bridge, roster, tokenNames, designMd } = ctx.current;
       // One run in flight per workspace (§6.6); an empty roster never runs (§6.4);
       // and an empty intent never runs (§6.5).
@@ -99,6 +100,7 @@ export function useComposeRun(args: {
         designMd,
         intent: prompt,
         preferredComponents,
+        insertSpec,
         slot: {
           anchorLabel: target.anchorLabel ?? "the anchored element",
           anchorText: target.anchorText ?? null,

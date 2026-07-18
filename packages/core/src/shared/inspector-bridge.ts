@@ -281,6 +281,16 @@ export const bridgeCommandSchema = z.discriminatedUnion("t", [
   /** Remove the active placeholder (discard / cancel / mode change). */
   z.object({ t: z.literal("dismissPlaceholder") }),
   /**
+   * Re-render the active placeholder to the user's chosen axis and slot count
+   * (change: canvas-live-structural-editing, §3) — the placeholder reflects the
+   * layout the composition will use before the run.
+   */
+  z.object({
+    t: z.literal("setPlaceholderSpec"),
+    axis: z.enum(["row", "column"]),
+    slotCount: z.number().int().min(1),
+  }),
+  /**
    * Preview one composed option in place: hide every `[data-vs-option]` whose index
    * differs from `option` (null shows them all). Lets the cycler render one option
    * at a time in the real slot without rewriting source per cycle.

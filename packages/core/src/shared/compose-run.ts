@@ -102,6 +102,18 @@ export interface ComposeSlot {
   file: string | null;
 }
 
+/**
+ * Where and how the composition goes in — the user's explicit placement choice,
+ * replacing silent axis inference (change: canvas-live-structural-editing, §3).
+ * `slotCount` is how many layout slots/items to create; it is NOT the AI option
+ * count (`count`, 1–3) — the two are deliberately distinct quantities.
+ */
+export interface InsertSpec {
+  placement: "into-existing" | "new-row" | "new-column";
+  axis: "row" | "column";
+  slotCount: number;
+}
+
 export interface ComposePromptInput {
   /** Opaque, marker-safe run id — the scaffold markers carry it (see compose-scaffold). */
   runId: string;
@@ -120,9 +132,11 @@ export interface ComposePromptInput {
    * roster is fair game.
    */
   preferredComponents?: string[];
+  /** The user's explicit placement + axis + slot count (overrides inference). */
+  insertSpec?: InsertSpec;
   /** The placeholder's soft size hint (px) — guidance the composition may deviate from. */
   sizeHint?: { width?: number; height?: number };
-  /** How many options to attempt (1–3, default 3). A ceiling, never a target. */
+  /** How many AI options to attempt (1–3, default 3). A ceiling — NOT the slot count. */
   count?: number;
 }
 
@@ -180,6 +194,16 @@ export function buildComposePrompt(input: ComposePromptInput): string {
       ? `The user sized the slot to roughly ${input.sizeHint.width ?? "auto"}×${input.sizeHint.height ?? "auto"}px. Treat this as a SOFT hint, not a constraint.`
       : "";
 
+  // The user's explicit choice overrides the container's inferred axis.
+  const spec = input.insertSpec;
+  const axis = spec?.axis ?? slot.axis;
+  const axisWord = axis === "row" ? "horizontal (row)" : "vertical (column)";
+  const placementLine = spec
+    ? spec.placement === "into-existing"
+      ? `Insert as a ${axis} (the user chose this axis explicitly).${spec.slotCount > 1 ? ` Create ${spec.slotCount} items along it.` : ""}`
+      : `Create a NEW ${spec.placement === "new-row" ? "row" : "column"} container with ${spec.slotCount} slot(s) at this position, laid out along the ${axis} axis, and place the composition inside it.`
+    : "";
+
   const lines: string[] = [
     `Compose new UI for an insertion slot in this project, using ONLY the project's own components.`,
     "",
@@ -187,7 +211,8 @@ export function buildComposePrompt(input: ComposePromptInput): string {
     "",
     `The slot: insert ${slot.position} the "${slot.anchorLabel}" element${
       slot.anchorText ? ` whose leading text is "${slot.anchorText.slice(0, 120)}"` : ""
-    }, in a ${slot.axis === "row" ? "horizontal (row)" : "vertical (column)"} flow.`,
+    }, in a ${axisWord} flow.`,
+    placementLine,
     slot.file ? `The slot resolves to source file: ${slot.file}.` : "",
     sizeHint,
     "",
