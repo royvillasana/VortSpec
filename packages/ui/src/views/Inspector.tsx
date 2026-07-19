@@ -12,10 +12,12 @@ import type {
   TokenSource,
   TokenType,
   TokenUsage,
+  DesignAudit,
 } from "@vortspec/core/ipc";
 import { api } from "../lib/api";
 import { useAgentRun } from "../lib/useAgentRun";
 import { Spinner } from "@vortspec/ui/ui";
+import { AuditBanner } from "@vortspec/ui/AuditBanner";
 import { RunPanel } from "@vortspec/ui/RunPanel";
 import { ProjectRail, projectRailItems } from "@vortspec/ui/ProjectRail";
 
@@ -249,6 +251,7 @@ export function Inspector({
   // value duplicates, surfaced so the user can push orphans back / collapse dupes.
   const [sanitation, setSanitation] = useState<TokenSanitation | null>(null);
   const [sanOpen, setSanOpen] = useState(false);
+  const [audit, setAudit] = useState<DesignAudit | null>(null);
 
   async function reloadTokens(preferredCollection?: string): Promise<void> {
     const r = await api.inspectorTokens(project.path, preferredCollection);
@@ -262,6 +265,7 @@ export function Inspector({
     setPickedCollection(r.activeCollection);
     setActiveMode(r.activeMode);
     void api.getSanitation(project.path).then(setSanitation).catch(() => undefined);
+    void api.designAudit(project.path).then(setAudit).catch(() => undefined);
   }
 
   async function collapseDuplicate(tokenName: string, canonicalName: string): Promise<void> {
@@ -836,6 +840,8 @@ export function Inspector({
             </button>
           </div>
         </header>
+
+        <AuditBanner audit={audit} />
 
         <div className="flex-1 overflow-x-hidden overflow-y-auto">
           {tokens === null ? (
