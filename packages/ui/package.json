@@ -153,6 +153,10 @@
       "types": "./src/components/run-canvas/Sitemap.tsx",
       "default": "./src/components/run-canvas/Sitemap.tsx"
     },
+    "./AuditBanner": {
+      "types": "./src/components/run-canvas/AuditBanner.tsx",
+      "default": "./src/components/run-canvas/AuditBanner.tsx"
+    },
     "./AssignDialog": {
       "types": "./src/components/run-canvas/AssignDialog.tsx",
       "default": "./src/components/run-canvas/AssignDialog.tsx"

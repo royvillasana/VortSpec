@@ -107,13 +107,16 @@ export async function createProject(
     join(projectPath, ".claude", "skills"),
   );
 
-  // .gitignore
+  // .gitignore — the SDD-DE toolkit and the VortSpec derived scan cache (`.vortspec/index/`
+  // is a pure, self-healing cache; the durable maps in `.vortspec/maps/` are intentionally
+  // left tracked, as shared design-system knowledge).
   const gitignorePath = join(projectPath, ".gitignore");
   if (await exists(gitignorePath)) {
     const content = await readFile(gitignorePath, "utf8");
-    if (!content.includes(".sdd-de")) {
-      await appendFile(gitignorePath, "\n# SDD-DE toolkit\n.sdd-de/\n");
-    }
+    let add = "";
+    if (!content.includes(".sdd-de")) add += "\n# SDD-DE toolkit\n.sdd-de/\n";
+    if (!content.includes(".vortspec/index")) add += "\n# VortSpec scan cache (derived)\n.vortspec/index/\n";
+    if (add) await appendFile(gitignorePath, add);
   }
 
   return refreshProject(projectPath);

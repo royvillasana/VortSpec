@@ -130,6 +130,8 @@ export interface MockConfig {
   figmaSelection?: import("@vortspec/core/ipc").FigmaSelection;
   /** Report returned by getSanitation() — orphan/duplicate tokens for the sanitation UI. */
   sanitation?: import("@vortspec/core/ipc").TokenSanitation;
+  /** Report returned by designAudit() — hardcoded values + token drift (Plan B4). */
+  designAudit?: import("@vortspec/core/ipc").DesignAudit;
   /** Plan returned by figmaComputePushPlan() — the code→Figma push confirm gate. */
   pushPlan?: import("@vortspec/core/ipc").PushPlan;
   /** Result returned by figmaPushVariables(). */
@@ -532,6 +534,7 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
     // TypeError that unmounts React and blanks the page (see figmaEnsureConnected note
     // above), so every one of these must exist even when a test doesn't exercise it.
     getSanitation: async () => cfg.sanitation ?? { orphans: [], duplicates: [] },
+    designAudit: async () => cfg.designAudit ?? { findings: [], summary: { components: 0, findings: 0, drifted: 0 } },
     collapseToken: async () => cfg.tokens ?? EMPTY_TOKENS,
     createToken: async () => cfg.tokens ?? EMPTY_TOKENS,
     setTokenModeMap: async () => cfg.tokens ?? EMPTY_TOKENS,

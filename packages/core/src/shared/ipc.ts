@@ -131,6 +131,8 @@ export type {
   InspectorComponentsResult,
   PropControl,
   ComponentStatus,
+  DesignAudit,
+  AuditFinding,
 } from "./inspector";
 export type {
   VerificationFinding,
