@@ -10,6 +10,32 @@ import {
 } from "./token-resolver";
 
 const c = (name: string, value: string, aliasOf?: string): ResolveCandidate => ({ name, value, aliasOf });
+const ck = (name: string, value: string, key: string): ResolveCandidate => ({ name, value, key });
+
+describe("resolveToken — durable key tier (Plan B1)", () => {
+  it("matches by variableKey over a conflicting name and value", () => {
+    // The code token was renamed AND its value collides with another candidate,
+    // yet the durable key still joins it to the right Figma variable.
+    const index = [ck("color/brand/primary", "#0055FF", "KEY_A"), ck("color/brand/accent", "#0055FF", "KEY_B")];
+    const r = resolveToken({ name: "--totally-different", value: "#0055FF", key: "KEY_B" }, index);
+    expect(r.signal).toBe("key");
+    expect(r.match?.name).toBe("color/brand/accent");
+  });
+
+  it("falls through to name/value when the key is ambiguous or absent on the index", () => {
+    // Two candidates share the key (shouldn't happen, but is not authoritative) → fall through.
+    const index = [ck("color/a", "#111111", "DUP"), ck("color/b", "#222222", "DUP")];
+    const r = resolveToken({ name: "color/a", value: "#111111", key: "DUP" }, index);
+    expect(r.signal).toBe("name");
+    expect(r.match?.name).toBe("color/a");
+  });
+
+  it("ignores keys when the candidate has none (legacy path unchanged)", () => {
+    const index = [ck("color/surface", "#FFFFFF", "KEY_X")];
+    const r = resolveToken(c("--color-surface", "#FFFFFF"), index);
+    expect(r.signal).toBe("name");
+  });
+});
 
 describe("resolveToken — layered precedence", () => {
   it("matches by normalized name across formatting differences", () => {
