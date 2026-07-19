@@ -157,6 +157,10 @@
       "types": "./src/components/run-canvas/AuditBanner.tsx",
       "default": "./src/components/run-canvas/AuditBanner.tsx"
     },
+    "./MetadataStatus": {
+      "types": "./src/components/run-canvas/MetadataStatus.tsx",
+      "default": "./src/components/run-canvas/MetadataStatus.tsx"
+    },
     "./AssignDialog": {
       "types": "./src/components/run-canvas/AssignDialog.tsx",
       "default": "./src/components/run-canvas/AssignDialog.tsx"

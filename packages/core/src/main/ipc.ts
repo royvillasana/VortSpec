@@ -50,6 +50,7 @@ import {
   restoreFiles,
 } from "./inspector/component-reader";
 import { buildDesignAudit } from "./inspector/design-audit";
+import { metadataPlan } from "./inspector/component-metadata";
 import {
   acceptComposition,
   sweepComposition,
@@ -375,6 +376,7 @@ const handlers: Record<IpcChannel, Handler> = {
   "inspector:getComponents": ((projectPath: string) =>
     getInspectorComponents(projectPath)) as Handler,
   "inspector:designAudit": ((projectPath: string) => buildDesignAudit(projectPath)) as Handler,
+  "inspector:metadataPlan": ((projectPath: string) => metadataPlan(projectPath)) as Handler,
   "inspector:setTokenValue": ((req: {
     projectPath: string;
     name: string;

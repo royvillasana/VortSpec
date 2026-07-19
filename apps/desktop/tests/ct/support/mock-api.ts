@@ -132,6 +132,8 @@ export interface MockConfig {
   sanitation?: import("@vortspec/core/ipc").TokenSanitation;
   /** Report returned by designAudit() — hardcoded values + token drift (Plan B4). */
   designAudit?: import("@vortspec/core/ipc").DesignAudit;
+  /** Coverage returned by metadataPlan() — AI-ready component metadata (Plan B6). */
+  metadataPlan?: import("@vortspec/core/ipc").MetadataPlan;
   /** Plan returned by figmaComputePushPlan() — the code→Figma push confirm gate. */
   pushPlan?: import("@vortspec/core/ipc").PushPlan;
   /** Result returned by figmaPushVariables(). */
@@ -535,6 +537,7 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
     // above), so every one of these must exist even when a test doesn't exercise it.
     getSanitation: async () => cfg.sanitation ?? { orphans: [], duplicates: [] },
     designAudit: async () => cfg.designAudit ?? { findings: [], summary: { components: 0, findings: 0, drifted: 0 } },
+    metadataPlan: async () => cfg.metadataPlan ?? { total: 0, withMetadata: 0, missing: [], prompt: "" },
     collapseToken: async () => cfg.tokens ?? EMPTY_TOKENS,
     createToken: async () => cfg.tokens ?? EMPTY_TOKENS,
     setTokenModeMap: async () => cfg.tokens ?? EMPTY_TOKENS,

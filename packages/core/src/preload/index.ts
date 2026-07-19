@@ -233,6 +233,7 @@ const api: VortSpecApi = {
     ),
   inspectorComponents: (projectPath: string) => invoke("inspector:getComponents", projectPath),
   designAudit: (projectPath: string) => invoke("inspector:designAudit", projectPath),
+  metadataPlan: (projectPath: string) => invoke("inspector:metadataPlan", projectPath),
   setTokenValue: (projectPath: string, name: string, value: string, context?: string) =>
     invoke("inspector:setTokenValue", { projectPath, name, value, context }),
   setTokenModeMap: (projectPath: string, map: Record<string, string>) =>
