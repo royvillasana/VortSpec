@@ -385,6 +385,35 @@ export const inspectorComponentsResultSchema = z.object({
 });
 export type InspectorComponentsResult = z.infer<typeof inspectorComponentsResultSchema>;
 
+/**
+ * A design-system audit (Plan B4): divergences the persistent index makes cheap to
+ * find continuously — a component that hardcodes a value a token already names, or a
+ * token whose code value drifted from its Figma variable. Severity-ranked so the UI
+ * can lead with the ones that break design consistency.
+ */
+export const auditFindingSchema = z.object({
+  /** The component the finding is in, or "(tokens)" for a token-level drift. */
+  component: z.string(),
+  /** Project-relative file the finding points at, when known. */
+  file: z.string().nullable(),
+  severity: z.enum(["error", "warning"]),
+  kind: z.enum(["hardcoded-color", "token-drift"]),
+  /** A human, one-line description with the fix. */
+  message: z.string(),
+});
+export type AuditFinding = z.infer<typeof auditFindingSchema>;
+
+export const designAuditSchema = z.object({
+  findings: z.array(auditFindingSchema).default([]),
+  summary: z.object({
+    components: z.number(),
+    findings: z.number(),
+    /** how many tokens drifted from Figma. */
+    drifted: z.number(),
+  }),
+});
+export type DesignAudit = z.infer<typeof designAuditSchema>;
+
 /** A captured file (project-relative path + content), for gated revert of a modify run. */
 export const fileSnapshotSchema = z.object({ path: z.string(), content: z.string() });
 export type FileSnapshot = z.infer<typeof fileSnapshotSchema>;

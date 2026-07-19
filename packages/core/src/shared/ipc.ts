@@ -97,6 +97,7 @@ import { setupAnswersSchema, projectConfigSchema } from "./setup";
 import {
   inspectorTokensResultSchema,
   inspectorComponentsResultSchema,
+  designAuditSchema,
   verificationResultSchema,
   fileSnapshotListSchema,
   pushPlanSchema,
@@ -594,6 +595,10 @@ export const ipcContract = {
   "inspector:getComponents": {
     request: z.string(),
     response: inspectorComponentsResultSchema,
+  },
+  "inspector:designAudit": {
+    request: z.string(),
+    response: designAuditSchema,
   },
   "inspector:setTokenValue": {
     request: z.object({

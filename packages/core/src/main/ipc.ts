@@ -49,6 +49,7 @@ import {
   snapshotComponent,
   restoreFiles,
 } from "./inspector/component-reader";
+import { buildDesignAudit } from "./inspector/design-audit";
 import {
   acceptComposition,
   sweepComposition,
@@ -373,6 +374,7 @@ const handlers: Record<IpcChannel, Handler> = {
       : getInspectorTokens(req.projectPath, req.preferredCollection)) as Handler,
   "inspector:getComponents": ((projectPath: string) =>
     getInspectorComponents(projectPath)) as Handler,
+  "inspector:designAudit": ((projectPath: string) => buildDesignAudit(projectPath)) as Handler,
   "inspector:setTokenValue": ((req: {
     projectPath: string;
     name: string;
