@@ -1,6 +1,8 @@
 import type { AgentRunOptions } from "@vortspec/core/run-events";
 import { getInspectorComponents } from "./component-reader";
 import { getInspectorTokens } from "./token-parser";
+import { readAllMetadata } from "./component-metadata";
+import { normComponentName } from "./figma-reconcile";
 
 /**
  * The design-system index digest (Plan B3): a compact, authoritative summary of the
@@ -10,9 +12,10 @@ import { getInspectorTokens } from "./token-parser";
  * the agent would otherwise spend exploration tokens to learn.
  */
 export async function buildIndexDigest(projectPath: string): Promise<string> {
-  const [comps, toks] = await Promise.all([
+  const [comps, toks, metadata] = await Promise.all([
     getInspectorComponents(projectPath).catch(() => null),
     getInspectorTokens(projectPath).catch(() => null),
+    readAllMetadata(projectPath).catch(() => new Map()),
   ]);
   const components = comps?.components ?? [];
   const tokens = toks?.tokens ?? [];
@@ -24,13 +27,16 @@ export async function buildIndexDigest(projectPath: string): Promise<string> {
   ];
 
   if (components.length) {
-    lines.push("", `## Components (${components.length}) — name [level] · file · deps · figma`);
+    lines.push("", `## Components (${components.length}) — name [level] · file · deps · figma · summary`);
+    if (metadata.size) lines.push("Full usage/patterns/anti-patterns live in `.vortspec/metadata/<name>.json` — read a component's file before composing with it.");
     for (const c of components) {
       const bits = [c.file ?? "(unbuilt)"];
       if (c.dependsOn?.length) bits.push(`deps:${c.dependsOn.join(",")}`);
       if (c.figmaKey) bits.push(`figma:${c.figmaKey}`);
       else if (c.figmaBacked) bits.push("figma:yes");
-      lines.push(`- ${c.name}${c.level ? ` [${c.level}]` : ""} · ${bits.join(" · ")}`);
+      const meta = metadata.get(normComponentName(c.name));
+      const summary = meta?.summary ? ` — ${meta.summary}` : "";
+      lines.push(`- ${c.name}${c.level ? ` [${c.level}]` : ""} · ${bits.join(" · ")}${summary}`);
     }
   }
 

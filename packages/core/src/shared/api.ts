@@ -150,6 +150,8 @@ export interface VortSpecApi {
   inspectorComponents(projectPath: string): Promise<IpcResponse<"inspector:getComponents">>;
   /** The design-system audit — hardcoded values + token drift (Plan B4). */
   designAudit(projectPath: string): Promise<IpcResponse<"inspector:designAudit">>;
+  /** AI-ready component metadata coverage + the generation prompt (Plan B6). */
+  metadataPlan(projectPath: string): Promise<IpcResponse<"inspector:metadataPlan">>;
   setTokenValue(
     projectPath: string,
     name: string,

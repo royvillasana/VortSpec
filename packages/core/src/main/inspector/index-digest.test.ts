@@ -43,6 +43,20 @@ describe("buildIndexDigest (Plan B3)", () => {
     await writeFile(join(dir, "package.json"), "{}", "utf8");
     expect(await buildIndexDigest(dir)).toBe("");
   });
+
+  it("includes a component's AI-metadata summary and points to the metadata files (B6)", async () => {
+    await scaffold(dir);
+    const { mkdir } = await import("node:fs/promises");
+    await mkdir(join(dir, ".vortspec/metadata"), { recursive: true });
+    await writeFile(
+      join(dir, ".vortspec/metadata/button.json"),
+      JSON.stringify({ name: "Button", summary: "A clickable primary action.", usage: [], patterns: [], antiPatterns: [] }),
+      "utf8",
+    );
+    const d = await buildIndexDigest(dir);
+    expect(d).toContain("A clickable primary action.");
+    expect(d).toContain(".vortspec/metadata/");
+  });
 });
 
 describe("groundOptions (Plan B3)", () => {

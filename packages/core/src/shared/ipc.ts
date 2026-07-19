@@ -98,6 +98,7 @@ import {
   inspectorTokensResultSchema,
   inspectorComponentsResultSchema,
   designAuditSchema,
+  metadataPlanSchema,
   verificationResultSchema,
   fileSnapshotListSchema,
   pushPlanSchema,
@@ -133,6 +134,9 @@ export type {
   ComponentStatus,
   DesignAudit,
   AuditFinding,
+  ComponentMetadata,
+  MetadataStatus,
+  MetadataPlan,
 } from "./inspector";
 export type {
   VerificationFinding,
@@ -601,6 +605,10 @@ export const ipcContract = {
   "inspector:designAudit": {
     request: z.string(),
     response: designAuditSchema,
+  },
+  "inspector:metadataPlan": {
+    request: z.string(),
+    response: metadataPlanSchema,
   },
   "inspector:setTokenValue": {
     request: z.object({

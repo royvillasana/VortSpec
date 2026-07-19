@@ -13,11 +13,13 @@ import type {
   TokenType,
   TokenUsage,
   DesignAudit,
+  MetadataPlan,
 } from "@vortspec/core/ipc";
 import { api } from "../lib/api";
 import { useAgentRun } from "../lib/useAgentRun";
 import { Spinner } from "@vortspec/ui/ui";
 import { AuditBanner } from "@vortspec/ui/AuditBanner";
+import { MetadataStatus } from "@vortspec/ui/MetadataStatus";
 import { RunPanel } from "@vortspec/ui/RunPanel";
 import { ProjectRail, projectRailItems } from "@vortspec/ui/ProjectRail";
 
@@ -229,6 +231,9 @@ export function Inspector({
   const pushRun = useAgentRun();
   const [pushPlan, setPushPlan] = useState<PushPlan | null>(null);
   const [pushing, setPushing] = useState(false);
+  // AI-ready component metadata (Plan B6): coverage + a gated run to fill the gap.
+  const metaRun = useAgentRun();
+  const [metaPlan, setMetaPlan] = useState<MetadataPlan | null>(null);
   // New-token creation form.
   const [creating, setCreating] = useState(false);
   const [newTok, setNewTok] = useState<{ name: string; value: string; type: TokenType }>({
@@ -266,7 +271,25 @@ export function Inspector({
     setActiveMode(r.activeMode);
     void api.getSanitation(project.path).then(setSanitation).catch(() => undefined);
     void api.designAudit(project.path).then(setAudit).catch(() => undefined);
+    void api.metadataPlan(project.path).then(setMetaPlan).catch(() => undefined);
   }
+
+  async function generateMetadata(): Promise<void> {
+    if (!metaPlan?.prompt || metaRun.running) return;
+    await metaRun.start({
+      prompt: metaPlan.prompt,
+      cwd: project.path,
+      allowedTools: ["Read", "Write"],
+      bypassPermissions: true,
+      strictMcp: true,
+    });
+  }
+
+  // When metadata generation finishes, re-read coverage so the status updates.
+  useEffect(() => {
+    if (metaRun.model.status === "done") void api.metadataPlan(project.path).then(setMetaPlan).catch(() => undefined);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [metaRun.model.status]);
 
   async function collapseDuplicate(tokenName: string, canonicalName: string): Promise<void> {
     const r = await api.collapseToken(project.path, tokenName, canonicalName);
@@ -842,6 +865,7 @@ export function Inspector({
         </header>
 
         <AuditBanner audit={audit} />
+        <MetadataStatus plan={metaPlan} running={metaRun.running} onGenerate={() => void generateMetadata()} />
 
         <div className="flex-1 overflow-x-hidden overflow-y-auto">
           {tokens === null ? (
