@@ -185,6 +185,26 @@ export const tokenKeyMapSchema = z.object({
 export type TokenKeyMap = z.infer<typeof tokenKeyMapSchema>;
 
 /**
+ * The durable component join table (`.vortspec/maps/components.json`, Plan B1c):
+ * normalized code-component name → its Figma `componentKey` (durable join) +
+ * `componentSetId` (fast in-file lookup) + `dependsOn` (the other DS components it
+ * renders, so generation can resolve nested instances bottom-up). Mirrors the token
+ * map; the component key is the highest-precedence reconcile signal.
+ */
+export const componentKeyEntrySchema = z.object({
+  componentKey: z.string().optional(),
+  componentSetId: z.string().optional(),
+  /** normalized names of other roster components this one renders (for bottom-up order). */
+  dependsOn: z.array(z.string()).default([]),
+});
+export type ComponentKeyEntry = z.infer<typeof componentKeyEntrySchema>;
+
+export const componentKeyMapSchema = z.object({
+  components: z.record(z.string(), componentKeyEntrySchema).default({}),
+});
+export type ComponentKeyMap = z.infer<typeof componentKeyMapSchema>;
+
+/**
  * Code→Figma push (change: add-code-to-figma-token-push, extended by
  * figma-native-token-model). A push plan is computed locally by diffing the code
  * token file against the Figma-variable cache; it is what the user previews and
@@ -346,6 +366,10 @@ export const inspectorComponentSchema = z.object({
   figmaBacked: z.boolean().optional(),
   /** The matched Figma component's variant axes, when figma-backed. */
   figmaVariants: z.array(z.string()).optional(),
+  /** The matched Figma component's durable componentKey, when figma-backed (Plan B1c). */
+  figmaKey: z.string().optional(),
+  /** Other roster components this one renders — bottom-up generation order (Plan B1c). */
+  dependsOn: z.array(z.string()).optional(),
 });
 export type InspectorComponent = z.infer<typeof inspectorComponentSchema>;
 

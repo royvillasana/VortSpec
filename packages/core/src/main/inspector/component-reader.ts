@@ -2,6 +2,7 @@ import { join, dirname, basename } from "node:path";
 import { readFile, readdir, writeFile } from "node:fs/promises";
 import { readProjectConfig } from "../workspace/config-manager";
 import { readFigmaComponents, reconcileComponents, normComponentName } from "./figma-reconcile";
+import { readComponentMap, mergeComponentEntries } from "./design-map";
 import { detectedComponentsSchema, type DetectedComponent } from "@vortspec/core/flow";
 import type {
   ComponentStatus,
@@ -278,6 +279,29 @@ async function componentStatus(
   return { status: "verified", issues: [], specPath, reportPath };
 }
 
+/**
+ * Which other roster components a component's source renders — its `dependsOn`
+ * (Plan B1c), used for bottom-up generation order. Deterministic: a roster name N is
+ * a dependency of the source when it appears as a JSX opening tag `<N` (word-bounded,
+ * so `<Button` matches but `<ButtonGroup` does not). Excludes the component itself.
+ * Returns normalized names, sorted.
+ */
+export function componentDeps(source: string, roster: string[], self: string): string[] {
+  const selfNorm = normComponentName(self);
+  const deps = new Set<string>();
+  for (const name of roster) {
+    const norm = normComponentName(name);
+    if (norm === selfNorm) continue;
+    // JSX tag use: `<Name` followed by whitespace, `>`, or `/` (not another name char).
+    if (new RegExp(`<${escapeRe(name)}(?![A-Za-z0-9])`).test(source)) deps.add(norm);
+  }
+  return [...deps].sort();
+}
+
+function escapeRe(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 export async function getInspectorComponents(
   projectPath: string,
 ): Promise<InspectorComponentsResult> {
@@ -293,6 +317,8 @@ export async function getInspectorComponents(
   }
 
   const root = componentDir ? join(projectPath, componentDir) : projectPath;
+  const rosterNames = manifest.map((m) => m.name);
+  const srcByName = new Map<string, string>();
   const components: InspectorComponent[] = [];
   for (const entry of manifest) {
     const abs = await findSourceFile(root, entry.name);
@@ -301,6 +327,7 @@ export async function getInspectorComponents(
     let tokens: string[] = [];
     if (abs && file) {
       const src = await readFile(abs, "utf8").catch(() => "");
+      srcByName.set(entry.name, src);
       // CVA variants usually live in a sibling `<name>.variants.ts`.
       const vrel = await variantsSibling(projectPath, file);
       const variantsSrc = vrel ? await readFile(join(projectPath, vrel), "utf8").catch(() => "") : "";
@@ -332,10 +359,30 @@ export async function getInspectorComponents(
   // and every component stays plain code with no figma badge.
   const figmaComps = await readFigmaComponents(projectPath);
   const recon = figmaComps ? reconcileComponents(components.map((c) => c.name), figmaComps) : null;
+  // Durable-key join (Plan B1c): prefer the recorded componentKey over the name match,
+  // so a Figma rename doesn't drop the badge. Figma components carry their key from sync.
+  const compMap = await readComponentMap(projectPath);
+  const figmaByKey = new Map((figmaComps ?? []).filter((f) => f.key).map((f) => [f.key as string, f]));
+  const figmaByName = new Map((figmaComps ?? []).map((f) => [normComponentName(f.name), f]));
+
+  const joins: { name: string; componentKey?: string; componentSetId?: string; dependsOn?: string[] }[] = [];
   const withFigma: InspectorComponent[] = components.map((c) => {
-    const match = recon?.byName.get(normComponentName(c.name));
-    return match ? { ...c, figmaBacked: true, figmaVariants: match.figmaVariants } : c;
+    const norm = normComponentName(c.name);
+    const dependsOn = componentDeps(srcByName.get(c.name) ?? "", rosterNames, c.name);
+    // 1) durable key (recorded) → 2) name match. Both yield the full Figma component,
+    // so a name match still records the durable key (bootstrapping the join).
+    const recordedKey = compMap.components[norm]?.componentKey;
+    const fig = (recordedKey ? figmaByKey.get(recordedKey) : undefined) ?? figmaByName.get(norm);
+    if (fig || dependsOn.length) {
+      joins.push({ name: c.name, componentKey: fig?.key, componentSetId: fig?.id, dependsOn });
+    }
+    return fig
+      ? { ...c, figmaBacked: true, figmaVariants: fig.variants, figmaKey: fig.key, dependsOn }
+      : { ...c, dependsOn };
   });
+
+  // Persist confident component keys + the dependency graph (guarded — writes on change).
+  await mergeComponentEntries(projectPath, joins);
 
   return {
     componentDir,

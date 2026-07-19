@@ -464,7 +464,8 @@ export const READ_COMPONENTS_SCRIPT = `figma.loadAllPagesAsync().then(function (
     if (seen[n.name]) continue; seen[n.name] = 1;
     var variants = [];
     if (n.type === "COMPONENT_SET") { try { variants = Object.keys(n.variantGroupProperties || {}); } catch (e) {} }
-    out.push({ name: n.name, isSet: n.type === "COMPONENT_SET", variants: variants });
+    // n.key is the publish-stable componentKey (empty for an unpublished component).
+    out.push({ name: n.name, isSet: n.type === "COMPONENT_SET", variants: variants, key: n.key || undefined, id: n.id });
   }
   return out;
 });`;
@@ -496,7 +497,9 @@ export function parseComponentsEval(raw: string): FigmaComponent[] {
     const variants = Array.isArray(r.variants)
       ? r.variants.filter((v): v is string => typeof v === "string")
       : [];
-    out.push({ name, isSet: Boolean(r.isSet), variants });
+    const key = typeof r.key === "string" && r.key ? r.key : undefined;
+    const id = typeof r.id === "string" && r.id ? r.id : undefined;
+    out.push({ name, isSet: Boolean(r.isSet), variants, key, id });
   }
   return out;
 }

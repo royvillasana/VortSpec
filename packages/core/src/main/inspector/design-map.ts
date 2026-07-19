@@ -1,8 +1,14 @@
 import { join, dirname } from "node:path";
 import { readFile, writeFile, mkdir } from "node:fs/promises";
-import { tokenKeyMapSchema, type TokenKeyMap } from "@vortspec/core/inspector";
+import {
+  tokenKeyMapSchema,
+  componentKeyMapSchema,
+  type TokenKeyMap,
+  type ComponentKeyMap,
+  type ComponentKeyEntry,
+} from "@vortspec/core/inspector";
 import type { ResolveCandidate } from "./token-resolver";
-import { normName } from "./figma-reconcile";
+import { normName, normComponentName } from "./figma-reconcile";
 
 /**
  * The durable design-system join table (Plan B1). Persists the code-token → Figma
@@ -87,6 +93,64 @@ export function stampTokenKeys(candidates: ResolveCandidate[], map: TokenKeyMap)
     const entry = map.tokens[normName(c.name)];
     return entry ? { ...c, key: entry.variableKey } : c;
   });
+}
+
+// ── Component join table (`.vortspec/maps/components.json`, Plan B1c) ──────────────
+
+const COMPONENTS_MAP_PATH = ".vortspec/maps/components.json";
+
+/** Read the durable component join table. Missing/malformed → an empty map. */
+export async function readComponentMap(projectPath: string): Promise<ComponentKeyMap> {
+  try {
+    const raw = await readFile(join(projectPath, COMPONENTS_MAP_PATH), "utf8");
+    const parsed = componentKeyMapSchema.safeParse(JSON.parse(raw));
+    if (parsed.success) return parsed.data;
+  } catch {
+    /* no map yet */
+  }
+  return { components: {} };
+}
+
+/** Write the durable component join table (best-effort; creates `.vortspec/maps/`). */
+export async function writeComponentMap(projectPath: string, map: ComponentKeyMap): Promise<void> {
+  const path = join(projectPath, COMPONENTS_MAP_PATH);
+  await mkdir(dirname(path), { recursive: true }).catch(() => undefined);
+  await writeFile(path, `${JSON.stringify(map, null, 2)}\n`, "utf8").catch(() => undefined);
+}
+
+/**
+ * Merge component join entries (keyed by normalized code-component name) into the map,
+ * writing only when something changed. Each entry may carry a componentKey/setId (from
+ * a confident Figma match) and/or a `dependsOn` list (from the deterministic source
+ * scan). Returns whether it changed.
+ */
+export async function mergeComponentEntries(
+  projectPath: string,
+  entries: { name: string; componentKey?: string; componentSetId?: string; dependsOn?: string[] }[],
+): Promise<{ changed: boolean }> {
+  if (entries.length === 0) return { changed: false };
+  const map = await readComponentMap(projectPath);
+  let changed = false;
+  for (const e of entries) {
+    const norm = normComponentName(e.name);
+    const prev: ComponentKeyEntry = map.components[norm] ?? { dependsOn: [] };
+    const next: ComponentKeyEntry = {
+      componentKey: e.componentKey ?? prev.componentKey,
+      componentSetId: e.componentSetId ?? prev.componentSetId,
+      dependsOn: e.dependsOn ?? prev.dependsOn,
+    };
+    if (
+      next.componentKey !== prev.componentKey ||
+      next.componentSetId !== prev.componentSetId ||
+      next.dependsOn.join(",") !== prev.dependsOn.join(",") ||
+      !map.components[norm]
+    ) {
+      map.components[norm] = next;
+      changed = true;
+    }
+  }
+  if (changed) await writeComponentMap(projectPath, map);
+  return { changed };
 }
 
 /**
