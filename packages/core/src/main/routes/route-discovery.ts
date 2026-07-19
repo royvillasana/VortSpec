@@ -1,6 +1,13 @@
 import { readFile, readdir } from "node:fs/promises";
 import { join, extname, relative } from "node:path";
-import { buildRouteTree, type RouteDiscovery, type RouteNode } from "../../shared/routes";
+import {
+  buildRouteTree,
+  buildScreenList,
+  screenPreviewManifestSchema,
+  type RouteDiscovery,
+  type RouteNode,
+  type ScreenPreviewManifest,
+} from "../../shared/routes";
 
 /**
  * Discover the app's page routes from source (change: sitemap-tree).
@@ -159,15 +166,70 @@ export async function discoverRoutes(projectPath: string): Promise<RouteDiscover
     return { router: "react-router", routes: [], note: "react-router is present but no <Route path> was found in source." };
   }
 
-  // No router — a single-page app. Point Home at the entry file, if we can find one.
+  // No router — a single-page app. Point Home at the entry file, and list any
+  // state-navigated screen files so they're visible/openable even without a URL.
   const entry =
     (await firstExisting(projectPath, ["src/App.tsx", "src/App.jsx", "src/main.tsx", "src/main.jsx", "src/index.tsx", "App.tsx"])) ??
     null;
+  const home: RouteNode = { path: "/", label: "Home", file: entry, dynamic: false, navigable: !!entry, children: [] };
+  const screens = await discoverScreenFiles(projectPath);
+  if (screens.length) {
+    const manifest = await readScreenPreviewManifest(projectPath);
+    return {
+      router: "none",
+      routes: buildScreenList(home, screens, manifest),
+      note: manifest
+        ? "State-navigated screens (no URL). Click one to preview it standalone in the live canvas."
+        : "State-navigated screens have no URL. Enable screen preview to render them standalone; until then, click one to open its source.",
+      screenPreview: { enabled: !!manifest, param: manifest?.param ?? "screen" },
+    };
+  }
   return {
     router: "none",
-    routes: [{ path: "/", label: "Home", file: entry, dynamic: false, children: [] }],
+    routes: [home],
     note: "No router detected — this looks like a single-page app. Add routing to see more pages here.",
   };
+}
+
+/** Read the dev-only screen-preview harness manifest, if the app has installed one. */
+async function readScreenPreviewManifest(projectPath: string): Promise<ScreenPreviewManifest | null> {
+  try {
+    const raw = JSON.parse(await readFile(join(projectPath, ".vortspec/screen-preview.json"), "utf8"));
+    const parsed = screenPreviewManifestSchema.parse(raw);
+    return parsed.screens.length ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Split a PascalCase/camelCase name into readable words: `DestinationDetail` → `Destination detail`. */
+function humanizeScreenName(name: string): string {
+  const spaced = name.replace(/[-_]+/g, " ").replace(/([a-z0-9])([A-Z])/g, "$1 $2").trim();
+  return spaced ? spaced.charAt(0).toUpperCase() + spaced.slice(1).toLowerCase() : name;
+}
+
+/**
+ * Screen component files a state-navigated app renders without a router — the `screens/`,
+ * `pages/`, or `views/` directory. Excludes tests/stories and barrel `index` files.
+ */
+async function discoverScreenFiles(projectPath: string): Promise<{ label: string; file: string; name: string }[]> {
+  const dirs = ["src/screens", "src/pages", "src/views", "screens", "pages", "views"];
+  const out: { label: string; file: string; name: string }[] = [];
+  const seen = new Set<string>();
+  for (const d of dirs) {
+    const root = join(projectPath, d);
+    if (!(await exists(root))) continue;
+    for (const f of await walkFiles(root)) {
+      const bare = f.slice(root.length + 1).replace(/\.(tsx|jsx|ts|js)$/, "");
+      const last = bare.split("/").pop() ?? bare;
+      if (/\.(test|spec|stories)$/.test(bare) || last === "index" || !/^[A-Z]/.test(last)) continue;
+      const rel = relative(projectPath, f);
+      if (seen.has(rel)) continue;
+      seen.add(rel);
+      out.push({ label: humanizeScreenName(last), file: rel, name: last });
+    }
+  }
+  return out;
 }
 
 async function firstExisting(projectPath: string, rels: string[]): Promise<string | null> {

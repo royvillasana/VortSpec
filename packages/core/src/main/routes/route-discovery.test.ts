@@ -94,7 +94,43 @@ describe("discoverRoutes", () => {
     const r = await discoverRoutes(dir);
     expect(r.router).toBe("none");
     expect(r.routes).toHaveLength(1);
-    expect(r.routes[0]).toMatchObject({ path: "/", label: "Home", file: "src/App.tsx" });
+    expect(r.routes[0]).toMatchObject({ path: "/", label: "Home", file: "src/App.tsx", navigable: true });
     expect(r.note).toMatch(/single-page/);
+  });
+
+  it("lists state-navigated screen files under Home for a router-less app", async () => {
+    await writeFile(join(dir, "package.json"), JSON.stringify({ dependencies: { react: "18", vite: "5" } }), "utf8");
+    await write(dir, "src/App.tsx");
+    await write(dir, "src/screens/DestinationDetail.tsx");
+    await write(dir, "src/screens/index.ts"); // barrel — excluded
+    await write(dir, "src/screens/DestinationDetail.test.tsx"); // test — excluded
+    const r = await discoverRoutes(dir);
+    expect(r.router).toBe("none");
+    const home = r.routes[0];
+    expect(home).toMatchObject({ path: "/", navigable: true });
+    expect(home.children).toHaveLength(1);
+    expect(home.children[0]).toMatchObject({
+      path: "#screen/src/screens/DestinationDetail.tsx",
+      label: "Destination detail",
+      file: "src/screens/DestinationDetail.tsx",
+      navigable: false,
+    });
+    expect(r.note).toMatch(/state-navigated/i);
+    expect(r.screenPreview).toEqual({ enabled: false, param: "screen" });
+  });
+
+  it("makes screens navigable via ?screen= when a preview harness manifest is present", async () => {
+    await writeFile(join(dir, "package.json"), JSON.stringify({ dependencies: { react: "18", vite: "5" } }), "utf8");
+    await write(dir, "src/App.tsx");
+    await write(dir, "src/screens/DestinationDetail.tsx");
+    await write(
+      dir,
+      ".vortspec/screen-preview.json",
+      JSON.stringify({ param: "screen", screens: [{ name: "DestinationDetail", file: "src/screens/DestinationDetail.tsx" }] }),
+    );
+    const r = await discoverRoutes(dir);
+    expect(r.screenPreview).toEqual({ enabled: true, param: "screen" });
+    const screen = r.routes[0].children[0];
+    expect(screen).toMatchObject({ path: "?screen=DestinationDetail", navigable: true });
   });
 });

@@ -243,6 +243,9 @@ export function RunApp({
   // ── Sitemap: the app's page/route tree, read from source (change: sitemap-tree) ──
   const [routes, setRoutes] = useState<RouteDiscovery | null>(null);
   const [currentPath, setCurrentPath] = useState("/");
+  const rediscoverRoutes = useCallback(() => {
+    void api.discoverRoutes(project.path).then(setRoutes);
+  }, [project.path]);
   useEffect(() => {
     if (!canvas) return;
     let alive = true;
@@ -319,6 +322,14 @@ export function RunApp({
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [dev.url, bridge.loadUrl],
+  );
+
+  // A state-navigated screen has no URL — reveal its source file so the user can edit it.
+  const openScreenFile = useCallback(
+    (relPath: string) => {
+      void api.revealPath(project.path, relPath);
+    },
+    [project.path],
   );
 
   // Reload the live preview: reload the canvas webview via the bridge, and
@@ -412,6 +423,61 @@ export function RunApp({
   const [review, setReview] = useState(false);
   const [snapshot, setSnapshot] = useState<FileSnapshot[] | null>(null);
   const structuralMod = useAgentRun();
+
+  // ── Screen preview: install a dev-only harness so state-navigated screens (no URL)
+  // can be rendered standalone via `?screen=<Name>`. A gated Claude Code run adds the
+  // harness + a manifest; on completion we re-discover so those screens become navigable.
+  const screenPreviewMod = useAgentRun();
+  const enableScreenPreview = useCallback(() => {
+    const screens = (routes?.routes[0]?.children ?? [])
+      .filter((c) => c.path.startsWith("#screen/") && c.file)
+      .map((c) => c.file as string);
+    const param = routes?.screenPreview?.param ?? "screen";
+    const list = screens.length ? screens.map((f) => `  - ${f}`).join("\n") : "  - (scan src/screens, src/pages, src/views)";
+    void screenPreviewMod.start({
+      cwd: project.path,
+      allowedTools: ["Read", "Edit", "Write"],
+      bypassPermissions: true,
+      strictMcp: true,
+      prompt: [
+        "This app navigates between screens with React state, not a router, so its screens have no URL and can't be opened directly in a preview. Add a DEV-ONLY screen-preview harness so each screen can be rendered standalone.",
+        "",
+        "Requirements:",
+        `1. In the app's entry module (the script that index.html loads — likely src/main.tsx, src/preview/main.tsx, or src/index.tsx), add a branch guarded by \`import.meta.env.DEV\`: read the URL query param "${param}" (e.g. ?${param}=DestinationDetail). If it names a screen component, render THAT screen ALONE — wrapped in exactly the same top-level providers, theme, and global styles the app normally mounts. Otherwise render the app exactly as before. Production builds MUST be unaffected.`,
+        "2. Each screen needs representative props to render. Build realistic sample props by REUSING the app's own sample data and helper functions (e.g. the landing screen's listings array and any `to<Screen>Data` mapper). If they aren't exported, export them (or construct equivalent representative data). Supply no-op functions for callbacks like onBack.",
+        `3. Create the manifest file \`.vortspec/screen-preview.json\` with EXACTLY this shape: { "param": "${param}", "screens": [ { "name": "<ComponentName>", "file": "<src/screens/File.tsx>" } ] } listing every screen the harness can render.`,
+        "4. Keep it minimal, typed (no `any`), and reversible. Do NOT add a router or change production rendering.",
+        "",
+        "Screens to support:",
+        list,
+      ].join("\n"),
+    });
+  }, [routes, project.path, screenPreviewMod]);
+
+  // When the harness-install run finishes, re-discover routes (screens become navigable)
+  // and reload the preview so the new entry code is live.
+  useEffect(() => {
+    if (screenPreviewMod.model.status !== "done") return;
+    rediscoverRoutes();
+    bridge.reload();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [screenPreviewMod.model.status]);
+
+  // Auto-provision the screen-preview harness (like Storybook): the FIRST time we detect
+  // state-navigated screens without a harness, install it silently — no user action. Once
+  // per project per session; a failure surfaces a manual retry in the sitemap instead of looping.
+  const autoPreviewFor = useRef<string | null>(null);
+  useEffect(() => {
+    if (!canvas) return;
+    const sp = routes?.screenPreview;
+    if (!sp || sp.enabled) return; // nothing to do, or already installed
+    if (screenPreviewMod.running || autoPreviewFor.current === project.path) return;
+    autoPreviewFor.current = project.path;
+    enableScreenPreview();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [routes, canvas, project.path]);
+  const screenPreviewState: "setting-up" | "failed" =
+    screenPreviewMod.model.status === "error" ? "failed" : "setting-up";
 
   // Persist the ledger on every change (removed when empty — nothing owed).
   useEffect(() => {
@@ -1239,7 +1305,14 @@ export function RunApp({
                 className="flex flex-none flex-col overflow-hidden border-r border-vs-border-default bg-vs-bg-surface"
               >
                 {/* Sitemap: navigate the preview to the app's pages, in any mode. */}
-                <Sitemap discovery={routes} currentPath={currentPath} onNavigate={navigateTo} />
+                <Sitemap
+                  discovery={routes}
+                  currentPath={currentPath}
+                  onNavigate={navigateTo}
+                  onOpenFile={openScreenFile}
+                  onRetryScreenPreview={enableScreenPreview}
+                  screenPreviewState={screenPreviewState}
+                />
                 {mode === "comment" ? (
                   <>
                   <div className="flex min-h-0 flex-1 flex-col overflow-hidden">

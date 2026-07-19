@@ -543,7 +543,11 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
     snapshotTokenScope: async () => cfg.snapshot ?? [],
     snapshotSourceScope: async () => cfg.snapshot ?? [],
     discoverRoutes: async () =>
-      cfg.routes ?? { router: "none", routes: [{ path: "/", label: "Home", file: "src/App.tsx", dynamic: false, children: [] }], note: null },
+      cfg.routes ?? {
+        router: "none",
+        routes: [{ path: "/", label: "Home", file: "src/App.tsx", dynamic: false, navigable: true, children: [] }],
+        note: null,
+      },
     restoreFiles: async (_p: string, files: { path: string }[]) => {
       composeOps.push({ op: "restore", files: files.map((f) => f.path) });
       return undefined;
