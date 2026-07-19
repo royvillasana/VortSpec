@@ -3,6 +3,8 @@ import { readFile, readdir, writeFile } from "node:fs/promises";
 import { readProjectConfig } from "../workspace/config-manager";
 import { readFigmaComponents, reconcileComponents, normComponentName } from "./figma-reconcile";
 import { readComponentMap, mergeComponentEntries } from "./design-map";
+import { cachedScan } from "./scan-cache";
+import { inspectorComponentsResultSchema } from "@vortspec/core/inspector";
 import { detectedComponentsSchema, type DetectedComponent } from "@vortspec/core/flow";
 import type {
   ComponentStatus,
@@ -302,7 +304,28 @@ function escapeRe(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+/**
+ * Read the project's components, cached by an input fingerprint (Plan B2): a warm cache
+ * returns the stored result without re-reading every component source. The derived
+ * component map (`.vortspec/maps/components.json`) is an OUTPUT, not an input.
+ */
 export async function getInspectorComponents(
+  projectPath: string,
+): Promise<InspectorComponentsResult> {
+  const config = await readProjectConfig(projectPath);
+  return cachedScan<InspectorComponentsResult>(
+    projectPath,
+    "components",
+    {
+      files: [".sdd-de/project.yaml", ".sdd-de/components.json", ".vortspec/figma-components.json"],
+      dirs: config?.componentDir ? [config.componentDir] : [],
+    },
+    () => computeInspectorComponents(projectPath),
+    inspectorComponentsResultSchema,
+  );
+}
+
+async function computeInspectorComponents(
   projectPath: string,
 ): Promise<InspectorComponentsResult> {
   const config = await readProjectConfig(projectPath);

@@ -10,6 +10,8 @@ import {
 } from "./figma-reconcile";
 import { resolveToken, readTokenLinks, type ResolveCandidate } from "./token-resolver";
 import { readTokenKeyMap, mergeTokenKeys } from "./design-map";
+import { cachedScan } from "./scan-cache";
+import { inspectorTokensResultSchema } from "@vortspec/core/inspector";
 import type {
   FigmaCollection,
   FigmaVariable,
@@ -399,7 +401,40 @@ const EMPTY_RESULT: Omit<InspectorTokensResult, "tokenFile"> = {
   modeMap: {},
 };
 
+/**
+ * Read the project's tokens, cached by an input fingerprint (Plan B2): a warm cache
+ * (no source/Figma change since last read) returns the stored result without re-parsing.
+ * The derived key map (`.vortspec/maps/tokens.json`) is NOT an input — it's an output of
+ * this scan, computed from the token file + Figma cache, both already fingerprinted.
+ */
 export async function getInspectorTokens(
+  projectPath: string,
+  preferredCollection?: string,
+): Promise<InspectorTokensResult> {
+  const config = await readProjectConfig(projectPath);
+  const tokenFile = config?.tokenFile ?? null;
+  if (!tokenFile) return { tokenFile: null, ...EMPTY_RESULT };
+  return cachedScan<InspectorTokensResult>(
+    projectPath,
+    `tokens-${preferredCollection ?? "default"}`,
+    {
+      files: [
+        ".sdd-de/project.yaml",
+        tokenFile,
+        ".vortspec/figma-variables.json",
+        ".vortspec/token-overrides.json",
+        ".vortspec/token-links.json",
+        ".vortspec/token-mode-map.json",
+      ],
+      dirs: config?.componentDir ? [config.componentDir] : [],
+      extra: preferredCollection ?? "",
+    },
+    () => computeInspectorTokens(projectPath, preferredCollection),
+    inspectorTokensResultSchema,
+  );
+}
+
+async function computeInspectorTokens(
   projectPath: string,
   preferredCollection?: string,
 ): Promise<InspectorTokensResult> {
