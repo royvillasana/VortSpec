@@ -2,7 +2,7 @@ import { join } from "node:path";
 import { readFile } from "node:fs/promises";
 import type { AuditFinding, DesignAudit } from "@vortspec/core/inspector";
 import { getInspectorTokens } from "./token-parser";
-import { getInspectorComponents } from "./component-reader";
+import { getInspectorComponents, stripComments } from "./component-reader";
 import { normValue } from "./figma-reconcile";
 
 /**
@@ -47,7 +47,8 @@ export async function buildDesignAudit(projectPath: string): Promise<DesignAudit
   // Hardcoded colors: a hex literal in a component that equals a color token's value.
   for (const c of components) {
     if (!c.file || findings.length >= MAX_FINDINGS) continue;
-    const src = await readFile(join(projectPath, c.file), "utf8").catch(() => "");
+    // Strip comments so a hex in `/* brand #1a73e8 */` isn't flagged as a hardcoded value.
+    const src = stripComments(await readFile(join(projectPath, c.file), "utf8").catch(() => ""));
     const seen = new Set<string>();
     for (const m of src.matchAll(HEX_RE)) {
       const hex = m[0];

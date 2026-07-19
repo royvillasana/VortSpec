@@ -23,6 +23,9 @@ interface PayloadSchema<T> {
  * input change is a miss that recomputes — so it can always be deleted safely.
  */
 
+/** Cache envelope version — bump to invalidate every cache after a format change. Also
+ * makes a foreign cache file (e.g. shipped in a cloned repo) fail the check and recompute. */
+const CACHE_VERSION = 1;
 const SKIP_DIRS = new Set(["node_modules", ".git", ".next", "dist", "build", "out", ".turbo", "coverage", ".vortspec"]);
 const SOURCE_EXTS = new Set([".ts", ".tsx", ".js", ".jsx", ".css", ".scss", ".vue", ".svelte", ".astro", ".json", ".yaml", ".yml"]);
 const MAX_WALK = 6000;
@@ -57,12 +60,14 @@ async function walkSigs(root: string, rel: string, out: string[], budget: { n: n
   for (const e of entries) {
     if (budget.n <= 0) break;
     if (e.name.startsWith(".") || SKIP_DIRS.has(e.name)) continue;
+    // Every entry (dir OR file) costs budget, so a tree of millions of empty/nested
+    // directories can't walk forever — the cap engages regardless of match count.
+    budget.n--;
     const abs = join(root, e.name);
     const childRel = `${rel}/${e.name}`;
     if (e.isDirectory()) {
       await walkSigs(abs, childRel, out, budget);
     } else if (SOURCE_EXTS.has(e.name.slice(e.name.lastIndexOf(".")))) {
-      budget.n--;
       out.push(`${childRel}=${await fileSig(abs)}`);
     }
   }
@@ -103,16 +108,16 @@ export async function cachedScan<T>(
   const cachePath = join(projectPath, ".vortspec/index", `${safeKey(key)}.json`);
   try {
     const raw = JSON.parse(await readFile(cachePath, "utf8"));
-    if (raw && raw.fingerprint === fp) {
+    if (raw && raw.v === CACHE_VERSION && raw.fingerprint === fp) {
       if (!schema) return raw.payload as T;
       const parsed = schema.safeParse(raw.payload);
       if (parsed.success) return parsed.data;
     }
   } catch {
-    /* no cache / unreadable → recompute */
+    /* no cache / unreadable / wrong version → recompute */
   }
   const payload = await compute();
   await mkdir(dirname(cachePath), { recursive: true }).catch(() => undefined);
-  await writeFile(cachePath, `${JSON.stringify({ fingerprint: fp, payload }, null, 2)}\n`, "utf8").catch(() => undefined);
+  await writeFile(cachePath, `${JSON.stringify({ v: CACHE_VERSION, fingerprint: fp, payload }, null, 2)}\n`, "utf8").catch(() => undefined);
   return payload;
 }

@@ -8,6 +8,7 @@ import {
 } from "@vortspec/core/inspector";
 import { getInspectorComponents } from "./component-reader";
 import { normComponentName } from "./figma-reconcile";
+import { safePromptField } from "./prompt-safe";
 
 /**
  * AI-ready component metadata store (Plan B6). Metadata lives at
@@ -34,15 +35,20 @@ export async function readComponentMetadata(projectPath: string, name: string): 
   }
 }
 
+/** Generated metadata for a known set of component names, keyed by normalized name. */
+export async function readMetadataFor(projectPath: string, names: string[]): Promise<Map<string, ComponentMetadata>> {
+  const out = new Map<string, ComponentMetadata>();
+  for (const name of names) {
+    const m = await readComponentMetadata(projectPath, name);
+    if (m) out.set(normComponentName(name), m);
+  }
+  return out;
+}
+
 /** All generated metadata, keyed by normalized component name. */
 export async function readAllMetadata(projectPath: string): Promise<Map<string, ComponentMetadata>> {
   const comps = await getInspectorComponents(projectPath).catch(() => null);
-  const out = new Map<string, ComponentMetadata>();
-  for (const c of comps?.components ?? []) {
-    const m = await readComponentMetadata(projectPath, c.name);
-    if (m) out.set(normComponentName(c.name), m);
-  }
-  return out;
+  return readMetadataFor(projectPath, (comps?.components ?? []).map((c) => c.name));
 }
 
 /** Coverage of metadata across the roster — which components still lack it. */
@@ -83,8 +89,11 @@ export async function metadataPlan(projectPath: string): Promise<MetadataPlan> {
  * the files match what `readComponentMetadata` expects.
  */
 export function buildMetadataPrompt(components: { name: string; file: string | null }[]): string {
+  // The component NAME and FILE are untrusted project data; sanitize before embedding in
+  // the prompt (Plan B security). The target path is derived via metadataFileName
+  // (normComponentName) so it can never escape `.vortspec/metadata/`.
   const list = components
-    .map((c) => `- ${c.name}${c.file ? ` (${c.file})` : ""} → ${DIR}/${metadataFileName(c.name)}`)
+    .map((c) => `- ${safePromptField(c.name, 80)}${c.file ? ` (${safePromptField(c.file, 120)})` : ""} → ${DIR}/${metadataFileName(c.name)}`)
     .join("\n");
   return [
     "Generate AI-ready metadata for these design-system components so future runs use each one as intended.",

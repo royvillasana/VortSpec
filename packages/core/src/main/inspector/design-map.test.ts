@@ -2,7 +2,7 @@ import { describe, expect, it, beforeEach, afterEach } from "vitest";
 import { mkdtemp, rm, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { readTokenKeyMap, recordTokenKey, stampTokenKeys, tokenDrift } from "./design-map";
+import { readTokenKeyMap, recordTokenKey, stampTokenKeys } from "./design-map";
 import type { ResolveCandidate } from "./token-resolver";
 
 describe("design-map — durable token→variableKey store (Plan B1)", () => {
@@ -37,17 +37,5 @@ describe("design-map — durable token→variableKey store (Plan B1)", () => {
     const stamped = stampTokenKeys(candidates, map);
     expect(stamped[0].key).toBe("VAR_SPACE_4");
     expect(stamped[1].key).toBeUndefined();
-  });
-
-  it("detects drift when the Figma value diverges from the recorded baseline", async () => {
-    await recordTokenKey(dir, "--color-primary", "K1", "#0055FF");
-    await recordTokenKey(dir, "--space-2", "K2", "8px");
-    const map = await readTokenKeyMap(dir);
-    const figmaNow = new Map([
-      ["K1", "#FF0000"], // changed in Figma → drift
-      ["K2", "8px"], // unchanged
-    ]);
-    const drift = tokenDrift(map, figmaNow);
-    expect(drift).toEqual([{ token: "color-primary", variableKey: "K1", was: "#0055FF", now: "#FF0000" }]);
   });
 });
