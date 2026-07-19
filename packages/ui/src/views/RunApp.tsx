@@ -1022,6 +1022,9 @@ export function RunApp({
           // skip the user's global MCP servers (Figma, etc.) to cut session startup,
           // and route the mechanical patch to a faster tier than the default.
           strictMcp: true,
+          // Ground the patch with the design-system index (Plan B3): the token map lets
+          // the agent bind to the right token instead of re-deriving names by grepping.
+          groundWithIndex: true,
           model: routedModel("sonnet"),
         });
         // Completion (reload + review) is handled by the effect below.

@@ -283,7 +283,7 @@ export function GuidedFlow({
   async function op(
     label: string,
     prompt: string,
-    opts?: { tools?: string[]; kind?: OpKind; total?: number; resumeSessionId?: string; model?: ModelTier },
+    opts?: { tools?: string[]; kind?: OpKind; total?: number; resumeSessionId?: string; model?: ModelTier; ground?: boolean },
   ): Promise<void> {
     const kind = opts?.kind ?? "other";
     setRunLabel(label);
@@ -302,6 +302,9 @@ export function GuidedFlow({
       resumeSessionId: opts?.resumeSessionId,
       // Route mechanical/structured steps to a cheaper tier when the login allows.
       model: opts?.model ? routedModel(opts.model) : undefined,
+      // Ground build steps with the design-system index (Plan B3) so the agent reuses
+      // existing components/tokens and builds in dependency order, instead of rediscovering.
+      groundWithIndex: opts?.ground,
       // Persisted so an interrupted run can be resumed with its stage view intact.
       meta: { kind, label, total: opts?.total },
     });
@@ -414,7 +417,7 @@ export function GuidedFlow({
         storybook: true,
         manifest: true,
       }),
-      { kind: "pipeline", total: chunk.length, model: tierForChunk(chunk) },
+      { kind: "pipeline", total: chunk.length, model: tierForChunk(chunk), ground: true },
     );
   }
 
@@ -847,6 +850,7 @@ export function GuidedFlow({
                                 void op(`Building "${c.name}"`, buildOnePrompt(c.name, c.level), {
                                   kind: "build",
                                   model: tierForChunk([c]),
+                                  ground: true,
                                 });
                               }}
                               onVerify={() => void verify(c.name, `Verifying "${c.name}"`)}
