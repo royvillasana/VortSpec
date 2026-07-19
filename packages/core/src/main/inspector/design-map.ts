@@ -52,6 +52,32 @@ export async function recordTokenKey(
 }
 
 /**
+ * Merge confident code-token ↔ variableKey joins into the map, writing only when
+ * something actually changed (so a read-path caller can populate the map without a
+ * write on every open). Entries should come from HIGH-confidence matches only
+ * (key/link/name signals) — never a fuzzy value guess. Returns whether it changed.
+ */
+export async function mergeTokenKeys(
+  projectPath: string,
+  entries: { token: string; variableKey: string; value?: string }[],
+): Promise<{ changed: boolean }> {
+  if (entries.length === 0) return { changed: false };
+  const map = await readTokenKeyMap(projectPath);
+  let changed = false;
+  for (const e of entries) {
+    if (!e.variableKey) continue;
+    const norm = normName(e.token);
+    const prev = map.tokens[norm];
+    if (!prev || prev.variableKey !== e.variableKey || prev.value !== e.value) {
+      map.tokens[norm] = { variableKey: e.variableKey, ...(e.value ? { value: e.value } : {}) };
+      changed = true;
+    }
+  }
+  if (changed) await writeTokenKeyMap(projectPath, map);
+  return { changed };
+}
+
+/**
  * Stamp each code-token candidate with the `variableKey` recorded for it in the map,
  * so the resolver's durable-key tier can fire. Pure — the map is passed in. Candidates
  * without a recorded key are returned unchanged.

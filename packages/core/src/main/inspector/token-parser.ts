@@ -9,6 +9,7 @@ import {
   normValue,
 } from "./figma-reconcile";
 import { resolveToken, readTokenLinks, type ResolveCandidate } from "./token-resolver";
+import { readTokenKeyMap, mergeTokenKeys } from "./design-map";
 import type {
   FigmaCollection,
   FigmaVariable,
@@ -447,16 +448,20 @@ export async function getInspectorTokens(
   // still reconciles instead of showing as unmatched. Value equality uses the
   // default mode's resolved value; ambiguous value matches don't auto-bind.
   const links = await readTokenLinks(projectPath);
+  // Durable key map (Plan B1): the highest-precedence resolver signal. Figma candidates
+  // carry their publish-stable `variableKey`; code tokens carry the key recorded for them.
+  const keyMap = await readTokenKeyMap(projectPath);
   const figmaIndex: ResolveCandidate[] = [...figmaByNorm.values()].map((v) => ({
     name: v.name,
     value: variableValueInMode(v, defMode, defMode ?? undefined) ?? v.resolvedValue,
     aliasOf: defMode ? v.valuesByMode?.[defMode]?.aliasOf : undefined,
+    key: v.key,
   }));
   const resolveMatch = (t: (typeof parsed)[number]): { match?: FigmaVariable; signal: InspectorToken["matchSignal"] } => {
     if (!model) return { signal: undefined };
     const ref = t.rawValue.trim().match(/^var\(\s*--([\w-]+)/);
     const res = resolveToken(
-      { name: t.name, value: t.resolvedValue, aliasOf: ref ? ref[1] : undefined },
+      { name: t.name, value: t.resolvedValue, aliasOf: ref ? ref[1] : undefined, key: keyMap.tokens[normName(t.name)]?.variableKey },
       figmaIndex,
       { links },
     );
@@ -477,9 +482,17 @@ export async function getInspectorTokens(
         : ("drifted" as const);
 
   const matchedFigma = new Set<string>(); // figma variables claimed by a code token (any signal)
+  // Confident code↔variableKey joins to persist into the durable map (Plan B1b): only
+  // high-confidence signals (key/link/name), never a fuzzy value guess. Recording them
+  // now means a later Figma rename still resolves by key next session.
+  const keyJoins: { token: string; variableKey: string; value?: string }[] = [];
+  const CONFIDENT = new Set(["key", "link", "name"]);
   const tokens: InspectorToken[] = parsed.map((t) => {
     const { match, signal: matchSignal } = resolveMatch(t);
     if (match) matchedFigma.add(normName(match.name));
+    if (match?.key && matchSignal && CONFIDENT.has(matchSignal)) {
+      keyJoins.push({ token: t.name, variableKey: match.key, value: match.resolvedValue || undefined });
+    }
     const source = edited.has(t.name) ? "hand-edited" : match ? "figma-variable" : "generated-code";
     const figmaPath = match ? match.name : undefined;
     const group = match ? figmaGroup(match.name) : undefined;
@@ -540,6 +553,9 @@ export async function getInspectorTokens(
       modes,
     };
   });
+
+  // Persist any new durable-key joins (guarded — writes only when the map changed).
+  await mergeTokenKeys(projectPath, keyJoins);
 
   // Figma variables with no matching code token (designed, not yet in code).
   const figmaOnly: FigmaVariable[] = [];
