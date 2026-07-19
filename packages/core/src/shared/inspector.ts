@@ -35,7 +35,7 @@ export type TokenDrift = z.infer<typeof tokenDriftSchema>;
  * token-fidelity-sanitation): a persisted link, normalized name, resolved value,
  * or shared alias target — `none` when unresolved.
  */
-export const matchSignalSchema = z.enum(["link", "name", "value", "alias", "none"]);
+export const matchSignalSchema = z.enum(["key", "link", "name", "value", "alias", "none"]);
 export type MatchSignal = z.infer<typeof matchSignalSchema>;
 
 export const inspectorTokenSchema = z.object({
@@ -125,6 +125,13 @@ export const figmaVariableSchema = z.object({
   collection: z.string().optional(),
   /** The Figma resolved type (COLOR/FLOAT/STRING/BOOLEAN), when known. */
   resolvedType: figmaVariableTypeSchema.optional(),
+  /**
+   * The variable's publish-stable **key** — the durable join to a code token
+   * (change: figma-durable-keys / Plan B1). Survives file rebuilds and renames,
+   * so it is the highest-precedence resolver signal. Empty/absent for a local,
+   * unpublished variable — the resolver then falls back to name/value/alias.
+   */
+  key: z.string().optional(),
   /** mode name → value in that mode. Absent for a legacy single-value export. */
   valuesByMode: z.record(z.string(), figmaModeValueSchema).optional(),
 });
@@ -156,6 +163,46 @@ export type FigmaVariableModel = z.infer<typeof figmaVariableModelSchema>;
  */
 export const tokenLinkMapSchema = z.record(z.string(), z.string());
 export type TokenLinkMap = z.infer<typeof tokenLinkMapSchema>;
+
+/**
+ * The durable token join table (`.vortspec/maps/tokens.json`, Plan B1): normalized
+ * code-token name → the Figma variable's publish-stable `variableKey`, plus the
+ * value last seen in Figma (for drift detection, Plan B4). Unlike token-links (which
+ * joins by the Figma *name/path*, and so breaks on a Figma rename), this joins by the
+ * durable key — the highest-precedence resolver signal. Recorded whenever a code
+ * token is confidently matched to a keyed Figma variable (sync, link-confirm, push).
+ */
+export const tokenKeyEntrySchema = z.object({
+  variableKey: z.string(),
+  /** the variable's resolved value when the key was last recorded (drift baseline). */
+  value: z.string().optional(),
+});
+export type TokenKeyEntry = z.infer<typeof tokenKeyEntrySchema>;
+
+export const tokenKeyMapSchema = z.object({
+  tokens: z.record(z.string(), tokenKeyEntrySchema).default({}),
+});
+export type TokenKeyMap = z.infer<typeof tokenKeyMapSchema>;
+
+/**
+ * The durable component join table (`.vortspec/maps/components.json`, Plan B1c):
+ * normalized code-component name → its Figma `componentKey` (durable join) +
+ * `componentSetId` (fast in-file lookup) + `dependsOn` (the other DS components it
+ * renders, so generation can resolve nested instances bottom-up). Mirrors the token
+ * map; the component key is the highest-precedence reconcile signal.
+ */
+export const componentKeyEntrySchema = z.object({
+  componentKey: z.string().optional(),
+  componentSetId: z.string().optional(),
+  /** normalized names of other roster components this one renders (for bottom-up order). */
+  dependsOn: z.array(z.string()).default([]),
+});
+export type ComponentKeyEntry = z.infer<typeof componentKeyEntrySchema>;
+
+export const componentKeyMapSchema = z.object({
+  components: z.record(z.string(), componentKeyEntrySchema).default({}),
+});
+export type ComponentKeyMap = z.infer<typeof componentKeyMapSchema>;
 
 /**
  * Code→Figma push (change: add-code-to-figma-token-push, extended by
@@ -319,6 +366,10 @@ export const inspectorComponentSchema = z.object({
   figmaBacked: z.boolean().optional(),
   /** The matched Figma component's variant axes, when figma-backed. */
   figmaVariants: z.array(z.string()).optional(),
+  /** The matched Figma component's durable componentKey, when figma-backed (Plan B1c). */
+  figmaKey: z.string().optional(),
+  /** Other roster components this one renders — bottom-up generation order (Plan B1c). */
+  dependsOn: z.array(z.string()).optional(),
 });
 export type InspectorComponent = z.infer<typeof inspectorComponentSchema>;
 

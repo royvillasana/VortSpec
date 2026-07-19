@@ -63,6 +63,7 @@ import type { CommentThread } from "@vortspec/core/comment";
 import { getVerification } from "./inspector/verification-reader";
 import type { SetupAnswers } from "@vortspec/core/setup";
 import { startRun, cancelRun, hasActiveRun, getLastRun } from "./agent/run-manager";
+import { groundOptions } from "./inspector/index-digest";
 import { getUsage } from "./usage/usage-reader";
 import * as gitAdapter from "./git/git-adapter";
 import { providerAuth, providerSwitchAccount, providerCreateRepo, providerCreatePR, providerPublish } from "./git/providers";
@@ -238,8 +239,8 @@ const handlers: Record<IpcChannel, Handler> = {
   "toolkit:status": ((path: string) => getToolkitStatus(path)) as Handler,
   "toolkit:install": ((path: string) => installToolkit(path)) as Handler,
 
-  "agent:startRun": ((opts: AgentRunOptions, sender: WebContents) =>
-    startRun(sender, opts)) as Handler,
+  "agent:startRun": (async (opts: AgentRunOptions, sender: WebContents) =>
+    startRun(sender, await groundOptions(opts))) as Handler,
   "agent:cancelRun": ((runId: string) => {
     cancelRun(runId);
     return undefined;

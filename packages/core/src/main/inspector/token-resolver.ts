@@ -20,6 +20,13 @@ export interface ResolveCandidate {
   value: string;
   /** The referenced token/variable name when this is an alias, else undefined. */
   aliasOf?: string;
+  /**
+   * The Figma variable's publish-stable **key** (Plan B1). On a Figma candidate
+   * it's `variable.key`; on a code-token candidate it's the key recorded in the
+   * durable map (`.vortspec/maps/tokens.json`). When both sides carry the same
+   * key the match is unambiguous — it wins over name/value/alias.
+   */
+  key?: string;
 }
 
 export interface ResolveResult {
@@ -45,6 +52,14 @@ export function resolveToken(
   opts: { links?: TokenLinkMap } = {},
 ): ResolveResult {
   const key = normName(candidate.name);
+
+  // 0. Durable key — the publish-stable Figma variableKey (Plan B1). When the code
+  // token carries a mapped key and exactly one candidate shares it, that join is
+  // authoritative: it survives renames and value collisions that fool later tiers.
+  if (candidate.key) {
+    const byKey = index.filter((c) => c.key && c.key === candidate.key);
+    if (byKey.length === 1) return { match: byKey[0], signal: "key" };
+  }
 
   // 1. Link — authoritative + durable. A dangling target is a stale link, not a match.
   const linkedTarget = opts.links?.[key];

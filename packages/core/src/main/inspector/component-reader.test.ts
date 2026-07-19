@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseProps } from "./component-reader";
+import { parseProps, componentDeps } from "./component-reader";
 
 // Mirrors the real Button.variants.ts shape (CVA with string values containing `:`).
 const CVA = `
@@ -23,6 +23,22 @@ export const buttonVariants = cva(
   },
 );
 `;
+
+describe("componentDeps (dependency graph, Plan B1c)", () => {
+  const roster = ["Button", "Icon", "ButtonGroup", "Card"];
+  it("collects roster components used as JSX tags, normalized and sorted", () => {
+    const src = `export const Toolbar = () => (<div><Button/><Icon name="x"/></div>);`;
+    expect(componentDeps(src, roster, "Toolbar")).toEqual(["button", "icon"]);
+  });
+  it("excludes the component itself", () => {
+    const src = `export const Card = () => (<Card><Button/></Card>);`;
+    expect(componentDeps(src, roster, "Card")).toEqual(["button"]);
+  });
+  it("is word-bounded — `<Button` does not match `<ButtonGroup`", () => {
+    const src = `export const X = () => (<ButtonGroup/>);`;
+    expect(componentDeps(src, roster, "X")).toEqual(["buttongroup"]);
+  });
+});
 
 describe("parseProps (CVA)", () => {
   const props = parseProps(CVA);

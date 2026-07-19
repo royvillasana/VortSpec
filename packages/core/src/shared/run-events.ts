@@ -133,6 +133,14 @@ export const agentRunOptionsSchema = z.object({
    */
   strictMcp: z.boolean().optional(),
   /**
+   * Ground this run with the precomputed design-system index (Plan B3). When set,
+   * the main process prepends a compact digest — the component roster (file paths,
+   * dependsOn, figma keys, tokens used) and the token map (name → value → variableKey)
+   * — to `--append-system-prompt`, so the agent edits from the map instead of
+   * re-discovering the codebase. Read from the B2 scan cache, so it's near-free.
+   */
+  groundWithIndex: z.boolean().optional(),
+  /**
    * Renderer-supplied labels persisted with the run so an interrupted run can be
    * resumed later with its original stage view (kind) and scope (total). Opaque
    * to the main process except for persistence.

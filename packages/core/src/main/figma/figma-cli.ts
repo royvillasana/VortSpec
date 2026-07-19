@@ -305,7 +305,8 @@ export function buildVariablesFetchScript(): string {
     });
     var defMode = col ? (col.modes.filter(function(mm){return mm.modeId===col.defaultModeId;})[0] || col.modes[0]) : null;
     var defVal = defMode && valuesByMode[defMode.name] ? valuesByMode[defMode.name].value : '';
-    return { name: v.name, collection: col ? col.name : undefined, resolvedType: v.resolvedType, resolvedValue: defVal || '', valuesByMode: valuesByMode };
+    // v.key is the publish-stable durable key (empty for a local/unpublished variable).
+    return { name: v.name, key: v.key || undefined, collection: col ? col.name : undefined, resolvedType: v.resolvedType, resolvedValue: defVal || '', valuesByMode: valuesByMode };
   });
   var collections = cols.map(function(c){
     return { name: c.name, modes: c.modes.map(function(m){ return { id: m.modeId, name: m.name }; }), defaultModeId: c.defaultModeId };
@@ -463,7 +464,8 @@ export const READ_COMPONENTS_SCRIPT = `figma.loadAllPagesAsync().then(function (
     if (seen[n.name]) continue; seen[n.name] = 1;
     var variants = [];
     if (n.type === "COMPONENT_SET") { try { variants = Object.keys(n.variantGroupProperties || {}); } catch (e) {} }
-    out.push({ name: n.name, isSet: n.type === "COMPONENT_SET", variants: variants });
+    // n.key is the publish-stable componentKey (empty for an unpublished component).
+    out.push({ name: n.name, isSet: n.type === "COMPONENT_SET", variants: variants, key: n.key || undefined, id: n.id });
   }
   return out;
 });`;
@@ -495,7 +497,9 @@ export function parseComponentsEval(raw: string): FigmaComponent[] {
     const variants = Array.isArray(r.variants)
       ? r.variants.filter((v): v is string => typeof v === "string")
       : [];
-    out.push({ name, isSet: Boolean(r.isSet), variants });
+    const key = typeof r.key === "string" && r.key ? r.key : undefined;
+    const id = typeof r.id === "string" && r.id ? r.id : undefined;
+    out.push({ name, isSet: Boolean(r.isSet), variants, key, id });
   }
   return out;
 }

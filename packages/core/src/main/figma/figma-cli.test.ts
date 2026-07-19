@@ -145,6 +145,11 @@ describe("parseComponentsEval", () => {
     expect(parseComponentsEval(raw)).toEqual([{ name: "Card", isSet: false, variants: [] }]);
   });
 
+  it("captures the durable componentKey + node id when present (Plan B1c)", () => {
+    const raw = JSON.stringify([{ name: "Button", isSet: true, variants: ["Size"], key: "CK_1", id: "1:2" }]);
+    expect(parseComponentsEval(raw)[0]).toMatchObject({ name: "Button", key: "CK_1", id: "1:2" });
+  });
+
   it("drops malformed rows and non-string variants", () => {
     const raw = JSON.stringify([
       { name: "", isSet: true },

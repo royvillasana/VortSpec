@@ -69,6 +69,14 @@ export const figmaComponentSchema = z.object({
   isSet: z.boolean(),
   /** variant axis names (e.g. ["Type", "Size"]); empty for a plain component. */
   variants: z.array(z.string()).default([]),
+  /**
+   * The component's publish-stable **componentKey** (Plan B1c) — the durable join
+   * to a code component. Survives file rebuilds and renames. Empty for an
+   * unpublished component; the reconciler then falls back to name matching.
+   */
+  key: z.string().optional(),
+  /** The node id (componentSetId) — a fast in-file lookup; not stable across rebuilds. */
+  id: z.string().optional(),
 });
 export type FigmaComponent = z.infer<typeof figmaComponentSchema>;
 
