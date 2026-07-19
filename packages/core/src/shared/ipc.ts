@@ -33,6 +33,9 @@ import { devServerStatusSchema } from "./dev-server";
 import { manifestResultSchema, manifestVersionsResultSchema } from "./manifest";
 import { updateInfoSchema } from "./update";
 import { commentThreadSchema, commentCollaboratorSchema, notifyResultSchema } from "./comment";
+import { routeDiscoverySchema } from "./routes";
+export type { RouteDiscovery, RouteNode, RouterKind } from "./routes";
+export { routeDiscoverySchema, routeNodeSchema, buildRouteTree, humanizeSegment } from "./routes";
 
 export type { DevServerStatus, DevServerState, DevServerUpdate } from "./dev-server";
 export { DEV_SERVER_UPDATE_CHANNEL, devServerUpdateSchema } from "./dev-server";
@@ -662,6 +665,11 @@ export const ipcContract = {
   "inspector:snapshotSourceScope": {
     request: z.string(),
     response: fileSnapshotListSchema,
+  },
+  // The app's page/route sitemap, read from source (change: sitemap-tree).
+  "routes:discover": {
+    request: z.string(),
+    response: routeDiscoverySchema,
   },
   "inspector:restoreFiles": {
     request: z.object({ projectPath: z.string(), files: fileSnapshotListSchema }),

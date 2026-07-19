@@ -134,6 +134,8 @@ export interface MockConfig {
   pushPlan?: import("@vortspec/core/ipc").PushPlan;
   /** Result returned by figmaPushVariables(). */
   figmaPush?: import("@vortspec/core/ipc").FigmaPushResult;
+  /** Route sitemap returned by discoverRoutes(). */
+  routes?: import("@vortspec/core/ipc").RouteDiscovery;
 }
 
 export const EMPTY_TOKENS: InspectorTokensResult = {
@@ -540,6 +542,12 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
     snapshotComponent: async () => [],
     snapshotTokenScope: async () => cfg.snapshot ?? [],
     snapshotSourceScope: async () => cfg.snapshot ?? [],
+    discoverRoutes: async () =>
+      cfg.routes ?? {
+        router: "none",
+        routes: [{ path: "/", label: "Home", file: "src/App.tsx", dynamic: false, navigable: true, children: [] }],
+        note: null,
+      },
     restoreFiles: async (_p: string, files: { path: string }[]) => {
       composeOps.push({ op: "restore", files: files.map((f) => f.path) });
       return undefined;

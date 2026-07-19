@@ -627,7 +627,9 @@ function Field({
   onChange: (value: string) => void;
 }): JSX.Element {
   const control =
-    field.kind === "align" ? (
+    field.kind === "resize" ? (
+      <ResizeField value={field.value} mode={field.mode ?? "fixed"} onChange={onChange} />
+    ) : field.kind === "align" ? (
       <AlignGrid value={field.value} onChange={onChange} />
     ) : field.kind === "segment" ? (
       <SegmentedField value={field.value} options={field.options} onChange={onChange} />
@@ -875,6 +877,51 @@ function AlignGrid({
 }
 
 /** An inline segmented button group (Figma-style) — e.g. flow: block / row / column. */
+/**
+ * Figma-style resize control: a Fixed/Hug/Fill mode dropdown + a px value (editable
+ * only in Fixed). A mode change emits `@fixed`/`@hug`/`@fill`; a px edit emits the raw
+ * value — the host maps either to the axis-aware CSS override.
+ */
+function ResizeField({
+  value,
+  mode,
+  onChange,
+}: {
+  value: string;
+  mode: "fixed" | "hug" | "fill";
+  onChange: (v: string) => void;
+}): JSX.Element {
+  const [draft, setDraft] = useState(value);
+  useEffect(() => setDraft(value), [value]);
+  return (
+    <div className="flex w-full items-center gap-1">
+      {mode === "fixed" ? (
+        <input
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={() => draft !== value && onChange(draft)}
+          onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
+          className="min-w-0 flex-1 rounded border border-vs-border-default bg-vs-bg-surface px-2 py-1 text-right font-mono text-[12px] text-vs-text-primary outline-none focus:border-vs-accent"
+        />
+      ) : (
+        <span className="min-w-0 flex-1 rounded border border-vs-border-subtle bg-vs-bg-surface px-2 py-1 text-[12px] text-vs-text-muted">
+          {value}
+        </span>
+      )}
+      <select
+        aria-label="Resizing"
+        value={mode}
+        onChange={(e) => onChange(`@${e.target.value}`)}
+        className="flex-none rounded border border-vs-border-default bg-vs-bg-surface px-1 py-1 text-[11px] text-vs-text-secondary outline-none focus:border-vs-accent"
+      >
+        <option value="fixed">Fixed</option>
+        <option value="hug">Hug</option>
+        <option value="fill">Fill</option>
+      </select>
+    </div>
+  );
+}
+
 function SegmentedField({
   value,
   options,

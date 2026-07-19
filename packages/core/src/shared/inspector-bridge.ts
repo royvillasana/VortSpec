@@ -83,6 +83,8 @@ export const nodeReadoutSchema = z.object({
    * forwards a `data-component` attribute to its DOM root. Empty for non-React pages.
    */
   componentCandidates: z.array(z.string()).default([]),
+  /** The parent's layout flow (`row`/`column` flex, else `block`) — for axis-aware resizing. */
+  parentFlow: z.enum(["row", "column", "block"]).default("block"),
   /** The element's full className string, for component/token heuristics. */
   className: z.string().default(""),
   /** Direct element children's border-boxes (guest coords) — used to place gap bands. */
@@ -104,6 +106,7 @@ export const fieldKindSchema = z.enum([
   "text", // free text
   "toggle", // boolean
   "align", // a Figma-style 3×3 auto-layout alignment grid (value `"<x>|<y>"`)
+  "resize", // a Figma-style Fixed/Hug/Fill width or height control (with a px value when Fixed)
 ]);
 export type FieldKind = z.infer<typeof fieldKindSchema>;
 
@@ -130,6 +133,8 @@ export const sectionFieldSchema = z.object({
   options: z.array(z.string()).default([]),
   /** Unit hint for a `length` field (`px`, `rem`, …). */
   unit: z.string().optional(),
+  /** For a `resize` field: the current Fixed/Hug/Fill mode. */
+  mode: z.enum(["fixed", "hug", "fill"]).optional(),
 });
 export type SectionField = z.infer<typeof sectionFieldSchema>;
 
@@ -401,6 +406,17 @@ export const bridgeEventSchema = z.discriminatedUnion("t", [
   z.object({ t: z.literal("placeholderLost"), message: z.string() }),
   /** The requested structural snapshot of a subtree (change: canvas-live-structural-editing). */
   z.object({ t: z.literal("structure"), snapshot: structureSnapshotSchema }),
+  /**
+   * The outcome of a `replayOverrides` pass (change: persist + replay). `missing` is
+   * how many un-saved edits could not be re-applied because their element could not be
+   * re-acquired after the reload (structure changed) — the host surfaces a hint rather
+   * than letting them vanish silently.
+   */
+  z.object({
+    t: z.literal("replayResult"),
+    applied: z.number().int().nonnegative(),
+    missing: z.number().int().nonnegative(),
+  }),
   /**
    * Drag-move (change: canvas-live-structural-editing, §5). A drag began on the
    * selected element in inspect mode — the guest owns the gesture (Decision 3). The

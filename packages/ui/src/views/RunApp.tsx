@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { DevServerStatus, Project, InspectorToken, InspectorComponent, FileSnapshot, StorybookEntry } from "@vortspec/core/ipc";
 import { buildSelection, alignToCss, flowToCss } from "@vortspec/core/selection-builder";
+import { sizeModeCss, SIZE_MODE_LABEL } from "@vortspec/core/sizing";
 import { api } from "../lib/api";
 import { Button, Spinner } from "@vortspec/ui/ui";
 import { ProjectRail, projectRailItems } from "@vortspec/ui/ProjectRail";
 import { DesignPanel, ChangesBar } from "../components/run-canvas/DesignPanel";
+import { Sitemap } from "../components/run-canvas/Sitemap";
+import type { RouteDiscovery } from "@vortspec/core/ipc";
 import { RunCanvas } from "../components/run-canvas/RunCanvas";
 import {
   resolveComponent,
@@ -237,6 +240,21 @@ export function RunApp({
   const embedUrl = dev.url ? dev.url.replace(/\/+$/, "") + "/" : "";
   const canvasReady = canvas && isApp && !!embedUrl;
 
+  // ── Sitemap: the app's page/route tree, read from source (change: sitemap-tree) ──
+  const [routes, setRoutes] = useState<RouteDiscovery | null>(null);
+  const [currentPath, setCurrentPath] = useState("/");
+  const rediscoverRoutes = useCallback(() => {
+    void api.discoverRoutes(project.path).then(setRoutes);
+  }, [project.path]);
+  useEffect(() => {
+    if (!canvas) return;
+    let alive = true;
+    void api.discoverRoutes(project.path).then((r) => alive && setRoutes(r));
+    return () => {
+      alive = false;
+    };
+  }, [canvas, project.path]);
+
   // ── Storybook provisioning (the deterministic backstop) ─────────────────────
   // The Playground guarantees a REAL Storybook to serve once components exist,
   // instead of silently falling back to the improvised Vite gallery. On open we
@@ -293,6 +311,26 @@ export function RunApp({
 
   // ── Run Canvas (visual editing) state — only used when `canvas` is on ──────
   const bridge = useInspectorBridge();
+
+  // Navigate the preview to a route (SPA fallback or a real Next.js URL both work).
+  const navigateTo = useCallback(
+    (path: string) => {
+      if (!dev.url) return;
+      const url = new URL(path.startsWith("/") ? path.slice(1) : path, dev.url.replace(/\/+$/, "") + "/").href;
+      bridge.loadUrl(url);
+      setCurrentPath(path);
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [dev.url, bridge.loadUrl],
+  );
+
+  // A state-navigated screen has no URL — reveal its source file so the user can edit it.
+  const openScreenFile = useCallback(
+    (relPath: string) => {
+      void api.revealPath(project.path, relPath);
+    },
+    [project.path],
+  );
 
   // Reload the live preview: reload the canvas webview via the bridge, and
   // remount the plain iframe by bumping its key nonce.
@@ -385,6 +423,61 @@ export function RunApp({
   const [review, setReview] = useState(false);
   const [snapshot, setSnapshot] = useState<FileSnapshot[] | null>(null);
   const structuralMod = useAgentRun();
+
+  // ── Screen preview: install a dev-only harness so state-navigated screens (no URL)
+  // can be rendered standalone via `?screen=<Name>`. A gated Claude Code run adds the
+  // harness + a manifest; on completion we re-discover so those screens become navigable.
+  const screenPreviewMod = useAgentRun();
+  const enableScreenPreview = useCallback(() => {
+    const screens = (routes?.routes[0]?.children ?? [])
+      .filter((c) => c.path.startsWith("#screen/") && c.file)
+      .map((c) => c.file as string);
+    const param = routes?.screenPreview?.param ?? "screen";
+    const list = screens.length ? screens.map((f) => `  - ${f}`).join("\n") : "  - (scan src/screens, src/pages, src/views)";
+    void screenPreviewMod.start({
+      cwd: project.path,
+      allowedTools: ["Read", "Edit", "Write"],
+      bypassPermissions: true,
+      strictMcp: true,
+      prompt: [
+        "This app navigates between screens with React state, not a router, so its screens have no URL and can't be opened directly in a preview. Add a DEV-ONLY screen-preview harness so each screen can be rendered standalone.",
+        "",
+        "Requirements:",
+        `1. In the app's entry module (the script that index.html loads — likely src/main.tsx, src/preview/main.tsx, or src/index.tsx), add a branch guarded by \`import.meta.env.DEV\`: read the URL query param "${param}" (e.g. ?${param}=DestinationDetail). If it names a screen component, render THAT screen ALONE — wrapped in exactly the same top-level providers, theme, and global styles the app normally mounts. Otherwise render the app exactly as before. Production builds MUST be unaffected.`,
+        "2. Each screen needs representative props to render. Build realistic sample props by REUSING the app's own sample data and helper functions (e.g. the landing screen's listings array and any `to<Screen>Data` mapper). If they aren't exported, export them (or construct equivalent representative data). Supply no-op functions for callbacks like onBack.",
+        `3. Create the manifest file \`.vortspec/screen-preview.json\` with EXACTLY this shape: { "param": "${param}", "screens": [ { "name": "<ComponentName>", "file": "<src/screens/File.tsx>" } ] } listing every screen the harness can render.`,
+        "4. Keep it minimal, typed (no `any`), and reversible. Do NOT add a router or change production rendering.",
+        "",
+        "Screens to support:",
+        list,
+      ].join("\n"),
+    });
+  }, [routes, project.path, screenPreviewMod]);
+
+  // When the harness-install run finishes, re-discover routes (screens become navigable)
+  // and reload the preview so the new entry code is live.
+  useEffect(() => {
+    if (screenPreviewMod.model.status !== "done") return;
+    rediscoverRoutes();
+    bridge.reload();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [screenPreviewMod.model.status]);
+
+  // Auto-provision the screen-preview harness (like Storybook): the FIRST time we detect
+  // state-navigated screens without a harness, install it silently — no user action. Once
+  // per project per session; a failure surfaces a manual retry in the sitemap instead of looping.
+  const autoPreviewFor = useRef<string | null>(null);
+  useEffect(() => {
+    if (!canvas) return;
+    const sp = routes?.screenPreview;
+    if (!sp || sp.enabled) return; // nothing to do, or already installed
+    if (screenPreviewMod.running || autoPreviewFor.current === project.path) return;
+    autoPreviewFor.current = project.path;
+    enableScreenPreview();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [routes, canvas, project.path]);
+  const screenPreviewState: "setting-up" | "failed" =
+    screenPreviewMod.model.status === "error" ? "failed" : "setting-up";
 
   // Persist the ledger on every change (removed when empty — nothing owed).
   useEffect(() => {
@@ -596,6 +689,20 @@ export function RunApp({
     return () => clearTimeout(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bridge.dragMessage]);
+  // If a replay-on-return couldn't restore some edits (their element changed), say so
+  // instead of dropping them silently — a transient hint, auto-cleared.
+  const [replayHint, setReplayHint] = useState<string | null>(null);
+  useEffect(() => {
+    const missing = bridge.replayResult?.missing ?? 0;
+    if (missing > 0) {
+      setReplayHint(`${missing} unsaved edit${missing === 1 ? "" : "s"} couldn't be restored — ${missing === 1 ? "its" : "their"} element changed since you left.`);
+      const id = setTimeout(() => setReplayHint(null), 6000);
+      bridge.clearReplayResult();
+      return () => clearTimeout(id);
+    }
+    bridge.clearReplayResult();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bridge.replayResult]);
   // The move's Keep/Revert gate, docked in the Design sidebar (no floating dialog).
   // Keep is the ONE action — it reconciles the JSX and is done; no second "Save
   // changes" prompt for a move.
@@ -731,6 +838,7 @@ export function RunApp({
         cssProps: string[];
         css?: Record<string, string>;
         token?: string | null;
+        resizeMode?: "fixed" | "hug" | "fill";
       }[],
       forceStyle = false,
     ) => {
@@ -755,6 +863,7 @@ export function RunApp({
             file: sel.file,
             elementLabel: sel.label,
             elementText: text,
+            resizeMode: e.resizeMode,
           };
         }
         return next;
@@ -790,6 +899,19 @@ export function RunApp({
         const css = flowToCss(value);
         applyLive(css);
         commitEdits([{ key, value, cssProps: Object.keys(css), css }]);
+      } else if (key === "width" || key === "height") {
+        // Figma-style Fixed/Hug/Fill resize (axis-aware via the parent's flow). A mode
+        // change arrives as `@fixed`/`@hug`/`@fill`; a raw value is a Fixed px edit.
+        const dim = key as "width" | "height";
+        const parentFlow = readoutRef.current?.parentFlow ?? "block";
+        const mode = value.startsWith("@") ? (value.slice(1) as "fixed" | "hug" | "fill") : "fixed";
+        const fixedPx = value.startsWith("@")
+          ? `${Math.round(readoutRef.current?.rect[dim] ?? 0)}px`
+          : value;
+        const css = sizeModeCss(dim, mode, parentFlow, fixedPx);
+        applyLive(css);
+        const displayValue = mode === "fixed" ? fixedPx : SIZE_MODE_LABEL[mode];
+        commitEdits([{ key, value: displayValue, cssProps: Object.keys(css), css, resizeMode: mode }]);
       } else {
         const css = cssForField(key, value);
         applyLive(css);
@@ -1182,6 +1304,15 @@ export function RunApp({
                 style={{ width: panelW }}
                 className="flex flex-none flex-col overflow-hidden border-r border-vs-border-default bg-vs-bg-surface"
               >
+                {/* Sitemap: navigate the preview to the app's pages, in any mode. */}
+                <Sitemap
+                  discovery={routes}
+                  currentPath={currentPath}
+                  onNavigate={navigateTo}
+                  onOpenFile={openScreenFile}
+                  onRetryScreenPreview={enableScreenPreview}
+                  screenPreviewState={screenPreviewState}
+                />
                 {mode === "comment" ? (
                   <>
                   <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -1271,12 +1402,12 @@ export function RunApp({
                     getStoryUrl={storyUrlFor}
                   />
                 )}
-                {bridge.dragMessage && (
+                {(bridge.dragMessage || replayHint) && (
                   <div
-                    data-testid="drag-message"
+                    data-testid={bridge.dragMessage ? "drag-message" : "replay-hint"}
                     className="pointer-events-none absolute left-1/2 top-3 z-40 -translate-x-1/2 rounded-md border border-vs-border-default bg-vs-bg-elevated/95 px-3 py-1.5 text-[12px] text-vs-text-secondary shadow-lg backdrop-blur"
                   >
-                    {bridge.dragMessage}
+                    {bridge.dragMessage || replayHint}
                   </div>
                 )}
                 <RunCanvas

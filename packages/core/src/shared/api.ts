@@ -185,6 +185,8 @@ export interface VortSpecApi {
   snapshotTokenScope(projectPath: string): Promise<IpcResponse<"inspector:snapshotTokenScope">>;
   /** A broad source snapshot (whole `src/` tree) for a drag-move — see Decision 6. */
   snapshotSourceScope(projectPath: string): Promise<IpcResponse<"inspector:snapshotSourceScope">>;
+  /** Discover the app's page/route sitemap from source (router config / file-system routes). */
+  discoverRoutes(projectPath: string): Promise<IpcResponse<"routes:discover">>;
   restoreFiles(projectPath: string, files: FileSnapshot[]): Promise<IpcResponse<"inspector:restoreFiles">>;
   /** Accept a composition: keep one option's content in the file, remove the rest + markers. */
   composeAccept(

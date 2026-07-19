@@ -40,6 +40,7 @@ import {
 } from "./inspector/token-parser";
 import { getTokenSanitation } from "./inspector/token-sanitation";
 import { writeTokenLink } from "./inspector/token-resolver";
+import { discoverRoutes } from "./routes/route-discovery";
 import { computePushPlan, VORTSPEC_COLLECTION } from "./inspector/figma-push";
 import { readFigmaVariables } from "./inspector/figma-reconcile";
 import type { PushPlan } from "@vortspec/core/ipc";
@@ -406,6 +407,7 @@ const handlers: Record<IpcChannel, Handler> = {
     snapshotTokenScope(projectPath)) as Handler,
   "inspector:snapshotSourceScope": ((projectPath: string) =>
     snapshotSourceScope(projectPath)) as Handler,
+  "routes:discover": ((projectPath: string) => discoverRoutes(projectPath)) as Handler,
   "inspector:restoreFiles": ((req: { projectPath: string; files: FileSnapshot[] }) =>
     restoreFiles(req.projectPath, req.files).then(() => undefined)) as Handler,
   "compose:accept": ((req: { projectPath: string; file: string; runId: string; keepOption: number }) =>

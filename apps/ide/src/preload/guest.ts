@@ -47,6 +47,11 @@ const STYLE_PROPS = [
   "gap",
   "width",
   "height",
+  // Flex-item sizing, for the Figma-style Fixed/Hug/Fill resize control.
+  "flex-grow",
+  "flex-shrink",
+  "flex-basis",
+  "align-self",
   "padding-top",
   "padding-right",
   "padding-bottom",
@@ -310,6 +315,15 @@ function reactComponentNames(el: Element): string[] {
   }
 }
 
+/** The element's parent's layout flow — `row`/`column` for flex, else `block`. */
+function parentFlowOf(el: Element): "row" | "column" | "block" {
+  const parent = el.parentElement;
+  if (!parent) return "block";
+  const cs = getComputedStyle(parent);
+  if (!cs.display.includes("flex")) return "block";
+  return cs.flexDirection.startsWith("column") ? "column" : "row";
+}
+
 function readoutOf(el: Element, id: string): NodeReadout {
   const cs = getComputedStyle(el);
   const computed: Record<string, string> = {};
@@ -334,6 +348,8 @@ function readoutOf(el: Element, id: string): NodeReadout {
     customProps,
     dataComponent: el.getAttribute("data-component"),
     componentCandidates: reactComponentNames(el),
+    // The parent's flow — Fixed/Hug/Fill resizing is axis-aware (needs the parent's axis).
+    parentFlow: parentFlowOf(el),
     className: typeof el.className === "string" ? el.className : "",
     children: Array.from(el.children)
       .filter((c) => !SKIP_TAGS.has(c.tagName) && !c.hasAttribute("data-vs-overlay"))
@@ -926,9 +942,14 @@ function handleCommand(cmd: BridgeCommand): void {
     case "replayOverrides": {
       // Restore un-saved visual edits after a full reload (returning to the Playground):
       // resolve each edit by its durable fingerprint and re-apply the style/class/text.
+      let applied = 0;
+      let missing = 0;
       for (const e of cmd.edits) {
         const el = resolveFingerprint(e.fingerprint) as HTMLElement | undefined;
-        if (!el) continue;
+        if (!el) {
+          missing++;
+          continue;
+        }
         // Ensure the element is tracked so the override store + HMR reapply cover it.
         let id = uidOf.get(el);
         if (!id || byId.get(id) !== el) {
@@ -945,7 +966,10 @@ function handleCommand(cmd: BridgeCommand): void {
           for (const name of e.addClasses) if (name) el.classList.add(name);
         }
         if (e.text !== undefined) setTextOverride(id, el, e.text);
+        applied++;
       }
+      // Tell the host how many un-saved edits could not be restored (element gone).
+      if (cmd.edits.length > 0) send({ t: "replayResult", applied, missing });
       return;
     }
     case "setText": {
