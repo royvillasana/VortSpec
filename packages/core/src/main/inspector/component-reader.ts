@@ -216,12 +216,20 @@ const FIND_SKIP_DIRS = new Set(["node_modules", ".git", ".next", "dist", "build"
 
 async function findSourceFile(dir: string, name: string, budget = { n: 8000 }): Promise<string | null> {
   if (budget.n <= 0) return null;
+  // Match by NORMALIZED name, not an exact kebab filename — the SDD-DE convention builds
+  // `<category>/<ComponentName>.tsx` (PascalCase), so a roster entry "color-picker" lives in
+  // `color-picker/ColorPicker.tsx`. Case/separator-insensitive comparison (normComponentName)
+  // recognizes ColorPicker.tsx / color-picker.tsx / colorPicker.tsx alike, plus an `index`
+  // file inside a folder that carries the component's name. Without this, every PascalCase-named
+  // component reads as "not built" and its Build button never clears.
+  const target = normComponentName(name);
   let entries;
   try {
     entries = await readdir(dir, { withFileTypes: true });
   } catch {
     return null;
   }
+  let indexInMatchingDir: string | null = null;
   for (const entry of entries) {
     if (budget.n <= 0) break;
     if (entry.name.startsWith(".") || FIND_SKIP_DIRS.has(entry.name)) continue;
@@ -230,11 +238,17 @@ async function findSourceFile(dir: string, name: string, budget = { n: 8000 }): 
     if (entry.isDirectory()) {
       const found = await findSourceFile(full, name, budget);
       if (found) return found;
-    } else if (SOURCE_EXTS.some((ext) => entry.name === `${name}${ext}`)) {
-      return full;
+    } else {
+      const ext = SOURCE_EXTS.find((e) => entry.name.endsWith(e));
+      if (!ext) continue;
+      const stem = entry.name.slice(0, -ext.length);
+      // A file named for the component in any case/separator style is the match.
+      if (normComponentName(stem) === target) return full;
+      // Fall back to an `index.*` file, but only when THIS folder carries the component name.
+      if (stem === "index" && normComponentName(basename(dir)) === target) indexInMatchingDir = full;
     }
   }
-  return null;
+  return indexInMatchingDir;
 }
 
 function scanTokens(...sources: string[]): string[] {
