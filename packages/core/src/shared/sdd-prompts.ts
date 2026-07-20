@@ -14,8 +14,9 @@ export function buildOnePrompt(name: string, level?: string): string {
   return (
     `Read .sdd-de/project.yaml. Implement the "${name}" component` +
     (level ? ` (${level})` : "") +
-    " into component_dir in the configured framework and language, using ONLY the extracted " +
-    "design tokens. Run /generate-artifacts for it to produce its specs, then implement it. " +
+    " into component_dir in the configured framework and language. " +
+    DESIGN_REFERENCE_CLAUSE +
+    " Run /generate-artifacts for it to produce its specs, then implement it. " +
     VARIANT_SET_CLAUSE
   );
 }
@@ -24,6 +25,30 @@ export function buildOnePrompt(name: string, level?: string): string {
 const VARIANT_SET_CLAUSE =
   "If its .sdd-de/components.json entry has a `variants` array (variant axes), implement a SINGLE " +
   "component that covers ALL those variants via variant props (e.g. CVA), not a separate component per variant.";
+
+/**
+ * The page-per-component design anchor (change: figma-visual-validation). A build must
+ * REPRODUCE the component's authoritative Figma design, not invent a shape from its name.
+ * For a Figma source, that reference is the Figma PAGE named after the component — the
+ * page-per-component convention: a page called "accordion" holds the accordion and all
+ * its variant frames. Tokens supply VALUES only; the reference supplies STRUCTURE. This
+ * is what stops "the alert looks like a restyled button": the alert is built from the
+ * alert's own page, and the reference wins over the design-system index for its shape.
+ */
+const DESIGN_REFERENCE_CLAUSE = [
+  "DESIGN REFERENCE — do this BEFORE writing code: if project.yaml's `design_source` is `figma`, the",
+  "authoritative reference for a component is the Figma PAGE named after it (page-per-component: a page",
+  '"accordion" holds the accordion and all its variant frames). For each component, use the Figma MCP',
+  "(figma_file_url in project.yaml) to find that page by name, read its frames/variants, and view its",
+  "screenshot; treat that design as authoritative for the component's STRUCTURE, parts, and variants and",
+  "REPRODUCE it. Use the extracted design tokens ONLY for VALUES (color/spacing/radius/typography). Do NOT",
+  "infer the component's shape from its name, and do NOT copy a different existing component (an alert is",
+  "NOT a restyled button). This component's own Figma page reference takes precedence over the",
+  "design-system index — follow the reference even if the index holds a similar component. If NO page",
+  "matches the component's name, or the Figma MCP is unavailable so you cannot read the reference, do NOT",
+  "fabricate a design from the name: build nothing for it and report it as unreferenced (needs a Figma",
+  "page / reachable Figma MCP) so it is never mistaken for a design-matched component.",
+].join(" ");
 
 /**
  * Every batch action is idempotent so an interrupted run resumes from the files:
@@ -41,9 +66,10 @@ export const BUILD_REMAINING_PROMPT =
   RESUMABLE +
   "\n\nRead .sdd-de/components.json and .sdd-de/project.yaml. Implement EVERY component listed in " +
   "components.json that is NOT yet implemented in component_dir, in the configured framework and " +
-  "language, using ONLY the extracted design tokens. For each, run /generate-artifacts to produce " +
-  "its specs, then implement it. Build in order: atoms → molecules → organisms. Skip components that " +
-  "already have a source file.";
+  "language. " +
+  DESIGN_REFERENCE_CLAUSE +
+  " For each, run /generate-artifacts to produce its specs, then implement it. Build in order: " +
+  "atoms → molecules → organisms. Skip components that already have a source file.";
 
 /**
  * Re-scan the design source and RECONCILE — additive, never destructive. Refresh
@@ -92,6 +118,13 @@ export const RESCAN_PROMPT = [
   "   - for `design_source: figma`, record each entry's Figma node id as a `figmaNodeId` field (resolve it",
   "     via `figma_get_component_details`/`figma_search_components` by name) so component docs can be enriched",
   "     later without re-resolving — add/refresh it where missing or changed,",
+  "   - PAGE-PER-COMPONENT REFERENCE (authoritative design anchor): the file follows the convention that each",
+  "     PAGE is one component and holds that component with all its variations (a page \"accordion\" = the",
+  "     accordion + its variant frames). Match each roster entry to its page by NORMALIZED name (case/separator-",
+  "     insensitive) and record `figmaPage` (the page name) and `figmaPageId` (its node id) on the entry. If a",
+  "     roster component has NO page bearing its name, set `\"unreferenced\": true` on it and note it in the",
+  "     summary — do NOT invent a page or point it at another component's page. Utility pages (Cover,",
+  "     Typography, Icons, etc.) that name no component are NOT component references.",
   "   - do NOT delete other entries and do NOT touch component source files.",
   "4. RECONCILE IMPLEMENTATION STATUS: for every existing entry whose description says it is",
   "   \"not yet implemented\" (or similar wording, e.g. \"discovered in a re-scan; not yet implemented\")",
@@ -200,29 +233,45 @@ export const RESUME_PROMPT =
 
 export function verifyPrompt(target: string, url: string | null, isFigma: boolean): string {
   const scope = target === "all" ? "every built component" : `the "${target}" component`;
+  const refPage = isFigma
+    ? "the Figma PAGE named after the component (page-per-component: it holds the component and all its " +
+      "variant frames), read via the Figma MCP (figma_file_url in .sdd-de/project.yaml)"
+    : "the component's spec and design source";
   return [
     ...(target === "all" ? [RESUMABLE] : []),
-    `Run verification for ${scope} autonomously.`,
-    `1. Compile check (BLOCKING, do this FIRST): run the project's type-check — 'npx tsc --noEmit' — ` +
-      `and, for a Storybook/library project with no dev server, also 'npm run build-storybook' (or the ` +
-      `project's build script). ${scope} MUST compile/build with zero errors in its own files. Any ` +
-      `type or build error (a broken import, an interface imported as a value instead of 'import type', ` +
-      `a duplicate JSX attribute, a missing export, an unresolved token) is a blocking defect — fix it ` +
-      `inline and re-run until it is clean. If it still does not compile, the verdict is ISSUES, never PASS.`,
-    `2. /visual-verify for ${scope}: compare the implementation to its spec across 375/768/1440px, ` +
-      `check every token/variant/state, and run the accessibility audit. ${harnessClause(url)} ${figmaClause(isFigma)}`,
-    `3. /adversarial-review for ${scope}: red-team tokens (grep hardcoded hex/px), variant/state ` +
-      `coverage, accessibility, and spec compliance.`,
-    "4. Fix any discrepancies inline, then write specs/<component>/visual-verify-report.md and the " +
-      "adversarial-review report.",
+    `Run verification for ${scope} autonomously, as THREE layers reported in this order — VISUAL, then ` +
+      `TOKEN, then CODE. ${scope} is "verified" only when ALL THREE pass on real evidence; report each ` +
+      `layer's outcome independently and never let a green layer mask a failing one.`,
+    `Layer 1 — VISUAL FIDELITY (the primary check): run /visual-verify for ${scope} — render it live and ` +
+      `compare it, every variant and ` +
+      `state, to its authoritative design — ${refPage}. ${harnessClause(url)} Render at 375/768/1440px, ` +
+      `screenshot each variant/state, and compare to the reference; a component that COMPILES and uses ` +
+      `tokens but does NOT match its reference FAILS this layer — call out the concrete differences (missing ` +
+      `parts/slots, wrong container shape, absent variants, wrong proportions), not a bare verdict. ` +
+      `${figmaClause(isFigma)}`,
+    `Layer 2 — TOKEN CORRECTNESS: confirm ${scope} uses the design tokens the reference specifies ` +
+      `(color/spacing/radius/typography); grep for hardcoded hex/px and wrong-token substitutions and flag ` +
+      `each with the token that should have been used.`,
+    `Layer 3 — CODE / BUILD: run the project's type-check — 'npx tsc --noEmit' — and, for a Storybook/` +
+      `library project with no dev server, also 'npm run build-storybook' (or the project's build script). ` +
+      `${scope} MUST compile/build with zero errors. Any type or build error (a broken import, an interface ` +
+      `imported as a value instead of 'import type', a duplicate JSX attribute, a missing export, an ` +
+      `unresolved token) is a blocking defect — fix it inline and re-run until clean. Code that does not ` +
+      `compile is ISSUES; and because it can't be rendered, Layer 1 is then BLOCKED.`,
+    `Then /adversarial-review for ${scope} (red-team tokens, variant/state coverage, accessibility, spec ` +
+      `compliance). Fix discrepancies inline, then write specs/<component>/visual-verify-report.md. That ` +
+      `report MUST include a machine-readable block: one line each 'VISUAL: pass|fail|blocked', 'TOKEN: ` +
+      `pass|fail', 'CODE: pass|fail', and a final 'VERIFY: PASS' / 'VERIFY: ISSUES (<failing layers>)' / ` +
+      `'VERIFY: BLOCKED (<what>)'. Also write the adversarial-review report.`,
     NO_MANUAL_STEPS,
     `Report PASS only if ${scope} COMPILES/BUILDS cleanly AND you ACTUALLY rendered and inspected the ` +
-      `live component (and, for a Figma project, compared it to the authoritative design). Code that ` +
-      `does not compile is ISSUES; a source-only / grep audit with no render is BLOCKED. Never claim a ` +
-      `check you did not perform, and never report PASS on code you did not compile.`,
+      `live component and compared it to the authoritative design (all three layers passing on real ` +
+      `evidence). Code that does not compile is ISSUES; a source-only / grep audit with no render is ` +
+      `BLOCKED. Never claim a check you did not perform, never report PASS on code you did not compile, ` +
+      `and never report a visual pass you did not render-and-compare.`,
     target === "all"
-      ? "End with one line per component: '<name>: PASS', '<name>: ISSUES (n)', or '<name>: BLOCKED (<what you could not verify>)'."
-      : "End with one line: 'VERIFY: PASS', 'VERIFY: ISSUES (n)', or 'VERIFY: BLOCKED (<what you could not verify>)'.",
+      ? "End with one line per component: '<name>: PASS', '<name>: ISSUES (visual|token|code: <what failed>)', or '<name>: BLOCKED (<what you could not verify>)'."
+      : "End with one line: 'VERIFY: PASS', 'VERIFY: ISSUES (visual|token|code: <what failed>)', or 'VERIFY: BLOCKED (<what you could not verify>)'.",
   ].join("\n");
 }
 
@@ -295,17 +344,20 @@ export function buildChunkPrompt(names: string[], opts: BuildChunkOptions = {}):
     "",
     "Read .sdd-de/components.json and .sdd-de/project.yaml. Build ONLY these components, in " +
       `atoms → molecules → organisms order: ${list}. Do NOT build any other component in this run.`,
+    DESIGN_REFERENCE_CLAUSE,
     "For EACH of them, run /generate-artifacts to produce its specs, then implement it into " +
-      "component_dir in the configured framework and language, using ONLY the extracted design tokens. " +
-      "Skip any that already have a source file.",
+      "component_dir in the configured framework and language. Skip any that already have a source file.",
     VARIANT_SET_CLAUSE,
   ];
   if (opts.verify) {
     lines.push(
-      "Then verify each of them: /visual-verify then /adversarial-review; fix discrepancies inline and " +
-        `write specs/<component>/visual-verify-report.md and the adversarial report. ${harnessClause(
-          opts.url ?? null,
-        )} ${figmaClause(!!opts.isFigma)}`,
+      "Then verify each of them in three layers, reported in order — VISUAL, then TOKEN, then CODE. " +
+        "VISUAL: run /visual-verify — render it live and compare every variant/state to its authoritative " +
+        "Figma reference (the page named after the component); call out concrete differences, and a component " +
+        "that does not match its reference is ISSUES even if it compiles. TOKEN: confirm it uses the design " +
+        "tokens (no hardcoded hex/px). CODE: it must type-check/build cleanly. Then /adversarial-review; fix discrepancies inline " +
+        `and write specs/<component>/visual-verify-report.md (recording the three layer outcomes) and the ` +
+        `adversarial report. ${harnessClause(opts.url ?? null)} ${figmaClause(!!opts.isFigma)}`,
     );
   }
   if (opts.storybook) {
@@ -331,9 +383,13 @@ export function buildVerifyRestPrompt(url: string | null, isFigma: boolean): str
     "Read .sdd-de/components.json and .sdd-de/project.yaml. For EVERY component listed that is NOT " +
       "yet implemented in component_dir, in atoms → molecules → organisms order, run the full SDD-DE " +
       "cycle autonomously and in the background:",
-    "  a. /generate-artifacts to produce its specs, then implement it using ONLY the extracted design tokens.",
-    `  b. /visual-verify then /adversarial-review for it. ${harnessClause(url)} ${figmaClause(isFigma)}`,
-    "  c. Fix any discrepancies inline; write specs/<component>/visual-verify-report.md and the adversarial report.",
+    "  a. " + DESIGN_REFERENCE_CLAUSE,
+    "  b. /generate-artifacts to produce its specs, then implement it.",
+    `  c. Verify in three layers reported in order — VISUAL (/visual-verify: render and compare every ` +
+      `variant/state to its authoritative Figma reference; a mismatch is ISSUES even if it compiles), TOKEN (uses design tokens, ` +
+      `no hardcoded hex/px), CODE (type-checks/builds cleanly) — then /adversarial-review. ${harnessClause(url)} ${figmaClause(isFigma)}`,
+    "  d. Fix any discrepancies inline; write specs/<component>/visual-verify-report.md (recording the three " +
+      "layer outcomes) and the adversarial report.",
     "Skip components that already have a source file. " + NO_MANUAL_STEPS,
     "End with one line per component: '<name>: PASS' or '<name>: ISSUES (n)'.",
   ].join("\n");

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseProps, componentDeps } from "./component-reader";
+import { parseProps, componentDeps, reportUnresolved } from "./component-reader";
 
 // Mirrors the real Button.variants.ts shape (CVA with string values containing `:`).
 const CVA = `
@@ -23,6 +23,34 @@ export const buttonVariants = cva(
   },
 );
 `;
+
+describe("reportUnresolved — a visual mismatch is never masked as verified", () => {
+  it("clean PASS with all layers passing → verified", () => {
+    const r = "VISUAL: pass\nTOKEN: pass\nCODE: pass\nVERIFY: PASS\n";
+    expect(reportUnresolved(r)).toEqual({ unresolved: false, issues: [] });
+  });
+
+  it("a failed VISUAL layer keeps it out of verified even when it compiles", () => {
+    const r = "VISUAL: fail — missing icon slot, wrong container shape\nTOKEN: pass\nCODE: pass\nVERIFY: ISSUES (visual)\n";
+    const v = reportUnresolved(r);
+    expect(v.unresolved).toBe(true);
+    expect(v.issues.join(" ")).toMatch(/VISUAL: fail/);
+  });
+
+  it("a BLOCKED visual layer (no render) is unresolved", () => {
+    const r = "VISUAL: blocked\nTOKEN: pass\nCODE: pass\nVERIFY: BLOCKED (no preview server)\n";
+    expect(reportUnresolved(r).unresolved).toBe(true);
+  });
+
+  it("still honors the legacy 'status: open' marker", () => {
+    expect(reportUnresolved("### D1 something\nstatus: open\n").unresolved).toBe(true);
+  });
+
+  it("tolerates list/blockquote prefixes on the machine-readable lines", () => {
+    expect(reportUnresolved("- VISUAL: fail\n- TOKEN: pass\n").unresolved).toBe(true);
+    expect(reportUnresolved("> VERIFY: ISSUES (token)\n").unresolved).toBe(true);
+  });
+});
 
 describe("componentDeps (dependency graph, Plan B1c)", () => {
   const roster = ["Button", "Icon", "ButtonGroup", "Card"];
