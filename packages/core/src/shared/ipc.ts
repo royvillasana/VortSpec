@@ -553,6 +553,23 @@ export const ipcContract = {
       error: z.string().optional(),
     }),
   },
+  "styling:ensure": {
+    request: z.string(),
+    response: z.object({
+      applicable: z.boolean(),
+      created: z.array(z.string()),
+      preExisting: z.array(z.string()),
+      depsInstalled: z.boolean(),
+      depsFixIt: z.string().optional(),
+    }),
+  },
+  "styling:reconcileExports": {
+    request: z.string(),
+    response: z.object({
+      filesChanged: z.number(),
+      changes: z.array(z.object({ file: z.string(), detail: z.string() })),
+    }),
+  },
   "manifest:get": { request: z.string(), response: manifestResultSchema },
   "manifest:save": {
     request: z.object({ projectPath: z.string(), content: z.string() }),

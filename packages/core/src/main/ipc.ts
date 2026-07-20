@@ -28,6 +28,8 @@ import type { FigmaCliMode } from "@vortspec/core/figma";
 import { readProjectConfig } from "./workspace/config-manager";
 import { getEnvStatus, createEnvFromExample } from "./workspace/env-files";
 import { ensureStorybook, storybookReadiness, storyGap } from "./workspace/storybook-setup";
+import { ensureStylingPipeline } from "./workspace/styling-setup";
+import { reconcileProjectExports } from "./workspace/reconcile-exports";
 import { extractWalkthrough } from "./workspace/walkthrough";
 import {
   getInspectorTokens,
@@ -361,6 +363,8 @@ const handlers: Record<IpcChannel, Handler> = {
       storyCount: res.readiness.storyCount,
       error: res.error,
     }))) as Handler,
+  "styling:ensure": ((projectPath: string) => ensureStylingPipeline(projectPath)) as Handler,
+  "styling:reconcileExports": ((projectPath: string) => reconcileProjectExports(projectPath)) as Handler,
   "devserver:storybookIndex": ((url: string) => getStorybookIndex(url)) as Handler,
   "flow:setPublishTarget": ((req: { projectPath: string; repoUrl: string }) =>
     setPublishTarget(req.projectPath, req.repoUrl)) as Handler,

@@ -155,6 +155,8 @@ export function GuidedFlow({
   const [pipelineTotal, setPipelineTotal] = useState<number | undefined>(undefined);
   const [verifyResult, setVerifyResult] = useState<VerificationResult | null>(null);
   const [harnessMsg, setHarnessMsg] = useState("");
+  // Styling-pipeline fix-it (styling-foundation-gate): shown when Tailwind deps could not be installed.
+  const [stylingFixIt, setStylingFixIt] = useState<string | null>(null);
   const [showTranscript, setShowTranscript] = useState(false);
   const [externalRun, setExternalRun] = useState(false);
   const [resume, setResume] = useState<LastRun | null>(null);
@@ -376,8 +378,27 @@ export function GuidedFlow({
    * the rest are built. Sequencing is driven by the run-done effect (below),
    * because `run.start` resolves on kick-off, not completion.
    */
+  /**
+   * Deterministically wire the styling pipeline (Tailwind config + postcss + entry CSS +
+   * token→theme bridge) BEFORE any component is built, so the built components render
+   * styled instead of as unstyled skeletons. Awaited — styling must be ready before the
+   * first render. Surfaces a fix-it when the required deps could not be installed.
+   */
+  async function ensureStyling(): Promise<void> {
+    try {
+      const r = await api.ensureStylingPipeline(project.path);
+      setStylingFixIt(r.applicable && !r.depsInstalled && r.depsFixIt ? r.depsFixIt : null);
+    } catch {
+      /* best-effort; the compile gate still catches an unstyled build */
+    }
+  }
+
   async function buildRemaining(verify: boolean): Promise<void> {
     if (remaining.length === 0 || busy) return;
+    // Styling foundation first — before Storybook and before the first build.
+    setHarnessMsg("Setting up the styling pipeline…");
+    await ensureStyling();
+    setHarnessMsg("");
     // Pre-provision a real Storybook (idempotent, non-blocking) so the engine's
     // per-chunk story step writes into it and the Playground has it ready — the
     // deterministic backstop against the improvised-gallery failure.
@@ -808,6 +829,14 @@ export function GuidedFlow({
                     </Button>
                   </div>
 
+                  {stylingFixIt && (
+                    <div className="mt-2 rounded border border-vs-warning/40 bg-vs-warning/10 px-3 py-2 text-xs text-vs-text">
+                      Tailwind styling deps aren’t installed, so components may render unstyled. Run this in the
+                      project, then rebuild:{" "}
+                      <code className="font-mono text-[11px]">{stylingFixIt}</code>
+                    </div>
+                  )}
+
                   {addNew && (
                     <NewComponentForm
                       disabled={busy}
@@ -848,12 +877,14 @@ export function GuidedFlow({
                               component={c}
                               disabled={busy}
                               onBuild={() => {
-                                // Pre-provision Storybook (idempotent) so a story lands in a real one.
-                                void api.ensureStorybook(project.path).catch(() => undefined);
-                                void op(`Building "${c.name}"`, buildOnePrompt(c.name, c.level), {
-                                  kind: "build",
-                                  model: tierForChunk([c]),
-                                  ground: true,
+                                // Styling foundation first, then Storybook (both idempotent), then build.
+                                void ensureStyling().finally(() => {
+                                  void api.ensureStorybook(project.path).catch(() => undefined);
+                                  void op(`Building "${c.name}"`, buildOnePrompt(c.name, c.level), {
+                                    kind: "build",
+                                    model: tierForChunk([c]),
+                                    ground: true,
+                                  });
                                 });
                               }}
                               onVerify={() => void verify(c.name, `Verifying "${c.name}"`)}
