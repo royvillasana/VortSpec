@@ -37,6 +37,6 @@
 
 ## 6. Methodology + release
 
-- [ ] 6.1 Document the page-per-component convention in `@royvillasana/sdd-de`; bump + re-wire. BLOCKED here: the methodology source repo (github.com/royvillasana/SDD-DE) is not checked out in this workspace and publishing needs the user's npm OTP. The operative convention already lives in the in-repo prompts (`sdd-prompts.ts`); the published `/visual-verify` skill + `component-standards.md` update is a follow-up requiring the source repo + a republish.
+- [x] 6.1 Documented the page-per-component convention in `@royvillasana/sdd-de` and re-wired VortSpec. SDD-DE `1.10.0` published & live: `component-standards.md` convention section, `generate-artifacts` (Figma) resolves the reference page first, `visual-verify` runs visual→token→code + emits the machine-readable VISUAL/TOKEN/CODE/VERIFY block that VortSpec's `reportUnresolved` parses. Both apps bumped to `^1.10.0`, `pnpm install` resolved 1.10.0 into the lockfile, tests/typecheck/lint green.
 - [ ] 6.2 End-to-end validation on TokenUpdate (alert builds to match, only verifies after a real visual compare). Manual UI run — requires launching the app and rebuilding against the reference file; deferred to a hands-on session (milestone DoD check).
 - [x] 6.3 `pnpm test`, `pnpm check-types`, `pnpm lint` green across both shells — 330 core tests + 23 prompt + 21 reader tests pass, typecheck + lint clean.
