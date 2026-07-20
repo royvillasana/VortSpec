@@ -29,12 +29,53 @@ describe("verifyPrompt — honest gate (no false PASS without a live render)", (
     expect(verifyPrompt("all", null, true)).toMatch(/PASS.*ISSUES.*BLOCKED/s);
   });
 
-  it("makes a compile/build check the FIRST, blocking step so broken code can't pass", () => {
+  it("keeps a compile/build check that blocks a false pass so broken code can't pass", () => {
     const p = verifyPrompt("button", "http://localhost:5173", false);
-    expect(p).toMatch(/Compile check \(BLOCKING/);
+    expect(p).toMatch(/CODE \/ BUILD/);
     expect(p).toMatch(/tsc --noEmit/);
     expect(p).toMatch(/import type/); // names the exact class of bug that shipped before
     expect(p).toMatch(/does not compile is ISSUES/i);
+  });
+
+  it("orders the gate visual → token → code, with visual as the primary check", () => {
+    const p = verifyPrompt("alert", "http://localhost:6006", true);
+    const visual = p.indexOf("Layer 1 — VISUAL");
+    const token = p.indexOf("Layer 2 — TOKEN");
+    const code = p.indexOf("Layer 3 — CODE");
+    expect(visual).toBeGreaterThanOrEqual(0);
+    expect(visual).toBeLessThan(token);
+    expect(token).toBeLessThan(code);
+    // A component that compiles + uses tokens but doesn't match its reference still fails.
+    expect(p).toMatch(/does NOT match its reference FAILS this layer/);
+    // Visual compares against the page-per-component Figma reference, via /visual-verify.
+    expect(p).toMatch(/Figma PAGE named after the component/);
+    expect(p).toMatch(/\/visual-verify/);
+  });
+
+  it("marks verified only on real evidence — no visual pass without a render-and-compare", () => {
+    const p = verifyPrompt("alert", "http://localhost:6006", true);
+    expect(p).toMatch(/never report a visual pass you did not render-and-compare/);
+    expect(p).toMatch(/all three layers passing on real evidence/i);
+  });
+});
+
+describe("design-anchored build — reproduce the Figma page, not the name", () => {
+  it("buildOnePrompt anchors to the component's Figma page and forbids name-inference", () => {
+    const p = buildOnePrompt("alert");
+    expect(p).toMatch(/Figma PAGE named after it/);
+    expect(p).toMatch(/page-per-component/);
+    expect(p).toMatch(/Do NOT infer the component's shape from its name/);
+    expect(p).toMatch(/alert is\s+NOT a restyled button|NOT a restyled button/);
+    // Reference wins over the design-system index.
+    expect(p).toMatch(/takes precedence over the\s+design-system index/);
+    // No reference → don't fabricate.
+    expect(p).toMatch(/do NOT fabricate a design from the name/);
+  });
+
+  it("buildChunkPrompt carries the design reference for its components", () => {
+    const p = buildChunkPrompt(["alert", "badge"]);
+    expect(p).toMatch(/Figma PAGE named after it/);
+    expect(p).toMatch(/Use the extracted design tokens ONLY for VALUES/);
   });
 });
 
@@ -179,6 +220,18 @@ describe("detection — collapse variant sets + drop internal nodes", () => {
   it("build prompts implement a collapsed variant set as ONE component", () => {
     expect(buildOnePrompt("form-item")).toMatch(/single .* component .* ALL those variants|SINGLE component that covers ALL those variants/i);
     expect(buildChunkPrompt(["form-item"])).toMatch(/SINGLE component that covers ALL those variants/);
+  });
+
+  it("RESCAN_PROMPT records the page-per-component reference and flags unreferenced components", () => {
+    expect(RESCAN_PROMPT).toMatch(/PAGE-PER-COMPONENT REFERENCE/);
+    expect(RESCAN_PROMPT).toMatch(/each\s+PAGE is one component/);
+    expect(RESCAN_PROMPT).toMatch(/NORMALIZED name/);
+    expect(RESCAN_PROMPT).toMatch(/figmaPage/);
+    expect(RESCAN_PROMPT).toMatch(/figmaPageId/);
+    expect(RESCAN_PROMPT).toMatch(/"unreferenced": true/);
+    // Utility pages are not references; don't point a component at another's page.
+    expect(RESCAN_PROMPT).toMatch(/Cover,\s*\n?\s*Typography, Icons/);
+    expect(RESCAN_PROMPT).toMatch(/do NOT invent a page/);
   });
 
   it("RESCAN_PROMPT prefers the remote OAuth Figma MCP (no Desktop Bridge, no token) and never fabricates", () => {

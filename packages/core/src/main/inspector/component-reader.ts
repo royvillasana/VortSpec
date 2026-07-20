@@ -272,6 +272,26 @@ async function firstExisting(projectPath: string, rels: string[]): Promise<strin
   return null;
 }
 
+/**
+ * Decide from a visual-verify-report whether the component still has unresolved work
+ * (change: figma-visual-validation). A component is "verified" ONLY when the report shows
+ * no unresolved discrepancy AND the machine-readable gate is a clean PASS: a failed/blocked
+ * VISUAL/TOKEN/CODE layer, or an ISSUES/BLOCKED verdict, keeps it out of "verified" so a
+ * visual mismatch is never masked as passing even when the prose never says "open". Pure so
+ * the gate is unit-testable independent of the filesystem walk.
+ */
+export function reportUnresolved(report: string): { unresolved: boolean; issues: string[] } {
+  const hasOpen = /status:\s*open/i.test(report) || /open (discrepanc|source-level)/i.test(report);
+  const layerFailed = /^[ \t>*-]*(visual|token|code)\s*:\s*(fail|blocked)\b/im.test(report);
+  const verdictNotPass = /^[ \t>*-]*verify\s*:\s*(issues|blocked)\b/im.test(report);
+  if (!hasOpen && !layerFailed && !verdictNotPass) return { unresolved: false, issues: [] };
+  const issues = [...report.matchAll(/^###\s+(D\d[^\n]*)/gm)].map((m) => m[1].trim());
+  const layerIssues = [...report.matchAll(/^[ \t>*-]*(visual|token|code)\s*:\s*(fail|blocked)\b[^\n]*/gim)].map(
+    (m) => m[0].trim(),
+  );
+  return { unresolved: true, issues: issues.length ? issues : layerIssues };
+}
+
 async function componentStatus(
   projectPath: string,
   name: string,
@@ -294,10 +314,9 @@ async function componentStatus(
   } catch {
     return { status: "built", issues: [], specPath, reportPath };
   }
-  const hasOpen = /status:\s*open/i.test(report) || /open (discrepanc|source-level)/i.test(report);
-  if (hasOpen) {
-    const issues = [...report.matchAll(/^###\s+(D\d[^\n]*)/gm)].map((m) => m[1].trim());
-    return { status: "has-issues", issues, specPath, reportPath };
+  const verdict = reportUnresolved(report);
+  if (verdict.unresolved) {
+    return { status: "has-issues", issues: verdict.issues, specPath, reportPath };
   }
   return { status: "verified", issues: [], specPath, reportPath };
 }
