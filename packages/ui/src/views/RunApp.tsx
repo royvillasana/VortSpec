@@ -1020,12 +1020,13 @@ export function RunApp({
           bypassPermissions: true,
           // A visual-edit apply reads/edits one source file — it needs no MCP, so
           // skip the user's global MCP servers (Figma, etc.) to cut session startup,
-          // and route the mechanical patch to a faster tier than the default.
+          // and route the mechanical patch to the cheapest tier (a token/style patch,
+          // grounded by the index below, is not generative work).
           strictMcp: true,
           // Ground the patch with the design-system index (Plan B3): the token map lets
           // the agent bind to the right token instead of re-deriving names by grepping.
           groundWithIndex: true,
-          model: routedModel("sonnet"),
+          model: routedModel("haiku"),
         });
         // Completion (reload + review) is handled by the effect below.
       } else {
