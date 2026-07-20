@@ -14,7 +14,7 @@ describe("verifyPrompt — honest gate (no false PASS without a live render)", (
     const p = verifyPrompt("button", null, false);
     expect(p).toMatch(/MUST NOT report PASS/);
     expect(p).toMatch(/BLOCKED/);
-    expect(p).toMatch(/Report PASS only if you ACTUALLY rendered/);
+    expect(p).toMatch(/Report PASS only if .* COMPILES\/BUILDS cleanly AND you ACTUALLY rendered/);
   });
 
   it("directs the agent to load and render the live surface when a preview URL exists", () => {
@@ -22,11 +22,19 @@ describe("verifyPrompt — honest gate (no false PASS without a live render)", (
     expect(p).toContain("http://localhost:5173");
     expect(p).toMatch(/render\/inspect it|not just the source/);
     // PASS remains gated on an actual render even with a URL.
-    expect(p).toMatch(/Report PASS only if you ACTUALLY rendered/);
+    expect(p).toMatch(/Report PASS only if .* COMPILES\/BUILDS cleanly AND you ACTUALLY rendered/);
   });
 
   it("offers PASS / ISSUES / BLOCKED as the three verdicts", () => {
     expect(verifyPrompt("all", null, true)).toMatch(/PASS.*ISSUES.*BLOCKED/s);
+  });
+
+  it("makes a compile/build check the FIRST, blocking step so broken code can't pass", () => {
+    const p = verifyPrompt("button", "http://localhost:5173", false);
+    expect(p).toMatch(/Compile check \(BLOCKING/);
+    expect(p).toMatch(/tsc --noEmit/);
+    expect(p).toMatch(/import type/); // names the exact class of bug that shipped before
+    expect(p).toMatch(/does not compile is ISSUES/i);
   });
 });
 

@@ -202,17 +202,24 @@ export function verifyPrompt(target: string, url: string | null, isFigma: boolea
   const scope = target === "all" ? "every built component" : `the "${target}" component`;
   return [
     ...(target === "all" ? [RESUMABLE] : []),
-    `Run visual verification for ${scope} autonomously.`,
-    `1. /visual-verify for ${scope}: compare the implementation to its spec across 375/768/1440px, ` +
+    `Run verification for ${scope} autonomously.`,
+    `1. Compile check (BLOCKING, do this FIRST): run the project's type-check — 'npx tsc --noEmit' — ` +
+      `and, for a Storybook/library project with no dev server, also 'npm run build-storybook' (or the ` +
+      `project's build script). ${scope} MUST compile/build with zero errors in its own files. Any ` +
+      `type or build error (a broken import, an interface imported as a value instead of 'import type', ` +
+      `a duplicate JSX attribute, a missing export, an unresolved token) is a blocking defect — fix it ` +
+      `inline and re-run until it is clean. If it still does not compile, the verdict is ISSUES, never PASS.`,
+    `2. /visual-verify for ${scope}: compare the implementation to its spec across 375/768/1440px, ` +
       `check every token/variant/state, and run the accessibility audit. ${harnessClause(url)} ${figmaClause(isFigma)}`,
-    `2. /adversarial-review for ${scope}: red-team tokens (grep hardcoded hex/px), variant/state ` +
+    `3. /adversarial-review for ${scope}: red-team tokens (grep hardcoded hex/px), variant/state ` +
       `coverage, accessibility, and spec compliance.`,
-    "3. Fix any discrepancies inline, then write specs/<component>/visual-verify-report.md and the " +
+    "4. Fix any discrepancies inline, then write specs/<component>/visual-verify-report.md and the " +
       "adversarial-review report.",
     NO_MANUAL_STEPS,
-    "Report PASS only if you ACTUALLY rendered and inspected the live component (and, for a Figma " +
-      "project, compared it to the authoritative design). A source-only / grep audit is NEVER a PASS — " +
-      "it is BLOCKED. Never claim a check you did not perform.",
+    `Report PASS only if ${scope} COMPILES/BUILDS cleanly AND you ACTUALLY rendered and inspected the ` +
+      `live component (and, for a Figma project, compared it to the authoritative design). Code that ` +
+      `does not compile is ISSUES; a source-only / grep audit with no render is BLOCKED. Never claim a ` +
+      `check you did not perform, and never report PASS on code you did not compile.`,
     target === "all"
       ? "End with one line per component: '<name>: PASS', '<name>: ISSUES (n)', or '<name>: BLOCKED (<what you could not verify>)'."
       : "End with one line: 'VERIFY: PASS', 'VERIFY: ISSUES (n)', or 'VERIFY: BLOCKED (<what you could not verify>)'.",
