@@ -136,6 +136,8 @@ export interface VortSpecApi {
   storybookIndex(url: string): Promise<IpcResponse<"devserver:storybookIndex">>;
   storybookStatus(projectPath: string): Promise<IpcResponse<"storybook:status">>;
   ensureStorybook(projectPath: string): Promise<IpcResponse<"storybook:ensure">>;
+  ensureStylingPipeline(projectPath: string): Promise<IpcResponse<"styling:ensure">>;
+  reconcileExports(projectPath: string): Promise<IpcResponse<"styling:reconcileExports">>;
 
   // artifacts / config
   readArtifact(projectPath: string, relPath: string): Promise<IpcResponse<"artifact:read">>;

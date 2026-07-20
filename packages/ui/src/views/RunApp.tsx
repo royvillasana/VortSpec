@@ -275,6 +275,11 @@ export function RunApp({
       if (!s) return setSb({ phase: "idle" });
       if (!s.installed && s.components > 0) {
         setSb({ phase: "installing" });
+        // Wire the styling pipeline (Tailwind config + token→theme bridge) and reconcile any
+        // default/named export mismatches before Storybook renders, so components aren't shown
+        // as unstyled skeletons and the build doesn't fail on MISSING_EXPORT (styling-foundation-gate).
+        await api.ensureStylingPipeline(project.path).catch(() => null);
+        await api.reconcileExports(project.path).catch(() => null);
         const r = await api.ensureStorybook(project.path).catch(() => null);
         if (!alive) return;
         if (r && r.installed) {

@@ -159,6 +159,8 @@ const api: VortSpecApi = {
   previewInfo: (projectPath: string) => invoke("devserver:previewInfo", projectPath),
   storybookStatus: (projectPath: string) => invoke("storybook:status", projectPath),
   ensureStorybook: (projectPath: string) => invoke("storybook:ensure", projectPath),
+  ensureStylingPipeline: (projectPath: string) => invoke("styling:ensure", projectPath),
+  reconcileExports: (projectPath: string) => invoke("styling:reconcileExports", projectPath),
   storybookIndex: (url: string) => invoke("devserver:storybookIndex", url),
   onDevServerUpdate: (callback: (payload: DevServerUpdate) => void) =>
     subscribe(DEV_SERVER_UPDATE_CHANNEL, callback),
