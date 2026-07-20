@@ -22,7 +22,7 @@
     "@electron-toolkit/utils": "^3.0.0",
     "@fontsource-variable/geist": "^5.2.9",
     "@fontsource-variable/geist-mono": "^5.2.8",
-    "@royvillasana/sdd-de": "^1.10.0",
+    "@royvillasana/sdd-de": "^1.11.0",
     "@vortspec/core": "workspace:*",
     "@vortspec/ui": "workspace:*",
     "monaco-editor": "^0.52.0",
