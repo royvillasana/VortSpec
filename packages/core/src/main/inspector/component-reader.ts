@@ -39,7 +39,7 @@ function balanced(src: string, from: number): { body: string; end: number } | nu
 }
 
 /** Strip `//` line and `/* *\/` block comments, but never inside string/template literals. */
-function stripComments(src: string): string {
+export function stripComments(src: string): string {
   let out = "";
   for (let i = 0; i < src.length; i++) {
     const ch = src[i];
@@ -211,7 +211,11 @@ async function variantsSibling(projectPath: string, file: string): Promise<strin
   return hit ? join(dir, hit) : null;
 }
 
-async function findSourceFile(dir: string, name: string): Promise<string | null> {
+/** Dirs a component-file search never descends into (deps/build output). */
+const FIND_SKIP_DIRS = new Set(["node_modules", ".git", ".next", "dist", "build", "out", ".turbo", "coverage", ".vortspec", ".sdd-de"]);
+
+async function findSourceFile(dir: string, name: string, budget = { n: 8000 }): Promise<string | null> {
+  if (budget.n <= 0) return null;
   let entries;
   try {
     entries = await readdir(dir, { withFileTypes: true });
@@ -219,9 +223,12 @@ async function findSourceFile(dir: string, name: string): Promise<string | null>
     return null;
   }
   for (const entry of entries) {
+    if (budget.n <= 0) break;
+    if (entry.name.startsWith(".") || FIND_SKIP_DIRS.has(entry.name)) continue;
+    budget.n--; // bound total entries so a huge repo × a large roster can't stall
     const full = join(dir, entry.name);
     if (entry.isDirectory()) {
-      const found = await findSourceFile(full, name);
+      const found = await findSourceFile(full, name, budget);
       if (found) return found;
     } else if (SOURCE_EXTS.some((ext) => entry.name === `${name}${ext}`)) {
       return full;
@@ -290,12 +297,13 @@ async function componentStatus(
  */
 export function componentDeps(source: string, roster: string[], self: string): string[] {
   const selfNorm = normComponentName(self);
+  const src = stripComments(source); // don't count `// <Button>` in a comment as a dep
   const deps = new Set<string>();
   for (const name of roster) {
     const norm = normComponentName(name);
     if (norm === selfNorm) continue;
     // JSX tag use: `<Name` followed by whitespace, `>`, or `/` (not another name char).
-    if (new RegExp(`<${escapeRe(name)}(?![A-Za-z0-9])`).test(source)) deps.add(norm);
+    if (new RegExp(`<${escapeRe(name)}(?![A-Za-z0-9])`).test(src)) deps.add(norm);
   }
   return [...deps].sort();
 }

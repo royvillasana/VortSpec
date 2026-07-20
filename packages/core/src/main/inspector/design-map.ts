@@ -152,22 +152,3 @@ export async function mergeComponentEntries(
   if (changed) await writeComponentMap(projectPath, map);
   return { changed };
 }
-
-/**
- * Rows whose Figma value has drifted from the value recorded in the map (Plan B4
- * seed): the map's `value` baseline differs from the variable's current value. Pure.
- */
-export function tokenDrift(
-  map: TokenKeyMap,
-  figmaByKey: Map<string, string>,
-): { token: string; variableKey: string; was: string; now: string }[] {
-  const out: { token: string; variableKey: string; was: string; now: string }[] = [];
-  for (const [token, entry] of Object.entries(map.tokens)) {
-    if (entry.value === undefined) continue;
-    const now = figmaByKey.get(entry.variableKey);
-    if (now !== undefined && now !== entry.value) {
-      out.push({ token, variableKey: entry.variableKey, was: entry.value, now });
-    }
-  }
-  return out;
-}
