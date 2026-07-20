@@ -108,9 +108,9 @@ function stageReached(id: StageId, hay: { text: string; files: string[] }): bool
   return sig.text.some((re) => re.test(hay.text));
 }
 
-/** Count the per-component verdict lines the pipeline prints ("<name>: PASS|ISSUES"). */
+/** Count the per-component verdict lines the pipeline prints ("<name>: PASS|ISSUES|BLOCKED"). */
 function countVerdicts(text: string): number {
-  const matches = text.match(/:\s*(pass|issues)\b/g);
+  const matches = text.match(/:\s*(pass|issues|blocked)\b/gi);
   return matches ? matches.length : 0;
 }
 

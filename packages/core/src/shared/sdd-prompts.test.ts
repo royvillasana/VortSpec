@@ -5,8 +5,30 @@ import {
   tierForChunk,
   buildChunkPrompt,
   buildOnePrompt,
+  verifyPrompt,
   RESCAN_PROMPT,
 } from "./sdd-prompts";
+
+describe("verifyPrompt — honest gate (no false PASS without a live render)", () => {
+  it("blocks PASS and mandates BLOCKED when no preview URL is available", () => {
+    const p = verifyPrompt("button", null, false);
+    expect(p).toMatch(/MUST NOT report PASS/);
+    expect(p).toMatch(/BLOCKED/);
+    expect(p).toMatch(/Report PASS only if you ACTUALLY rendered/);
+  });
+
+  it("directs the agent to load and render the live surface when a preview URL exists", () => {
+    const p = verifyPrompt("button", "http://localhost:5173", false);
+    expect(p).toContain("http://localhost:5173");
+    expect(p).toMatch(/render\/inspect it|not just the source/);
+    // PASS remains gated on an actual render even with a URL.
+    expect(p).toMatch(/Report PASS only if you ACTUALLY rendered/);
+  });
+
+  it("offers PASS / ISSUES / BLOCKED as the three verdicts", () => {
+    expect(verifyPrompt("all", null, true)).toMatch(/PASS.*ISSUES.*BLOCKED/s);
+  });
+});
 
 describe("addSourcePrompt — re-run the Foundation against a new source", () => {
   const figma = { kind: "figma" as const, ref: "https://figma.com/file/abc" };

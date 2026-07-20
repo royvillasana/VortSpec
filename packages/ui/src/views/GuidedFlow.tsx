@@ -360,9 +360,12 @@ export function GuidedFlow({
 
   async function verify(target: string, label: string): Promise<void> {
     const url = await ensureHarness();
-    // R3: verification is structured checking (visual-verify + adversarial review),
-    // not deep reasoning — route it to Sonnet. Build/implement stays on the default.
-    await op(label, verifyPrompt(target, url, config?.designSource === "figma"), { kind: "verify", model: "sonnet" });
+    // Verify is structured checking (visual-verify + adversarial review), not generative
+    // work — route it to the cheapest tier. When no live preview came up (url is null) the
+    // prompt reports BLOCKED rather than a false PASS (it can only do a source-level audit),
+    // and we say so up front so it's clear the pass depends on a running preview.
+    const runLabel = url ? label : `${label} — source-only (start the preview for a full verify)`;
+    await op(runLabel, verifyPrompt(target, url, config?.designSource === "figma"), { kind: "verify", model: "haiku" });
   }
 
   /**

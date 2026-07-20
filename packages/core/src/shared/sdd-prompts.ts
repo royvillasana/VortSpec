@@ -147,10 +147,14 @@ export function newComponentFromFigmaNodePrompt(name: string, nodeId: string): s
  */
 function harnessClause(url: string | null): string {
   return url
-    ? `The live component is served at ${url} — load it there to inspect it.`
-    : "No live preview server is available; run the code-level audit (grep for hardcoded " +
-        "hex/px, check every variant/state and a11y in the source, verify spec compliance) and " +
-        'record any browser-only check as "pending" in the report — do NOT ask me to start a server.';
+    ? `The live component is served at ${url} — load it there and actually render/inspect it; ` +
+        "the rendered appearance, every variant/state as drawn, focus rings, and responsive layout " +
+        "at 375/768/1440 must be checked against the live surface, not just the source."
+    : "No live preview server is available, so the RENDERED checks (appearance, every variant/state " +
+        "as drawn, focus rings, responsive layout at 375/768/1440) CANNOT be performed. Do the " +
+        "source-level audit you can (grep hardcoded hex/px, check variants/states + a11y in the code, " +
+        "verify spec compliance) and LIST every visual check you could not run. This is a PARTIAL " +
+        "verify — you MUST NOT report PASS; the verdict is BLOCKED. Do NOT ask me to start a server.";
 }
 function figmaClause(isFigma: boolean): string {
   return isFigma
@@ -206,9 +210,12 @@ export function verifyPrompt(target: string, url: string | null, isFigma: boolea
     "3. Fix any discrepancies inline, then write specs/<component>/visual-verify-report.md and the " +
       "adversarial-review report.",
     NO_MANUAL_STEPS,
+    "Report PASS only if you ACTUALLY rendered and inspected the live component (and, for a Figma " +
+      "project, compared it to the authoritative design). A source-only / grep audit is NEVER a PASS — " +
+      "it is BLOCKED. Never claim a check you did not perform.",
     target === "all"
-      ? "End with one line per component: '<name>: PASS' or '<name>: ISSUES (n)'."
-      : "End with one line: 'VERIFY: PASS' or 'VERIFY: ISSUES (n)'.",
+      ? "End with one line per component: '<name>: PASS', '<name>: ISSUES (n)', or '<name>: BLOCKED (<what you could not verify>)'."
+      : "End with one line: 'VERIFY: PASS', 'VERIFY: ISSUES (n)', or 'VERIFY: BLOCKED (<what you could not verify>)'.",
   ].join("\n");
 }
 
