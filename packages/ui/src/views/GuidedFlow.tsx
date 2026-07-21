@@ -422,8 +422,17 @@ export function GuidedFlow({
   async function runNextChunk(): Promise<void> {
     const q = chunkQueueRef.current;
     if (!q || cancelChunksRef.current || q.index >= q.chunks.length) {
+      const finished = !!q && !cancelChunksRef.current && q.index >= q.chunks.length;
+      const alreadyVerified = q?.verify ?? false;
       chunkQueueRef.current = null;
       setChunksActive(false);
+      // Automatic styling validation once the components + Storybook are created: if the
+      // build didn't already verify per-chunk, run the visual → token → code pass now so
+      // every component is compared to its Figma node (figmaNodeId) and styling mismatches
+      // are flagged and fixed — not left for the user to notice in Storybook.
+      if (finished && !alreadyVerified) {
+        await verify("all", "Validating styling against Figma");
+      }
       return;
     }
     const chunk = q.chunks[q.index]!;
