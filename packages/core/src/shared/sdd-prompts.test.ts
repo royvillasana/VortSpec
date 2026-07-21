@@ -159,23 +159,26 @@ describe("chunkByLevel — group builds atoms → molecules → organisms", () =
 });
 
 describe("tierForChunk — route by complexity, never opus/fable", () => {
-  it("routes atoms/molecules-only chunks to haiku", () => {
+  it("routes an atoms-only chunk to haiku (atoms are simple enough)", () => {
     expect(tierForChunk([{ name: "Button", level: "atom" }])).toBe("haiku");
     expect(
       tierForChunk([
         { name: "Button", level: "atom" },
-        { name: "Field", level: "molecule" },
+        { name: "Input", level: "atom" },
       ]),
     ).toBe("haiku");
   });
 
-  it("routes a chunk containing an organism to sonnet", () => {
+  it("routes a chunk with a MOLECULE or organism to sonnet (fidelity needs capability)", () => {
+    // Haiku produced structurally-wrong molecules (alert with no colored panel, dropdown
+    // rendered inline), so molecules must escalate to Sonnet just like organisms.
     expect(
       tierForChunk([
         { name: "Button", level: "atom" },
-        { name: "Modal", level: "organism" },
+        { name: "Alert", level: "molecule" },
       ]),
     ).toBe("sonnet");
+    expect(tierForChunk([{ name: "Modal", level: "organism" }])).toBe("sonnet");
   });
 });
 

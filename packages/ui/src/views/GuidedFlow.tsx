@@ -362,12 +362,14 @@ export function GuidedFlow({
 
   async function verify(target: string, label: string): Promise<void> {
     const url = await ensureHarness();
-    // Verify is structured checking (visual-verify + adversarial review), not generative
-    // work — route it to the cheapest tier. When no live preview came up (url is null) the
-    // prompt reports BLOCKED rather than a false PASS (it can only do a source-level audit),
-    // and we say so up front so it's clear the pass depends on a running preview.
+    // Verify RENDERS each component, compares it to its Figma node, and FIXES the
+    // discrepancies inline — the fix is generative work that needs a capable model.
+    // Haiku could grep tokens but could not actually reproduce the design, so a broken
+    // molecule stayed broken after "verifying" (the exact "I verified and they look the
+    // same" failure). Route it to Sonnet. When no live preview came up (url is null) the
+    // prompt reports BLOCKED rather than a false PASS.
     const runLabel = url ? label : `${label} — source-only (start the preview for a full verify)`;
-    await op(runLabel, verifyPrompt(target, url, config?.designSource === "figma"), { kind: "verify", model: "haiku" });
+    await op(runLabel, verifyPrompt(target, url, config?.designSource === "figma"), { kind: "verify", model: "sonnet" });
   }
 
   /**

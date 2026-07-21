@@ -328,12 +328,16 @@ export function chunkByLevel<T extends ChunkComponent>(components: T[], size = 5
 }
 
 /**
- * Route a chunk by complexity: a chunk containing an organism gets Sonnet, an
- * atoms/molecules-only chunk gets Haiku. Component work is straightforward and
- * repetitive, so it never routes to Opus/Fable.
+ * Route a chunk by complexity. ONLY an atoms-only chunk gets Haiku — atoms (button,
+ * input, badge) are simple enough that Haiku reproduces the design faithfully. A chunk
+ * containing a MOLECULE or ORGANISM gets Sonnet: Haiku is not capable enough to
+ * reproduce the harder components and produced structurally-wrong output (an alert with
+ * no colored panel, a dropdown rendered inline instead of a floating menu). This is the
+ * fidelity-vs-tokens balance — cheap for atoms, capable where it matters. Never
+ * Opus/Fable for repetitive builds.
  */
 export function tierForChunk(chunk: ChunkComponent[]): BuildTier {
-  return chunk.some((c) => levelRank(c.level) === 2) ? "sonnet" : "haiku";
+  return chunk.some((c) => levelRank(c.level) >= 1) ? "sonnet" : "haiku";
 }
 
 export interface BuildChunkOptions {
