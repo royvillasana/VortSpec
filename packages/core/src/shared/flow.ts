@@ -138,15 +138,19 @@ export const DEFAULT_FLOW: StageDef[] = [
       "Read .sdd-de/project.yaml for `design_source` and the project configuration " +
       "(framework, language, token_file, component_dir). Connect to the configured source — do NOT " +
       "ask for a brief; the design source is the input.\n\n" +
-      "For `design_source: figma`, PREFER the remote/official Figma MCP (the OAuth-based " +
-      "`mcp.figma.com` server — file-level reads that need NO Figma Desktop app, NO local Desktop Bridge " +
-      "plugin, and NO live layer selection) over any local bridge. Read the file at `figma_file_url`: use " +
-      "its metadata for structure, and read the FULL variable collection (`figma_token_collection`) AND the " +
-      "text/color STYLES from the file link. Explicitly fetch VARIABLES + STYLES — not code generation. If a " +
-      "variable read needs a node scope, iterate the design system's foundation/component nodes and aggregate. " +
-      "Do NOT depend on the figma-console Desktop Bridge or a personal access token. Extract the COMPLETE " +
-      "token set and NEVER guess or approximate a value — if a value truly can't be read, OMIT it and note it, " +
-      "never fabricate a value.\n\n" +
+      "For `design_source: figma`, ENUMERATE THE WHOLE FILE — every page and every component set, not a " +
+      "subset. PREFER the Figma Desktop Bridge (the figma-console plugin): it lists ALL pages via " +
+      "`figma.root.children` and gives a complete component + variable dump on any Figma plan, and " +
+      "`figma_get_design_system_summary` + `figma_search_components` enumerate the FULL component set. " +
+      "CRITICAL: do NOT use the file's page listing / `get_metadata` as the component inventory — the remote " +
+      "Figma MCP's page listing CAPS AT 3 PAGES, so a 14-page page-per-component library would wrongly detect " +
+      "as ~8 documentation/foundation entries (icon/text/paragraph/callout/table/header) and MISS the real " +
+      "components (Alerts, Buttons, Card, Carousel, Dropdowns, Navbar, Tooltips, Input, Form). If the Desktop " +
+      "Bridge is unavailable, still cover EVERY component: use the remote MCP's `search_design_system` scoped " +
+      "to THIS file's own library (from `figma_file_url`) to enumerate all component sets — never stop at the " +
+      "capped page listing. Read the FULL variable collection (`figma_token_collection`) AND the text/color " +
+      "STYLES. Fetch VARIABLES + STYLES (not code generation). Extract the COMPLETE token set and NEVER guess " +
+      "or approximate a value — if a value truly can't be read, OMIT it and note it, never fabricate a value.\n\n" +
       "For `design_source: github` (a repository imported into this project), the repo's own files ARE " +
       "the source: scan them for the design system — read its existing token definitions (CSS variables, " +
       "Tailwind/theme config, SCSS/JS token files) and its component library, and reconcile them into the " +
