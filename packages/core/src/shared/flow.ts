@@ -69,6 +69,14 @@ export const detectedComponentSchema = z.object({
    * entry per variant (which explodes a `form-item` set into 40 rows).
    */
   variants: z.array(z.string()).optional(),
+  /**
+   * The component's authoritative Figma reference, recorded at detection so build and
+   * verify can fetch its design and validate against it WITHOUT asking the user for a
+   * link (change: figma-node-reference). `figmaNodeId` is the component set's node id;
+   * `componentKey` is its durable library key when available.
+   */
+  figmaNodeId: z.string().optional(),
+  componentKey: z.string().optional(),
 });
 export type DetectedComponent = z.infer<typeof detectedComponentSchema>;
 export const detectedComponentsSchema = z.array(detectedComponentSchema);
@@ -158,7 +166,13 @@ export const DEFAULT_FLOW: StageDef[] = [
       "1. Extract every design token and variable from the source into the configured `token_file`.\n" +
       "2. Detect the design system's PUBLIC components and write `.sdd-de/components.json` — a JSON " +
       "array of objects `{ \"name\": string, \"level\": \"atom\"|\"molecule\"|\"organism\", " +
-      "\"description\": string, \"variants\"?: string[] }`, ordered tokens → atoms → molecules → organisms.\n\n" +
+      "\"description\": string, \"variants\"?: string[], \"figmaNodeId\"?: string, \"componentKey\"?: string }`, " +
+      "ordered tokens → atoms → molecules → organisms.\n\n" +
+      "   RECORD THE FIGMA REFERENCE on every entry (this is required — build and verify look it up to fetch " +
+      "the authoritative design and validate against it, without asking the user): set `figmaNodeId` to the " +
+      "component set's node id and, when available, `componentKey` to its durable library key. You already have " +
+      "these from the enumeration (Desktop Bridge `figma.root.children`, or `search_design_system` scoped to " +
+      "this file's own library, or the node you read). Never leave a component without at least a `figmaNodeId`.\n\n" +
       "   COLLAPSE VARIANTS — do NOT emit one entry per variant:\n" +
       "   - A Figma COMPONENT_SET is ONE component: emit a single entry named after the set and record its " +
       "variant AXIS names in `variants` (e.g. `{ \"name\": \"button\", \"variants\": [\"type\", \"size\"] }`), " +

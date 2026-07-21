@@ -47,9 +47,18 @@ describe("verifyPrompt — honest gate (no false PASS without a live render)", (
     expect(token).toBeLessThan(code);
     // A component that compiles + uses tokens but doesn't match its reference still fails.
     expect(p).toMatch(/does NOT match its reference FAILS this layer/);
-    // Visual compares against the page-per-component Figma reference, via /visual-verify.
-    expect(p).toMatch(/Figma PAGE named after the component/);
+    // Verify resolves the component's Figma node itself (no manual links) and compares to it.
+    expect(p).toMatch(/RESOLVE each component's authoritative Figma reference YOURSELF — never ask me for a link/);
+    expect(p).toMatch(/figmaNodeId.*componentKey/);
+    expect(p).toMatch(/search_design_system/);
     expect(p).toMatch(/\/visual-verify/);
+  });
+
+  it("token layer flags hardcoded colors and checks the component's own semantic tokens", () => {
+    const p = verifyPrompt("alert", "http://localhost:6006", true);
+    expect(p).toMatch(/hardcoded hex\/rgb\/rgba\/px/);
+    expect(p).toMatch(/--component-<name>-\*/);
+    expect(p).toMatch(/is a TOKEN failure, even if it looks right/);
   });
 
   it("marks verified only on real evidence — no visual pass without a render-and-compare", () => {
@@ -59,23 +68,26 @@ describe("verifyPrompt — honest gate (no false PASS without a live render)", (
   });
 });
 
-describe("design-anchored build — reproduce the Figma page, not the name", () => {
-  it("buildOnePrompt anchors to the component's Figma page and forbids name-inference", () => {
+describe("design-anchored build — reproduce the Figma node, resolved autonomously", () => {
+  it("buildOnePrompt anchors to the component's Figma node and forbids name-inference", () => {
     const p = buildOnePrompt("alert");
-    expect(p).toMatch(/Figma PAGE named after it/);
-    expect(p).toMatch(/page-per-component/);
+    // Resolve the node itself: recorded figmaNodeId/componentKey, else search_design_system.
+    expect(p).toMatch(/never ask me for a Figma link/);
+    expect(p).toMatch(/figmaNodeId.*componentKey/);
+    expect(p).toMatch(/search_design_system/);
     expect(p).toMatch(/Do NOT infer the component's shape from its name/);
     expect(p).toMatch(/alert is\s+NOT a restyled button|NOT a restyled button/);
-    // Reference wins over the design-system index.
-    expect(p).toMatch(/takes precedence over the\s+design-system index/);
+    // Use the component's own semantic tokens; never hardcode.
+    expect(p).toMatch(/--component-<name>-\*/);
+    expect(p).toMatch(/do NOT hardcode a hex\/rgba/);
     // No reference → don't fabricate.
-    expect(p).toMatch(/do NOT fabricate a design from the name/);
+    expect(p).toMatch(/build nothing and report it unreferenced/);
   });
 
   it("buildChunkPrompt carries the design reference for its components", () => {
     const p = buildChunkPrompt(["alert", "badge"]);
-    expect(p).toMatch(/Figma PAGE named after it/);
-    expect(p).toMatch(/Use the extracted design tokens ONLY for VALUES/);
+    expect(p).toMatch(/authoritative reference for a component is its own Figma/);
+    expect(p).toMatch(/Use the extracted design tokens ONLY for/);
   });
 });
 
@@ -247,9 +259,10 @@ describe("detection — collapse variant sets + drop internal nodes", () => {
     expect(RESCAN_PROMPT).toMatch(/NEVER fabricate a value/);
   });
 
-  it("DESIGN_REFERENCE_CLAUSE finds a component's page across ALL pages, not the capped listing", () => {
+  it("DESIGN_REFERENCE_CLAUSE resolves the node via id/key then search, not the capped page listing", () => {
     const p = buildOnePrompt("alert");
-    expect(p).toMatch(/ENUMERATE ALL PAGES/);
+    expect(p).toMatch(/figmaNodeId.*componentKey/);
+    expect(p).toMatch(/search_design_system/);
     expect(p).toMatch(/Desktop Bridge/);
     expect(p).toMatch(/CAPS AT 3/);
   });
