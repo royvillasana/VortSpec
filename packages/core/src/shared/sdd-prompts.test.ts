@@ -234,11 +234,23 @@ describe("detection — collapse variant sets + drop internal nodes", () => {
     expect(RESCAN_PROMPT).toMatch(/do NOT invent a page/);
   });
 
-  it("RESCAN_PROMPT prefers the remote OAuth Figma MCP (no Desktop Bridge, no token) and never fabricates", () => {
-    expect(RESCAN_PROMPT).toMatch(/PREFER the remote\/official Figma MCP/);
-    expect(RESCAN_PROMPT).toMatch(/mcp\.figma\.com/);
-    expect(RESCAN_PROMPT).toMatch(/NO local Desktop Bridge/);
+  it("RESCAN_PROMPT enumerates ALL pages via the Desktop Bridge and never trusts the 3-page cap", () => {
+    // Regression fix: 57fa76c8 steered detection to the remote MCP, whose page listing caps at 3,
+    // so a 14-page page-per-component library detected as ~8 doc/foundation entries. Detection must
+    // cover the WHOLE file — prefer the Desktop Bridge (sees every page), never the capped listing.
+    expect(RESCAN_PROMPT).toMatch(/ENUMERATE THE WHOLE FILE/);
+    expect(RESCAN_PROMPT).toMatch(/PREFER the Figma Desktop Bridge/);
+    expect(RESCAN_PROMPT).toMatch(/figma\.root\.children/);
+    expect(RESCAN_PROMPT).toMatch(/CAPS AT 3 PAGES/);
+    expect(RESCAN_PROMPT).toMatch(/first-3 listing as the file's page set/i);
     expect(RESCAN_PROMPT).toMatch(/VARIABLES \+ STYLES/);
-    expect(RESCAN_PROMPT).toMatch(/never fabricate a value/);
+    expect(RESCAN_PROMPT).toMatch(/NEVER fabricate a value/);
+  });
+
+  it("DESIGN_REFERENCE_CLAUSE finds a component's page across ALL pages, not the capped listing", () => {
+    const p = buildOnePrompt("alert");
+    expect(p).toMatch(/ENUMERATE ALL PAGES/);
+    expect(p).toMatch(/Desktop Bridge/);
+    expect(p).toMatch(/CAPS AT 3/);
   });
 });
