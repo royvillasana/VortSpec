@@ -117,6 +117,15 @@ export async function ensureStylingPipeline(
 ): Promise<StylingPipelineResult> {
   const created: string[] = [];
   const preExisting: string[] = [];
+
+  // Mirror tsconfig path aliases into Storybook's Vite config — needed for ANY project
+  // whose components import via `@/…`, regardless of styling. Vite does not read tsconfig
+  // paths, so without this `@/lib/utils` fails to resolve in the Storybook build even though
+  // tsc passes. Runs before the tailwind check so non-tailwind projects are covered too.
+  const alias = await ensureStorybookAliases(projectPath);
+  created.push(...alias.created);
+  preExisting.push(...alias.preExisting);
+
   const config = await readProjectConfig(projectPath);
   if (!config || config.styling !== "tailwind") {
     return { applicable: false, created, preExisting, depsInstalled: false };
@@ -235,4 +244,95 @@ function insertAfterLastTopImport(src: string, line: string): string {
   if (lastImport < 0) return line + src;
   lines.splice(lastImport + 1, 0, line.trimEnd());
   return lines.join("\n");
+}
+
+const TSCONFIG_NAMES = ["tsconfig.json", "tsconfig.app.json", "tsconfig.base.json"];
+const MAIN_NAMES = [".storybook/main.ts", ".storybook/main.js", ".storybook/main.mjs"];
+
+/** Strip // and /* *​/ comments so a JSONC tsconfig can be JSON.parsed. */
+function stripJsonComments(s: string): string {
+  return s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
+}
+
+/**
+ * Read `compilerOptions.paths` bare-alias → source dir from the project's tsconfig, e.g.
+ * `{ "@/*": ["./src/*"] }` → `{ "@": "src" }`. Only single-target `<alias>/*` → `<dir>/*`
+ * mappings are handled (the common case); anything else is skipped.
+ */
+async function readTsconfigAliases(projectPath: string): Promise<Record<string, string>> {
+  const file = first(projectPath, TSCONFIG_NAMES);
+  if (!file) return {};
+  let json: unknown;
+  try {
+    json = JSON.parse(stripJsonComments(await readFile(join(projectPath, file), "utf8")));
+  } catch {
+    return {};
+  }
+  const paths = (json as { compilerOptions?: { paths?: Record<string, string[]> } })?.compilerOptions
+    ?.paths;
+  if (!paths) return {};
+  const out: Record<string, string> = {};
+  for (const [key, targets] of Object.entries(paths)) {
+    if (!key.endsWith("/*") || !Array.isArray(targets) || !targets[0]?.endsWith("/*")) continue;
+    const aliasKey = key.slice(0, -2); // "@/*" → "@"
+    const dir = targets[0].slice(0, -2).replace(/^\.\//, ""); // "./src/*" → "src"
+    out[aliasKey] = dir;
+  }
+  return out;
+}
+
+/**
+ * Ensure Storybook's Vite build resolves the project's tsconfig path aliases (change:
+ * storybook-alias-resolution). Vite does not read tsconfig paths, so a component that
+ * imports `@/lib/utils` compiles under tsc but fails the Storybook build with "Failed to
+ * resolve import". This mirrors each `@/*` alias into `.storybook/main`'s `viteFinal`.
+ * Idempotent and conservative: only injects when the alias isn't already wired and the
+ * file has a `const … ; export default …;` shape it can safely append to.
+ */
+export async function ensureStorybookAliases(
+  projectPath: string,
+): Promise<{ created: string[]; preExisting: string[] }> {
+  const created: string[] = [];
+  const preExisting: string[] = [];
+  const aliases = await readTsconfigAliases(projectPath);
+  if (Object.keys(aliases).length === 0) return { created, preExisting };
+
+  const mainRel = first(projectPath, MAIN_NAMES);
+  if (!mainRel) return { created, preExisting }; // no Storybook config yet — nothing to wire
+
+  const mainPath = join(projectPath, mainRel);
+  let src: string;
+  try {
+    src = await readFile(mainPath, "utf8");
+  } catch {
+    return { created, preExisting };
+  }
+
+  // Already wired (a viteFinal that sets resolve.alias) → leave it.
+  if (/resolve\.alias/.test(src) || /viteFinal/.test(src)) {
+    preExisting.push(`${mainRel} (vite alias)`);
+    return { created, preExisting };
+  }
+
+  // Only safe to append when there's a named default export to attach viteFinal to.
+  const exp = src.match(/export\s+default\s+([A-Za-z0-9_]+)\s*;/);
+  if (!exp) return { created, preExisting }; // unusual shape — don't risk corrupting it
+
+  const name = exp[1];
+  const aliasEntries = Object.entries(aliases)
+    .map(([k, dir]) => `    ${JSON.stringify(k)}: fileURLToPath(new URL(${JSON.stringify(`../${dir}`)}, import.meta.url)),`)
+    .join("\n");
+  let next = src;
+  if (!/from ['"]node:url['"]/.test(next)) {
+    next = insertAfterLastTopImport(next, `import { fileURLToPath } from "node:url";`);
+  }
+  const block =
+    `${name}.viteFinal = async (viteConfig) => {\n` +
+    `  viteConfig.resolve = viteConfig.resolve ?? {};\n` +
+    `  viteConfig.resolve.alias = {\n    ...viteConfig.resolve.alias,\n${aliasEntries}\n  };\n` +
+    `  return viteConfig;\n};\n`;
+  next = next.replace(exp[0], `${block}${exp[0]}`);
+  await writeFile(mainPath, next, "utf8").catch(() => undefined);
+  created.push(`${mainRel} (vite alias)`);
+  return { created, preExisting };
 }
