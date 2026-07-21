@@ -58,42 +58,50 @@ export const stageStateSchema = z.object({
 export type StageState = z.infer<typeof stageStateSchema>;
 
 /** A component detected in the design source, written to `.sdd-de/components.json`. */
-export const detectedComponentSchema = z.object({
-  name: z.string(),
-  level: z.enum(["atom", "molecule", "organism"]).optional(),
-  description: z.string().optional(),
-  /**
-   * Variant axis names for a COMPONENT_SET / variant family — e.g.
-   * ["type", "size"] or ["orientation", "control"]. Detection collapses a whole
-   * variant set into ONE entry carrying its axes here, instead of emitting one
-   * entry per variant (which explodes a `form-item` set into 40 rows).
-   */
-  variants: z.array(z.string()).optional(),
-  /**
-   * The component's authoritative Figma reference, recorded at detection so build and
-   * verify can fetch its design and validate against it WITHOUT asking the user for a
-   * link (change: figma-node-reference). `figmaNodeId` is the component set's node id;
-   * `componentKey` is its durable library key when available.
-   */
-  figmaNodeId: z.string().optional(),
-  /** The agent sometimes writes the node id as `nodeId` instead of `figmaNodeId`. */
-  nodeId: z.string().optional(),
-  componentKey: z.string().optional(),
-});
+export const detectedComponentSchema = z
+  .object({
+    name: z.string(),
+    // Loosened from a strict enum: an unexpected level (e.g. "typography", "Atom") must
+    // NOT fail the entry — `levelRank` already treats unknowns as last. A strict enum here
+    // meant one odd row nuked the ENTIRE roster (0 components detected).
+    level: z.string().optional(),
+    description: z.string().optional(),
+    /**
+     * Variant axis names for a COMPONENT_SET / variant family — e.g. ["type", "size"].
+     * `.catch(undefined)` so a malformed `variants` degrades the field, never the entry.
+     */
+    variants: z.array(z.string()).optional().catch(undefined),
+    /**
+     * The component's authoritative Figma reference, recorded at detection so build and
+     * verify can fetch its design without asking the user for a link. `figmaNodeId`/`nodeId`
+     * is the component set's node id; `componentKey` its durable library key.
+     */
+    figmaNodeId: z.string().optional(),
+    nodeId: z.string().optional(),
+    componentKey: z.string().optional(),
+  })
+  // Keep extra fields the agent writes (figmaCategory, status, …) instead of stripping them.
+  .passthrough();
 export type DetectedComponent = z.infer<typeof detectedComponentSchema>;
 
 /**
- * Parse `.sdd-de/components.json`. The agent may write EITHER a flat array of components
- * OR a rich wrapper object `{ complete, totals, notes, components: [...] }` (the extract
- * skill's metadata form). Accept both — a wrapper whose `components` array failed to be
- * unwrapped was reported as "zero components detected" even though 59 were present.
+ * Parse `.sdd-de/components.json` ROBUSTLY — a scan that actually found components must
+ * never render as "0 detected" because of a format quirk. It:
+ *   1. Unwraps the component list whether the agent wrote a flat array OR a metadata
+ *      wrapper `{ complete, totals, notes, components: [...] }`.
+ *   2. Keeps every object that has a string `name`, dropping only genuinely junk entries —
+ *      one malformed row can't blank the whole roster.
  */
 export const detectedComponentsSchema = z.preprocess((v) => {
-  if (v && typeof v === "object" && !Array.isArray(v)) {
-    const inner = (v as { components?: unknown }).components;
-    if (Array.isArray(inner)) return inner;
-  }
-  return v;
+  const arr = Array.isArray(v)
+    ? v
+    : v && typeof v === "object" && Array.isArray((v as { components?: unknown }).components)
+      ? (v as { components: unknown[] }).components
+      : [];
+  return (arr as unknown[]).filter(
+    (e): e is Record<string, unknown> =>
+      !!e && typeof e === "object" && typeof (e as { name?: unknown }).name === "string",
+  );
 }, z.array(detectedComponentSchema));
 
 export const COMPONENTS_MANIFEST = ".sdd-de/components.json";

@@ -346,7 +346,10 @@ export type ComponentStatus = z.infer<typeof componentStatusSchema>;
 
 export const inspectorComponentSchema = z.object({
   name: z.string(),
-  level: z.enum(["atom", "molecule", "organism"]).optional(),
+  // Loosened from a strict enum to tolerate whatever the detection wrote (an odd level
+  // must never break the roster); the UI groups by atom/molecule/organism and buckets
+  // anything else under "other".
+  level: z.string().optional(),
   description: z.string().optional(),
   /** Project-relative path of the component's source file, or null if not found. */
   file: z.string().nullable(),

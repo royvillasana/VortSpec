@@ -36,4 +36,18 @@ describe("detectedComponentsSchema — accepts a flat array OR the wrapper objec
       expect(r.data[1].nodeId).toBe("2:2");
     }
   });
+
+  it("does NOT blank the whole roster because of one odd entry", () => {
+    // An unexpected level, a malformed variants, and a junk row must not zero the roster.
+    const r = detectedComponentsSchema.safeParse([
+      { name: "text", level: "typography" }, // odd level → kept
+      { name: "button", level: "atom", variants: "type" }, // bad variants → field dropped, entry kept
+      { name: 42 }, // junk (name not a string) → dropped
+      null, // junk → dropped
+      { name: "alert", level: "molecule", figmaCategory: "feedback", status: "pending" }, // extra fields kept
+    ]);
+    expect(r.success).toBe(true);
+    expect(r.success && r.data.map((c) => c.name)).toEqual(["text", "button", "alert"]);
+    expect(r.success && r.data[1].variants).toBeUndefined();
+  });
 });
