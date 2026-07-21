@@ -158,27 +158,13 @@ describe("chunkByLevel — group builds atoms → molecules → organisms", () =
   });
 });
 
-describe("tierForChunk — route by complexity, never opus/fable", () => {
-  it("routes an atoms-only chunk to haiku (atoms are simple enough)", () => {
-    expect(tierForChunk([{ name: "Button", level: "atom" }])).toBe("haiku");
-    expect(
-      tierForChunk([
-        { name: "Button", level: "atom" },
-        { name: "Input", level: "atom" },
-      ]),
-    ).toBe("haiku");
-  });
-
-  it("routes a chunk with a MOLECULE or organism to sonnet (fidelity needs capability)", () => {
-    // Haiku produced structurally-wrong molecules (alert with no colored panel, dropdown
-    // rendered inline), so molecules must escalate to Sonnet just like organisms.
-    expect(
-      tierForChunk([
-        { name: "Button", level: "atom" },
-        { name: "Alert", level: "molecule" },
-      ]),
-    ).toBe("sonnet");
-    expect(tierForChunk([{ name: "Modal", level: "organism" }])).toBe("sonnet");
+describe("tierForChunk — builds run on the default (best) model, never downgraded", () => {
+  it("routes every chunk to opus (= the user's default model, no --model override)", () => {
+    // Downgrading builds to Haiku for cost is what broke fidelity; component creation now
+    // always uses the full-capability default model, at every level.
+    expect(tierForChunk([{ name: "Button", level: "atom" }])).toBe("opus");
+    expect(tierForChunk([{ name: "Alert", level: "molecule" }])).toBe("opus");
+    expect(tierForChunk([{ name: "Modal", level: "organism" }])).toBe("opus");
   });
 });
 

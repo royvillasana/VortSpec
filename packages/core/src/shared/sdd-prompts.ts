@@ -302,8 +302,8 @@ export interface ChunkComponent {
   level?: string | null;
 }
 
-/** The model tiers VortSpec routes builds to. Never opus/fable for repetitive builds. */
-export type BuildTier = "haiku" | "sonnet";
+/** The model tiers VortSpec routes builds to. `opus` = the user's default (best) model. */
+export type BuildTier = "opus" | "sonnet" | "haiku";
 
 const LEVEL_RANK: Record<string, number> = { atom: 0, molecule: 1, organism: 2 };
 function levelRank(level?: string | null): number {
@@ -328,16 +328,16 @@ export function chunkByLevel<T extends ChunkComponent>(components: T[], size = 5
 }
 
 /**
- * Route a chunk by complexity. ONLY an atoms-only chunk gets Haiku — atoms (button,
- * input, badge) are simple enough that Haiku reproduces the design faithfully. A chunk
- * containing a MOLECULE or ORGANISM gets Sonnet: Haiku is not capable enough to
- * reproduce the harder components and produced structurally-wrong output (an alert with
- * no colored panel, a dropdown rendered inline instead of a floating menu). This is the
- * fidelity-vs-tokens balance — cheap for atoms, capable where it matters. Never
- * Opus/Fable for repetitive builds.
+ * Component creation runs on the DEFAULT (best) model the user's plan provides —
+ * `opus` here resolves to no `--model` override, i.e. exactly what the raw SDD-CLI and
+ * VortSpec's earlier versions used. Downgrading builds to Haiku to save tokens is what
+ * broke fidelity (alerts with no colored panel, dropdowns rendered inline), so we no
+ * longer trade model capability for cost on the creative build task. Never Fable.
+ * (`chunk` is kept in the signature so callers can reintroduce per-chunk routing later
+ * without a call-site change.)
  */
-export function tierForChunk(chunk: ChunkComponent[]): BuildTier {
-  return chunk.some((c) => levelRank(c.level) >= 1) ? "sonnet" : "haiku";
+export function tierForChunk(_chunk: ChunkComponent[]): BuildTier {
+  return "opus";
 }
 
 export interface BuildChunkOptions {
