@@ -161,9 +161,16 @@ export const DEFAULT_FLOW: StageDef[] = [
       "Read .sdd-de/project.yaml for `design_source` and the project configuration " +
       "(framework, language, token_file, component_dir). Connect to the configured source — do NOT " +
       "ask for a brief; the design source is the input.\n\n" +
-      "For `design_source: figma`, ENUMERATE THE WHOLE FILE — every page and every component set, not a " +
-      "subset. PREFER the Figma Desktop Bridge (the figma-console plugin): it lists ALL pages via " +
-      "`figma.root.children` and gives a complete component + variable dump on any Figma plan, and " +
+      "For `design_source: figma`, first note the CONFIGURED file key from `figma_file_url` " +
+      "(`https://figma.com/design/<FILE_KEY>/…`). Everything you extract MUST come from THAT file and no " +
+      "other. ENUMERATE THE WHOLE FILE — every page and every component set, not a subset. PREFER the Figma " +
+      "Desktop Bridge (the figma-console plugin): it lists ALL pages via `figma.root.children` and gives a " +
+      "complete component + variable dump on any Figma plan. **BUT the Desktop Bridge reads whatever file is " +
+      "currently OPEN in Figma Desktop** — before extracting, CONFIRM the open file's key matches the " +
+      "configured `<FILE_KEY>` (check `figma.root` / the file url). If a DIFFERENT file is open, do NOT " +
+      "extract from it — that is how a scan silently reads the wrong design system; instead use the remote " +
+      "Figma MCP, which reads the configured file BY KEY (paginate past its 3-page listing cap via the " +
+      "design-system search below), or stop and tell the user to open the configured file in Figma Desktop. " +
       "`figma_get_design_system_summary` + `figma_search_components` enumerate the FULL component set. " +
       "CRITICAL: do NOT use the file's page listing / `get_metadata` as the component inventory — the remote " +
       "Figma MCP's page listing CAPS AT 3 PAGES, so a 14-page page-per-component library would wrongly detect " +
