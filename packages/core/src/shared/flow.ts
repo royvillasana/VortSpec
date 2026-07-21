@@ -76,10 +76,25 @@ export const detectedComponentSchema = z.object({
    * `componentKey` is its durable library key when available.
    */
   figmaNodeId: z.string().optional(),
+  /** The agent sometimes writes the node id as `nodeId` instead of `figmaNodeId`. */
+  nodeId: z.string().optional(),
   componentKey: z.string().optional(),
 });
 export type DetectedComponent = z.infer<typeof detectedComponentSchema>;
-export const detectedComponentsSchema = z.array(detectedComponentSchema);
+
+/**
+ * Parse `.sdd-de/components.json`. The agent may write EITHER a flat array of components
+ * OR a rich wrapper object `{ complete, totals, notes, components: [...] }` (the extract
+ * skill's metadata form). Accept both — a wrapper whose `components` array failed to be
+ * unwrapped was reported as "zero components detected" even though 59 were present.
+ */
+export const detectedComponentsSchema = z.preprocess((v) => {
+  if (v && typeof v === "object" && !Array.isArray(v)) {
+    const inner = (v as { components?: unknown }).components;
+    if (Array.isArray(inner)) return inner;
+  }
+  return v;
+}, z.array(detectedComponentSchema));
 
 export const COMPONENTS_MANIFEST = ".sdd-de/components.json";
 
