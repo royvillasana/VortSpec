@@ -72,13 +72,30 @@ describe("ensureStylingPipeline", () => {
     expect(preview.indexOf("tailwind.css")).toBeLessThan(preview.indexOf("tokens.css"));
   });
 
-  it("surfaces a fix-it command when deps are missing and no package manager is detectable", async () => {
+  it("auto-installs deps (defaulting to npm) even with no lockfile", async () => {
     await scaffold("tailwind");
-    // Remove the deps from package.json and any node_modules so install is needed; no lockfile present.
     await writeFile(join(root, "package.json"), JSON.stringify({ name: "t" }));
-    const r = await ensureStylingPipeline(root);
+    const calls: { pm: string; pkgs: string[] }[] = [];
+    const r = await ensureStylingPipeline(root, {
+      install: async (pm, pkgs) => {
+        calls.push({ pm, pkgs });
+        return true;
+      },
+    });
+    // No lockfile → defaults to npm and actually attempts the install (does not skip).
+    expect(calls).toHaveLength(1);
+    expect(calls[0].pm).toBe("npm");
+    expect(calls[0].pkgs).toEqual(["tailwindcss", "postcss", "autoprefixer"]);
+    expect(r.depsInstalled).toBe(true);
+    expect(r.depsFixIt).toBeUndefined();
+  });
+
+  it("surfaces a fix-it command only when the install actually fails", async () => {
+    await scaffold("tailwind");
+    await writeFile(join(root, "package.json"), JSON.stringify({ name: "t" }));
+    const r = await ensureStylingPipeline(root, { install: async () => false });
     expect(r.depsInstalled).toBe(false);
-    expect(r.depsFixIt).toMatch(/postcss.*autoprefixer|autoprefixer/);
+    expect(r.depsFixIt).toMatch(/npm install -D tailwindcss postcss autoprefixer/);
   });
 });
 

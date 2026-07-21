@@ -69,11 +69,27 @@ async function hasDeps(projectPath: string, pkgs: string[]): Promise<boolean> {
 
 function runInstall(projectPath: string, pm: "pnpm" | "yarn" | "npm", pkgs: string[]): Promise<boolean> {
   return new Promise((resolve) => {
-    const child = spawn(pm, addArgs(pm, pkgs), { cwd: projectPath, shell: false });
-    const timer = setTimeout(() => {
-      child.kill();
+    let child;
+    try {
+      // Inherit the parent env so the package-manager binary resolves on PATH (the
+      // GUI process's PATH), matching how the Storybook installer spawns.
+      child = spawn(pm, addArgs(pm, pkgs), {
+        cwd: projectPath,
+        shell: false,
+        env: { ...process.env, CI: "1", NO_COLOR: "1" },
+      });
+    } catch {
       resolve(false);
-    }, 180_000);
+      return;
+    }
+    const timer = setTimeout(() => {
+      try {
+        child.kill("SIGKILL");
+      } catch {
+        /* already gone */
+      }
+      resolve(false);
+    }, 300_000);
     child.on("error", () => {
       clearTimeout(timer);
       resolve(false);
@@ -85,12 +101,20 @@ function runInstall(projectPath: string, pm: "pnpm" | "yarn" | "npm", pkgs: stri
   });
 }
 
+export interface StylingPipelineOptions {
+  /** Override the dependency installer (tests inject a stub to avoid a real install). */
+  install?: (pm: "pnpm" | "yarn" | "npm", pkgs: string[]) => Promise<boolean>;
+}
+
 /**
  * Ensure the styling pipeline exists for a `styling: tailwind` project. Best-effort;
  * never throws. Returns what it created, what already existed, and whether the required
  * build deps are in place (with a fix-it command when they could not be installed).
  */
-export async function ensureStylingPipeline(projectPath: string): Promise<StylingPipelineResult> {
+export async function ensureStylingPipeline(
+  projectPath: string,
+  opts: StylingPipelineOptions = {},
+): Promise<StylingPipelineResult> {
   const created: string[] = [];
   const preExisting: string[] = [];
   const config = await readProjectConfig(projectPath);
@@ -149,14 +173,18 @@ export async function ensureStylingPipeline(projectPath: string): Promise<Stylin
     );
   }
 
-  // 5. postcss/autoprefixer deps.
+  // 5. tailwindcss/postcss/autoprefixer deps. Attempt the install automatically — a
+  // fresh project has no lockfile yet, so default to npm rather than skipping (the bug
+  // that surfaced the fix-it even though Tailwind was selected). Only fall back to a
+  // fix-it card when the install actually fails.
   const deps = ["tailwindcss", "postcss", "autoprefixer"];
   let depsInstalled = await hasDeps(projectPath, deps);
   let depsFixIt: string | undefined;
   if (!depsInstalled) {
-    const pm = detectPackageManager(projectPath);
-    if (pm) depsInstalled = await runInstall(projectPath, pm, deps);
-    if (!depsInstalled) depsFixIt = `${pm ?? "npm"} ${addArgs(pm ?? "npm", deps).join(" ")}`;
+    const pm = detectPackageManager(projectPath) ?? "npm";
+    const install = opts.install ?? ((p, pkgs) => runInstall(projectPath, p, pkgs));
+    depsInstalled = await install(pm, deps);
+    if (!depsInstalled) depsFixIt = `${pm} ${addArgs(pm, deps).join(" ")}`;
   }
 
   return { applicable: true, created, preExisting, depsInstalled, depsFixIt };
