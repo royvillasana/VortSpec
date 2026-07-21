@@ -47,6 +47,16 @@ describe("buildTokenTheme — token → Tailwind theme bridge", () => {
     expect(t.boxShadow["default"]).toBe("var(--shadow-default)");
   });
 
+  it("also exposes the Tailwind 4px spacing scale so `p-4` resolves to a token", () => {
+    // --spacing-16 (16px) → Tailwind scale key `4` (16/4).
+    expect(t.spacing["4"]).toBe("var(--spacing-16)");
+  });
+
+  it("aliases status colors to idiomatic semantic names (`text-danger`, `bg-success`)", () => {
+    expect(t.colors["danger"]).toBe("var(--color-status-danger)");
+    expect(t.colors["status-danger"]).toBe("var(--color-status-danger)");
+  });
+
   it("does not miscategorize a non-color, non-typography scalar as a color", () => {
     expect(t.colors["stroke-width"]).toBeUndefined();
   });

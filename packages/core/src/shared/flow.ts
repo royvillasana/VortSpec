@@ -164,6 +164,14 @@ export const DEFAULT_FLOW: StageDef[] = [
       "Tailwind/theme config, SCSS/JS token files) and its component library, and reconcile them into the " +
       "configured `token_file` and inventory. Do not fetch anything remotely; read the files on disk.\n\n" +
       "1. Extract every design token and variable from the source into the configured `token_file`.\n" +
+      "   For `styling: tailwind`, ALSO author a CURATED, SEMANTIC `tailwind.config.js` `theme.extend` that " +
+      "maps IDIOMATIC Tailwind scale names to those tokens — colors `primary/secondary/success/danger/warning/" +
+      "info` + `neutral.{100,300,600,900,muted}` + `text.{DEFAULT,muted}` + brand ramps; the `spacing` scale; " +
+      "`borderRadius` (sm/DEFAULT/md/lg); `boxShadow` (DEFAULT/md); `borderWidth` (1); `fontFamily` (base/sans/" +
+      "mono); `fontSize` (body/h1…, each with its lineHeight); `opacity.disabled` — so components use CLEAN " +
+      "classes like `bg-primary text-danger border-1 border-neutral-300 rounded shadow-md p-3 text-body`, NEVER " +
+      "a raw `bg-[var(--…)]` dump and NEVER Tailwind's hardcoded defaults. This semantic theme is the single " +
+      "biggest driver of component fidelity.\n" +
       "2. Detect the design system's PUBLIC components and write `.sdd-de/components.json` — a JSON " +
       "array of objects `{ \"name\": string, \"level\": \"atom\"|\"molecule\"|\"organism\", " +
       "\"description\": string, \"variants\"?: string[], \"figmaNodeId\"?: string, \"componentKey\"?: string }`, " +
