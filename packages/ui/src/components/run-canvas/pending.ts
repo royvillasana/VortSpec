@@ -186,7 +186,7 @@ export function describeEdit(edit: PendingEdit): string {
         const props = entries.map(([k]) => k).join(", ");
         return `RESET ${edit.label} to none (target computed style: \`${decls}\`). REMOVE the value in source — delete the utility class that sets ${props} (e.g. a \`bg-*\` background class, a \`text-*\` text-color class, a \`border-*\`/\`shadow-*\` class) or the matching CSS declaration. Do NOT add a \`*-transparent\`/\`*-none\` class alongside the existing one: it typically loses in the cascade and nothing changes — the existing class must be removed so the property no longer renders.`;
       }
-      return `Set this element's computed style to \`${decls}\`. If it's styled by utility classes, swap the relevant classes (e.g. \`bg-*\`/\`text-*\` for color, \`justify-*\`/\`items-*\` for alignment, \`w-*\`/\`flex-*\` for width) so the RENDERED result matches — don't just append an inline style or a second class that the existing one overrides.`;
+      return `Set this element's computed style to \`${decls}\`. If it's styled by utility classes, change the relevant class (e.g. \`bg-*\`/\`text-*\` for color, \`justify-*\`/\`items-*\` for alignment, \`w-*\`/\`flex-*\` for width) so the RENDERED result matches. If NO such class exists yet, ADD one (e.g. add a \`bg-*\` class when the element currently has no background). Don't just append an inline style or a second class that the existing one overrides.`;
     }
   }
 }
@@ -203,6 +203,10 @@ export interface EditTarget {
   text: string | null;
   /** The element's live className — the concrete anchor to grep for in the source JSX. */
   className: string | null;
+  /** When the element is a reused component instance, its component-definition file — a
+   *  SECONDARY place the class may live (editing it changes every instance, so `file`,
+   *  the usage site, is preferred for a per-instance change). */
+  componentFile?: string | null;
   edits: PendingEdit[];
 }
 
@@ -253,9 +257,22 @@ export function buildEditPrompt(targets: EditTarget[]): string {
         ];
     return [...where, ...t.edits.map((e) => `- ${describeEdit(e)}`)];
   });
+  // Per-instance guidance: the edited element is often a reused component instance whose
+  // visual class lives on the USAGE (e.g. `<Card className="bg-neutral-100">` in the page),
+  // NOT in the component's shared definition. So edit the usage; only touch the component
+  // file if the class truly lives there AND the change is meant for every instance.
+  const withComponent = targets.filter((t) => t.componentFile);
+  const componentNote = withComponent.length
+    ? [
+        `IMPORTANT — per-instance change: each element above is a REUSED component instance. Its visual class (background, color, etc.) usually sits on the instance at its usage in \`${targets[0].file}\`, not in the component's shared definition. Change it at the usage so other instances are unaffected. Only if the class genuinely lives in the component's own file (${withComponent
+          .map((t) => `\`${t.componentFile}\``)
+          .join(", ")}) and the change is meant for EVERY instance should you edit there. If the element has no such class yet, add one on the instance (the component must forward \`className\`; if it doesn't, add the class in the component).`,
+      ]
+    : [];
   return [
     head,
     `Make the minimal change so the RENDERED result matches; preserve existing design-token usage and do not touch unrelated code. After editing, re-read the file to confirm the change is actually present.`,
+    ...componentNote,
     // A bare layout element (a wrapper <div> with few/no classes) resolves by tag alone to
     // index.html's mount `<div id="root">` — forbid that: it's the HTML shell, not source.
     `Never edit index.html, or anything under dist/ or storybook-static/ — those are the HTML mount shell and build output. Edit the JSX page/component source under src/. A bare wrapper element lives in the page named above or a component it renders; if you truly cannot find it there, make NO change rather than editing the mount shell.`,

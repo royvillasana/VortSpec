@@ -1152,13 +1152,25 @@ export function RunApp({
         // Group by element (edits can span multiple elements + files now). Snapshot
         // every distinct affected file so discard restores all of them; if any element
         // has no known file, fall back to the broad token scope.
-        // Ground each element with no component file of its own to the CURRENTLY PREVIEWED
-        // page's source — otherwise the agent, searching by tag alone, resolves a bare
-        // layout `<div>` to index.html's `<div id="root">` (the mount shell) and refuses.
-        const targets = groupEditsByElement(structural).map((t) => ({ ...t, file: t.file ?? currentPageFile }));
-        const files = [...new Set(targets.map((t) => t.file).filter((f): f is string => !!f))];
+        // A per-element visual edit is a per-INSTANCE change: target where the element is
+        // USED (the current page) — the class often lives on the instance (e.g.
+        // `<Card className="bg-neutral-100">`), and editing the component would change every
+        // instance. Keep the component's own file as a SECONDARY location for the agent to
+        // check. Falls back to the component file when the page can't be resolved.
+        const targets = groupEditsByElement(structural).map((t) => {
+          const usage = currentPageFile ?? t.file;
+          const componentFile = t.file && t.file !== usage ? t.file : null;
+          return { ...t, file: usage, componentFile };
+        });
+        // Snapshot every file the agent might touch (usage + component) so Discard/Revert
+        // restores whichever it edited; fall back to the broad token scope if none resolved.
+        const files = [
+          ...new Set(
+            targets.flatMap((t) => [t.file, t.componentFile]).filter((f): f is string => !!f),
+          ),
+        ];
         const snap =
-          files.length > 0 && files.length === targets.length
+          files.length > 0
             ? (await Promise.all(files.map((f) => api.snapshotComponent(project.path, f)))).flat()
             : await api.snapshotTokenScope(project.path);
         // Dedupe snapshot entries by path.
