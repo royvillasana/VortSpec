@@ -163,13 +163,22 @@ export function describeEdit(edit: PendingEdit): string {
       // Prefer the EXACT declarations the canvas computed (e.g. justify-content: center;
       // align-items: center) over the loose label — the agent must realize this precise
       // result, typically by swapping the element's utility classes (Tailwind
-      // justify-*/items-*/w-*), not by guessing an "approximate" value.
-      const decls = edit.css && Object.keys(edit.css).length
-        ? Object.entries(edit.css)
-            .map(([k, v]) => `${k}: ${v}`)
-            .join("; ")
-        : `${edit.cssProps.join(", ") || edit.label.toLowerCase()}: ${edit.value}`;
-      return `Set this element's computed style to \`${decls}\`. If it's styled by utility classes, swap the relevant classes (e.g. \`justify-*\`/\`items-*\` for alignment, \`w-*\`/\`flex-*\` for width) so the RENDERED result matches — don't just append an inline style that a class overrides.`;
+      // bg-*/text-*/justify-*/w-*), not by guessing an "approximate" value.
+      const entries: [string, string][] =
+        edit.css && Object.keys(edit.css).length
+          ? Object.entries(edit.css)
+          : edit.cssProps.map((p) => [p, edit.value]);
+      const decls = entries.map(([k, v]) => `${k}: ${v || "(empty)"}`).join("; ");
+      // A reset-to-none (the ✕ in the color/length pickers → transparent/none/empty) must
+      // REMOVE the source value, not add a competing one: appending `bg-transparent` beside
+      // `bg-white` usually loses in the cascade, so the file changes but nothing renders and
+      // the change "reverts" on Keep. So instruct removal explicitly.
+      const isReset = entries.length > 0 && entries.every(([, v]) => /^(transparent|none|)$/i.test(String(v).trim()));
+      if (isReset) {
+        const props = entries.map(([k]) => k).join(", ");
+        return `RESET ${edit.label} to none (target computed style: \`${decls}\`). REMOVE the value in source — delete the utility class that sets ${props} (e.g. a \`bg-*\` background class, a \`text-*\` text-color class, a \`border-*\`/\`shadow-*\` class) or the matching CSS declaration. Do NOT add a \`*-transparent\`/\`*-none\` class alongside the existing one: it typically loses in the cascade and nothing changes — the existing class must be removed so the property no longer renders.`;
+      }
+      return `Set this element's computed style to \`${decls}\`. If it's styled by utility classes, swap the relevant classes (e.g. \`bg-*\`/\`text-*\` for color, \`justify-*\`/\`items-*\` for alignment, \`w-*\`/\`flex-*\` for width) so the RENDERED result matches — don't just append an inline style or a second class that the existing one overrides.`;
     }
   }
 }

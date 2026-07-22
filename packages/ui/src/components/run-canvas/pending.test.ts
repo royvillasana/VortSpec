@@ -80,6 +80,16 @@ describe("edit provenance (Phase 6)", () => {
     expect(ff).toContain("Set this element's computed style");
     expect(ff).toContain("opacity");
   });
+
+  it("describes a color reset (transparent) as a class REMOVAL, not a transparent add", () => {
+    const reset = classifyFieldEdit(selection, "fill", "transparent", ["background-color"], () => 1, true);
+    const desc = describeEdit(reset);
+    expect(desc).toContain("RESET");
+    expect(desc).toContain("REMOVE");
+    expect(desc).toContain("bg-");
+    // Must warn against the failing approach (append a transparent class that loses cascade).
+    expect(desc.toLowerCase()).toContain("do not add");
+  });
 });
 
 describe("isTokenBinding — a var() binding is a source edit, not a token-value rewrite", () => {
