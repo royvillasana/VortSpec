@@ -458,6 +458,9 @@ export function RunApp({
   // preview-only, so we keep the pending edits and tell the user instead of falsely
   // entering review (which would "revert" on Keep once the live override is dropped).
   const [applyMiss, setApplyMiss] = useState(false);
+  // The agent's own explanation for why it changed no file (its final message) — surfaced
+  // in the warning so "why didn't it apply?" is answered concretely, not generically.
+  const [applyMissReason, setApplyMissReason] = useState<string | null>(null);
   const [snapshot, setSnapshot] = useState<FileSnapshot[] | null>(null);
   const structuralMod = useAgentRun();
   // The reload Apply triggers to show the source change must NOT be treated as a
@@ -1138,6 +1141,7 @@ export function RunApp({
     const tokenEdits = edits.filter(isTokenValueEdit);
     const structural = edits.filter((e) => !isTokenValueEdit(e));
     setApplyMiss(false);
+    setApplyMissReason(null);
     setApplying(true);
     try {
       for (const e of tokenEdits) {
@@ -1206,7 +1210,14 @@ export function RunApp({
       setReview(true);
     } else {
       // No source edit → don't clear the override (keep showing the edit live), don't
-      // enter review. The persistent unsaved bar stays up with an explanation.
+      // enter review. The persistent unsaved bar stays up with an explanation. Capture the
+      // agent's OWN final message — it usually says exactly why (e.g. "couldn't find the
+      // element", "the classes don't appear in this file").
+      const m = structuralMod.model;
+      const reason = (m.result?.text ?? [...m.messages].reverse().find((x) => x.role === "assistant")?.text ?? "")
+        .trim()
+        .slice(0, 400);
+      setApplyMissReason(reason || null);
       setApplyMiss(true);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1216,6 +1227,7 @@ export function RunApp({
     bridge.clearOverride();
     setPending({});
     setApplyMiss(false);
+    setApplyMissReason(null);
     refreshReadout(); // the canvas reverted — re-read so the panel fields follow
   }
   // Drop a single pending edit before applying: restore ITS element to the original,
@@ -1364,6 +1376,11 @@ export function RunApp({
                   <b>Couldn’t locate {Object.keys(pending).length === 1 ? "this edit" : "these edits"} in your source</b> —
                   the run finished without changing a file, so {Object.keys(pending).length === 1 ? "it’s" : "they’re"}{" "}
                   still preview-only. Try <b>Re-apply in Chat</b> to describe the change to Claude, or Discard.
+                  {applyMissReason && (
+                    <span className="mt-1 block border-l-2 border-vs-warning/40 pl-2 text-[11px] italic text-vs-text-muted">
+                      Claude said: “{applyMissReason}”
+                    </span>
+                  )}
                 </>
               ) : (
                 <>
