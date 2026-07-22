@@ -216,7 +216,12 @@ function resizeField(
   computed: Record<string, string>,
   fixedValue: string | undefined,
 ): SectionField {
-  const mode = detectSizeMode(dim, computed, readout.parentFlow);
+  const mode = detectSizeMode(
+    dim,
+    computed,
+    readout.parentFlow,
+    readout.parentSize ? { size: readout.rect[dim], parentContent: readout.parentSize[dim] } : undefined,
+  );
   // When Fixed, the value is the px readout; otherwise the mode name reads in the field.
   const value = mode === "fixed" ? (fixedValue ?? `${Math.round(readout.rect[dim])}px`) : SIZE_MODE_LABEL[mode];
   return { key: dim, label, kind: "resize", value, mode, token: null, options: [] };

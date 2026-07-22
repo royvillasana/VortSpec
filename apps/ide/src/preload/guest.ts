@@ -324,6 +324,16 @@ function parentFlowOf(el: Element): "row" | "column" | "block" {
   return cs.flexDirection.startsWith("column") ? "column" : "row";
 }
 
+/** The parent's content-box size in px (getComputedStyle width/height resolve to the used
+ *  content width/height). Null when there is no parent. Used to detect Fill in a block
+ *  parent — a full-bleed child's own computed width is resolved to px, never `100%`. */
+function parentContentSize(el: Element): { width: number; height: number } | null {
+  const parent = el.parentElement;
+  if (!parent) return null;
+  const cs = getComputedStyle(parent);
+  return { width: parseFloat(cs.width) || 0, height: parseFloat(cs.height) || 0 };
+}
+
 function readoutOf(el: Element, id: string): NodeReadout {
   const cs = getComputedStyle(el);
   const computed: Record<string, string> = {};
@@ -350,6 +360,7 @@ function readoutOf(el: Element, id: string): NodeReadout {
     componentCandidates: reactComponentNames(el),
     // The parent's flow — Fixed/Hug/Fill resizing is axis-aware (needs the parent's axis).
     parentFlow: parentFlowOf(el),
+    parentSize: parentContentSize(el),
     className: typeof el.className === "string" ? el.className : "",
     children: Array.from(el.children)
       .filter((c) => !SKIP_TAGS.has(c.tagName) && !c.hasAttribute("data-vs-overlay"))

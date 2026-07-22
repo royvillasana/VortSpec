@@ -33,6 +33,7 @@ function readout(over: Partial<NodeReadout> = {}): NodeReadout {
     dataComponent: over.dataComponent ?? "button",
     componentCandidates: over.componentCandidates ?? [],
     parentFlow: over.parentFlow ?? "block",
+    parentSize: over.parentSize ?? null,
     className: over.className ?? "btn",
     children: over.children ?? [],
     text: over.text,

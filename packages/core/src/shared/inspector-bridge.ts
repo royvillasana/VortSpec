@@ -85,6 +85,9 @@ export const nodeReadoutSchema = z.object({
   componentCandidates: z.array(z.string()).default([]),
   /** The parent's layout flow (`row`/`column` flex, else `block`) — for axis-aware resizing. */
   parentFlow: z.enum(["row", "column", "block"]).default("block"),
+  /** The parent's content-box size (px). Lets Fill be detected in a block parent, where a
+   *  full-bleed child's computed width is resolved to px (never the literal `100%`). */
+  parentSize: z.object({ width: z.number(), height: z.number() }).nullable().default(null),
   /** The element's full className string, for component/token heuristics. */
   className: z.string().default(""),
   /** Direct element children's border-boxes (guest coords) — used to place gap bands. */
