@@ -15,6 +15,9 @@ export interface ChatMessage {
   id: string;
   role: "user" | "assistant";
   text: string;
+  /** Monotonic order across messages AND tool steps, so the two can be interleaved
+   *  chronologically in the chat (text → the files it worked on → the next text …). */
+  seq?: number;
 }
 
 /** One item of Claude's plan (its TodoWrite checklist). */
@@ -31,6 +34,8 @@ export interface ToolStep {
   /** The tool's output text (from its result), shown when the card expands. */
   output?: string;
   status: "running" | "ok" | "error";
+  /** Shared order with ChatMessage (see ChatMessage.seq) for chronological interleaving. */
+  seq?: number;
 }
 
 export interface RunModel {
@@ -93,6 +98,8 @@ export type RunAction =
 
 let activitySeq = 0;
 let messageSeq = 0;
+// Shared monotonic order across messages AND tool steps so the chat can interleave them.
+let orderSeq = 0;
 
 export function reduceRun(state: RunModel, action: RunAction): RunModel {
   switch (action.type) {
@@ -111,7 +118,7 @@ export function reduceRun(state: RunModel, action: RunAction): RunModel {
         result: undefined,
         messages: [
           ...state.messages,
-          { id: `m${messageSeq++}`, role: "user", text: action.text },
+          { id: `m${messageSeq++}`, role: "user", text: action.text, seq: orderSeq++ },
         ],
       };
     case "raw":
@@ -126,7 +133,7 @@ function commitStreaming(state: RunModel): ChatMessage[] {
   if (!state.streamingText.trim()) return state.messages;
   return [
     ...state.messages,
-    { id: `m${messageSeq++}`, role: "assistant", text: state.streamingText },
+    { id: `m${messageSeq++}`, role: "assistant", text: state.streamingText, seq: orderSeq++ },
   ];
 }
 
@@ -172,7 +179,7 @@ function applyEvent(state: RunModel, event: RunEvent): RunModel {
         ...state,
         messages: [
           ...state.messages,
-          { id: `m${messageSeq++}`, role: "assistant", text: event.text },
+          { id: `m${messageSeq++}`, role: "assistant", text: event.text, seq: orderSeq++ },
         ],
         streamingText: "",
       };
@@ -182,7 +189,7 @@ function applyEvent(state: RunModel, event: RunEvent): RunModel {
         event.path && !state.files.includes(event.path)
           ? [...state.files, event.path]
           : state.files;
-      const step: ToolStep = { id: `s${activitySeq}`, name: event.name, detail: event.path ?? event.input, status: "running" };
+      const step: ToolStep = { id: `s${activitySeq}`, name: event.name, detail: event.path ?? event.input, status: "running", seq: orderSeq++ };
       return pushActivity({ ...state, files, steps: [...state.steps, step] }, label, "tool");
     }
     case "tool-result": {

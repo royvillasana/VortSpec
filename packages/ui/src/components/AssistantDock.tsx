@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { Project, FsEntry } from "@vortspec/core/ipc";
 import { api } from "@vortspec/ui/api";
 import { useAgentRun } from "../lib/useAgentRun";
-import type { ChatMessage } from "@vortspec/ui/run-model";
+import type { ChatMessage, ToolStep } from "@vortspec/ui/run-model";
 import { Spinner } from "@vortspec/ui/ui";
 import { Response } from "./ai/Response";
 import { RunLimitNotice } from "./RunLimitNotice";
@@ -476,14 +476,20 @@ export function AssistantDock({
         ) : (
           <div className="flex flex-col gap-3">
             {firstPrompt && <Bubble role="user" text={firstPrompt} />}
-            {run.model.messages.map((m) => (
-              <Bubble key={m.id} role={m.role} text={m.text} />
-            ))}
+            {/* Interleave text and tool work in the order it happened: text → the files it
+                worked on ("Worked · N steps") → the result → the next working block. Each run
+                of consecutive tool calls is its own block, so the reader never loses context. */}
+            {buildTimeline(run.model.messages, run.model.steps).map((b) =>
+              b.kind === "message" ? (
+                <Bubble key={b.message.id} role={b.message.role} text={b.message.text} />
+              ) : (
+                <ToolSteps key={b.key} steps={b.steps} />
+              ),
+            )}
             {run.model.plan.length > 0 && <Plan items={run.model.plan} />}
             {run.model.reasoning && (
               <Reasoning text={run.model.reasoning} streaming={run.running && !run.model.streamingText} />
             )}
-            {run.model.steps.length > 0 && <ToolSteps steps={run.model.steps} />}
             {run.model.streamingText && <Bubble role="assistant" text={run.model.streamingText} />}
             {run.running && !run.model.streamingText && !run.model.reasoning && (
               <div className="flex items-center gap-2 text-xs">
@@ -816,6 +822,34 @@ function Row({ label, children }: { label: string; children: React.ReactNode }):
 
 function preview(items: string[]): string {
   return items.slice(0, 12).join(", ") + (items.length > 12 ? ` +${items.length - 12}` : "");
+}
+
+type TimelineBlock =
+  | { kind: "message"; message: ChatMessage }
+  | { kind: "steps"; key: string; steps: ToolStep[] };
+
+/**
+ * Merge the committed text messages and tool steps into one chronological timeline
+ * (shared `seq`), grouping RUNS of consecutive tool calls into a single block. This is
+ * what makes the chat read "text → the files it worked on → result → the next block"
+ * instead of all the prose on top and one lump of tool work at the bottom.
+ */
+function buildTimeline(messages: ChatMessage[], steps: ToolStep[]): TimelineBlock[] {
+  const merged: Array<{ seq: number; m?: ChatMessage; s?: ToolStep }> = [
+    ...messages.map((m, i) => ({ seq: m.seq ?? i, m })),
+    ...steps.map((s, i) => ({ seq: s.seq ?? 1e6 + i, s })),
+  ].sort((a, b) => a.seq - b.seq);
+  const blocks: TimelineBlock[] = [];
+  for (const it of merged) {
+    if (it.m) {
+      blocks.push({ kind: "message", message: it.m });
+    } else if (it.s) {
+      const last = blocks[blocks.length - 1];
+      if (last && last.kind === "steps") last.steps.push(it.s);
+      else blocks.push({ kind: "steps", key: it.s.id, steps: [it.s] });
+    }
+  }
+  return blocks;
 }
 
 function Bubble({ role, text }: { role: "user" | "assistant"; text: string }): React.JSX.Element {
