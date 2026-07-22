@@ -17,6 +17,14 @@ interface StoredProject {
   id: string;
   path: string;
   addedAt: string;
+  /** Last time the project was opened — the recent list is ordered by this (newest first).
+   *  Absent on entries added before this was tracked; falls back to `addedAt`. */
+  lastOpenedAt?: string;
+}
+
+/** The recency key an entry sorts by — last opened, else first added. */
+function recencyOf(e: StoredProject): string {
+  return e.lastOpenedAt ?? e.addedAt;
 }
 
 function registryPath(): string {
@@ -63,8 +71,22 @@ async function hydrate(entry: StoredProject): Promise<Project> {
 
 export async function listProjects(): Promise<Project[]> {
   const entries = await readRegistry();
-  const projects = await Promise.all(entries.map(hydrate));
+  // Most-recently-opened first (falls back to added time), so the project you were just
+  // working on leads the recent list instead of sinking to the bottom.
+  const ordered = [...entries].sort((a, b) => recencyOf(b).localeCompare(recencyOf(a)));
+  const projects = await Promise.all(ordered.map(hydrate));
   return projectListSchema.parse(projects);
+}
+
+/** Record that a project was just opened (bumps it to the top of the recent list).
+ *  Registers the path if it isn't known yet. Fire-and-forget from the renderer. */
+export async function touchProject(path: string): Promise<void> {
+  const entries = await readRegistry();
+  const now = new Date().toISOString();
+  const existing = entries.find((e) => e.path === path);
+  if (existing) existing.lastOpenedAt = now;
+  else entries.push({ id: projectId(path), path, addedAt: now, lastOpenedAt: now });
+  await writeRegistry(entries);
 }
 
 export async function pickFolder(
@@ -114,13 +136,13 @@ export async function createFolder(): Promise<Project | null> {
 /** Add a path to the registry (deduped) and return the hydrated project. */
 async function registerPath(path: string): Promise<Project> {
   const entries = await readRegistry();
+  const now = new Date().toISOString();
   const existing = entries.find((e) => e.path === path);
-  const entry: StoredProject =
-    existing ?? { id: projectId(path), path, addedAt: new Date().toISOString() };
-  if (!existing) {
-    entries.push(entry);
-    await writeRegistry(entries);
-  }
+  const entry: StoredProject = existing ?? { id: projectId(path), path, addedAt: now };
+  // Registering a path means it's being opened — stamp recency so it leads the list.
+  entry.lastOpenedAt = now;
+  if (!existing) entries.push(entry);
+  await writeRegistry(entries);
   return hydrate(entry);
 }
 

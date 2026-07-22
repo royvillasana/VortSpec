@@ -84,6 +84,8 @@ export default function App(): JSX.Element {
   // ProjectSetup stepper as "New Project" — instead of landing on the Foundation
   // with no design system to extract. Mirrors the cockpit dashboard's routing.
   const openProject = useCallback((p: Project): void => {
+    // Bump recency so the recent list leads with what you're actually working on.
+    void api.touchProject(p.path).catch(() => {});
     if (p.toolkit.configured) {
       setNewProject(null);
       setWorkspace(p);
