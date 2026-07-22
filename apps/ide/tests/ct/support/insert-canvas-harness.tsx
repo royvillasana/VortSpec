@@ -2,6 +2,7 @@
 import React from "react";
 import type { JSX } from "react";
 import { RunCanvas } from "@vortspec/ui/RunCanvas";
+import { DEFAULT_VIEWPORTS } from "@vortspec/ui/viewports";
 import type { CanvasMode } from "@vortspec/ui/useInspectorBridge";
 import type { InsertTargetWire } from "@vortspec/core/ipc";
 import { makeBridge } from "./mock-bridge";
@@ -60,9 +61,10 @@ export function InsertCanvasHarness({ scenario }: { scenario: InsertScenario }):
         bridge={bridge}
         mode={mode}
         onModeChange={noop}
-        zoom={1}
-        onZoomBy={noop}
-        onZoomReset={noop}
+        viewport={DEFAULT_VIEWPORTS.desktop}
+        frame="none"
+        onViewportChange={noop}
+        onFrameChange={noop}
       />
     </div>
   );

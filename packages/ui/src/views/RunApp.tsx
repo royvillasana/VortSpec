@@ -9,6 +9,7 @@ import { DesignPanel, ChangesBar } from "../components/run-canvas/DesignPanel";
 import { Sitemap } from "../components/run-canvas/Sitemap";
 import type { RouteDiscovery, RouteNode, Rect } from "@vortspec/core/ipc";
 import { RunCanvas } from "../components/run-canvas/RunCanvas";
+import { viewportsFromTokens, type ViewportId, type DeviceFrameKind } from "../components/run-canvas/viewports";
 import {
   resolveComponent,
   resembleComponent,
@@ -369,14 +370,23 @@ export function RunApp({
   // state is lifted here where both the Design panel and the canvas can read it.
   // Default to Interact so the app just works; switch to Inspect to edit.
   const [mode, setMode] = useState<CanvasMode>("interact");
-  const [zoom, setZoom] = useState(1);
-  const zoomBy = useCallback((f: number) => setZoom((z) => Math.min(4, Math.max(0.25, z * f))), []);
-  const resetZoom = useCallback(() => setZoom(1), []);
+  // Playground viewport (Desktop/Tablet/Mobile) + device frame. Breakpoint widths come
+  // from the project's Figma breakpoint variables (synced as tokens) when present, else
+  // standard defaults. Auto-fit inside RunCanvas replaced the old manual zoom.
+  const [viewportId, setViewportId] = useState<ViewportId>("desktop");
+  const [frame, setFrame] = useState<DeviceFrameKind>("iphone");
   // Project color tokens for the Figma-style color picker (Libraries tab).
   const colorTokens = useMemo(
     () => tokens.filter((t) => t.type === "color").map((t) => ({ name: t.name, value: t.resolvedValue })),
     [tokens],
   );
+  // Breakpoint widths sourced from the project's Figma breakpoint variables (tokens), with
+  // standard defaults; `viewport` is the resolved current one handed to the canvas.
+  const viewports = useMemo(
+    () => viewportsFromTokens(tokens.map((t) => ({ name: t.name, resolvedValue: t.resolvedValue }))),
+    [tokens],
+  );
+  const viewport = viewports[viewportId];
 
   useEffect(() => {
     if (!canvas) return;
@@ -1628,9 +1638,10 @@ export function RunApp({
                   bridge={bridge}
                   mode={mode}
                   onModeChange={setMode}
-                  zoom={zoom}
-                  onZoomBy={zoomBy}
-                  onZoomReset={resetZoom}
+                  viewport={viewport}
+                  frame={frame}
+                  onViewportChange={setViewportId}
+                  onFrameChange={setFrame}
                   onLiveEdit={applyLive}
                   onCommitEdit={commitStyleEdits}
                   onSendToChat={

@@ -2,6 +2,7 @@ import { test, expect } from "@playwright/experimental-ct-react";
 import App from "../../src/renderer/src/App";
 import { DesignPanel } from "@vortspec/ui/DesignPanel";
 import { CanvasToolbar } from "@vortspec/ui/CanvasToolbar";
+import { DEFAULT_VIEWPORTS } from "@vortspec/ui/viewports";
 import { AssignDialog } from "@vortspec/ui/AssignDialog";
 import type { Project, Selection, InspectorToken, InspectorComponent, FsEntry } from "@vortspec/core/ipc";
 
@@ -72,21 +73,22 @@ test("the canvas toolbar carries the modes and zoom, bottom-center over the canv
   await expect(bar.getByRole("button", { name: "Comment" })).toBeVisible();
   await expect(bar.getByRole("button", { name: "Insert" })).toBeVisible();
   await expect(c.getByRole("button", { name: "Pan" })).toHaveCount(0); // never existed
-  await expect(bar.getByRole("button", { name: "100%" })).toBeVisible();
+  // Zoom was replaced by the viewport selector — Desktop is the default.
+  await expect(bar.getByRole("button", { name: /Desktop/ })).toBeVisible();
   // The Design panel is still a resizable sidebar (like the Explorer rail).
   await expect(c.getByRole("separator", { name: "Resize Design panel" })).toBeVisible();
 });
 
-test("the mode and zoom controls exist exactly once, and survive collapsing Layers", async ({ mount }) => {
+test("the mode and viewport controls exist exactly once, and survive collapsing Layers", async ({ mount }) => {
   const c = await mount(<App />, { hooksConfig: { mock: base } });
   await openRun(c);
   // The Comments panel used to re-implement this toggle; the Design panel used to
   // own it. Exactly one implementation now, wherever we are.
   await expect(c.getByRole("button", { name: "Inspect" })).toHaveCount(1);
-  await expect(c.getByRole("button", { name: "100%" })).toHaveCount(1);
-  // Zoom used to live in the Layers footer and vanish with it.
+  await expect(c.getByRole("button", { name: /Desktop/ })).toHaveCount(1);
+  // The controls live on the canvas toolbar, so they don't vanish with the Layers panel.
   await c.getByRole("button", { name: /Layers/ }).click();
-  await expect(c.getByTestId("canvas-toolbar").getByRole("button", { name: "100%" })).toBeVisible();
+  await expect(c.getByTestId("canvas-toolbar").getByRole("button", { name: /Desktop/ })).toBeVisible();
   await expect(c.getByRole("button", { name: "Inspect" })).toHaveCount(1);
 });
 
@@ -118,9 +120,10 @@ test("a bridge that is still connecting does not disable anything", async ({ mou
 const barProps = {
   mode: "interact" as const,
   onModeChange: () => {},
-  zoom: 1,
-  onZoomBy: () => {},
-  onZoomReset: () => {},
+  viewport: DEFAULT_VIEWPORTS.desktop,
+  frame: "none" as const,
+  onViewportChange: () => {},
+  onFrameChange: () => {},
 };
 
 test("a failed bridge disables the modes that need it, but never Interact", async ({ mount }) => {

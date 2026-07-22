@@ -189,6 +189,10 @@
       "types": "./src/components/run-canvas/RunCanvas.tsx",
       "default": "./src/components/run-canvas/RunCanvas.tsx"
     },
+    "./viewports": {
+      "types": "./src/components/run-canvas/viewports.ts",
+      "default": "./src/components/run-canvas/viewports.ts"
+    },
     "./useInspectorBridge": {
       "types": "./src/lib/useInspectorBridge.ts",
       "default": "./src/lib/useInspectorBridge.ts"
