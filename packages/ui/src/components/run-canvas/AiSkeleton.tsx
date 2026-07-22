@@ -68,8 +68,7 @@ const CSS = `
   animation: vs-ai-sweep 2.6s linear infinite;
 }
 .vs-ai-pill {
-  position: absolute; left: 50%; bottom: 20px; transform: translateX(-50%);
-  display: flex; align-items: center; gap: 8px;
+  display: inline-flex; align-items: center; gap: 8px;
   padding: 6px 12px; border-radius: 999px;
   background: color-mix(in srgb, #0b0b12 78%, transparent); color: #fff;
   border: 1px solid color-mix(in srgb, var(--c1) 45%, transparent);
@@ -111,13 +110,25 @@ export function AiSkeletonBlock({ rect, label }: { rect: Rect; label?: string })
   );
 }
 
-/** Full-preview animated gradient while the AI works the whole page. */
+/** Full-preview animated gradient while the AI works the whole page. The "Working…"
+ *  label is NOT here — it's rendered by the host as a toolbar-anchored pill so it stays
+ *  above the bottom toolbar in every viewport (not floating inside a scaled device). */
 export function AiSkeletonPage({ label = "Working on the page…" }: { label?: string }): JSX.Element {
   return (
     <div className="vs-ai-skel vs-ai-page" role="status" aria-label={label}>
       <Styles />
       <div className="vs-ai-page-mesh" />
       <div className="vs-ai-page-sweep" />
+    </div>
+  );
+}
+
+/** The "AI is working" pill — a flow element the host pins just above the canvas toolbar
+ *  (screen-space), so it reads the same across Desktop/Tablet/Mobile. */
+export function AiWorkingPill({ label = "Working…" }: { label?: string }): JSX.Element {
+  return (
+    <div className="vs-ai-skel" role="status" aria-label={label}>
+      <Styles />
       <div className="vs-ai-pill">
         <b />
         {label}

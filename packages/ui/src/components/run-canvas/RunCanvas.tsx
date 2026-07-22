@@ -4,7 +4,7 @@ import type { Rect } from "@vortspec/core/ipc";
 import type { InspectorBridge, CanvasMode } from "../../lib/useInspectorBridge";
 import { SpacingOverlay } from "./SpacingOverlay";
 import { CommentsLayer, type CommentsLayerProps } from "./CommentsLayer";
-import { AiSkeletonBlock, AiSkeletonPage } from "./AiSkeleton";
+import { AiSkeletonBlock, AiSkeletonPage, AiWorkingPill } from "./AiSkeleton";
 import { CanvasToolbar } from "./CanvasToolbar";
 import { bridgeStatusMessage } from "./bridge-status";
 import { DeviceFrame, frameBezel } from "./DeviceFrame";
@@ -285,8 +285,11 @@ export function RunCanvas({
       />
 
       {/* Notices sit ABOVE the toolbar (which owns bottom-3), stacked in one column
-          so a second notice pushes the first up instead of drawing over it. */}
-      <div className="pointer-events-none absolute bottom-14 left-1/2 z-30 flex -translate-x-1/2 flex-col items-center gap-1.5">
+          so a second notice pushes the first up instead of drawing over it. The
+          "AI is working" pill lives here too — anchored to the toolbar, screen-space,
+          so it reads the same in every viewport instead of floating inside the device. */}
+      <div className="pointer-events-none absolute bottom-14 left-1/2 z-40 flex -translate-x-1/2 flex-col items-center gap-1.5">
+        {skeleton?.mode === "page" && <AiWorkingPill label={skeleton.label} />}
         {bridge.error && (
           <div className="rounded-md border border-vs-border-default bg-vs-bg-elevated px-3 py-1.5 text-[11px] text-vs-text-secondary shadow">
             {/* Same sentence the toolbar shows as its disabled reason — one source. */}
