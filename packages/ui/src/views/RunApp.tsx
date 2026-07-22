@@ -9,7 +9,7 @@ import { DesignPanel, ChangesBar } from "../components/run-canvas/DesignPanel";
 import { Sitemap } from "../components/run-canvas/Sitemap";
 import type { RouteDiscovery, RouteNode, Rect } from "@vortspec/core/ipc";
 import { RunCanvas } from "../components/run-canvas/RunCanvas";
-import { viewportsFromTokens, type ViewportId, type DeviceFrameKind } from "../components/run-canvas/viewports";
+import { viewportsFromTokens, appliesInViewport, type ViewportId, type DeviceFrameKind } from "../components/run-canvas/viewports";
 import {
   resolveComponent,
   resembleComponent,
@@ -896,6 +896,25 @@ export function RunApp({
   selectionRef.current = selection;
   const readoutRef = useRef(bridge.readout);
   readoutRef.current = bridge.readout;
+  // Current viewport + pending ledger as refs — read inside commitEdits / the re-scope
+  // effect without stale closures or re-subscribing.
+  const viewportIdRef = useRef(viewportId);
+  viewportIdRef.current = viewportId;
+
+  // Re-scope live overrides when the viewport changes (responsive preview): a mobile/tablet
+  // edit renders only in its own viewport — matching how it commits to source — so switching
+  // views clears every override and re-applies just those that apply at the new breakpoint. A
+  // viewport switch only resizes the webview (no reload), so node ids stay valid.
+  useEffect(() => {
+    bridge.clearOverride();
+    for (const e of Object.values(pendingRef.current)) {
+      if (!e.nodeId || !appliesInViewport(e.viewport, viewportId)) continue;
+      if (e.css && Object.keys(e.css).length > 0) applyOverride(e.nodeId, e.css);
+      else if (e.key === "content") setText(e.nodeId, e.value);
+      else if (e.kind === "variant") setClass(e.nodeId, e.removeClasses ?? [], e.addClasses ?? []);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewportId]);
   const tokensRef = useRef(tokens);
   tokensRef.current = tokens;
   // Last-applied variant value per key, so chained switches remove the right classes.
@@ -957,6 +976,9 @@ export function RunApp({
             elementClassName: readoutRef.current?.className ?? undefined,
             resizeMode: e.resizeMode,
             remove: e.remove,
+            // Tag the edit with the viewport it was made in — a mobile/tablet edit is scoped
+            // to that breakpoint in source (and in the live preview across viewport switches).
+            viewport: viewportIdRef.current,
           };
         }
         return next;

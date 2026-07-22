@@ -1,4 +1,14 @@
 import type { Selection } from "@vortspec/core/ipc";
+import { VIEWPORT_VARIANT, VIEWPORT_BREAKPOINT_LABEL } from "./viewports";
+
+/** For a viewport-scoped edit (mobile/tablet), the instruction to realize it at only that
+ *  breakpoint via a Tailwind max-width variant, preserving other widths. "" for desktop/base. */
+function viewportScope(edit: PendingEdit): string {
+  if (!edit.viewport || edit.viewport === "desktop") return "";
+  const prefix = VIEWPORT_VARIANT[edit.viewport];
+  const label = VIEWPORT_BREAKPOINT_LABEL[edit.viewport];
+  return ` This edit was made in the ${edit.viewport} viewport — scope it to ${label}: realize it with Tailwind's \`${prefix}\` variant (e.g. \`${prefix}p-2\`, \`${prefix}bg-white\`) so ONLY that breakpoint changes and every other width keeps its current value. ADD the \`${prefix}\`-prefixed class; do NOT change the unprefixed base class.`;
+}
 
 /**
  * Pending-edit model for the Run-Canvas gated commit (change: run-canvas-visual-editor).
@@ -52,6 +62,9 @@ export interface PendingEdit {
   resizeMode?: "fixed" | "hug" | "fill";
   /** A whole-element deletion — hidden live (display:none), removed from source on Apply. */
   remove?: boolean;
+  /** The viewport this edit was made in (responsive editing) — mobile/tablet edits are
+   *  scoped to that breakpoint in source; desktop is the base. Absent = base. */
+  viewport?: "desktop" | "tablet" | "mobile";
 }
 
 /** Classify a Design-panel field edit into a `PendingEdit`, given the live selection + token usage. */
@@ -156,7 +169,7 @@ export function describeEdit(edit: PendingEdit): string {
         : edit.resizeMode === "hug"
           ? "hug (size to) its content"
           : "fill the available space in its container";
-    return `Set the element's ${edit.key} to ${how} (Figma-style resizing — realize it however best fits the component: a utility class like w-full/flex-1, or a style).`;
+    return `Set the element's ${edit.key} to ${how} (Figma-style resizing — realize it however best fits the component: a utility class like w-full/flex-1, or a style).${viewportScope(edit)}`;
   }
   switch (editProvenance(edit)) {
     case "variant": {
@@ -184,9 +197,9 @@ export function describeEdit(edit: PendingEdit): string {
       const isReset = entries.length > 0 && entries.every(([, v]) => /^(transparent|none|)$/i.test(String(v).trim()));
       if (isReset) {
         const props = entries.map(([k]) => k).join(", ");
-        return `RESET ${edit.label} to none (target computed style: \`${decls}\`). REMOVE the value in source — delete the utility class that sets ${props} (e.g. a \`bg-*\` background class, a \`text-*\` text-color class, a \`border-*\`/\`shadow-*\` class) or the matching CSS declaration. Do NOT add a \`*-transparent\`/\`*-none\` class alongside the existing one: it typically loses in the cascade and nothing changes — the existing class must be removed so the property no longer renders.`;
+        return `RESET ${edit.label} to none (target computed style: \`${decls}\`). REMOVE the value in source — delete the utility class that sets ${props} (e.g. a \`bg-*\` background class, a \`text-*\` text-color class, a \`border-*\`/\`shadow-*\` class) or the matching CSS declaration. Do NOT add a \`*-transparent\`/\`*-none\` class alongside the existing one: it typically loses in the cascade and nothing changes — the existing class must be removed so the property no longer renders.${viewportScope(edit)}`;
       }
-      return `Set this element's computed style to \`${decls}\`. If it's styled by utility classes, change the relevant class (e.g. \`bg-*\`/\`text-*\` for color, \`justify-*\`/\`items-*\` for alignment, \`w-*\`/\`flex-*\` for width) so the RENDERED result matches. If NO such class exists yet, ADD one (e.g. add a \`bg-*\` class when the element currently has no background). Don't just append an inline style or a second class that the existing one overrides.`;
+      return `Set this element's computed style to \`${decls}\`. If it's styled by utility classes, change the relevant class (e.g. \`bg-*\`/\`text-*\` for color, \`justify-*\`/\`items-*\` for alignment, \`w-*\`/\`flex-*\` for width) so the RENDERED result matches. If NO such class exists yet, ADD one (e.g. add a \`bg-*\` class when the element currently has no background). Don't just append an inline style or a second class that the existing one overrides.${viewportScope(edit)}`;
     }
   }
 }

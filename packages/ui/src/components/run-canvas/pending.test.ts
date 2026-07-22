@@ -81,6 +81,17 @@ describe("edit provenance (Phase 6)", () => {
     expect(ff).toContain("opacity");
   });
 
+  it("scopes a mobile-viewport edit to the max-md breakpoint, base untouched", () => {
+    const base = classifyFieldEdit(selection, "fill", "#fff", ["background-color"], () => 1, true);
+    const mobile = describeEdit({ ...base, viewport: "mobile" });
+    expect(mobile).toContain("max-md:");
+    expect(mobile).toContain("mobile only");
+    expect(mobile).toContain("do NOT change the unprefixed base class");
+    // A desktop edit is the base — no responsive variant tacked on.
+    expect(describeEdit({ ...base, viewport: "desktop" })).not.toContain("max-md:");
+    expect(describeEdit(base)).not.toContain("max-md:");
+  });
+
   it("describes a delete edit as a full JSX removal", () => {
     const del = { key: "remove", id: "remove", label: "Delete element", kind: "style" as const, value: "", token: null, shared: false, cssProps: ["display"], css: { display: "none" }, remove: true };
     const desc = describeEdit(del);

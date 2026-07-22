@@ -251,6 +251,7 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
     createFolder: async () => cfg.createFolderResult ?? null,
     pickFile: async () => cfg.pickFileResult ?? null,
     listProjects: async () => cfg.projects ?? [],
+    touchProject: async () => undefined,
     removeProject: async (id: string) => (cfg.projects ?? []).filter((p) => p.id !== id),
     openFolder: async () => undefined,
     revealPath: async () => undefined,
@@ -266,6 +267,12 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
     createProject: async () => null,
     toolkitStatus: async () => ({ present: true, configured: true, version: "1.0.0", updateAvailable: false }),
     installToolkit: async () => ({ present: true, configured: true, version: "1.0.0", updateAvailable: false }),
+    resyncToolkit: async (path: string) => ({
+      id: "p",
+      name: "p",
+      path,
+      toolkit: { present: true, configured: true, version: "1.0.0", updateAvailable: false },
+    }),
 
     startRun,
     // Cancelling ends the run — emit a terminal result so the UI leaves its

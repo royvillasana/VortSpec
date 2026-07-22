@@ -46,6 +46,7 @@ export function DeviceFrame({ kind, children }: { kind: DeviceFrameKind; childre
               borderRadius: 999,
               background: "#000",
               zIndex: 2,
+              pointerEvents: "none",
             }}
           />
         ) : (
@@ -62,6 +63,7 @@ export function DeviceFrame({ kind, children }: { kind: DeviceFrameKind; childre
               background: "#000",
               boxShadow: "0 0 0 2px rgba(255,255,255,.06)",
               zIndex: 2,
+              pointerEvents: "none",
             }}
           />
         )}
@@ -79,6 +81,7 @@ export function DeviceFrame({ kind, children }: { kind: DeviceFrameKind; childre
             borderRadius: 999,
             background: "rgba(255,255,255,.5)",
             zIndex: 2,
+              pointerEvents: "none",
           }}
         />
       )}

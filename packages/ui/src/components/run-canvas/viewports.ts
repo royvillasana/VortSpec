@@ -34,6 +34,35 @@ export function frameApplies(id: ViewportId): boolean {
   return id === "mobile" || id === "tablet";
 }
 
+/**
+ * The Tailwind variant an edit made in each viewport is scoped to (responsive editing).
+ * Desktop is the base (no prefix — the default appearance at every width unless a smaller
+ * breakpoint overrides). Mobile/Tablet use max-width variants so a change there affects ONLY
+ * that view: `max-md:` = below 768px (mobile), `md:max-lg:` = 768–1023px (tablet).
+ */
+export const VIEWPORT_VARIANT: Record<ViewportId, string> = {
+  desktop: "",
+  tablet: "md:max-lg:",
+  mobile: "max-md:",
+};
+
+/** Human label for the breakpoint an edit in `id` targets — for the Apply prompt. */
+export const VIEWPORT_BREAKPOINT_LABEL: Record<ViewportId, string> = {
+  desktop: "all widths (the base/default)",
+  tablet: "tablet only (768px–1023px)",
+  mobile: "mobile only (below 768px)",
+};
+
+/**
+ * Whether an edit made in `editVp` should render live while viewing `current`. A base
+ * (desktop) edit applies everywhere; a viewport-scoped (mobile/tablet) edit shows only in
+ * its own viewport — so switching views re-scopes the preview to match the source.
+ */
+export function appliesInViewport(editVp: ViewportId | undefined, current: ViewportId): boolean {
+  if (!editVp || editVp === "desktop") return true;
+  return editVp === current;
+}
+
 const leadingPx = (v: string): number | null => {
   const m = String(v).trim().match(/^(\d+(?:\.\d+)?)/);
   if (!m) return null;
