@@ -7,7 +7,7 @@ import { Button, Spinner } from "@vortspec/ui/ui";
 import { ProjectRail, projectRailItems } from "@vortspec/ui/ProjectRail";
 import { DesignPanel, ChangesBar } from "../components/run-canvas/DesignPanel";
 import { Sitemap } from "../components/run-canvas/Sitemap";
-import type { RouteDiscovery } from "@vortspec/core/ipc";
+import type { RouteDiscovery, RouteNode } from "@vortspec/core/ipc";
 import { RunCanvas } from "../components/run-canvas/RunCanvas";
 import {
   resolveComponent,
@@ -243,6 +243,21 @@ export function RunApp({
   // ── Sitemap: the app's page/route tree, read from source (change: sitemap-tree) ──
   const [routes, setRoutes] = useState<RouteDiscovery | null>(null);
   const [currentPath, setCurrentPath] = useState("/");
+  // The source file of the page currently on screen — grounds canvas Apply so the agent
+  // edits the previewed page (not index.html's mount shell) when an element has no known
+  // component file of its own. Walks the route tree for the node at `currentPath`.
+  const currentPageFile = useMemo(() => {
+    const roots = routes?.routes ?? [];
+    const find = (nodes: RouteNode[]): string | null => {
+      for (const n of nodes) {
+        if (n.path === currentPath && n.file) return n.file;
+        const hit = find(n.children);
+        if (hit) return hit;
+      }
+      return null;
+    };
+    return find(roots) ?? roots[0]?.file ?? null;
+  }, [routes, currentPath]);
   const rediscoverRoutes = useCallback(() => {
     void api.discoverRoutes(project.path).then(setRoutes);
   }, [project.path]);
@@ -1051,7 +1066,10 @@ export function RunApp({
         // Group by element (edits can span multiple elements + files now). Snapshot
         // every distinct affected file so discard restores all of them; if any element
         // has no known file, fall back to the broad token scope.
-        const targets = groupEditsByElement(structural);
+        // Ground each element with no component file of its own to the CURRENTLY PREVIEWED
+        // page's source — otherwise the agent, searching by tag alone, resolves a bare
+        // layout `<div>` to index.html's `<div id="root">` (the mount shell) and refuses.
+        const targets = groupEditsByElement(structural).map((t) => ({ ...t, file: t.file ?? currentPageFile }));
         const files = [...new Set(targets.map((t) => t.file).filter((f): f is string => !!f))];
         const snap =
           files.length > 0 && files.length === targets.length

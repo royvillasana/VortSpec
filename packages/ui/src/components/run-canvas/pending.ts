@@ -239,6 +239,9 @@ export function buildEditPrompt(targets: EditTarget[]): string {
   return [
     head,
     `Make the minimal change so the RENDERED result matches; preserve existing design-token usage and do not touch unrelated code. After editing, re-read the file to confirm the change is actually present.`,
+    // A bare layout element (a wrapper <div> with few/no classes) resolves by tag alone to
+    // index.html's mount `<div id="root">` — forbid that: it's the HTML shell, not source.
+    `Never edit index.html, or anything under dist/ or storybook-static/ — those are the HTML mount shell and build output. Edit the JSX page/component source under src/. A bare wrapper element lives in the page named above or a component it renders; if you truly cannot find it there, make NO change rather than editing the mount shell.`,
     ...blocks.flat(),
   ].join("\n");
 }
