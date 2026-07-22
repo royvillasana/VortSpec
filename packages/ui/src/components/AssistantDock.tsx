@@ -65,6 +65,7 @@ export function AssistantDock({
   onSendSelection,
   autoStart,
   taskReturn,
+  onBusyChange,
 }: {
   project: Project;
   /** Optional one-line context the dock mentions to Claude on the first message. */
@@ -112,6 +113,9 @@ export function AssistantDock({
   /** When set, a "resume where you were" banner appears once the run finishes,
    *  linking back to the screen the task was dispatched from. */
   taskReturn?: { origin: string; onReturn: () => void };
+  /** Fires as the assistant starts/stops running — lets the host (e.g. the canvas)
+   *  show an "AI is working" affordance while a chat run is in flight. */
+  onBusyChange?: (busy: boolean) => void;
 }): React.JSX.Element {
   const run = useAgentRun();
   const [draft, setDraft] = useState("");
@@ -131,6 +135,11 @@ export function AssistantDock({
   // persistent chip. Not in `attachments`, so submitting never clears it; it goes
   // only when the selection itself changes or clears.
   const ambientSelection = useCanvasSelection();
+  // Report run start/stop so the host can show an "AI is working" affordance (e.g. the
+  // canvas page skeleton) while a chat run streams.
+  useEffect(() => {
+    onBusyChange?.(run.running);
+  }, [run.running, onBusyChange]);
   // The selection the user detached for the current selection instance. Keyed on
   // the selection's identity so a re-select (new key) surfaces the chip again.
   const [detachedKey, setDetachedKey] = useState<string | null>(null);

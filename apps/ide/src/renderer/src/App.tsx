@@ -49,6 +49,8 @@ export default function App(): JSX.Element {
   const [assistantHome, setAssistantHome] = useState<string | null>(null);
   // The current git branch, shown in the status bar beside the project name.
   const [branch, setBranch] = useState<string | null>(null);
+  // The assistant chat is running — drives the Playground's "AI is working" page skeleton.
+  const [dockBusy, setDockBusy] = useState(false);
   const [gitCounts, setGitCounts] = useState<{ changes: number; ahead: number }>({ changes: 0, ahead: 0 });
   // The live editor selection, surfaced to the assistant as grounding context.
   const [selection, setSelection] = useState<EditorSelection | null>(null);
@@ -542,7 +544,7 @@ export default function App(): JSX.Element {
           onOpenTasks={go("tasks")}
         />
       ) : a === "run" ? (
-        <RunApp project={p} kind="app" hideRail canvas saveSignal={saveSignal} onBack={go("explorer")} onFlow={go("flow")} onRun={go("run")} onPlayground={go("play")} onTokens={go("tokens")} onManifest={go("manifest")} onHistory={go("explorer")} onSource={go("source")}
+        <RunApp project={p} kind="app" hideRail canvas saveSignal={saveSignal} assistantBusy={dockBusy} onBack={go("explorer")} onFlow={go("flow")} onRun={go("run")} onPlayground={go("play")} onTokens={go("tokens")} onManifest={go("manifest")} onHistory={go("explorer")} onSource={go("source")}
           onSendToChat={(text, file) => {
             if (!layout.secondaryOpen) dispatch({ type: "toggleSecondary" });
             // A canvas selection has no honest line range — carry it as a canvas
@@ -667,6 +669,7 @@ export default function App(): JSX.Element {
                     onReturnToOrigin={(returnTo) =>
                       dispatch({ type: "setActivity", activity: returnTo as Activity })
                     }
+                    onBusyChange={setDockBusy}
                     onClose={() => dispatch({ type: "toggleSecondary" })}
                   />
                 </div>

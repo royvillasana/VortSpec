@@ -7,7 +7,7 @@ import { Button, Spinner } from "@vortspec/ui/ui";
 import { ProjectRail, projectRailItems } from "@vortspec/ui/ProjectRail";
 import { DesignPanel, ChangesBar } from "../components/run-canvas/DesignPanel";
 import { Sitemap } from "../components/run-canvas/Sitemap";
-import type { RouteDiscovery, RouteNode } from "@vortspec/core/ipc";
+import type { RouteDiscovery, RouteNode, Rect } from "@vortspec/core/ipc";
 import { RunCanvas } from "../components/run-canvas/RunCanvas";
 import {
   resolveComponent,
@@ -63,6 +63,7 @@ export function RunApp({
   onSource,
   onSendToChat,
   saveSignal,
+  assistantBusy = false,
 }: {
   project: Project;
   /** Which server to run: the project's own `app` (default) or its `storybook`. */
@@ -83,6 +84,8 @@ export function RunApp({
   onSendToChat?: (text: string, file?: string | null) => void;
   /** Bumped by File > Save / Ctrl+S — flush pending canvas edits to disk. */
   saveSignal?: number;
+  /** The right-sidebar assistant is running (IDE) — drives the page "AI is working" skeleton. */
+  assistantBusy?: boolean;
 }): React.JSX.Element {
   const [dev, setDev] = useState<DevServerStatus>({ state: "stopped", url: null, script: null, message: null });
   const [frameLoading, setFrameLoading] = useState(true);
@@ -692,6 +695,22 @@ export function RunApp({
   // or resolved run, or an owed screen-update notice.
   const composeActive =
     mode === "insert" && (!!bridge.placeholder || compose.phase !== "idle" || !!compose.screenUpdateOwed);
+
+  // "AI is working" skeleton over the preview (change: canvas-ai-skeleton). A component
+  // being built into a KNOWN slot shimmers in place (block); anything page-wide — an Apply
+  // writing source, the screen-preview harness, a slot-less build, or the chat assistant
+  // working this project — gets the animated gradient overlay.
+  const skeleton = useMemo((): { mode: "page"; label?: string } | { mode: "block"; rect: Rect; label?: string } | null => {
+    if (compose.phase === "generating" && bridge.placeholder?.rect) {
+      return { mode: "block", rect: bridge.placeholder.rect, label: "Building component…" };
+    }
+    if (applying) return { mode: "page", label: "Applying your changes…" };
+    if (compose.phase === "generating" || screenPreviewMod.model.status === "running") {
+      return { mode: "page", label: "Building…" };
+    }
+    if (assistantBusy) return { mode: "page", label: "AI is working…" };
+    return null;
+  }, [compose.phase, bridge.placeholder, applying, screenPreviewMod.model.status, assistantBusy]);
 
   // ── Live drag-and-drop move (§5.8) ────────────────────────────────────────
   // Behind a feature flag (Decision 3): when off, a drag is simply never opened as
@@ -1634,6 +1653,7 @@ export function RunApp({
                     onCancelTarget: clearCommentTarget,
                     onShare: () => void comments.share(),
                   }}
+                  skeleton={skeleton}
                 />
               </div>
               {bridge.runtimeError && !doctorDismissed && (

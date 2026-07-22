@@ -4,6 +4,7 @@ import type { Rect } from "@vortspec/core/ipc";
 import type { InspectorBridge, CanvasMode } from "../../lib/useInspectorBridge";
 import { SpacingOverlay } from "./SpacingOverlay";
 import { CommentsLayer, type CommentsLayerProps } from "./CommentsLayer";
+import { AiSkeletonBlock, AiSkeletonPage } from "./AiSkeleton";
 import { CanvasToolbar } from "./CanvasToolbar";
 import { bridgeStatusMessage } from "./bridge-status";
 
@@ -33,6 +34,7 @@ export function RunCanvas({
   onCommitEdit,
   onSendToChat,
   comments,
+  skeleton,
 }: {
   src: string;
   guestPreloadUrl: string | null;
@@ -52,6 +54,9 @@ export function RunCanvas({
   onSendToChat?: () => void;
   /** Comment threads + handlers; the pins/composer render in comment mode. */
   comments?: Omit<CommentsLayerProps, "zoom">;
+  /** An "AI is working" placeholder over the preview: a shimmer block where a
+   *  component is being built, or a full-page animated gradient for page work. */
+  skeleton?: { mode: "page"; label?: string } | { mode: "block"; rect: Rect; label?: string } | null;
 }): JSX.Element {
   // Optimistic rectangle while dragging a handle — drives the overlay instantly
   // instead of waiting for the guest's geometry echo (the source of the lag).
@@ -193,6 +198,12 @@ export function RunCanvas({
               )}
             </>
           )}
+
+          {/* "AI is working" placeholder — a shimmer block where a component is being
+              built, or an animated gradient over the whole preview for page work. Last
+              in the overlay so it sits above selection/insert chrome while generating. */}
+          {skeleton?.mode === "block" && <AiSkeletonBlock rect={skeleton.rect} label={skeleton.label} />}
+          {skeleton?.mode === "page" && <AiSkeletonPage label={skeleton.label} />}
         </div>
       </div>
 
