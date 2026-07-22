@@ -50,6 +50,8 @@ export interface PendingEdit {
   addClasses?: string[];
   /** For a Figma-style width/height resize edit: the chosen Fixed/Hug/Fill mode. */
   resizeMode?: "fixed" | "hug" | "fill";
+  /** A whole-element deletion — hidden live (display:none), removed from source on Apply. */
+  remove?: boolean;
 }
 
 /** Classify a Design-panel field edit into a `PendingEdit`, given the live selection + token usage. */
@@ -139,6 +141,10 @@ export function editProvenance(edit: PendingEdit): EditProvenance {
  * flagged as an approximate visual target for freeform geometry/style.
  */
 export function describeEdit(edit: PendingEdit): string {
+  // A deletion — remove the whole element from source, not a style tweak.
+  if (edit.remove) {
+    return `DELETE this element from the source entirely — remove its whole JSX element (its opening tag, children, and closing tag). Also drop anything that existed ONLY to support it (an import, handler, or data entry used nowhere else). Do not leave an empty wrapper, a commented-out block, or a \`display:none\`.`;
+  }
   // Resize edits describe intent, not raw CSS — the run realizes Fixed/Hug/Fill in the
   // component's own idiom (utility classes, style props).
   if (edit.resizeMode) {

@@ -81,6 +81,14 @@ describe("edit provenance (Phase 6)", () => {
     expect(ff).toContain("opacity");
   });
 
+  it("describes a delete edit as a full JSX removal", () => {
+    const del = { key: "remove", id: "remove", label: "Delete element", kind: "style" as const, value: "", token: null, shared: false, cssProps: ["display"], css: { display: "none" }, remove: true };
+    const desc = describeEdit(del);
+    expect(desc).toContain("DELETE");
+    expect(desc).toContain("JSX");
+    expect(desc.toLowerCase()).toContain("display:none");
+  });
+
   it("describes a color reset (transparent) as a class REMOVAL, not a transparent add", () => {
     const reset = classifyFieldEdit(selection, "fill", "transparent", ["background-color"], () => 1, true);
     const desc = describeEdit(reset);

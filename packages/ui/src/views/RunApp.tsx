@@ -892,6 +892,8 @@ export function RunApp({
         css?: Record<string, string>;
         token?: string | null;
         resizeMode?: "fixed" | "hug" | "fill";
+        remove?: boolean;
+        label?: string;
       }[],
       forceStyle = false,
     ) => {
@@ -911,6 +913,7 @@ export function RunApp({
           next[id] = {
             ...edit,
             id,
+            label: e.label ?? edit.label,
             fingerprint: fp,
             nodeId,
             file: sel.file,
@@ -918,6 +921,7 @@ export function RunApp({
             elementText: text,
             elementClassName: readoutRef.current?.className ?? undefined,
             resizeMode: e.resizeMode,
+            remove: e.remove,
           };
         }
         return next;
@@ -932,6 +936,18 @@ export function RunApp({
     (edits: { key: string; value: string; cssProps: string[] }[]) => commitEdits(edits, true),
     [commitEdits],
   );
+
+  // Delete the selected element: hide it live (display:none — reversible via clearOverride)
+  // and record a removal that Apply writes to source (removes the JSX). Keep/Revert like any
+  // other pending edit. Deselect so the panel doesn't dangle on a now-hidden node.
+  const deleteSelected = useCallback(() => {
+    const id = selectedIdRef.current;
+    if (!id || !selectionRef.current) return;
+    const css = { display: "none" };
+    applyOverride(id, css);
+    commitEdits([{ key: "remove", value: "", cssProps: ["display"], css, remove: true, label: "Delete element" }]);
+    select(null);
+  }, [applyOverride, commitEdits, select]);
 
   // A Design-panel field edit → live override + a recorded pending edit.
   const onFieldChange = useCallback(
@@ -1059,6 +1075,23 @@ export function RunApp({
 
   const onSelectNode = useCallback((id: string) => select(id), [select]);
   const onHoverNode = useCallback((id: string | null) => hover(id), [hover]);
+
+  // Delete/Backspace deletes the selected element (Figma-style), in inspect mode only and
+  // never while typing in a field. The webview swallows keys when focused, so this covers
+  // the host chrome; the panel's trash button is the always-available path.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key !== "Delete" && e.key !== "Backspace") return;
+      if (mode !== "inspect" || !selectedIdRef.current) return;
+      const t = e.target as HTMLElement | null;
+      const tag = t?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || t?.isContentEditable) return;
+      e.preventDefault();
+      deleteSelected();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [mode, deleteSelected]);
 
   // Apply — the ONLY path to disk (spec-first gate). Token values commit
   // deterministically; style/variant edits go through a gated Claude Code run.
@@ -1496,6 +1529,7 @@ export function RunApp({
                   onSelectNode={onSelectNode}
                   onHoverNode={onHoverNode}
                   onFieldChange={onFieldChange}
+                  onDelete={deleteSelected}
                   onVariantChange={onVariantChange}
                   pending={Object.values(pending)}
                   applying={applying}
