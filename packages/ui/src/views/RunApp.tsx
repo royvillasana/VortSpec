@@ -694,20 +694,31 @@ export function RunApp({
     return () => clearTimeout(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bridge.dragMessage]);
-  // If a replay-on-return couldn't restore some edits (their element changed), say so
-  // instead of dropping them silently — a transient hint, auto-cleared.
-  const [replayHint, setReplayHint] = useState<string | null>(null);
+  // If a replay-on-return couldn't restore some edits (their element changed), keep a
+  // PERSISTENT count — the edits are still in the ledger, just not live, so we surface
+  // them in the unsaved-edits bar (below) with a recovery path instead of a fleeting hint.
+  const [orphanCount, setOrphanCount] = useState(0);
   useEffect(() => {
     const missing = bridge.replayResult?.missing ?? 0;
-    if (missing > 0) {
-      setReplayHint(`${missing} unsaved edit${missing === 1 ? "" : "s"} couldn't be restored — ${missing === 1 ? "its" : "their"} element changed since you left.`);
-      const id = setTimeout(() => setReplayHint(null), 6000);
-      bridge.clearReplayResult();
-      return () => clearTimeout(id);
-    }
+    if (missing > 0) setOrphanCount(missing);
     bridge.clearReplayResult();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bridge.replayResult]);
+  // Once the ledger is empty (applied or discarded), there are no orphans to warn about.
+  useEffect(() => {
+    if (Object.keys(pending).length === 0) setOrphanCount(0);
+  }, [pending]);
+  // Hand the still-saved edits to the assistant to re-apply by description — the recovery
+  // path when they couldn't reattach to a changed element.
+  const reapplyInChat = useCallback(() => {
+    const list = Object.values(pending)
+      .map((e) => `${e.label ?? e.key} → ${e.value}`)
+      .join("; ");
+    if (onSendToChat && list) {
+      onSendToChat(`Re-apply these canvas edits I made (they couldn't reattach after the page changed): ${list}.`, null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pending, onSendToChat]);
   // The move's Keep/Revert gate, docked in the Design sidebar (no floating dialog).
   // Keep is the ONE action — it reconciles the JSX and is done; no second "Save
   // changes" prompt for a move.
@@ -1182,6 +1193,42 @@ export function RunApp({
           )}
         </header>
 
+        {/* Persistent unsaved-edits bar: canvas edits are LIVE preview overrides until Apply
+            writes them to source, so they can be lost on a reload. Always show the count +
+            Apply so the user never loses work silently, and surface any edit that couldn't
+            reattach to a changed element (still saved — offer a re-apply-in-Chat recovery). */}
+        {isApp && dirty && (
+          <div className="flex flex-none items-center gap-3 border-b border-vs-accent/40 bg-vs-accent-subtle px-5 py-2 text-[12px]">
+            <span className="flex-none text-vs-accent" aria-hidden>
+              ●
+            </span>
+            <span className="min-w-0 flex-1 leading-relaxed text-vs-text-primary">
+              <b>
+                {Object.keys(pending).length} unsaved edit{Object.keys(pending).length === 1 ? "" : "s"}
+              </b>{" "}
+              — live preview only. <b>Apply</b> to write them into your code so they persist across
+              reloads.
+              {orphanCount > 0 && (
+                <span className="text-vs-warning">
+                  {" "}
+                  · {orphanCount} couldn’t reattach after the page changed — still saved, but not showing.
+                </span>
+              )}
+            </span>
+            {orphanCount > 0 && onSendToChat && (
+              <Button variant="ghost" onClick={reapplyInChat}>
+                Re-apply in Chat
+              </Button>
+            )}
+            <Button variant="ghost" onClick={discardEdits}>
+              Discard
+            </Button>
+            <Button variant="primary" disabled={applying} onClick={() => void applyEdits()}>
+              {applying ? "Applying…" : `Apply ${Object.keys(pending).length}`}
+            </Button>
+          </div>
+        )}
+
         {kind === "app" && !envDismissed && (envCreated || envMissing) && (
           <div
             className={`flex flex-none items-start gap-3 border-b px-5 py-2.5 text-[12px] ${
@@ -1411,12 +1458,12 @@ export function RunApp({
                     getStoryUrl={storyUrlFor}
                   />
                 )}
-                {(bridge.dragMessage || replayHint) && (
+                {bridge.dragMessage && (
                   <div
-                    data-testid={bridge.dragMessage ? "drag-message" : "replay-hint"}
+                    data-testid="drag-message"
                     className="pointer-events-none absolute left-1/2 top-3 z-40 -translate-x-1/2 rounded-md border border-vs-border-default bg-vs-bg-elevated/95 px-3 py-1.5 text-[12px] text-vs-text-secondary shadow-lg backdrop-blur"
                   >
-                    {bridge.dragMessage || replayHint}
+                    {bridge.dragMessage}
                   </div>
                 )}
                 <RunCanvas
