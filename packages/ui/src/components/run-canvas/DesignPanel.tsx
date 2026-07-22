@@ -512,7 +512,7 @@ function LayersRegion({
         </button>
       </div>
       {open && (
-        <div className="max-h-64 overflow-y-auto">
+        <div className="max-h-44 overflow-y-auto">
           <NodeTree
             tree={tree}
             selectedId={selectedId}

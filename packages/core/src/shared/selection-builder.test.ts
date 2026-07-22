@@ -86,6 +86,25 @@ describe("buildSelection", () => {
     expect(w.value).toBe("Fill");
   });
 
+  it("exposes a Spacing (gap-mode) control for a flex container, next to Align", () => {
+    const sel = buildSelection(readout({ computed: { display: "flex", "flex-direction": "row" } }), { tag: "ul" });
+    const layout = sel.sections.find((s) => s.id === "layout")!;
+    const spacing = layout.fields.find((f) => f.key === "gap-mode");
+    expect(spacing).toBeDefined();
+    expect(spacing!.kind).toBe("segment");
+    expect(spacing!.value).toBe("packed");
+    // Reads Distribute when the container is already space-between.
+    const sel2 = buildSelection(
+      readout({ computed: { display: "flex", "justify-content": "space-between" } }),
+      { tag: "ul" },
+    );
+    const spacing2 = sel2.sections.find((s) => s.id === "layout")!.fields.find((f) => f.key === "gap-mode")!;
+    expect(spacing2.value).toBe("distribute");
+    // A non-flex container gets no Spacing control.
+    const selBlock = buildSelection(readout({ computed: { display: "block" } }), { tag: "div" });
+    expect(selBlock.sections.find((s) => s.id === "layout")?.fields.find((f) => f.key === "gap-mode")).toBeUndefined();
+  });
+
   it("makes margins token-bindable to the spacing scale (Phase 5)", () => {
     const sel = buildSelection(readout({ computed: { "margin-left": "8px", "margin-top": "8px" } }), {
       tokens,
