@@ -6,6 +6,7 @@ import { ipcContract, type IpcChannel } from "@vortspec/core/ipc";
 import { checkEnvironment, verifyClaudeLogin, verifyFigmaMcp } from "./environment/env-manager";
 import {
   listProjects,
+  touchProject,
   removeProject,
   pickFolder,
   createFolder,
@@ -145,6 +146,7 @@ const handlers: Record<IpcChannel, Handler> = {
   "workspace:pickFile": ((req?: { filters?: { name: string; extensions: string[] }[] }) =>
     pickFile(req?.filters ?? [])) as Handler,
   "workspace:listProjects": () => listProjects(),
+  "workspace:touchProject": ((path: string) => touchProject(path)) as Handler,
   "workspace:removeProject": ((id: string) => removeProject(id)) as Handler,
   "workspace:openFolder": ((path: string) => openFolder(path)) as Handler,
   "workspace:revealPath": ((req: { projectPath: string; relPath: string }) => {

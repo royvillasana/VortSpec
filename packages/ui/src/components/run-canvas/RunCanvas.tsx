@@ -4,8 +4,11 @@ import type { Rect } from "@vortspec/core/ipc";
 import type { InspectorBridge, CanvasMode } from "../../lib/useInspectorBridge";
 import { SpacingOverlay } from "./SpacingOverlay";
 import { CommentsLayer, type CommentsLayerProps } from "./CommentsLayer";
+import { AiSkeletonBlock, AiSkeletonPage, AiWorkingPill } from "./AiSkeleton";
 import { CanvasToolbar } from "./CanvasToolbar";
 import { bridgeStatusMessage } from "./bridge-status";
+import { DeviceFrame, frameBezel } from "./DeviceFrame";
+import { frameApplies, type Viewport, type ViewportId, type DeviceFrameKind } from "./viewports";
 
 const px = (s?: string): number => Math.max(0, parseFloat(s ?? "") || 0);
 
@@ -26,13 +29,15 @@ export function RunCanvas({
   bridge,
   mode,
   onModeChange,
-  zoom,
-  onZoomBy,
-  onZoomReset,
   onLiveEdit,
   onCommitEdit,
   onSendToChat,
   comments,
+  skeleton,
+  viewport,
+  frame,
+  onViewportChange,
+  onFrameChange,
 }: {
   src: string;
   guestPreloadUrl: string | null;
@@ -40,10 +45,12 @@ export function RunCanvas({
   /** Input mode — owned by RunApp, surfaced on the canvas toolbar. */
   mode: CanvasMode;
   onModeChange: (mode: CanvasMode) => void;
-  /** Zoom factor — owned by RunApp, surfaced on the canvas toolbar. */
-  zoom: number;
-  onZoomBy: (factor: number) => void;
-  onZoomReset: () => void;
+  /** The current Playground viewport (Desktop/Tablet/Mobile) — resizes the preview. */
+  viewport: Viewport;
+  /** Device frame to draw around a Tablet/Mobile viewport. */
+  frame: DeviceFrameKind;
+  onViewportChange: (id: ViewportId) => void;
+  onFrameChange: (frame: DeviceFrameKind) => void;
   /** Apply a CSS override live (per animation frame while dragging a handle). */
   onLiveEdit?: (css: Record<string, string>) => void;
   /** Record the final edit(s) once, on drag end. */
@@ -52,10 +59,42 @@ export function RunCanvas({
   onSendToChat?: () => void;
   /** Comment threads + handlers; the pins/composer render in comment mode. */
   comments?: Omit<CommentsLayerProps, "zoom">;
+  /** An "AI is working" placeholder over the preview: a shimmer block where a
+   *  component is being built, or a full-page animated gradient for page work. */
+  skeleton?: { mode: "page"; label?: string } | { mode: "block"; rect: Rect; label?: string } | null;
 }): JSX.Element {
   // Optimistic rectangle while dragging a handle — drives the overlay instantly
   // instead of waiting for the guest's geometry echo (the source of the lag).
   const [dragRect, setDragRect] = useState<Rect | null>(null);
+
+  // Viewport (Chrome-DevTools device mode): render the webview at the viewport's CSS px
+  // size so the page's media queries respond, then scale-to-fit the canvas area. Desktop
+  // (width null) fills as before. The overlay lives inside the same scaled box, so guest
+  // rects still map 1:1 — inspect/insert stay pixel-accurate at any viewport.
+  const deviceMode = viewport.width !== null;
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [area, setArea] = useState({ w: 0, h: 0 });
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => setArea({ w: el.clientWidth, h: el.clientHeight }));
+    ro.observe(el);
+    setArea({ w: el.clientWidth, h: el.clientHeight });
+    return () => ro.disconnect();
+  }, []);
+  const vpW = viewport.width ?? 0;
+  const vpH = viewport.height ?? 0;
+  const framed: DeviceFrameKind = deviceMode && frameApplies(viewport.id) ? frame : "none";
+  const bezel = frameBezel(framed);
+  // Fit the framed device into the area with a small margin; never upscale past 1×.
+  const MARGIN = 48;
+  const fit =
+    deviceMode && area.w > 0
+      ? Math.min(1, (area.w - MARGIN) / (vpW + bezel), (area.h - MARGIN) / (vpH + bezel))
+      : 1;
+  // The effective display scale — passed to in-stage overlays so their handles/labels
+  // stay a constant on-screen size (they counter-scale by this), same role `zoom` had.
+  const zoom = fit;
 
   const bridgeSelRect = bridge.selectedId ? bridge.rects[bridge.selectedId] : undefined;
   const selRect = dragRect ?? bridgeSelRect;
@@ -110,11 +149,14 @@ export function RunCanvas({
 
   return (
     <div
-      className="relative h-full min-h-[340px] w-full overflow-hidden bg-white"
+      ref={containerRef}
+      className={`relative h-full min-h-[340px] w-full overflow-hidden ${deviceMode ? "bg-vs-bg-secondary" : "bg-white"}`}
       style={insertCursor ? { cursor: insertCursor } : undefined}
     >
-      {/* Stage — the webview + overlay share one transform, so rects align at any zoom. */}
-      <div className="absolute inset-0 origin-top-left" style={{ transform: `scale(${zoom})` }}>
+      {/* Stage — the webview + overlay share one transform, so guest rects map 1:1. In a
+          device viewport the stage is a fixed-size, scaled-to-fit, optionally framed box;
+          on Desktop it fills. Either way the overlay is inside it, so inspect stays exact. */}
+      <Stage deviceMode={deviceMode} fit={fit} vpW={vpW} vpH={vpH} framed={framed}>
         {guestPreloadUrl ? (
           // <webview> is an Electron intrinsic element, not in React's JSX types —
           // build it via createElement to keep the loose attribute typing contained.
@@ -193,8 +235,14 @@ export function RunCanvas({
               )}
             </>
           )}
+
+          {/* "AI is working" placeholder — a shimmer block where a component is being
+              built, or an animated gradient over the whole preview for page work. Last
+              in the overlay so it sits above selection/insert chrome while generating. */}
+          {skeleton?.mode === "block" && <AiSkeletonBlock rect={skeleton.rect} label={skeleton.label} />}
+          {skeleton?.mode === "page" && <AiSkeletonPage label={skeleton.label} />}
         </div>
-      </div>
+      </Stage>
 
       {/* Comment pins + composer/threads — screen-space so they stay a constant size. */}
       {mode === "comment" && comments && (
@@ -223,21 +271,25 @@ export function RunCanvas({
         </div>
       )}
 
-      {/* The one canvas toolbar — modes + zoom + bridge status. Owned by the
+      {/* The one canvas toolbar — modes + viewport + bridge status. Owned by the
           canvas, so it survives the Design→Comments panel swap. */}
       <CanvasToolbar
         mode={mode}
         onModeChange={onModeChange}
-        zoom={zoom}
-        onZoomBy={onZoomBy}
-        onZoomReset={onZoomReset}
+        viewport={viewport}
+        frame={frame}
+        onViewportChange={onViewportChange}
+        onFrameChange={onFrameChange}
         bridgeReady={bridge.ready}
         bridgeError={bridge.error}
       />
 
       {/* Notices sit ABOVE the toolbar (which owns bottom-3), stacked in one column
-          so a second notice pushes the first up instead of drawing over it. */}
-      <div className="pointer-events-none absolute bottom-14 left-1/2 z-30 flex -translate-x-1/2 flex-col items-center gap-1.5">
+          so a second notice pushes the first up instead of drawing over it. The
+          "AI is working" pill lives here too — anchored to the toolbar, screen-space,
+          so it reads the same in every viewport instead of floating inside the device. */}
+      <div className="pointer-events-none absolute bottom-14 left-1/2 z-40 flex -translate-x-1/2 flex-col items-center gap-1.5">
+        {skeleton?.mode === "page" && <AiWorkingPill label={skeleton.label} />}
         {bridge.error && (
           <div className="rounded-md border border-vs-border-default bg-vs-bg-elevated px-3 py-1.5 text-[11px] text-vs-text-secondary shadow">
             {/* Same sentence the toolbar shows as its disabled reason — one source. */}
@@ -268,6 +320,44 @@ export function RunCanvas({
             </button>
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The stage that hosts the webview + overlay. On Desktop it fills the canvas (no
+ * scaling). In a device viewport it is a fixed-size box (the viewport's CSS px),
+ * optionally wrapped in a device frame, scaled to fit and centered. The overlay is
+ * a sibling of the webview inside this box, so both share the box's coordinate space
+ * and the scale transform — guest rects map 1:1 regardless of viewport.
+ */
+function Stage({
+  deviceMode,
+  fit,
+  vpW,
+  vpH,
+  framed,
+  children,
+}: {
+  deviceMode: boolean;
+  fit: number;
+  vpW: number;
+  vpH: number;
+  framed: DeviceFrameKind;
+  children: JSX.Element[] | JSX.Element;
+}): JSX.Element {
+  if (!deviceMode) {
+    return <div className="absolute inset-0 origin-top-left">{children}</div>;
+  }
+  return (
+    <div className="absolute inset-0 grid place-items-center overflow-auto p-6">
+      <div style={{ transform: `scale(${fit})`, transformOrigin: "center" }}>
+        <DeviceFrame kind={framed}>
+          <div className="relative origin-top-left bg-white" style={{ width: vpW, height: vpH }}>
+            {children}
+          </div>
+        </DeviceFrame>
       </div>
     </div>
   );

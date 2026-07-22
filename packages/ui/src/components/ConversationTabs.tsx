@@ -44,12 +44,15 @@ export function ConversationTabs({
   onClose,
   incomingTask,
   onReturnToOrigin,
+  onBusyChange,
   ...shared
 }: {
   project: Project;
   presets?: Agent[];
   pendingRef?: PendingSelectionRef;
   onClose?: () => void;
+  /** Fires as the ACTIVE conversation starts/stops running (for host "AI is working" UI). */
+  onBusyChange?: (busy: boolean) => void;
   /** A "Fix in Assistant" task → opens a dedicated auto-running tab. */
   incomingTask?: IncomingTask;
   /** Navigate back to a task's origin screen (from the done banner). */
@@ -204,6 +207,7 @@ export function ConversationTabs({
               agent={c.agent}
               presets={presets}
               onAgentChange={(a) => setConvs((cs) => cs.map((x) => (x.id === c.id ? { ...x, agent: a } : x)))}
+              onBusyChange={c.id === active ? onBusyChange : undefined}
               pendingRef={c.id === active ? pendingRef : undefined}
               autoStart={c.autoStart}
               taskReturn={

@@ -281,15 +281,28 @@ async function firstExisting(projectPath: string, rels: string[]): Promise<strin
  * the gate is unit-testable independent of the filesystem walk.
  */
 export function reportUnresolved(report: string): { unresolved: boolean; issues: string[] } {
-  const hasOpen = /status:\s*open/i.test(report) || /open (discrepanc|source-level)/i.test(report);
   const layerFailed = /^[ \t>*-]*(visual|token|code)\s*:\s*(fail|blocked)\b/im.test(report);
-  const verdictNotPass = /^[ \t>*-]*verify\s*:\s*(issues|blocked)\b/im.test(report);
-  if (!hasOpen && !layerFailed && !verdictNotPass) return { unresolved: false, issues: [] };
+  const verdictLine = /^[ \t>*-]*verify\s*:\s*(pass|issues|blocked)\b/im.exec(report);
+
+  // The machine-readable verdict block is AUTHORITATIVE when present. A report can carry a
+  // clean `VERIFY: PASS` (all VISUAL/TOKEN/CODE = pass) AND still list prose "open items" —
+  // e.g. token-sync follow-ups like `--spacing-48` or a hover-color mismatch flagged for
+  // /sync-tokens. Those are NOT verification failures, so a `status: open` in the prose must
+  // NOT override a passing verdict (the bug: 10 components read PASS but showed "has issues").
+  if (verdictLine) {
+    const verdictNotPass = /^(issues|blocked)$/i.test(verdictLine[1]);
+    if (!layerFailed && !verdictNotPass) return { unresolved: false, issues: [] };
+    const layerIssues = [...report.matchAll(/^[ \t>*-]*(visual|token|code)\s*:\s*(fail|blocked)\b[^\n]*/gim)].map(
+      (m) => m[0].trim(),
+    );
+    return { unresolved: true, issues: layerIssues };
+  }
+
+  // Legacy report (no machine-readable block): fall back to the prose heuristic.
+  const hasOpen = /status:\s*open/i.test(report) || /open (discrepanc|source-level)/i.test(report);
+  if (!hasOpen && !layerFailed) return { unresolved: false, issues: [] };
   const issues = [...report.matchAll(/^###\s+(D\d[^\n]*)/gm)].map((m) => m[1].trim());
-  const layerIssues = [...report.matchAll(/^[ \t>*-]*(visual|token|code)\s*:\s*(fail|blocked)\b[^\n]*/gim)].map(
-    (m) => m[0].trim(),
-  );
-  return { unresolved: true, issues: issues.length ? issues : layerIssues };
+  return { unresolved: true, issues: issues.length ? issues : ["open discrepancies"] };
 }
 
 async function componentStatus(

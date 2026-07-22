@@ -44,8 +44,11 @@ export function projectRailItems(
   const defs: { key: RailKey; label: string; onClick: () => void }[] = [
     { key: "flow", label: "Flow", onClick: nav.onFlow },
     { key: "run", label: "Run", onClick: nav.onRun },
-    { key: "playground", label: "Playground", onClick: nav.onPlayground },
+    // "Playground" = the screens/pages preview (the app on localhost, RunApp kind="app").
+    // "Storybook" = the component library (DevPreview). They were both labeled "Playground",
+    // so created pages appeared to land in Storybook. Playground comes first.
     ...(nav.onRunApp ? [{ key: "runapp" as const, label: "Playground", onClick: nav.onRunApp }] : []),
+    { key: "playground", label: "Storybook", onClick: nav.onPlayground },
     { key: "tokens", label: "Tokens", onClick: nav.onTokens },
     { key: "manifest", label: "Manifest", onClick: nav.onManifest },
     ...(nav.onSource ? [{ key: "source" as const, label: "Source Control", onClick: nav.onSource }] : []),

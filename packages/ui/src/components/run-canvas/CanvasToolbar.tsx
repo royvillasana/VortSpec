@@ -1,7 +1,9 @@
+import { useEffect, useRef, useState } from "react";
 import type { JSX, ComponentType } from "react";
-import { MousePointer2, SquareMousePointer, MessageSquare, Plus } from "lucide-react";
+import { MousePointer2, SquareMousePointer, MessageSquare, Plus, Monitor, Tablet, Smartphone, Check } from "lucide-react";
 import type { CanvasMode } from "../../lib/useInspectorBridge";
 import { NEEDS_BRIDGE, bridgeState, bridgeStatusMessage, type BridgeState } from "./bridge-status";
+import { VIEWPORT_ORDER, DEFAULT_VIEWPORTS, frameApplies, type Viewport, type ViewportId, type DeviceFrameKind } from "./viewports";
 
 /**
  * The canvas toolbar (change: canvas-compose-and-preview-bar).
@@ -34,17 +36,21 @@ const MODES: { key: CanvasMode; label: string; hint: string; icon: ComponentType
 export function CanvasToolbar({
   mode,
   onModeChange,
-  zoom,
-  onZoomBy,
-  onZoomReset,
+  viewport,
+  frame,
+  onViewportChange,
+  onFrameChange,
   bridgeReady,
   bridgeError,
 }: {
   mode: CanvasMode;
   onModeChange: (mode: CanvasMode) => void;
-  zoom: number;
-  onZoomBy: (factor: number) => void;
-  onZoomReset: () => void;
+  /** Current Playground viewport (Desktop/Tablet/Mobile). */
+  viewport: Viewport;
+  /** Device frame drawn around a Tablet/Mobile viewport. */
+  frame: DeviceFrameKind;
+  onViewportChange: (id: ViewportId) => void;
+  onFrameChange: (frame: DeviceFrameKind) => void;
   /** Whether the guest bridge has attached to the page. */
   bridgeReady: boolean;
   /** Why the bridge is unavailable, when it is — shown as the disabled reason. */
@@ -87,18 +93,138 @@ export function CanvasToolbar({
 
       <span className="mx-0.5 h-4 w-px bg-vs-border-subtle" aria-hidden />
 
-      <div className="flex items-center gap-0.5 text-[11px]">
-        <ZoomBtn onClick={() => onZoomBy(1 / 1.2)} label="−" title="Zoom out" />
-        <button
-          type="button"
-          onClick={onZoomReset}
-          title="Reset to 100%"
-          className="min-w-[2.75rem] rounded px-1 py-0.5 text-center text-vs-text-secondary hover:bg-vs-bg-hover hover:text-vs-text-primary"
+      <ViewportSelector
+        viewport={viewport}
+        frame={frame}
+        onViewportChange={onViewportChange}
+        onFrameChange={onFrameChange}
+      />
+    </div>
+  );
+}
+
+const VIEWPORT_ICON: Record<ViewportId, ComponentType<{ size?: number; strokeWidth?: number }>> = {
+  desktop: Monitor,
+  tablet: Tablet,
+  mobile: Smartphone,
+};
+
+/**
+ * The viewport picker that replaced the zoom controls: a button showing the current
+ * viewport (icon + label), opening a menu of Desktop / Tablet / Mobile — and, for a
+ * device viewport, a device-frame choice (None / iPhone / Android).
+ */
+function ViewportSelector({
+  viewport,
+  frame,
+  onViewportChange,
+  onFrameChange,
+}: {
+  viewport: Viewport;
+  frame: DeviceFrameKind;
+  onViewportChange: (id: ViewportId) => void;
+  onFrameChange: (frame: DeviceFrameKind) => void;
+}): JSX.Element {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent): void => {
+      if (!ref.current?.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [open]);
+
+  const Icon = VIEWPORT_ICON[viewport.id];
+  const showFrames = frameApplies(viewport.id);
+  const frames: { key: DeviceFrameKind; label: string }[] = [
+    { key: "none", label: "No frame" },
+    { key: "iphone", label: "iPhone" },
+    { key: "android", label: "Android" },
+  ];
+
+  return (
+    <div ref={ref} className="group relative flex">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        title="Viewport"
+        className="flex items-center gap-1.5 rounded px-2 py-1 text-[12px] text-vs-text-secondary hover:bg-vs-bg-hover hover:text-vs-text-primary"
+      >
+        <Icon size={16} strokeWidth={2} />
+        <span>{viewport.label}</span>
+        {viewport.width !== null && (
+          <span className="font-mono text-[10px] text-vs-text-muted">
+            {viewport.width}
+            {viewport.height ? `×${viewport.height}` : ""}
+          </span>
+        )}
+      </button>
+
+      {open && (
+        <div
+          role="menu"
+          className="absolute bottom-full right-0 z-50 mb-2 w-52 overflow-hidden rounded-lg border border-vs-border-default bg-vs-bg-elevated py-1 shadow-2xl"
         >
-          {Math.round(zoom * 100)}%
-        </button>
-        <ZoomBtn onClick={() => onZoomBy(1.2)} label="+" title="Zoom in" />
-      </div>
+          {VIEWPORT_ORDER.map((id) => {
+            const v = DEFAULT_VIEWPORTS[id];
+            const ItemIcon = VIEWPORT_ICON[id];
+            const active = id === viewport.id;
+            return (
+              <button
+                key={id}
+                type="button"
+                role="menuitemradio"
+                aria-checked={active}
+                onClick={() => {
+                  onViewportChange(id);
+                  setOpen(false);
+                }}
+                className={`flex w-full items-center gap-2.5 px-3 py-1.5 text-left text-[12px] hover:bg-vs-bg-hover ${
+                  active ? "text-vs-text-primary" : "text-vs-text-secondary"
+                }`}
+              >
+                <ItemIcon size={15} strokeWidth={2} />
+                <span className="flex-1">{v.label}</span>
+                {v.width !== null && (
+                  <span className="font-mono text-[10px] text-vs-text-muted">
+                    {v.width}
+                    {v.height ? `×${v.height}` : ""}
+                  </span>
+                )}
+                {active && <Check size={13} className="text-vs-accent" />}
+              </button>
+            );
+          })}
+
+          {showFrames && (
+            <>
+              <div className="my-1 border-t border-vs-border-subtle" />
+              <p className="px-3 pb-0.5 pt-1 text-[10px] font-semibold uppercase tracking-wide text-vs-text-muted">
+                Device frame
+              </p>
+              {frames.map((f) => (
+                <button
+                  key={f.key}
+                  type="button"
+                  role="menuitemradio"
+                  aria-checked={frame === f.key}
+                  onClick={() => onFrameChange(f.key)}
+                  className={`flex w-full items-center gap-2.5 px-3 py-1.5 text-left text-[12px] hover:bg-vs-bg-hover ${
+                    frame === f.key ? "text-vs-text-primary" : "text-vs-text-secondary"
+                  }`}
+                >
+                  <span className="flex-1">{f.label}</span>
+                  {frame === f.key && <Check size={13} className="text-vs-accent" />}
+                </button>
+              ))}
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -179,15 +305,3 @@ function Tooltip({ children }: { children: React.ReactNode }): JSX.Element {
   );
 }
 
-function ZoomBtn({ onClick, label, title }: { onClick: () => void; label: string; title: string }): JSX.Element {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      title={title}
-      className="grid h-5 w-5 place-items-center rounded text-vs-text-secondary hover:bg-vs-bg-hover hover:text-vs-text-primary"
-    >
-      {label}
-    </button>
-  );
-}

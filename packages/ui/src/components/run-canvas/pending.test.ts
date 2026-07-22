@@ -77,8 +77,26 @@ describe("edit provenance (Phase 6)", () => {
     expect(describeEdit(token)).toContain("design token `--radius-md` (exact");
     expect(describeEdit(text)).toContain("visible text to `Hi` (exact)");
     const ff = describeEdit(freeform);
-    expect(ff).toContain("Approximate visual target");
+    expect(ff).toContain("Set this element's computed style");
     expect(ff).toContain("opacity");
+  });
+
+  it("describes a delete edit as a full JSX removal", () => {
+    const del = { key: "remove", id: "remove", label: "Delete element", kind: "style" as const, value: "", token: null, shared: false, cssProps: ["display"], css: { display: "none" }, remove: true };
+    const desc = describeEdit(del);
+    expect(desc).toContain("DELETE");
+    expect(desc).toContain("JSX");
+    expect(desc.toLowerCase()).toContain("display:none");
+  });
+
+  it("describes a color reset (transparent) as a class REMOVAL, not a transparent add", () => {
+    const reset = classifyFieldEdit(selection, "fill", "transparent", ["background-color"], () => 1, true);
+    const desc = describeEdit(reset);
+    expect(desc).toContain("RESET");
+    expect(desc).toContain("REMOVE");
+    expect(desc).toContain("bg-");
+    // Must warn against the failing approach (append a transparent class that loses cascade).
+    expect(desc.toLowerCase()).toContain("do not add");
   });
 });
 
@@ -117,6 +135,7 @@ describe("gated-run prompt", () => {
         component: null,
         label: "the element",
         text: null,
+        className: null,
         edits: [{ key: "content", id: "content", label: "Text", kind: "style", value: "New label", token: null, shared: false, cssProps: [] }],
       },
     ]);
@@ -130,20 +149,22 @@ describe("gated-run prompt", () => {
         component: "Button",
         label: "Button",
         text: null,
+        className: "inline-flex opacity-100",
         edits: [classifyFieldEdit(selection, "opacity", "0.5", ["opacity"], () => 1), classifyVariantEdit("size", "large")],
       },
     ]);
     expect(prompt).toContain("src/components/Button.tsx");
     expect(prompt).toContain("Button");
-    expect(prompt).toContain("Approximate visual target — set opacity to about `0.5`");
+    expect(prompt).toContain("Set this element's computed style to `opacity: 0.5`");
+    expect(prompt).toContain("Find it in source by its current classes: `inline-flex opacity-100`");
     expect(prompt).toContain("Set the `size` variant to `large` (exact");
     expect(prompt).toContain("preserve existing design-token usage");
   });
 
   it("groups edits per element when they span more than one (multi-element apply)", () => {
     const prompt = buildEditPrompt([
-      { file: "src/App.tsx", component: null, label: "Card", text: "Featured", edits: [classifyFieldEdit(selection, "opacity", "0.5", ["opacity"], () => 1)] },
-      { file: "src/App.tsx", component: null, label: "Sidebar", text: "Filters", edits: [classifyFieldEdit(selection, "radius", "12px", ["border-radius"], () => 1)] },
+      { file: "src/App.tsx", component: null, label: "Card", text: "Featured", className: null, edits: [classifyFieldEdit(selection, "opacity", "0.5", ["opacity"], () => 1)] },
+      { file: "src/App.tsx", component: null, label: "Sidebar", text: "Filters", className: null, edits: [classifyFieldEdit(selection, "radius", "12px", ["border-radius"], () => 1)] },
     ]);
     expect(prompt).toContain("span 2 elements");
     expect(prompt).toContain('On the "Card" element whose leading text is "Featured"');

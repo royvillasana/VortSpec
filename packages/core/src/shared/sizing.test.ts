@@ -30,6 +30,14 @@ describe("detectSizeMode", () => {
   it("reads Fill from 100% under a block parent", () => {
     expect(detectSizeMode("width", { width: "100%" }, "block")).toBe("fill");
   });
+  it("reads Fill when a block child's px-resolved width spans the parent content box", () => {
+    // getComputedStyle resolves w-full to px, never "100%" — detect Fill by geometry.
+    expect(detectSizeMode("width", { width: "1083px" }, "block", { size: 1083, parentContent: 1083 })).toBe("fill");
+    // A genuinely fixed, narrower child stays Fixed.
+    expect(detectSizeMode("width", { width: "400px" }, "block", { size: 400, parentContent: 1083 })).toBe("fixed");
+    // Height doesn't fill by default in block flow even when it happens to match.
+    expect(detectSizeMode("height", { height: "172px" }, "block", { size: 172, parentContent: 172 })).toBe("fixed");
+  });
 });
 
 describe("sizeModeCss", () => {

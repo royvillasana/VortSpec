@@ -31,6 +31,7 @@ export function DesignPanel({
   onHoverNode,
   onFieldChange,
   onVariantChange,
+  onDelete,
   pending = [],
   applying = false,
   applyStatus = null,
@@ -57,6 +58,8 @@ export function DesignPanel({
   onFieldChange?: (key: string, value: string) => void;
   /** A variant switch (variant prop key → new option). */
   onVariantChange?: (key: string, value: string) => void;
+  /** Delete the selected element (hidden live, removed from source on Apply). */
+  onDelete?: () => void;
   /** Uncommitted edits (ephemeral overrides), surfaced in the Apply bar. */
   pending?: PendingEdit[];
   /** An apply is in flight (gated Claude run). */
@@ -114,7 +117,7 @@ export function DesignPanel({
           </p>
         ) : (
           <>
-            <SelectionHeader selection={selection} onAssign={onAssign} />
+            <SelectionHeader selection={selection} onAssign={onAssign} onDelete={onDelete} />
             {/* Assigning / reusing / extracting a component moved to the inspect
                 AssignDialog (change: canvas-compose-and-preview-bar) — this panel is
                 now just identity + editable properties. */}
@@ -512,7 +515,7 @@ function LayersRegion({
         </button>
       </div>
       {open && (
-        <div className="max-h-64 overflow-y-auto">
+        <div className="max-h-44 overflow-y-auto">
           <NodeTree
             tree={tree}
             selectedId={selectedId}
@@ -526,7 +529,15 @@ function LayersRegion({
   );
 }
 
-function SelectionHeader({ selection, onAssign }: { selection: Selection; onAssign?: () => void }): JSX.Element {
+function SelectionHeader({
+  selection,
+  onAssign,
+  onDelete,
+}: {
+  selection: Selection;
+  onAssign?: () => void;
+  onDelete?: () => void;
+}): JSX.Element {
   return (
     <div className="flex items-center gap-2 border-b border-vs-border-subtle px-3 py-2">
       <span className="truncate text-[13px] font-semibold">{selection.label}</span>
@@ -548,6 +559,17 @@ function SelectionHeader({ selection, onAssign }: { selection: Selection; onAssi
       <span className="ml-auto font-mono text-[10px] text-vs-text-muted">
         {Math.round(selection.rect.width)}×{Math.round(selection.rect.height)}
       </span>
+      {onDelete && (
+        <button
+          type="button"
+          onClick={onDelete}
+          title="Delete element (⌫) — removed from source on Apply"
+          aria-label="Delete element"
+          className="flex-none rounded p-1 text-vs-text-muted hover:bg-vs-bg-hover hover:text-vs-error"
+        >
+          <TrashIcon />
+        </button>
+      )}
     </div>
   );
 }

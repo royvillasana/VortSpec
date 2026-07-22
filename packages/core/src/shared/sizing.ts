@@ -26,8 +26,18 @@ export function isMainAxis(dim: SizeDim, parentFlow: ParentFlow): boolean {
 
 const CONTENT_SIZED = new Set(["", "auto", "fit-content", "max-content", "min-content"]);
 
-/** Detect the current sizing mode from the element's computed style + its parent's flow. */
-export function detectSizeMode(dim: SizeDim, computed: Record<string, string>, parentFlow: ParentFlow): SizeMode {
+/**
+ * Detect the current sizing mode from the element's computed style + its parent's flow.
+ * `geom` (the element's border-box size on this axis + the parent's content size) lets a
+ * block-flow Fill be detected: `getComputedStyle` resolves a `w-full`/`width:100%` child to
+ * px (e.g. `1083px`), never the literal `100%`, so the string check alone always misses it.
+ */
+export function detectSizeMode(
+  dim: SizeDim,
+  computed: Record<string, string>,
+  parentFlow: ParentFlow,
+  geom?: { size: number; parentContent: number },
+): SizeMode {
   const val = (computed[dim] ?? "").trim();
   const grow = parseFloat(computed["flex-grow"] ?? "0") || 0;
   const alignSelf = (computed["align-self"] ?? "auto").trim();
@@ -35,6 +45,11 @@ export function detectSizeMode(dim: SizeDim, computed: Record<string, string>, p
   // Fill first — it can coexist with an `auto` width, which would otherwise read as Hug.
   if (parentFlow === "block") {
     if (val === "100%") return "fill";
+    // Block children fill the inline (width) axis by default; a child whose border-box
+    // spans the parent's content width IS Fill — the px-resolved width hid this above.
+    if (dim === "width" && geom && geom.parentContent > 0 && geom.size >= geom.parentContent - 1) {
+      return "fill";
+    }
   } else if (isMainAxis(dim, parentFlow)) {
     if (grow > 0) return "fill";
   } else if (alignSelf === "stretch") {

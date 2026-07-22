@@ -324,6 +324,16 @@ function parentFlowOf(el: Element): "row" | "column" | "block" {
   return cs.flexDirection.startsWith("column") ? "column" : "row";
 }
 
+/** The parent's content-box size in px (getComputedStyle width/height resolve to the used
+ *  content width/height). Null when there is no parent. Used to detect Fill in a block
+ *  parent — a full-bleed child's own computed width is resolved to px, never `100%`. */
+function parentContentSize(el: Element): { width: number; height: number } | null {
+  const parent = el.parentElement;
+  if (!parent) return null;
+  const cs = getComputedStyle(parent);
+  return { width: parseFloat(cs.width) || 0, height: parseFloat(cs.height) || 0 };
+}
+
 function readoutOf(el: Element, id: string): NodeReadout {
   const cs = getComputedStyle(el);
   const computed: Record<string, string> = {};
@@ -350,6 +360,7 @@ function readoutOf(el: Element, id: string): NodeReadout {
     componentCandidates: reactComponentNames(el),
     // The parent's flow — Fixed/Hug/Fill resizing is axis-aware (needs the parent's axis).
     parentFlow: parentFlowOf(el),
+    parentSize: parentContentSize(el),
     className: typeof el.className === "string" ? el.className : "",
     children: Array.from(el.children)
       .filter((c) => !SKIP_TAGS.has(c.tagName) && !c.hasAttribute("data-vs-overlay"))
@@ -1093,10 +1104,25 @@ function attach(): void {
     const chain = componentChainUnder(target);
     return chain.length ? chain[chain.length - 1] : idUnder(target);
   };
-  // A double click drills IN: the innermost component under the pointer (the child).
-  const drillTarget = (target: EventTarget | null): string | null => {
-    const chain = componentChainUnder(target);
-    return chain.length ? chain[0] : idUnder(target);
+  // A double click drills IN by ONE level: the immediate tracked child of the current
+  // selection on the path to the pointer (Figma-style progressive depth — repeated
+  // double-clicks step deeper, one nested div at a time). null when nothing tracked is
+  // nested under the pointer inside `fromId`.
+  const drillOneLevel = (fromId: string, target: EventTarget | null): string | null => {
+    const fromEl = resolve(fromId);
+    const deepId = idUnder(target);
+    const deep = deepId ? resolve(deepId) : null;
+    if (!fromEl || !deep || deep === fromEl || !fromEl.contains(deep)) return null;
+    // Walk from the deepest element under the pointer up to `fromEl`, keeping the LAST
+    // tracked id before it — the immediate tracked descendant (one level in).
+    let child: string | null = null;
+    let el: Element | null = deep;
+    while (el && el !== fromEl) {
+      const tid = trackedId(el);
+      if (tid && tid !== fromId) child = tid;
+      el = el.parentElement;
+    }
+    return child;
   };
   let rafPending = false;
   let lastHover: string | null = null;
@@ -1258,11 +1284,13 @@ function attach(): void {
       if (id === null) return;
       const el = resolve(id) as HTMLElement | undefined;
       if (!el) return;
-      // A non-text element: drill IN — select the innermost component under the pointer.
+      // A non-text element: drill IN by one level. If something is already selected and
+      // the pointer is inside it, step to the immediate nested child (progressive — each
+      // double-click goes one level deeper). Otherwise select the element under the pointer.
       if (!isTextLeaf(el)) {
-        const inner = drillTarget(e.target) ?? id;
+        const inner = (selectedId ? drillOneLevel(selectedId, e.target) : null) ?? id;
         const innerEl = resolve(inner);
-        if (!innerEl || inner === selectedId) return; // already there → inert
+        if (!innerEl || inner === selectedId) return; // nothing deeper → inert
         e.preventDefault();
         e.stopPropagation();
         selectedId = inner;
