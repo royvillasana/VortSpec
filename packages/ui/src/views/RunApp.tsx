@@ -428,6 +428,18 @@ export function RunApp({
   const [review, setReview] = useState(false);
   const [snapshot, setSnapshot] = useState<FileSnapshot[] | null>(null);
   const structuralMod = useAgentRun();
+  // The reload Apply triggers to show the source change must NOT be treated as a
+  // "returned to the Playground" event — otherwise the replay re-attaches the very edits
+  // being applied, fails, and reports a bogus "couldn't reattach". Refs (not deps) so the
+  // reload effect reads the latest value without re-subscribing.
+  const applyingRef = useRef(false);
+  const reviewRef = useRef(false);
+  useEffect(() => {
+    applyingRef.current = applying;
+  }, [applying]);
+  useEffect(() => {
+    reviewRef.current = review;
+  }, [review]);
 
   // ── Screen preview: install a dev-only harness so state-navigated screens (no URL)
   // can be rendered standalone via `?screen=<Name>`. A gated Claude Code run adds the
@@ -516,7 +528,9 @@ export function RunApp({
         removeClasses: e.removeClasses,
         addClasses: e.addClasses,
       }));
-    if (edits.length) bridge.replayOverrides(edits);
+    // Skip when an Apply is in flight / under review: that reload is us writing these
+    // edits to source, not a fresh return — replaying them here would falsely orphan them.
+    if (edits.length && !applyingRef.current && !reviewRef.current) bridge.replayOverrides(edits);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bridge.ready]);
 
@@ -700,7 +714,8 @@ export function RunApp({
   const [orphanCount, setOrphanCount] = useState(0);
   useEffect(() => {
     const missing = bridge.replayResult?.missing ?? 0;
-    if (missing > 0) setOrphanCount(missing);
+    // Only a genuine return-replay orphans edits; an Apply/review reload never should.
+    if (missing > 0 && !applyingRef.current && !reviewRef.current) setOrphanCount(missing);
     bridge.clearReplayResult();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bridge.replayResult]);
@@ -1197,7 +1212,7 @@ export function RunApp({
             writes them to source, so they can be lost on a reload. Always show the count +
             Apply so the user never loses work silently, and surface any edit that couldn't
             reattach to a changed element (still saved — offer a re-apply-in-Chat recovery). */}
-        {isApp && dirty && (
+        {isApp && dirty && !applying && !review && (
           <div className="flex flex-none items-center gap-3 border-b border-vs-accent/40 bg-vs-accent-subtle px-5 py-2 text-[12px]">
             <span className="flex-none text-vs-accent" aria-hidden>
               ●
