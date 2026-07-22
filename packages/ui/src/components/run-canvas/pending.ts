@@ -28,6 +28,9 @@ export interface PendingEdit {
   elementLabel?: string;
   /** The element's leading text — disambiguates it among similar siblings in the prompt. */
   elementText?: string | null;
+  /** The element's live className string — the exact anchor the Apply agent greps for to
+   *  find the right JSX (and, for class-driven props like alignment/width, what to replace). */
+  elementClassName?: string;
   /** Human label for the apply summary (e.g. `Radius`, `Variant · size`). */
   label: string;
   kind: EditKind;
@@ -157,8 +160,16 @@ export function describeEdit(edit: PendingEdit): string {
     case "text":
       return `Set the element's visible text to \`${edit.value}\` (exact).`;
     case "freeform-style": {
-      const props = edit.cssProps.length ? edit.cssProps.join(", ") : edit.label.toLowerCase();
-      return `Approximate visual target — set ${props} to about \`${edit.value}\`; realize it in source however best fits the component.`;
+      // Prefer the EXACT declarations the canvas computed (e.g. justify-content: center;
+      // align-items: center) over the loose label — the agent must realize this precise
+      // result, typically by swapping the element's utility classes (Tailwind
+      // justify-*/items-*/w-*), not by guessing an "approximate" value.
+      const decls = edit.css && Object.keys(edit.css).length
+        ? Object.entries(edit.css)
+            .map(([k, v]) => `${k}: ${v}`)
+            .join("; ")
+        : `${edit.cssProps.join(", ") || edit.label.toLowerCase()}: ${edit.value}`;
+      return `Set this element's computed style to \`${decls}\`. If it's styled by utility classes, swap the relevant classes (e.g. \`justify-*\`/\`items-*\` for alignment, \`w-*\`/\`flex-*\` for width) so the RENDERED result matches — don't just append an inline style that a class overrides.`;
     }
   }
 }
@@ -173,6 +184,8 @@ export interface EditTarget {
   label: string;
   /** The element's leading text — disambiguates it among similar siblings. */
   text: string | null;
+  /** The element's live className — the concrete anchor to grep for in the source JSX. */
+  className: string | null;
   edits: PendingEdit[];
 }
 
@@ -187,7 +200,7 @@ export function groupEditsByElement(edits: PendingEdit[]): EditTarget[] {
     const gkey = e.fingerprint || e.nodeId || e.elementLabel || "•";
     let g = groups.get(gkey);
     if (!g) {
-      g = { file: e.file ?? null, component: null, label: e.elementLabel ?? "the element", text: e.elementText ?? null, edits: [] };
+      g = { file: e.file ?? null, component: null, label: e.elementLabel ?? "the element", text: e.elementText ?? null, className: e.elementClassName ?? null, edits: [] };
       groups.set(gkey, g);
     }
     g.edits.push(e);
@@ -202,10 +215,15 @@ export function groupEditsByElement(edits: PendingEdit[]): EditTarget[] {
  */
 export function buildEditPrompt(targets: EditTarget[]): string {
   const single = targets.length === 1;
+  // The className is the strongest locator we have — grepping for it lands the agent on
+  // the exact JSX element (a screen can reuse a component many times; the class string,
+  // not the tag/label, is what distinguishes THIS instance's source line).
+  const anchor = (t: EditTarget): string =>
+    t.className ? ` Find it in source by its current classes: \`${t.className.slice(0, 200)}\`.` : "";
   const head = single
-    ? `Apply these visual edits made in the VortSpec Run Canvas to ${
-        targets[0].file ? `\`${targets[0].file}\`${targets[0].component ? ` (${targets[0].component})` : ""}` : "the relevant component source"
-      }.`
+    ? `Apply this visual edit made in the VortSpec Run Canvas to ${
+        targets[0].file ? `\`${targets[0].file}\`${targets[0].component ? ` (${targets[0].component})` : ""}` : "the page/component source that renders it"
+      }.${anchor(targets[0])}`
     : `Apply these visual edits made in the VortSpec Run Canvas. They span ${targets.length} elements — apply each group to its own element, in its own source location.`;
   const blocks = targets.map((t) => {
     const where = single
@@ -214,13 +232,13 @@ export function buildEditPrompt(targets: EditTarget[]): string {
           ``,
           `On the "${t.label}" element${t.text ? ` whose leading text is "${t.text.slice(0, 120)}"` : ""}${
             t.file ? `, in \`${t.file}\`` : ""
-          }${t.component ? ` (${t.component})` : ""}:`,
+          }${t.component ? ` (${t.component})` : ""}:${anchor(t)}`,
         ];
     return [...where, ...t.edits.map((e) => `- ${describeEdit(e)}`)];
   });
   return [
     head,
-    `Make the minimal change so the rendered result matches; preserve existing design-token usage and do not touch unrelated code.`,
+    `Make the minimal change so the RENDERED result matches; preserve existing design-token usage and do not touch unrelated code. After editing, re-read the file to confirm the change is actually present.`,
     ...blocks.flat(),
   ].join("\n");
 }

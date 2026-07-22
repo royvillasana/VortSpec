@@ -119,7 +119,7 @@ describe("buildSelectionContext with provenance (Phase 6)", () => {
     const freeform = buildSelectionContext(selection, [
       classifyFieldEdit(selection, "opacity", "0.4", ["opacity"], () => 1),
     ]);
-    expect(freeform).toContain("Approximate visual target");
+    expect(freeform).toContain("Set this element's computed style");
     // The two edits produce visibly different, correctly-scoped context.
     expect(variant).not.toBe(freeform);
   });

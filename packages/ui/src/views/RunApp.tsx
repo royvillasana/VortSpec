@@ -901,6 +901,7 @@ export function RunApp({
             file: sel.file,
             elementLabel: sel.label,
             elementText: text,
+            elementClassName: readoutRef.current?.className ?? undefined,
             resizeMode: e.resizeMode,
           };
         }
@@ -1011,6 +1012,7 @@ export function RunApp({
           file: sel?.file ?? null,
           elementLabel: sel?.label,
           elementText: readoutRef.current?.text ?? null,
+          elementClassName: readoutRef.current?.className ?? undefined,
         },
       }));
     },
