@@ -58,14 +58,20 @@ export function ColorTokenField({
     setDisplay({ label: hex, swatch: hex, isToken: false });
     onChange(hex);
   }
+  // Reset to NO value — clears the property entirely (no color), not transparent/#000.
+  function clear(): void {
+    setDisplay(derive("", null, colorTokens));
+    onChange("");
+    setOpen(false);
+  }
 
   return (
-    <div className="w-full">
+    <div className="flex w-full items-center gap-1">
       <button
         ref={btnRef}
         type="button"
         onClick={toggle}
-        className="flex w-full items-center gap-2 rounded border border-vs-border-default bg-vs-bg-surface px-2 py-1 text-left hover:border-vs-accent"
+        className="flex min-w-0 flex-1 items-center gap-2 rounded border border-vs-border-default bg-vs-bg-surface px-2 py-1 text-left hover:border-vs-accent"
       >
         <span
           className="h-3.5 w-3.5 flex-none rounded-sm border border-vs-border-strong"
@@ -73,12 +79,27 @@ export function ColorTokenField({
         />
         <span
           className={`min-w-0 flex-1 truncate text-[12px] ${
-            display.isToken ? "text-vs-accent" : "font-mono text-vs-text-primary"
+            display.none
+              ? "text-vs-text-muted"
+              : display.isToken
+                ? "text-vs-accent"
+                : "font-mono text-vs-text-primary"
           }`}
         >
           {display.label}
         </span>
       </button>
+      {!display.none && (
+        <button
+          type="button"
+          onClick={clear}
+          title="Reset — no value (removes the color)"
+          aria-label="Reset to no value"
+          className="flex-none rounded p-1 text-vs-text-muted hover:bg-vs-bg-hover hover:text-vs-text-primary"
+        >
+          ✕
+        </button>
+      )}
       {open &&
         anchor &&
         createPortal(
@@ -97,11 +118,18 @@ export function ColorTokenField({
   );
 }
 
+/** A cleared color: no value at all (the property is removed, not set to transparent). */
+const NONE_SWATCH =
+  "repeating-conic-gradient(var(--vs-border-default, #888) 0% 25%, transparent 0% 50%) 50% / 8px 8px";
+
 function derive(
   value: string,
   token: string | null,
   colorTokens: ColorToken[],
-): { label: string; swatch: string; isToken: boolean } {
+): { label: string; swatch: string; isToken: boolean; none?: boolean } {
+  if (!value.trim() || value.trim().toLowerCase() === "none") {
+    return { label: "None", swatch: NONE_SWATCH, isToken: false, none: true };
+  }
   const varMatch = value.match(/var\(--([^),\s]+)/);
   const name = token ?? (varMatch ? varMatch[1] : null);
   if (name) {
