@@ -58,10 +58,12 @@ export function ColorTokenField({
     setDisplay({ label: hex, swatch: hex, isToken: false });
     onChange(hex);
   }
-  // Reset to NO value — clears the property entirely (no color), not transparent/#000.
+  // Reset the value to NO color. We set `transparent` (not "") so it OVERRIDES a
+  // class/token color and the change is visible live on the page — clearing to "" only
+  // removes an inline override, which is a no-op when the color comes from a class.
   function clear(): void {
-    setDisplay(derive("", null, colorTokens));
-    onChange("");
+    setDisplay(derive("transparent", null, colorTokens));
+    onChange("transparent");
     setOpen(false);
   }
 
@@ -127,7 +129,8 @@ function derive(
   token: string | null,
   colorTokens: ColorToken[],
 ): { label: string; swatch: string; isToken: boolean; none?: boolean } {
-  if (!value.trim() || value.trim().toLowerCase() === "none") {
+  const v = value.trim().toLowerCase();
+  if (!v || v === "none" || v === "transparent") {
     return { label: "None", swatch: NONE_SWATCH, isToken: false, none: true };
   }
   const varMatch = value.match(/var\(--([^),\s]+)/);
