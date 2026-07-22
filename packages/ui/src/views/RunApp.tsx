@@ -426,6 +426,10 @@ export function RunApp({
   });
   const [applying, setApplying] = useState(false);
   const [review, setReview] = useState(false);
+  // Set when an Apply run finished but edited NO source file — the change is still
+  // preview-only, so we keep the pending edits and tell the user instead of falsely
+  // entering review (which would "revert" on Keep once the live override is dropped).
+  const [applyMiss, setApplyMiss] = useState(false);
   const [snapshot, setSnapshot] = useState<FileSnapshot[] | null>(null);
   const structuralMod = useAgentRun();
   // The reload Apply triggers to show the source change must NOT be treated as a
@@ -727,10 +731,13 @@ export function RunApp({
   // path when they couldn't reattach to a changed element.
   const reapplyInChat = useCallback(() => {
     const list = Object.values(pending)
-      .map((e) => `${e.label ?? e.key} → ${e.value}`)
+      .map((e) => `${e.elementLabel ? `${e.elementLabel}: ` : ""}${e.label ?? e.key} → ${e.value}`)
       .join("; ");
     if (onSendToChat && list) {
-      onSendToChat(`Re-apply these canvas edits I made (they couldn't reattach after the page changed): ${list}.`, null);
+      onSendToChat(
+        `Apply these visual edits I made in the canvas — find the right element in the page source and change it: ${list}. Make the minimal change and preserve existing design-token usage.`,
+        null,
+      );
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pending, onSendToChat]);
@@ -1025,6 +1032,7 @@ export function RunApp({
     const isTokenValueEdit = (e: PendingEdit): boolean => e.kind === "token" && !!e.token && !isTokenBinding(e);
     const tokenEdits = edits.filter(isTokenValueEdit);
     const structural = edits.filter((e) => !isTokenValueEdit(e));
+    setApplyMiss(false);
     setApplying(true);
     try {
       for (const e of tokenEdits) {
@@ -1072,18 +1080,34 @@ export function RunApp({
     }
   }
 
-  // When the structural (gated) run finishes, reload the preview and enter review.
+  // When the structural (gated) run finishes, decide honestly whether it landed.
+  // The agent can report "done" without editing anything (element not located in
+  // source, ambiguous target). If NO file was written, the source is unchanged, so
+  // entering review would show the change (from the live override) and then "revert"
+  // on Keep. Instead: keep the edits pending, keep the override so the preview still
+  // shows them, and surface why — the user can Re-apply in Chat or adjust.
   useEffect(() => {
     if (structuralMod.model.status !== "done") return;
-    bridge.reload();
+    const patched = structuralMod.model.steps.some(
+      (s) => /^(edit|write|multiedit)$/i.test(s.name) && s.status === "ok",
+    );
     setApplying(false);
-    setReview(true);
+    if (patched) {
+      bridge.reload();
+      setApplyMiss(false);
+      setReview(true);
+    } else {
+      // No source edit → don't clear the override (keep showing the edit live), don't
+      // enter review. The persistent unsaved bar stays up with an explanation.
+      setApplyMiss(true);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [structuralMod.model.status]);
 
   function discardEdits(): void {
     bridge.clearOverride();
     setPending({});
+    setApplyMiss(false);
     refreshReadout(); // the canvas reverted — re-read so the panel fields follow
   }
   // Drop a single pending edit before applying: restore ITS element to the original,
@@ -1218,24 +1242,37 @@ export function RunApp({
             Apply so the user never loses work silently, and surface any edit that couldn't
             reattach to a changed element (still saved — offer a re-apply-in-Chat recovery). */}
         {isApp && dirty && !applying && !review && (
-          <div className="flex flex-none items-center gap-3 border-b border-vs-accent/40 bg-vs-accent-subtle px-5 py-2 text-[12px]">
-            <span className="flex-none text-vs-accent" aria-hidden>
-              ●
+          <div
+            className={`flex flex-none items-center gap-3 border-b px-5 py-2 text-[12px] ${
+              applyMiss ? "border-vs-warning/40 bg-vs-warning/10" : "border-vs-accent/40 bg-vs-accent-subtle"
+            }`}
+          >
+            <span className={`flex-none ${applyMiss ? "text-vs-warning" : "text-vs-accent"}`} aria-hidden>
+              {applyMiss ? "⚠" : "●"}
             </span>
             <span className="min-w-0 flex-1 leading-relaxed text-vs-text-primary">
-              <b>
-                {Object.keys(pending).length} unsaved edit{Object.keys(pending).length === 1 ? "" : "s"}
-              </b>{" "}
-              — live preview only. <b>Apply</b> to write them into your code so they persist across
-              reloads.
-              {orphanCount > 0 && (
-                <span className="text-vs-warning">
-                  {" "}
-                  · {orphanCount} couldn’t reattach after the page changed — still saved, but not showing.
-                </span>
+              {applyMiss ? (
+                <>
+                  <b>Couldn’t locate {Object.keys(pending).length === 1 ? "this edit" : "these edits"} in your source</b> —
+                  the run finished without changing a file, so {Object.keys(pending).length === 1 ? "it’s" : "they’re"}{" "}
+                  still preview-only. Try <b>Re-apply in Chat</b> to describe the change to Claude, or Discard.
+                </>
+              ) : (
+                <>
+                  <b>
+                    {Object.keys(pending).length} unsaved edit{Object.keys(pending).length === 1 ? "" : "s"}
+                  </b>{" "}
+                  — live preview only. <b>Apply</b> to write them into your code so they persist across reloads.
+                  {orphanCount > 0 && (
+                    <span className="text-vs-warning">
+                      {" "}
+                      · {orphanCount} couldn’t reattach after the page changed — still saved, but not showing.
+                    </span>
+                  )}
+                </>
               )}
             </span>
-            {orphanCount > 0 && onSendToChat && (
+            {(orphanCount > 0 || applyMiss) && onSendToChat && (
               <Button variant="ghost" onClick={reapplyInChat}>
                 Re-apply in Chat
               </Button>
