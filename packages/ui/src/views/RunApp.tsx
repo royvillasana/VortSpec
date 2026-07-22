@@ -1524,14 +1524,31 @@ export function RunApp({
                 onDismiss={() => void start()}
               />
             </Centered>
+          ) : isApp ? (
+            <Centered>
+              <div className="flex max-w-md flex-col items-center gap-2 text-center">
+                <span className="text-2xl" aria-hidden>
+                  📄
+                </span>
+                <p className="text-sm font-semibold text-vs-text-primary">
+                  This is your Playground — where your pages preview.
+                </p>
+                <p className="text-xs leading-relaxed text-vs-text-muted">
+                  You don’t have any pages yet. Once your components are built, just describe the page you want in the{" "}
+                  <b>Chat sidebar</b> — it’s composed from your design-system components and appears here live. No
+                  forms or buttons to hunt for; you create pages by asking.
+                </p>
+                <Button variant="primary" className="mt-2" onClick={() => void start()}>
+                  Start app
+                </Button>
+              </div>
+            </Centered>
           ) : (
             <Centered>
               <div className="text-center">
-                <p className="text-sm text-vs-text-secondary">
-                  {isApp ? "Run your project's app to preview it live." : "Run Storybook to browse your components live."}
-                </p>
+                <p className="text-sm text-vs-text-secondary">Run Storybook to browse your components live.</p>
                 <Button variant="primary" className="mt-3" onClick={() => void start()}>
-                  {isApp ? "Start app" : "Start Storybook"}
+                  Start Storybook
                 </Button>
               </div>
             </Centered>

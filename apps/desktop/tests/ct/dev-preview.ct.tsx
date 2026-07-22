@@ -21,8 +21,9 @@ test("rail includes the Manifest destination", async ({ mount }) => {
   const c = await mount(<DevPreview {...props} />, {
     hooksConfig: { mock: { components: COMPONENTS, devStatus: RUNNING, previewInfo: HAS_SB } },
   });
-  // The canonical rail: Flow · Run · Playground · Tokens · Manifest · History.
-  for (const label of ["Flow", "Run", "Playground", "Tokens", "Manifest", "History"]) {
+  // DevPreview is the component library view — its rail item is "Storybook"
+  // (the "Playground" screens item appears only where onRunApp is wired).
+  for (const label of ["Flow", "Run", "Storybook", "Tokens", "Manifest", "History"]) {
     await expect(c.getByRole("button", { name: label, exact: true })).toBeVisible();
   }
 });
