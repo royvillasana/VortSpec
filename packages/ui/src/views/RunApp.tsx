@@ -1112,7 +1112,12 @@ export function RunApp({
     setReview(false);
     setSnapshot(null);
     setPending({});
+    // Drop the now-redundant live override, then RELOAD so the preview re-renders from
+    // the patched SOURCE. Without the reload, if HMR didn't refresh the DOM, clearing the
+    // override dropped back to the pre-change render — the change "wasn't kept". Pending is
+    // already empty here, so the reload's replay is a no-op.
     bridge.clearOverride();
+    bridge.reload();
     structuralMod.reset();
   }
   async function revertEdits(): Promise<void> {
