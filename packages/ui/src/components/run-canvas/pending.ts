@@ -143,7 +143,9 @@ export function editProvenance(edit: PendingEdit): EditProvenance {
 export function describeEdit(edit: PendingEdit): string {
   // A deletion — remove the whole element from source, not a style tweak.
   if (edit.remove) {
-    return `DELETE this element from the source entirely — remove its whole JSX element (its opening tag, children, and closing tag). Also drop anything that existed ONLY to support it (an import, handler, or data entry used nowhere else). Do not leave an empty wrapper, a commented-out block, or a \`display:none\`.`;
+    const who = edit.elementLabel ? `the \`${edit.elementLabel}\`` : "this";
+    const txt = edit.elementText ? ` (its text: "${edit.elementText.slice(0, 60)}")` : "";
+    return `DELETE ${who} element${txt} from the source entirely — remove its whole JSX (opening tag, children, closing tag). If it is a component instance like \`<${edit.elementLabel ?? "Component"} …/>\`, remove THAT usage from this page's JSX — do NOT edit the component's own definition. Also drop anything used only by it (an import, handler, or data entry). Do not leave an empty wrapper, a commented-out block, or a \`display:none\`.`;
   }
   // Resize edits describe intent, not raw CSS — the run realizes Fixed/Hug/Fill in the
   // component's own idiom (utility classes, style props).

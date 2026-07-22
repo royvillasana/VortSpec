@@ -916,7 +916,10 @@ export function RunApp({
             label: e.label ?? edit.label,
             fingerprint: fp,
             nodeId,
-            file: sel.file,
+            // A deletion removes the USAGE from the page being viewed, not the component's
+            // definition — so ground it to the current page (null → currentPageFile in Apply),
+            // never to sel.file (which for a component instance is the component's own source).
+            file: e.remove ? null : sel.file,
             elementLabel: sel.label,
             elementText: text,
             elementClassName: readoutRef.current?.className ?? undefined,
