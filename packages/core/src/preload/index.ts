@@ -81,6 +81,7 @@ const api: VortSpecApi = {
 
   toolkitStatus: (path: string) => invoke("toolkit:status", path),
   installToolkit: (path: string) => invoke("toolkit:install", path),
+  resyncToolkit: (path: string) => invoke("toolkit:resync", path),
 
   startRun: (opts: AgentRunOptions) => invoke("agent:startRun", opts),
   cancelRun: (runId: string) => invoke("agent:cancelRun", runId),

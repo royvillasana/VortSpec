@@ -3,6 +3,7 @@ import { dirname, join, sep } from "node:path";
 import {
   cp,
   mkdir,
+  rm,
   writeFile,
   copyFile,
   readdir,
@@ -42,6 +43,19 @@ export function toUnpacked(p: string): string {
 
 function packageDir(): string {
   return toUnpacked(dirname(require.resolve("@royvillasana/sdd-de/package.json")));
+}
+
+/** Marker file written into `.sdd-de/` recording the toolkit version last copied in, so
+ *  the app can tell a project's version (the CLI writes none) and offer an update. */
+export const TOOLKIT_VERSION_FILE = ".toolkit-version";
+
+/** The version of the `@royvillasana/sdd-de` bundled with this build, or null. */
+export function bundledToolkitVersion(): string | null {
+  try {
+    return (require("@royvillasana/sdd-de/package.json") as { version?: string }).version ?? null;
+  } catch {
+    return null;
+  }
 }
 
 async function exists(path: string): Promise<boolean> {
@@ -118,6 +132,53 @@ export async function createProject(
     if (!content.includes(".vortspec/index")) add += "\n# VortSpec scan cache (derived)\n.vortspec/index/\n";
     if (add) await appendFile(gitignorePath, add);
   }
+
+  // Record the toolkit version copied in, so the app can later detect an update.
+  const v = bundledToolkitVersion();
+  if (v) await writeFile(join(sddeDir, TOOLKIT_VERSION_FILE), v, "utf8");
+
+  return refreshProject(projectPath);
+}
+
+/**
+ * Re-sync an existing project's SDD-DE toolkit to the version bundled with this build —
+ * the in-app equivalent of `npx @royvillasana/sdd-de update`, but non-interactive (no CLI,
+ * no TTY). Overwrites skills + docs (clean, so a renamed/removed skill doesn't linger),
+ * always overwrites the CLAUDE.md companions, refreshes the `.claude/skills` symlinks, and
+ * stamps the version marker. `project.yaml` is PRESERVED — the user's config is untouched.
+ */
+export async function resyncToolkit(projectPath: string): Promise<Project> {
+  const pkgDir = packageDir();
+  const sddeDir = join(projectPath, ".sdd-de");
+  if (!(await exists(sddeDir))) {
+    throw new Error("This project has no SDD-DE toolkit yet — run setup first, then update.");
+  }
+  // Skills + docs — clean overwrite (remove first so files dropped in the new version go).
+  const skillsDst = join(sddeDir, "ai-specs", "skills");
+  await rm(skillsDst, { recursive: true, force: true });
+  await mkdir(join(sddeDir, "ai-specs"), { recursive: true });
+  await cp(join(pkgDir, "ai-specs", "skills"), skillsDst, { recursive: true });
+  const docsDst = join(sddeDir, "docs");
+  await rm(docsDst, { recursive: true, force: true });
+  await cp(join(pkgDir, "docs"), docsDst, { recursive: true });
+
+  // CLAUDE.md + companions — always overwrite on update (unlike setup, which skips if present).
+  const claudeSrc = join(pkgDir, "CLAUDE.md");
+  for (const name of ["CLAUDE.md", "AGENTS.md", "GEMINI.md", "codex.md"]) {
+    try {
+      await copyFile(claudeSrc, join(projectPath, name));
+    } catch {
+      /* CLAUDE.md may not ship in older toolkit versions */
+    }
+  }
+
+  // Refresh `.claude/skills` symlinks — drop stale ones, recreate all from the new skills.
+  const claudeSkills = join(projectPath, ".claude", "skills");
+  await rm(claudeSkills, { recursive: true, force: true });
+  await createSkillSymlinks(skillsDst, claudeSkills);
+
+  const v = bundledToolkitVersion();
+  if (v) await writeFile(join(sddeDir, TOOLKIT_VERSION_FILE), v, "utf8");
 
   return refreshProject(projectPath);
 }

@@ -1,7 +1,20 @@
+import { createRequire } from "node:module";
 import { join } from "node:path";
-import { access } from "node:fs/promises";
+import { access, readFile } from "node:fs/promises";
 import { execFileSafe } from "../util/exec";
 import type { ToolkitStatus } from "@vortspec/core/ipc";
+
+const req = createRequire(import.meta.url);
+
+/** The `@royvillasana/sdd-de` version bundled with this build (read independently of
+ *  setup-manager to avoid a require cycle), or null. */
+function bundledVersion(): string | null {
+  try {
+    return (req("@royvillasana/sdd-de/package.json") as { version?: string }).version ?? null;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Detects and installs the SDD-DE toolkit (`@royvillasana/sdd-de`) in a project.
@@ -38,9 +51,19 @@ export async function getToolkitStatus(projectPath: string): Promise<ToolkitStat
   // folder has neither, so it routes to intake instead of the extraction flow.
   const configured = await exists(join(sdde, "project.yaml"));
   const present = configured || (await exists(join(sdde, "ai-specs", "skills")));
-  // The CLI does not write an installed-version marker, so version is unknown
-  // when present; the dashboard shows "installed". Update detection is deferred.
-  return { present, configured, version: null, updateAvailable: false };
+  // Read the version marker VortSpec writes on setup/re-sync (`.toolkit-version`). The
+  // CLI writes none, so a project set up via the CLI reads null → treated as "unknown,
+  // offer update". An update is available when we know the bundled version and the
+  // project's differs (or is unknown).
+  let version: string | null = null;
+  try {
+    version = (await readFile(join(sdde, ".toolkit-version"), "utf8")).trim() || null;
+  } catch {
+    /* no marker — older install or CLI install */
+  }
+  const bundled = bundledVersion();
+  const updateAvailable = present && !!bundled && version !== bundled;
+  return { present, configured, version, updateAvailable };
 }
 
 export async function installToolkit(projectPath: string): Promise<ToolkitStatus> {

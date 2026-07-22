@@ -15,6 +15,7 @@ import { DesignManifest } from "@vortspec/ui/DesignManifest";
 import { RunApp } from "@vortspec/ui/RunApp";
 import { Profile } from "@vortspec/ui/Profile";
 import { ProjectSetup } from "@vortspec/ui/ProjectSetup";
+import { ToolkitUpdateBanner } from "@vortspec/ui/ToolkitUpdateBanner";
 import { ActivityBar } from "./components/ActivityBar";
 import { WorkspacePicker } from "./components/WorkspacePicker";
 import { Explorer } from "./components/Explorer";
@@ -581,6 +582,8 @@ export default function App(): JSX.Element {
         >
           {workspace.name} — <span className="ml-1 font-bold text-vs-text-secondary">VortSpec</span>
         </header>
+
+        <ToolkitUpdateBanner project={workspace} onUpdated={setWorkspace} />
 
         <div className="flex min-h-0 flex-1 overflow-hidden">
           <ActivityBar active={layout.activity} onSelect={(a) => (a === "home" ? setWorkspace(null) : dispatch({ type: "setActivity", activity: a }))} chatOpen={layout.secondaryOpen} onToggleChat={() => dispatch({ type: "toggleSecondary" })} />

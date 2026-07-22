@@ -58,6 +58,8 @@ export interface VortSpecApi {
 
   toolkitStatus(path: string): Promise<IpcResponse<"toolkit:status">>;
   installToolkit(path: string): Promise<IpcResponse<"toolkit:install">>;
+  /** Re-sync an existing project's SDD-DE toolkit to the bundled version (no CLI/TTY). */
+  resyncToolkit(path: string): Promise<IpcResponse<"toolkit:resync">>;
 
   // agent runs
   startRun(opts: AgentRunOptions): Promise<IpcResponse<"agent:startRun">>;

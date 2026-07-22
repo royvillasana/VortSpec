@@ -445,6 +445,7 @@ export const ipcContract = {
 
   "toolkit:status": { request: z.string(), response: toolkitStatusSchema },
   "toolkit:install": { request: z.string(), response: toolkitStatusSchema },
+  "toolkit:resync": { request: z.string(), response: projectSchema },
 
   "agent:startRun": {
     request: agentRunOptionsSchema,
