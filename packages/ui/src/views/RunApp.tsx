@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { DevServerStatus, Project, InspectorToken, InspectorComponent, FileSnapshot, StorybookEntry } from "@vortspec/core/ipc";
-import { buildSelection, alignToCss, flowToCss } from "@vortspec/core/selection-builder";
+import { buildSelection, alignToCss, flowToCss, gapModeCss } from "@vortspec/core/selection-builder";
 import { sizeModeCss, SIZE_MODE_LABEL } from "@vortspec/core/sizing";
 import { api } from "../lib/api";
 import { Button, Spinner } from "@vortspec/ui/ui";
@@ -936,6 +936,12 @@ export function RunApp({
         // block / row / column → display (+ flex-direction). Multiple props, so
         // compute the override explicitly rather than via the 1-value field map.
         const css = flowToCss(value);
+        applyLive(css);
+        commitEdits([{ key, value, cssProps: Object.keys(css), css }]);
+      } else if (key === "gap-mode") {
+        // Packed vs Space-between (Figma spacing mode) — distribute children to fill the
+        // container's main axis. A fixed `gap` can't fill; this is the CSS that does.
+        const css = gapModeCss(value);
         applyLive(css);
         commitEdits([{ key, value, cssProps: Object.keys(css), css }]);
       } else if (key === "width" || key === "height") {
