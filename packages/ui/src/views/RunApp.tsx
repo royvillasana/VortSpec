@@ -969,9 +969,26 @@ export function RunApp({
           ? `${Math.round(readoutRef.current?.rect[dim] ?? 0)}px`
           : value;
         const css = sizeModeCss(dim, mode, parentFlow, fixedPx);
-        applyLive(css);
         const displayValue = mode === "fixed" ? fixedPx : SIZE_MODE_LABEL[mode];
-        commitEdits([{ key, value: displayValue, cssProps: Object.keys(css), css, resizeMode: mode }]);
+        const edits: Parameters<typeof commitEdits>[0] = [
+          { key, value: displayValue, cssProps: Object.keys(css), css, resizeMode: mode },
+        ];
+        // Filling a flex container along ITS OWN main axis frees space its children don't
+        // use (a fixed gap can't grow). Spread them to fill it — Figma "Space between" —
+        // so Fill visibly redistributes the components inside, as expected. Committed as a
+        // second edit so Apply writes `justify-between` into source alongside the resize.
+        const disp = readoutRef.current?.computed["display"] ?? "";
+        const dir = readoutRef.current?.computed["flex-direction"] ?? "row";
+        const selfMainDim = dir.startsWith("column") ? "height" : "width";
+        const childCount = readoutRef.current?.children.length ?? 0;
+        const live: Record<string, string> = { ...css };
+        if (mode === "fill" && disp.includes("flex") && dim === selfMainDim && childCount >= 2) {
+          const jc = gapModeCss("distribute");
+          Object.assign(live, jc);
+          edits.push({ key: "gap-mode", value: "distribute", cssProps: Object.keys(jc), css: jc });
+        }
+        applyLive(live);
+        commitEdits(edits);
       } else {
         const css = cssForField(key, value);
         applyLive(css);
