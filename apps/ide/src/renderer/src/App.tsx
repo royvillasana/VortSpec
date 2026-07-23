@@ -605,7 +605,13 @@ export default function App(): JSX.Element {
           <LeftDock
             width={eff.primary}
             sectionLabel={
-              isExplorer ? "Explorer" : layout.activity === "run" || layout.activity === "play" ? "Design" : "Panel"
+              isExplorer
+                ? "Explorer"
+                : layout.activity === "run"
+                  ? "Design"
+                  : layout.activity === "play"
+                    ? "Stories"
+                    : "Panel"
             }
             hasSection={isExplorer || layout.activity === "run" || layout.activity === "play"}
             sectionEl={sectionSlot}

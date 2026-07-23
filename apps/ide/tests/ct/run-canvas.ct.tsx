@@ -37,6 +37,42 @@ async function openRun(c: import("@playwright/test").Locator): Promise<void> {
   await rail(c).getByRole("button", { name: "Playground" }).click();
 }
 
+test("Storybook drives its story nav from the dock's Stories tab", async ({ mount }) => {
+  const mock = {
+    ...base,
+    devStatus: { state: "running", url: "http://localhost:6006", script: "storybook", message: null },
+    storybookStatus: { installed: true, hasConfig: true, hasScript: true, storyCount: 3, components: 2, missingStories: 0 },
+    storybookIndex: [
+      { id: "components-button--primary", title: "Components/Button", name: "Primary", type: "story" as const },
+      { id: "components-button--secondary", title: "Components/Button", name: "Secondary", type: "story" as const },
+      { id: "components-card--default", title: "Components/Card", name: "Default", type: "story" as const },
+    ],
+  };
+  const c = await mount(<App />, { hooksConfig: { mock } });
+  await c.getByRole("button", { name: /acme-design-system/ }).click();
+  await rail(c).getByRole("button", { name: "Storybook" }).click();
+  const dock = c.getByRole("complementary");
+  // Storybook's nav lives in the dock's Stories tab (not the in-iframe sidebar).
+  await expect(dock.getByRole("button", { name: "Stories", exact: true })).toBeVisible();
+  await expect(dock.getByText("Button", { exact: true })).toBeVisible();
+  await expect(dock.getByRole("button", { name: "Primary" })).toBeVisible();
+  await expect(dock.getByRole("button", { name: "Default" })).toBeVisible();
+  // Clicking a story drives the embedded Storybook to that story's preview.
+  await dock.getByRole("button", { name: "Secondary" }).click();
+  await expect(c.locator("iframe")).toHaveAttribute("src", /iframe\.html\?id=components-button--secondary/);
+});
+
+test("the Playground shows the unified left dock (Design + Chat tabs), never zero-width", async ({ mount }) => {
+  const c = await mount(<App />, { hooksConfig: { mock: base } });
+  await openRun(c);
+  // Regression: the dock's width was gated on isSidebarView, so outside Explorer it computed
+  // to 0 and the whole dock vanished. It must be present with both tabs in the Playground.
+  const dock = c.getByRole("complementary");
+  await expect(dock).toBeVisible();
+  await expect(dock.getByRole("button", { name: "Design", exact: true })).toBeVisible();
+  await expect(dock.getByRole("button", { name: "Chat", exact: true })).toBeVisible();
+});
+
 test("the Run activity shows the Figma-style Design panel beside the canvas", async ({ mount }) => {
   const c = await mount(<App />, { hooksConfig: { mock: base } });
   await openRun(c);

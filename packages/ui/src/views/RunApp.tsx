@@ -50,6 +50,19 @@ import { buildDoctorPrompt, buildEnvSetupPrompt, relFileFromSource } from "../co
  * can run and iterate on screens they vibe-engineer via the assistant (which is
  * modify-capable on this screen, seeded with a Screen-Creation context in App).
  */
+
+/** Group Storybook stories by their component title (the part before the last `/`),
+ *  keeping only real stories — for the dock's Storybook nav. */
+function groupStories(entries: StorybookEntry[]): { title: string; items: StorybookEntry[] }[] {
+  const map = new Map<string, StorybookEntry[]>();
+  for (const e of entries) {
+    if (e.type !== "story") continue;
+    const title = e.title.split("/").pop() || e.title;
+    (map.get(title) ?? map.set(title, []).get(title)!).push(e);
+  }
+  return Array.from(map, ([title, items]) => ({ title, items }));
+}
+
 export function RunApp({
   project,
   kind = "app",
@@ -96,6 +109,10 @@ export function RunApp({
 }): React.JSX.Element {
   const [dev, setDev] = useState<DevServerStatus>({ state: "stopped", url: null, script: null, message: null });
   const [frameLoading, setFrameLoading] = useState(true);
+  // Storybook (kind=storybook): the story index drives a VortSpec nav in the left dock's
+  // Section tab, so the embedded Storybook shows just the story (no in-iframe sidebar).
+  const [storyEntries, setStoryEntries] = useState<StorybookEntry[]>([]);
+  const [storyId, setStoryId] = useState<string | null>(null);
   // Bumped by the header Refresh button to reload the preview (remounts the
   // iframe via its key; the canvas webview reloads through the bridge).
   const [reloadNonce, setReloadNonce] = useState(0);
@@ -1336,9 +1353,65 @@ export function RunApp({
 
   useEffect(() => setFrameLoading(true), [embedUrl]);
 
+  // Load Storybook's story index (index.json) for the dock nav; pick the first real story.
+  useEffect(() => {
+    if (isApp || !embedUrl) return;
+    let alive = true;
+    void api
+      .storybookIndex(embedUrl)
+      .then((entries) => {
+        if (!alive) return;
+        setStoryEntries(entries);
+        setStoryId((cur) => cur ?? entries.find((e) => e.type === "story")?.id ?? entries[0]?.id ?? null);
+      })
+      .catch(() => alive && setStoryEntries([]));
+    return () => {
+      alive = false;
+    };
+  }, [isApp, embedUrl, reloadNonce]);
+
   async function start(): Promise<void> {
     setDev(await startFor());
   }
+
+  // Storybook's story nav for the left dock (kind=storybook) — a VortSpec component/story
+  // list that drives the embedded Storybook, replacing its in-iframe sidebar.
+  const storybookNav = (
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-vs-bg-surface">
+      <div className="flex-none border-b border-vs-border-subtle px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-vs-text-secondary">
+        Components
+      </div>
+      {storyEntries.length === 0 ? (
+        <p className="px-3 py-4 text-[11px] text-vs-text-muted">
+          No stories yet — build components (Storybook populates as they land).
+        </p>
+      ) : (
+        <div className="min-h-0 flex-1 overflow-auto p-1">
+          {groupStories(storyEntries).map((g) => (
+            <div key={g.title} className="mb-1">
+              <p className="truncate px-2 pb-0.5 pt-1.5 text-[10px] font-semibold uppercase tracking-wide text-vs-text-muted">
+                {g.title}
+              </p>
+              {g.items.map((e) => (
+                <button
+                  key={e.id}
+                  type="button"
+                  onClick={() => setStoryId(e.id)}
+                  className={`flex w-full items-center rounded px-2 py-1 text-left text-[12px] ${
+                    storyId === e.id
+                      ? "bg-vs-accent text-white"
+                      : "text-vs-text-secondary hover:bg-vs-bg-hover hover:text-vs-text-primary"
+                  }`}
+                >
+                  <span className="truncate">{e.name}</span>
+                </button>
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 
   // The Design/Layers sidebar body (Sitemap + Design or Comments panel). Rendered inline in
   // an <aside> on desktop, or PORTALED into the IDE's unified left-dock slot (sidebarSlot).
@@ -1428,6 +1501,9 @@ export function RunApp({
       />
       )}
 
+      {/* Storybook: portal the story nav into the dock's Section tab (canvas is app-only,
+          so Storybook has no Design panel — its nav goes here instead). */}
+      {!isApp && sidebarSlot && embedUrl && createPortal(storybookNav, sidebarSlot)}
       <main className="flex min-w-0 flex-1 flex-col bg-vs-bg-primary">
         <header className="flex flex-none items-center gap-3 border-b border-vs-border-default px-5 py-3">
           <span className="text-[15px] font-semibold">{isApp ? "Playground" : "Storybook"}</span>
@@ -1772,13 +1848,24 @@ export function RunApp({
             </div>
           ) : embedUrl ? (
             <div className="relative h-full min-h-[340px]">
-              <iframe
-                key={`${embedUrl}:${reloadNonce}`}
-                title={noun}
-                src={embedUrl}
-                onLoad={() => setFrameLoading(false)}
-                className="h-full min-h-[340px] w-full border-0 bg-white"
-              />
+              {(() => {
+                // In the dock (sidebarSlot), the VortSpec nav drives Storybook, so show the
+                // STORY only (iframe.html) — no in-iframe manager sidebar. Otherwise (desktop)
+                // embed the full Storybook manager at its root.
+                const storyOnly = !isApp && sidebarSlot && storyId;
+                const src = storyOnly
+                  ? `${embedUrl}iframe.html?id=${encodeURIComponent(storyId)}&viewMode=story`
+                  : embedUrl;
+                return (
+                  <iframe
+                    key={`${src}:${reloadNonce}`}
+                    title={noun}
+                    src={src}
+                    onLoad={() => setFrameLoading(false)}
+                    className="h-full min-h-[340px] w-full border-0 bg-white"
+                  />
+                );
+              })()}
               {frameLoading && (
                 <div className="absolute inset-0 grid place-items-center bg-vs-bg-primary/60 text-xs text-vs-text-secondary">
                   Loading {noun}…
