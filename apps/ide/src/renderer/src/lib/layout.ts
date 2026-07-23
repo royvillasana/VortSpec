@@ -174,7 +174,9 @@ export function effectiveWidths(
   state: LayoutState,
   winW: number,
 ): { primary: number; secondary: number; panelSide: number } {
-  const primaryShown = isSidebarView(state.activity) && state.primaryOpen;
+  // The primary region is now the ALWAYS-present unified left dock (Section + Chat), shown
+  // in every activity — not just Explorer — so its width no longer gates on isSidebarView.
+  const primaryShown = state.primaryOpen;
   const secondaryShown = state.secondaryOpen;
   const panelShown = state.panelOpen && state.panelDock === "right";
 
