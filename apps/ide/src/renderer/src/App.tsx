@@ -56,6 +56,7 @@ export default function App(): JSX.Element {
   const [dockBusy, setDockBusy] = useState(false);
   // The unified left dock's Section-tab slot — the current view portals its sidebar here.
   const [sectionSlot, setSectionSlot] = useState<HTMLDivElement | null>(null);
+  const [leftTab, setLeftTab] = useState<"section" | "chat">("section");
   const [gitCounts, setGitCounts] = useState<{ changes: number; ahead: number }>({ changes: 0, ahead: 0 });
   // The live editor selection, surfaced to the assistant as grounding context.
   const [selection, setSelection] = useState<EditorSelection | null>(null);
@@ -313,7 +314,7 @@ export default function App(): JSX.Element {
   const dispatchAssistantTask = useCallback(
     (task: AssistantTask): void => {
       const origin = layout.activity;
-      if (!layout.secondaryOpen) dispatch({ type: "toggleSecondary" });
+      setLeftTab("chat"); // the assistant lives in the left dock's Chat tab — reveal it
       setAssistantTask({
         title: task.title,
         prompt: task.prompt,
@@ -551,16 +552,16 @@ export default function App(): JSX.Element {
           onOpenTasks={go("tasks")}
         />
       ) : a === "run" ? (
-        <RunApp project={p} kind="app" hideRail canvas saveSignal={saveSignal} assistantBusy={dockBusy} onBack={go("explorer")} onFlow={go("flow")} onRun={go("run")} onPlayground={go("play")} onTokens={go("tokens")} onManifest={go("manifest")} onHistory={go("explorer")} onSource={go("source")}
+        <RunApp project={p} kind="app" hideRail canvas saveSignal={saveSignal} assistantBusy={dockBusy} sidebarSlot={sectionSlot} onBack={go("explorer")} onFlow={go("flow")} onRun={go("run")} onPlayground={go("play")} onTokens={go("tokens")} onManifest={go("manifest")} onHistory={go("explorer")} onSource={go("source")}
           onSendToChat={(text, file) => {
-            if (!layout.secondaryOpen) dispatch({ type: "toggleSecondary" });
+            setLeftTab("chat"); // reveal the chat tab in the left dock
             // A canvas selection has no honest line range — carry it as a canvas
             // selection with a label, not a fabricated file+line reference.
             setPendingRef({ source: "canvas", label: file ?? "Run canvas selection", text, nonce: ++refNonce.current });
           }}
         />
       ) : a === "play" ? (
-        <RunApp project={p} kind="storybook" hideRail onBack={go("explorer")} onFlow={go("flow")} onRun={go("run")} onPlayground={go("play")} onTokens={go("tokens")} onManifest={go("manifest")} onHistory={go("explorer")} onSource={go("source")} />
+        <RunApp project={p} kind="storybook" hideRail sidebarSlot={sectionSlot} onBack={go("explorer")} onFlow={go("flow")} onRun={go("run")} onPlayground={go("play")} onTokens={go("tokens")} onManifest={go("manifest")} onHistory={go("explorer")} onSource={go("source")} />
       ) : a === "tokens" ? (
         <Inspector project={p} hideRail onBack={go("explorer")} onOpenPreview={go("explorer")} onOpenRun={go("run")} onOpenHistory={go("explorer")} onOpenManifest={go("manifest")} onOpenFile={(path) => { void wf.openFile(path); dispatch({ type: "setActivity", activity: "explorer" }); }} />
       ) : a === "tasks" ? (
@@ -597,9 +598,13 @@ export default function App(): JSX.Element {
               the conversation persists across every section. */}
           <LeftDock
             width={eff.primary}
-            sectionLabel={isExplorer ? "Explorer" : "Panel"}
-            hasSection={isExplorer}
+            sectionLabel={
+              isExplorer ? "Explorer" : layout.activity === "run" || layout.activity === "play" ? "Design" : "Panel"
+            }
+            hasSection={isExplorer || layout.activity === "run" || layout.activity === "play"}
             onSectionSlot={setSectionSlot}
+            tab={leftTab}
+            onTabChange={setLeftTab}
             chat={
               <div className="flex min-h-0 flex-1 flex-col">
                 <div

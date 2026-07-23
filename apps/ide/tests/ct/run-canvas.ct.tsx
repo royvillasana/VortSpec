@@ -76,19 +76,18 @@ test("the canvas toolbar carries the modes and zoom, bottom-center over the canv
   // Zoom was replaced by the viewport selector — Desktop is the default.
   await expect(bar.getByRole("button", { name: /Desktop/ })).toBeVisible();
   // The Design panel is still a resizable sidebar (like the Explorer rail).
-  await expect(c.getByRole("separator", { name: "Resize Design panel" })).toBeVisible();
+  await expect(c.getByRole("separator", { name: "Resize sidebar" })).toBeVisible();
 });
 
-test("the mode and viewport controls exist exactly once, and survive collapsing Layers", async ({ mount }) => {
+test("the mode and viewport controls exist exactly once on the canvas toolbar", async ({ mount }) => {
   const c = await mount(<App />, { hooksConfig: { mock: base } });
   await openRun(c);
-  // The Comments panel used to re-implement this toggle; the Design panel used to
-  // own it. Exactly one implementation now, wherever we are.
-  await expect(c.getByRole("button", { name: "Inspect" })).toHaveCount(1);
-  await expect(c.getByRole("button", { name: /Desktop/ })).toHaveCount(1);
-  // The controls live on the canvas toolbar, so they don't vanish with the Layers panel.
-  await c.getByRole("button", { name: /Layers/ }).click();
-  await expect(c.getByTestId("canvas-toolbar").getByRole("button", { name: /Desktop/ })).toBeVisible();
+  // The Design panel (now in the left dock) and the Comments panel each used to re-implement
+  // these; they live only on the canvas toolbar now — exactly one of each, independent of the
+  // dock's Section/Chat tabs.
+  const bar = c.getByTestId("canvas-toolbar");
+  await expect(bar.getByRole("button", { name: "Inspect" })).toHaveCount(1);
+  await expect(bar.getByRole("button", { name: /Desktop/ })).toHaveCount(1);
   await expect(c.getByRole("button", { name: "Inspect" })).toHaveCount(1);
 });
 

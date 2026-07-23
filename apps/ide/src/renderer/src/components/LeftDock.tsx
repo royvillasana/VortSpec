@@ -1,4 +1,3 @@
-import { useState } from "react";
 import type { JSX, ReactNode } from "react";
 
 /**
@@ -19,6 +18,8 @@ export function LeftDock({
   sectionLabel,
   hasSection,
   onSectionSlot,
+  tab,
+  onTabChange,
   chat,
 }: {
   width: number;
@@ -28,10 +29,12 @@ export function LeftDock({
   hasSection: boolean;
   /** Receives the section tab's slot element — the host portals the view's sidebar in. */
   onSectionSlot: (el: HTMLDivElement | null) => void;
+  /** Controlled active tab (so the host can reveal Chat, e.g. on "send to chat"). */
+  tab: "section" | "chat";
+  onTabChange: (tab: "section" | "chat") => void;
   /** The assistant, mounted here once (persistent across sections). */
   chat: ReactNode;
 }): JSX.Element {
-  const [tab, setTab] = useState<"section" | "chat">("section");
   const active = hasSection ? tab : "chat";
 
   return (
@@ -41,11 +44,11 @@ export function LeftDock({
     >
       <div className="flex flex-none items-stretch border-b border-vs-border-subtle text-[12px]">
         {hasSection && (
-          <TabBtn active={active === "section"} onClick={() => setTab("section")}>
+          <TabBtn active={active === "section"} onClick={() => onTabChange("section")}>
             {sectionLabel}
           </TabBtn>
         )}
-        <TabBtn active={active === "chat"} onClick={() => setTab("chat")}>
+        <TabBtn active={active === "chat"} onClick={() => onTabChange("chat")}>
           Chat
         </TabBtn>
       </div>

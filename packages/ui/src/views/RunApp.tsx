@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type { DevServerStatus, Project, InspectorToken, InspectorComponent, FileSnapshot, StorybookEntry } from "@vortspec/core/ipc";
 import { buildSelection, alignToCss, flowToCss, gapModeCss } from "@vortspec/core/selection-builder";
 import { sizeModeCss, SIZE_MODE_LABEL } from "@vortspec/core/sizing";
@@ -65,6 +66,7 @@ export function RunApp({
   onSendToChat,
   saveSignal,
   assistantBusy = false,
+  sidebarSlot,
 }: {
   project: Project;
   /** Which server to run: the project's own `app` (default) or its `storybook`. */
@@ -87,6 +89,10 @@ export function RunApp({
   saveSignal?: number;
   /** The right-sidebar assistant is running (IDE) — drives the page "AI is working" skeleton. */
   assistantBusy?: boolean;
+  /** When the host provides a left-dock slot (IDE unified sidebar), the Design/Layers panel
+   *  is PORTALED there instead of rendered inline, so the canvas fills the center. Omit
+   *  (desktop) to keep the inline sidebar. */
+  sidebarSlot?: HTMLElement | null;
 }): React.JSX.Element {
   const [dev, setDev] = useState<DevServerStatus>({ state: "stopped", url: null, script: null, message: null });
   const [frameLoading, setFrameLoading] = useState(true);
@@ -1334,6 +1340,75 @@ export function RunApp({
     setDev(await startFor());
   }
 
+  // The Design/Layers sidebar body (Sitemap + Design or Comments panel). Rendered inline in
+  // an <aside> on desktop, or PORTALED into the IDE's unified left-dock slot (sidebarSlot).
+  const sidebarBody = (
+    <>
+      {/* Sitemap: navigate the preview to the app's pages, in any mode. */}
+      <Sitemap
+        discovery={routes}
+        currentPath={currentPath}
+        onNavigate={navigateTo}
+        onOpenFile={openScreenFile}
+        onRetryScreenPreview={enableScreenPreview}
+        screenPreviewState={screenPreviewState}
+      />
+      {mode === "comment" ? (
+        <>
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+            <CommentsPanel
+              threads={comments.threads}
+              anchorRects={bridge.anchorRects}
+              activeId={comments.activeId}
+              me={{ login: comments.author.githubLogin, name: comments.author.name }}
+              onSelect={(t) => {
+                comments.setActiveId(t.id);
+                bridge.scrollToAnchor(t.anchor.fingerprint);
+              }}
+              onResolve={(id, resolved) => void resolveComment(id, resolved)}
+              onShare={() => void comments.share()}
+            />
+          </div>
+          <ChangesBar {...changesBarProps} />
+        </>
+      ) : (
+        <DesignPanel
+          selection={selection}
+          tree={bridge.tree}
+          hoveredId={bridge.hoveredId}
+          onSelectNode={onSelectNode}
+          onHoverNode={onHoverNode}
+          onFieldChange={onFieldChange}
+          onDelete={deleteSelected}
+          onVariantChange={onVariantChange}
+          pending={Object.values(pending)}
+          applying={applying}
+          applyStatus={applying ? (structuralMod.model.activity.at(-1)?.label ?? null) : null}
+          review={review}
+          onApply={() => void applyEdits()}
+          onDiscard={discardEdits}
+          onRemovePending={removePending}
+          onKeep={keepEdits}
+          onRevert={() => void revertEdits()}
+          colorTokens={colorTokens}
+          tokens={tokens}
+          onAssign={
+            onSendToChat && selection
+              ? () => {
+                  setAssignForced(selection.nodeId);
+                  setAssignDismissed((d) => (d === selection.nodeId ? null : d));
+                }
+              : undefined
+          }
+          owedScreenUpdates={owedScreenUpdates}
+          onSaveScreenUpdates={saveScreenUpdates}
+          onDismissScreenUpdate={dismissScreenUpdate}
+          move={moveBar}
+        />
+      )}
+    </>
+  );
+
   return (
     <div className={`flex w-full overflow-hidden bg-vs-bg-primary text-[13px] text-vs-text-primary ${hideRail ? "h-full min-h-0" : "h-[calc(100vh-3rem)]"}`}>
       {!hideRail && (
@@ -1571,82 +1646,35 @@ export function RunApp({
             </Centered>
           ) : canvasReady ? (
             // Run Canvas: Figma-style Design panel (left) + instrumented preview (right).
+            // When the IDE provides a left-dock slot, the panel is portaled there and the
+            // canvas fills the center; otherwise it renders inline in a resizable <aside>.
             <div className="relative flex h-full min-h-0">
-              <aside
-                style={{ width: panelW }}
-                className="flex flex-none flex-col overflow-hidden border-r border-vs-border-default bg-vs-bg-surface"
-              >
-                {/* Sitemap: navigate the preview to the app's pages, in any mode. */}
-                <Sitemap
-                  discovery={routes}
-                  currentPath={currentPath}
-                  onNavigate={navigateTo}
-                  onOpenFile={openScreenFile}
-                  onRetryScreenPreview={enableScreenPreview}
-                  screenPreviewState={screenPreviewState}
-                />
-                {mode === "comment" ? (
-                  <>
-                  <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-                  <CommentsPanel
-                    threads={comments.threads}
-                    anchorRects={bridge.anchorRects}
-                    activeId={comments.activeId}
-                    me={{ login: comments.author.githubLogin, name: comments.author.name }}
-                    onSelect={(t) => {
-                      comments.setActiveId(t.id);
-                      bridge.scrollToAnchor(t.anchor.fingerprint);
-                    }}
-                    onResolve={(id, resolved) => void resolveComment(id, resolved)}
-                    onShare={() => void comments.share()}
+              {/* `sidebarSlot === undefined` = no host dock (desktop) → inline resizable aside.
+                  Otherwise (IDE) always portal — render nothing until the slot element exists,
+                  never a transient inline copy, so the panel mounts once and stays stable. */}
+              {sidebarSlot !== undefined ? (
+                sidebarSlot &&
+                createPortal(
+                  <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-vs-bg-surface">{sidebarBody}</div>,
+                  sidebarSlot,
+                )
+              ) : (
+                <>
+                  <aside
+                    style={{ width: panelW }}
+                    className="flex flex-none flex-col overflow-hidden border-r border-vs-border-default bg-vs-bg-surface"
+                  >
+                    {sidebarBody}
+                  </aside>
+                  {/* Resize the Design panel (like the IDE Explorer rail). */}
+                  <div
+                    role="separator"
+                    aria-label="Resize Design panel"
+                    onPointerDown={startPanelResize}
+                    className="w-1 flex-none cursor-col-resize bg-vs-border-default/40 hover:bg-vs-accent"
                   />
-                  </div>
-                  {/* Un-saved canvas work stays visible + saveable even in comment mode. */}
-                  <ChangesBar {...changesBarProps} />
-                  </>
-                ) : (
-                <DesignPanel
-                  selection={selection}
-                  tree={bridge.tree}
-                  hoveredId={bridge.hoveredId}
-                  onSelectNode={onSelectNode}
-                  onHoverNode={onHoverNode}
-                  onFieldChange={onFieldChange}
-                  onDelete={deleteSelected}
-                  onVariantChange={onVariantChange}
-                  pending={Object.values(pending)}
-                  applying={applying}
-                  applyStatus={applying ? (structuralMod.model.activity.at(-1)?.label ?? null) : null}
-                  review={review}
-                  onApply={() => void applyEdits()}
-                  onDiscard={discardEdits}
-                  onRemovePending={removePending}
-                  onKeep={keepEdits}
-                  onRevert={() => void revertEdits()}
-                  colorTokens={colorTokens}
-                  tokens={tokens}
-                  onAssign={
-                    onSendToChat && selection
-                      ? () => {
-                          setAssignForced(selection.nodeId);
-                          setAssignDismissed((d) => (d === selection.nodeId ? null : d));
-                        }
-                      : undefined
-                  }
-                  owedScreenUpdates={owedScreenUpdates}
-                  onSaveScreenUpdates={saveScreenUpdates}
-                  onDismissScreenUpdate={dismissScreenUpdate}
-                  move={moveBar}
-                />
-                )}
-              </aside>
-              {/* Resize the Design panel (like the IDE Explorer rail). */}
-              <div
-                role="separator"
-                aria-label="Resize Design panel"
-                onPointerDown={startPanelResize}
-                className="w-1 flex-none cursor-col-resize bg-vs-border-default/40 hover:bg-vs-accent"
-              />
+                </>
+              )}
               <div className="relative min-w-0 flex-1">
                 {composeActive && (
                   <ComposePanel
