@@ -47,9 +47,18 @@ describe("verifyPrompt — honest gate (no false PASS without a live render)", (
     expect(token).toBeLessThan(code);
     // A component that compiles + uses tokens but doesn't match its reference still fails.
     expect(p).toMatch(/does NOT match its reference FAILS this layer/);
-    // Visual compares against the page-per-component Figma reference, via /visual-verify.
-    expect(p).toMatch(/Figma PAGE named after the component/);
+    // Verify resolves the component's Figma node itself (no manual links) and compares to it.
+    expect(p).toMatch(/RESOLVE each component's authoritative Figma reference YOURSELF — never ask me for a link/);
+    expect(p).toMatch(/figmaNodeId.*componentKey/);
+    expect(p).toMatch(/search_design_system/);
     expect(p).toMatch(/\/visual-verify/);
+  });
+
+  it("token layer flags hardcoded colors and checks the component's own semantic tokens", () => {
+    const p = verifyPrompt("alert", "http://localhost:6006", true);
+    expect(p).toMatch(/hardcoded hex\/rgb\/rgba\/px/);
+    expect(p).toMatch(/--component-<name>-\*/);
+    expect(p).toMatch(/is a TOKEN failure, even if it looks right/);
   });
 
   it("marks verified only on real evidence — no visual pass without a render-and-compare", () => {
@@ -59,23 +68,26 @@ describe("verifyPrompt — honest gate (no false PASS without a live render)", (
   });
 });
 
-describe("design-anchored build — reproduce the Figma page, not the name", () => {
-  it("buildOnePrompt anchors to the component's Figma page and forbids name-inference", () => {
+describe("design-anchored build — reproduce the Figma node, resolved autonomously", () => {
+  it("buildOnePrompt anchors to the component's Figma node and forbids name-inference", () => {
     const p = buildOnePrompt("alert");
-    expect(p).toMatch(/Figma PAGE named after it/);
-    expect(p).toMatch(/page-per-component/);
+    // Resolve the node itself: recorded figmaNodeId/componentKey, else search_design_system.
+    expect(p).toMatch(/never ask me for a Figma link/);
+    expect(p).toMatch(/figmaNodeId.*componentKey/);
+    expect(p).toMatch(/search_design_system/);
     expect(p).toMatch(/Do NOT infer the component's shape from its name/);
     expect(p).toMatch(/alert is\s+NOT a restyled button|NOT a restyled button/);
-    // Reference wins over the design-system index.
-    expect(p).toMatch(/takes precedence over the\s+design-system index/);
+    // Use the component's own semantic tokens; never hardcode.
+    expect(p).toMatch(/--component-<name>-\*/);
+    expect(p).toMatch(/do NOT hardcode a hex\/rgba/);
     // No reference → don't fabricate.
-    expect(p).toMatch(/do NOT fabricate a design from the name/);
+    expect(p).toMatch(/build nothing and report it unreferenced/);
   });
 
   it("buildChunkPrompt carries the design reference for its components", () => {
     const p = buildChunkPrompt(["alert", "badge"]);
-    expect(p).toMatch(/Figma PAGE named after it/);
-    expect(p).toMatch(/Use the extracted design tokens ONLY for VALUES/);
+    expect(p).toMatch(/authoritative reference for a component is its own Figma/);
+    expect(p).toMatch(/Use the extracted design tokens ONLY for/);
   });
 });
 
@@ -146,24 +158,13 @@ describe("chunkByLevel — group builds atoms → molecules → organisms", () =
   });
 });
 
-describe("tierForChunk — route by complexity, never opus/fable", () => {
-  it("routes atoms/molecules-only chunks to haiku", () => {
-    expect(tierForChunk([{ name: "Button", level: "atom" }])).toBe("haiku");
-    expect(
-      tierForChunk([
-        { name: "Button", level: "atom" },
-        { name: "Field", level: "molecule" },
-      ]),
-    ).toBe("haiku");
-  });
-
-  it("routes a chunk containing an organism to sonnet", () => {
-    expect(
-      tierForChunk([
-        { name: "Button", level: "atom" },
-        { name: "Modal", level: "organism" },
-      ]),
-    ).toBe("sonnet");
+describe("tierForChunk — builds run on the default (best) model, never downgraded", () => {
+  it("routes every chunk to opus (= the user's default model, no --model override)", () => {
+    // Downgrading builds to Haiku for cost is what broke fidelity; component creation now
+    // always uses the full-capability default model, at every level.
+    expect(tierForChunk([{ name: "Button", level: "atom" }])).toBe("opus");
+    expect(tierForChunk([{ name: "Alert", level: "molecule" }])).toBe("opus");
+    expect(tierForChunk([{ name: "Modal", level: "organism" }])).toBe("opus");
   });
 });
 
@@ -234,11 +235,24 @@ describe("detection — collapse variant sets + drop internal nodes", () => {
     expect(RESCAN_PROMPT).toMatch(/do NOT invent a page/);
   });
 
-  it("RESCAN_PROMPT prefers the remote OAuth Figma MCP (no Desktop Bridge, no token) and never fabricates", () => {
-    expect(RESCAN_PROMPT).toMatch(/PREFER the remote\/official Figma MCP/);
-    expect(RESCAN_PROMPT).toMatch(/mcp\.figma\.com/);
-    expect(RESCAN_PROMPT).toMatch(/NO local Desktop Bridge/);
+  it("RESCAN_PROMPT enumerates ALL pages via the Desktop Bridge and never trusts the 3-page cap", () => {
+    // Regression fix: 57fa76c8 steered detection to the remote MCP, whose page listing caps at 3,
+    // so a 14-page page-per-component library detected as ~8 doc/foundation entries. Detection must
+    // cover the WHOLE file — prefer the Desktop Bridge (sees every page), never the capped listing.
+    expect(RESCAN_PROMPT).toMatch(/ENUMERATE THE WHOLE FILE/);
+    expect(RESCAN_PROMPT).toMatch(/PREFER the Figma Desktop Bridge/);
+    expect(RESCAN_PROMPT).toMatch(/figma\.root\.children/);
+    expect(RESCAN_PROMPT).toMatch(/CAPS AT 3 PAGES/);
+    expect(RESCAN_PROMPT).toMatch(/first-3 listing as the file's page set/i);
     expect(RESCAN_PROMPT).toMatch(/VARIABLES \+ STYLES/);
-    expect(RESCAN_PROMPT).toMatch(/never fabricate a value/);
+    expect(RESCAN_PROMPT).toMatch(/NEVER fabricate a value/);
+  });
+
+  it("DESIGN_REFERENCE_CLAUSE resolves the node via id/key then search, not the capped page listing", () => {
+    const p = buildOnePrompt("alert");
+    expect(p).toMatch(/figmaNodeId.*componentKey/);
+    expect(p).toMatch(/search_design_system/);
+    expect(p).toMatch(/Desktop Bridge/);
+    expect(p).toMatch(/CAPS AT 3/);
   });
 });

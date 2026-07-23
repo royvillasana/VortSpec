@@ -3,7 +3,7 @@ import { mkdtemp, rm, mkdir, writeFile, readFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { ensureStylingPipeline, detectPackageManager, ensurePreviewImport } from "./styling-setup";
+import { ensureStylingPipeline, detectPackageManager, ensurePreviewImport, ensureStorybookAliases } from "./styling-setup";
 
 let root: string;
 
@@ -72,13 +72,30 @@ describe("ensureStylingPipeline", () => {
     expect(preview.indexOf("tailwind.css")).toBeLessThan(preview.indexOf("tokens.css"));
   });
 
-  it("surfaces a fix-it command when deps are missing and no package manager is detectable", async () => {
+  it("auto-installs deps (defaulting to npm) even with no lockfile", async () => {
     await scaffold("tailwind");
-    // Remove the deps from package.json and any node_modules so install is needed; no lockfile present.
     await writeFile(join(root, "package.json"), JSON.stringify({ name: "t" }));
-    const r = await ensureStylingPipeline(root);
+    const calls: { pm: string; pkgs: string[] }[] = [];
+    const r = await ensureStylingPipeline(root, {
+      install: async (pm, pkgs) => {
+        calls.push({ pm, pkgs });
+        return true;
+      },
+    });
+    // No lockfile → defaults to npm and actually attempts the install (does not skip).
+    expect(calls).toHaveLength(1);
+    expect(calls[0].pm).toBe("npm");
+    expect(calls[0].pkgs).toEqual(["tailwindcss", "postcss", "autoprefixer"]);
+    expect(r.depsInstalled).toBe(true);
+    expect(r.depsFixIt).toBeUndefined();
+  });
+
+  it("surfaces a fix-it command only when the install actually fails", async () => {
+    await scaffold("tailwind");
+    await writeFile(join(root, "package.json"), JSON.stringify({ name: "t" }));
+    const r = await ensureStylingPipeline(root, { install: async () => false });
     expect(r.depsInstalled).toBe(false);
-    expect(r.depsFixIt).toMatch(/postcss.*autoprefixer|autoprefixer/);
+    expect(r.depsFixIt).toMatch(/npm install -D tailwindcss postcss autoprefixer/);
   });
 });
 
@@ -89,6 +106,49 @@ describe("detectPackageManager", () => {
   });
   it("returns null with no lockfile", () => {
     expect(detectPackageManager(root)).toBeNull();
+  });
+});
+
+describe("ensureStorybookAliases — mirror tsconfig `@/*` into Storybook's Vite config", () => {
+  async function sb(mainContent: string, tsPaths = '{ "@/*": ["./src/*"] }') {
+    await mkdir(join(root, ".storybook"), { recursive: true });
+    await writeFile(join(root, ".storybook", "main.ts"), mainContent);
+    await writeFile(join(root, "tsconfig.json"), `{ "compilerOptions": { "paths": ${tsPaths} } }`);
+  }
+  const plainMain = `import type { StorybookConfig } from '@storybook/react-vite';\nconst config: StorybookConfig = { framework: '@storybook/react-vite' };\nexport default config;\n`;
+
+  it("injects a viteFinal that aliases @ to src when it's missing", async () => {
+    await sb(plainMain);
+    const r = await ensureStorybookAliases(root);
+    expect(r.created).toContain(".storybook/main.ts (vite alias)");
+    const main = await readFile(join(root, ".storybook", "main.ts"), "utf8");
+    expect(main).toMatch(/config\.viteFinal = async/);
+    expect(main).toMatch(/"@": fileURLToPath\(new URL\("\.\.\/src", import\.meta\.url\)\)/);
+    expect(main).toMatch(/import \{ fileURLToPath \} from "node:url"/);
+  });
+
+  it("is idempotent — leaves an already-wired config alone", async () => {
+    await sb(plainMain);
+    await ensureStorybookAliases(root);
+    const r2 = await ensureStorybookAliases(root);
+    expect(r2.created).toHaveLength(0);
+    expect(r2.preExisting).toContain(".storybook/main.ts (vite alias)");
+  });
+
+  it("does nothing when tsconfig has no path aliases", async () => {
+    await mkdir(join(root, ".storybook"), { recursive: true });
+    await writeFile(join(root, ".storybook", "main.ts"), plainMain);
+    await writeFile(join(root, "tsconfig.json"), `{ "compilerOptions": {} }`);
+    const r = await ensureStorybookAliases(root);
+    expect(r.created).toHaveLength(0);
+  });
+
+  it("does not corrupt an unusual config shape it can't safely edit", async () => {
+    await sb(`export default { framework: '@storybook/react-vite' };\n`); // anonymous default
+    const r = await ensureStorybookAliases(root);
+    expect(r.created).toHaveLength(0);
+    const main = await readFile(join(root, ".storybook", "main.ts"), "utf8");
+    expect(main).not.toMatch(/viteFinal/);
   });
 });
 

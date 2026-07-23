@@ -232,23 +232,6 @@ test("shows full-color, distinct file-type icons", async ({ mount }) => {
   await expect(folder.locator('[data-icon="folder-open"]')).toHaveCount(1);
 });
 
-test("editor tracks its container both directions when the assistant toggles", async ({ mount }) => {
-  const c = await mount(<App />, { hooksConfig: { mock: base } });
-  await open(c);
-  await c.getByRole("button", { name: "README.md" }).click();
-  // Markdown opens in the stylized preview by default — switch to Source for the editor.
-  await c.getByRole("button", { name: "Source", exact: true }).click();
-  const host = c.getByTestId("code-editor");
-  await expect(host).toBeVisible();
-  const width = async (): Promise<number> => (await host.boundingBox())!.width;
-  const toggle = c.getByRole("navigation", { name: "Activity bar" }).getByRole("button", { name: "Toggle assistant" });
-
-  const w0 = await width();
-  // Close the assistant → the editor's container grows → Monaco re-lays out wider.
-  await toggle.click();
-  await expect.poll(width).toBeGreaterThan(w0);
-  const w1 = await width();
-  // Reopen it → the editor shrinks back (the bug was: it didn't re-layout on grow).
-  await toggle.click();
-  await expect.poll(width).toBeLessThan(w1);
-});
+// (Removed: "editor tracks its container when the assistant toggles" — the assistant is no
+// longer a separate right sidebar that resizes the editor; it lives in the left dock's Chat
+// tab. Editor-relayout-on-region-resize is still covered by the dock/panel resize paths.)

@@ -44,6 +44,8 @@ export interface VortSpecApi {
   createFolder(): Promise<IpcResponse<"workspace:createFolder">>;
   pickFile(filters?: { name: string; extensions: string[] }[]): Promise<IpcResponse<"workspace:pickFile">>;
   listProjects(): Promise<IpcResponse<"workspace:listProjects">>;
+  /** Mark a project as just-opened so it leads the recency-ordered recent list. */
+  touchProject(path: string): Promise<IpcResponse<"workspace:touchProject">>;
   /** Forget a project from the recent-workspaces list (never deletes the folder). */
   removeProject(id: string): Promise<IpcResponse<"workspace:removeProject">>;
   openFolder(path: string): Promise<IpcResponse<"workspace:openFolder">>;
@@ -56,6 +58,8 @@ export interface VortSpecApi {
 
   toolkitStatus(path: string): Promise<IpcResponse<"toolkit:status">>;
   installToolkit(path: string): Promise<IpcResponse<"toolkit:install">>;
+  /** Re-sync an existing project's SDD-DE toolkit to the bundled version (no CLI/TTY). */
+  resyncToolkit(path: string): Promise<IpcResponse<"toolkit:resync">>;
 
   // agent runs
   startRun(opts: AgentRunOptions): Promise<IpcResponse<"agent:startRun">>;

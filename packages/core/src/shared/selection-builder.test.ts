@@ -33,6 +33,7 @@ function readout(over: Partial<NodeReadout> = {}): NodeReadout {
     dataComponent: over.dataComponent ?? "button",
     componentCandidates: over.componentCandidates ?? [],
     parentFlow: over.parentFlow ?? "block",
+    parentSize: over.parentSize ?? null,
     className: over.className ?? "btn",
     children: over.children ?? [],
     text: over.text,
@@ -83,6 +84,25 @@ describe("buildSelection", () => {
     const w = sel.sections.find((s) => s.id === "size")!.fields.find((f) => f.key === "width")!;
     expect(w.mode).toBe("fill");
     expect(w.value).toBe("Fill");
+  });
+
+  it("exposes a Spacing (gap-mode) control for a flex container, next to Align", () => {
+    const sel = buildSelection(readout({ computed: { display: "flex", "flex-direction": "row" } }), { tag: "ul" });
+    const layout = sel.sections.find((s) => s.id === "layout")!;
+    const spacing = layout.fields.find((f) => f.key === "gap-mode");
+    expect(spacing).toBeDefined();
+    expect(spacing!.kind).toBe("segment");
+    expect(spacing!.value).toBe("packed");
+    // Reads Distribute when the container is already space-between.
+    const sel2 = buildSelection(
+      readout({ computed: { display: "flex", "justify-content": "space-between" } }),
+      { tag: "ul" },
+    );
+    const spacing2 = sel2.sections.find((s) => s.id === "layout")!.fields.find((f) => f.key === "gap-mode")!;
+    expect(spacing2.value).toBe("distribute");
+    // A non-flex container gets no Spacing control.
+    const selBlock = buildSelection(readout({ computed: { display: "block" } }), { tag: "div" });
+    expect(selBlock.sections.find((s) => s.id === "layout")?.fields.find((f) => f.key === "gap-mode")).toBeUndefined();
   });
 
   it("makes margins token-bindable to the spacing scale (Phase 5)", () => {

@@ -330,6 +330,7 @@ export const ipcContract = {
     response: z.string().nullable(),
   },
   "workspace:listProjects": { request: z.void(), response: projectListSchema },
+  "workspace:touchProject": { request: z.string(), response: z.void() },
   "workspace:removeProject": { request: z.string(), response: projectListSchema },
   "workspace:openFolder": { request: z.string(), response: z.void() },
   "workspace:revealPath": {
@@ -444,6 +445,7 @@ export const ipcContract = {
 
   "toolkit:status": { request: z.string(), response: toolkitStatusSchema },
   "toolkit:install": { request: z.string(), response: toolkitStatusSchema },
+  "toolkit:resync": { request: z.string(), response: projectSchema },
 
   "agent:startRun": {
     request: agentRunOptionsSchema,

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { JSX } from "react";
 import type { RunLimit } from "@vortspec/core/ipc";
 
@@ -37,7 +37,16 @@ export function RunLimitNotice({
     return () => clearInterval(t);
   }, []);
 
-  const resetAt = limit.resetsAt ?? parseResetEpoch(limit.resetLabel, now);
+  // FREEZE the reset moment when the notice first mounts (≈ when the run paused). The label
+  // is a bare time-of-day; re-parsing it against the TICKING `now` rolls a JUST-passed reset
+  // forward to tomorrow — e.g. "1:30am" re-parsed at 1:31am became tomorrow's 1:30am, a
+  // phantom ~24h countdown that never hits zero, so auto-resume never fired. Parse ONCE
+  // against the mount time so the countdown ends when the reset actually passes.
+  const anchor = useRef(Date.now());
+  const resetAt = useMemo(
+    () => limit.resetsAt ?? parseResetEpoch(limit.resetLabel, anchor.current),
+    [limit.resetsAt, limit.resetLabel],
+  );
   const remaining = resetAt != null ? resetAt - now : null;
   const cleared = remaining != null && remaining <= 0;
 

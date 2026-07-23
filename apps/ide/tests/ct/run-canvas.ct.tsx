@@ -2,6 +2,7 @@ import { test, expect } from "@playwright/experimental-ct-react";
 import App from "../../src/renderer/src/App";
 import { DesignPanel } from "@vortspec/ui/DesignPanel";
 import { CanvasToolbar } from "@vortspec/ui/CanvasToolbar";
+import { DEFAULT_VIEWPORTS } from "@vortspec/ui/viewports";
 import { AssignDialog } from "@vortspec/ui/AssignDialog";
 import type { Project, Selection, InspectorToken, InspectorComponent, FsEntry } from "@vortspec/core/ipc";
 
@@ -35,6 +36,40 @@ async function openRun(c: import("@playwright/test").Locator): Promise<void> {
   await c.getByRole("button", { name: /acme-design-system/ }).click();
   await rail(c).getByRole("button", { name: "Playground" }).click();
 }
+
+test("Storybook shows its native sidebar (cropped) in the dock, previewing the story", async ({ mount }) => {
+  const mock = {
+    ...base,
+    devStatus: { state: "running", url: "http://localhost:6006", script: "storybook", message: null },
+    storybookStatus: { installed: true, hasConfig: true, hasScript: true, storyCount: 3, components: 2, missingStories: 0 },
+    storybookIndex: [
+      { id: "components-button--primary", title: "Components/Button", name: "Primary", type: "story" as const },
+      { id: "components-button--secondary", title: "Components/Button", name: "Secondary", type: "story" as const },
+      { id: "components-card--default", title: "Components/Card", name: "Default", type: "story" as const },
+    ],
+  };
+  const c = await mount(<App />, { hooksConfig: { mock } });
+  await c.getByRole("button", { name: /acme-design-system/ }).click();
+  await rail(c).getByRole("button", { name: "Storybook" }).click();
+  const dock = c.getByRole("complementary");
+  // The dock's Stories tab hosts the REAL Storybook sidebar, not a hand-rolled list:
+  // the native manager is embedded (cropped to its sidebar) and drives the canvas.
+  await expect(dock.getByRole("button", { name: "Stories", exact: true })).toBeVisible();
+  await expect(dock.locator("webview")).toHaveAttribute("src", "http://localhost:6006/");
+  // The canvas previews the seeded first story (story-only — the in-iframe manager is off).
+  await expect(c.locator("iframe")).toHaveAttribute("src", /iframe\.html\?id=components-button--primary/);
+});
+
+test("the Playground shows the unified left dock (Design + Chat tabs), never zero-width", async ({ mount }) => {
+  const c = await mount(<App />, { hooksConfig: { mock: base } });
+  await openRun(c);
+  // Regression: the dock's width was gated on isSidebarView, so outside Explorer it computed
+  // to 0 and the whole dock vanished. It must be present with both tabs in the Playground.
+  const dock = c.getByRole("complementary");
+  await expect(dock).toBeVisible();
+  await expect(dock.getByRole("button", { name: "Design", exact: true })).toBeVisible();
+  await expect(dock.getByRole("button", { name: "Chat", exact: true })).toBeVisible();
+});
 
 test("the Run activity shows the Figma-style Design panel beside the canvas", async ({ mount }) => {
   const c = await mount(<App />, { hooksConfig: { mock: base } });
@@ -72,21 +107,21 @@ test("the canvas toolbar carries the modes and zoom, bottom-center over the canv
   await expect(bar.getByRole("button", { name: "Comment" })).toBeVisible();
   await expect(bar.getByRole("button", { name: "Insert" })).toBeVisible();
   await expect(c.getByRole("button", { name: "Pan" })).toHaveCount(0); // never existed
-  await expect(bar.getByRole("button", { name: "100%" })).toBeVisible();
+  // Zoom was replaced by the viewport selector — Desktop is the default.
+  await expect(bar.getByRole("button", { name: /Desktop/ })).toBeVisible();
   // The Design panel is still a resizable sidebar (like the Explorer rail).
-  await expect(c.getByRole("separator", { name: "Resize Design panel" })).toBeVisible();
+  await expect(c.getByRole("separator", { name: "Resize sidebar" })).toBeVisible();
 });
 
-test("the mode and zoom controls exist exactly once, and survive collapsing Layers", async ({ mount }) => {
+test("the mode and viewport controls exist exactly once on the canvas toolbar", async ({ mount }) => {
   const c = await mount(<App />, { hooksConfig: { mock: base } });
   await openRun(c);
-  // The Comments panel used to re-implement this toggle; the Design panel used to
-  // own it. Exactly one implementation now, wherever we are.
-  await expect(c.getByRole("button", { name: "Inspect" })).toHaveCount(1);
-  await expect(c.getByRole("button", { name: "100%" })).toHaveCount(1);
-  // Zoom used to live in the Layers footer and vanish with it.
-  await c.getByRole("button", { name: /Layers/ }).click();
-  await expect(c.getByTestId("canvas-toolbar").getByRole("button", { name: "100%" })).toBeVisible();
+  // The Design panel (now in the left dock) and the Comments panel each used to re-implement
+  // these; they live only on the canvas toolbar now — exactly one of each, independent of the
+  // dock's Section/Chat tabs.
+  const bar = c.getByTestId("canvas-toolbar");
+  await expect(bar.getByRole("button", { name: "Inspect" })).toHaveCount(1);
+  await expect(bar.getByRole("button", { name: /Desktop/ })).toHaveCount(1);
   await expect(c.getByRole("button", { name: "Inspect" })).toHaveCount(1);
 });
 
@@ -118,9 +153,10 @@ test("a bridge that is still connecting does not disable anything", async ({ mou
 const barProps = {
   mode: "interact" as const,
   onModeChange: () => {},
-  zoom: 1,
-  onZoomBy: () => {},
-  onZoomReset: () => {},
+  viewport: DEFAULT_VIEWPORTS.desktop,
+  frame: "none" as const,
+  onViewportChange: () => {},
+  onFrameChange: () => {},
 };
 
 test("a failed bridge disables the modes that need it, but never Interact", async ({ mount }) => {

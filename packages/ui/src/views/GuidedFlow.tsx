@@ -362,12 +362,14 @@ export function GuidedFlow({
 
   async function verify(target: string, label: string): Promise<void> {
     const url = await ensureHarness();
-    // Verify is structured checking (visual-verify + adversarial review), not generative
-    // work — route it to the cheapest tier. When no live preview came up (url is null) the
-    // prompt reports BLOCKED rather than a false PASS (it can only do a source-level audit),
-    // and we say so up front so it's clear the pass depends on a running preview.
+    // Verify RENDERS each component, compares it to its Figma node, and FIXES the
+    // discrepancies inline — generative work that needs the full model. Haiku/Sonnet
+    // downgrades were the cost-optimization that let a broken molecule stay broken after
+    // "verifying" (the "I verified and they look the same" failure). Run it on the default
+    // (best) model, like the creation build. When no live preview came up (url is null)
+    // the prompt reports BLOCKED rather than a false PASS.
     const runLabel = url ? label : `${label} — source-only (start the preview for a full verify)`;
-    await op(runLabel, verifyPrompt(target, url, config?.designSource === "figma"), { kind: "verify", model: "haiku" });
+    await op(runLabel, verifyPrompt(target, url, config?.designSource === "figma"), { kind: "verify", model: "opus" });
   }
 
   /**
@@ -422,8 +424,17 @@ export function GuidedFlow({
   async function runNextChunk(): Promise<void> {
     const q = chunkQueueRef.current;
     if (!q || cancelChunksRef.current || q.index >= q.chunks.length) {
+      const finished = !!q && !cancelChunksRef.current && q.index >= q.chunks.length;
+      const alreadyVerified = q?.verify ?? false;
       chunkQueueRef.current = null;
       setChunksActive(false);
+      // Automatic styling validation once the components + Storybook are created: if the
+      // build didn't already verify per-chunk, run the visual → token → code pass now so
+      // every component is compared to its Figma node (figmaNodeId) and styling mismatches
+      // are flagged and fixed — not left for the user to notice in Storybook.
+      if (finished && !alreadyVerified) {
+        await verify("all", "Validating styling against Figma");
+      }
       return;
     }
     const chunk = q.chunks[q.index]!;

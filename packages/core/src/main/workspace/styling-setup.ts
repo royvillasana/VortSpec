@@ -69,11 +69,27 @@ async function hasDeps(projectPath: string, pkgs: string[]): Promise<boolean> {
 
 function runInstall(projectPath: string, pm: "pnpm" | "yarn" | "npm", pkgs: string[]): Promise<boolean> {
   return new Promise((resolve) => {
-    const child = spawn(pm, addArgs(pm, pkgs), { cwd: projectPath, shell: false });
-    const timer = setTimeout(() => {
-      child.kill();
+    let child;
+    try {
+      // Inherit the parent env so the package-manager binary resolves on PATH (the
+      // GUI process's PATH), matching how the Storybook installer spawns.
+      child = spawn(pm, addArgs(pm, pkgs), {
+        cwd: projectPath,
+        shell: false,
+        env: { ...process.env, CI: "1", NO_COLOR: "1" },
+      });
+    } catch {
       resolve(false);
-    }, 180_000);
+      return;
+    }
+    const timer = setTimeout(() => {
+      try {
+        child.kill("SIGKILL");
+      } catch {
+        /* already gone */
+      }
+      resolve(false);
+    }, 300_000);
     child.on("error", () => {
       clearTimeout(timer);
       resolve(false);
@@ -85,14 +101,31 @@ function runInstall(projectPath: string, pm: "pnpm" | "yarn" | "npm", pkgs: stri
   });
 }
 
+export interface StylingPipelineOptions {
+  /** Override the dependency installer (tests inject a stub to avoid a real install). */
+  install?: (pm: "pnpm" | "yarn" | "npm", pkgs: string[]) => Promise<boolean>;
+}
+
 /**
  * Ensure the styling pipeline exists for a `styling: tailwind` project. Best-effort;
  * never throws. Returns what it created, what already existed, and whether the required
  * build deps are in place (with a fix-it command when they could not be installed).
  */
-export async function ensureStylingPipeline(projectPath: string): Promise<StylingPipelineResult> {
+export async function ensureStylingPipeline(
+  projectPath: string,
+  opts: StylingPipelineOptions = {},
+): Promise<StylingPipelineResult> {
   const created: string[] = [];
   const preExisting: string[] = [];
+
+  // Mirror tsconfig path aliases into Storybook's Vite config — needed for ANY project
+  // whose components import via `@/…`, regardless of styling. Vite does not read tsconfig
+  // paths, so without this `@/lib/utils` fails to resolve in the Storybook build even though
+  // tsc passes. Runs before the tailwind check so non-tailwind projects are covered too.
+  const alias = await ensureStorybookAliases(projectPath);
+  created.push(...alias.created);
+  preExisting.push(...alias.preExisting);
+
   const config = await readProjectConfig(projectPath);
   if (!config || config.styling !== "tailwind") {
     return { applicable: false, created, preExisting, depsInstalled: false };
@@ -149,14 +182,18 @@ export async function ensureStylingPipeline(projectPath: string): Promise<Stylin
     );
   }
 
-  // 5. postcss/autoprefixer deps.
+  // 5. tailwindcss/postcss/autoprefixer deps. Attempt the install automatically — a
+  // fresh project has no lockfile yet, so default to npm rather than skipping (the bug
+  // that surfaced the fix-it even though Tailwind was selected). Only fall back to a
+  // fix-it card when the install actually fails.
   const deps = ["tailwindcss", "postcss", "autoprefixer"];
   let depsInstalled = await hasDeps(projectPath, deps);
   let depsFixIt: string | undefined;
   if (!depsInstalled) {
-    const pm = detectPackageManager(projectPath);
-    if (pm) depsInstalled = await runInstall(projectPath, pm, deps);
-    if (!depsInstalled) depsFixIt = `${pm ?? "npm"} ${addArgs(pm ?? "npm", deps).join(" ")}`;
+    const pm = detectPackageManager(projectPath) ?? "npm";
+    const install = opts.install ?? ((p, pkgs) => runInstall(projectPath, p, pkgs));
+    depsInstalled = await install(pm, deps);
+    if (!depsInstalled) depsFixIt = `${pm} ${addArgs(pm, deps).join(" ")}`;
   }
 
   return { applicable: true, created, preExisting, depsInstalled, depsFixIt };
@@ -207,4 +244,95 @@ function insertAfterLastTopImport(src: string, line: string): string {
   if (lastImport < 0) return line + src;
   lines.splice(lastImport + 1, 0, line.trimEnd());
   return lines.join("\n");
+}
+
+const TSCONFIG_NAMES = ["tsconfig.json", "tsconfig.app.json", "tsconfig.base.json"];
+const MAIN_NAMES = [".storybook/main.ts", ".storybook/main.js", ".storybook/main.mjs"];
+
+/** Strip // and /* *​/ comments so a JSONC tsconfig can be JSON.parsed. */
+function stripJsonComments(s: string): string {
+  return s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
+}
+
+/**
+ * Read `compilerOptions.paths` bare-alias → source dir from the project's tsconfig, e.g.
+ * `{ "@/*": ["./src/*"] }` → `{ "@": "src" }`. Only single-target `<alias>/*` → `<dir>/*`
+ * mappings are handled (the common case); anything else is skipped.
+ */
+async function readTsconfigAliases(projectPath: string): Promise<Record<string, string>> {
+  const file = first(projectPath, TSCONFIG_NAMES);
+  if (!file) return {};
+  let json: unknown;
+  try {
+    json = JSON.parse(stripJsonComments(await readFile(join(projectPath, file), "utf8")));
+  } catch {
+    return {};
+  }
+  const paths = (json as { compilerOptions?: { paths?: Record<string, string[]> } })?.compilerOptions
+    ?.paths;
+  if (!paths) return {};
+  const out: Record<string, string> = {};
+  for (const [key, targets] of Object.entries(paths)) {
+    if (!key.endsWith("/*") || !Array.isArray(targets) || !targets[0]?.endsWith("/*")) continue;
+    const aliasKey = key.slice(0, -2); // "@/*" → "@"
+    const dir = targets[0].slice(0, -2).replace(/^\.\//, ""); // "./src/*" → "src"
+    out[aliasKey] = dir;
+  }
+  return out;
+}
+
+/**
+ * Ensure Storybook's Vite build resolves the project's tsconfig path aliases (change:
+ * storybook-alias-resolution). Vite does not read tsconfig paths, so a component that
+ * imports `@/lib/utils` compiles under tsc but fails the Storybook build with "Failed to
+ * resolve import". This mirrors each `@/*` alias into `.storybook/main`'s `viteFinal`.
+ * Idempotent and conservative: only injects when the alias isn't already wired and the
+ * file has a `const … ; export default …;` shape it can safely append to.
+ */
+export async function ensureStorybookAliases(
+  projectPath: string,
+): Promise<{ created: string[]; preExisting: string[] }> {
+  const created: string[] = [];
+  const preExisting: string[] = [];
+  const aliases = await readTsconfigAliases(projectPath);
+  if (Object.keys(aliases).length === 0) return { created, preExisting };
+
+  const mainRel = first(projectPath, MAIN_NAMES);
+  if (!mainRel) return { created, preExisting }; // no Storybook config yet — nothing to wire
+
+  const mainPath = join(projectPath, mainRel);
+  let src: string;
+  try {
+    src = await readFile(mainPath, "utf8");
+  } catch {
+    return { created, preExisting };
+  }
+
+  // Already wired (a viteFinal that sets resolve.alias) → leave it.
+  if (/resolve\.alias/.test(src) || /viteFinal/.test(src)) {
+    preExisting.push(`${mainRel} (vite alias)`);
+    return { created, preExisting };
+  }
+
+  // Only safe to append when there's a named default export to attach viteFinal to.
+  const exp = src.match(/export\s+default\s+([A-Za-z0-9_]+)\s*;/);
+  if (!exp) return { created, preExisting }; // unusual shape — don't risk corrupting it
+
+  const name = exp[1];
+  const aliasEntries = Object.entries(aliases)
+    .map(([k, dir]) => `    ${JSON.stringify(k)}: fileURLToPath(new URL(${JSON.stringify(`../${dir}`)}, import.meta.url)),`)
+    .join("\n");
+  let next = src;
+  if (!/from ['"]node:url['"]/.test(next)) {
+    next = insertAfterLastTopImport(next, `import { fileURLToPath } from "node:url";`);
+  }
+  const block =
+    `${name}.viteFinal = async (viteConfig) => {\n` +
+    `  viteConfig.resolve = viteConfig.resolve ?? {};\n` +
+    `  viteConfig.resolve.alias = {\n    ...viteConfig.resolve.alias,\n${aliasEntries}\n  };\n` +
+    `  return viteConfig;\n};\n`;
+  next = next.replace(exp[0], `${block}${exp[0]}`);
+  await writeFile(mainPath, next, "utf8").catch(() => undefined);
+  created.push(`${mainRel} (vite alias)`);
+  return { created, preExisting };
 }

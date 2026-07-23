@@ -58,20 +58,51 @@ export const stageStateSchema = z.object({
 export type StageState = z.infer<typeof stageStateSchema>;
 
 /** A component detected in the design source, written to `.sdd-de/components.json`. */
-export const detectedComponentSchema = z.object({
-  name: z.string(),
-  level: z.enum(["atom", "molecule", "organism"]).optional(),
-  description: z.string().optional(),
-  /**
-   * Variant axis names for a COMPONENT_SET / variant family — e.g.
-   * ["type", "size"] or ["orientation", "control"]. Detection collapses a whole
-   * variant set into ONE entry carrying its axes here, instead of emitting one
-   * entry per variant (which explodes a `form-item` set into 40 rows).
-   */
-  variants: z.array(z.string()).optional(),
-});
+export const detectedComponentSchema = z
+  .object({
+    name: z.string(),
+    // Loosened from a strict enum: an unexpected level (e.g. "typography", "Atom") must
+    // NOT fail the entry — `levelRank` already treats unknowns as last. A strict enum here
+    // meant one odd row nuked the ENTIRE roster (0 components detected).
+    level: z.string().optional(),
+    description: z.string().optional(),
+    /**
+     * Variant axis names for a COMPONENT_SET / variant family — e.g. ["type", "size"].
+     * `.catch(undefined)` so a malformed `variants` degrades the field, never the entry.
+     */
+    variants: z.array(z.string()).optional().catch(undefined),
+    /**
+     * The component's authoritative Figma reference, recorded at detection so build and
+     * verify can fetch its design without asking the user for a link. `figmaNodeId`/`nodeId`
+     * is the component set's node id; `componentKey` its durable library key.
+     */
+    figmaNodeId: z.string().optional(),
+    nodeId: z.string().optional(),
+    componentKey: z.string().optional(),
+  })
+  // Keep extra fields the agent writes (figmaCategory, status, …) instead of stripping them.
+  .passthrough();
 export type DetectedComponent = z.infer<typeof detectedComponentSchema>;
-export const detectedComponentsSchema = z.array(detectedComponentSchema);
+
+/**
+ * Parse `.sdd-de/components.json` ROBUSTLY — a scan that actually found components must
+ * never render as "0 detected" because of a format quirk. It:
+ *   1. Unwraps the component list whether the agent wrote a flat array OR a metadata
+ *      wrapper `{ complete, totals, notes, components: [...] }`.
+ *   2. Keeps every object that has a string `name`, dropping only genuinely junk entries —
+ *      one malformed row can't blank the whole roster.
+ */
+export const detectedComponentsSchema = z.preprocess((v) => {
+  const arr = Array.isArray(v)
+    ? v
+    : v && typeof v === "object" && Array.isArray((v as { components?: unknown }).components)
+      ? (v as { components: unknown[] }).components
+      : [];
+  return (arr as unknown[]).filter(
+    (e): e is Record<string, unknown> =>
+      !!e && typeof e === "object" && typeof (e as { name?: unknown }).name === "string",
+  );
+}, z.array(detectedComponentSchema));
 
 export const COMPONENTS_MANIFEST = ".sdd-de/components.json";
 
@@ -138,23 +169,48 @@ export const DEFAULT_FLOW: StageDef[] = [
       "Read .sdd-de/project.yaml for `design_source` and the project configuration " +
       "(framework, language, token_file, component_dir). Connect to the configured source — do NOT " +
       "ask for a brief; the design source is the input.\n\n" +
-      "For `design_source: figma`, PREFER the remote/official Figma MCP (the OAuth-based " +
-      "`mcp.figma.com` server — file-level reads that need NO Figma Desktop app, NO local Desktop Bridge " +
-      "plugin, and NO live layer selection) over any local bridge. Read the file at `figma_file_url`: use " +
-      "its metadata for structure, and read the FULL variable collection (`figma_token_collection`) AND the " +
-      "text/color STYLES from the file link. Explicitly fetch VARIABLES + STYLES — not code generation. If a " +
-      "variable read needs a node scope, iterate the design system's foundation/component nodes and aggregate. " +
-      "Do NOT depend on the figma-console Desktop Bridge or a personal access token. Extract the COMPLETE " +
-      "token set and NEVER guess or approximate a value — if a value truly can't be read, OMIT it and note it, " +
-      "never fabricate a value.\n\n" +
+      "For `design_source: figma`, first note the CONFIGURED file key from `figma_file_url` " +
+      "(`https://figma.com/design/<FILE_KEY>/…`). Everything you extract MUST come from THAT file and no " +
+      "other. ENUMERATE THE WHOLE FILE — every page and every component set, not a subset. PREFER the Figma " +
+      "Desktop Bridge (the figma-console plugin): it lists ALL pages via `figma.root.children` and gives a " +
+      "complete component + variable dump on any Figma plan. **BUT the Desktop Bridge reads whatever file is " +
+      "currently OPEN in Figma Desktop** — before extracting, CONFIRM the open file's key matches the " +
+      "configured `<FILE_KEY>` (check `figma.root` / the file url). If a DIFFERENT file is open, do NOT " +
+      "extract from it — that is how a scan silently reads the wrong design system; instead use the remote " +
+      "Figma MCP, which reads the configured file BY KEY (paginate past its 3-page listing cap via the " +
+      "design-system search below), or stop and tell the user to open the configured file in Figma Desktop. " +
+      "`figma_get_design_system_summary` + `figma_search_components` enumerate the FULL component set. " +
+      "CRITICAL: do NOT use the file's page listing / `get_metadata` as the component inventory — the remote " +
+      "Figma MCP's page listing CAPS AT 3 PAGES, so a 14-page page-per-component library would wrongly detect " +
+      "as ~8 documentation/foundation entries (icon/text/paragraph/callout/table/header) and MISS the real " +
+      "components (Alerts, Buttons, Card, Carousel, Dropdowns, Navbar, Tooltips, Input, Form). If the Desktop " +
+      "Bridge is unavailable, still cover EVERY component: use the remote MCP's `search_design_system` scoped " +
+      "to THIS file's own library (from `figma_file_url`) to enumerate all component sets — never stop at the " +
+      "capped page listing. Read the FULL variable collection (`figma_token_collection`) AND the text/color " +
+      "STYLES. Fetch VARIABLES + STYLES (not code generation). Extract the COMPLETE token set and NEVER guess " +
+      "or approximate a value — if a value truly can't be read, OMIT it and note it, never fabricate a value.\n\n" +
       "For `design_source: github` (a repository imported into this project), the repo's own files ARE " +
       "the source: scan them for the design system — read its existing token definitions (CSS variables, " +
       "Tailwind/theme config, SCSS/JS token files) and its component library, and reconcile them into the " +
       "configured `token_file` and inventory. Do not fetch anything remotely; read the files on disk.\n\n" +
       "1. Extract every design token and variable from the source into the configured `token_file`.\n" +
+      "   For `styling: tailwind`, ALSO author a CURATED, SEMANTIC `tailwind.config.js` `theme.extend` that " +
+      "maps IDIOMATIC Tailwind scale names to those tokens — colors `primary/secondary/success/danger/warning/" +
+      "info` + `neutral.{100,300,600,900,muted}` + `text.{DEFAULT,muted}` + brand ramps; the `spacing` scale; " +
+      "`borderRadius` (sm/DEFAULT/md/lg); `boxShadow` (DEFAULT/md); `borderWidth` (1); `fontFamily` (base/sans/" +
+      "mono); `fontSize` (body/h1…, each with its lineHeight); `opacity.disabled` — so components use CLEAN " +
+      "classes like `bg-primary text-danger border-1 border-neutral-300 rounded shadow-md p-3 text-body`, NEVER " +
+      "a raw `bg-[var(--…)]` dump and NEVER Tailwind's hardcoded defaults. This semantic theme is the single " +
+      "biggest driver of component fidelity.\n" +
       "2. Detect the design system's PUBLIC components and write `.sdd-de/components.json` — a JSON " +
       "array of objects `{ \"name\": string, \"level\": \"atom\"|\"molecule\"|\"organism\", " +
-      "\"description\": string, \"variants\"?: string[] }`, ordered tokens → atoms → molecules → organisms.\n\n" +
+      "\"description\": string, \"variants\"?: string[], \"figmaNodeId\"?: string, \"componentKey\"?: string }`, " +
+      "ordered tokens → atoms → molecules → organisms.\n\n" +
+      "   RECORD THE FIGMA REFERENCE on every entry (this is required — build and verify look it up to fetch " +
+      "the authoritative design and validate against it, without asking the user): set `figmaNodeId` to the " +
+      "component set's node id and, when available, `componentKey` to its durable library key. You already have " +
+      "these from the enumeration (Desktop Bridge `figma.root.children`, or `search_design_system` scoped to " +
+      "this file's own library, or the node you read). Never leave a component without at least a `figmaNodeId`.\n\n" +
       "   COLLAPSE VARIANTS — do NOT emit one entry per variant:\n" +
       "   - A Figma COMPONENT_SET is ONE component: emit a single entry named after the set and record its " +
       "variant AXIS names in `variants` (e.g. `{ \"name\": \"button\", \"variants\": [\"type\", \"size\"] }`), " +

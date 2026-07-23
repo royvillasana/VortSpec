@@ -111,7 +111,7 @@ test("opening a workspace reveals the four-region shell", async ({ mount }) => {
   await expect(rail.getByRole("button", { name: "Source Control" })).toBeVisible();
   await expect(rail.getByRole("button", { name: "Design tokens" })).toBeVisible();
   // The code activity's Explorer + editor + preview bar regions.
-  await expect(c.locator("aside").getByText("Explorer", { exact: true })).toBeVisible();
+  await expect(c.getByRole("complementary").getByRole("button", { name: "Explorer", exact: true })).toBeVisible();
   await expect(c.getByText("No file open", { exact: true })).toBeVisible();
   await expect(c.getByText("Preview", { exact: true })).toBeVisible(); // the preview bar
   await expect(c.getByRole("button", { name: "Open Browser" })).toBeVisible();
@@ -134,36 +134,29 @@ test("switching to a work panel hides the Explorer; Explorer restores it", async
   const c = await mount(<App />, { hooksConfig: { mock: base } });
   await open(c);
   const rail = c.getByRole("navigation", { name: "Activity bar" });
-  await expect(c.locator("aside").getByText("Explorer", { exact: true })).toBeVisible();
+  await expect(c.getByRole("complementary").getByRole("button", { name: "Explorer", exact: true })).toBeVisible();
   // Switch to a work panel — the editor and the Explorer sidebar give way to it.
   await rail.getByRole("button", { name: "Design tokens" }).click();
   await expect(c.getByText("No file open", { exact: true })).toHaveCount(0);
-  await expect(c.locator("aside").getByText("Explorer", { exact: true })).toHaveCount(0);
+  await expect(c.getByRole("complementary").getByRole("button", { name: "Explorer", exact: true })).toHaveCount(0);
   // Back to Explorer restores the sidebar.
   await rail.getByRole("button", { name: "Explorer" }).click();
-  await expect(c.locator("aside").getByText("Explorer", { exact: true })).toBeVisible();
+  await expect(c.getByRole("complementary").getByRole("button", { name: "Explorer", exact: true })).toBeVisible();
 });
 
-test("the Explorer header chevron collapses the sidebar; the activity reopens it", async ({ mount }) => {
+test("the left dock's Chat tab hides the section sidebar; the section tab restores it", async ({ mount }) => {
   const c = await mount(<App />, { hooksConfig: { mock: base } });
   await open(c);
-  await expect(c.locator("aside").getByText("Explorer", { exact: true })).toBeVisible();
-  await c.getByRole("button", { name: "Collapse Explorer" }).click();
-  await expect(c.locator("aside").getByText("Explorer", { exact: true })).toHaveCount(0);
-  // Reopen via the Explorer activity icon.
-  await c.getByRole("navigation", { name: "Activity bar" }).getByRole("button", { name: "Explorer" }).click();
-  await expect(c.locator("aside").getByText("Explorer", { exact: true })).toBeVisible();
-});
-
-test("re-clicking the active Explorer activity collapses the sidebar", async ({ mount }) => {
-  const c = await mount(<App />, { hooksConfig: { mock: base } });
-  await open(c);
-  const explorer = c.getByRole("navigation", { name: "Activity bar" }).getByRole("button", { name: "Explorer" });
-  await expect(c.locator("aside").getByText("Explorer", { exact: true })).toBeVisible();
-  await explorer.click(); // active → collapse
-  await expect(c.locator("aside").getByText("Explorer", { exact: true })).toHaveCount(0);
-  await explorer.click(); // reopen
-  await expect(c.locator("aside").getByText("Explorer", { exact: true })).toBeVisible();
+  const dock = c.getByRole("complementary");
+  // Section (Explorer) tab is active by default.
+  await expect(dock.getByRole("button", { name: "Explorer", exact: true })).toHaveAttribute("aria-pressed", "true");
+  // Switch to Chat → the section content is hidden, Chat is active.
+  await dock.getByRole("button", { name: "Chat", exact: true }).click();
+  await expect(dock.getByRole("button", { name: "Chat", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await expect(dock.getByRole("button", { name: "Explorer", exact: true })).toHaveAttribute("aria-pressed", "false");
+  // Back to the section tab.
+  await dock.getByRole("button", { name: "Explorer", exact: true }).click();
+  await expect(dock.getByRole("button", { name: "Explorer", exact: true })).toHaveAttribute("aria-pressed", "true");
 });
 
 test("the breadcrumb Home returns to the workspace picker", async ({ mount }) => {

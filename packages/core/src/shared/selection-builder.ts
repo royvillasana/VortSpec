@@ -56,8 +56,10 @@ export function buildSelection(
     ]),
     section("layout", "Auto layout", [
       literal("flow", "Flow", "segment", flow(c), ["block", "row", "column"]),
-      // Figma-style auto-layout alignment (only meaningful for flex containers).
-      ...(isFlex(c) ? [alignField(c)] : []),
+      // Figma-style auto-layout alignment + spacing mode (only meaningful for flex
+      // containers). Spacing mode is Figma's "Packed" vs "Space between": a fixed `gap`
+      // can never distribute, so filling the space is `justify-content: space-between`.
+      ...(isFlex(c) ? [alignField(c), gapModeField(c)] : []),
       bind("gap", "Gap", "length", c["gap"], "spacing"),
       bind("padding-left", "Padding X", "length", c["padding-left"], "spacing"),
       bind("padding-top", "Padding Y", "length", c["padding-top"], "spacing"),
@@ -169,6 +171,17 @@ export function alignToCss(value: string, direction: string): Record<string, str
 }
 
 /**
+ * Map the `gap-mode` segmented control (packed / distribute) to the declaration the
+ * guest applies live. "Distribute" is Figma's Space-between: children spread to fill
+ * the container's main axis (a fixed `gap` becomes the MINIMUM spacing). "Packed"
+ * collapses back to normal start-packed flow. `justify-content` is the main axis for
+ * both row and column, so direction doesn't matter here. Exported for the host.
+ */
+export function gapModeCss(value: string): Record<string, string> {
+  return { "justify-content": value === "distribute" ? "space-between" : "flex-start" };
+}
+
+/**
  * Map the `flow` segmented control (block / row / column) to the display +
  * flex-direction declarations the guest applies live. Exported for the host.
  */
@@ -203,7 +216,12 @@ function resizeField(
   computed: Record<string, string>,
   fixedValue: string | undefined,
 ): SectionField {
-  const mode = detectSizeMode(dim, computed, readout.parentFlow);
+  const mode = detectSizeMode(
+    dim,
+    computed,
+    readout.parentFlow,
+    readout.parentSize ? { size: readout.rect[dim], parentContent: readout.parentSize[dim] } : undefined,
+  );
   // When Fixed, the value is the px readout; otherwise the mode name reads in the field.
   const value = mode === "fixed" ? (fixedValue ?? `${Math.round(readout.rect[dim])}px`) : SIZE_MODE_LABEL[mode];
   return { key: dim, label, kind: "resize", value, mode, token: null, options: [] };
@@ -305,6 +323,19 @@ function alignField(c: Record<string, string>): SectionField {
     value: `${x}|${y}`,
     token: null,
     options: [column ? "column" : "row"],
+  };
+}
+
+/** Figma-style spacing mode: Packed (fixed gap) vs Space-between (children fill the row). */
+function gapModeField(c: Record<string, string>): SectionField {
+  const distributed = /space-(between|around|evenly)/.test(c["justify-content"] ?? "");
+  return {
+    key: "gap-mode",
+    label: "Spacing",
+    kind: "segment",
+    value: distributed ? "distribute" : "packed",
+    token: null,
+    options: ["packed", "distribute"],
   };
 }
 

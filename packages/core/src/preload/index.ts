@@ -66,6 +66,7 @@ const api: VortSpecApi = {
   createFolder: () => invoke("workspace:createFolder"),
   pickFile: (filters) => invoke("workspace:pickFile", filters ? { filters } : undefined),
   listProjects: () => invoke("workspace:listProjects"),
+  touchProject: (path: string) => invoke("workspace:touchProject", path),
   removeProject: (id) => invoke("workspace:removeProject", id),
   openFolder: (path: string) => invoke("workspace:openFolder", path),
   revealPath: (projectPath: string, relPath: string) =>
@@ -80,6 +81,7 @@ const api: VortSpecApi = {
 
   toolkitStatus: (path: string) => invoke("toolkit:status", path),
   installToolkit: (path: string) => invoke("toolkit:install", path),
+  resyncToolkit: (path: string) => invoke("toolkit:resync", path),
 
   startRun: (opts: AgentRunOptions) => invoke("agent:startRun", opts),
   cancelRun: (runId: string) => invoke("agent:cancelRun", runId),

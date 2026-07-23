@@ -57,6 +57,12 @@ export const MIN = {
   activityBar: 48,
 } as const;
 
+// The Storybook (play) activity frames the native Storybook sidebar (embedded + cropped)
+// in the dock. Storybook's manager defaults its nav column to 300px, so the dock is pinned
+// to that exact width there — otherwise a narrower dock clips the sidebar's right edge.
+// Tune this if a Storybook version ships a different default nav width.
+export const STORYBOOK_SIDEBAR_WIDTH = 300;
+
 export const DEFAULT_LAYOUT: LayoutState = {
   activity: "explorer",
   primaryOpen: true,
@@ -174,7 +180,9 @@ export function effectiveWidths(
   state: LayoutState,
   winW: number,
 ): { primary: number; secondary: number; panelSide: number } {
-  const primaryShown = isSidebarView(state.activity) && state.primaryOpen;
+  // The primary region is now the ALWAYS-present unified left dock (Section + Chat), shown
+  // in every activity — not just Explorer — so its width no longer gates on isSidebarView.
+  const primaryShown = state.primaryOpen;
   const secondaryShown = state.secondaryOpen;
   const panelShown = state.panelOpen && state.panelDock === "right";
 

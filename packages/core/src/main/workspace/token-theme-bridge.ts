@@ -71,10 +71,22 @@ export function buildTokenTheme(tokensCss: string): TailwindTheme {
     else if (/^text-.*-leading$/.test(name)) theme.lineHeight[name.slice("text-".length)] = ref;
     else if (/^text-.*-family$/.test(name)) theme.fontFamily[name.slice("text-".length)] = [ref];
     else if (/^font-/.test(name)) theme.fontFamily[name.slice("font-".length)] = [ref];
-    else if (/^spacing-/.test(name)) theme.spacing[name.slice("spacing-".length)] = ref;
-    else if (/^radius-/.test(name)) theme.borderRadius[name.slice("radius-".length)] = ref;
+    else if (/^spacing-/.test(name)) {
+      theme.spacing[name.slice("spacing-".length)] = ref;
+      // Bootstrap-style pixel spacing → Tailwind's 4px scale (--spacing-16 → `4`), so
+      // idiomatic classes like `p-3`/`gap-2` resolve to tokens, not Tailwind defaults.
+      const px = Number(name.slice("spacing-".length));
+      if (Number.isInteger(px) && px % 4 === 0) theme.spacing[String(px / 4)] = ref;
+    } else if (/^radius-/.test(name)) theme.borderRadius[name.slice("radius-".length)] = ref;
     else if (/^shadows?-/.test(name)) theme.boxShadow[name.replace(/^shadows?-/, "")] = ref;
   }
+  // Semantic color aliases so components can use idiomatic classes (`text-danger`,
+  // `bg-success`) even in this deterministic fallback — the agent's curated config is
+  // preferred, but this keeps the fallback compatible with reference-style components.
+  const alias = (to: string, from: string): void => {
+    if (!theme.colors[to] && theme.colors[from]) theme.colors[to] = theme.colors[from];
+  };
+  for (const s of ["success", "danger", "warning", "info", "secondary"]) alias(s, `status-${s}`);
   return theme;
 }
 
@@ -128,9 +140,15 @@ for (const { name, value } of parseVars()) {
   else if (/^text-.*-leading$/.test(name)) lineHeight[name.slice("text-".length)] = ref;
   else if (/^text-.*-family$/.test(name)) fontFamily[name.slice("text-".length)] = [ref];
   else if (/^font-/.test(name)) fontFamily[name.slice("font-".length)] = [ref];
-  else if (/^spacing-/.test(name)) spacing[name.slice("spacing-".length)] = ref;
-  else if (/^radius-/.test(name)) borderRadius[name.slice("radius-".length)] = ref;
+  else if (/^spacing-/.test(name)) {
+    spacing[name.slice("spacing-".length)] = ref;
+    const px = Number(name.slice("spacing-".length));
+    if (Number.isInteger(px) && px % 4 === 0) spacing[String(px / 4)] = ref;
+  } else if (/^radius-/.test(name)) borderRadius[name.slice("radius-".length)] = ref;
   else if (/^shadows?-/.test(name)) boxShadow[name.replace(/^shadows?-/, "")] = ref;
+}
+for (const s of ["success", "danger", "warning", "info", "secondary"]) {
+  if (!colors[s] && colors["status-" + s]) colors[s] = colors["status-" + s];
 }
 
 /** @type {import('tailwindcss').Config} */

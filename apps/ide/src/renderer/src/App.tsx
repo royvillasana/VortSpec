@@ -15,6 +15,9 @@ import { DesignManifest } from "@vortspec/ui/DesignManifest";
 import { RunApp } from "@vortspec/ui/RunApp";
 import { Profile } from "@vortspec/ui/Profile";
 import { ProjectSetup } from "@vortspec/ui/ProjectSetup";
+import { ToolkitUpdateBanner } from "@vortspec/ui/ToolkitUpdateBanner";
+import { LeftDock } from "./components/LeftDock";
+import { createPortal } from "react-dom";
 import { ActivityBar } from "./components/ActivityBar";
 import { WorkspacePicker } from "./components/WorkspacePicker";
 import { Explorer } from "./components/Explorer";
@@ -23,7 +26,7 @@ import { PanelGroup } from "./components/PanelGroup";
 import { Resizer } from "./components/Resizer";
 import { useWorkspaceFiles } from "./lib/useWorkspaceFiles";
 import { useLayout } from "./lib/useLayout";
-import { effectiveWidths, isSidebarView, type Activity } from "./lib/layout";
+import { effectiveWidths, isSidebarView, STORYBOOK_SIDEBAR_WIDTH, type Activity } from "./lib/layout";
 import { IdeContext, buildSeedContext, buildLiveContext, type EditorSelection } from "./lib/ide-context";
 import { useIdeMcp, IDE_MCP_TOOL_GROUP } from "./lib/useIdeMcp";
 import { IdeActionDialog } from "./components/IdeActionDialog";
@@ -49,6 +52,17 @@ export default function App(): JSX.Element {
   const [assistantHome, setAssistantHome] = useState<string | null>(null);
   // The current git branch, shown in the status bar beside the project name.
   const [branch, setBranch] = useState<string | null>(null);
+  // The assistant chat is running — drives the Playground's "AI is working" page skeleton.
+  const [dockBusy, setDockBusy] = useState(false);
+  // The unified left dock's Section-tab slot — a STABLE div created once, so views can
+  // portal their sidebar into it without a null gap or churn (the dock just mounts it and
+  // toggles its container's visibility). The current view portals into this element.
+  const [sectionSlot] = useState<HTMLDivElement>(() => {
+    const el = document.createElement("div");
+    el.className = "flex min-h-0 flex-1 flex-col overflow-auto";
+    return el;
+  });
+  const [leftTab, setLeftTab] = useState<"section" | "chat">("section");
   const [gitCounts, setGitCounts] = useState<{ changes: number; ahead: number }>({ changes: 0, ahead: 0 });
   // The live editor selection, surfaced to the assistant as grounding context.
   const [selection, setSelection] = useState<EditorSelection | null>(null);
@@ -82,6 +96,8 @@ export default function App(): JSX.Element {
   // ProjectSetup stepper as "New Project" — instead of landing on the Foundation
   // with no design system to extract. Mirrors the cockpit dashboard's routing.
   const openProject = useCallback((p: Project): void => {
+    // Bump recency so the recent list leads with what you're actually working on.
+    void api.touchProject(p.path).catch(() => {});
     if (p.toolkit.configured) {
       setNewProject(null);
       setWorkspace(p);
@@ -304,7 +320,7 @@ export default function App(): JSX.Element {
   const dispatchAssistantTask = useCallback(
     (task: AssistantTask): void => {
       const origin = layout.activity;
-      if (!layout.secondaryOpen) dispatch({ type: "toggleSecondary" });
+      setLeftTab("chat"); // the assistant lives in the left dock's Chat tab — reveal it
       setAssistantTask({
         title: task.title,
         prompt: task.prompt,
@@ -542,16 +558,16 @@ export default function App(): JSX.Element {
           onOpenTasks={go("tasks")}
         />
       ) : a === "run" ? (
-        <RunApp project={p} kind="app" hideRail canvas saveSignal={saveSignal} onBack={go("explorer")} onFlow={go("flow")} onRun={go("run")} onPlayground={go("play")} onTokens={go("tokens")} onManifest={go("manifest")} onHistory={go("explorer")} onSource={go("source")}
+        <RunApp project={p} kind="app" hideRail canvas saveSignal={saveSignal} assistantBusy={dockBusy} sidebarSlot={sectionSlot} onBack={go("explorer")} onFlow={go("flow")} onRun={go("run")} onPlayground={go("play")} onTokens={go("tokens")} onManifest={go("manifest")} onHistory={go("explorer")} onSource={go("source")}
           onSendToChat={(text, file) => {
-            if (!layout.secondaryOpen) dispatch({ type: "toggleSecondary" });
+            setLeftTab("chat"); // reveal the chat tab in the left dock
             // A canvas selection has no honest line range — carry it as a canvas
             // selection with a label, not a fabricated file+line reference.
             setPendingRef({ source: "canvas", label: file ?? "Run canvas selection", text, nonce: ++refNonce.current });
           }}
         />
       ) : a === "play" ? (
-        <RunApp project={p} kind="storybook" hideRail onBack={go("explorer")} onFlow={go("flow")} onRun={go("run")} onPlayground={go("play")} onTokens={go("tokens")} onManifest={go("manifest")} onHistory={go("explorer")} onSource={go("source")} />
+        <RunApp project={p} kind="storybook" hideRail sidebarSlot={sectionSlot} onBack={go("explorer")} onFlow={go("flow")} onRun={go("run")} onPlayground={go("play")} onTokens={go("tokens")} onManifest={go("manifest")} onHistory={go("explorer")} onSource={go("source")} />
       ) : a === "tokens" ? (
         <Inspector project={p} hideRail onBack={go("explorer")} onOpenPreview={go("explorer")} onOpenRun={go("run")} onOpenHistory={go("explorer")} onOpenManifest={go("manifest")} onOpenFile={(path) => { void wf.openFile(path); dispatch({ type: "setActivity", activity: "explorer" }); }} />
       ) : a === "tasks" ? (
@@ -578,17 +594,90 @@ export default function App(): JSX.Element {
           {workspace.name} — <span className="ml-1 font-bold text-vs-text-secondary">VortSpec</span>
         </header>
 
+        <ToolkitUpdateBanner project={workspace} onUpdated={setWorkspace} />
+
         <div className="flex min-h-0 flex-1 overflow-hidden">
           <ActivityBar active={layout.activity} onSelect={(a) => (a === "home" ? setWorkspace(null) : dispatch({ type: "setActivity", activity: a }))} chatOpen={layout.secondaryOpen} onToggleChat={() => dispatch({ type: "toggleSecondary" })} />
 
-          {showPrimary && (
-            <>
-              <aside style={{ width: eff.primary }} className="flex shrink-0 flex-col overflow-auto border-r border-vs-border-default bg-vs-bg-surface transition-[width] duration-150 ease-out">
-                <Explorer project={workspace} activePath={wf.activePath} onOpen={openFromExplorer} onCollapse={() => dispatch({ type: "togglePrimary" })} openCount={wf.files.length} newFileSignal={newFileSignal} />
-              </aside>
-              <Resizer orientation="vertical" ariaLabel="Resize sidebar" onDelta={(d) => dispatch({ type: "nudgePrimary", delta: d })} />
-            </>
-          )}
+          {/* The ONE left sidebar: the current view's Section sidebar + the persistent Chat.
+              The right assistant sidebar is gone — the chat lives here now, mounted once so
+              the conversation persists across every section. */}
+          <LeftDock
+            // Storybook frames the native SB sidebar (default nav width 300) — pin the dock
+            // to that exact width so its right edge isn't clipped; every other view resizes.
+            width={layout.activity === "play" ? STORYBOOK_SIDEBAR_WIDTH : eff.primary}
+            sectionLabel={
+              isExplorer
+                ? "Explorer"
+                : layout.activity === "run"
+                  ? "Design"
+                  : layout.activity === "play"
+                    ? "Stories"
+                    : "Panel"
+            }
+            hasSection={isExplorer || layout.activity === "run" || layout.activity === "play"}
+            sectionEl={sectionSlot}
+            tab={leftTab}
+            onTabChange={setLeftTab}
+            chat={
+              <div className="flex min-h-0 flex-1 flex-col">
+                <div
+                  data-testid="assistant-context"
+                  className="flex flex-none flex-wrap items-center gap-1.5 border-b border-vs-border-subtle bg-vs-bg-surface px-3 py-1.5 text-[11px] text-vs-text-muted"
+                >
+                  <span className="uppercase tracking-wide">Context</span>
+                  {wf.activePath ? (
+                    <span className="truncate rounded bg-vs-bg-elevated px-1.5 py-0.5 font-mono text-vs-text-secondary">
+                      {wf.activePath}
+                    </span>
+                  ) : (
+                    <span>no file open</span>
+                  )}
+                  {selection && (
+                    <span
+                      title="Selected lines are sent to the assistant as context"
+                      className="rounded bg-vs-accent-subtle px-1.5 py-0.5 font-mono text-vs-accent"
+                    >
+                      ⧉ {selection.startLine === selection.endLine
+                        ? `line ${selection.startLine}`
+                        : `${selection.endLine - selection.startLine + 1} lines`}
+                    </span>
+                  )}
+                </div>
+                <div className="min-h-0 flex-1">
+                  <ConversationTabs
+                    project={workspace}
+                    showSession
+                    allowModify
+                    userName={userName}
+                    seedContext={buildSeedContext(previewUrl)}
+                    liveContext={buildLiveContext(wf.activePath, selection)}
+                    mcpConfigPath={ideMcp.configPath}
+                    extraAllowedTools={ideMcp.configPath ? [IDE_MCP_TOOL_GROUP] : undefined}
+                    pendingRef={pendingRef}
+                    incomingTask={assistantTask}
+                    onReturnToOrigin={(returnTo) => dispatch({ type: "setActivity", activity: returnTo as Activity })}
+                    onBusyChange={setDockBusy}
+                  />
+                </div>
+              </div>
+            }
+          />
+          <Resizer orientation="vertical" ariaLabel="Resize sidebar" onDelta={(d) => dispatch({ type: "nudgePrimary", delta: d })} />
+          {/* Explorer's file tree is portaled into the dock's Section tab. */}
+          {isExplorer &&
+            sectionSlot &&
+            createPortal(
+              <Explorer
+                project={workspace}
+                activePath={wf.activePath}
+                onOpen={openFromExplorer}
+                onCollapse={() => dispatch({ type: "togglePrimary" })}
+                openCount={wf.files.length}
+                newFileSignal={newFileSignal}
+              />,
+              sectionSlot,
+            )}
 
           <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
             {/* Breadcrumb — close/change the project (back to Home), above the editor tabs. */}
@@ -629,50 +718,6 @@ export default function App(): JSX.Element {
               {isExplorer ? centerForExplorer() : workPanel()}
             </div>
           </div>
-
-          {layout.secondaryOpen && (
-            <>
-              <Resizer orientation="vertical" ariaLabel="Resize assistant" onDelta={(d) => dispatch({ type: "nudgeSecondary", delta: -d })} />
-              <div style={{ width: eff.secondary }} className="flex min-w-0 shrink-0 flex-col overflow-hidden border-l border-vs-border-default transition-[width] duration-150 ease-out">
-                <div data-testid="assistant-context" className="flex flex-none flex-wrap items-center gap-1.5 border-b border-vs-border-subtle bg-vs-bg-surface px-3 py-1.5 text-[11px] text-vs-text-muted">
-                  <span className="uppercase tracking-wide">Context</span>
-                  {wf.activePath ? (
-                    <span className="truncate rounded bg-vs-bg-elevated px-1.5 py-0.5 font-mono text-vs-text-secondary">{wf.activePath}</span>
-                  ) : (
-                    <span>no file open</span>
-                  )}
-                  {selection && (
-                    <span
-                      title="Selected lines are sent to the assistant as context"
-                      className="rounded bg-vs-accent-subtle px-1.5 py-0.5 font-mono text-vs-accent"
-                    >
-                      ⧉ {selection.startLine === selection.endLine
-                        ? `line ${selection.startLine}`
-                        : `${selection.endLine - selection.startLine + 1} lines`}
-                    </span>
-                  )}
-                </div>
-                <div className="min-h-0 flex-1">
-                  <ConversationTabs
-                    project={workspace}
-                    showSession
-                    allowModify
-                    userName={userName}
-                    seedContext={buildSeedContext(previewUrl)}
-                    liveContext={buildLiveContext(wf.activePath, selection)}
-                    mcpConfigPath={ideMcp.configPath}
-                    extraAllowedTools={ideMcp.configPath ? [IDE_MCP_TOOL_GROUP] : undefined}
-                    pendingRef={pendingRef}
-                    incomingTask={assistantTask}
-                    onReturnToOrigin={(returnTo) =>
-                      dispatch({ type: "setActivity", activity: returnTo as Activity })
-                    }
-                    onClose={() => dispatch({ type: "toggleSecondary" })}
-                  />
-                </div>
-              </div>
-            </>
-          )}
         </div>
 
         <footer className="flex h-6 shrink-0 items-center gap-2 border-t border-vs-border-default bg-vs-bg-surface px-3 text-[11px] text-vs-text-muted">

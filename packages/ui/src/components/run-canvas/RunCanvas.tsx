@@ -1,11 +1,13 @@
 import { createElement, useEffect, useRef, useState } from "react";
-import type { JSX } from "react";
+import type { JSX, CSSProperties } from "react";
 import type { Rect } from "@vortspec/core/ipc";
 import type { InspectorBridge, CanvasMode } from "../../lib/useInspectorBridge";
 import { SpacingOverlay } from "./SpacingOverlay";
 import { CommentsLayer, type CommentsLayerProps } from "./CommentsLayer";
+import { AiSkeletonBlock, AiSkeletonPage, AiWorkingPill } from "./AiSkeleton";
 import { CanvasToolbar } from "./CanvasToolbar";
 import { bridgeStatusMessage } from "./bridge-status";
+import { frameApplies, type Viewport, type ViewportId, type DeviceFrameKind } from "./viewports";
 
 const px = (s?: string): number => Math.max(0, parseFloat(s ?? "") || 0);
 
@@ -26,13 +28,15 @@ export function RunCanvas({
   bridge,
   mode,
   onModeChange,
-  zoom,
-  onZoomBy,
-  onZoomReset,
   onLiveEdit,
   onCommitEdit,
   onSendToChat,
   comments,
+  skeleton,
+  viewport,
+  frame,
+  onViewportChange,
+  onFrameChange,
 }: {
   src: string;
   guestPreloadUrl: string | null;
@@ -40,10 +44,12 @@ export function RunCanvas({
   /** Input mode — owned by RunApp, surfaced on the canvas toolbar. */
   mode: CanvasMode;
   onModeChange: (mode: CanvasMode) => void;
-  /** Zoom factor — owned by RunApp, surfaced on the canvas toolbar. */
-  zoom: number;
-  onZoomBy: (factor: number) => void;
-  onZoomReset: () => void;
+  /** The current Playground viewport (Desktop/Tablet/Mobile) — resizes the preview. */
+  viewport: Viewport;
+  /** Device frame to draw around a Tablet/Mobile viewport. */
+  frame: DeviceFrameKind;
+  onViewportChange: (id: ViewportId) => void;
+  onFrameChange: (frame: DeviceFrameKind) => void;
   /** Apply a CSS override live (per animation frame while dragging a handle). */
   onLiveEdit?: (css: Record<string, string>) => void;
   /** Record the final edit(s) once, on drag end. */
@@ -52,10 +58,28 @@ export function RunCanvas({
   onSendToChat?: () => void;
   /** Comment threads + handlers; the pins/composer render in comment mode. */
   comments?: Omit<CommentsLayerProps, "zoom">;
+  /** An "AI is working" placeholder over the preview: a shimmer block where a
+   *  component is being built, or a full-page animated gradient for page work. */
+  skeleton?: { mode: "page"; label?: string } | { mode: "block"; rect: Rect; label?: string } | null;
 }): JSX.Element {
   // Optimistic rectangle while dragging a handle — drives the overlay instantly
   // instead of waiting for the guest's geometry echo (the source of the lag).
   const [dragRect, setDragRect] = useState<Rect | null>(null);
+
+  // Viewport (Chrome-DevTools device mode): render the webview at the viewport's CSS px
+  // size so the page's media queries respond, then scale-to-fit the canvas area. Desktop
+  // (width null) fills as before. The overlay lives inside the same scaled box, so guest
+  // rects still map 1:1 — inspect/insert stay pixel-accurate at any viewport.
+  const deviceMode = viewport.width !== null;
+  const vpW = viewport.width ?? 0;
+  const vpH = viewport.height ?? 0;
+  const framed: DeviceFrameKind = deviceMode && frameApplies(viewport.id) ? frame : "none";
+  // NO CSS transform on the webview: an Electron <webview> mis-hit-tests through a scaled
+  // ancestor (clicks land nowhere → inspect breaks), and a structural change on viewport
+  // switch remounts/reloads it. So the device preview renders at ACTUAL size (scroll if it
+  // overflows) inside a structurally-stable box that only RESIZES — the webview never
+  // remounts. Overlays therefore map 1:1 with no counter-scale (zoom = 1).
+  const zoom = 1;
 
   const bridgeSelRect = bridge.selectedId ? bridge.rects[bridge.selectedId] : undefined;
   const selRect = dragRect ?? bridgeSelRect;
@@ -110,15 +134,21 @@ export function RunCanvas({
 
   return (
     <div
-      className="relative h-full min-h-[340px] w-full overflow-hidden bg-white"
+      className={`relative h-full min-h-[340px] w-full ${deviceMode ? "overflow-auto bg-vs-bg-secondary" : "overflow-hidden bg-white"}`}
       style={insertCursor ? { cursor: insertCursor } : undefined}
     >
-      {/* Stage — the webview + overlay share one transform, so rects align at any zoom. */}
-      <div className="absolute inset-0 origin-top-left" style={{ transform: `scale(${zoom})` }}>
+      {/* Stage — hosts the webview + overlay in a structurally-stable box that only RESIZES
+          per viewport (never remounts the webview) and applies NO transform, so Electron's
+          <webview> keeps hit-testing correctly. Device viewports render at actual size,
+          centered, scrolling if they overflow; Desktop fills. */}
+      <Stage deviceMode={deviceMode} vpW={vpW} vpH={vpH} framed={framed}>
         {guestPreloadUrl ? (
           // <webview> is an Electron intrinsic element, not in React's JSX types —
           // build it via createElement to keep the loose attribute typing contained.
           createElement("webview", {
+            // Stable key: the webview must NEVER remount on a viewport switch (a remount
+            // reloads the guest and can break the bridge). Only its container resizes.
+            key: "vs-preview-webview",
             ref: bridge.attach,
             src,
             preload: guestPreloadUrl,
@@ -193,8 +223,14 @@ export function RunCanvas({
               )}
             </>
           )}
+
+          {/* "AI is working" placeholder — a shimmer block where a component is being
+              built, or an animated gradient over the whole preview for page work. Last
+              in the overlay so it sits above selection/insert chrome while generating. */}
+          {skeleton?.mode === "block" && <AiSkeletonBlock rect={skeleton.rect} label={skeleton.label} />}
+          {skeleton?.mode === "page" && <AiSkeletonPage label={skeleton.label} />}
         </div>
-      </div>
+      </Stage>
 
       {/* Comment pins + composer/threads — screen-space so they stay a constant size. */}
       {mode === "comment" && comments && (
@@ -223,21 +259,25 @@ export function RunCanvas({
         </div>
       )}
 
-      {/* The one canvas toolbar — modes + zoom + bridge status. Owned by the
+      {/* The one canvas toolbar — modes + viewport + bridge status. Owned by the
           canvas, so it survives the Design→Comments panel swap. */}
       <CanvasToolbar
         mode={mode}
         onModeChange={onModeChange}
-        zoom={zoom}
-        onZoomBy={onZoomBy}
-        onZoomReset={onZoomReset}
+        viewport={viewport}
+        frame={frame}
+        onViewportChange={onViewportChange}
+        onFrameChange={onFrameChange}
         bridgeReady={bridge.ready}
         bridgeError={bridge.error}
       />
 
       {/* Notices sit ABOVE the toolbar (which owns bottom-3), stacked in one column
-          so a second notice pushes the first up instead of drawing over it. */}
-      <div className="pointer-events-none absolute bottom-14 left-1/2 z-30 flex -translate-x-1/2 flex-col items-center gap-1.5">
+          so a second notice pushes the first up instead of drawing over it. The
+          "AI is working" pill lives here too — anchored to the toolbar, screen-space,
+          so it reads the same in every viewport instead of floating inside the device. */}
+      <div className="pointer-events-none absolute bottom-14 left-1/2 z-40 flex -translate-x-1/2 flex-col items-center gap-1.5">
+        {skeleton?.mode === "page" && <AiWorkingPill label={skeleton.label} />}
         {bridge.error && (
           <div className="rounded-md border border-vs-border-default bg-vs-bg-elevated px-3 py-1.5 text-[11px] text-vs-text-secondary shadow">
             {/* Same sentence the toolbar shows as its disabled reason — one source. */}
@@ -270,6 +310,71 @@ export function RunCanvas({
         )}
       </div>
     </div>
+  );
+}
+
+/**
+ * The stage that hosts the webview + overlay. The webview's position in the tree is the
+ * SAME in every viewport — only the wrapping div's className/style change — so the webview
+ * never remounts (and never reloads) on a viewport switch. NO CSS transform is used, since
+ * an Electron <webview> mis-hit-tests through a scaled ancestor. Desktop fills the canvas;
+ * a device viewport is an actual-size box (the viewport's CSS px), centered and scrolling
+ * if it overflows, with the frame drawn as CSS on the box (no wrapping element).
+ */
+function Stage({
+  deviceMode,
+  vpW,
+  vpH,
+  framed,
+  children,
+}: {
+  deviceMode: boolean;
+  vpW: number;
+  vpH: number;
+  framed: DeviceFrameKind;
+  children: JSX.Element[] | JSX.Element;
+}): JSX.Element {
+  const frameStyle: CSSProperties =
+    framed === "iphone"
+      ? {
+          borderRadius: 44,
+          overflow: "hidden",
+          boxShadow: "0 0 0 11px #0b0b0e, 0 0 0 13px #3a3a40, 0 24px 60px -18px rgba(0,0,0,.55)",
+        }
+      : framed === "android"
+        ? {
+            borderRadius: 32,
+            overflow: "hidden",
+            boxShadow: "0 0 0 9px #111214, 0 0 0 11px #2c2d31, 0 24px 60px -18px rgba(0,0,0,.55)",
+          }
+        : {};
+  return (
+    // Outer wrapper: same element every viewport (re-styled, not replaced).
+    <div className={deviceMode ? "flex min-h-full min-w-full items-start justify-center p-10" : "absolute inset-0"}>
+      {/* Screen box: the webview's stable parent — only its size/frame styling changes. */}
+      <div
+        className={deviceMode ? "relative flex-none bg-white" : "absolute inset-0"}
+        style={deviceMode ? { width: vpW, height: vpH, ...frameStyle } : undefined}
+      >
+        {children}
+        {deviceMode && framed !== "none" && <FrameDecor kind={framed} />}
+      </div>
+    </div>
+  );
+}
+
+/** Non-interactive device chrome drawn over the screen — iPhone island + home indicator,
+ *  Android camera hole. Siblings of the webview, so toggling them never remounts it. */
+function FrameDecor({ kind }: { kind: DeviceFrameKind }): JSX.Element {
+  const base: CSSProperties = { position: "absolute", left: "50%", transform: "translateX(-50%)", background: "#000", zIndex: 5, pointerEvents: "none" };
+  if (kind === "android") {
+    return <div style={{ ...base, top: 8, width: 10, height: 10, borderRadius: 999, boxShadow: "0 0 0 2px rgba(255,255,255,.06)" }} />;
+  }
+  return (
+    <>
+      <div style={{ ...base, top: 9, width: 92, height: 26, borderRadius: 999 }} />
+      <div style={{ ...base, bottom: 8, width: "34%", height: 5, borderRadius: 999, background: "rgba(255,255,255,.5)" }} />
+    </>
   );
 }
 

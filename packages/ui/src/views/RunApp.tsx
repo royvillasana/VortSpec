@@ -1,14 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type { DevServerStatus, Project, InspectorToken, InspectorComponent, FileSnapshot, StorybookEntry } from "@vortspec/core/ipc";
-import { buildSelection, alignToCss, flowToCss } from "@vortspec/core/selection-builder";
+import { buildSelection, alignToCss, flowToCss, gapModeCss } from "@vortspec/core/selection-builder";
 import { sizeModeCss, SIZE_MODE_LABEL } from "@vortspec/core/sizing";
 import { api } from "../lib/api";
 import { Button, Spinner } from "@vortspec/ui/ui";
 import { ProjectRail, projectRailItems } from "@vortspec/ui/ProjectRail";
 import { DesignPanel, ChangesBar } from "../components/run-canvas/DesignPanel";
+import { StorybookSidebar } from "../components/run-canvas/StorybookSidebar";
 import { Sitemap } from "../components/run-canvas/Sitemap";
-import type { RouteDiscovery } from "@vortspec/core/ipc";
+import type { RouteDiscovery, RouteNode, Rect } from "@vortspec/core/ipc";
 import { RunCanvas } from "../components/run-canvas/RunCanvas";
+import { viewportsFromTokens, appliesInViewport, type ViewportId, type DeviceFrameKind } from "../components/run-canvas/viewports";
 import {
   resolveComponent,
   resembleComponent,
@@ -48,6 +51,7 @@ import { buildDoctorPrompt, buildEnvSetupPrompt, relFileFromSource } from "../co
  * can run and iterate on screens they vibe-engineer via the assistant (which is
  * modify-capable on this screen, seeded with a Screen-Creation context in App).
  */
+
 export function RunApp({
   project,
   kind = "app",
@@ -63,6 +67,8 @@ export function RunApp({
   onSource,
   onSendToChat,
   saveSignal,
+  assistantBusy = false,
+  sidebarSlot,
 }: {
   project: Project;
   /** Which server to run: the project's own `app` (default) or its `storybook`. */
@@ -83,9 +89,20 @@ export function RunApp({
   onSendToChat?: (text: string, file?: string | null) => void;
   /** Bumped by File > Save / Ctrl+S — flush pending canvas edits to disk. */
   saveSignal?: number;
+  /** The right-sidebar assistant is running (IDE) — drives the page "AI is working" skeleton. */
+  assistantBusy?: boolean;
+  /** When the host provides a left-dock slot (IDE unified sidebar), the Design/Layers panel
+   *  is PORTALED there instead of rendered inline, so the canvas fills the center. Omit
+   *  (desktop) to keep the inline sidebar. */
+  sidebarSlot?: HTMLElement | null;
 }): React.JSX.Element {
   const [dev, setDev] = useState<DevServerStatus>({ state: "stopped", url: null, script: null, message: null });
   const [frameLoading, setFrameLoading] = useState(true);
+  // Storybook (kind=storybook): the story index drives a VortSpec nav in the left dock's
+  // Section tab, so the embedded Storybook shows just the story (no in-iframe sidebar).
+  const [storyId, setStoryId] = useState<string | null>(null);
+  // Story vs docs view for the canvas iframe — mirrors what the native sidebar selected.
+  const [storyViewMode, setStoryViewMode] = useState<"story" | "docs">("story");
   // Bumped by the header Refresh button to reload the preview (remounts the
   // iframe via its key; the canvas webview reloads through the bridge).
   const [reloadNonce, setReloadNonce] = useState(0);
@@ -243,6 +260,21 @@ export function RunApp({
   // ── Sitemap: the app's page/route tree, read from source (change: sitemap-tree) ──
   const [routes, setRoutes] = useState<RouteDiscovery | null>(null);
   const [currentPath, setCurrentPath] = useState("/");
+  // The source file of the page currently on screen — grounds canvas Apply so the agent
+  // edits the previewed page (not index.html's mount shell) when an element has no known
+  // component file of its own. Walks the route tree for the node at `currentPath`.
+  const currentPageFile = useMemo(() => {
+    const roots = routes?.routes ?? [];
+    const find = (nodes: RouteNode[]): string | null => {
+      for (const n of nodes) {
+        if (n.path === currentPath && n.file) return n.file;
+        const hit = find(n.children);
+        if (hit) return hit;
+      }
+      return null;
+    };
+    return find(roots) ?? roots[0]?.file ?? null;
+  }, [routes, currentPath]);
   const rediscoverRoutes = useCallback(() => {
     void api.discoverRoutes(project.path).then(setRoutes);
   }, [project.path]);
@@ -351,14 +383,23 @@ export function RunApp({
   // state is lifted here where both the Design panel and the canvas can read it.
   // Default to Interact so the app just works; switch to Inspect to edit.
   const [mode, setMode] = useState<CanvasMode>("interact");
-  const [zoom, setZoom] = useState(1);
-  const zoomBy = useCallback((f: number) => setZoom((z) => Math.min(4, Math.max(0.25, z * f))), []);
-  const resetZoom = useCallback(() => setZoom(1), []);
+  // Playground viewport (Desktop/Tablet/Mobile) + device frame. Breakpoint widths come
+  // from the project's Figma breakpoint variables (synced as tokens) when present, else
+  // standard defaults. Auto-fit inside RunCanvas replaced the old manual zoom.
+  const [viewportId, setViewportId] = useState<ViewportId>("desktop");
+  const [frame, setFrame] = useState<DeviceFrameKind>("iphone");
   // Project color tokens for the Figma-style color picker (Libraries tab).
   const colorTokens = useMemo(
     () => tokens.filter((t) => t.type === "color").map((t) => ({ name: t.name, value: t.resolvedValue })),
     [tokens],
   );
+  // Breakpoint widths sourced from the project's Figma breakpoint variables (tokens), with
+  // standard defaults; `viewport` is the resolved current one handed to the canvas.
+  const viewports = useMemo(
+    () => viewportsFromTokens(tokens.map((t) => ({ name: t.name, resolvedValue: t.resolvedValue }))),
+    [tokens],
+  );
+  const viewport = viewports[viewportId];
 
   useEffect(() => {
     if (!canvas) return;
@@ -426,8 +467,27 @@ export function RunApp({
   });
   const [applying, setApplying] = useState(false);
   const [review, setReview] = useState(false);
+  // Set when an Apply run finished but edited NO source file — the change is still
+  // preview-only, so we keep the pending edits and tell the user instead of falsely
+  // entering review (which would "revert" on Keep once the live override is dropped).
+  const [applyMiss, setApplyMiss] = useState(false);
+  // The agent's own explanation for why it changed no file (its final message) — surfaced
+  // in the warning so "why didn't it apply?" is answered concretely, not generically.
+  const [applyMissReason, setApplyMissReason] = useState<string | null>(null);
   const [snapshot, setSnapshot] = useState<FileSnapshot[] | null>(null);
   const structuralMod = useAgentRun();
+  // The reload Apply triggers to show the source change must NOT be treated as a
+  // "returned to the Playground" event — otherwise the replay re-attaches the very edits
+  // being applied, fails, and reports a bogus "couldn't reattach". Refs (not deps) so the
+  // reload effect reads the latest value without re-subscribing.
+  const applyingRef = useRef(false);
+  const reviewRef = useRef(false);
+  useEffect(() => {
+    applyingRef.current = applying;
+  }, [applying]);
+  useEffect(() => {
+    reviewRef.current = review;
+  }, [review]);
 
   // ── Screen preview: install a dev-only harness so state-navigated screens (no URL)
   // can be rendered standalone via `?screen=<Name>`. A gated Claude Code run adds the
@@ -516,7 +576,9 @@ export function RunApp({
         removeClasses: e.removeClasses,
         addClasses: e.addClasses,
       }));
-    if (edits.length) bridge.replayOverrides(edits);
+    // Skip when an Apply is in flight / under review: that reload is us writing these
+    // edits to source, not a fresh return — replaying them here would falsely orphan them.
+    if (edits.length && !applyingRef.current && !reviewRef.current) bridge.replayOverrides(edits);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bridge.ready]);
 
@@ -660,6 +722,22 @@ export function RunApp({
   const composeActive =
     mode === "insert" && (!!bridge.placeholder || compose.phase !== "idle" || !!compose.screenUpdateOwed);
 
+  // "AI is working" skeleton over the preview (change: canvas-ai-skeleton). A component
+  // being built into a KNOWN slot shimmers in place (block); anything page-wide — an Apply
+  // writing source, the screen-preview harness, a slot-less build, or the chat assistant
+  // working this project — gets the animated gradient overlay.
+  const skeleton = useMemo((): { mode: "page"; label?: string } | { mode: "block"; rect: Rect; label?: string } | null => {
+    if (compose.phase === "generating" && bridge.placeholder?.rect) {
+      return { mode: "block", rect: bridge.placeholder.rect, label: "Building component…" };
+    }
+    if (applying) return { mode: "page", label: "Applying your changes…" };
+    if (compose.phase === "generating" || screenPreviewMod.model.status === "running") {
+      return { mode: "page", label: "Building…" };
+    }
+    if (assistantBusy) return { mode: "page", label: "AI is working…" };
+    return null;
+  }, [compose.phase, bridge.placeholder, applying, screenPreviewMod.model.status, assistantBusy]);
+
   // ── Live drag-and-drop move (§5.8) ────────────────────────────────────────
   // Behind a feature flag (Decision 3): when off, a drag is simply never opened as
   // a move and inspect works as before.
@@ -694,20 +772,35 @@ export function RunApp({
     return () => clearTimeout(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bridge.dragMessage]);
-  // If a replay-on-return couldn't restore some edits (their element changed), say so
-  // instead of dropping them silently — a transient hint, auto-cleared.
-  const [replayHint, setReplayHint] = useState<string | null>(null);
+  // If a replay-on-return couldn't restore some edits (their element changed), keep a
+  // PERSISTENT count — the edits are still in the ledger, just not live, so we surface
+  // them in the unsaved-edits bar (below) with a recovery path instead of a fleeting hint.
+  const [orphanCount, setOrphanCount] = useState(0);
   useEffect(() => {
     const missing = bridge.replayResult?.missing ?? 0;
-    if (missing > 0) {
-      setReplayHint(`${missing} unsaved edit${missing === 1 ? "" : "s"} couldn't be restored — ${missing === 1 ? "its" : "their"} element changed since you left.`);
-      const id = setTimeout(() => setReplayHint(null), 6000);
-      bridge.clearReplayResult();
-      return () => clearTimeout(id);
-    }
+    // Only a genuine return-replay orphans edits; an Apply/review reload never should.
+    if (missing > 0 && !applyingRef.current && !reviewRef.current) setOrphanCount(missing);
     bridge.clearReplayResult();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bridge.replayResult]);
+  // Once the ledger is empty (applied or discarded), there are no orphans to warn about.
+  useEffect(() => {
+    if (Object.keys(pending).length === 0) setOrphanCount(0);
+  }, [pending]);
+  // Hand the still-saved edits to the assistant to re-apply by description — the recovery
+  // path when they couldn't reattach to a changed element.
+  const reapplyInChat = useCallback(() => {
+    const list = Object.values(pending)
+      .map((e) => `${e.elementLabel ? `${e.elementLabel}: ` : ""}${e.label ?? e.key} → ${e.value}`)
+      .join("; ");
+    if (onSendToChat && list) {
+      onSendToChat(
+        `Apply these visual edits I made in the canvas — find the right element in the page source and change it: ${list}. Make the minimal change and preserve existing design-token usage.`,
+        null,
+      );
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pending, onSendToChat]);
   // The move's Keep/Revert gate, docked in the Design sidebar (no floating dialog).
   // Keep is the ONE action — it reconciles the JSX and is done; no second "Save
   // changes" prompt for a move.
@@ -816,6 +909,25 @@ export function RunApp({
   selectionRef.current = selection;
   const readoutRef = useRef(bridge.readout);
   readoutRef.current = bridge.readout;
+  // Current viewport + pending ledger as refs — read inside commitEdits / the re-scope
+  // effect without stale closures or re-subscribing.
+  const viewportIdRef = useRef(viewportId);
+  viewportIdRef.current = viewportId;
+
+  // Re-scope live overrides when the viewport changes (responsive preview): a mobile/tablet
+  // edit renders only in its own viewport — matching how it commits to source — so switching
+  // views clears every override and re-applies just those that apply at the new breakpoint. A
+  // viewport switch only resizes the webview (no reload), so node ids stay valid.
+  useEffect(() => {
+    bridge.clearOverride();
+    for (const e of Object.values(pendingRef.current)) {
+      if (!e.nodeId || !appliesInViewport(e.viewport, viewportId)) continue;
+      if (e.css && Object.keys(e.css).length > 0) applyOverride(e.nodeId, e.css);
+      else if (e.key === "content") setText(e.nodeId, e.value);
+      else if (e.kind === "variant") setClass(e.nodeId, e.removeClasses ?? [], e.addClasses ?? []);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewportId]);
   const tokensRef = useRef(tokens);
   tokensRef.current = tokens;
   // Last-applied variant value per key, so chained switches remove the right classes.
@@ -844,6 +956,8 @@ export function RunApp({
         css?: Record<string, string>;
         token?: string | null;
         resizeMode?: "fixed" | "hug" | "fill";
+        remove?: boolean;
+        label?: string;
       }[],
       forceStyle = false,
     ) => {
@@ -863,12 +977,21 @@ export function RunApp({
           next[id] = {
             ...edit,
             id,
+            label: e.label ?? edit.label,
             fingerprint: fp,
             nodeId,
-            file: sel.file,
+            // A deletion removes the USAGE from the page being viewed, not the component's
+            // definition — so ground it to the current page (null → currentPageFile in Apply),
+            // never to sel.file (which for a component instance is the component's own source).
+            file: e.remove ? null : sel.file,
             elementLabel: sel.label,
             elementText: text,
+            elementClassName: readoutRef.current?.className ?? undefined,
             resizeMode: e.resizeMode,
+            remove: e.remove,
+            // Tag the edit with the viewport it was made in — a mobile/tablet edit is scoped
+            // to that breakpoint in source (and in the live preview across viewport switches).
+            viewport: viewportIdRef.current,
           };
         }
         return next;
@@ -883,6 +1006,18 @@ export function RunApp({
     (edits: { key: string; value: string; cssProps: string[] }[]) => commitEdits(edits, true),
     [commitEdits],
   );
+
+  // Delete the selected element: hide it live (display:none — reversible via clearOverride)
+  // and record a removal that Apply writes to source (removes the JSX). Keep/Revert like any
+  // other pending edit. Deselect so the panel doesn't dangle on a now-hidden node.
+  const deleteSelected = useCallback(() => {
+    const id = selectedIdRef.current;
+    if (!id || !selectionRef.current) return;
+    const css = { display: "none" };
+    applyOverride(id, css);
+    commitEdits([{ key: "remove", value: "", cssProps: ["display"], css, remove: true, label: "Delete element" }]);
+    select(null);
+  }, [applyOverride, commitEdits, select]);
 
   // A Design-panel field edit → live override + a recorded pending edit.
   const onFieldChange = useCallback(
@@ -904,6 +1039,12 @@ export function RunApp({
         const css = flowToCss(value);
         applyLive(css);
         commitEdits([{ key, value, cssProps: Object.keys(css), css }]);
+      } else if (key === "gap-mode") {
+        // Packed vs Space-between (Figma spacing mode) — distribute children to fill the
+        // container's main axis. A fixed `gap` can't fill; this is the CSS that does.
+        const css = gapModeCss(value);
+        applyLive(css);
+        commitEdits([{ key, value, cssProps: Object.keys(css), css }]);
       } else if (key === "width" || key === "height") {
         // Figma-style Fixed/Hug/Fill resize (axis-aware via the parent's flow). A mode
         // change arrives as `@fixed`/`@hug`/`@fill`; a raw value is a Fixed px edit.
@@ -914,9 +1055,26 @@ export function RunApp({
           ? `${Math.round(readoutRef.current?.rect[dim] ?? 0)}px`
           : value;
         const css = sizeModeCss(dim, mode, parentFlow, fixedPx);
-        applyLive(css);
         const displayValue = mode === "fixed" ? fixedPx : SIZE_MODE_LABEL[mode];
-        commitEdits([{ key, value: displayValue, cssProps: Object.keys(css), css, resizeMode: mode }]);
+        const edits: Parameters<typeof commitEdits>[0] = [
+          { key, value: displayValue, cssProps: Object.keys(css), css, resizeMode: mode },
+        ];
+        // Filling a flex container along ITS OWN main axis frees space its children don't
+        // use (a fixed gap can't grow). Spread them to fill it — Figma "Space between" —
+        // so Fill visibly redistributes the components inside, as expected. Committed as a
+        // second edit so Apply writes `justify-between` into source alongside the resize.
+        const disp = readoutRef.current?.computed["display"] ?? "";
+        const dir = readoutRef.current?.computed["flex-direction"] ?? "row";
+        const selfMainDim = dir.startsWith("column") ? "height" : "width";
+        const childCount = readoutRef.current?.children.length ?? 0;
+        const live: Record<string, string> = { ...css };
+        if (mode === "fill" && disp.includes("flex") && dim === selfMainDim && childCount >= 2) {
+          const jc = gapModeCss("distribute");
+          Object.assign(live, jc);
+          edits.push({ key: "gap-mode", value: "distribute", cssProps: Object.keys(jc), css: jc });
+        }
+        applyLive(live);
+        commitEdits(edits);
       } else {
         const css = cssForField(key, value);
         applyLive(css);
@@ -978,6 +1136,7 @@ export function RunApp({
           file: sel?.file ?? null,
           elementLabel: sel?.label,
           elementText: readoutRef.current?.text ?? null,
+          elementClassName: readoutRef.current?.className ?? undefined,
         },
       }));
     },
@@ -986,6 +1145,23 @@ export function RunApp({
 
   const onSelectNode = useCallback((id: string) => select(id), [select]);
   const onHoverNode = useCallback((id: string | null) => hover(id), [hover]);
+
+  // Delete/Backspace deletes the selected element (Figma-style), in inspect mode only and
+  // never while typing in a field. The webview swallows keys when focused, so this covers
+  // the host chrome; the panel's trash button is the always-available path.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key !== "Delete" && e.key !== "Backspace") return;
+      if (mode !== "inspect" || !selectedIdRef.current) return;
+      const t = e.target as HTMLElement | null;
+      const tag = t?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || t?.isContentEditable) return;
+      e.preventDefault();
+      deleteSelected();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [mode, deleteSelected]);
 
   // Apply — the ONLY path to disk (spec-first gate). Token values commit
   // deterministically; style/variant edits go through a gated Claude Code run.
@@ -999,6 +1175,8 @@ export function RunApp({
     const isTokenValueEdit = (e: PendingEdit): boolean => e.kind === "token" && !!e.token && !isTokenBinding(e);
     const tokenEdits = edits.filter(isTokenValueEdit);
     const structural = edits.filter((e) => !isTokenValueEdit(e));
+    setApplyMiss(false);
+    setApplyMissReason(null);
     setApplying(true);
     try {
       for (const e of tokenEdits) {
@@ -1009,10 +1187,25 @@ export function RunApp({
         // Group by element (edits can span multiple elements + files now). Snapshot
         // every distinct affected file so discard restores all of them; if any element
         // has no known file, fall back to the broad token scope.
-        const targets = groupEditsByElement(structural);
-        const files = [...new Set(targets.map((t) => t.file).filter((f): f is string => !!f))];
+        // A per-element visual edit is a per-INSTANCE change: target where the element is
+        // USED (the current page) — the class often lives on the instance (e.g.
+        // `<Card className="bg-neutral-100">`), and editing the component would change every
+        // instance. Keep the component's own file as a SECONDARY location for the agent to
+        // check. Falls back to the component file when the page can't be resolved.
+        const targets = groupEditsByElement(structural).map((t) => {
+          const usage = currentPageFile ?? t.file;
+          const componentFile = t.file && t.file !== usage ? t.file : null;
+          return { ...t, file: usage, componentFile };
+        });
+        // Snapshot every file the agent might touch (usage + component) so Discard/Revert
+        // restores whichever it edited; fall back to the broad token scope if none resolved.
+        const files = [
+          ...new Set(
+            targets.flatMap((t) => [t.file, t.componentFile]).filter((f): f is string => !!f),
+          ),
+        ];
         const snap =
-          files.length > 0 && files.length === targets.length
+          files.length > 0
             ? (await Promise.all(files.map((f) => api.snapshotComponent(project.path, f)))).flat()
             : await api.snapshotTokenScope(project.path);
         // Dedupe snapshot entries by path.
@@ -1046,18 +1239,42 @@ export function RunApp({
     }
   }
 
-  // When the structural (gated) run finishes, reload the preview and enter review.
+  // When the structural (gated) run finishes, decide honestly whether it landed.
+  // The agent can report "done" without editing anything (element not located in
+  // source, ambiguous target). If NO file was written, the source is unchanged, so
+  // entering review would show the change (from the live override) and then "revert"
+  // on Keep. Instead: keep the edits pending, keep the override so the preview still
+  // shows them, and surface why — the user can Re-apply in Chat or adjust.
   useEffect(() => {
     if (structuralMod.model.status !== "done") return;
-    bridge.reload();
+    const patched = structuralMod.model.steps.some(
+      (s) => /^(edit|write|multiedit)$/i.test(s.name) && s.status === "ok",
+    );
     setApplying(false);
-    setReview(true);
+    if (patched) {
+      bridge.reload();
+      setApplyMiss(false);
+      setReview(true);
+    } else {
+      // No source edit → don't clear the override (keep showing the edit live), don't
+      // enter review. The persistent unsaved bar stays up with an explanation. Capture the
+      // agent's OWN final message — it usually says exactly why (e.g. "couldn't find the
+      // element", "the classes don't appear in this file").
+      const m = structuralMod.model;
+      const reason = (m.result?.text ?? [...m.messages].reverse().find((x) => x.role === "assistant")?.text ?? "")
+        .trim()
+        .slice(0, 400);
+      setApplyMissReason(reason || null);
+      setApplyMiss(true);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [structuralMod.model.status]);
 
   function discardEdits(): void {
     bridge.clearOverride();
     setPending({});
+    setApplyMiss(false);
+    setApplyMissReason(null);
     refreshReadout(); // the canvas reverted — re-read so the panel fields follow
   }
   // Drop a single pending edit before applying: restore ITS element to the original,
@@ -1086,7 +1303,12 @@ export function RunApp({
     setReview(false);
     setSnapshot(null);
     setPending({});
+    // Drop the now-redundant live override, then RELOAD so the preview re-renders from
+    // the patched SOURCE. Without the reload, if HMR didn't refresh the DOM, clearing the
+    // override dropped back to the pre-change render — the change "wasn't kept". Pending is
+    // already empty here, so the reload's replay is a no-op.
     bridge.clearOverride();
+    bridge.reload();
     structuralMod.reset();
   }
   async function revertEdits(): Promise<void> {
@@ -1121,9 +1343,109 @@ export function RunApp({
 
   useEffect(() => setFrameLoading(true), [embedUrl]);
 
+  // Seed the canvas with a default story (Storybook's index.json) so the preview shows
+  // something on entry, before the native sidebar's first selection lands. The native
+  // sidebar (StorybookSidebar) is the live nav from there on.
+  useEffect(() => {
+    if (isApp || !embedUrl) return;
+    let alive = true;
+    void api
+      .storybookIndex(embedUrl)
+      .then((entries) => {
+        if (!alive) return;
+        setStoryId((cur) => cur ?? entries.find((e) => e.type === "story")?.id ?? entries[0]?.id ?? null);
+      })
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [isApp, embedUrl, reloadNonce]);
+
   async function start(): Promise<void> {
     setDev(await startFor());
   }
+
+  // Storybook's nav for the left dock (kind=storybook) — the REAL Storybook sidebar,
+  // cropped out of the native manager (search + tree + docs), driving the story-only
+  // canvas via the manager's own `?path=` URL. Not a hand-rolled list.
+  const storybookNav = (
+    <StorybookSidebar
+      src={embedUrl}
+      onSelect={(id, viewMode) => {
+        setStoryId(id);
+        setStoryViewMode(viewMode);
+      }}
+    />
+  );
+
+  // The Design/Layers sidebar body (Sitemap + Design or Comments panel). Rendered inline in
+  // an <aside> on desktop, or PORTALED into the IDE's unified left-dock slot (sidebarSlot).
+  const sidebarBody = (
+    <>
+      {/* Sitemap: navigate the preview to the app's pages, in any mode. */}
+      <Sitemap
+        discovery={routes}
+        currentPath={currentPath}
+        onNavigate={navigateTo}
+        onOpenFile={openScreenFile}
+        onRetryScreenPreview={enableScreenPreview}
+        screenPreviewState={screenPreviewState}
+      />
+      {mode === "comment" ? (
+        <>
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+            <CommentsPanel
+              threads={comments.threads}
+              anchorRects={bridge.anchorRects}
+              activeId={comments.activeId}
+              me={{ login: comments.author.githubLogin, name: comments.author.name }}
+              onSelect={(t) => {
+                comments.setActiveId(t.id);
+                bridge.scrollToAnchor(t.anchor.fingerprint);
+              }}
+              onResolve={(id, resolved) => void resolveComment(id, resolved)}
+              onShare={() => void comments.share()}
+            />
+          </div>
+          <ChangesBar {...changesBarProps} />
+        </>
+      ) : (
+        <DesignPanel
+          selection={selection}
+          tree={bridge.tree}
+          hoveredId={bridge.hoveredId}
+          onSelectNode={onSelectNode}
+          onHoverNode={onHoverNode}
+          onFieldChange={onFieldChange}
+          onDelete={deleteSelected}
+          onVariantChange={onVariantChange}
+          pending={Object.values(pending)}
+          applying={applying}
+          applyStatus={applying ? (structuralMod.model.activity.at(-1)?.label ?? null) : null}
+          review={review}
+          onApply={() => void applyEdits()}
+          onDiscard={discardEdits}
+          onRemovePending={removePending}
+          onKeep={keepEdits}
+          onRevert={() => void revertEdits()}
+          colorTokens={colorTokens}
+          tokens={tokens}
+          onAssign={
+            onSendToChat && selection
+              ? () => {
+                  setAssignForced(selection.nodeId);
+                  setAssignDismissed((d) => (d === selection.nodeId ? null : d));
+                }
+              : undefined
+          }
+          owedScreenUpdates={owedScreenUpdates}
+          onSaveScreenUpdates={saveScreenUpdates}
+          onDismissScreenUpdate={dismissScreenUpdate}
+          move={moveBar}
+        />
+      )}
+    </>
+  );
 
   return (
     <div className={`flex w-full overflow-hidden bg-vs-bg-primary text-[13px] text-vs-text-primary ${hideRail ? "h-full min-h-0" : "h-[calc(100vh-3rem)]"}`}>
@@ -1144,6 +1466,9 @@ export function RunApp({
       />
       )}
 
+      {/* Storybook: portal the story nav into the dock's Section tab (canvas is app-only,
+          so Storybook has no Design panel — its nav goes here instead). */}
+      {!isApp && sidebarSlot && embedUrl && createPortal(storybookNav, sidebarSlot)}
       <main className="flex min-w-0 flex-1 flex-col bg-vs-bg-primary">
         <header className="flex flex-none items-center gap-3 border-b border-vs-border-default px-5 py-3">
           <span className="text-[15px] font-semibold">{isApp ? "Playground" : "Storybook"}</span>
@@ -1181,6 +1506,60 @@ export function RunApp({
             </Button>
           )}
         </header>
+
+        {/* Persistent unsaved-edits bar: canvas edits are LIVE preview overrides until Apply
+            writes them to source, so they can be lost on a reload. Always show the count +
+            Apply so the user never loses work silently, and surface any edit that couldn't
+            reattach to a changed element (still saved — offer a re-apply-in-Chat recovery). */}
+        {isApp && dirty && !applying && !review && (
+          <div
+            className={`flex flex-none items-center gap-3 border-b px-5 py-2 text-[12px] ${
+              applyMiss ? "border-vs-warning/40 bg-vs-warning/10" : "border-vs-accent/40 bg-vs-accent-subtle"
+            }`}
+          >
+            <span className={`flex-none ${applyMiss ? "text-vs-warning" : "text-vs-accent"}`} aria-hidden>
+              {applyMiss ? "⚠" : "●"}
+            </span>
+            <span className="min-w-0 flex-1 leading-relaxed text-vs-text-primary">
+              {applyMiss ? (
+                <>
+                  <b>Couldn’t locate {Object.keys(pending).length === 1 ? "this edit" : "these edits"} in your source</b> —
+                  the run finished without changing a file, so {Object.keys(pending).length === 1 ? "it’s" : "they’re"}{" "}
+                  still preview-only. Try <b>Re-apply in Chat</b> to describe the change to Claude, or Discard.
+                  {applyMissReason && (
+                    <span className="mt-1 block border-l-2 border-vs-warning/40 pl-2 text-[11px] italic text-vs-text-muted">
+                      Claude said: “{applyMissReason}”
+                    </span>
+                  )}
+                </>
+              ) : (
+                <>
+                  <b>
+                    {Object.keys(pending).length} unsaved edit{Object.keys(pending).length === 1 ? "" : "s"}
+                  </b>{" "}
+                  — live preview only. <b>Apply</b> to write them into your code so they persist across reloads.
+                  {orphanCount > 0 && (
+                    <span className="text-vs-warning">
+                      {" "}
+                      · {orphanCount} couldn’t reattach after the page changed — still saved, but not showing.
+                    </span>
+                  )}
+                </>
+              )}
+            </span>
+            {(orphanCount > 0 || applyMiss) && onSendToChat && (
+              <Button variant="ghost" onClick={reapplyInChat}>
+                Re-apply in Chat
+              </Button>
+            )}
+            <Button variant="ghost" onClick={discardEdits}>
+              Discard
+            </Button>
+            <Button variant="primary" disabled={applying} onClick={() => void applyEdits()}>
+              {applying ? "Applying…" : `Apply ${Object.keys(pending).length}`}
+            </Button>
+          </div>
+        )}
 
         {kind === "app" && !envDismissed && (envCreated || envMissing) && (
           <div
@@ -1308,81 +1687,35 @@ export function RunApp({
             </Centered>
           ) : canvasReady ? (
             // Run Canvas: Figma-style Design panel (left) + instrumented preview (right).
+            // When the IDE provides a left-dock slot, the panel is portaled there and the
+            // canvas fills the center; otherwise it renders inline in a resizable <aside>.
             <div className="relative flex h-full min-h-0">
-              <aside
-                style={{ width: panelW }}
-                className="flex flex-none flex-col overflow-hidden border-r border-vs-border-default bg-vs-bg-surface"
-              >
-                {/* Sitemap: navigate the preview to the app's pages, in any mode. */}
-                <Sitemap
-                  discovery={routes}
-                  currentPath={currentPath}
-                  onNavigate={navigateTo}
-                  onOpenFile={openScreenFile}
-                  onRetryScreenPreview={enableScreenPreview}
-                  screenPreviewState={screenPreviewState}
-                />
-                {mode === "comment" ? (
-                  <>
-                  <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-                  <CommentsPanel
-                    threads={comments.threads}
-                    anchorRects={bridge.anchorRects}
-                    activeId={comments.activeId}
-                    me={{ login: comments.author.githubLogin, name: comments.author.name }}
-                    onSelect={(t) => {
-                      comments.setActiveId(t.id);
-                      bridge.scrollToAnchor(t.anchor.fingerprint);
-                    }}
-                    onResolve={(id, resolved) => void resolveComment(id, resolved)}
-                    onShare={() => void comments.share()}
+              {/* `sidebarSlot === undefined` = no host dock (desktop) → inline resizable aside.
+                  Otherwise (IDE) always portal — render nothing until the slot element exists,
+                  never a transient inline copy, so the panel mounts once and stays stable. */}
+              {sidebarSlot !== undefined ? (
+                sidebarSlot &&
+                createPortal(
+                  <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-vs-bg-surface">{sidebarBody}</div>,
+                  sidebarSlot,
+                )
+              ) : (
+                <>
+                  <aside
+                    style={{ width: panelW }}
+                    className="flex flex-none flex-col overflow-hidden border-r border-vs-border-default bg-vs-bg-surface"
+                  >
+                    {sidebarBody}
+                  </aside>
+                  {/* Resize the Design panel (like the IDE Explorer rail). */}
+                  <div
+                    role="separator"
+                    aria-label="Resize Design panel"
+                    onPointerDown={startPanelResize}
+                    className="w-1 flex-none cursor-col-resize bg-vs-border-default/40 hover:bg-vs-accent"
                   />
-                  </div>
-                  {/* Un-saved canvas work stays visible + saveable even in comment mode. */}
-                  <ChangesBar {...changesBarProps} />
-                  </>
-                ) : (
-                <DesignPanel
-                  selection={selection}
-                  tree={bridge.tree}
-                  hoveredId={bridge.hoveredId}
-                  onSelectNode={onSelectNode}
-                  onHoverNode={onHoverNode}
-                  onFieldChange={onFieldChange}
-                  onVariantChange={onVariantChange}
-                  pending={Object.values(pending)}
-                  applying={applying}
-                  applyStatus={applying ? (structuralMod.model.activity.at(-1)?.label ?? null) : null}
-                  review={review}
-                  onApply={() => void applyEdits()}
-                  onDiscard={discardEdits}
-                  onRemovePending={removePending}
-                  onKeep={keepEdits}
-                  onRevert={() => void revertEdits()}
-                  colorTokens={colorTokens}
-                  tokens={tokens}
-                  onAssign={
-                    onSendToChat && selection
-                      ? () => {
-                          setAssignForced(selection.nodeId);
-                          setAssignDismissed((d) => (d === selection.nodeId ? null : d));
-                        }
-                      : undefined
-                  }
-                  owedScreenUpdates={owedScreenUpdates}
-                  onSaveScreenUpdates={saveScreenUpdates}
-                  onDismissScreenUpdate={dismissScreenUpdate}
-                  move={moveBar}
-                />
-                )}
-              </aside>
-              {/* Resize the Design panel (like the IDE Explorer rail). */}
-              <div
-                role="separator"
-                aria-label="Resize Design panel"
-                onPointerDown={startPanelResize}
-                className="w-1 flex-none cursor-col-resize bg-vs-border-default/40 hover:bg-vs-accent"
-              />
+                </>
+              )}
               <div className="relative min-w-0 flex-1">
                 {composeActive && (
                   <ComposePanel
@@ -1411,12 +1744,12 @@ export function RunApp({
                     getStoryUrl={storyUrlFor}
                   />
                 )}
-                {(bridge.dragMessage || replayHint) && (
+                {bridge.dragMessage && (
                   <div
-                    data-testid={bridge.dragMessage ? "drag-message" : "replay-hint"}
+                    data-testid="drag-message"
                     className="pointer-events-none absolute left-1/2 top-3 z-40 -translate-x-1/2 rounded-md border border-vs-border-default bg-vs-bg-elevated/95 px-3 py-1.5 text-[12px] text-vs-text-secondary shadow-lg backdrop-blur"
                   >
-                    {bridge.dragMessage || replayHint}
+                    {bridge.dragMessage}
                   </div>
                 )}
                 <RunCanvas
@@ -1425,9 +1758,10 @@ export function RunApp({
                   bridge={bridge}
                   mode={mode}
                   onModeChange={setMode}
-                  zoom={zoom}
-                  onZoomBy={zoomBy}
-                  onZoomReset={resetZoom}
+                  viewport={viewport}
+                  frame={frame}
+                  onViewportChange={setViewportId}
+                  onFrameChange={setFrame}
                   onLiveEdit={applyLive}
                   onCommitEdit={commitStyleEdits}
                   onSendToChat={
@@ -1450,6 +1784,7 @@ export function RunApp({
                     onCancelTarget: clearCommentTarget,
                     onShare: () => void comments.share(),
                   }}
+                  skeleton={skeleton}
                 />
               </div>
               {bridge.runtimeError && !doctorDismissed && (
@@ -1478,13 +1813,24 @@ export function RunApp({
             </div>
           ) : embedUrl ? (
             <div className="relative h-full min-h-[340px]">
-              <iframe
-                key={`${embedUrl}:${reloadNonce}`}
-                title={noun}
-                src={embedUrl}
-                onLoad={() => setFrameLoading(false)}
-                className="h-full min-h-[340px] w-full border-0 bg-white"
-              />
+              {(() => {
+                // In the dock (sidebarSlot), the VortSpec nav drives Storybook, so show the
+                // STORY only (iframe.html) — no in-iframe manager sidebar. Otherwise (desktop)
+                // embed the full Storybook manager at its root.
+                const storyOnly = !isApp && sidebarSlot && storyId;
+                const src = storyOnly
+                  ? `${embedUrl}iframe.html?id=${encodeURIComponent(storyId)}&viewMode=${storyViewMode}`
+                  : embedUrl;
+                return (
+                  <iframe
+                    key={`${src}:${reloadNonce}`}
+                    title={noun}
+                    src={src}
+                    onLoad={() => setFrameLoading(false)}
+                    className="h-full min-h-[340px] w-full border-0 bg-white"
+                  />
+                );
+              })()}
               {frameLoading && (
                 <div className="absolute inset-0 grid place-items-center bg-vs-bg-primary/60 text-xs text-vs-text-secondary">
                   Loading {noun}…
@@ -1524,14 +1870,31 @@ export function RunApp({
                 onDismiss={() => void start()}
               />
             </Centered>
+          ) : isApp ? (
+            <Centered>
+              <div className="flex max-w-md flex-col items-center gap-2 text-center">
+                <span className="text-2xl" aria-hidden>
+                  📄
+                </span>
+                <p className="text-sm font-semibold text-vs-text-primary">
+                  This is your Playground — where your pages preview.
+                </p>
+                <p className="text-xs leading-relaxed text-vs-text-muted">
+                  You don’t have any pages yet. Once your components are built, just describe the page you want in the{" "}
+                  <b>Chat sidebar</b> — it’s composed from your design-system components and appears here live. No
+                  forms or buttons to hunt for; you create pages by asking.
+                </p>
+                <Button variant="primary" className="mt-2" onClick={() => void start()}>
+                  Start app
+                </Button>
+              </div>
+            </Centered>
           ) : (
             <Centered>
               <div className="text-center">
-                <p className="text-sm text-vs-text-secondary">
-                  {isApp ? "Run your project's app to preview it live." : "Run Storybook to browse your components live."}
-                </p>
+                <p className="text-sm text-vs-text-secondary">Run Storybook to browse your components live.</p>
                 <Button variant="primary" className="mt-3" onClick={() => void start()}>
-                  {isApp ? "Start app" : "Start Storybook"}
+                  Start Storybook
                 </Button>
               </div>
             </Centered>

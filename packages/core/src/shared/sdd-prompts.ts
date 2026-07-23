@@ -27,27 +27,32 @@ const VARIANT_SET_CLAUSE =
   "component that covers ALL those variants via variant props (e.g. CVA), not a separate component per variant.";
 
 /**
- * The page-per-component design anchor (change: figma-visual-validation). A build must
- * REPRODUCE the component's authoritative Figma design, not invent a shape from its name.
- * For a Figma source, that reference is the Figma PAGE named after the component — the
- * page-per-component convention: a page called "accordion" holds the accordion and all
- * its variant frames. Tokens supply VALUES only; the reference supplies STRUCTURE. This
- * is what stops "the alert looks like a restyled button": the alert is built from the
- * alert's own page, and the reference wins over the design-system index for its shape.
+ * The design anchor (change: figma-visual-validation, hardened in figma-node-reference).
+ * A build must REPRODUCE the component's authoritative Figma design, not invent a shape
+ * from its name. The reference is the component's own Figma NODE (its component set),
+ * resolved AUTONOMOUSLY — never by asking the user for a link. Detection records each
+ * entry's `figmaNodeId`/`componentKey`; the build reads that exact node. When the id is
+ * missing, the build resolves it itself via `search_design_system` (scoped to this
+ * file's own library) — which is NOT subject to the 3-page listing cap. Tokens supply
+ * VALUES only; the reference supplies STRUCTURE. This is what stops "the alert looks
+ * like a restyled button."
  */
 const DESIGN_REFERENCE_CLAUSE = [
-  "DESIGN REFERENCE — do this BEFORE writing code: if project.yaml's `design_source` is `figma`, the",
-  "authoritative reference for a component is the Figma PAGE named after it (page-per-component: a page",
-  '"accordion" holds the accordion and all its variant frames). For each component, use the Figma MCP',
-  "(figma_file_url in project.yaml) to find that page by name, read its frames/variants, and view its",
-  "screenshot; treat that design as authoritative for the component's STRUCTURE, parts, and variants and",
-  "REPRODUCE it. Use the extracted design tokens ONLY for VALUES (color/spacing/radius/typography). Do NOT",
-  "infer the component's shape from its name, and do NOT copy a different existing component (an alert is",
-  "NOT a restyled button). This component's own Figma page reference takes precedence over the",
-  "design-system index — follow the reference even if the index holds a similar component. If NO page",
-  "matches the component's name, or the Figma MCP is unavailable so you cannot read the reference, do NOT",
-  "fabricate a design from the name: build nothing for it and report it as unreferenced (needs a Figma",
-  "page / reachable Figma MCP) so it is never mistaken for a design-matched component.",
+  "DESIGN REFERENCE — do this BEFORE writing code, entirely yourself (never ask me for a Figma link): if",
+  "project.yaml's `design_source` is `figma`, the authoritative reference for a component is its own Figma",
+  "NODE (the component set). RESOLVE it in this order: (1) the entry's `figmaNodeId`/`componentKey` in",
+  ".sdd-de/components.json — read that exact node via the Figma MCP (get_design_context / get_screenshot);",
+  "(2) if that is missing, resolve the node yourself with `search_design_system` scoped to THIS file's own",
+  "library (from `figma_file_url`) — it returns the component by name and is NOT capped like the page",
+  "listing; (3) the Desktop Bridge (figma-console) if connected. Do NOT rely on the remote page listing to",
+  "locate it — that CAPS AT 3 pages. Read the resolved node's frames/variants and view its screenshot, and",
+  "REPRODUCE that design — structure, parts, and every variant. Use the extracted design tokens ONLY for",
+  "VALUES (color/spacing/radius/typography) and use the component's OWN design tokens (e.g. the",
+  "`--component-<name>-*` semantic tokens) where the design system defines them — do NOT hardcode a hex/rgba",
+  "or invent a value. Do NOT infer the component's shape from its name, and do NOT copy a different existing",
+  "component (an alert is NOT a restyled button). The component's own node reference takes precedence over",
+  "the design-system index. If the node truly cannot be resolved by any method, do NOT fabricate from the",
+  "name: build nothing and report it unreferenced, so it is never mistaken for a design-matched component.",
 ].join(" ");
 
 /**
@@ -82,13 +87,16 @@ export const RESCAN_PROMPT = [
   "modify any component code — this only refreshes tokens and the component inventory.",
   "",
   "1. Read `.sdd-de/project.yaml` for `design_source` and the config. Connect to the configured",
-  "   source. For `design_source: figma`, PREFER the remote/official Figma MCP (the OAuth-based",
-  "   `mcp.figma.com` server — file-level reads that need NO Figma Desktop app, NO local Desktop Bridge",
-  "   plugin, and NO live layer selection) over any local bridge. Read `figma_file_url` and the variable",
-  "   collection `figma_token_collection` PLUS the text/color STYLES from the file link. Explicitly fetch",
-  "   VARIABLES + STYLES — not code generation. If a variable read needs a node scope, iterate the design",
-  "   system's foundation/component nodes and aggregate. Do NOT depend on the figma-console Desktop Bridge",
-  "   or a personal access token.",
+  "   source. For `design_source: figma`, ENUMERATE THE WHOLE FILE — every page and every component,",
+  "   not a subset. PREFER the Figma Desktop Bridge (the figma-console plugin) when it is connected: it",
+  "   lists ALL pages via `figma.root.children` and gives a complete component + variable dump on any",
+  "   Figma plan. CRITICAL: the remote/official Figma MCP's page listing CAPS AT 3 PAGES — never treat",
+  "   that first-3 listing as the file's page set (that is the exact bug that made a 14-page,",
+  "   page-per-component library detect as only ~8 doc/foundation entries). If the Desktop Bridge is",
+  "   unavailable, still cover EVERY page: read the full document / use `search_design_system` +",
+  "   `figma_get_design_system_summary` for the complete component inventory — do NOT stop at the capped",
+  "   page listing. Read `figma_file_url` and the variable collection `figma_token_collection` PLUS the",
+  "   text/color STYLES. Fetch VARIABLES + STYLES (not code generation), and NEVER fabricate a value.",
   "2. Re-extract design tokens into the configured `token_file` from the FULL variable collection + styles:",
   "   add newly-found tokens and update values that changed. NEVER guess or approximate a value — if one",
   "   truly can't be read, OMIT it and note it, never fabricate a value. Do NOT remove tokens that existing",
@@ -233,25 +241,35 @@ export const RESUME_PROMPT =
 
 export function verifyPrompt(target: string, url: string | null, isFigma: boolean): string {
   const scope = target === "all" ? "every built component" : `the "${target}" component`;
-  const refPage = isFigma
-    ? "the Figma PAGE named after the component (page-per-component: it holds the component and all its " +
-      "variant frames), read via the Figma MCP (figma_file_url in .sdd-de/project.yaml)"
+  const resolveRef = isFigma
+    ? "RESOLVE each component's authoritative Figma reference YOURSELF — never ask me for a link. Use, in " +
+      "order: (1) the entry's `figmaNodeId`/`componentKey` in .sdd-de/components.json, read via the Figma MCP " +
+      "(get_design_context / get_screenshot on that node); (2) if missing, `search_design_system` scoped to " +
+      "THIS file's own library (from `figma_file_url`) to resolve the node by name — it is NOT capped like the " +
+      "page listing; (3) the Desktop Bridge if connected. Do NOT use the remote page listing (caps at 3)."
+    : "Compare against the component's spec and design source (design_source is not Figma).";
+  const compareTo = isFigma
+    ? "the component's authoritative Figma node (resolved as above), screenshot included"
     : "the component's spec and design source";
   return [
     ...(target === "all" ? [RESUMABLE] : []),
     `Run verification for ${scope} autonomously, as THREE layers reported in this order — VISUAL, then ` +
       `TOKEN, then CODE. ${scope} is "verified" only when ALL THREE pass on real evidence; report each ` +
-      `layer's outcome independently and never let a green layer mask a failing one.`,
+      `layer's outcome independently and never let a green layer mask a failing one. ${resolveRef}`,
     `Layer 1 — VISUAL FIDELITY (the primary check): run /visual-verify for ${scope} — render it live and ` +
       `compare it, every variant and ` +
-      `state, to its authoritative design — ${refPage}. ${harnessClause(url)} Render at 375/768/1440px, ` +
+      `state, to ${compareTo}. ${harnessClause(url)} Render at 375/768/1440px, ` +
       `screenshot each variant/state, and compare to the reference; a component that COMPILES and uses ` +
       `tokens but does NOT match its reference FAILS this layer — call out the concrete differences (missing ` +
-      `parts/slots, wrong container shape, absent variants, wrong proportions), not a bare verdict. ` +
+      `parts/slots, wrong container shape, wrong border/radius/height, absent variants, wrong proportions, an ` +
+      `addon/affix rendered plainly when the design shows an attached segment), not a bare verdict. ` +
       `${figmaClause(isFigma)}`,
-    `Layer 2 — TOKEN CORRECTNESS: confirm ${scope} uses the design tokens the reference specifies ` +
-      `(color/spacing/radius/typography); grep for hardcoded hex/px and wrong-token substitutions and flag ` +
-      `each with the token that should have been used.`,
+    `Layer 2 — TOKEN CORRECTNESS: confirm ${scope} uses the design tokens the resolved reference specifies ` +
+      `(color/spacing/radius/typography), INCLUDING the component's own semantic tokens (e.g. ` +
+      `\`--component-<name>-*\`) where the design system defines them. Grep for hardcoded hex/rgb/rgba/px and ` +
+      `wrong-token substitutions across the component AND its \`*.variants.*\` file, and flag each with the ` +
+      `exact token that should have been used. Any hardcoded color (e.g. a raw #83bcc7 or rgba(...) focus ring) ` +
+      `is a TOKEN failure, even if it looks right.`,
     `Layer 3 — CODE / BUILD: run the project's type-check — 'npx tsc --noEmit' — and, for a Storybook/` +
       `library project with no dev server, also 'npm run build-storybook' (or the project's build script). ` +
       `${scope} MUST compile/build with zero errors. Any type or build error (a broken import, an interface ` +
@@ -284,8 +302,8 @@ export interface ChunkComponent {
   level?: string | null;
 }
 
-/** The model tiers VortSpec routes builds to. Never opus/fable for repetitive builds. */
-export type BuildTier = "haiku" | "sonnet";
+/** The model tiers VortSpec routes builds to. `opus` = the user's default (best) model. */
+export type BuildTier = "opus" | "sonnet" | "haiku";
 
 const LEVEL_RANK: Record<string, number> = { atom: 0, molecule: 1, organism: 2 };
 function levelRank(level?: string | null): number {
@@ -310,12 +328,16 @@ export function chunkByLevel<T extends ChunkComponent>(components: T[], size = 5
 }
 
 /**
- * Route a chunk by complexity: a chunk containing an organism gets Sonnet, an
- * atoms/molecules-only chunk gets Haiku. Component work is straightforward and
- * repetitive, so it never routes to Opus/Fable.
+ * Component creation runs on the DEFAULT (best) model the user's plan provides —
+ * `opus` here resolves to no `--model` override, i.e. exactly what the raw SDD-CLI and
+ * VortSpec's earlier versions used. Downgrading builds to Haiku to save tokens is what
+ * broke fidelity (alerts with no colored panel, dropdowns rendered inline), so we no
+ * longer trade model capability for cost on the creative build task. Never Fable.
+ * (`chunk` is kept in the signature so callers can reintroduce per-chunk routing later
+ * without a call-site change.)
  */
-export function tierForChunk(chunk: ChunkComponent[]): BuildTier {
-  return chunk.some((c) => levelRank(c.level) === 2) ? "sonnet" : "haiku";
+export function tierForChunk(_chunk: ChunkComponent[]): BuildTier {
+  return "opus";
 }
 
 export interface BuildChunkOptions {

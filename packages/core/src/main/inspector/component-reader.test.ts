@@ -42,7 +42,19 @@ describe("reportUnresolved — a visual mismatch is never masked as verified", (
     expect(reportUnresolved(r).unresolved).toBe(true);
   });
 
-  it("still honors the legacy 'status: open' marker", () => {
+  it("a passing verdict WINS over prose 'open items' (token-sync TODOs are not failures)", () => {
+    // The exact bug: reports read VERIFY: PASS with all layers pass, but also listed
+    // token-sync follow-ups as "open items / status: open" — VortSpec wrongly marked them
+    // "has issues". The machine-readable verdict is authoritative when present.
+    const r =
+      "## Findings\n" +
+      "status: open — token gap: `--spacing-48` not yet in Figma (flagged for /sync-tokens)\n" +
+      "Open item: button secondary hover color mismatch.\n\n" +
+      "VISUAL: pass\nTOKEN: pass\nCODE: pass\nVERIFY: PASS\n";
+    expect(reportUnresolved(r)).toEqual({ unresolved: false, issues: [] });
+  });
+
+  it("still honors the legacy 'status: open' marker when there is NO verdict block", () => {
     expect(reportUnresolved("### D1 something\nstatus: open\n").unresolved).toBe(true);
   });
 
