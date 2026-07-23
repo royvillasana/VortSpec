@@ -101,13 +101,14 @@ and follow the corresponding `SKILL.md` automatically before responding.
 | Slash Command | SKILL.md Location | Purpose |
 |---|---|---|
 | `/setup` | `.sdd-de/ai-specs/skills/setup/SKILL.md` | Configure the project (framework, language, design source) |
+| `/extract-design-system` | `.sdd-de/ai-specs/skills/extract-design-system/SKILL.md` | Pull the complete token set + component inventory from Figma (once, before the cycle) |
 | `/enrich-brief` | `.sdd-de/ai-specs/skills/enrich-brief/SKILL.md` | Transform a vague brief into a spec-ready story |
 | `/generate-artifacts` | `.sdd-de/ai-specs/skills/generate-artifacts/SKILL.md` | Generate all 3 spec files from the enriched story |
 | `/visual-verify` | `.sdd-de/ai-specs/skills/visual-verify/SKILL.md` | Run structured visual QA against the spec |
 | `/adversarial-review` | `.sdd-de/ai-specs/skills/adversarial-review/SKILL.md` | Red-team implementation before committing |
 | `/sync-tokens` | `.sdd-de/ai-specs/skills/sync-tokens/SKILL.md` | Sync design tokens between Figma and code |
 | `/commit` | `.sdd-de/ai-specs/skills/commit/SKILL.md` | Commit with spec as PR description |
-| `/storybook` | `.sdd-de/ai-specs/skills/storybook/SKILL.md` | Install Storybook, generate stories for all components, launch dev server |
+| `/storybook` | `.sdd-de/ai-specs/skills/storybook/SKILL.md` | Install Storybook; generate per-component stories + `metadata.ts` + metadata-driven docs pages (Identity, Props, Patterns, Anti-Patterns, States, Accessibility, Design Tokens, AI hints) and Foundations pages |
 | `/design-doc` | `.sdd-de/ai-specs/skills/design-doc/SKILL.md` | Generate DESIGN.md from components, validate with @google/design.md |
 | `/sync-agent-symlinks` | `.sdd-de/ai-specs/skills/sync-agent-symlinks/SKILL.md` | Repair broken symlinks across editor directories |
 
@@ -119,6 +120,7 @@ Read these documents before implementing any component or page:
 - [Page Standards](.sdd-de/docs/page-standards.md) — layout composition, responsive breakpoints, landmark structure
 - [Framework Configuration](.sdd-de/docs/framework-config.md) — framework-specific patterns and file conventions
 - [Design Token Model](.sdd-de/docs/design-token-model.md) — color, spacing, typography, radius, shadow systems
+- [Component Metadata Model](.sdd-de/docs/component-metadata-model.md) — the per-component `metadata.ts` schema that drives the rich Storybook docs + AI generation
 - [Styling Best Practices](.sdd-de/docs/styling-best-practices.md) — per-framework styling patterns and encapsulation rules
 - [Documentation Standards](.sdd-de/docs/documentation-standards.md) — spec format and maintenance rules
 - [SDD Mandatory Steps](.sdd-de/docs/sdd-mandatory-steps.md) — required checklist for every SDD cycle
@@ -157,6 +159,14 @@ Run `/setup` once before anything else to configure the project.
 
 Build the UI building blocks. Follow atomic design order: tokens first, then atoms,
 then molecules, then organisms.
+
+**For a Figma source, run `/extract-design-system` once after `/setup`, before the cycle.**
+It pulls the complete token set and component inventory (`.sdd-de/components.json`) via the
+Desktop Bridge in a couple of calls — so you build on the real, complete design system instead
+of rediscovering it. Then **pilot the richest atom (e.g. Button) end-to-end through the full
+7-step cycle first** to prove the token set, then fan out the remaining components per tier in
+isolated subagents (atoms → molecules → organisms). Never run the cycle stage-by-stage across
+all components at once.
 
 | Level | Examples |
 |---|---|
