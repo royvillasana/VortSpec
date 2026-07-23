@@ -33,8 +33,8 @@ importers:
         specifier: ^5.2.8
         version: 5.2.8
       '@royvillasana/sdd-de':
-        specifier: ^1.15.0
-        version: 1.15.0
+        specifier: ^1.16.0
+        version: 1.16.0
       '@vortspec/core':
         specifier: workspace:*
         version: link:../../packages/core
@@ -112,8 +112,8 @@ importers:
         specifier: ^5.2.8
         version: 5.2.8
       '@royvillasana/sdd-de':
-        specifier: ^1.15.0
-        version: 1.15.0
+        specifier: ^1.16.0
+        version: 1.16.0
       '@vortspec/core':
         specifier: workspace:*
         version: link:../../packages/core
@@ -1069,8 +1069,8 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@royvillasana/sdd-de@1.15.0':
-    resolution: {integrity: sha512-bgk+bKj97KIkT1NWtai+9eNvMT27lNws3x/Wb/L1UpUaKuHQbnjDCRG7t/LiEfXk0113snLHJqRzB6GAe/6ryQ==}
+  '@royvillasana/sdd-de@1.16.0':
+    resolution: {integrity: sha512-CXDyCzFkiszi5z8UlYuxfjC7wCXTh+So7Xpox/rYwO7Wjb9csoIE6rW8pK6rDQks6d8SXMmm1P4iKYZm06vp/g==}
     engines: {node: '>=18'}
     hasBin: true
 
@@ -4048,7 +4048,7 @@ snapshots:
   '@rollup/rollup-win32-x64-msvc@4.62.2':
     optional: true
 
-  '@royvillasana/sdd-de@1.15.0':
+  '@royvillasana/sdd-de@1.16.0':
     dependencies:
       '@clack/prompts': 0.9.1
 
