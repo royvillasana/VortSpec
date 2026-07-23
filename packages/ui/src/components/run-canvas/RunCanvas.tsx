@@ -1,5 +1,5 @@
 import { createElement, useEffect, useRef, useState } from "react";
-import type { JSX } from "react";
+import type { JSX, CSSProperties } from "react";
 import type { Rect } from "@vortspec/core/ipc";
 import type { InspectorBridge, CanvasMode } from "../../lib/useInspectorBridge";
 import { SpacingOverlay } from "./SpacingOverlay";
@@ -7,7 +7,6 @@ import { CommentsLayer, type CommentsLayerProps } from "./CommentsLayer";
 import { AiSkeletonBlock, AiSkeletonPage, AiWorkingPill } from "./AiSkeleton";
 import { CanvasToolbar } from "./CanvasToolbar";
 import { bridgeStatusMessage } from "./bridge-status";
-import { DeviceFrame, frameBezel } from "./DeviceFrame";
 import { frameApplies, type Viewport, type ViewportId, type DeviceFrameKind } from "./viewports";
 
 const px = (s?: string): number => Math.max(0, parseFloat(s ?? "") || 0);
@@ -72,29 +71,15 @@ export function RunCanvas({
   // (width null) fills as before. The overlay lives inside the same scaled box, so guest
   // rects still map 1:1 — inspect/insert stay pixel-accurate at any viewport.
   const deviceMode = viewport.width !== null;
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [area, setArea] = useState({ w: 0, h: 0 });
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-    const ro = new ResizeObserver(() => setArea({ w: el.clientWidth, h: el.clientHeight }));
-    ro.observe(el);
-    setArea({ w: el.clientWidth, h: el.clientHeight });
-    return () => ro.disconnect();
-  }, []);
   const vpW = viewport.width ?? 0;
   const vpH = viewport.height ?? 0;
   const framed: DeviceFrameKind = deviceMode && frameApplies(viewport.id) ? frame : "none";
-  const bezel = frameBezel(framed);
-  // Fit the framed device into the area with a small margin; never upscale past 1×.
-  const MARGIN = 48;
-  const fit =
-    deviceMode && area.w > 0
-      ? Math.min(1, (area.w - MARGIN) / (vpW + bezel), (area.h - MARGIN) / (vpH + bezel))
-      : 1;
-  // The effective display scale — passed to in-stage overlays so their handles/labels
-  // stay a constant on-screen size (they counter-scale by this), same role `zoom` had.
-  const zoom = fit;
+  // NO CSS transform on the webview: an Electron <webview> mis-hit-tests through a scaled
+  // ancestor (clicks land nowhere → inspect breaks), and a structural change on viewport
+  // switch remounts/reloads it. So the device preview renders at ACTUAL size (scroll if it
+  // overflows) inside a structurally-stable box that only RESIZES — the webview never
+  // remounts. Overlays therefore map 1:1 with no counter-scale (zoom = 1).
+  const zoom = 1;
 
   const bridgeSelRect = bridge.selectedId ? bridge.rects[bridge.selectedId] : undefined;
   const selRect = dragRect ?? bridgeSelRect;
@@ -149,18 +134,21 @@ export function RunCanvas({
 
   return (
     <div
-      ref={containerRef}
-      className={`relative h-full min-h-[340px] w-full overflow-hidden ${deviceMode ? "bg-vs-bg-secondary" : "bg-white"}`}
+      className={`relative h-full min-h-[340px] w-full ${deviceMode ? "overflow-auto bg-vs-bg-secondary" : "overflow-hidden bg-white"}`}
       style={insertCursor ? { cursor: insertCursor } : undefined}
     >
-      {/* Stage — the webview + overlay share one transform, so guest rects map 1:1. In a
-          device viewport the stage is a fixed-size, scaled-to-fit, optionally framed box;
-          on Desktop it fills. Either way the overlay is inside it, so inspect stays exact. */}
-      <Stage deviceMode={deviceMode} fit={fit} vpW={vpW} vpH={vpH} framed={framed}>
+      {/* Stage — hosts the webview + overlay in a structurally-stable box that only RESIZES
+          per viewport (never remounts the webview) and applies NO transform, so Electron's
+          <webview> keeps hit-testing correctly. Device viewports render at actual size,
+          centered, scrolling if they overflow; Desktop fills. */}
+      <Stage deviceMode={deviceMode} vpW={vpW} vpH={vpH} framed={framed}>
         {guestPreloadUrl ? (
           // <webview> is an Electron intrinsic element, not in React's JSX types —
           // build it via createElement to keep the loose attribute typing contained.
           createElement("webview", {
+            // Stable key: the webview must NEVER remount on a viewport switch (a remount
+            // reloads the guest and can break the bridge). Only its container resizes.
+            key: "vs-preview-webview",
             ref: bridge.attach,
             src,
             preload: guestPreloadUrl,
@@ -326,40 +314,67 @@ export function RunCanvas({
 }
 
 /**
- * The stage that hosts the webview + overlay. On Desktop it fills the canvas (no
- * scaling). In a device viewport it is a fixed-size box (the viewport's CSS px),
- * optionally wrapped in a device frame, scaled to fit and centered. The overlay is
- * a sibling of the webview inside this box, so both share the box's coordinate space
- * and the scale transform — guest rects map 1:1 regardless of viewport.
+ * The stage that hosts the webview + overlay. The webview's position in the tree is the
+ * SAME in every viewport — only the wrapping div's className/style change — so the webview
+ * never remounts (and never reloads) on a viewport switch. NO CSS transform is used, since
+ * an Electron <webview> mis-hit-tests through a scaled ancestor. Desktop fills the canvas;
+ * a device viewport is an actual-size box (the viewport's CSS px), centered and scrolling
+ * if it overflows, with the frame drawn as CSS on the box (no wrapping element).
  */
 function Stage({
   deviceMode,
-  fit,
   vpW,
   vpH,
   framed,
   children,
 }: {
   deviceMode: boolean;
-  fit: number;
   vpW: number;
   vpH: number;
   framed: DeviceFrameKind;
   children: JSX.Element[] | JSX.Element;
 }): JSX.Element {
-  if (!deviceMode) {
-    return <div className="absolute inset-0 origin-top-left">{children}</div>;
-  }
+  const frameStyle: CSSProperties =
+    framed === "iphone"
+      ? {
+          borderRadius: 44,
+          overflow: "hidden",
+          boxShadow: "0 0 0 11px #0b0b0e, 0 0 0 13px #3a3a40, 0 24px 60px -18px rgba(0,0,0,.55)",
+        }
+      : framed === "android"
+        ? {
+            borderRadius: 32,
+            overflow: "hidden",
+            boxShadow: "0 0 0 9px #111214, 0 0 0 11px #2c2d31, 0 24px 60px -18px rgba(0,0,0,.55)",
+          }
+        : {};
   return (
-    <div className="absolute inset-0 grid place-items-center overflow-auto p-6">
-      <div style={{ transform: `scale(${fit})`, transformOrigin: "center" }}>
-        <DeviceFrame kind={framed}>
-          <div className="relative origin-top-left bg-white" style={{ width: vpW, height: vpH }}>
-            {children}
-          </div>
-        </DeviceFrame>
+    // Outer wrapper: same element every viewport (re-styled, not replaced).
+    <div className={deviceMode ? "flex min-h-full min-w-full items-start justify-center p-10" : "absolute inset-0"}>
+      {/* Screen box: the webview's stable parent — only its size/frame styling changes. */}
+      <div
+        className={deviceMode ? "relative flex-none bg-white" : "absolute inset-0"}
+        style={deviceMode ? { width: vpW, height: vpH, ...frameStyle } : undefined}
+      >
+        {children}
+        {deviceMode && framed !== "none" && <FrameDecor kind={framed} />}
       </div>
     </div>
+  );
+}
+
+/** Non-interactive device chrome drawn over the screen — iPhone island + home indicator,
+ *  Android camera hole. Siblings of the webview, so toggling them never remounts it. */
+function FrameDecor({ kind }: { kind: DeviceFrameKind }): JSX.Element {
+  const base: CSSProperties = { position: "absolute", left: "50%", transform: "translateX(-50%)", background: "#000", zIndex: 5, pointerEvents: "none" };
+  if (kind === "android") {
+    return <div style={{ ...base, top: 8, width: 10, height: 10, borderRadius: 999, boxShadow: "0 0 0 2px rgba(255,255,255,.06)" }} />;
+  }
+  return (
+    <>
+      <div style={{ ...base, top: 9, width: 92, height: 26, borderRadius: 999 }} />
+      <div style={{ ...base, bottom: 8, width: "34%", height: 5, borderRadius: 999, background: "rgba(255,255,255,.5)" }} />
+    </>
   );
 }
 
