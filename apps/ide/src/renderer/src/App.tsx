@@ -26,7 +26,7 @@ import { PanelGroup } from "./components/PanelGroup";
 import { Resizer } from "./components/Resizer";
 import { useWorkspaceFiles } from "./lib/useWorkspaceFiles";
 import { useLayout } from "./lib/useLayout";
-import { effectiveWidths, isSidebarView, type Activity } from "./lib/layout";
+import { effectiveWidths, isSidebarView, STORYBOOK_SIDEBAR_WIDTH, type Activity } from "./lib/layout";
 import { IdeContext, buildSeedContext, buildLiveContext, type EditorSelection } from "./lib/ide-context";
 import { useIdeMcp, IDE_MCP_TOOL_GROUP } from "./lib/useIdeMcp";
 import { IdeActionDialog } from "./components/IdeActionDialog";
@@ -603,7 +603,9 @@ export default function App(): JSX.Element {
               The right assistant sidebar is gone — the chat lives here now, mounted once so
               the conversation persists across every section. */}
           <LeftDock
-            width={eff.primary}
+            // Storybook frames the native SB sidebar (default nav width 300) — pin the dock
+            // to that exact width so its right edge isn't clipped; every other view resizes.
+            width={layout.activity === "play" ? STORYBOOK_SIDEBAR_WIDTH : eff.primary}
             sectionLabel={
               isExplorer
                 ? "Explorer"

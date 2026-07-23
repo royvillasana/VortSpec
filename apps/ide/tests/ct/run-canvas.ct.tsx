@@ -37,7 +37,7 @@ async function openRun(c: import("@playwright/test").Locator): Promise<void> {
   await rail(c).getByRole("button", { name: "Playground" }).click();
 }
 
-test("Storybook drives its story nav from the dock's Stories tab", async ({ mount }) => {
+test("Storybook shows its native sidebar (cropped) in the dock, previewing the story", async ({ mount }) => {
   const mock = {
     ...base,
     devStatus: { state: "running", url: "http://localhost:6006", script: "storybook", message: null },
@@ -52,14 +52,12 @@ test("Storybook drives its story nav from the dock's Stories tab", async ({ moun
   await c.getByRole("button", { name: /acme-design-system/ }).click();
   await rail(c).getByRole("button", { name: "Storybook" }).click();
   const dock = c.getByRole("complementary");
-  // Storybook's nav lives in the dock's Stories tab (not the in-iframe sidebar).
+  // The dock's Stories tab hosts the REAL Storybook sidebar, not a hand-rolled list:
+  // the native manager is embedded (cropped to its sidebar) and drives the canvas.
   await expect(dock.getByRole("button", { name: "Stories", exact: true })).toBeVisible();
-  await expect(dock.getByText("Button", { exact: true })).toBeVisible();
-  await expect(dock.getByRole("button", { name: "Primary" })).toBeVisible();
-  await expect(dock.getByRole("button", { name: "Default" })).toBeVisible();
-  // Clicking a story drives the embedded Storybook to that story's preview.
-  await dock.getByRole("button", { name: "Secondary" }).click();
-  await expect(c.locator("iframe")).toHaveAttribute("src", /iframe\.html\?id=components-button--secondary/);
+  await expect(dock.locator("webview")).toHaveAttribute("src", "http://localhost:6006/");
+  // The canvas previews the seeded first story (story-only — the in-iframe manager is off).
+  await expect(c.locator("iframe")).toHaveAttribute("src", /iframe\.html\?id=components-button--primary/);
 });
 
 test("the Playground shows the unified left dock (Design + Chat tabs), never zero-width", async ({ mount }) => {
