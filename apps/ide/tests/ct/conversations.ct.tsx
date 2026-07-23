@@ -19,6 +19,7 @@ const base = {
 
 async function open(c: import("@playwright/test").Locator): Promise<void> {
   await c.getByRole("button", { name: /acme-design-system/ }).click();
+  await c.getByRole("button", { name: "Chat", exact: true }).click(); // chat now lives in the left dock's Chat tab
 }
 
 const active = (c: import("@playwright/test").Locator) => c.getByTestId("active-conversation");

@@ -22,5 +22,5 @@ test("opening the walk-through extracts and opens a project", async ({ mount }) 
   const c = await mount(<App />, { hooksConfig: { mock: base } });
   await c.getByRole("button", { name: /Open the walk-through project/ }).click();
   // createFolder → openWalkthrough (ok) → refreshProject → onOpen → the workspace shell.
-  await expect(c.locator("aside").getByText("Explorer", { exact: true })).toBeVisible();
+  await expect(c.getByRole("complementary").getByRole("button", { name: "Explorer", exact: true })).toBeVisible();
 });

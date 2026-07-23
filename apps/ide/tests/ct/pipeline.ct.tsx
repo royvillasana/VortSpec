@@ -31,6 +31,6 @@ test("a founded project opens on the Explorer, not the foundation", async ({ mou
   // Founded → has tokens; the IDE opens normally (Explorer) with Flow still reachable.
   const c = await mount(<App />, { hooksConfig: { mock: { ...base, tokens: FOUNDED_TOKENS } } });
   await c.getByRole("button", { name: /acme-design-system/ }).click();
-  await expect(c.locator("aside").getByText("Explorer", { exact: true })).toBeVisible();
+  await expect(c.getByRole("complementary").getByRole("button", { name: "Explorer", exact: true })).toBeVisible();
   await expect(c.getByRole("heading", { name: "Set up the foundation" })).toHaveCount(0);
 });

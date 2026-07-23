@@ -16,6 +16,8 @@ import { RunApp } from "@vortspec/ui/RunApp";
 import { Profile } from "@vortspec/ui/Profile";
 import { ProjectSetup } from "@vortspec/ui/ProjectSetup";
 import { ToolkitUpdateBanner } from "@vortspec/ui/ToolkitUpdateBanner";
+import { LeftDock } from "./components/LeftDock";
+import { createPortal } from "react-dom";
 import { ActivityBar } from "./components/ActivityBar";
 import { WorkspacePicker } from "./components/WorkspacePicker";
 import { Explorer } from "./components/Explorer";
@@ -52,6 +54,8 @@ export default function App(): JSX.Element {
   const [branch, setBranch] = useState<string | null>(null);
   // The assistant chat is running — drives the Playground's "AI is working" page skeleton.
   const [dockBusy, setDockBusy] = useState(false);
+  // The unified left dock's Section-tab slot — the current view portals its sidebar here.
+  const [sectionSlot, setSectionSlot] = useState<HTMLDivElement | null>(null);
   const [gitCounts, setGitCounts] = useState<{ changes: number; ahead: number }>({ changes: 0, ahead: 0 });
   // The live editor selection, surfaced to the assistant as grounding context.
   const [selection, setSelection] = useState<EditorSelection | null>(null);
@@ -588,14 +592,73 @@ export default function App(): JSX.Element {
         <div className="flex min-h-0 flex-1 overflow-hidden">
           <ActivityBar active={layout.activity} onSelect={(a) => (a === "home" ? setWorkspace(null) : dispatch({ type: "setActivity", activity: a }))} chatOpen={layout.secondaryOpen} onToggleChat={() => dispatch({ type: "toggleSecondary" })} />
 
-          {showPrimary && (
-            <>
-              <aside style={{ width: eff.primary }} className="flex shrink-0 flex-col overflow-auto border-r border-vs-border-default bg-vs-bg-surface transition-[width] duration-150 ease-out">
-                <Explorer project={workspace} activePath={wf.activePath} onOpen={openFromExplorer} onCollapse={() => dispatch({ type: "togglePrimary" })} openCount={wf.files.length} newFileSignal={newFileSignal} />
-              </aside>
-              <Resizer orientation="vertical" ariaLabel="Resize sidebar" onDelta={(d) => dispatch({ type: "nudgePrimary", delta: d })} />
-            </>
-          )}
+          {/* The ONE left sidebar: the current view's Section sidebar + the persistent Chat.
+              The right assistant sidebar is gone — the chat lives here now, mounted once so
+              the conversation persists across every section. */}
+          <LeftDock
+            width={eff.primary}
+            sectionLabel={isExplorer ? "Explorer" : "Panel"}
+            hasSection={isExplorer}
+            onSectionSlot={setSectionSlot}
+            chat={
+              <div className="flex min-h-0 flex-1 flex-col">
+                <div
+                  data-testid="assistant-context"
+                  className="flex flex-none flex-wrap items-center gap-1.5 border-b border-vs-border-subtle bg-vs-bg-surface px-3 py-1.5 text-[11px] text-vs-text-muted"
+                >
+                  <span className="uppercase tracking-wide">Context</span>
+                  {wf.activePath ? (
+                    <span className="truncate rounded bg-vs-bg-elevated px-1.5 py-0.5 font-mono text-vs-text-secondary">
+                      {wf.activePath}
+                    </span>
+                  ) : (
+                    <span>no file open</span>
+                  )}
+                  {selection && (
+                    <span
+                      title="Selected lines are sent to the assistant as context"
+                      className="rounded bg-vs-accent-subtle px-1.5 py-0.5 font-mono text-vs-accent"
+                    >
+                      ⧉ {selection.startLine === selection.endLine
+                        ? `line ${selection.startLine}`
+                        : `${selection.endLine - selection.startLine + 1} lines`}
+                    </span>
+                  )}
+                </div>
+                <div className="min-h-0 flex-1">
+                  <ConversationTabs
+                    project={workspace}
+                    showSession
+                    allowModify
+                    userName={userName}
+                    seedContext={buildSeedContext(previewUrl)}
+                    liveContext={buildLiveContext(wf.activePath, selection)}
+                    mcpConfigPath={ideMcp.configPath}
+                    extraAllowedTools={ideMcp.configPath ? [IDE_MCP_TOOL_GROUP] : undefined}
+                    pendingRef={pendingRef}
+                    incomingTask={assistantTask}
+                    onReturnToOrigin={(returnTo) => dispatch({ type: "setActivity", activity: returnTo as Activity })}
+                    onBusyChange={setDockBusy}
+                  />
+                </div>
+              </div>
+            }
+          />
+          <Resizer orientation="vertical" ariaLabel="Resize sidebar" onDelta={(d) => dispatch({ type: "nudgePrimary", delta: d })} />
+          {/* Explorer's file tree is portaled into the dock's Section tab. */}
+          {isExplorer &&
+            sectionSlot &&
+            createPortal(
+              <Explorer
+                project={workspace}
+                activePath={wf.activePath}
+                onOpen={openFromExplorer}
+                onCollapse={() => dispatch({ type: "togglePrimary" })}
+                openCount={wf.files.length}
+                newFileSignal={newFileSignal}
+              />,
+              sectionSlot,
+            )}
 
           <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
             {/* Breadcrumb — close/change the project (back to Home), above the editor tabs. */}
@@ -636,51 +699,6 @@ export default function App(): JSX.Element {
               {isExplorer ? centerForExplorer() : workPanel()}
             </div>
           </div>
-
-          {layout.secondaryOpen && (
-            <>
-              <Resizer orientation="vertical" ariaLabel="Resize assistant" onDelta={(d) => dispatch({ type: "nudgeSecondary", delta: -d })} />
-              <div style={{ width: eff.secondary }} className="flex min-w-0 shrink-0 flex-col overflow-hidden border-l border-vs-border-default transition-[width] duration-150 ease-out">
-                <div data-testid="assistant-context" className="flex flex-none flex-wrap items-center gap-1.5 border-b border-vs-border-subtle bg-vs-bg-surface px-3 py-1.5 text-[11px] text-vs-text-muted">
-                  <span className="uppercase tracking-wide">Context</span>
-                  {wf.activePath ? (
-                    <span className="truncate rounded bg-vs-bg-elevated px-1.5 py-0.5 font-mono text-vs-text-secondary">{wf.activePath}</span>
-                  ) : (
-                    <span>no file open</span>
-                  )}
-                  {selection && (
-                    <span
-                      title="Selected lines are sent to the assistant as context"
-                      className="rounded bg-vs-accent-subtle px-1.5 py-0.5 font-mono text-vs-accent"
-                    >
-                      ⧉ {selection.startLine === selection.endLine
-                        ? `line ${selection.startLine}`
-                        : `${selection.endLine - selection.startLine + 1} lines`}
-                    </span>
-                  )}
-                </div>
-                <div className="min-h-0 flex-1">
-                  <ConversationTabs
-                    project={workspace}
-                    showSession
-                    allowModify
-                    userName={userName}
-                    seedContext={buildSeedContext(previewUrl)}
-                    liveContext={buildLiveContext(wf.activePath, selection)}
-                    mcpConfigPath={ideMcp.configPath}
-                    extraAllowedTools={ideMcp.configPath ? [IDE_MCP_TOOL_GROUP] : undefined}
-                    pendingRef={pendingRef}
-                    incomingTask={assistantTask}
-                    onReturnToOrigin={(returnTo) =>
-                      dispatch({ type: "setActivity", activity: returnTo as Activity })
-                    }
-                    onBusyChange={setDockBusy}
-                    onClose={() => dispatch({ type: "toggleSecondary" })}
-                  />
-                </div>
-              </div>
-            </>
-          )}
         </div>
 
         <footer className="flex h-6 shrink-0 items-center gap-2 border-t border-vs-border-default bg-vs-bg-surface px-3 text-[11px] text-vs-text-muted">

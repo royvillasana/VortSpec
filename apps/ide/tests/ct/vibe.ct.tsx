@@ -25,6 +25,7 @@ const base = {
 
 async function open(c: import("@playwright/test").Locator): Promise<void> {
   await c.getByRole("button", { name: /acme-design-system/ }).click();
+  await c.getByRole("button", { name: "Chat", exact: true }).click(); // chat now lives in the left dock's Chat tab
 }
 
 test("the assistant session panel shows model, skills, and MCP status", async ({ mount }) => {
@@ -205,14 +206,18 @@ test("mounts a modify-capable assistant grounded in the workspace", async ({ mou
 test("seeds the assistant context with the open file", async ({ mount }) => {
   const c = await mount(<App />, { hooksConfig: { mock: base } });
   await open(c);
+  await c.getByRole("complementary").getByRole("button", { name: "Explorer", exact: true }).click();
   await c.getByRole("button", { name: "README.md" }).click();
+  await c.getByRole("button", { name: "Chat", exact: true }).click();
   await expect(c.getByTestId("assistant-context")).toContainText("README.md");
 });
 
 test("sends the open file as hidden grounding without echoing it in the bubble", async ({ mount }) => {
   const c = await mount(<App />, { hooksConfig: { mock: base } });
   await open(c);
+  await c.getByRole("complementary").getByRole("button", { name: "Explorer", exact: true }).click();
   await c.getByRole("button", { name: "README.md" }).click();
+  await c.getByRole("button", { name: "Chat", exact: true }).click();
   await c.getByPlaceholder(/@ a file/).fill("explain this");
   await c.getByRole("button", { name: "Send" }).click();
   // The prompt actually sent to Claude carries the live IDE grounding…
