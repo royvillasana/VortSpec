@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import type { JSX, ReactNode } from "react";
 
 /**
@@ -17,7 +18,7 @@ export function LeftDock({
   width,
   sectionLabel,
   hasSection,
-  onSectionSlot,
+  sectionEl,
   tab,
   onTabChange,
   chat,
@@ -27,8 +28,10 @@ export function LeftDock({
   sectionLabel: string;
   /** Whether the current view contributes a section sidebar (else only Chat shows). */
   hasSection: boolean;
-  /** Receives the section tab's slot element — the host portals the view's sidebar in. */
-  onSectionSlot: (el: HTMLDivElement | null) => void;
+  /** A STABLE slot element (created once by the host) that views portal their sidebar into.
+   *  We mount it into the Section tab and only toggle its container's visibility — so the
+   *  portal target never changes identity (no churn) and never hits a null gap. */
+  sectionEl: HTMLElement;
   /** Controlled active tab (so the host can reveal Chat, e.g. on "send to chat"). */
   tab: "section" | "chat";
   onTabChange: (tab: "section" | "chat") => void;
@@ -36,6 +39,11 @@ export function LeftDock({
   chat: ReactNode;
 }): JSX.Element {
   const active = hasSection ? tab : "chat";
+  const mountRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const mount = mountRef.current;
+    if (mount && sectionEl.parentElement !== mount) mount.appendChild(sectionEl);
+  }, [sectionEl]);
 
   return (
     <aside
@@ -53,11 +61,8 @@ export function LeftDock({
         </TabBtn>
       </div>
 
-      {/* Section slot — the host portals the current view's sidebar here. */}
-      <div
-        ref={onSectionSlot}
-        className={`min-h-0 flex-1 flex-col overflow-auto ${active === "section" ? "flex" : "hidden"}`}
-      />
+      {/* Section slot — the stable `sectionEl` is mounted here; the view portals into it. */}
+      <div ref={mountRef} className={active === "section" ? "flex min-h-0 flex-1 flex-col" : "hidden"} />
       {/* Chat — always mounted (only hidden), so its conversation persists everywhere. */}
       <div className={`min-h-0 flex-1 flex-col ${active === "chat" ? "flex" : "hidden"}`}>{chat}</div>
     </aside>

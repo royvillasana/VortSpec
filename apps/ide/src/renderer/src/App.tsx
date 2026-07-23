@@ -54,8 +54,14 @@ export default function App(): JSX.Element {
   const [branch, setBranch] = useState<string | null>(null);
   // The assistant chat is running — drives the Playground's "AI is working" page skeleton.
   const [dockBusy, setDockBusy] = useState(false);
-  // The unified left dock's Section-tab slot — the current view portals its sidebar here.
-  const [sectionSlot, setSectionSlot] = useState<HTMLDivElement | null>(null);
+  // The unified left dock's Section-tab slot — a STABLE div created once, so views can
+  // portal their sidebar into it without a null gap or churn (the dock just mounts it and
+  // toggles its container's visibility). The current view portals into this element.
+  const [sectionSlot] = useState<HTMLDivElement>(() => {
+    const el = document.createElement("div");
+    el.className = "flex min-h-0 flex-1 flex-col overflow-auto";
+    return el;
+  });
   const [leftTab, setLeftTab] = useState<"section" | "chat">("section");
   const [gitCounts, setGitCounts] = useState<{ changes: number; ahead: number }>({ changes: 0, ahead: 0 });
   // The live editor selection, surfaced to the assistant as grounding context.
@@ -602,7 +608,7 @@ export default function App(): JSX.Element {
               isExplorer ? "Explorer" : layout.activity === "run" || layout.activity === "play" ? "Design" : "Panel"
             }
             hasSection={isExplorer || layout.activity === "run" || layout.activity === "play"}
-            onSectionSlot={setSectionSlot}
+            sectionEl={sectionSlot}
             tab={leftTab}
             onTabChange={setLeftTab}
             chat={
