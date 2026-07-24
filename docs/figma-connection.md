@@ -56,6 +56,14 @@ caught **before** a scan wastes a run on guessed tokens.
 > → `/mcp` → Authenticate) and demotes the token/bridge fix to a fallback. The
 > Settings token field is likewise framed as "most people don't need this."
 
+> **First-run auto-installs the MCP** (change: `figma-mcp-prerequisite`). The Figma
+> MCP is a first-class prerequisite: `environment-check` renders a **Figma MCP** row
+> with a fix, and the guided first-run **runs** `claude mcp add … figma …` for the
+> user (the "Add Figma MCP" fix / `env:addFigmaMcp`), then — since MCP OAuth is
+> interactive — guides `/mcp → Authenticate` in the embedded terminal and polls
+> `claude mcp list` to green. It is distinct from the **figma-cli** step (VortSpec's
+> local writer): the MCP reads design context into Claude; figma-cli writes back.
+
 `main/figma/figma-token.ts` — write-through only, **no VortSpec-side storage**
 (invariant #4):
 

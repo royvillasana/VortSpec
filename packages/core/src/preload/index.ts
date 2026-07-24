@@ -61,6 +61,7 @@ const api: VortSpecApi = {
   checkEnvironment: () => invoke("env:check"),
   verifyLogin: () => invoke("env:verifyLogin"),
   verifyFigmaMcp: () => invoke("env:verifyFigmaMcp"),
+  addFigmaMcp: () => invoke("env:addFigmaMcp"),
   openInstall: (url: string) => invoke("env:openInstall", url),
 
   pickFolder: (create = false) => invoke("workspace:pickFolder", { create }),

@@ -57,8 +57,9 @@ export function FirstRunSetup({ project, onDone, onSkip }: FirstRunSetupProps): 
 
   const [termId, setTermId] = useState<string | null>(null);
   const [claude, setClaude] = useState<StepStatus>("pending");
+  const [figmaMcp, setFigmaMcp] = useState<StepStatus>("pending");
   const [figma, setFigma] = useState<StepStatus>("pending");
-  const [busy, setBusy] = useState<null | "claude" | "figma">(null);
+  const [busy, setBusy] = useState<null | "claude" | "figma-mcp" | "figma">(null);
   const [detecting, setDetecting] = useState(true);
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -66,12 +67,14 @@ export function FirstRunSetup({ project, onDone, onSkip }: FirstRunSetupProps): 
   useEffect(() => {
     let alive = true;
     void (async () => {
-      const [login, fig] = await Promise.all([
+      const [login, mcp, fig] = await Promise.all([
         api.verifyLogin().catch(() => null),
+        api.verifyFigmaMcp().catch(() => null),
         api.figmaStatus().catch(() => null),
       ]);
       if (!alive) return;
       if (login?.status === "pass") setClaude("done");
+      if (mcp?.status === "pass") setFigmaMcp("done");
       if (fig?.connected) setFigma("done");
       setDetecting(false);
     })();
@@ -82,7 +85,9 @@ export function FirstRunSetup({ project, onDone, onSkip }: FirstRunSetupProps): 
   }, []);
 
   const terminalReady = termId !== null;
-  const allDone = terminalReady && claude === "done" && figma === "done";
+  // Core-independent of the local figma-cli: the Figma MCP (how VortSpec reads
+  // design context) is the required Figma path here; figma-cli is a recommended extra.
+  const allDone = terminalReady && claude === "done" && figmaMcp === "done";
 
   // Step 2 — drive `claude` into the embedded terminal (which walks the user
   // through browser login on an unauthed machine), then poll until logged in.
@@ -109,7 +114,40 @@ export function FirstRunSetup({ project, onDone, onSkip }: FirstRunSetupProps): 
     pollRef.current = setTimeout(() => void poll(), 4000);
   }, [termId]);
 
-  // Step 3 — connect Figma (figma-cli, the primary path), then re-check.
+  // Step 3 — install the Figma MCP (`claude mcp add … figma …`) so Claude can read
+  // design context. MCP OAuth is interactive, so when it needs authentication we open
+  // `claude` in the terminal, guide `/mcp → Authenticate`, and poll (usage-free) to green.
+  const setupFigmaMcp = useCallback(() => {
+    setFigmaMcp("active");
+    setBusy("figma-mcp");
+    void (async () => {
+      const added = await api.addFigmaMcp().catch(() => null);
+      if (added?.status === "pass") {
+        setFigmaMcp("done");
+        setBusy(null);
+        return;
+      }
+      if (termId) void api.terminalWrite(termId, "claude\r");
+      const start = Date.now();
+      const poll = async (): Promise<void> => {
+        const r = await api.verifyFigmaMcp().catch(() => null);
+        if (r?.status === "pass") {
+          setFigmaMcp("done");
+          setBusy(null);
+          return;
+        }
+        if (Date.now() - start > 5 * 60_000) {
+          setFigmaMcp("error");
+          setBusy(null);
+          return;
+        }
+        pollRef.current = setTimeout(() => void poll(), 3000);
+      };
+      pollRef.current = setTimeout(() => void poll(), 4000);
+    })();
+  }, [termId]);
+
+  // Step 4 — connect figma-cli (VortSpec's local writer), then re-check.
   const connectFigma = useCallback(async () => {
     setFigma("active");
     setBusy("figma");
@@ -153,13 +191,27 @@ export function FirstRunSetup({ project, onDone, onSkip }: FirstRunSetupProps): 
 
           <Step
             n={3}
-            title="Connect Figma"
+            title="Set up the Figma MCP"
+            status={detecting ? "active" : figmaMcp}
+            detail="Installs the Figma MCP so Claude can read your design context; complete /mcp → Authenticate in the terminal. VortSpec stores no credentials."
+          >
+            {figmaMcp !== "done" && !detecting && (
+              <Button variant="primary" disabled={!terminalReady || busy !== null} onClick={setupFigmaMcp}>
+                {busy === "figma-mcp" ? "Waiting for authorization…" : "Set up Figma MCP"}
+              </Button>
+            )}
+            {figmaMcp === "error" && <span className="text-[11px] text-vs-warning">Didn't detect an authorized Figma MCP — try again.</span>}
+          </Step>
+
+          <Step
+            n={4}
+            title="Connect Figma (local editing)"
             status={detecting ? "active" : figma}
-            detail="Connect figma-cli so VortSpec can read your design system (optional, for Figma sources)."
+            detail="Connect figma-cli so VortSpec can write back to Figma (recommended, for Figma sources)."
           >
             {figma !== "done" && !detecting && (
               <Button variant="default" disabled={busy !== null} onClick={() => void connectFigma()}>
-                {busy === "figma" ? "Connecting…" : "Connect Figma"}
+                {busy === "figma" ? "Connecting…" : "Connect figma-cli"}
               </Button>
             )}
             {figma === "error" && <span className="text-[11px] text-vs-warning">Couldn't connect — see the Figma panel.</span>}

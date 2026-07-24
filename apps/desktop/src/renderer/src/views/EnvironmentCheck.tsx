@@ -62,10 +62,26 @@ export function EnvironmentCheck({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  async function addFigma(): Promise<void> {
+    setBusy("figma-mcp");
+    onReport(patchCheck(report, "figma-mcp", { status: "checking" }));
+    try {
+      // Runs `claude mcp add … figma …`; a freshly added server reports "needs
+      // authentication" until the user completes `/mcp → Authenticate`.
+      onReport(patchCheck(report, "figma-mcp", await api.addFigmaMcp()));
+    } finally {
+      setBusy(null);
+    }
+  }
+
   async function runFix(check: EnvCheck): Promise<void> {
     if (!check.fix) return;
     if (check.fix.kind === "install-link" && check.fix.url) {
       await api.openInstall(check.fix.url);
+      return;
+    }
+    if (check.fix.kind === "figma-add") {
+      await addFigma();
       return;
     }
     if (check.id === "figma-mcp") {

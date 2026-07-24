@@ -28,6 +28,10 @@
       "types": "./src/components/RunPanel.tsx",
       "default": "./src/components/RunPanel.tsx"
     },
+    "./FigmaMcpBanner": {
+      "types": "./src/components/FigmaMcpBanner.tsx",
+      "default": "./src/components/FigmaMcpBanner.tsx"
+    },
     "./GitGraph": {
       "types": "./src/components/GitGraph.tsx",
       "default": "./src/components/GitGraph.tsx"

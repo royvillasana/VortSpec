@@ -235,8 +235,9 @@ export const checkStatusSchema = z.enum(["pass", "fail", "unknown", "checking"])
 export type CheckStatus = z.infer<typeof checkStatusSchema>;
 
 export const fixActionSchema = z.object({
-  /** install-link → open an external URL; open-login → run login in the PTY; verify → re-run the check */
-  kind: z.enum(["install-link", "open-login", "verify"]),
+  /** install-link → open an external URL; open-login → run login in the PTY; verify → re-run the check;
+   *  figma-add → run `claude mcp add … figma …` for the user, then re-verify */
+  kind: z.enum(["install-link", "open-login", "verify", "figma-add"]),
   label: z.string(),
   url: z.string().url().optional(),
 });
@@ -316,6 +317,7 @@ export const ipcContract = {
   "env:check": { request: z.void(), response: envReportSchema },
   "env:verifyLogin": { request: z.void(), response: envCheckSchema },
   "env:verifyFigmaMcp": { request: z.void(), response: envCheckSchema },
+  "env:addFigmaMcp": { request: z.void(), response: envCheckSchema },
   "env:openInstall": { request: z.string().url(), response: z.void() },
 
   "workspace:pickFolder": {
