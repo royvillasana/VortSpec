@@ -24,6 +24,7 @@ export interface MockConfig {
   tokens?: InspectorTokensResult;
   components?: InspectorComponentsResult;
   figmaMcp?: EnvCheck;
+  figmaMcpAdd?: EnvCheck;
   /** Initial dev-server status returned by devServerStatus(). */
   devStatus?: DevServerStatus;
   /** Status returned by startDevServer() — defaults to a running server with a URL. */
@@ -242,6 +243,8 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
     verifyLogin: async () => ({ id: "claude-login", label: "Claude", status: "pass" }),
     verifyFigmaMcp: async () =>
       cfg.figmaMcp ?? { id: "figma-mcp", label: "Figma MCP", status: "unknown", detail: "" },
+    addFigmaMcp: async () =>
+      cfg.figmaMcpAdd ?? { id: "figma-mcp", label: "Figma MCP", status: "pass", detail: "Connected" },
     openInstall: async (url: string) => {
       installOpens.push(url);
       return undefined;

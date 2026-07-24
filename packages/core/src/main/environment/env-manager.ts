@@ -25,17 +25,22 @@ const CLAUDE_INSTALL: FixAction = {
 };
 const OPEN_LOGIN: FixAction = { kind: "open-login", label: "Open login" };
 const VERIFY_LOGIN: FixAction = { kind: "verify", label: "Verify login" };
-const FIGMA_ADD: FixAction = {
-  kind: "install-link",
-  label: "Add Figma MCP",
-  url: "https://code.claude.com/docs/en/mcp",
-};
-const FIGMA_CONNECT: FixAction = {
-  kind: "install-link",
-  label: "Connect Figma",
-  url: "https://claude.ai/customize/connectors",
-};
+// Actionable: runs `claude mcp add … figma …` for the user (not a docs link).
+const FIGMA_ADD: FixAction = { kind: "figma-add", label: "Add Figma MCP" };
+// Configured-but-unauthed: authorization is interactive (`/mcp → Authenticate`),
+// so the fix re-verifies after the user completes OAuth in the terminal.
+const FIGMA_CONNECT: FixAction = { kind: "verify", label: "Authenticate & verify" };
 const VERIFY_FIGMA: FixAction = { kind: "verify", label: "Verify" };
+
+/** The documented, minimal Figma MCP install — one constant so the URL/command lives in one place. */
+export const REMOTE_FIGMA_MCP_ARGS = [
+  "mcp",
+  "add",
+  "--transport",
+  "http",
+  "figma",
+  "https://mcp.figma.com/mcp",
+] as const;
 
 const MIN_NODE_MAJOR = 20;
 
@@ -147,7 +152,7 @@ export async function verifyFigmaMcp(): Promise<EnvCheck> {
       id: "figma-mcp",
       label: "Figma MCP",
       status: "unknown",
-      detail: "Not configured — only needed for Figma design sources",
+      detail: "Not configured — add it to work with Figma",
       fix: FIGMA_ADD,
     };
   }
@@ -170,6 +175,39 @@ export async function verifyFigmaMcp(): Promise<EnvCheck> {
     detail: "Configured (status unclear)",
     fix: FIGMA_CONNECT,
   };
+}
+
+/**
+ * Install the Figma MCP for the user by running the documented
+ * `claude mcp add … figma …`. Idempotent — an "already exists/added" result is
+ * treated as success. Returns the post-add verification (a freshly added server
+ * reports "needs authentication" until the user completes `/mcp → Authenticate`).
+ * Writes only into the user's own Claude MCP config; VortSpec handles no credentials.
+ */
+export async function addFigmaMcp(): Promise<EnvCheck> {
+  const r = await execFileSafe("claude", [...REMOTE_FIGMA_MCP_ARGS], { timeoutMs: 30000 });
+  if (r.spawnError) {
+    return {
+      id: "figma-mcp",
+      label: "Figma MCP",
+      status: "unknown",
+      detail: "Could not run Claude Code — is it installed and on PATH?",
+      fix: FIGMA_ADD,
+    };
+  }
+  const out = `${r.stdout}\n${r.stderr}`;
+  const alreadyThere = /already\s+(exists|added|configured)|already\s+in/i.test(out);
+  if (r.code !== 0 && !alreadyThere) {
+    return {
+      id: "figma-mcp",
+      label: "Figma MCP",
+      status: "fail",
+      detail: r.stderr.trim().split("\n")[0] || "Could not add the Figma MCP",
+      fix: FIGMA_ADD,
+    };
+  }
+  // Added (or already present) — report the real connection/auth state.
+  return verifyFigmaMcp();
 }
 
 const AUTH_ERROR_RE =

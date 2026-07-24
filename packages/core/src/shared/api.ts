@@ -38,6 +38,8 @@ export interface VortSpecApi {
   checkEnvironment(): Promise<IpcResponse<"env:check">>;
   verifyLogin(): Promise<IpcResponse<"env:verifyLogin">>;
   verifyFigmaMcp(): Promise<IpcResponse<"env:verifyFigmaMcp">>;
+  /** Install the Figma MCP for the user (`claude mcp add … figma …`), then re-verify. */
+  addFigmaMcp(): Promise<IpcResponse<"env:addFigmaMcp">>;
   openInstall(url: string): Promise<IpcResponse<"env:openInstall">>;
 
   // workspace / projects
