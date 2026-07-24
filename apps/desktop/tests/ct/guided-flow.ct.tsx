@@ -367,8 +367,11 @@ test("builds remaining components in chunks of five, routed by complexity", asyn
   const opts = await page.evaluate(
     () => (window as unknown as { __runOpts: { prompt: string; model?: string }[] }).__runOpts,
   );
-  // First chunk: the five atoms, on Haiku, scoped so no other component is built.
-  expect(opts[0].model).toBe("haiku");
+  // First chunk: the five atoms, scoped so no other component is built. Component
+  // creation runs on the DEFAULT (best) model — `tierForChunk` returns "opus", which
+  // routes to no `--model` override (undefined). Downgrading builds to Haiku was
+  // reverted because it broke visual fidelity, so `model` is intentionally unset here.
+  expect(opts[0].model).toBeUndefined();
   expect(opts[0].prompt).toContain('"Button", "Input", "Label", "Badge", "Icon"');
   expect(opts[0].prompt).toMatch(/Do NOT build any other component/);
   expect(opts[0].prompt).not.toContain("Dialog");
