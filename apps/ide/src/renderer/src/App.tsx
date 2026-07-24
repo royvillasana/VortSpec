@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { JSX, CSSProperties } from "react";
-import type { Project } from "@vortspec/core/ipc";
+import type { Project, Profile as ProfileT } from "@vortspec/core/ipc";
 import type { IdeState } from "@vortspec/core/ide-mcp";
 import { api } from "@vortspec/ui/api";
+import { Logo } from "@vortspec/ui/Logo";
 import type { PendingSelectionRef } from "@vortspec/ui/AssistantDock";
 import { ConversationTabs, type IncomingTask } from "@vortspec/ui/ConversationTabs";
 import { AssistantTaskProvider, type AssistantTask } from "@vortspec/ui/assistant-task";
@@ -43,7 +44,9 @@ import { StatusBranch } from "./components/StatusBranch";
 export default function App(): JSX.Element {
   const [workspace, setWorkspace] = useState<Project | null>(null);
   const [layout, dispatch] = useLayout();
-  const [userName, setUserName] = useState<string | undefined>(undefined);
+  // The global profile — name seeds the assistant, name + avatar drive the top-bar photo.
+  const [profile, setProfile] = useState<ProfileT | null>(null);
+  const userName = profile?.name?.trim() || undefined;
   const [previewUrl] = useState<string | null>(null);
   const [homeDir, setHomeDir] = useState<string | null>(null);
   // A dedicated, scoped folder (~/VortSpec) the pre-project assistant runs in —
@@ -203,7 +206,7 @@ export default function App(): JSX.Element {
   });
 
   useEffect(() => {
-    void api.getProfile().then((p) => setUserName(p.name || undefined)).catch(() => undefined);
+    void api.getProfile().then(setProfile).catch(() => undefined);
     void api.homeDir().then(setHomeDir).catch(() => undefined);
   }, []);
   useEffect(() => {
@@ -371,7 +374,7 @@ export default function App(): JSX.Element {
           <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
             {welcomeView === "settings" ? (
               <div className="min-w-0 flex-1 overflow-auto">
-                <Profile onBack={() => setWelcomeView("start")} onSaved={(p) => setUserName(p.name || undefined)} />
+                <Profile onBack={() => setWelcomeView("start")} onSaved={setProfile} />
               </div>
             ) : (
               <WorkspacePicker
@@ -422,6 +425,19 @@ export default function App(): JSX.Element {
       onClosePanel={() => dispatch({ type: "togglePanel" })}
     />
   );
+
+  // Breadcrumb terminal toggle — an in-app shell like any IDE, docked at the bottom
+  // and available from every view. Open → dock bottom + select the terminal tab;
+  // toggle closed when it's already the shown panel.
+  const terminalOpen = layout.panelOpen && layout.panelSelected === "terminal";
+  const toggleTerminal = (): void => {
+    if (terminalOpen) {
+      dispatch({ type: "togglePanel" });
+    } else {
+      dispatch({ type: "setPanelDock", dock: "bottom" });
+      dispatch({ type: "openPanelTab", tab: "terminal" });
+    }
+  };
 
   function centerForExplorer(): JSX.Element {
     if (!layout.editorOpen && !layout.panelOpen) {
@@ -536,10 +552,23 @@ export default function App(): JSX.Element {
       <CanvasSelectionProvider>
       <div className="flex h-screen w-screen flex-col overflow-hidden bg-vs-bg-primary text-vs-text-primary">
         <header
-          className="flex h-9 shrink-0 items-center justify-center border-b border-vs-border-default bg-vs-bg-surface text-xs text-vs-text-muted"
+          className="relative flex h-9 shrink-0 items-center justify-end border-b border-vs-border-default bg-vs-bg-surface pr-2 text-xs text-vs-text-muted"
           style={{ WebkitAppRegion: "drag" } as unknown as CSSProperties}
         >
-          {workspace.name} — <span className="ml-1 font-bold text-vs-text-secondary">VortSpec</span>
+          {/* Logo + name centered in the bar so it clears the macOS traffic lights
+              (top-left, titleBarStyle: hiddenInset). pointer-events-none keeps the whole
+              center a drag handle. */}
+          <div className="pointer-events-none absolute inset-x-0 flex items-center justify-center gap-2">
+            <Logo size={16} />
+            <span className="font-bold text-vs-text-secondary">VortSpec</span>
+          </div>
+          <div className="relative" style={{ WebkitAppRegion: "no-drag" } as unknown as CSSProperties}>
+            <AvatarButton
+              profile={profile}
+              active={layout.activity === "settings"}
+              onClick={() => dispatch({ type: "setActivity", activity: "settings" })}
+            />
+          </div>
         </header>
 
         <ToolkitUpdateBanner project={workspace} onUpdated={setWorkspace} />
@@ -671,10 +700,40 @@ export default function App(): JSX.Element {
                   </span>
                 </>
               )}
+              <div className="flex-1" />
+              {/* Open an in-app terminal at the bottom — available from every view. */}
+              <button
+                type="button"
+                onClick={toggleTerminal}
+                aria-pressed={terminalOpen}
+                title="Toggle terminal (Ctrl+`)"
+                className={`flex items-center gap-1 rounded px-1.5 py-0.5 transition-colors ${
+                  terminalOpen
+                    ? "bg-vs-bg-elevated text-vs-text-primary"
+                    : "text-vs-text-muted hover:bg-vs-bg-hover hover:text-vs-text-secondary"
+                }`}
+              >
+                <TerminalIcon />
+                Terminal
+              </button>
             </nav>
-            <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
-              {isExplorer ? centerForExplorer() : workPanel()}
-            </div>
+            {isExplorer ? (
+              <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">{centerForExplorer()}</div>
+            ) : (
+              // Work-panel views (Foundation, Run, Tokens, …) get the same bottom
+              // terminal dock as the Explorer, so the in-app shell is everywhere.
+              <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+                <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">{workPanel()}</div>
+                {layout.panelOpen && layout.panelDock === "bottom" && (
+                  <>
+                    <Resizer orientation="horizontal" ariaLabel="Resize terminal" onDelta={(d) => dispatch({ type: "nudgePanel", delta: -d })} />
+                    <div style={{ height: layout.panelSize }} className="min-h-0 flex-none">
+                      {panelGroup}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
@@ -708,12 +767,12 @@ export default function App(): JSX.Element {
             </button>
           )}
           <div className="flex-1" />
-          {/* Region toggles apply to the Explorer/editor view only. */}
+          {/* Region toggles apply to the Explorer/editor view only. The Terminal now
+              lives in the breadcrumb (available from every view), so it's not here. */}
           {isExplorer && (
             <div className="flex items-center gap-1">
               <FooterToggle label="Explorer" active={showPrimary} title="Toggle the Explorer sidebar" onClick={() => dispatch({ type: "togglePrimary" })} />
               <FooterToggle label="Editor" active={layout.editorOpen} title="Toggle the editor" onClick={() => dispatch({ type: "toggleEditor" })} />
-              <FooterToggle label="Terminal" active={layout.panelOpen} title="Toggle the terminal panel (Ctrl+`)" onClick={() => dispatch({ type: "togglePanel" })} />
             </div>
           )}
         </footer>
@@ -742,6 +801,48 @@ function activityLabel(a: Activity): string {
     history: "History",
   };
   return LABELS[a] ?? a;
+}
+
+/** The top-bar user photo: the profile avatar, or the name's initial as a fallback. */
+function AvatarButton({
+  profile,
+  active,
+  onClick,
+}: {
+  profile: ProfileT | null;
+  active: boolean;
+  onClick: () => void;
+}): JSX.Element {
+  const initial = (profile?.name.trim()?.[0] ?? "").toUpperCase() || "You";
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title="Profile & settings"
+      aria-label="Profile"
+      className={`overflow-hidden rounded-full border transition-colors ${
+        active ? "border-vs-accent" : "border-vs-border-strong hover:border-vs-accent"
+      }`}
+    >
+      {profile?.avatarDataUrl ? (
+        <img src={profile.avatarDataUrl} alt="" className="h-6 w-6 object-cover" />
+      ) : (
+        <span className="grid h-6 w-6 place-items-center bg-vs-bg-elevated text-[10px] font-medium text-vs-text-secondary">
+          {initial}
+        </span>
+      )}
+    </button>
+  );
+}
+
+/** A small terminal glyph for the breadcrumb's terminal toggle. */
+function TerminalIcon(): JSX.Element {
+  return (
+    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden>
+      <rect x="1.5" y="2.5" width="13" height="11" rx="1.5" stroke="currentColor" strokeWidth="1.2" />
+      <path d="M4 6l2.5 2L4 10M8 10.5h4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
 }
 
 /** A status-bar region toggle: highlighted when its region is visible. */
