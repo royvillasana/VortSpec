@@ -13,6 +13,7 @@ import { DEFAULT_FLOW } from "@vortspec/core/flow";
 import {
   buildOnePrompt,
   RESCAN_PROMPT,
+  PROVISION_LIBRARY_PROMPT,
   newComponentPrompt,
   newComponentFromFigmaNodePrompt,
   REFACTOR_PROMPT,
@@ -476,6 +477,20 @@ export function GuidedFlow({
   // Foundation is established once tokens exist or components have been detected.
   const foundationReady = (tokenCount ?? 0) > 0 || total > 0;
 
+  // Library provisioning (change: provision-library-source). A `library` source needs its
+  // REAL components pulled/installed before the cycle. We treat a library project with no
+  // detected components as un-provisioned, and surface a "Provision library" action that runs
+  // the /provision-library skill instead of letting the flow rebuild look-alikes.
+  const isLibrary = config?.designSource === "library";
+  const libraryProvisioned = !isLibrary || total > 0;
+  const provisionLibrary = (): void => {
+    const lib = config?.componentLibrary ?? "the library";
+    void op(`Provisioning ${lib} — pulling in the real components`, PROVISION_LIBRARY_PROMPT, {
+      tools: FOUNDATION_DEF.allowedTools,
+      kind: "source",
+    });
+  };
+
   const groups = useMemo(() => {
     if (!components) return [];
     return LEVEL_ORDER.map((level) => ({
@@ -813,6 +828,22 @@ export function GuidedFlow({
                         {compSyncing ? "Reading…" : figmaCompSynced ? "↻ Figma components" : "Read Figma components"}
                       </Button>
                     )}
+                    {isLibrary && (
+                      <Button
+                        variant={libraryProvisioned ? "default" : "primary"}
+                        disabled={busy}
+                        title={
+                          libraryProvisioned
+                            ? "Re-run library provisioning — adds any components missing from the library (its CLI or package). Existing components are left intact."
+                            : `Pull ${config?.componentLibrary ?? "the library"}'s REAL components into this project (its CLI for shadcn/radix, or install + token-mapped wrappers) instead of rebuilding them from scratch.`
+                        }
+                        onClick={provisionLibrary}
+                      >
+                        {libraryProvisioned
+                          ? "↻ Re-provision library"
+                          : `Provision ${config?.componentLibrary ?? "library"}`}
+                      </Button>
+                    )}
                     <Button
                       variant="default"
                       disabled={busy}
@@ -857,7 +888,16 @@ export function GuidedFlow({
                         Build Figma selection
                       </Button>
                     )}
-                    <Button variant="primary" disabled={busy} onClick={() => setAddNew(true)}>
+                    <Button
+                      variant={isLibrary && !libraryProvisioned ? "default" : "primary"}
+                      disabled={busy}
+                      title={
+                        isLibrary && !libraryProvisioned
+                          ? "Provision the library first — it ships these components. Building one by hand before provisioning creates a look-alike that drifts from the library."
+                          : undefined
+                      }
+                      onClick={() => setAddNew(true)}
+                    >
                       + New component
                     </Button>
                   </div>
@@ -884,6 +924,20 @@ export function GuidedFlow({
                   {components === null ? (
                     <Card className="flex items-center gap-2 p-4 text-sm text-vs-text-secondary">
                       <Spinner /> Reading components…
+                    </Card>
+                  ) : isLibrary && !libraryProvisioned ? (
+                    <Card className="flex flex-col items-center gap-3 p-6 text-center">
+                      <p className="text-sm text-vs-text-secondary">
+                        <span className="font-medium text-vs-text-primary">
+                          {config?.componentLibrary ?? "This library"}
+                        </span>{" "}
+                        hasn’t been provisioned yet. Pull in its real components — VortSpec runs the
+                        library’s own CLI (shadcn/radix) or installs it and generates token-mapped
+                        wrappers (MUI/Chakra/…). It won’t rebuild what the library already ships.
+                      </p>
+                      <Button variant="primary" disabled={busy} onClick={provisionLibrary}>
+                        Provision {config?.componentLibrary ?? "library"}
+                      </Button>
                     </Card>
                   ) : total === 0 ? (
                     <Card className="p-6 text-center text-sm text-vs-text-muted">

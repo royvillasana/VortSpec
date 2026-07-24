@@ -24,9 +24,9 @@
 
 ## 5. VortSpec surface (trigger + status)
 
-- [ ] 5.1 Add a "Provision library" affordance in the guided flow for `design_source: library` (parallel to "Read Figma components" / the GitHub clone), gated so component work prompts to provision when unprovisioned
-- [ ] 5.2 Run provisioning through a scoped Claude/CLI run in the user's environment (reuse the existing run plumbing; no bundled package managers beyond base-tool install); reflect progress + surface a fix-it on failure
-- [ ] 5.3 Detect "provisioned" state from `component_dir` contents / `components.json` so the flow shows the right next step
+- [x] 5.1 Add a "Provision library" affordance in the guided flow for `design_source: library` (parallel to "Read Figma components" / the GitHub clone), gated so component work prompts to provision when unprovisioned
+- [x] 5.2 Run provisioning through a scoped Claude/CLI run in the user's environment (reuse the existing run plumbing; no bundled package managers beyond base-tool install); reflect progress + surface a fix-it on failure
+- [x] 5.3 Detect "provisioned" state from `component_dir` contents / `components.json` so the flow shows the right next step
 
 ## 6. Verification
 
@@ -34,7 +34,7 @@
 - [ ] 6.2 End-to-end (copy-source): create a shadcn project, run provisioning, confirm the REAL shadcn source files land in `component_dir`, extraction builds `components.json` from them, and no from-scratch Button is generated
 - [ ] 6.3 End-to-end (package): create an MUI project, run provisioning, confirm the package installs and token-mapped wrappers are generated that import from the library
 - [ ] 6.4 Idempotency: re-run provisioning; confirm existing components are untouched and the report lists nothing new
-- [ ] 6.5 Confirm the guided flow blocks/nudges component work until a library project is provisioned
+- [x] 6.5 Confirm the guided flow blocks/nudges component work until a library project is provisioned
 
 ## 7. Ship
 
