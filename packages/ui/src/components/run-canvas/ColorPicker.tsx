@@ -124,6 +124,9 @@ export function ColorTokenField({
 const NONE_SWATCH =
   "repeating-conic-gradient(var(--vs-border-default, #888) 0% 25%, transparent 0% 50%) 50% / 8px 8px";
 
+/** True for a concrete color literal (hex or rgb/rgba) — not a keyword/var/gradient. */
+const isColor = (v: string): boolean => /^#[0-9a-f]{3,8}$/i.test(v.trim()) || /^rgba?\(/i.test(v.trim());
+
 function derive(
   value: string,
   token: string | null,
@@ -138,6 +141,14 @@ function derive(
   if (name) {
     const t = colorTokens.find((c) => c.name === name);
     return { label: name, swatch: t?.value ?? value, isToken: true };
+  }
+  // No explicit binding, but the selection gives a computed `rgb(...)` — if it equals a
+  // color token's resolved value, show that token (name + swatch), not the raw rgb.
+  // Mirrors the spacing/length fields' value-matching so a token color reads as a token.
+  if (isColor(value)) {
+    const hex = toHex(value);
+    const match = colorTokens.find((c) => isColor(c.value) && toHex(c.value) === hex);
+    if (match) return { label: match.name, swatch: match.value, isToken: true };
   }
   return { label: value, swatch: value, isToken: false };
 }

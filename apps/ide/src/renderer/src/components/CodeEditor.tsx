@@ -148,7 +148,12 @@ export function CodeEditor({
     if (!editor || path === null) return;
     let model = modelsRef.current.get(path);
     if (!model) {
-      model = monaco.editor.createModel(value, languageForPath(path));
+      // Create the model under its real file URI so the TS worker infers the correct script
+      // kind from the extension — a `.tsx`/`.jsx` file then parses JSX instead of syntax-
+      // erroring on it (a URI-less model is treated as plain `.ts`). Reuse a same-URI model
+      // if one somehow lingers, to avoid Monaco's "model already exists" throw.
+      const uri = monaco.Uri.file(path);
+      model = monaco.editor.getModel(uri) ?? monaco.editor.createModel(value, languageForPath(path), uri);
       modelsRef.current.set(path, model);
     } else if (model.getValue() !== value) {
       // External update (e.g. reload-from-disk) — replace the buffer.
@@ -228,8 +233,16 @@ export function DiffView({
     });
     editorRef.current = editor;
     const lang = languageForPath(path);
-    const originalModel = monaco.editor.createModel(original, lang);
-    const modifiedModel = monaco.editor.createModel(modified, lang);
+    // Distinct URIs that keep the real extension → JSX parses on both sides, and neither side
+    // collides with the other or with the main editor's model for the same path.
+    const rel = path.replace(/^\/+/, "");
+    const mkModel = (side: string, content: string): monaco.editor.ITextModel => {
+      const uri = monaco.Uri.file(`/~diff-${side}/${rel}`); // Uri.file encodes spaces/specials
+      monaco.editor.getModel(uri)?.dispose(); // drop any stale model at this URI, then recreate
+      return monaco.editor.createModel(content, lang, uri);
+    };
+    const originalModel = mkModel("orig", original);
+    const modifiedModel = mkModel("mod", modified);
     editor.setModel({ original: originalModel, modified: modifiedModel });
     const raf = requestAnimationFrame(() => {
       const box = wrap.getBoundingClientRect();

@@ -67,7 +67,9 @@ export const DEFAULT_LAYOUT: LayoutState = {
   activity: "explorer",
   primaryOpen: true,
   primaryWidth: 248,
-  secondaryOpen: true,
+  // The right assistant sidebar was removed — the chat lives in the left dock's Chat tab.
+  // Kept in the model (harmless) but off, so it never reserves layout width.
+  secondaryOpen: false,
   secondaryWidth: 380,
   editorOpen: true,
   panelOpen: false,

@@ -61,12 +61,10 @@ export function buildSelection(
       // can never distribute, so filling the space is `justify-content: space-between`.
       ...(isFlex(c) ? [alignField(c), gapModeField(c)] : []),
       bind("gap", "Gap", "length", c["gap"], "spacing"),
-      bind("padding-left", "Padding X", "length", c["padding-left"], "spacing"),
-      bind("padding-top", "Padding Y", "length", c["padding-top"], "spacing"),
-      // Margins — token-bindable to the spacing scale (Figma binds a variable to any
-      // spacing prop); shown even at 0px (bind only drops undefined/empty values).
-      bind("margin-left", "Margin X", "length", c["margin-left"], "spacing"),
-      bind("margin-top", "Margin Y", "length", c["margin-top"], "spacing"),
+      // Per-side spacing (Figma auto-layout): top/right/bottom/left, each token-bindable
+      // to the spacing scale, edited independently — replaces the old symmetric X/Y pair.
+      boxField("padding", "Padding", c),
+      boxField("margin", "Margin", c),
     ]),
     section("appearance", "Appearance", [
       literal("opacity", "Opacity", "number", c["opacity"] ?? "1"),
@@ -323,6 +321,24 @@ function alignField(c: Record<string, string>): SectionField {
     value: `${x}|${y}`,
     token: null,
     options: [column ? "column" : "row"],
+  };
+}
+
+/**
+ * A Figma-style per-side spacing field (padding/margin). Value is
+ * `"<top>|<right>|<bottom>|<left>"` of resolved px; each side is edited independently and
+ * token-bindable to the spacing scale (the host classifies each side's token on commit).
+ */
+function boxField(key: string, label: string, c: Record<string, string>): SectionField {
+  const side = (s: string): string => c[`${key}-${s}`] ?? "0px";
+  return {
+    key,
+    label,
+    kind: "box",
+    value: `${side("top")}|${side("right")}|${side("bottom")}|${side("left")}`,
+    token: null,
+    tokenType: "spacing",
+    options: [],
   };
 }
 

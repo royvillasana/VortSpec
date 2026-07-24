@@ -10,6 +10,8 @@ import {
 } from "@vortspec/core/run-events";
 import { newAccumulator, recordRun, patchLastRun, readLastRun, runTitle } from "./run-recorder";
 import type { LastRun, RunLimit } from "@vortspec/core/run-events";
+import { parseSendResult } from "@vortspec/core/figma-screen-prompts";
+import { upsertScreen } from "../figma/screen-map";
 
 /**
  * Owns the set of active agent runs and forwards their events to the renderer.
@@ -64,6 +66,21 @@ export function startRun(
     if (event.kind === "result") {
       if (event.usage) acc.usage = event.usage;
       if (event.costUsd !== undefined) acc.costUsd = event.costUsd;
+      // Durable "Send to Figma" recording: parse the run's RESULT line HERE, in the main
+      // process, so the screen↔Figma mapping is written even if the Playground (which started
+      // the run) unmounted during a long send. Best-effort; never blocks the run's completion.
+      const fs = opts.meta?.figmaSend;
+      if (fs && !event.isError && event.text) {
+        const r = parseSendResult(event.text);
+        if (r) {
+          void upsertScreen(
+            opts.cwd,
+            fs.screenKey,
+            { file: fs.file, figmaNodeId: r.nodeId, updatedAt: new Date().toISOString() },
+            r.fileKey,
+          ).catch(() => undefined);
+        }
+      }
     }
     // Capture the session id so an interrupted run can be `--resume`d.
     if ((event.kind === "system-init" || event.kind === "result" || event.kind === "limit-reached") && event.sessionId) {

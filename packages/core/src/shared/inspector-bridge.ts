@@ -110,6 +110,7 @@ export const fieldKindSchema = z.enum([
   "toggle", // boolean
   "align", // a Figma-style 3×3 auto-layout alignment grid (value `"<x>|<y>"`)
   "resize", // a Figma-style Fixed/Hug/Fill width or height control (with a px value when Fixed)
+  "box", // a Figma-style per-side spacing control (padding/margin); value `"<top>|<right>|<bottom>|<left>"`
 ]);
 export type FieldKind = z.infer<typeof fieldKindSchema>;
 

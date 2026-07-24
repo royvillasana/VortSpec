@@ -8,6 +8,7 @@ import type {
   VariantControl,
   InspectorToken,
 } from "@vortspec/core/ipc";
+import { Link2, Unlink2 } from "lucide-react";
 import { NodeTree } from "./NodeTree";
 import type { PendingEdit } from "./pending";
 import { matchTokenName, tokenNameFromVar, tokensForField } from "./compose";
@@ -653,8 +654,15 @@ function Field({
       <ResizeField value={field.value} mode={field.mode ?? "fixed"} onChange={onChange} />
     ) : field.kind === "align" ? (
       <AlignGrid value={field.value} onChange={onChange} />
+    ) : field.kind === "box" ? (
+      <BoxField value={field.value} tokens={tokens} tokenType={field.tokenType} onChange={onChange} />
     ) : field.kind === "segment" ? (
-      <SegmentedField value={field.value} options={field.options} onChange={onChange} />
+      <SegmentedField
+        value={field.value}
+        options={field.options}
+        onChange={onChange}
+        icons={field.key === "flow" ? FLOW_ICONS : undefined}
+      />
     ) : field.kind === "select" ? (
       <SelectField value={field.value} options={field.options} onChange={onChange} />
     ) : field.kind === "toggle" ? (
@@ -682,6 +690,79 @@ function Field({
       {control}
       {field.token && !ownIndicator && <TokenBadge name={field.token} />}
     </div>
+  );
+}
+
+/** Width that hugs a monospace value (digits are 1ch), with a little breathing room. */
+const hugWidth = (draft: string): React.CSSProperties => ({ width: `${Math.max(2, draft.length) + 0.6}ch` });
+
+/**
+ * The value control for any token-capable field, in one of two states:
+ *  - BOUND — the value sits in a rounded accent box (a variable chip) whose WHOLE
+ *    area is a button: clicking it anywhere opens the picker (change the variable or
+ *    switch to a raw value). It is not directly editable — that's the point of a
+ *    bound value.
+ *  - RAW — an editable input where the user types the value. `showDot` fields expose
+ *    a ◆ button to bind a variable (length fields bind via their left name-pill, so
+ *    they pass showDot=false).
+ * A transparent border in the raw state holds the size so binding/detaching never
+ * shifts the layout, and `ml-auto` keeps the chip flush right. `hugWidth` keeps both
+ * states sized to the value, never filling the input.
+ */
+function TokenValueChip({
+  draft,
+  matched,
+  showDot,
+  inputRef,
+  onOpen,
+  onInput,
+  onCommit,
+}: {
+  draft: string;
+  matched: string | null;
+  showDot: boolean;
+  inputRef: React.RefObject<HTMLInputElement | null>;
+  onOpen: () => void;
+  onInput: (v: string) => void;
+  onCommit: () => void;
+}): JSX.Element {
+  if (matched) {
+    return (
+      <button
+        type="button"
+        onClick={onOpen}
+        title={`Variable: ${matched} — click to change or enter a raw value`}
+        aria-label={`Variable: ${matched}`}
+        className="ml-auto inline-flex items-center gap-1 rounded border border-vs-accent/50 bg-vs-accent-subtle px-1 py-0.5 font-mono text-[12px] text-vs-text-primary hover:border-vs-accent"
+      >
+        <span>{draft}</span>
+        {showDot && <span className="text-[10px] leading-none text-vs-accent">◆</span>}
+      </button>
+    );
+  }
+  return (
+    <span className="ml-auto inline-flex items-center gap-1 rounded border border-transparent px-1 py-0.5">
+      <input
+        ref={inputRef}
+        value={draft}
+        onChange={(e) => onInput(e.target.value)}
+        onBlur={onCommit}
+        onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
+        style={hugWidth(draft)}
+        className="bg-transparent text-right font-mono text-[12px] text-vs-text-primary outline-none"
+      />
+      {showDot && (
+        <button
+          type="button"
+          onClick={onOpen}
+          title="Bind a variable"
+          aria-label="Bind a variable"
+          className="flex-none rounded-full text-[10px] leading-none text-vs-text-muted hover:text-vs-text-secondary"
+        >
+          ◆
+        </button>
+      )}
+    </span>
   );
 }
 
@@ -716,6 +797,8 @@ function LengthTokenField({
   // Whether the user has typed a raw value into the input (so blur commits it — a
   // pick that merely repopulates the input must not be mistaken for a raw edit).
   const editedRef = useRef(false);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const focusRawRef = useRef(false); // focus the input right after detaching to raw
   // A fresh readout (new selection, or the kept change after apply) re-syncs the view.
   useEffect(() => {
     setDraft(value);
@@ -729,6 +812,13 @@ function LengthTokenField({
     localToken !== undefined
       ? localToken
       : (token ?? tokenNameFromVar(value) ?? (tokenType ? matchTokenName(draft, opts, tokenType) : null));
+  // After "Raw value" flips the chip to an editable input, focus it so the user can type.
+  useEffect(() => {
+    if (!matched && focusRawRef.current) {
+      focusRawRef.current = false;
+      inputRef.current?.focus();
+    }
+  });
 
   const bindToken = (name: string): void => {
     // Reflect the new token name + its resolved value in the field right away.
@@ -742,6 +832,7 @@ function LengthTokenField({
     // Fall back to a raw literal — the current resolved value (or the bound token's).
     const raw = opts.find((t) => t.name === matched)?.resolvedValue ?? draft;
     setDraft(raw);
+    focusRawRef.current = true; // becomes an editable input — focus it
     setLocalToken(null);
     editedRef.current = false;
     onChange(raw);
@@ -755,7 +846,7 @@ function LengthTokenField({
   };
   return (
     <div className="relative w-full">
-      <div className="flex w-full items-center rounded border border-vs-border-default bg-vs-bg-surface focus-within:border-vs-accent">
+      <div className="flex w-full items-center rounded border border-vs-border-default bg-vs-bg-surface pr-1 focus-within:border-vs-accent">
         {opts.length > 0 && (
           <button
             type="button"
@@ -771,17 +862,17 @@ function LengthTokenField({
             {matched && <span className="truncate">{matched}</span>}
           </button>
         )}
-        <input
-          value={draft}
-          onChange={(e) => {
+        <TokenValueChip
+          draft={draft}
+          matched={matched}
+          showDot={false}
+          inputRef={inputRef}
+          onOpen={() => setOpen((o) => !o)}
+          onInput={(v) => {
             editedRef.current = true;
-            setDraft(e.target.value);
+            setDraft(v);
           }}
-          onBlur={commitRaw}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") (e.target as HTMLInputElement).blur();
-          }}
-          className="min-w-0 flex-1 bg-transparent px-2 py-1 text-right font-mono text-[12px] text-vs-text-primary outline-none"
+          onCommit={commitRaw}
         />
       </div>
       {open && opts.length > 0 && (
@@ -898,6 +989,270 @@ function AlignGrid({
   );
 }
 
+/**
+ * Figma-style per-side spacing (padding / margin). A linked-toggle cycles three modes —
+ * All (one input) → H·V (two) → Individual (the 2×2 grid of Top/Right/Bottom/Left) — and
+ * each side edits independently. Value is `"<top>|<right>|<bottom>|<left>"`; onChange emits
+ * only the changed sides as `"side:value;…"` so one side never clobbers another.
+ */
+type BoxSide = "top" | "right" | "bottom" | "left";
+const SIDE_MARK: Record<BoxSide, string> = { top: "M2.5 3h6", right: "M8 2.5v6", bottom: "M2.5 8h6", left: "M3 2.5v6" };
+function SideGlyph({ mark }: { mark: string }): JSX.Element {
+  return (
+    <svg width="11" height="11" viewBox="0 0 11 11" aria-hidden className="shrink-0 text-vs-text-muted">
+      <rect x="2" y="2" width="7" height="7" rx="1.2" fill="none" stroke="currentColor" strokeOpacity="0.4" />
+      <path d={mark} stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+    </svg>
+  );
+}
+/** A side value's numeric display: resolve a `var(--token)` via the token set, else strip px. */
+function sideDisplay(value: string, opts: InspectorToken[]): string {
+  const varName = tokenNameFromVar(value);
+  const resolved = varName ? (opts.find((o) => o.name === varName)?.resolvedValue ?? value) : value;
+  return resolved.replace(/px$/, "");
+}
+
+/**
+ * One box side — token-aware, mirroring LengthTokenField. Bind a spacing variable
+ * via the ◆ picker OR type a raw value; the pill shows the bound (or value-matched)
+ * token. Picking emits `var(--name)`, typing emits the raw px. Because BoxField's
+ * grouped modes commit the SAME emitted value to every side they cover, a token or
+ * raw value chosen while sides are linked is already present on each side's input
+ * when the user unlinks to edit them individually.
+ */
+function BoxSideInput({
+  glyph,
+  value,
+  tokens,
+  tokenType,
+  onCommit,
+  menuAlign = "start",
+}: {
+  glyph: JSX.Element;
+  value: string; // "16px" | "var(--space-4)"
+  tokens: InspectorToken[];
+  tokenType?: string;
+  onCommit: (v: string) => void; // raw px, or "var(--name)"
+  menuAlign?: "start" | "end"; // which edge the (wide) picker anchors to, so it never overflows the panel
+}): JSX.Element {
+  const opts = tokensForField(tokens, tokenType);
+  const [draft, setDraft] = useState(() => sideDisplay(value, opts));
+  // localToken: undefined = follow the value; null = detached to a literal; string = just-picked.
+  const [localToken, setLocalToken] = useState<string | null | undefined>(undefined);
+  const editedRef = useRef(false);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const focusRawRef = useRef(false); // focus the input right after detaching to raw
+  const prevValueRef = useRef(value);
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    const prev = prevValueRef.current;
+    prevValueRef.current = value;
+    setDraft(sideDisplay(value, opts));
+    // Normally re-derive the binding from the new value. But an explicit raw detach
+    // (localToken === null) must STICK when the incoming value merely echoes it — our
+    // own emit re-sends the same literal (e.g. 32px == space-8), and without this the
+    // value-match would snap it straight back to a token chip, so "Raw value" would
+    // never take. A var() or a genuinely different value (a real readout / node change)
+    // still re-derives.
+    setLocalToken((lt) =>
+      lt === null && !tokenNameFromVar(value) && sideDisplay(value, opts) === sideDisplay(prev, opts)
+        ? null
+        : undefined,
+    );
+    editedRef.current = false;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value]);
+  const matched =
+    localToken !== undefined
+      ? localToken
+      : (tokenNameFromVar(value) ?? (tokenType ? matchTokenName(`${draft}px`, opts, tokenType) : null));
+  // After "Raw value" flips the chip to an editable input, focus it so the user can type.
+  useEffect(() => {
+    if (!matched && focusRawRef.current) {
+      focusRawRef.current = false;
+      inputRef.current?.focus();
+    }
+  });
+  const bindToken = (name: string): void => {
+    setDraft(sideDisplay(`var(--${name})`, opts));
+    setLocalToken(name);
+    editedRef.current = false;
+    onCommit(`var(--${name})`);
+    setOpen(false);
+  };
+  const detach = (): void => {
+    const raw = opts.find((t) => t.name === matched)?.resolvedValue ?? `${draft}px`;
+    setDraft(raw.replace(/px$/, ""));
+    focusRawRef.current = true; // becomes an editable input — focus it
+    setLocalToken(null);
+    editedRef.current = false;
+    onCommit(raw);
+    setOpen(false);
+  };
+  const commitRaw = (): void => {
+    if (!editedRef.current) return; // a pick repopulated the input — not a raw edit
+    editedRef.current = false;
+    setLocalToken(null); // typing a literal detaches any binding
+    const t = draft.trim();
+    onCommit(/^-?\d*\.?\d+$/.test(t) ? `${t}px` : t);
+  };
+  return (
+    <div className="relative min-w-0 flex-1">
+      <div className="flex items-center gap-1 rounded border border-vs-border-default bg-vs-bg-surface py-1 pl-1.5 pr-1 focus-within:border-vs-accent">
+        {glyph}
+        {/* Bound → the whole value chip is a button (click anywhere opens the picker);
+            raw → an editable input with a ◆ to bind. The chip hugs its content and the
+            dot is the compact token marker (name lives in the tooltip + picker). */}
+        <TokenValueChip
+          draft={draft}
+          matched={matched}
+          showDot={opts.length > 0}
+          inputRef={inputRef}
+          onOpen={() => setOpen((o) => !o)}
+          onInput={(v) => {
+            editedRef.current = true;
+            setDraft(v);
+          }}
+          onCommit={commitRaw}
+        />
+      </div>
+      {open && opts.length > 0 && (
+        <>
+          <div className="fixed inset-0 z-20" onClick={() => setOpen(false)} />
+          {/* The picker is content-width (name + resolved value), not the narrow input's
+              width — so an unlinked side shows the same readable list as a single input.
+              It anchors to the input's near edge so it never overflows the panel. */}
+          <div
+            className={`absolute z-30 mt-1 max-h-56 w-max min-w-[12rem] max-w-[15rem] overflow-y-auto rounded-md border border-vs-border-default bg-vs-bg-elevated py-1 shadow-2xl ${
+              menuAlign === "end" ? "right-0" : "left-0"
+            }`}
+          >
+            {matched && (
+              <button
+                type="button"
+                onClick={detach}
+                className="flex w-full items-center gap-1.5 px-2.5 py-1.5 text-[11px] text-vs-text-muted hover:bg-vs-bg-hover"
+              >
+                <span className="text-[8px]">◇</span>
+                <span className="truncate">Raw value</span>
+              </button>
+            )}
+            {opts.map((t) => (
+              <button
+                key={t.name}
+                type="button"
+                onClick={() => bindToken(t.name)}
+                className={`flex w-full items-center justify-between gap-2 px-2.5 py-1.5 text-[11px] hover:bg-vs-bg-hover ${
+                  t.name === matched ? "text-vs-accent" : "text-vs-text-secondary"
+                }`}
+              >
+                <span className="flex min-w-0 items-center gap-1.5">
+                  <span className="text-[8px] text-vs-accent">◆</span>
+                  <span className="truncate">{t.name}</span>
+                </span>
+                <span className="flex-none font-mono text-vs-text-muted">{t.resolvedValue}</span>
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+function BoxField({
+  value,
+  tokens,
+  tokenType,
+  onChange,
+}: {
+  value: string;
+  tokens: InspectorToken[];
+  tokenType?: string;
+  onChange: (v: string) => void;
+}): JSX.Element {
+  const [tv, rv, bv, lv] = value.split("|");
+  const base = { top: tv ?? "0px", right: rv ?? "0px", bottom: bv ?? "0px", left: lv ?? "0px" };
+  // Optimistic overlay of the sides the user just set — the value they entered (a
+  // raw px OR a `var(--token)`), kept verbatim so it survives a mode switch. Without
+  // it, unlinking to edit sides individually would remount inputs bound to the *old*
+  // `value` (the host's readout is async), losing the token/value just chosen. A
+  // fresh readout (new `value`) supersedes the overlay. This is what makes a value
+  // assigned while linked replicate onto every side when the user unlinks.
+  const [draft, setDraft] = useState<Partial<Record<BoxSide, string>>>({});
+  useEffect(() => setDraft({}), [value]);
+  const cur = {
+    top: draft.top ?? base.top,
+    right: draft.right ?? base.right,
+    bottom: draft.bottom ?? base.bottom,
+    left: draft.left ?? base.left,
+  };
+  // menuAlign follows the grid column so the (wide) token picker opens toward the panel
+  // interior: left-column inputs anchor left, right-column inputs anchor right.
+  const side = (
+    glyph: JSX.Element,
+    v: string,
+    onCommit: (x: string) => void,
+    menuAlign: "start" | "end" = "start",
+  ): JSX.Element => (
+    <BoxSideInput glyph={glyph} value={v} tokens={tokens} tokenType={tokenType} onCommit={onCommit} menuAlign={menuAlign} />
+  );
+  const allEqual = cur.top === cur.right && cur.right === cur.bottom && cur.bottom === cur.left;
+  const axisEqual = cur.top === cur.bottom && cur.left === cur.right;
+  const [mode, setMode] = useState<"all" | "axis" | "individual">(allEqual ? "all" : axisEqual ? "axis" : "individual");
+  // Follow the incoming values, but don't yank the user out of a mode they opened.
+  useEffect(() => {
+    setMode((m) => (m !== "individual" && !allEqual && axisEqual ? "axis" : m !== "individual" && allEqual ? "all" : m));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value]);
+  const cycle = (): void => setMode((m) => (m === "all" ? "axis" : m === "axis" ? "individual" : "all"));
+  const emit = (sides: Partial<Record<BoxSide, string>>): void => {
+    setDraft((d) => ({ ...d, ...sides })); // remember, so a mode switch replicates it
+    onChange(
+      Object.entries(sides)
+        .map(([s, v]) => `${s}:${v}`)
+        .join(";"),
+    );
+  };
+  const linked = mode !== "individual";
+  return (
+    <div className="flex items-start gap-1.5">
+      <div className="min-w-0 flex-1">
+        {mode === "all" ? (
+          side(<SideGlyph mark="M2 5.5h7 M5.5 2v7" />, cur.top, (v) => emit({ top: v, right: v, bottom: v, left: v }))
+        ) : mode === "axis" ? (
+          <div className="flex gap-1.5">
+            {side(<SideGlyph mark="M3 2.5v6" />, cur.left, (v) => emit({ left: v, right: v }), "start")}
+            {side(<SideGlyph mark="M2.5 3h6" />, cur.top, (v) => emit({ top: v, bottom: v }), "end")}
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 gap-1.5">
+            {side(<SideGlyph mark={SIDE_MARK.top} />, cur.top, (v) => emit({ top: v }), "start")}
+            {side(<SideGlyph mark={SIDE_MARK.right} />, cur.right, (v) => emit({ right: v }), "end")}
+            {side(<SideGlyph mark={SIDE_MARK.bottom} />, cur.bottom, (v) => emit({ bottom: v }), "start")}
+            {side(<SideGlyph mark={SIDE_MARK.left} />, cur.left, (v) => emit({ left: v }), "end")}
+          </div>
+        )}
+      </div>
+      <button
+        type="button"
+        onClick={cycle}
+        title={
+          linked
+            ? "Sides linked — click to edit each side independently"
+            : "Sides independent — click to link them together"
+        }
+        aria-label="Link sides"
+        aria-pressed={!linked}
+        className={`mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded ${
+          linked ? "text-vs-text-muted hover:bg-vs-bg-hover" : "bg-vs-accent/15 text-vs-accent"
+        }`}
+      >
+        {linked ? <Link2 size={13} aria-hidden /> : <Unlink2 size={13} aria-hidden />}
+      </button>
+    </div>
+  );
+}
+
 /** An inline segmented button group (Figma-style) — e.g. flow: block / row / column. */
 /**
  * Figma-style resize control: a Fixed/Hug/Fill mode dropdown + a px value (editable
@@ -944,14 +1299,42 @@ function ResizeField({
   );
 }
 
+/**
+ * Figma-style flow glyphs: no-auto-layout (block), horizontal (row), vertical (column).
+ * Each is a 3-child mini-layout so the direction reads at a glance, like Figma's toolbar.
+ */
+const FLOW_ICONS: Record<string, JSX.Element> = {
+  block: (
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden>
+      <rect x="2.5" y="2.5" width="11" height="11" rx="1.5" stroke="currentColor" strokeWidth="1.3" strokeDasharray="2 1.6" />
+    </svg>
+  ),
+  row: (
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden>
+      <rect x="2.5" y="3.5" width="2.6" height="9" rx="1" />
+      <rect x="6.7" y="3.5" width="2.6" height="9" rx="1" />
+      <rect x="10.9" y="3.5" width="2.6" height="9" rx="1" />
+    </svg>
+  ),
+  column: (
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden>
+      <rect x="3.5" y="2.5" width="9" height="2.6" rx="1" />
+      <rect x="3.5" y="6.7" width="9" height="2.6" rx="1" />
+      <rect x="3.5" y="10.9" width="9" height="2.6" rx="1" />
+    </svg>
+  ),
+};
+
 function SegmentedField({
   value,
   options,
   onChange,
+  icons,
 }: {
   value: string;
   options: string[];
   onChange: (v: string) => void;
+  icons?: Record<string, JSX.Element>;
 }): JSX.Element {
   const [local, setLocal] = useState(value);
   useEffect(() => setLocal(value), [value]);
@@ -959,21 +1342,25 @@ function SegmentedField({
     <div className="flex w-full overflow-hidden rounded border border-vs-border-default">
       {options.map((o) => {
         const active = o === local;
+        const icon = icons?.[o];
         return (
           <button
             key={o}
             type="button"
+            title={icon ? o : undefined}
+            aria-label={icon ? o : undefined}
+            aria-pressed={active}
             onClick={() => {
               setLocal(o);
               onChange(o);
             }}
-            className={`flex-1 px-1 py-1 text-[11px] capitalize transition-colors ${
+            className={`flex flex-1 items-center justify-center px-1 py-1 text-[11px] capitalize transition-colors ${
               active
                 ? "bg-vs-accent text-white"
                 : "bg-vs-bg-surface text-vs-text-secondary hover:bg-vs-bg-hover hover:text-vs-text-primary"
             }`}
           >
-            {o}
+            {icon ?? o}
           </button>
         );
       })}

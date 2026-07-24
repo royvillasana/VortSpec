@@ -95,11 +95,13 @@ test("Settings is reachable from the initial (no-workspace) screen", async ({ mo
   await expect(c.getByRole("heading", { name: "Profile", exact: true })).toBeVisible();
 });
 
-test("the assistant is available on the initial screen (grounded in Home)", async ({ mount }) => {
+test("the initial screen has no assistant sidebar (chat is per-project, in the left dock)", async ({ mount }) => {
   const c = await mount(<App />, { hooksConfig: { mock: base } });
-  // The assistant dock renders on the welcome screen so the user can chat before
-  // opening a project (its empty-state prompt is shown).
-  await expect(c.getByText(/Change a component|Ask about this project/)).toBeVisible();
+  // The right assistant sidebar was removed; the welcome screen shows the picker only.
+  await expect(c.getByText(/Change a component|Ask about this project/)).toHaveCount(0);
+  // Home is the selected activity on the welcome screen (not Explorer).
+  const rail = c.getByRole("navigation", { name: "Activity bar" });
+  await expect(rail.getByRole("button", { name: /^Home/ })).toHaveAttribute("aria-pressed", "true");
 });
 
 test("opening a workspace reveals the four-region shell", async ({ mount }) => {
@@ -115,8 +117,8 @@ test("opening a workspace reveals the four-region shell", async ({ mount }) => {
   await expect(c.getByText("No file open", { exact: true })).toBeVisible();
   await expect(c.getByText("Preview", { exact: true })).toBeVisible(); // the preview bar
   await expect(c.getByRole("button", { name: "Open Browser" })).toBeVisible();
-  // The assistant chat (right rail) toggle.
-  await expect(rail.getByRole("button", { name: "Toggle assistant" })).toBeVisible();
+  // The assistant chat lives in the left dock's Chat tab — no right-rail toggle.
+  await expect(rail.getByRole("button", { name: "Toggle assistant" })).toHaveCount(0);
 });
 
 test("the activity bar switches to a reused @vortspec/ui panel", async ({ mount }) => {
@@ -179,10 +181,7 @@ test("the status bar shows the git branch and Explorer-only region toggles", asy
   // Region toggles are present in the Explorer activity, wrapped with an active state.
   await expect(footer.getByRole("button", { name: "Explorer" })).toBeVisible();
   await expect(footer.getByRole("button", { name: "Editor" })).toBeVisible();
-  const assistant = footer.getByRole("button", { name: "Assistant" });
-  await expect(assistant).toHaveAttribute("aria-pressed", "true"); // visible by default
-  await assistant.click();
-  await expect(assistant).toHaveAttribute("aria-pressed", "false"); // now disabled/hidden
+  await expect(footer.getByRole("button", { name: "Assistant" })).toHaveCount(0); // no assistant sidebar
   // Switching to a non-Explorer activity hides the region toggles (branch stays).
   await c.getByRole("navigation", { name: "Activity bar" }).getByRole("button", { name: "Design tokens" }).click();
   await expect(footer.getByRole("button", { name: "Editor" })).toHaveCount(0);
@@ -235,11 +234,3 @@ test("switching branches is blocked when the working tree is dirty", async ({ mo
   ).toHaveAttribute("aria-pressed", "true");
 });
 
-test("can collapse the assistant chat", async ({ mount }) => {
-  const c = await mount(<App />, { hooksConfig: { mock: base } });
-  await open(c);
-  const toggle = c.getByRole("button", { name: "Toggle assistant" });
-  await expect(toggle).toHaveAttribute("aria-pressed", "true");
-  await toggle.click();
-  await expect(toggle).toHaveAttribute("aria-pressed", "false");
-});

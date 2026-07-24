@@ -21,6 +21,7 @@ import { WORKSPACE_CHANGE_CHANNEL, type WorkspaceChange } from "@vortspec/core/f
 import { TERMINAL_DATA_CHANNEL, type TerminalData } from "@vortspec/core/terminal";
 import { IDE_ACTION_CHANNEL, type IdeState, type IdeAction, type IdeActionResult } from "@vortspec/core/ide-mcp";
 import type { FigmaCliMode } from "@vortspec/core/figma";
+import type { ScreenEntry } from "@vortspec/core/inspector";
 import type { CommentThread } from "@vortspec/core/comment";
 import type { VortSpecApi } from "@vortspec/core/api";
 
@@ -214,6 +215,9 @@ const api: VortSpecApi = {
   figmaEnsureConnected: () => invoke("figma:ensureConnected", undefined),
   figmaOpenAppManagement: () => invoke("figma:openAppManagement", undefined),
   figmaConnect: (mode: FigmaCliMode) => invoke("figma:connect", { mode }),
+  screenMapGet: (projectPath: string) => invoke("screenMap:get", { projectPath }),
+  screenMapUpsert: (projectPath: string, screenKey: string, entry: ScreenEntry, fileKey?: string) =>
+    invoke("screenMap:upsert", { projectPath, screenKey, entry, fileKey }),
   figmaSyncVariables: (projectPath: string) => invoke("figma:syncVariables", { projectPath }),
   figmaSyncComponents: (projectPath: string) => invoke("figma:syncComponents", { projectPath }),
   figmaSelection: () => invoke("figma:selection", undefined),

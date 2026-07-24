@@ -31,6 +31,11 @@ export function RunCanvas({
   onLiveEdit,
   onCommitEdit,
   onSendToChat,
+  onSendToFigma,
+  onUpdateFromFigma,
+  figmaStatus,
+  figmaConnected,
+  figmaMapped,
   comments,
   skeleton,
   viewport,
@@ -56,6 +61,16 @@ export function RunCanvas({
   onCommitEdit?: (edits: { key: string; value: string; cssProps: string[] }[]) => void;
   /** Send the current selection to the assistant chat (from the right-click menu). */
   onSendToChat?: () => void;
+  /** Send the currently-previewed screen to Figma (toolbar menu). Omit to hide the Figma control. */
+  onSendToFigma?: () => void;
+  /** Pull this screen's Figma changes back into code ("Update from Figma"). */
+  onUpdateFromFigma?: () => void;
+  /** In-place status of the Figma round-trip. */
+  figmaStatus?: "idle" | "sending" | "sent" | "error";
+  /** Whether Figma is connected — gates the Figma control. */
+  figmaConnected?: boolean;
+  /** Whether the current screen already has a Figma frame — gates "Update from Figma". */
+  figmaMapped?: boolean;
   /** Comment threads + handlers; the pins/composer render in comment mode. */
   comments?: Omit<CommentsLayerProps, "zoom">;
   /** An "AI is working" placeholder over the preview: a shimmer block where a
@@ -270,6 +285,11 @@ export function RunCanvas({
         onFrameChange={onFrameChange}
         bridgeReady={bridge.ready}
         bridgeError={bridge.error}
+        onSendToFigma={onSendToFigma}
+        onUpdateFromFigma={onUpdateFromFigma}
+        figmaStatus={figmaStatus}
+        figmaConnected={figmaConnected}
+        figmaMapped={figmaMapped}
       />
 
       {/* Notices sit ABOVE the toolbar (which owns bottom-3), stacked in one column

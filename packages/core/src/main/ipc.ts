@@ -23,6 +23,7 @@ import { ideMcpConfigPath, reportIdeState, resolveIdeAction } from "./ide-mcp/ho
 import { readClipboardImage } from "./system/clipboard";
 import type { IdeState, IdeActionResult } from "@vortspec/core/ide-mcp";
 import * as figmaCli from "./figma/figma-cli";
+import * as screenMap from "./figma/screen-map";
 import { checkFigmaHealth } from "./figma/figma-health";
 import { getFigmaTokenStatus, setFigmaToken } from "./figma/figma-token";
 import type { FigmaCliMode } from "@vortspec/core/figma";
@@ -215,6 +216,18 @@ const handlers: Record<IpcChannel, Handler> = {
   "figma:ensureConnected": (() => figmaCli.ensureConnected()) as Handler,
   "figma:openAppManagement": (() =>
     figmaCli.openAppManagementSettings().then(() => undefined)) as Handler,
+
+  // Screen ↔ Figma round-trip map (change: add-screen-to-figma).
+  "screenMap:get": (async (r: { projectPath: string }) => ({
+    map: await screenMap.readScreenMap(r.projectPath),
+    targetFileKey: await screenMap.resolveTargetFileKey(r.projectPath),
+  })) as Handler,
+  "screenMap:upsert": ((r: {
+    projectPath: string;
+    screenKey: string;
+    entry: import("@vortspec/core/inspector").ScreenEntry;
+    fileKey?: string;
+  }) => screenMap.upsertScreen(r.projectPath, r.screenKey, r.entry, r.fileKey)) as Handler,
   "figma:connect": ((r: { mode: FigmaCliMode }) => figmaCli.connect(r.mode)) as Handler,
   "figma:syncVariables": ((r: { projectPath: string }) =>
     figmaCli.syncVariablesToCache(r.projectPath)) as Handler,

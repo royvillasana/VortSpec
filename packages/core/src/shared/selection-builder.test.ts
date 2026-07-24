@@ -105,15 +105,30 @@ describe("buildSelection", () => {
     expect(selBlock.sections.find((s) => s.id === "layout")?.fields.find((f) => f.key === "gap-mode")).toBeUndefined();
   });
 
-  it("makes margins token-bindable to the spacing scale (Phase 5)", () => {
-    const sel = buildSelection(readout({ computed: { "margin-left": "8px", "margin-top": "8px" } }), {
-      tokens,
-      tag: "div",
-    });
-    const marginX = sel.sections.find((s) => s.id === "layout")!.fields.find((f) => f.key === "margin-left")!;
-    expect(marginX.kind).toBe("length");
-    expect(marginX.tokenType).toBe("spacing");
-    expect(marginX.token).toBe("space-2"); // 8px recognized as the spacing token
+  it("exposes padding + margin as per-side box fields bound to the spacing scale (Phase 5)", () => {
+    const sel = buildSelection(
+      readout({
+        computed: {
+          "margin-top": "8px",
+          "margin-right": "8px",
+          "margin-bottom": "8px",
+          "margin-left": "8px",
+          "padding-top": "16px",
+          "padding-right": "32px",
+          "padding-bottom": "16px",
+          "padding-left": "48px",
+        },
+      }),
+      { tokens, tag: "div" },
+    );
+    const layout = sel.sections.find((s) => s.id === "layout")!;
+    const padding = layout.fields.find((f) => f.key === "padding")!;
+    expect(padding.kind).toBe("box");
+    expect(padding.tokenType).toBe("spacing");
+    expect(padding.value).toBe("16px|32px|16px|48px"); // top|right|bottom|left, independent sides
+    const margin = layout.fields.find((f) => f.key === "margin")!;
+    expect(margin.kind).toBe("box");
+    expect(margin.value).toBe("8px|8px|8px|8px");
   });
 
   it("falls back to an in-scope custom-property name when no project token matches", () => {
@@ -221,13 +236,14 @@ describe("flowToCss", () => {
 });
 
 describe("layout section controls", () => {
-  it("flow is a segmented control and margins are always present", () => {
-    const sel = buildSelection(readout({ computed: { "margin-left": "0px", "margin-top": "12px" } }));
+  it("flow is a segmented control and the margin box is always present", () => {
+    const sel = buildSelection(readout({ computed: { "margin-top": "12px", "margin-left": "0px" } }));
     const layout = sel.sections.find((s) => s.id === "layout")!;
     const flow = layout.fields.find((f) => f.key === "flow")!;
     expect(flow.kind).toBe("segment");
     expect(flow.options).toEqual(["block", "row", "column"]);
-    expect(layout.fields.find((f) => f.key === "margin-left")?.value).toBe("0px");
-    expect(layout.fields.find((f) => f.key === "margin-top")?.value).toBe("12px");
+    const margin = layout.fields.find((f) => f.key === "margin")!;
+    expect(margin.kind).toBe("box");
+    expect(margin.value).toBe("12px|0px|0px|0px"); // top=12, right/bottom/left default 0
   });
 });

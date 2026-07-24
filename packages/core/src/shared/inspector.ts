@@ -205,6 +205,26 @@ export const componentKeyMapSchema = z.object({
 export type ComponentKeyMap = z.infer<typeof componentKeyMapSchema>;
 
 /**
+ * The durable screen ↔ Figma join table (`.vortspec/maps/screens.json`, change:
+ * add-screen-to-figma): the per-project Figma `figmaFileKey` the screens live in, and
+ * per screen (keyed by its stable route path or source file) the source `file` + Figma
+ * `figmaNodeId` of its frame. Lets a re-send update the existing frame and a pull-back
+ * target the right node.
+ */
+export const screenEntrySchema = z.object({
+  file: z.string(),
+  figmaNodeId: z.string(),
+  updatedAt: z.string().optional(),
+});
+export type ScreenEntry = z.infer<typeof screenEntrySchema>;
+
+export const screenMapSchema = z.object({
+  figmaFileKey: z.string().optional(),
+  screens: z.record(z.string(), screenEntrySchema).default({}),
+});
+export type ScreenMap = z.infer<typeof screenMapSchema>;
+
+/**
  * Code→Figma push (change: add-code-to-figma-token-push, extended by
  * figma-native-token-model). A push plan is computed locally by diffing the code
  * token file against the Figma-variable cache; it is what the user previews and

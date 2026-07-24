@@ -133,6 +133,17 @@ test("interact is the resting default mode", async ({ mount }) => {
   await expect(bar.getByRole("button", { name: "Inspect" })).toHaveAttribute("aria-pressed", "false");
 });
 
+test("the canvas toolbar has a Figma menu trigger, disabled until Figma is connected", async ({ mount }) => {
+  const c = await mount(<App />, { hooksConfig: { mock: base } });
+  await openRun(c);
+  const bar = c.getByTestId("canvas-toolbar");
+  const trigger = bar.getByTestId("figma-menu-trigger");
+  await expect(trigger).toBeVisible();
+  // Figma isn't connected in the mock → the trigger is disabled (can't open the Send/Update menu).
+  await expect(trigger).toBeDisabled();
+  await expect(bar.getByRole("tooltip", { name: "Connect Figma to send screens" })).toBeAttached();
+});
+
 test("a bridge that is still connecting does not disable anything", async ({ mount }) => {
   const c = await mount(<App />, { hooksConfig: { mock: base } });
   await openRun(c);
@@ -218,17 +229,18 @@ test("re-binding a length token updates the field to the new token + value immed
       onFieldChange={(k, v) => changes.push([k, v])}
     />,
   );
-  // Starts bound to space-20 / 20px.
-  await expect(c.getByTitle(/Variable: space-20/)).toBeVisible();
-  await expect(c.getByRole("textbox")).toHaveValue("20px");
+  // Starts bound to space-20 / 20px. A bound value is a clickable chip button (the
+  // whole square opens the picker), not an editable input.
+  const chip20 = c.getByRole("button", { name: "Variable: space-20", exact: true });
+  await expect(chip20).toContainText("20px");
+  await expect(c.getByRole("textbox")).toHaveCount(0);
 
-  // Open the ◆ picker and choose space-16.
-  await c.getByTitle(/Variable: space-20/).click();
+  // Click the value square → picker → choose space-16.
+  await chip20.click();
   await c.getByRole("button", { name: /space-16/ }).click();
 
   // The field reflects the new binding right away — before any apply.
-  await expect(c.getByTitle(/Variable: space-16/)).toBeVisible();
-  await expect(c.getByRole("textbox")).toHaveValue("16px");
+  await expect(c.getByRole("button", { name: "Variable: space-16", exact: true })).toContainText("16px");
   // …and it emitted the var() binding for the ephemeral override / pending edit.
   expect(changes).toContainEqual(["gap", "var(--space-16)"]);
 });
@@ -248,16 +260,14 @@ test("removing the edit (a fresh readout) snaps the field back to the node's rea
   const c = await mount(
     <DesignPanel selection={boundTo16} tree={null} tokens={SPACING_TOKENS} onSelectNode={() => {}} onFieldChange={() => {}} />,
   );
-  await expect(c.getByTitle(/Variable: space-16/)).toBeVisible();
-  await expect(c.getByRole("textbox")).toHaveValue("16px");
+  await expect(c.getByRole("button", { name: "Variable: space-16", exact: true })).toContainText("16px");
 
   // Removing the pending edit reverts the canvas and re-reads the node (refreshReadout),
   // so the panel now receives the original space-20 / 20px readout.
   await c.update(
     <DesignPanel selection={GAP_SELECTION} tree={null} tokens={SPACING_TOKENS} onSelectNode={() => {}} onFieldChange={() => {}} />,
   );
-  await expect(c.getByTitle(/Variable: space-20/)).toBeVisible();
-  await expect(c.getByRole("textbox")).toHaveValue("20px");
+  await expect(c.getByRole("button", { name: "Variable: space-20", exact: true })).toContainText("20px");
 });
 
 // An unrecognized element that resembles Button — the assign picker case.

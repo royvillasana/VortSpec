@@ -485,6 +485,8 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
         message: "figma-cli isn't installed yet.",
       },
     figmaOpenAppManagement: async () => undefined,
+    screenMapGet: async () => ({ map: { screens: {} }, targetFileKey: null }),
+    screenMapUpsert: async () => ({ screens: {} }),
     figmaConnect: async () =>
       cfg.figma ?? {
         installed: true,

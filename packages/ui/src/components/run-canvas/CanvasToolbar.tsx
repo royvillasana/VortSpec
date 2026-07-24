@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { JSX, ComponentType } from "react";
-import { MousePointer2, SquareMousePointer, MessageSquare, Plus, Monitor, Tablet, Smartphone, Check } from "lucide-react";
+import { MousePointer2, SquareMousePointer, MessageSquare, Plus, Monitor, Tablet, Smartphone, Check, Loader2, RefreshCw } from "lucide-react";
+import { FigmaIcon } from "./FigmaIcon";
 import type { CanvasMode } from "../../lib/useInspectorBridge";
 import { NEEDS_BRIDGE, bridgeState, bridgeStatusMessage, type BridgeState } from "./bridge-status";
 import { VIEWPORT_ORDER, DEFAULT_VIEWPORTS, frameApplies, type Viewport, type ViewportId, type DeviceFrameKind } from "./viewports";
@@ -42,6 +43,11 @@ export function CanvasToolbar({
   onFrameChange,
   bridgeReady,
   bridgeError,
+  onSendToFigma,
+  onUpdateFromFigma,
+  figmaStatus = "idle",
+  figmaConnected = false,
+  figmaMapped = false,
 }: {
   mode: CanvasMode;
   onModeChange: (mode: CanvasMode) => void;
@@ -55,6 +61,16 @@ export function CanvasToolbar({
   bridgeReady: boolean;
   /** Why the bridge is unavailable, when it is — shown as the disabled reason. */
   bridgeError?: string | null;
+  /** Send the currently-previewed screen to Figma. Omit to hide the Figma control entirely. */
+  onSendToFigma?: () => void;
+  /** Pull the current screen's Figma changes back into code ("Update from Figma"). */
+  onUpdateFromFigma?: () => void;
+  /** In-place status of the send/pull round-trip. */
+  figmaStatus?: "idle" | "sending" | "sent" | "error";
+  /** Whether Figma is connected (figma-cli or the user's MCP) — gates the control. */
+  figmaConnected?: boolean;
+  /** Whether the current screen already has a Figma frame — gates "Update from Figma". */
+  figmaMapped?: boolean;
 }): JSX.Element {
   // Only a bridge that has actually FAILED disables a mode. A bridge that is
   // merely still attaching must not: `ready` drops to false on every guest load
@@ -99,6 +115,110 @@ export function CanvasToolbar({
         onViewportChange={onViewportChange}
         onFrameChange={onFrameChange}
       />
+
+      {onSendToFigma && (
+        <>
+          <span className="mx-0.5 h-4 w-px bg-vs-border-subtle" aria-hidden />
+          <FigmaMenu
+            onSend={onSendToFigma}
+            onUpdate={onUpdateFromFigma}
+            status={figmaStatus}
+            connected={figmaConnected}
+            mapped={figmaMapped}
+          />
+        </>
+      )}
+    </div>
+  );
+}
+
+/**
+ * The Figma control: a drop-up menu (the toolbar sits at the canvas bottom) with two
+ * independent actions — "Send to Figma" (push the previewed screen) and "Update from Figma"
+ * (pull this screen's Figma edits back). Send and pull are decoupled: send now, pull whenever.
+ */
+function FigmaMenu({
+  onSend,
+  onUpdate,
+  status,
+  connected,
+  mapped,
+}: {
+  onSend: () => void;
+  onUpdate?: () => void;
+  status: "idle" | "sending" | "sent" | "error";
+  connected: boolean;
+  mapped: boolean;
+}): JSX.Element {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent): void => {
+      if (!ref.current?.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [open]);
+
+  const busy = status === "sending";
+  return (
+    <div ref={ref} className="group relative flex">
+      <button
+        type="button"
+        onClick={() => connected && setOpen((o) => !o)}
+        disabled={!connected}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label="Figma"
+        data-testid="figma-menu-trigger"
+        className={`grid h-7 w-7 place-items-center rounded transition-colors ${
+          !connected
+            ? "cursor-not-allowed text-vs-text-muted opacity-50"
+            : "text-vs-text-secondary hover:bg-vs-bg-hover hover:text-vs-text-primary"
+        }`}
+      >
+        {busy ? <Loader2 size={16} strokeWidth={2} className="animate-spin" /> : <FigmaIcon size={16} />}
+      </button>
+      {!connected && <Tooltip>Connect Figma to send screens</Tooltip>}
+
+      {open && (
+        <div
+          role="menu"
+          data-testid="figma-menu"
+          className="absolute bottom-full right-0 z-50 mb-2 w-52 overflow-hidden rounded-lg border border-vs-border-default bg-vs-bg-elevated py-1 shadow-2xl"
+        >
+          <button
+            type="button"
+            role="menuitem"
+            data-testid="figma-send"
+            disabled={busy}
+            onClick={() => {
+              onSend();
+              setOpen(false);
+            }}
+            className="flex w-full items-center gap-2.5 px-3 py-1.5 text-left text-[12px] text-vs-text-secondary hover:bg-vs-bg-hover hover:text-vs-text-primary disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <FigmaIcon size={14} />
+            <span className="flex-1">{busy ? "Sending…" : "Send to Figma"}</span>
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            data-testid="figma-update"
+            disabled={!mapped || busy || !onUpdate}
+            title={mapped ? "Pull this screen's Figma changes back into code" : "Send this screen to Figma first"}
+            onClick={() => {
+              onUpdate?.();
+              setOpen(false);
+            }}
+            className="flex w-full items-center gap-2.5 px-3 py-1.5 text-left text-[12px] text-vs-text-secondary hover:bg-vs-bg-hover hover:text-vs-text-primary disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <RefreshCw size={14} strokeWidth={2} />
+            <span className="flex-1">Update from Figma</span>
+          </button>
+        </div>
+      )}
     </div>
   );
 }

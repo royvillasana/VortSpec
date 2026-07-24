@@ -60,8 +60,10 @@ describe("layoutReducer", () => {
   it("toggles the editor and the secondary sidebar independently", () => {
     const noEditor = layoutReducer(base, { type: "toggleEditor" });
     expect(noEditor.editorOpen).toBe(false);
-    const noChat = layoutReducer(base, { type: "toggleSecondary" });
-    expect(noChat.secondaryOpen).toBe(false);
+    // The right assistant sidebar defaults OFF now (chat moved into the unified left
+    // dock), so toggling it from the default opens it.
+    const chatOn = layoutReducer(base, { type: "toggleSecondary" });
+    expect(chatOn.secondaryOpen).toBe(true);
   });
 
   it("clamps oversized persisted widths to the viewport", () => {
@@ -88,9 +90,13 @@ describe("effectiveWidths", () => {
     expect(editor).toBeGreaterThanOrEqual(MIN.editor - 0.5);
   });
 
-  it("hides the primary width when the activity is a work panel", () => {
+  it("shows the primary width for any activity — the unified left dock is always present", () => {
+    // The primary region is now the always-present left dock (Section + Chat), shown in
+    // every activity, so its width no longer gates on the activity being a sidebar view.
     const s: LayoutState = { ...base, activity: "tokens", primaryOpen: true, primaryWidth: 300 };
-    expect(effectiveWidths(s, 1600).primary).toBe(0);
+    expect(effectiveWidths(s, 1600).primary).toBe(300);
+    // Collapsing the dock still hides it, regardless of activity.
+    expect(effectiveWidths({ ...s, primaryOpen: false }, 1600).primary).toBe(0);
   });
 
   it("counts the panel width only when docked to the side and open", () => {

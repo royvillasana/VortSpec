@@ -150,6 +150,10 @@ export const agentRunOptionsSchema = z.object({
       kind: z.string().optional(),
       label: z.string().optional(),
       total: z.number().optional(),
+      // A "Send to Figma" run (change: add-screen-to-figma): the main process parses the
+      // run's RESULT line on completion and records the screen↔Figma mapping in
+      // `.vortspec/maps/screens.json`, so a long send survives the Playground unmounting.
+      figmaSend: z.object({ screenKey: z.string(), file: z.string() }).optional(),
     })
     .optional(),
 });
