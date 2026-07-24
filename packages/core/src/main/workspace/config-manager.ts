@@ -14,6 +14,7 @@ const KEY_MAP: Record<string, keyof ProjectConfig> = {
   figma_file_url: "figmaFileUrl",
   figma_token_collection: "figmaTokenCollection",
   component_library: "componentLibrary",
+  component_library_kind: "componentLibraryKind",
   github_repo_url: "githubRepoUrl",
   github_branch: "githubBranch",
   github_component_dir: "githubComponentDir",
