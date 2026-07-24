@@ -112,13 +112,32 @@ test("opening a workspace reveals the four-region shell", async ({ mount }) => {
   await expect(rail.getByRole("button", { name: "Explorer" })).toBeVisible();
   await expect(rail.getByRole("button", { name: "Source Control" })).toBeVisible();
   await expect(rail.getByRole("button", { name: "Design tokens" })).toBeVisible();
-  // The code activity's Explorer + editor + preview bar regions.
+  // The code activity's Explorer + editor regions (the editor's bottom preview bar
+  // was removed — the localhost preview lives in the Playground now).
   await expect(c.getByRole("complementary").getByRole("button", { name: "Explorer", exact: true })).toBeVisible();
   await expect(c.getByText("No file open", { exact: true })).toBeVisible();
-  await expect(c.getByText("Preview", { exact: true })).toBeVisible(); // the preview bar
-  await expect(c.getByRole("button", { name: "Open Browser" })).toBeVisible();
+  await expect(c.getByText("Preview", { exact: true })).toHaveCount(0);
+  // Top bar carries the user photo (falls back to the name's initial); breadcrumb has
+  // the in-app Terminal toggle.
+  await expect(c.getByRole("button", { name: "Profile", exact: true })).toBeVisible();
+  await expect(
+    c.getByRole("navigation", { name: "Breadcrumb" }).getByRole("button", { name: "Terminal" }),
+  ).toBeVisible();
   // The assistant chat lives in the left dock's Chat tab — no right-rail toggle.
   await expect(rail.getByRole("button", { name: "Toggle assistant" })).toHaveCount(0);
+});
+
+test("the breadcrumb Terminal button opens the bottom terminal panel", async ({ mount }) => {
+  const c = await mount(<App />, { hooksConfig: { mock: base } });
+  await open(c);
+  const termToggle = c
+    .getByRole("navigation", { name: "Breadcrumb" })
+    .getByRole("button", { name: "Terminal" });
+  await expect(termToggle).toHaveAttribute("aria-pressed", "false");
+  await termToggle.click();
+  await expect(termToggle).toHaveAttribute("aria-pressed", "true");
+  // The xterm surface mounts in the bottom panel.
+  await expect(c.getByTestId("terminal")).toBeVisible();
 });
 
 test("the activity bar switches to a reused @vortspec/ui panel", async ({ mount }) => {

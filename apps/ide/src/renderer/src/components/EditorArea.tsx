@@ -3,13 +3,13 @@ import type { Project } from "@vortspec/core/ipc";
 import { api } from "@vortspec/ui/api";
 import { EditorGroup } from "./EditorGroup";
 import type { CodeSelection } from "./CodeEditor";
-import { PreviewBar } from "./PreviewBar";
 import type { WorkspaceFiles } from "../lib/useWorkspaceFiles";
 
 /**
- * The editor group region: tabs + Monaco, with the preview nav bar pinned to its
- * bottom edge (the preview lives here, so it shows only while the editor is on
- * screen). File state is owned by `useWorkspaceFiles` (above) so tabs persist.
+ * The editor group region: tabs + Monaco. File state is owned by
+ * `useWorkspaceFiles` (above) so tabs persist across activity switches. The
+ * localhost preview lives in the Playground now, so the Explorer editor no longer
+ * carries a bottom preview bar.
  */
 export function EditorArea({
   project,
@@ -28,23 +28,20 @@ export function EditorArea({
 }): JSX.Element {
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-      <div className="flex min-h-0 flex-1 flex-col">
-        <EditorGroup
-          files={wf.files}
-          activePath={wf.activePath}
-          onActivate={wf.setActivePath}
-          onClose={wf.close}
-          onChange={wf.change}
-          onSave={(p) => void wf.save(p)}
-          onReload={(p) => void wf.reload(p)}
-          loadHead={(p) => api.fileAtHead(project.path, p)}
-          relayoutKey={relayoutKey}
-          onSelection={onSelection}
-          onOpenInChat={onOpenInChat}
-          onReorder={wf.reorder}
-        />
-      </div>
-      <PreviewBar project={project} />
+      <EditorGroup
+        files={wf.files}
+        activePath={wf.activePath}
+        onActivate={wf.setActivePath}
+        onClose={wf.close}
+        onChange={wf.change}
+        onSave={(p) => void wf.save(p)}
+        onReload={(p) => void wf.reload(p)}
+        loadHead={(p) => api.fileAtHead(project.path, p)}
+        relayoutKey={relayoutKey}
+        onSelection={onSelection}
+        onOpenInChat={onOpenInChat}
+        onReorder={wf.reorder}
+      />
     </div>
   );
 }

@@ -86,6 +86,8 @@ test("activity-bar icons expose hover tooltips (accessible names)", async ({ mou
   const c = await mount(<App />, { hooksConfig: { mock: base } });
   await open(c);
   for (const name of ["Explorer", "Source Control", "Design tokens", "Settings (profile)"]) {
-    await expect(rail(c).getByRole("button", { name })).toHaveAttribute("title", name);
+    // The button exposes the name (accessible), and a fast hover tooltip carries the same label.
+    await expect(rail(c).getByRole("button", { name })).toBeVisible();
+    await expect(rail(c).getByRole("tooltip", { name })).toBeAttached();
   }
 });
