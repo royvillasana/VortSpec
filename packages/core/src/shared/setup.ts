@@ -57,6 +57,9 @@ export const setupAnswersSchema = z.object({
   figmaTokenCollection: z.string().optional(),
   // Library
   componentLibrary: componentLibrarySchema.optional(),
+  // Resolved provisioning kind — for `other`/unknown libraries the flow asks; for known
+  // libraries it derives from `componentLibrary` via `libraryKind()` (change: provision-library-source).
+  componentLibraryKind: z.enum(["copy-source", "package"]).optional(),
   // GitHub
   githubRepoUrl: z.string().optional(),
   githubBranch: z.string().optional(),
@@ -102,16 +105,36 @@ export const DESIGN_SOURCE_OPTIONS = [
   { value: "zip", label: "ZIP File", hint: "Exported from Stitch, Claude Design, or any other design tool" },
 ] as const;
 
+/**
+ * How a component library is provisioned into a project (change: provision-library-source):
+ *   - `copy-source` — the library's CLI copies component *source files* into the repo
+ *     (shadcn, radix). Provision by running that CLI; the copied files ARE the design system.
+ *   - `package`     — components are imported from an installed npm package (mui, chakra,
+ *     antd, mantine, headlessui). Provision by installing the package + generating thin,
+ *     token-mapped wrappers. You never own the library's source.
+ * `other` has no fixed kind — the setup flow asks.
+ */
+export type LibraryKind = "copy-source" | "package";
+
 export const COMPONENT_LIBRARY_OPTIONS = [
-  { value: "shadcn", label: "shadcn/ui", hint: "Radix UI + Tailwind" },
-  { value: "radix", label: "Radix UI", hint: "unstyled primitives" },
-  { value: "mui", label: "Material UI", hint: "Emotion-based" },
-  { value: "antd", label: "Ant Design" },
-  { value: "chakra", label: "Chakra UI", hint: "Emotion-based" },
-  { value: "mantine", label: "Mantine" },
-  { value: "headlessui", label: "Headless UI", hint: "Tailwind Labs" },
+  { value: "shadcn", label: "shadcn/ui", hint: "Radix UI + Tailwind", kind: "copy-source" },
+  { value: "radix", label: "Radix UI", hint: "unstyled primitives", kind: "copy-source" },
+  { value: "mui", label: "Material UI", hint: "Emotion-based", kind: "package" },
+  { value: "antd", label: "Ant Design", kind: "package" },
+  { value: "chakra", label: "Chakra UI", hint: "Emotion-based", kind: "package" },
+  { value: "mantine", label: "Mantine", kind: "package" },
+  { value: "headlessui", label: "Headless UI", hint: "Tailwind Labs", kind: "package" },
   { value: "other", label: "Other" },
 ] as const;
+
+/**
+ * The provisioning kind for a component library. Returns `"unknown"` for `other` or any
+ * unrecognized library, so the caller asks the user rather than guessing a command.
+ */
+export function libraryKind(library: string | undefined | null): LibraryKind | "unknown" {
+  const opt = COMPONENT_LIBRARY_OPTIONS.find((o) => o.value === library);
+  return opt && "kind" in opt ? opt.kind : "unknown";
+}
 
 export const STYLING_OPTIONS = [
   { value: "tailwind", label: "Tailwind CSS" },
@@ -195,6 +218,7 @@ export const projectConfigSchema = z.object({
   figmaFileUrl: z.string().optional(),
   figmaTokenCollection: z.string().optional(),
   componentLibrary: z.string().optional(),
+  componentLibraryKind: z.string().optional(),
   githubRepoUrl: z.string().optional(),
   githubBranch: z.string().optional(),
   githubComponentDir: z.string().optional(),
@@ -229,6 +253,10 @@ export function buildProjectYaml(a: SetupAnswers): string {
     lines.push(`figma_token_collection: ${a.figmaTokenCollection || "Tokens"}`);
   } else if (a.designSource === "library") {
     lines.push(`component_library: ${a.componentLibrary ?? "other"}`);
+    // Provisioning kind: derive for a known library, else use the answered kind for `other`.
+    const kind = libraryKind(a.componentLibrary);
+    const resolved = kind === "unknown" ? a.componentLibraryKind : kind;
+    if (resolved) lines.push(`component_library_kind: ${resolved}`);
   } else if (a.designSource === "github") {
     lines.push(`github_repo_url: "${a.githubRepoUrl ?? ""}"`);
     lines.push(`github_branch: ${a.githubBranch || "main"}`);

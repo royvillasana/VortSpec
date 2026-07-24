@@ -28,7 +28,7 @@ export interface MockConfig {
   env?: { checks: EnvCheck[]; ready: boolean };
   installGit?: EnvCheck;
   installClaude?: EnvCheck;
-  projectConfig?: { designSource?: string } | null;
+  projectConfig?: { designSource?: string; componentLibrary?: string; componentLibraryKind?: string } | null;
   /** Initial dev-server status returned by devServerStatus(). */
   devStatus?: DevServerStatus;
   /** Status returned by startDevServer() — defaults to a running server with a URL. */
