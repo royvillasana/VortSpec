@@ -190,9 +190,34 @@ export function parseTokensFromCss(
 
 const SOURCE_EXTS = new Set([".tsx", ".jsx", ".ts", ".vue", ".svelte", ".css", ".scss"]);
 
-/** Read every component source file under `dir` as { component, text }. */
+/** Tailwind config filenames, in resolution order. */
+const TAILWIND_CONFIG_FILES = [
+  "tailwind.config.js",
+  "tailwind.config.cjs",
+  "tailwind.config.mjs",
+  "tailwind.config.ts",
+];
+
+/** Read the project's Tailwind config text (empty string if none — a v4 project). */
+async function readTailwindConfig(projectPath: string): Promise<string> {
+  for (const file of TAILWIND_CONFIG_FILES) {
+    const text = await readFile(join(projectPath, file), "utf8").catch(() => "");
+    if (text) return text;
+  }
+  return "";
+}
+
+/**
+ * Read every component source under `dir` as { component, text }. CVA variant files
+ * (`Button.variants.ts`) hold the token-referencing utility classes for their
+ * component — excluding them was reporting zero uses for whole component libraries —
+ * so they are now INCLUDED and folded into the base component's text: a
+ * `Button.variants.ts` that uses `bg-primary` counts as usage on `Button`, not a
+ * phantom `Button.variants`. Co-located files sharing a base name merge into one entry
+ * so a token used in both `Button.tsx` and `Button.variants.ts` lists `Button` once.
+ */
 async function collectSources(dir: string): Promise<{ component: string; text: string }[]> {
-  const out: { component: string; text: string }[] = [];
+  const byComponent = new Map<string, string>();
   async function walk(d: string): Promise<void> {
     let entries;
     try {
@@ -202,15 +227,19 @@ async function collectSources(dir: string): Promise<{ component: string; text: s
     }
     for (const entry of entries) {
       const full = join(d, entry.name);
-      if (entry.isDirectory()) await walk(full);
-      else if (SOURCE_EXTS.has(extname(entry.name)) && !entry.name.endsWith(".variants.ts")) {
+      if (entry.isDirectory()) {
+        await walk(full);
+      } else if (SOURCE_EXTS.has(extname(entry.name))) {
         const text = await readFile(full, "utf8").catch(() => "");
-        if (text) out.push({ component: basename(entry.name, extname(entry.name)), text });
+        if (!text) continue;
+        const component = basename(entry.name, extname(entry.name)).replace(/\.variants$/, "");
+        const prev = byComponent.get(component);
+        byComponent.set(component, prev ? `${prev}\n${text}` : text);
       }
     }
   }
   await walk(dir);
-  return out;
+  return [...byComponent].map(([component, text]) => ({ component, text }));
 }
 
 /**
@@ -290,6 +319,112 @@ function buildClassMap(tokenNames: string[]): Map<string, { name: string; proper
 }
 
 /**
+ * Tailwind **v3** config theme section → the utility prefixes whose classes read a
+ * value from it. The v4 convention above assumes the token name *is* the class key
+ * (`color-brand-primary` → `bg-brand-primary`). A v3 project instead wires arbitrary
+ * token names to arbitrary utility keys in `tailwind.config.js`
+ * (`colors.primary.DEFAULT = 'var(--theme-primary)'` → `bg-primary`), so the link
+ * exists ONLY in the config and both the literal-`--` scan and the v4 namespace map
+ * miss it. This table lets `parseTailwindClassMap` turn that config into class→token.
+ */
+const TAILWIND_SECTION_PREFIXES: Record<string, string[]> = {
+  colors: [
+    "bg", "text", "border", "ring", "fill", "stroke", "outline", "divide", "accent",
+    "caret", "decoration", "from", "via", "to", "placeholder", "shadow", "ring-offset",
+  ],
+  backgroundColor: ["bg"],
+  textColor: ["text"],
+  borderColor: ["border", "divide"],
+  ringColor: ["ring"],
+  outlineColor: ["outline"],
+  fill: ["fill"],
+  stroke: ["stroke"],
+  caretColor: ["caret"],
+  accentColor: ["accent"],
+  spacing: [
+    "p", "px", "py", "pt", "pr", "pb", "pl", "ps", "pe", "m", "mx", "my", "mt", "mr",
+    "mb", "ml", "ms", "me", "gap", "gap-x", "gap-y", "w", "h", "size", "min-w", "max-w",
+    "min-h", "max-h", "space-x", "space-y", "inset", "inset-x", "inset-y", "top",
+    "right", "bottom", "left", "start", "end", "basis", "indent", "translate-x", "translate-y",
+  ],
+  padding: ["p", "px", "py", "pt", "pr", "pb", "pl", "ps", "pe"],
+  margin: ["m", "mx", "my", "mt", "mr", "mb", "ml", "ms", "me"],
+  gap: ["gap", "gap-x", "gap-y"],
+  width: ["w", "min-w", "max-w"],
+  height: ["h", "min-h", "max-h"],
+  borderRadius: [
+    "rounded", "rounded-t", "rounded-r", "rounded-b", "rounded-l", "rounded-tl",
+    "rounded-tr", "rounded-br", "rounded-bl", "rounded-s", "rounded-e",
+  ],
+  boxShadow: ["shadow"],
+  dropShadow: ["drop-shadow"],
+  fontSize: ["text"],
+  fontFamily: ["font"],
+  fontWeight: ["font"],
+  lineHeight: ["leading"],
+  letterSpacing: ["tracking"],
+  borderWidth: ["border", "border-t", "border-r", "border-b", "border-l", "border-x", "border-y"],
+  opacity: ["opacity"],
+  ringWidth: ["ring"],
+  strokeWidth: ["stroke"],
+  zIndex: ["z"],
+};
+
+const CONFIG_UNQUOTE = /^['"]|['"]$/g;
+
+/**
+ * Parse a Tailwind v3 `tailwind.config.*` and map every utility class that resolves to
+ * a `var(--token)` back to that token. Brace-tracking, comment-tolerant, no JS eval:
+ * we walk `key: {` (descend), `key: 'var(--token)'` (leaf), and `{` / `}` events,
+ * keeping a key stack. For a leaf under `theme[.extend].<section>....<key>`, the flat
+ * Tailwind key is the nested path joined by `-` with `DEFAULT` dropped
+ * (`colors.primary.DEFAULT` → `primary`, `colors.neutral.100` → `neutral-100`,
+ * `spacing.6` → `6`), and each of the section's utility prefixes maps to the token
+ * (`bg-primary` / `text-primary` / `border-primary` → `--theme-primary`).
+ */
+function parseTailwindClassMap(
+  configText: string,
+  tokenNames: Set<string>,
+): Map<string, { name: string; property: string }> {
+  const map = new Map<string, { name: string; property: string }>();
+  if (!configText) return map;
+  // Strip block + line comments (config files carry rationale comments). Guard the
+  // line-comment strip so a `//` inside `https://` or a value isn't mistaken for one.
+  const src = configText
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/(^|[^:\w])\/\/[^\n]*/g, "$1");
+  const event =
+    /('[^']*'|"[^"]*"|[\w$.-]+)\s*:\s*\{|('[^']*'|"[^"]*"|[\w$.-]+)\s*:\s*['"]var\(--([\w-]+)\)['"]|(\{)|(\})/g;
+  const stack: string[] = [];
+  let m: RegExpExecArray | null;
+  while ((m = event.exec(src))) {
+    if (m[1] !== undefined) {
+      stack.push(m[1].replace(CONFIG_UNQUOTE, "")); // key: {  → descend
+    } else if (m[2] !== undefined) {
+      const token = m[3];
+      if (!tokenNames.has(token)) continue;
+      const themeIdx = stack.indexOf("theme");
+      if (themeIdx === -1) continue;
+      const path = stack.slice(themeIdx + 1).filter((k) => k !== "extend");
+      if (path.length === 0) continue;
+      const [section, ...between] = path;
+      const prefixes = TAILWIND_SECTION_PREFIXES[section];
+      if (!prefixes) continue;
+      const leafKey = m[2].replace(CONFIG_UNQUOTE, "");
+      const flat = [...between, leafKey].filter((k) => k !== "DEFAULT").join("-");
+      for (const prefix of prefixes) {
+        map.set(flat ? `${prefix}-${flat}` : prefix, { name: token, property: prefix });
+      }
+    } else if (m[4] !== undefined) {
+      stack.push(""); // anonymous `{` (e.g. `module.exports = {`) — keeps depth balanced
+    } else {
+      stack.pop(); // `}`
+    }
+  }
+  return map;
+}
+
+/**
  * Build a token → usage map by scanning component sources for any reference to a
  * token: a literal `--name` (`var(--name)`, `bg-[--name]`, `@apply`, `theme(--name)`)
  * AND — crucially — the **semantic Tailwind utility classes** that resolve to the
@@ -300,10 +435,15 @@ function buildClassMap(tokenNames: string[]): Map<string, { name: string; proper
 export function buildUsage(
   tokenNames: string[],
   sources: { component: string; text: string }[],
+  tailwindConfigText = "",
 ): Record<string, TokenUsage[]> {
   const usage: Record<string, TokenUsage[]> = {};
   const names = new Set(tokenNames);
+  // v4 `@theme` namespace classes (token name IS the key) + v3 config-mapped classes
+  // (token → utility key wired in tailwind.config). Config entries overlay the v4 ones
+  // so an explicitly-configured mapping wins on any collision.
   const classMap = buildClassMap(tokenNames);
+  for (const [cls, hit] of parseTailwindClassMap(tailwindConfigText, names)) classMap.set(cls, hit);
   for (const { component, text } of sources) {
     const seen = new Set<string>();
     const add = (name: string, property?: string): void => {
@@ -315,11 +455,12 @@ export function buildUsage(
     for (const m of text.matchAll(/--([\w-]+)(?![\w-])/g)) {
       if (names.has(m[1])) add(m[1], deriveProperty(text, m.index ?? 0));
     }
-    // Semantic Tailwind classes. The word scan naturally strips variant prefixes
-    // (`hover:bg-x` → `bg-x`) and opacity suffixes (`bg-x/50` → `bg-x`), since `:`
-    // and `/` aren't word chars; only real class names hit the map.
+    // Semantic Tailwind classes. The scan strips variant prefixes (`hover:bg-x` → `bg-x`)
+    // and opacity suffixes (`bg-x/50` → `bg-x`) since `:` and `/` aren't matched; the `.`
+    // is kept so decimal spacing utilities (`p-1.5`) resolve. Only real class names hit
+    // the map, so the wider match never produces false positives.
     if (classMap.size > 0) {
-      for (const m of text.matchAll(/[a-zA-Z][\w-]*/g)) {
+      for (const m of text.matchAll(/[a-zA-Z][\w.-]*/g)) {
         const hit = classMap.get(m[0]);
         if (hit) add(hit.name, hit.property);
       }
@@ -490,6 +631,9 @@ export async function getInspectorTokens(
       files: [
         ".sdd-de/project.yaml",
         tokenFile,
+        // The Tailwind config carries the v3 token→utility mapping, so a change to it
+        // changes usage counts — invalidate the cached scan when any candidate moves.
+        ...TAILWIND_CONFIG_FILES,
         ".vortspec/figma-variables.json",
         ".vortspec/token-overrides.json",
         ".vortspec/token-links.json",
@@ -521,9 +665,11 @@ async function computeInspectorTokens(
   const sources = config?.componentDir
     ? await collectSources(join(projectPath, config.componentDir))
     : [];
+  const tailwindConfigText = await readTailwindConfig(projectPath);
   const usage = buildUsage(
     parsed.map((t) => t.name),
     sources,
+    tailwindConfigText,
   );
   const edited = await readOverrides(projectPath);
 
