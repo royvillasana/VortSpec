@@ -25,6 +25,7 @@ export interface MockConfig {
   components?: InspectorComponentsResult;
   figmaMcp?: EnvCheck;
   figmaMcpAdd?: EnvCheck;
+  projectConfig?: { designSource?: string } | null;
   /** Initial dev-server status returned by devServerStatus(). */
   devStatus?: DevServerStatus;
   /** Status returned by startDevServer() — defaults to a running server with a URL. */
@@ -542,7 +543,7 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
     setPublishTarget: async () => null,
     readArtifact: async () => null,
     findLatestArtifact: async () => null,
-    projectConfig: async () => null,
+    projectConfig: async () => cfg.projectConfig ?? null,
 
     inspectorTokens: async () => cfg.tokens ?? EMPTY_TOKENS,
     inspectorComponents: async () =>

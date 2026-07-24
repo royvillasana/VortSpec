@@ -8,7 +8,7 @@
 
 - [x] 2.1 `checkEnvironment`: include a **Figma MCP** row (present / needs-auth / missing); keep the base `ready` gate on Node/git/claude-install only.
 - [x] 2.2 `EnvironmentCheck.tsx`: render the row + fix; on-mount usage-free detect (as today); "Add Figma MCP" runs `figma:mcpAdd` then re-verifies.
-- [ ] 2.3 Mark the Figma MCP as blocking only when the selected project's `design_source` is Figma.
+- [x] 2.3 Mark the Figma MCP as blocking only when the selected project's `design_source` is Figma.
 
 ## 3. First-run step (auto-install + guided OAuth)
 
