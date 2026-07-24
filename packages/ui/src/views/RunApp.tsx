@@ -7,6 +7,7 @@ import { api } from "../lib/api";
 import { Button, Spinner } from "@vortspec/ui/ui";
 import { ProjectRail, projectRailItems } from "@vortspec/ui/ProjectRail";
 import { DesignPanel, ChangesBar } from "../components/run-canvas/DesignPanel";
+import { FigmaMcpBanner } from "../components/FigmaMcpBanner";
 import { StorybookSidebar } from "../components/run-canvas/StorybookSidebar";
 import { Sitemap } from "../components/run-canvas/Sitemap";
 import type { RouteDiscovery, RouteNode, Rect } from "@vortspec/core/ipc";
@@ -1800,6 +1801,10 @@ export function RunApp({
             </Button>
           </div>
         )}
+
+        {/* Project-scoped Figma-MCP gate: blocking only for Figma design-source
+            projects when the MCP isn't connected (change: figma-mcp-prerequisite). */}
+        <FigmaMcpBanner project={project} />
 
         {kind === "app" && !envDismissed && (envCreated || envMissing) && (
           <div

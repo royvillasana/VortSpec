@@ -38,6 +38,12 @@ export interface VortSpecApi {
   checkEnvironment(): Promise<IpcResponse<"env:check">>;
   verifyLogin(): Promise<IpcResponse<"env:verifyLogin">>;
   verifyFigmaMcp(): Promise<IpcResponse<"env:verifyFigmaMcp">>;
+  /** Install the Figma MCP for the user (`claude mcp add … figma …`), then re-verify. */
+  addFigmaMcp(): Promise<IpcResponse<"env:addFigmaMcp">>;
+  /** Trigger git's install (macOS Command Line Tools), then re-verify. */
+  installGit(): Promise<IpcResponse<"env:installGit">>;
+  /** Install the Claude CLI into the managed prefix (no sudo), then re-verify. */
+  installClaude(): Promise<IpcResponse<"env:installClaude">>;
   openInstall(url: string): Promise<IpcResponse<"env:openInstall">>;
 
   // workspace / projects

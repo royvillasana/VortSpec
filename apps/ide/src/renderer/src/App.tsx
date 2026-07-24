@@ -493,6 +493,7 @@ export default function App(): JSX.Element {
         <GuidedFlow
           project={p}
           hideRail
+          sidebarSlot={sectionSlot}
           onBack={go("explorer")}
           onOpenInspector={go("tokens")}
           onOpenPreview={go("play")}
@@ -516,7 +517,7 @@ export default function App(): JSX.Element {
       ) : a === "play" ? (
         <RunApp project={p} kind="storybook" hideRail sidebarSlot={sectionSlot} onBack={go("explorer")} onFlow={go("flow")} onRun={go("run")} onPlayground={go("play")} onTokens={go("tokens")} onManifest={go("manifest")} onHistory={go("explorer")} onSource={go("source")} />
       ) : a === "tokens" ? (
-        <Inspector project={p} hideRail onBack={go("explorer")} onOpenPreview={go("explorer")} onOpenRun={go("run")} onOpenHistory={go("explorer")} onOpenManifest={go("manifest")} onOpenFile={(path) => { void wf.openFile(path); dispatch({ type: "setActivity", activity: "explorer" }); }} />
+        <Inspector project={p} hideRail sidebarSlot={sectionSlot} onBack={go("explorer")} onOpenPreview={go("explorer")} onOpenRun={go("run")} onOpenHistory={go("explorer")} onOpenManifest={go("manifest")} onOpenFile={(path) => { void wf.openFile(path); dispatch({ type: "setActivity", activity: "explorer" }); }} />
       ) : a === "tasks" ? (
         <Tasks project={p} hideRail onBack={go("explorer")} onFlow={go("flow")} onRun={go("run")} onPlayground={go("explorer")} onTokens={go("tokens")} onManifest={go("manifest")} onHistory={go("explorer")} onSource={go("source")} />
       ) : a === "manifest" ? (
@@ -560,9 +561,19 @@ export default function App(): JSX.Element {
                   ? "Design"
                   : layout.activity === "play"
                     ? "Stories"
-                    : "Panel"
+                    : layout.activity === "flow"
+                      ? "Design system"
+                      : layout.activity === "tokens"
+                        ? "Variables"
+                        : "Panel"
             }
-            hasSection={isExplorer || layout.activity === "run" || layout.activity === "play"}
+            hasSection={
+              isExplorer ||
+              layout.activity === "run" ||
+              layout.activity === "play" ||
+              layout.activity === "flow" ||
+              layout.activity === "tokens"
+            }
             sectionEl={sectionSlot}
             tab={leftTab}
             onTabChange={setLeftTab}

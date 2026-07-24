@@ -13,6 +13,7 @@ export { stopAllWatchers } from "./workspace/fs-workspace";
 export { killAllSessions as stopAllTerminals } from "./terminal/pty-manager";
 export { stopIdeMcp } from "./ide-mcp/host";
 export { fixGuiPath } from "./util/fix-path";
+export { ensureManagedRuntime } from "./environment/runtime-manager";
 // Recent-projects list — the IDE reads it to populate the native File menu's
 // "Open Recent Projects" submenu (same store the welcome screen uses).
 export { listProjects } from "./workspace/workspace-manager";

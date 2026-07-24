@@ -24,6 +24,11 @@ export interface MockConfig {
   tokens?: InspectorTokensResult;
   components?: InspectorComponentsResult;
   figmaMcp?: EnvCheck;
+  figmaMcpAdd?: EnvCheck;
+  env?: { checks: EnvCheck[]; ready: boolean };
+  installGit?: EnvCheck;
+  installClaude?: EnvCheck;
+  projectConfig?: { designSource?: string } | null;
   /** Initial dev-server status returned by devServerStatus(). */
   devStatus?: DevServerStatus;
   /** Status returned by startDevServer() — defaults to a running server with a URL. */
@@ -238,10 +243,16 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
       releaseUrl: null,
       downloadUrl: null,
     }),
-    checkEnvironment: async () => ({ checks: [], ready: true }),
+    checkEnvironment: async () => cfg.env ?? { checks: [], ready: true },
     verifyLogin: async () => ({ id: "claude-login", label: "Claude", status: "pass" }),
     verifyFigmaMcp: async () =>
       cfg.figmaMcp ?? { id: "figma-mcp", label: "Figma MCP", status: "unknown", detail: "" },
+    addFigmaMcp: async () =>
+      cfg.figmaMcpAdd ?? { id: "figma-mcp", label: "Figma MCP", status: "pass", detail: "Connected" },
+    installGit: async () =>
+      cfg.installGit ?? { id: "git", label: "Git", status: "pass", detail: "v2.39.0" },
+    installClaude: async () =>
+      cfg.installClaude ?? { id: "claude-install", label: "Claude Code", status: "pass", detail: "1.2.3" },
     openInstall: async (url: string) => {
       installOpens.push(url);
       return undefined;
@@ -539,7 +550,7 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
     setPublishTarget: async () => null,
     readArtifact: async () => null,
     findLatestArtifact: async () => null,
-    projectConfig: async () => null,
+    projectConfig: async () => cfg.projectConfig ?? null,
 
     inspectorTokens: async () => cfg.tokens ?? EMPTY_TOKENS,
     inspectorComponents: async () =>

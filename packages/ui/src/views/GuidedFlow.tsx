@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type {
   FigmaComponent,
   FigmaConnection,
@@ -116,10 +117,14 @@ export function GuidedFlow({
   onOpenSource,
   onOpenRunApp,
   onOpenTasks,
+  sidebarSlot,
 }: {
   project: Project;
   /** Hide the internal ProjectRail — the IDE embeds this with its own ActivityBar. */
   hideRail?: boolean;
+  /** IDE left-dock Section slot — when provided, the dashboard rail portals into it
+   *  (unified sidebar); `undefined` means no host dock (desktop) → render inline. */
+  sidebarSlot?: HTMLElement | null;
   onBack: () => void;
   onOpenInspector: () => void;
   onOpenPreview: () => void;
@@ -568,8 +573,13 @@ export function GuidedFlow({
         <div className="flex min-h-0 flex-1">
           {/* Dashboard rail: pipeline card + foundation + category nav
               (design: Design System Dashboard.dc.html). */}
-          {(showRunCard || foundationReady) && (
-            <aside className="flex w-[296px] flex-none flex-col gap-4 overflow-y-auto border-r border-vs-border-default bg-vs-bg-surface p-4">
+          {(showRunCard || foundationReady) &&
+            (() => {
+              // The Design-System dashboard rail — portaled into the IDE's left-dock
+              // Section slot when provided (unified sidebar, like every other section),
+              // otherwise rendered inline (desktop). Same content either way.
+              const rail = (
+                <>
               {/* Active/just-finished run — the pipeline card. */}
               {showRunCard && (
                 <Card className="flex flex-col gap-3 p-3.5">
@@ -700,8 +710,20 @@ export function GuidedFlow({
                   </button>
                 </nav>
               )}
-            </aside>
-          )}
+                </>
+              );
+              return sidebarSlot !== undefined ? (
+                sidebarSlot &&
+                createPortal(
+                  <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto bg-vs-bg-surface p-4">{rail}</div>,
+                  sidebarSlot,
+                )
+              ) : (
+                <aside className="flex w-[296px] flex-none flex-col gap-4 overflow-y-auto border-r border-vs-border-default bg-vs-bg-surface p-4">
+                  {rail}
+                </aside>
+              );
+            })()}
 
           {/* Content: banners + toolbar + table + outputs. */}
           <div className="min-w-0 flex-1 overflow-y-auto px-8 pb-16 pt-6">

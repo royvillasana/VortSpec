@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import type {
   EnvCheck,
   FigmaCollection,
@@ -181,10 +182,14 @@ export function Inspector({
   onOpenHistory,
   onOpenManifest,
   onOpenFile,
+  sidebarSlot,
 }: {
   project: Project;
   /** Hide the internal ProjectRail (the IDE supplies its own activity-bar navigation). */
   hideRail?: boolean;
+  /** IDE left-dock Section slot — when provided, the Figma-style Collections/Groups nav
+   *  portals into it (unified sidebar); `undefined` = no host dock (desktop) → header controls. */
+  sidebarSlot?: HTMLElement | null;
   onBack: () => void;
   onOpenPreview: () => void;
   onOpenRun: () => void;
@@ -201,6 +206,8 @@ export function Inspector({
   const [componentFile, setComponentFile] = useState<Record<string, string>>({});
   const [tokenFile, setTokenFile] = useState<string | null>(null);
   const [segment, setSegment] = useState<TokenType | "all">("all");
+  // The Figma-style sidebar's picked group (top-level group path, or null = All).
+  const [pickedGroup, setPickedGroup] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [codeOnly, setCodeOnly] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
@@ -518,30 +525,49 @@ export function Inspector({
     );
   }, [tokens, query, segment, codeOnly, activeMode]);
 
+  // Whether tokens carry Figma group paths (drives the Groups nav + folder tree).
+  const useTree = useMemo(() => filtered.some((t) => (t.group?.length ?? 0) > 0), [filtered]);
+  const groupKeyOf = (t: InspectorToken): string => (useTree ? (t.group?.[0] ?? "Ungrouped") : t.type);
+  // Top-level groups for the Figma-style sidebar (name + count). Counts come from the
+  // full filtered set so picking a group never shrinks the list.
+  const navGroups = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const t of filtered) counts.set(groupKeyOf(t), (counts.get(groupKeyOf(t)) ?? 0) + 1);
+    return [...counts.entries()]
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filtered, useTree]);
+  // Tokens shown in the table — narrowed to the picked group (clicking a Figma group).
+  const visible = useMemo(
+    () => (pickedGroup ? filtered.filter((t) => groupKeyOf(t) === pickedGroup) : filtered),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [filtered, pickedGroup, useTree],
+  );
+
   // Type grouping (the fallback when no Figma group paths are present).
   const groups = useMemo(
     () =>
-      TYPE_ORDER.map((type) => ({ type, items: filtered.filter((t) => t.type === type) })).filter(
+      TYPE_ORDER.map((type) => ({ type, items: visible.filter((t) => t.type === type) })).filter(
         (g) => g.items.length > 0,
       ),
-    [filtered],
+    [visible],
   );
 
   // Figma-native folder tree: nest tokens under their `/` group path with
   // indentation, mirroring how Figma displays variables (change:
   // figma-native-token-model). Used whenever any token carries a group path.
-  const useTree = useMemo(() => filtered.some((t) => (t.group?.length ?? 0) > 0), [filtered]);
   const treeRows = useMemo<TreeRow[]>(() => {
     if (!useTree) return [];
     const counts = new Map<string, number>();
-    for (const t of filtered) {
+    for (const t of visible) {
       const g = t.group ?? [];
       for (let d = 0; d < g.length; d++) {
         const key = g.slice(0, d + 1).join("/");
         counts.set(key, (counts.get(key) ?? 0) + 1);
       }
     }
-    const sorted = [...filtered].sort((a, b) =>
+    const sorted = [...visible].sort((a, b) =>
       [...(a.group ?? []), a.name].join("/").localeCompare([...(b.group ?? []), b.name].join("/")),
     );
     const rows: TreeRow[] = [];
@@ -563,7 +589,7 @@ export function Inspector({
       for (const c of collapsed) if (path !== c && path.startsWith(c + "/")) return false;
       return true;
     });
-  }, [filtered, useTree, collapsed]);
+  }, [visible, useTree, collapsed]);
 
   const activeCollectionObj =
     collections.find((c) => c.name === pickedCollection) ?? collections[0] ?? null;
@@ -571,7 +597,7 @@ export function Inspector({
   const multiMode = modes.length > 1;
 
   const total = tokens?.length ?? 0;
-  const resultCount = filtered.length;
+  const resultCount = visible.length;
   const selectedToken = tokens?.find((t) => t.name === selected) ?? null;
   const driftCount = tokens?.filter((t) => modeView(t, activeMode).drift === "drifted").length ?? 0;
   const inSyncCount = tokens?.filter((t) => modeView(t, activeMode).drift === "in-sync").length ?? 0;
@@ -605,8 +631,55 @@ export function Inspector({
     flash("Updated the mode → context map");
   }
 
+  // Figma-style token nav: Collections (the variable collections) + Groups (top-level
+  // group folders, with counts) — clicking a group drives the table on the right. Lives
+  // in the IDE's left-dock Section tab (portaled); the desktop build keeps header controls.
+  const navBtn = (active: boolean): string =>
+    `flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] ${
+      active
+        ? "bg-vs-accent-subtle text-vs-accent"
+        : "text-vs-text-secondary hover:bg-vs-bg-hover hover:text-vs-text-primary"
+    }`;
+  const tokenNav = (
+    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto bg-vs-bg-surface py-1">
+      {collections.length > 1 && (
+        <div className="flex flex-col gap-0.5 px-2 pb-2">
+          <div className="px-2 pb-1 pt-2 font-mono text-[10px] uppercase tracking-[0.1em] text-vs-text-muted">
+            Collections
+          </div>
+          {collections.map((c) => (
+            <button
+              key={c.name}
+              onClick={() => void selectCollection(c.name)}
+              className={navBtn(activeCollectionObj?.name === c.name)}
+            >
+              <span className="min-w-0 flex-1 truncate">{c.name}</span>
+            </button>
+          ))}
+        </div>
+      )}
+      <div className="flex flex-col gap-0.5 border-t border-vs-border-subtle px-2 pb-2">
+        <div className="px-2 pb-1 pt-2 font-mono text-[10px] uppercase tracking-[0.1em] text-vs-text-muted">
+          Groups
+        </div>
+        <button onClick={() => setPickedGroup(null)} className={navBtn(pickedGroup === null)}>
+          <span className="min-w-0 flex-1 truncate">All</span>
+          <span className="font-mono text-[10.5px] text-vs-text-muted">{filtered.length}</span>
+        </button>
+        {navGroups.map((g) => (
+          <button key={g.name} onClick={() => setPickedGroup(g.name)} className={navBtn(pickedGroup === g.name)}>
+            <span className="min-w-0 flex-1 truncate">{g.name}</span>
+            <span className="font-mono text-[10.5px] text-vs-text-muted">{g.count}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+
   return (
     <div className="flex h-[calc(100vh-3rem)] w-full overflow-hidden bg-vs-bg-primary text-[13px] text-vs-text-primary">
+      {/* Figma-style Collections/Groups nav — portaled into the IDE left-dock Section tab. */}
+      {sidebarSlot !== undefined && sidebarSlot && createPortal(tokenNav, sidebarSlot)}
       {!hideRail && (
         <ProjectRail
         project={project}
@@ -788,8 +861,8 @@ export function Inspector({
             </div>
           )}
           <div className="flex flex-wrap items-center gap-3">
-            {/* Collection scope — shown only when Figma exposes more than one. */}
-            {collections.length > 1 && (
+            {/* Collection scope — moved to the dock's Collections nav when the IDE hosts it. */}
+            {sidebarSlot === undefined && collections.length > 1 && (
               <label className="flex items-center gap-1.5 text-xs text-vs-text-muted">
                 <span className="inline-block h-1.5 w-1.5 rounded-sm bg-vs-accent" />
                 <select
@@ -833,16 +906,19 @@ export function Inspector({
                 </button>
               </div>
             )}
-            <div className="flex gap-0.5 rounded-lg border border-vs-border-default bg-vs-bg-surface p-0.5">
-              <Segment active={segment === "all"} onClick={() => setSegment("all")}>
-                All
-              </Segment>
-              {TYPE_ORDER.map((t) => (
-                <Segment key={t} active={segment === t} onClick={() => setSegment(t)}>
-                  {TYPE_LABEL[t]}
+            {/* Type segments live in the dock's Groups nav when the IDE hosts it. */}
+            {sidebarSlot === undefined && (
+              <div className="flex gap-0.5 rounded-lg border border-vs-border-default bg-vs-bg-surface p-0.5">
+                <Segment active={segment === "all"} onClick={() => setSegment("all")}>
+                  All
                 </Segment>
-              ))}
-            </div>
+                {TYPE_ORDER.map((t) => (
+                  <Segment key={t} active={segment === t} onClick={() => setSegment(t)}>
+                    {TYPE_LABEL[t]}
+                  </Segment>
+                ))}
+              </div>
+            )}
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
@@ -881,6 +957,7 @@ export function Inspector({
                 onClick={() => {
                   setQuery("");
                   setSegment("all");
+                  setPickedGroup(null);
                   setCodeOnly(false);
                 }}
                 className="text-xs text-vs-accent underline hover:text-vs-text-primary"
