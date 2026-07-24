@@ -233,11 +233,69 @@ function deriveProperty(text: string, at: number): string | undefined {
 }
 
 /**
+ * Tailwind v4 theme namespace → the utility prefixes whose classes reference it.
+ * A token named `<namespace>-<key>` (e.g. `color-brand-primary`, `radius-md`,
+ * `spacing-4`) is referenced by `<prefix>-<key>` classes (`bg-brand-primary`,
+ * `rounded-md`, `p-4`) — which the literal `--` scan below can't see, because the
+ * class resolves the token through the theme, not through `var()`. That's why a
+ * component built with idiomatic semantic classes reported zero uses.
+ */
+const CLASS_NAMESPACES: { ns: RegExp; prefixes: string[] }[] = [
+  {
+    ns: /^(?:color|colour)-/,
+    prefixes: [
+      "bg", "text", "border", "ring", "fill", "stroke", "outline", "divide", "accent",
+      "caret", "decoration", "from", "via", "to", "placeholder", "shadow", "ring-offset",
+    ],
+  },
+  {
+    ns: /^radius-/,
+    prefixes: [
+      "rounded", "rounded-t", "rounded-r", "rounded-b", "rounded-l", "rounded-tl",
+      "rounded-tr", "rounded-br", "rounded-bl", "rounded-s", "rounded-e",
+    ],
+  },
+  {
+    ns: /^(?:spacing|space)-/,
+    prefixes: [
+      "p", "px", "py", "pt", "pr", "pb", "pl", "ps", "pe", "m", "mx", "my", "mt", "mr",
+      "mb", "ml", "ms", "me", "gap", "gap-x", "gap-y", "w", "h", "size", "min-w", "max-w",
+      "min-h", "max-h", "space-x", "space-y", "inset", "inset-x", "inset-y", "top",
+      "right", "bottom", "left", "start", "end", "basis", "indent", "translate-x", "translate-y",
+    ],
+  },
+  { ns: /^shadow-/, prefixes: ["shadow", "drop-shadow", "inset-shadow"] },
+  { ns: /^text-/, prefixes: ["text"] }, // font-size
+  { ns: /^(?:font-family|font)-/, prefixes: ["font"] }, // font-family / weight
+  { ns: /^(?:leading|line-height)-/, prefixes: ["leading"] },
+  { ns: /^(?:tracking|letter-spacing)-/, prefixes: ["tracking"] },
+];
+
+/**
+ * Map every semantic Tailwind utility class back to the token it references, using
+ * the v4 namespace convention above. `color-brand-primary` → `bg-brand-primary`,
+ * `text-brand-primary`, … ; `radius-md` → `rounded-md` ; `spacing-4` → `p-4`, `gap-4`, …
+ */
+function buildClassMap(tokenNames: string[]): Map<string, { name: string; property: string }> {
+  const map = new Map<string, { name: string; property: string }>();
+  for (const name of tokenNames) {
+    for (const { ns, prefixes } of CLASS_NAMESPACES) {
+      if (!ns.test(name)) continue;
+      const key = name.replace(ns, "");
+      if (key) for (const prefix of prefixes) map.set(`${prefix}-${key}`, { name, property: prefix });
+      break; // first matching namespace wins
+    }
+  }
+  return map;
+}
+
+/**
  * Build a token → usage map by scanning component sources for any reference to a
- * token — `var(--name)`, Tailwind arbitrary values (`bg-[--name]`,
- * `text-[var(--name)]`), `@apply`, or `theme(--name)` — not just `var()`. Each
- * component is listed once per token, with the property/utility it sits on when
- * recoverable (for the detail drawer's "where used").
+ * token: a literal `--name` (`var(--name)`, `bg-[--name]`, `@apply`, `theme(--name)`)
+ * AND — crucially — the **semantic Tailwind utility classes** that resolve to the
+ * token through the theme (`bg-brand-primary`, `rounded-md`, `p-4`), which have no
+ * literal `--name` in the source. Each component is listed once per token, with the
+ * property/utility it sits on when recoverable (for the detail drawer's "where used").
  */
 export function buildUsage(
   tokenNames: string[],
@@ -245,15 +303,26 @@ export function buildUsage(
 ): Record<string, TokenUsage[]> {
   const usage: Record<string, TokenUsage[]> = {};
   const names = new Set(tokenNames);
+  const classMap = buildClassMap(tokenNames);
   for (const { component, text } of sources) {
     const seen = new Set<string>();
-    // Any `--name` mention (word-boundary at the end so `--x` ≠ `--x-hover`).
-    for (const m of text.matchAll(/--([\w-]+)(?![\w-])/g)) {
-      const name = m[1];
-      if (!names.has(name) || seen.has(name)) continue;
+    const add = (name: string, property?: string): void => {
+      if (seen.has(name)) return;
       seen.add(name);
-      const property = deriveProperty(text, m.index ?? 0);
       (usage[name] ??= []).push(property ? { component, property } : { component });
+    };
+    // Literal `--name` mention (word-boundary at the end so `--x` ≠ `--x-hover`).
+    for (const m of text.matchAll(/--([\w-]+)(?![\w-])/g)) {
+      if (names.has(m[1])) add(m[1], deriveProperty(text, m.index ?? 0));
+    }
+    // Semantic Tailwind classes. The word scan naturally strips variant prefixes
+    // (`hover:bg-x` → `bg-x`) and opacity suffixes (`bg-x/50` → `bg-x`), since `:`
+    // and `/` aren't word chars; only real class names hit the map.
+    if (classMap.size > 0) {
+      for (const m of text.matchAll(/[a-zA-Z][\w-]*/g)) {
+        const hit = classMap.get(m[0]);
+        if (hit) add(hit.name, hit.property);
+      }
     }
   }
   return usage;
