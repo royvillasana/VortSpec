@@ -104,6 +104,8 @@ import {
   pushPlanSchema,
   figmaPushResultSchema,
   tokenSanitationSchema,
+  screenMapSchema,
+  screenEntrySchema,
 } from "./inspector";
 
 export type { SetupAnswers, ProjectConfig } from "./setup";
@@ -426,6 +428,21 @@ export const ipcContract = {
   "figma:status": { request: z.void(), response: figmaConnectionSchema },
   "figma:ensureConnected": { request: z.void(), response: figmaConnectionSchema },
   "figma:openAppManagement": { request: z.void(), response: z.void() },
+
+  // Screen ↔ Figma round-trip map (change: add-screen-to-figma).
+  "screenMap:get": {
+    request: z.object({ projectPath: z.string() }),
+    response: z.object({ map: screenMapSchema, targetFileKey: z.string().nullable() }),
+  },
+  "screenMap:upsert": {
+    request: z.object({
+      projectPath: z.string(),
+      screenKey: z.string(),
+      entry: screenEntrySchema,
+      fileKey: z.string().optional(),
+    }),
+    response: screenMapSchema,
+  },
   "figma:connect": { request: figmaConnectRequestSchema, response: figmaConnectionSchema },
   "figma:syncVariables": { request: figmaSyncRequestSchema, response: figmaSyncResultSchema },
   "figma:syncComponents": { request: figmaSyncRequestSchema, response: figmaSyncResultSchema },

@@ -16,6 +16,7 @@ import type { WorkspaceChange } from "./fs";
 import type { TerminalData } from "./terminal";
 import type { IdeState, IdeAction, IdeActionResult } from "./ide-mcp";
 import type { FigmaCliMode } from "./figma";
+import type { ScreenEntry } from "./inspector";
 import type { ProviderId, RepoVisibility } from "./git";
 import type { IssueType } from "./task";
 import type { SnapshotReason } from "./manifest";
@@ -254,6 +255,15 @@ export interface VortSpecApi {
   figmaEnsureConnected(): Promise<IpcResponse<"figma:ensureConnected">>;
   figmaOpenAppManagement(): Promise<IpcResponse<"figma:openAppManagement">>;
   figmaConnect(mode: FigmaCliMode): Promise<IpcResponse<"figma:connect">>;
+  /** Read the screen ↔ Figma map + the resolved target file key (design-system file, else null). */
+  screenMapGet(projectPath: string): Promise<IpcResponse<"screenMap:get">>;
+  /** Record a screen ↔ Figma node join (and the target file key, once known). */
+  screenMapUpsert(
+    projectPath: string,
+    screenKey: string,
+    entry: ScreenEntry,
+    fileKey?: string,
+  ): Promise<IpcResponse<"screenMap:upsert">>;
   /** Read design variables from Figma into the reconcile cache (figma-cli primary). */
   figmaSyncVariables(projectPath: string): Promise<IpcResponse<"figma:syncVariables">>;
   /** Read design-system components from Figma into the reconcile cache (figma-cli primary). */

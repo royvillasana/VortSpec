@@ -3,7 +3,7 @@ import type { JSX, CSSProperties } from "react";
 import type { Project } from "@vortspec/core/ipc";
 import type { IdeState } from "@vortspec/core/ide-mcp";
 import { api } from "@vortspec/ui/api";
-import { AssistantDock, type PendingSelectionRef } from "@vortspec/ui/AssistantDock";
+import type { PendingSelectionRef } from "@vortspec/ui/AssistantDock";
 import { ConversationTabs, type IncomingTask } from "@vortspec/ui/ConversationTabs";
 import { AssistantTaskProvider, type AssistantTask } from "@vortspec/ui/assistant-task";
 import { CanvasSelectionProvider } from "@vortspec/ui/canvas-selection";
@@ -49,7 +49,6 @@ export default function App(): JSX.Element {
   // A dedicated, scoped folder (~/VortSpec) the pre-project assistant runs in —
   // NOT the bare home dir, so Claude Code doesn't wander into ~/Music, ~/Documents,
   // etc. and make macOS prompt for those protected areas.
-  const [assistantHome, setAssistantHome] = useState<string | null>(null);
   // The current git branch, shown in the status bar beside the project name.
   const [branch, setBranch] = useState<string | null>(null);
   // The assistant chat is running — drives the Playground's "AI is working" page skeleton.
@@ -207,15 +206,6 @@ export default function App(): JSX.Element {
     void api.getProfile().then((p) => setUserName(p.name || undefined)).catch(() => undefined);
     void api.homeDir().then(setHomeDir).catch(() => undefined);
   }, []);
-  // Only when no project is open (welcome screen): ensure ~/VortSpec exists and
-  // ground the pre-project assistant there instead of the bare home dir — best-
-  // effort, created inside home so no traversal. Keeps Claude Code scoped and
-  // avoids macOS prompting for ~/Music, ~/Documents, etc. Never runs with a
-  // workspace open, so it doesn't touch the filesystem during normal editing.
-  useEffect(() => {
-    if (workspace || assistantHome || !homeDir) return;
-    void api.createDir(homeDir, "VortSpec").finally(() => setAssistantHome(`${homeDir}/VortSpec`));
-  }, [workspace, assistantHome, homeDir]);
   useEffect(() => {
     const onResize = (): void => setWinW(window.innerWidth);
     window.addEventListener("resize", onResize);
@@ -330,7 +320,7 @@ export default function App(): JSX.Element {
         nonce: ++taskNonce.current,
       });
     },
-    [layout.activity, layout.secondaryOpen, dispatch],
+    [layout.activity],
   );
 
   if (!workspace) {
@@ -359,20 +349,6 @@ export default function App(): JSX.Element {
         </div>
       );
     }
-    // A synthetic "Home" project gives the welcome-screen assistant a cwd so the
-    // user can chat with the AI before opening a project (ask it to set up, clone,
-    // scaffold, etc.). It runs in a dedicated ~/VortSpec folder — NOT the bare home
-    // dir — so the assistant stays out of protected areas (Music/Documents/Desktop).
-    const homeProject: Project | null = assistantHome
-      ? {
-          id: "home",
-          name: "Home",
-          path: assistantHome,
-          toolkit: { present: false, version: null, updateAvailable: false },
-          lastRunStatus: "none",
-          addedAt: "",
-        }
-      : null;
     return (
       <div className="flex h-screen w-screen flex-col overflow-hidden bg-vs-bg-primary text-vs-text-primary">
         <header
@@ -383,10 +359,8 @@ export default function App(): JSX.Element {
         </header>
         <div className="flex min-h-0 flex-1 overflow-hidden">
           <ActivityBar
-            active={welcomeView === "settings" ? "settings" : "explorer"}
+            active={welcomeView === "settings" ? "settings" : "home"}
             onSelect={(a) => setWelcomeView(a === "settings" ? "settings" : "start")}
-            chatOpen={layout.secondaryOpen}
-            onToggleChat={() => dispatch({ type: "toggleSecondary" })}
           />
           {welcomeView === "start" && (
             <aside className="flex w-60 shrink-0 flex-col border-r border-vs-border-default bg-vs-bg-surface">
@@ -412,36 +386,9 @@ export default function App(): JSX.Element {
               />
             )}
           </div>
-          {layout.secondaryOpen && (
-            <div className="flex w-[380px] shrink-0 flex-col border-l border-vs-border-default">
-              {homeProject ? (
-                <AssistantDock
-                  project={homeProject}
-                  fill
-                  showSession
-                  allowModify
-                  userName={userName}
-                  onClose={() => dispatch({ type: "toggleSecondary" })}
-                />
-              ) : (
-                <div className="flex flex-1 items-center justify-center p-4 text-center text-xs text-vs-text-muted">
-                  Loading the assistant…
-                </div>
-              )}
-            </div>
-          )}
         </div>
         <footer className="flex h-6 shrink-0 items-center gap-3 border-t border-vs-border-default bg-vs-bg-surface px-3 text-[11px] text-vs-text-muted">
           <span>No folder open</span>
-          <button
-            type="button"
-            aria-pressed={layout.secondaryOpen}
-            onClick={() => dispatch({ type: "toggleSecondary" })}
-            className={`ml-auto rounded px-2 py-0.5 ${layout.secondaryOpen ? "text-vs-text-primary" : "hover:text-vs-text-secondary"}`}
-            title="Toggle assistant"
-          >
-            Assistant
-          </button>
         </footer>
       </div>
     );
@@ -504,8 +451,8 @@ export default function App(): JSX.Element {
             }
             onOpenInChat={(s) => {
               if (!wf.activePath) return;
-              // Ensure the assistant is visible, then attach the selection.
-              if (!layout.secondaryOpen) dispatch({ type: "toggleSecondary" });
+              // Reveal the Chat tab in the left dock (the assistant lives there now), then attach.
+              setLeftTab("chat");
               setPendingRef({
                 path: wf.activePath,
                 startLine: s.startLine,
@@ -597,7 +544,7 @@ export default function App(): JSX.Element {
         <ToolkitUpdateBanner project={workspace} onUpdated={setWorkspace} />
 
         <div className="flex min-h-0 flex-1 overflow-hidden">
-          <ActivityBar active={layout.activity} onSelect={(a) => (a === "home" ? setWorkspace(null) : dispatch({ type: "setActivity", activity: a }))} chatOpen={layout.secondaryOpen} onToggleChat={() => dispatch({ type: "toggleSecondary" })} />
+          <ActivityBar active={layout.activity} onSelect={(a) => (a === "home" ? setWorkspace(null) : dispatch({ type: "setActivity", activity: a }))} />
 
           {/* The ONE left sidebar: the current view's Section sidebar + the persistent Chat.
               The right assistant sidebar is gone — the chat lives here now, mounted once so
@@ -756,7 +703,6 @@ export default function App(): JSX.Element {
               <FooterToggle label="Explorer" active={showPrimary} title="Toggle the Explorer sidebar" onClick={() => dispatch({ type: "togglePrimary" })} />
               <FooterToggle label="Editor" active={layout.editorOpen} title="Toggle the editor" onClick={() => dispatch({ type: "toggleEditor" })} />
               <FooterToggle label="Terminal" active={layout.panelOpen} title="Toggle the terminal panel (Ctrl+`)" onClick={() => dispatch({ type: "togglePanel" })} />
-              <FooterToggle label="Assistant" active={layout.secondaryOpen} title="Toggle the assistant" onClick={() => dispatch({ type: "toggleSecondary" })} />
             </div>
           )}
         </footer>

@@ -43,6 +43,8 @@ import { AssignDialog } from "../components/run-canvas/AssignDialog";
 import { routedModel } from "../lib/model-routing";
 import { RunDoctor, type DoctorState } from "../components/run-canvas/RunDoctor";
 import { buildDoctorPrompt, buildEnvSetupPrompt, relFileFromSource } from "../components/run-canvas/doctor";
+import { FigmaBridgePanel } from "../components/run-canvas/FigmaBridgePanel";
+import { buildSendScreenPrompt, buildPullScreenPrompt, parseSendResult } from "@vortspec/core/figma-screen-prompts";
 
 /**
  * Run App (M5) — the live localhost runtime for the project's OWN app (its `dev`
@@ -287,6 +289,17 @@ export function RunApp({
     };
   }, [canvas, project.path]);
 
+  // Keep the site tree fresh: route discovery is a read-only source scan, but it only ran
+  // on mount — so a page the assistant just created never appeared in the sitemap until the
+  // project was reopened. Re-discover whenever the sidebar assistant finishes a turn
+  // (busy → idle), so a new page/route shows up (and becomes navigable) right away.
+  const wasAssistantBusy = useRef(false);
+  useEffect(() => {
+    if (!canvas) return;
+    if (wasAssistantBusy.current && !assistantBusy) rediscoverRoutes();
+    wasAssistantBusy.current = assistantBusy;
+  }, [assistantBusy, canvas, rediscoverRoutes]);
+
   // ── Storybook provisioning (the deterministic backstop) ─────────────────────
   // The Playground guarantees a REAL Storybook to serve once components exist,
   // instead of silently falling back to the improvised Vite gallery. On open we
@@ -494,10 +507,13 @@ export function RunApp({
   // harness + a manifest; on completion we re-discover so those screens become navigable.
   const screenPreviewMod = useAgentRun();
   const enableScreenPreview = useCallback(() => {
-    const screens = (routes?.routes[0]?.children ?? [])
-      .filter((c) => c.path.startsWith("#screen/") && c.file)
-      .map((c) => c.file as string);
+    // Every state-navigated screen in the tree — both already-registered (`?param=`) and
+    // not-yet-registered (`#screen/`) — so a re-run to pick up NEW screens rewrites the
+    // manifest with the FULL set instead of dropping the ones already there.
     const param = routes?.screenPreview?.param ?? "screen";
+    const screens = (routes?.routes[0]?.children ?? [])
+      .filter((c) => !!c.file && (c.path.startsWith("#screen/") || c.path.startsWith("?")))
+      .map((c) => c.file as string);
     const list = screens.length ? screens.map((f) => `  - ${f}`).join("\n") : "  - (scan src/screens, src/pages, src/views)";
     void screenPreviewMod.start({
       cwd: project.path,
@@ -510,7 +526,7 @@ export function RunApp({
         "Requirements:",
         `1. In the app's entry module (the script that index.html loads — likely src/main.tsx, src/preview/main.tsx, or src/index.tsx), add a branch guarded by \`import.meta.env.DEV\`: read the URL query param "${param}" (e.g. ?${param}=DestinationDetail). If it names a screen component, render THAT screen ALONE — wrapped in exactly the same top-level providers, theme, and global styles the app normally mounts. Otherwise render the app exactly as before. Production builds MUST be unaffected.`,
         "2. Each screen needs representative props to render. Build realistic sample props by REUSING the app's own sample data and helper functions (e.g. the landing screen's listings array and any `to<Screen>Data` mapper). If they aren't exported, export them (or construct equivalent representative data). Supply no-op functions for callbacks like onBack.",
-        `3. Create the manifest file \`.vortspec/screen-preview.json\` with EXACTLY this shape: { "param": "${param}", "screens": [ { "name": "<ComponentName>", "file": "<src/screens/File.tsx>" } ] } listing every screen the harness can render.`,
+        `3. Create the manifest file \`.vortspec/screen-preview.json\` with EXACTLY this shape: { "param": "${param}", "screens": [ { "name": "<ComponentName>", "file": "<src/screens/File.tsx>" } ] }. Register ONE entry per screen COMPONENT (name = the component/screen name). Do NOT fan a single component out into multiple entries for its DATA variants — a product-detail screen shown for many products, or a screen with device/theme variants, is ONE entry, not one per product/variant. (Per-variant screens are a choice the user makes during screen creation, not something to auto-generate here.) If the harness/manifest ALREADY exists, EXTEND both — keep every screen already handled/listed and add the ones below that are missing; NEVER drop an existing screen.`,
         "4. Keep it minimal, typed (no `any`), and reversible. Do NOT add a router or change production rendering.",
         "",
         "Screens to support:",
@@ -528,19 +544,39 @@ export function RunApp({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [screenPreviewMod.model.status]);
 
-  // Auto-provision the screen-preview harness (like Storybook): the FIRST time we detect
-  // state-navigated screens without a harness, install it silently — no user action. Once
-  // per project per session; a failure surfaces a manual retry in the sitemap instead of looping.
-  const autoPreviewFor = useRef<string | null>(null);
+  // State-navigated screens that exist but aren't yet reachable from the site tree — they
+  // render as "open source" rows (`#screen/…`), not a `?screen=` deep-link. New screens the
+  // assistant adds land here until the harness + manifest are (re)generated to include them.
+  const unregisteredScreens = useMemo(() => {
+    const out: string[] = [];
+    const walk = (nodes: RouteNode[]): void => {
+      for (const n of nodes) {
+        if (n.path.startsWith("#screen/") && n.file) out.push(n.file);
+        walk(n.children);
+      }
+    };
+    walk(routes?.routes ?? []);
+    return out;
+  }, [routes]);
+
+  // Auto-provision + KEEP IN SYNC (like Storybook): the first time state-navigated screens
+  // have no reachable deep-link, install the harness silently; and whenever the assistant adds
+  // NEW screens (the unregistered set grows), re-run it so the manifest + entry include them and
+  // every created page becomes reachable from the site tree. Keyed on the EXACT unregistered set
+  // (not once per project) so it re-runs on genuinely new screens but never loops on the same
+  // set — a screen the harness can't render stays put without retrying (the sitemap keeps a
+  // manual retry). Router apps have no `screenPreview` and are skipped (they use real routes).
+  const provisionedKey = useRef<string>("");
   useEffect(() => {
     if (!canvas) return;
-    const sp = routes?.screenPreview;
-    if (!sp || sp.enabled) return; // nothing to do, or already installed
-    if (screenPreviewMod.running || autoPreviewFor.current === project.path) return;
-    autoPreviewFor.current = project.path;
+    if (!routes?.screenPreview) return;
+    if (unregisteredScreens.length === 0 || screenPreviewMod.running) return;
+    const key = `${project.path}::${[...unregisteredScreens].sort().join("|")}`;
+    if (provisionedKey.current === key) return;
+    provisionedKey.current = key;
     enableScreenPreview();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [routes, canvas, project.path]);
+  }, [routes, unregisteredScreens, canvas, project.path]);
   const screenPreviewState: "setting-up" | "failed" =
     screenPreviewMod.model.status === "error" ? "failed" : "setting-up";
 
@@ -722,6 +758,183 @@ export function RunApp({
   const composeActive =
     mode === "insert" && (!!bridge.placeholder || compose.phase !== "idle" || !!compose.screenUpdateOwed);
 
+  // ── Send to Figma round-trip (change: add-screen-to-figma) ──────────────────
+  // The bottom-toolbar Figma button sends the previewed screen to Figma as DS-linked
+  // component instances (via the user's own Figma MCP — no strictMcp, bypassPermissions), and
+  // "Pull changes back" reads the mapped node and edits the screen source under an Apply-style
+  // Keep/Revert review. VortSpec never calls Figma directly — the run does the work and reports
+  // back the ids we persist in `.vortspec/maps/screens.json`.
+  const figmaMod = useAgentRun();
+  const [figmaConnected, setFigmaConnected] = useState(false);
+  const [figmaPhase, setFigmaPhase] = useState<"idle" | "sending" | "sent" | "pulling" | "review" | "error">("idle");
+  const [figmaResult, setFigmaResult] = useState<{ url?: string; nodeId: string } | null>(null);
+  // The current screen's existing Figma frame (from the map) — enables Open + Pull.
+  const [figmaScreen, setFigmaScreen] = useState<{ nodeId: string; fileKey: string } | null>(null);
+  const [figmaSnap, setFigmaSnap] = useState<FileSnapshot[] | null>(null);
+  // Resolve WHICH screen to send — the one on screen, and NEVER the app entry. For a
+  // state-navigated app the entry (routes.routes[0].file, e.g. src/main.tsx) is not a screen:
+  // if the user hasn't navigated to a specific screen (currentPath "/"), fall back to the app's
+  // default — the first navigable screen. `key` is the stable map key; `label` grounds the prompt.
+  const sendTarget = useMemo((): { file: string; key: string; label: string } | null => {
+    const roots = routes?.routes ?? [];
+    const stateApp = !!routes?.screenPreview;
+    const entryFile = stateApp ? (roots[0]?.file ?? null) : null;
+    const findAt = (nodes: RouteNode[]): RouteNode | null => {
+      for (const n of nodes) {
+        if (n.path === currentPath && n.file) return n;
+        const hit = findAt(n.children);
+        if (hit) return hit;
+      }
+      return null;
+    };
+    const cur = findAt(roots);
+    if (cur?.file && cur.file !== entryFile) return { file: cur.file, key: cur.path, label: cur.label || cur.path };
+    if (stateApp) {
+      const first = (roots[0]?.children ?? []).find((c) => !!c.file);
+      if (first?.file) return { file: first.file, key: first.path, label: first.label || first.path };
+    }
+    if (currentPageFile && currentPageFile !== entryFile)
+      return { file: currentPageFile, key: currentPath, label: currentPath };
+    return null;
+  }, [routes, currentPath, currentPageFile]);
+  const screenKey = sendTarget?.key ?? currentPath;
+  const figmaPhaseRef = useRef(figmaPhase);
+  figmaPhaseRef.current = figmaPhase;
+
+  // Figma connectivity (figma-cli OR the user's Figma MCP), like the Inspector token push.
+  useEffect(() => {
+    if (!canvas) return;
+    let alive = true;
+    void Promise.all([
+      api.figmaEnsureConnected().catch(() => null),
+      api.verifyFigmaMcp().catch(() => null),
+    ]).then(([cli, mcp]) => {
+      if (alive) setFigmaConnected(!!cli?.connected || mcp?.status === "pass");
+    });
+    return () => {
+      alive = false;
+    };
+  }, [canvas, project.path]);
+
+  // Load the current screen's Figma mapping (drives Open + Pull). Re-reads after a round-trip.
+  useEffect(() => {
+    if (!canvas) return;
+    let alive = true;
+    void api
+      .screenMapGet(project.path)
+      .then(({ map }) => {
+        if (!alive) return;
+        const e = map.screens[screenKey];
+        setFigmaScreen(e && map.figmaFileKey ? { nodeId: e.figmaNodeId, fileKey: map.figmaFileKey } : null);
+      })
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [canvas, project.path, screenKey, figmaPhase]);
+
+  const figmaOpenUrl = useMemo((): string | null => {
+    if (figmaResult?.url) return figmaResult.url;
+    if (figmaScreen)
+      return `https://www.figma.com/design/${figmaScreen.fileKey}/?node-id=${figmaScreen.nodeId.replace(":", "-")}`;
+    return null;
+  }, [figmaResult, figmaScreen]);
+
+  async function sendToFigma(): Promise<void> {
+    const t = sendTarget;
+    if (!t) return;
+    setFigmaResult(null);
+    setFigmaPhase("sending");
+    const { map, targetFileKey } = await api.screenMapGet(project.path);
+    const existing = map.screens[t.key];
+    await figmaMod.start({
+      prompt: buildSendScreenPrompt({
+        file: t.file,
+        previewUrl: embedUrl || null,
+        fileKey: targetFileKey,
+        nodeId: existing?.figmaNodeId ?? null,
+        screenLabel: t.label,
+      }),
+      cwd: project.path,
+      // MCP tools (Figma) are auto-denied headless without this; NO strictMcp → the user's Figma MCP is reachable.
+      bypassPermissions: true,
+      // The main process records the mapping on completion — survives leaving the Playground mid-send.
+      meta: { kind: "figma-send", label: `Send ${t.label} to Figma`, figmaSend: { screenKey: t.key, file: t.file } },
+    });
+  }
+
+  async function pullFromFigma(): Promise<void> {
+    const t = sendTarget;
+    if (!t) return;
+    const { map } = await api.screenMapGet(project.path);
+    const entry = map.screens[t.key];
+    if (!entry || !map.figmaFileKey) return;
+    const snap = await api.snapshotComponent(project.path, t.file).catch(() => [] as FileSnapshot[]);
+    setFigmaSnap(snap);
+    setFigmaPhase("pulling");
+    await figmaMod.start({
+      prompt: buildPullScreenPrompt({ file: t.file, fileKey: map.figmaFileKey, nodeId: entry.figmaNodeId, screenLabel: t.label }),
+      cwd: project.path,
+      bypassPermissions: true,
+    });
+  }
+
+  // Resolve the run outcome by the phase it was started in.
+  useEffect(() => {
+    if (figmaMod.model.status === "error") {
+      if (figmaPhaseRef.current === "sending" || figmaPhaseRef.current === "pulling") setFigmaPhase("error");
+      return;
+    }
+    if (figmaMod.model.status !== "done") return;
+    if (figmaPhaseRef.current === "sending") {
+      const m = figmaMod.model;
+      const text = m.result?.text ?? [...m.messages].reverse().find((x) => x.role === "assistant")?.text ?? "";
+      const r = parseSendResult(text);
+      if (r) {
+        setFigmaResult({ url: r.url, nodeId: r.nodeId });
+        void api.screenMapUpsert(
+          project.path,
+          screenKey,
+          { file: sendTarget?.file ?? screenKey, figmaNodeId: r.nodeId, updatedAt: new Date().toISOString() },
+          r.fileKey,
+        );
+        setFigmaPhase("sent");
+      } else {
+        setFigmaPhase("error");
+      }
+    } else if (figmaPhaseRef.current === "pulling") {
+      setFigmaPhase("review");
+      bridge.reload();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [figmaMod.model.status]);
+
+  function figmaKeep(): void {
+    setFigmaPhase("idle");
+    setFigmaSnap(null);
+    figmaMod.reset();
+    bridge.reload();
+  }
+  async function figmaRevert(): Promise<void> {
+    if (figmaSnap && figmaSnap.length) await api.restoreFiles(project.path, figmaSnap);
+    setFigmaPhase("idle");
+    setFigmaSnap(null);
+    figmaMod.reset();
+    bridge.reload();
+  }
+  function figmaDismiss(): void {
+    setFigmaPhase("idle");
+    figmaMod.reset();
+  }
+  const figmaToolbarStatus: "idle" | "sending" | "sent" | "error" =
+    figmaPhase === "sending" || figmaPhase === "pulling"
+      ? "sending"
+      : figmaPhase === "sent"
+        ? "sent"
+        : figmaPhase === "error"
+          ? "error"
+          : "idle";
+
   // "AI is working" skeleton over the preview (change: canvas-ai-skeleton). A component
   // being built into a KNOWN slot shimmers in place (block); anything page-wide — an Apply
   // writing source, the screen-preview harness, a slot-less build, or the chat assistant
@@ -734,9 +947,12 @@ export function RunApp({
     if (compose.phase === "generating" || screenPreviewMod.model.status === "running") {
       return { mode: "page", label: "Building…" };
     }
+    if (figmaMod.model.status === "running") {
+      return { mode: "page", label: figmaPhase === "pulling" ? "Pulling from Figma…" : "Sending to Figma…" };
+    }
     if (assistantBusy) return { mode: "page", label: "AI is working…" };
     return null;
-  }, [compose.phase, bridge.placeholder, applying, screenPreviewMod.model.status, assistantBusy]);
+  }, [compose.phase, bridge.placeholder, applying, screenPreviewMod.model.status, figmaMod.model.status, figmaPhase, assistantBusy]);
 
   // ── Live drag-and-drop move (§5.8) ────────────────────────────────────────
   // Behind a feature flag (Decision 3): when off, a drag is simply never opened as
@@ -1075,6 +1291,29 @@ export function RunApp({
         }
         applyLive(live);
         commitEdits(edits);
+      } else if (key === "padding" || key === "margin") {
+        // Figma-style per-side spacing. BoxField emits only the sides the user
+        // touched, as "side:value;side:value", so editing one side never clobbers
+        // the others. Each side is an independent CSS property (`padding-top`, …)
+        // and can carry its own spacing-token binding — so `var(--space-4)` on the
+        // top stays a token while the left is a literal, exactly like Figma.
+        const field = selectionRef.current?.sections.flatMap((s) => s.fields).find((f) => f.key === key);
+        const live: Record<string, string> = {};
+        const edits: Parameters<typeof commitEdits>[0] = [];
+        for (const part of value.split(";")) {
+          const [side, raw] = part.split(/:(.*)/s); // split on the first colon only
+          if (!side || raw == null) continue;
+          const prop = `${key}-${side}`; // padding-top | margin-left | …
+          live[prop] = raw;
+          const token = field?.tokenType
+            ? (tokenNameFromVar(raw) ?? matchTokenName(raw, tokensRef.current, field.tokenType))
+            : undefined;
+          edits.push({ key: prop, value: raw, cssProps: [prop], css: { [prop]: raw }, token });
+        }
+        if (edits.length) {
+          applyLive(live);
+          commitEdits(edits);
+        }
       } else {
         const css = cssForField(key, value);
         applyLive(css);
@@ -1253,6 +1492,7 @@ export function RunApp({
     setApplying(false);
     if (patched) {
       bridge.reload();
+      rediscoverRoutes(); // an Apply may have added/changed a route or nav — refresh the site tree
       setApplyMiss(false);
       setReview(true);
     } else {
@@ -1769,6 +2009,11 @@ export function RunApp({
                       ? () => onSendToChat(buildSelectionContext(selection, Object.values(pending)), selection.file)
                       : undefined
                   }
+                  onSendToFigma={() => void sendToFigma()}
+                  onUpdateFromFigma={() => void pullFromFigma()}
+                  figmaStatus={figmaToolbarStatus}
+                  figmaConnected={figmaConnected}
+                  figmaMapped={!!figmaScreen}
                   comments={{
                     threads: comments.threads,
                     anchorRects: bridge.anchorRects,
@@ -1786,6 +2031,31 @@ export function RunApp({
                   }}
                   skeleton={skeleton}
                 />
+                {(() => {
+                  // Only the transient round-trip states get a panel now — the persistent
+                  // "already in Figma" affordance moved into the toolbar menu ("Update from Figma").
+                  const panelPhase =
+                    figmaPhase === "review"
+                      ? ("review" as const)
+                      : figmaPhase === "error"
+                        ? ("error" as const)
+                        : figmaPhase === "sent"
+                          ? ("sent" as const)
+                          : null;
+                  if (!panelPhase) return null;
+                  return (
+                    <FigmaBridgePanel
+                      phase={panelPhase}
+                      openUrl={figmaOpenUrl}
+                      error={figmaMod.model.result?.text ?? null}
+                      onOpen={() => figmaOpenUrl && void api.openInstall(figmaOpenUrl)}
+                      onPull={figmaScreen ? () => void pullFromFigma() : undefined}
+                      onKeep={figmaKeep}
+                      onRevert={() => void figmaRevert()}
+                      onDismiss={figmaDismiss}
+                    />
+                  );
+                })()}
               </div>
               {bridge.runtimeError && !doctorDismissed && (
                 <div className="pointer-events-none absolute inset-0 flex items-end justify-center p-4">

@@ -135,14 +135,22 @@ export function buildScreenList(
   screens: { label: string; file: string; name: string }[],
   manifest: ScreenPreviewManifest | null,
 ): RouteNode[] {
-  const previewable = new Set(manifest?.screens.map((s) => s.name) ?? []);
+  const byName = new Set(manifest?.screens.map((s) => s.name) ?? []);
+  // A component file may be registered in the manifest under a DIFFERENT name (or several —
+  // e.g. one `ProductDetail.tsx` registered as `ProductDetailMac`, `ProductDetailiPhone`, …).
+  // Reconcile by file so such a screen is still recognized as previewable (and navigates via
+  // one of its manifest names) instead of falling through to "open the source file".
+  const nameForFile = new Map<string, string>();
+  for (const m of manifest?.screens ?? []) if (!nameForFile.has(m.file)) nameForFile.set(m.file, m.name);
   const param = manifest?.param ?? "screen";
   const kids: RouteNode[] = screens
     .map((s) => {
-      const canPreview = previewable.has(s.name);
+      // Prefer an exact name match; else any manifest entry that targets this file.
+      const previewName = byName.has(s.name) ? s.name : nameForFile.get(s.file);
+      const canPreview = !!previewName;
       return {
         // Navigable → a query the harness reads; otherwise a synthetic id that opens the file.
-        path: canPreview ? `?${param}=${encodeURIComponent(s.name)}` : `#screen/${s.file}`,
+        path: canPreview ? `?${param}=${encodeURIComponent(previewName)}` : `#screen/${s.file}`,
         label: s.label,
         file: s.file,
         dynamic: false,

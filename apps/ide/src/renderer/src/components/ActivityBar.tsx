@@ -169,13 +169,9 @@ function IconButton({
 export function ActivityBar({
   active,
   onSelect,
-  chatOpen,
-  onToggleChat,
 }: {
-  active: Activity;
+  active: NavKey;
   onSelect: (key: NavKey) => void;
-  chatOpen: boolean;
-  onToggleChat: () => void;
 }): JSX.Element {
   return (
     <nav
@@ -187,20 +183,6 @@ export function ActivityBar({
       ))}
       <div className="mt-auto" />
       <IconButton item={SETTINGS} active={active === "settings"} onClick={() => onSelect("settings")} />
-      <button
-        type="button"
-        title="Toggle assistant"
-        aria-label="Toggle assistant"
-        aria-pressed={chatOpen}
-        onClick={onToggleChat}
-        className={`flex h-10 w-10 items-center justify-center rounded-md transition-colors ${
-          chatOpen ? "text-vs-accent" : "text-vs-text-muted hover:text-vs-text-secondary"
-        }`}
-      >
-        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M4 4h12a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1H8l-3.5 3V13H4a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1Z" />
-        </svg>
-      </button>
     </nav>
   );
 }
