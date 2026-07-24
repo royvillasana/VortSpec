@@ -383,6 +383,11 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
       },
     ensureStorybook: async () =>
       cfg.ensureStorybook ?? { state: "present" as const, installed: true, storyCount: 0 },
+    // The Playground provisioning effect wires the styling pipeline and reconciles
+    // exports before installing Storybook; stub both so the effect reaches the real
+    // ensureStorybook path instead of throwing on an undefined method.
+    ensureStylingPipeline: async () => ({ ok: true as const, changed: false }),
+    reconcileExports: async () => ({ ok: true as const, changed: [] }),
     onDevServerUpdate: (cb: (e: { projectPath: string; status: DevServerStatus }) => void) => {
       devSubs.add(cb);
       return () => devSubs.delete(cb);
