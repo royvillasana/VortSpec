@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { ipcContract, type IpcChannel } from "@vortspec/core/ipc";
 import { checkEnvironment, verifyClaudeLogin, verifyFigmaMcp, addFigmaMcp } from "./environment/env-manager";
+import { installGit, installClaudeCli } from "./environment/base-install";
 import {
   listProjects,
   touchProject,
@@ -139,6 +140,8 @@ const handlers: Record<IpcChannel, Handler> = {
   "env:verifyLogin": () => verifyClaudeLogin(),
   "env:verifyFigmaMcp": () => verifyFigmaMcp(),
   "env:addFigmaMcp": () => addFigmaMcp(),
+  "env:installGit": () => installGit(),
+  "env:installClaude": () => installClaudeCli(),
   "env:openInstall": ((url: string) =>
     shell.openExternal(url).then(() => undefined)) as Handler,
 

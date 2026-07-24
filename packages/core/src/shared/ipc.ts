@@ -236,8 +236,9 @@ export type CheckStatus = z.infer<typeof checkStatusSchema>;
 
 export const fixActionSchema = z.object({
   /** install-link → open an external URL; open-login → run login in the PTY; verify → re-run the check;
-   *  figma-add → run `claude mcp add … figma …` for the user, then re-verify */
-  kind: z.enum(["install-link", "open-login", "verify", "figma-add"]),
+   *  figma-add → run `claude mcp add … figma …` for the user, then re-verify;
+   *  run-install → auto-install the tool (git via the OS installer, Claude CLI into the managed prefix) */
+  kind: z.enum(["install-link", "open-login", "verify", "figma-add", "run-install"]),
   label: z.string(),
   url: z.string().url().optional(),
 });
@@ -318,6 +319,8 @@ export const ipcContract = {
   "env:verifyLogin": { request: z.void(), response: envCheckSchema },
   "env:verifyFigmaMcp": { request: z.void(), response: envCheckSchema },
   "env:addFigmaMcp": { request: z.void(), response: envCheckSchema },
+  "env:installGit": { request: z.void(), response: envCheckSchema },
+  "env:installClaude": { request: z.void(), response: envCheckSchema },
   "env:openInstall": { request: z.string().url(), response: z.void() },
 
   "workspace:pickFolder": {

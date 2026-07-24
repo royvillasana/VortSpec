@@ -18,6 +18,15 @@ test("first-run shows the Figma MCP as a real step; setting it up completes it",
   const c = await mount(<FirstRunSetup onDone={noop} onSkip={noop} />, {
     hooksConfig: {
       mock: {
+        // Base tools already present so the flow gates only on login + the Figma MCP.
+        env: {
+          checks: [
+            { id: "node", label: "Node.js", status: "pass", detail: "" },
+            { id: "git", label: "Git", status: "pass", detail: "" },
+            { id: "claude-install", label: "Claude Code", status: "pass", detail: "" },
+          ],
+          ready: true,
+        },
         figmaMcp: mcp("unknown", "Not configured — add it to work with Figma"),
         figmaMcpAdd: mcp("pass", "Connected"),
       },
