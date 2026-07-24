@@ -38,5 +38,5 @@
 
 ## 7. Ship
 
-- [ ] 7.1 Bump + publish the toolkit (`@royvillasana/sdd-de`) with the setup/extract/generate-artifacts/provisioning changes
-- [ ] 7.2 Bump VortSpec's toolkit dep and land the guided-flow trigger behind the same release
+- [x] 7.1 Bump + publish the toolkit (`@royvillasana/sdd-de`) with the setup/extract/generate-artifacts/provisioning changes
+- [x] 7.2 Bump VortSpec's toolkit dep and land the guided-flow trigger behind the same release
