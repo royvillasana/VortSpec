@@ -552,18 +552,17 @@ export default function App(): JSX.Element {
       <CanvasSelectionProvider>
       <div className="flex h-screen w-screen flex-col overflow-hidden bg-vs-bg-primary text-vs-text-primary">
         <header
-          className="flex h-9 shrink-0 items-center justify-between border-b border-vs-border-default bg-vs-bg-surface pr-2 text-xs text-vs-text-muted"
+          className="relative flex h-9 shrink-0 items-center justify-end border-b border-vs-border-default bg-vs-bg-surface pr-2 text-xs text-vs-text-muted"
           style={{ WebkitAppRegion: "drag" } as unknown as CSSProperties}
         >
-          {/* pl-16 clears the macOS traffic lights (titleBarStyle: hiddenInset). */}
-          <div
-            className="flex items-center gap-2 pl-16"
-            style={{ WebkitAppRegion: "no-drag" } as unknown as CSSProperties}
-          >
+          {/* Logo + name centered in the bar so it clears the macOS traffic lights
+              (top-left, titleBarStyle: hiddenInset). pointer-events-none keeps the whole
+              center a drag handle. */}
+          <div className="pointer-events-none absolute inset-x-0 flex items-center justify-center gap-2">
             <Logo size={16} />
             <span className="font-bold text-vs-text-secondary">VortSpec</span>
           </div>
-          <div style={{ WebkitAppRegion: "no-drag" } as unknown as CSSProperties}>
+          <div className="relative" style={{ WebkitAppRegion: "no-drag" } as unknown as CSSProperties}>
             <AvatarButton
               profile={profile}
               active={layout.activity === "settings"}
