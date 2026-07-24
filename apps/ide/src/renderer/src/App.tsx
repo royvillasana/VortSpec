@@ -493,6 +493,7 @@ export default function App(): JSX.Element {
         <GuidedFlow
           project={p}
           hideRail
+          sidebarSlot={sectionSlot}
           onBack={go("explorer")}
           onOpenInspector={go("tokens")}
           onOpenPreview={go("play")}
@@ -560,9 +561,16 @@ export default function App(): JSX.Element {
                   ? "Design"
                   : layout.activity === "play"
                     ? "Stories"
-                    : "Panel"
+                    : layout.activity === "flow"
+                      ? "Design system"
+                      : "Panel"
             }
-            hasSection={isExplorer || layout.activity === "run" || layout.activity === "play"}
+            hasSection={
+              isExplorer ||
+              layout.activity === "run" ||
+              layout.activity === "play" ||
+              layout.activity === "flow"
+            }
             sectionEl={sectionSlot}
             tab={leftTab}
             onTabChange={setLeftTab}
