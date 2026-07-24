@@ -1,7 +1,7 @@
 import { app, shell, BrowserWindow } from "electron";
 import { join } from "path";
 import { electronApp, optimizer, is } from "@electron-toolkit/utils";
-import { registerIpc, stopAllDevServers, stopAllTerminals, fixGuiPath } from "@vortspec/core/main";
+import { registerIpc, stopAllDevServers, stopAllTerminals, fixGuiPath, ensureManagedRuntime } from "@vortspec/core/main";
 
 /**
  * VortSpec desktop — main process (electron-vite).
@@ -63,6 +63,9 @@ app.whenReady().then(async () => {
   // and Claude Code runs find node/claude when launched from Finder/Dock (a GUI
   // launch otherwise only has a minimal PATH). Best-effort; never blocks quit.
   await fixGuiPath();
+  // Ensure the VortSpec-managed runtime (bundled Node + ~/.vortspec/bin) is on PATH,
+  // so managed node/npm/claude resolve before anything spawns (change: automate-base-tool-install).
+  await ensureManagedRuntime();
 
   registerIpc();
   createWindow();

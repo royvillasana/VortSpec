@@ -56,10 +56,11 @@ export function FirstRunSetup({ project, onDone, onSkip }: FirstRunSetupProps): 
   }, [project]);
 
   const [termId, setTermId] = useState<string | null>(null);
+  const [prereq, setPrereq] = useState<StepStatus>("pending"); // Node (bundled) + git + Claude CLI
   const [claude, setClaude] = useState<StepStatus>("pending");
   const [figmaMcp, setFigmaMcp] = useState<StepStatus>("pending");
   const [figma, setFigma] = useState<StepStatus>("pending");
-  const [busy, setBusy] = useState<null | "claude" | "figma-mcp" | "figma">(null);
+  const [busy, setBusy] = useState<null | "prereq" | "claude" | "figma-mcp" | "figma">(null);
   const [detecting, setDetecting] = useState(true);
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -67,12 +68,16 @@ export function FirstRunSetup({ project, onDone, onSkip }: FirstRunSetupProps): 
   useEffect(() => {
     let alive = true;
     void (async () => {
-      const [login, mcp, fig] = await Promise.all([
+      const [env, login, mcp, fig] = await Promise.all([
+        api.checkEnvironment().catch(() => null),
         api.verifyLogin().catch(() => null),
         api.verifyFigmaMcp().catch(() => null),
         api.figmaStatus().catch(() => null),
       ]);
       if (!alive) return;
+      // Base tools: Node is bundled; git + the Claude CLI must be present.
+      const has = (id: string): boolean => env?.checks.find((c) => c.id === id)?.status === "pass";
+      if (has("git") && has("claude-install")) setPrereq("done");
       if (login?.status === "pass") setClaude("done");
       if (mcp?.status === "pass") setFigmaMcp("done");
       if (fig?.connected) setFigma("done");
@@ -85,9 +90,31 @@ export function FirstRunSetup({ project, onDone, onSkip }: FirstRunSetupProps): 
   }, []);
 
   const terminalReady = termId !== null;
-  // Core-independent of the local figma-cli: the Figma MCP (how VortSpec reads
-  // design context) is the required Figma path here; figma-cli is a recommended extra.
-  const allDone = terminalReady && claude === "done" && figmaMcp === "done";
+  // Core-independent of the local figma-cli: base tools + login + the Figma MCP are the
+  // required path; figma-cli is a recommended extra.
+  const allDone = terminalReady && prereq === "done" && claude === "done" && figmaMcp === "done";
+
+  // Step 2 — install the base tools with no sudo: git via Apple's Command Line Tools
+  // installer (the user clicks Install once), then the Claude CLI into ~/.vortspec.
+  // Node ships bundled, so it's already satisfied. Auto-verifies and advances.
+  const installPrereqs = useCallback(() => {
+    setPrereq("active");
+    setBusy("prereq");
+    const start = Date.now();
+    void (async () => {
+      let git = await api.installGit().catch(() => null); // pass | unknown (Apple dialog open)
+      while (git && git.status !== "pass" && Date.now() - start < 5 * 60_000) {
+        await new Promise<void>((r) => {
+          pollRef.current = setTimeout(r, 3000);
+        });
+        const e = await api.checkEnvironment().catch(() => null);
+        git = e?.checks.find((c) => c.id === "git") ?? git;
+      }
+      const claudeCli = await api.installClaude().catch(() => null);
+      setPrereq(git?.status === "pass" && claudeCli?.status === "pass" ? "done" : "error");
+      setBusy(null);
+    })();
+  }, []);
 
   // Step 2 — drive `claude` into the embedded terminal (which walks the user
   // through browser login on an unauthed machine), then poll until logged in.
@@ -177,12 +204,26 @@ export function FirstRunSetup({ project, onDone, onSkip }: FirstRunSetupProps): 
 
           <Step
             n={2}
+            title="Install the base tools"
+            status={detecting ? "active" : prereq}
+            detail="Node ships with VortSpec; git installs via Apple's Command Line Tools (one click), and the Claude CLI into ~/.vortspec — no password needed."
+          >
+            {prereq !== "done" && !detecting && (
+              <Button variant="primary" disabled={busy !== null} onClick={installPrereqs}>
+                {busy === "prereq" ? "Installing…" : "Install"}
+              </Button>
+            )}
+            {prereq === "error" && <span className="text-[11px] text-vs-warning">Didn't finish — check the terminal and try again.</span>}
+          </Step>
+
+          <Step
+            n={3}
             title="Sign in to Claude Code"
             status={detecting ? "active" : claude}
             detail="Opens Claude Code in the terminal; complete the browser sign-in. VortSpec stores no credentials."
           >
             {claude !== "done" && !detecting && (
-              <Button variant="primary" disabled={!terminalReady || busy !== null} onClick={signInClaude}>
+              <Button variant="primary" disabled={!terminalReady || prereq !== "done" || busy !== null} onClick={signInClaude}>
                 {busy === "claude" ? "Waiting for sign-in…" : "Sign in"}
               </Button>
             )}
@@ -190,7 +231,7 @@ export function FirstRunSetup({ project, onDone, onSkip }: FirstRunSetupProps): 
           </Step>
 
           <Step
-            n={3}
+            n={4}
             title="Set up the Figma MCP"
             status={detecting ? "active" : figmaMcp}
             detail="Installs the Figma MCP so Claude can read your design context; complete /mcp → Authenticate in the terminal. VortSpec stores no credentials."
@@ -204,7 +245,7 @@ export function FirstRunSetup({ project, onDone, onSkip }: FirstRunSetupProps): 
           </Step>
 
           <Step
-            n={4}
+            n={5}
             title="Connect Figma (local editing)"
             status={detecting ? "active" : figma}
             detail="Connect figma-cli so VortSpec can write back to Figma (recommended, for Figma sources)."

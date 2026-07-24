@@ -84,6 +84,19 @@ export function EnvironmentCheck({
       await addFigma();
       return;
     }
+    if (check.fix.kind === "run-install") {
+      // Auto-install the tool (no sudo): git via the OS installer, Claude CLI into
+      // the managed prefix. The row shows progress, then re-verifies.
+      setBusy(check.id);
+      onReport(patchCheck(report, check.id, { status: "checking" }));
+      try {
+        const next = check.id === "git" ? await api.installGit() : await api.installClaude();
+        onReport(patchCheck(report, check.id, next));
+      } finally {
+        setBusy(null);
+      }
+      return;
+    }
     if (check.id === "figma-mcp") {
       await verifyFigma();
       return;

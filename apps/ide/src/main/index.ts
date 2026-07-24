@@ -1,7 +1,7 @@
 import { app, shell, BrowserWindow } from "electron";
 import { join } from "path";
 import { electronApp, optimizer, is } from "@electron-toolkit/utils";
-import { registerIpc, stopAllDevServers, stopAllWatchers, stopAllTerminals, stopIdeMcp, fixGuiPath } from "@vortspec/core/main";
+import { registerIpc, stopAllDevServers, stopAllWatchers, stopAllTerminals, stopIdeMcp, fixGuiPath, ensureManagedRuntime } from "@vortspec/core/main";
 import { installMenu } from "./menu";
 
 // Show "VortSpec IDE" in the menu bar / About / Quit instead of Electron's
@@ -83,6 +83,9 @@ app.whenReady().then(async () => {
   // Recover the user's real shell PATH before anything spawns (GUI launches get
   // a minimal PATH), so Claude Code and the CLIs resolve.
   await fixGuiPath();
+  // Ensure the VortSpec-managed runtime (bundled Node + ~/.vortspec/bin) is on PATH,
+  // so managed node/npm/claude resolve before anything spawns (change: automate-base-tool-install).
+  await ensureManagedRuntime();
 
   registerIpc();
   installMenu({ createWindow });

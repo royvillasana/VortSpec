@@ -13,16 +13,10 @@ const NODE_INSTALL: FixAction = {
   label: "Install Node.js",
   url: "https://nodejs.org/en/download",
 };
-const GIT_INSTALL: FixAction = {
-  kind: "install-link",
-  label: "Install Git",
-  url: "https://git-scm.com/downloads",
-};
-const CLAUDE_INSTALL: FixAction = {
-  kind: "install-link",
-  label: "Install Claude Code",
-  url: "https://code.claude.com/docs/en/overview",
-};
+// git and the Claude CLI now auto-install (no docs link): git via the OS Command
+// Line Tools installer, the Claude CLI into the VortSpec-managed prefix (no sudo).
+const GIT_INSTALL: FixAction = { kind: "run-install", label: "Install Git" };
+const CLAUDE_INSTALL: FixAction = { kind: "run-install", label: "Install Claude Code" };
 const OPEN_LOGIN: FixAction = { kind: "open-login", label: "Open login" };
 const VERIFY_LOGIN: FixAction = { kind: "verify", label: "Verify login" };
 // Actionable: runs `claude mcp add … figma …` for the user (not a docs link).
