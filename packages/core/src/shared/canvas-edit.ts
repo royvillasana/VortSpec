@@ -10,6 +10,19 @@ import { fileSnapshotListSchema } from "./inspector";
 export const anchorSchema = z.object({ line: z.number(), column: z.number() });
 export type Anchor = z.infer<typeof anchorSchema>;
 
+/**
+ * Parse a `data-source` value (`relPath:line:column`, as surfaced on `Selection.dataSource`)
+ * into a project-relative file + anchor. Shared so the renderer can build a deterministic
+ * write from a selection without importing the main-process stamp module. Null when absent
+ * or malformed (→ the edit can't take the deterministic path).
+ */
+export function parseAnchor(dataSource: string | null | undefined): { file: string; anchor: Anchor } | null {
+  if (!dataSource) return null;
+  const m = dataSource.match(/^(.*):(\d+):(\d+)$/);
+  if (!m) return null;
+  return { file: m[1], anchor: { line: Number(m[2]), column: Number(m[3]) } };
+}
+
 /** A JSX attribute value: a plain string (`x="v"`) or a raw expression (`x={v}`). */
 export const attrValueSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("string"), value: z.string() }),

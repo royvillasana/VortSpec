@@ -29,6 +29,9 @@ import {
   isTokenBinding,
   type PendingEdit,
 } from "../components/run-canvas/pending";
+import { toCanvasEdit } from "../components/run-canvas/edit-plan";
+import { createAutoPersist } from "../components/run-canvas/auto-persist";
+import type { CanvasEdit } from "@vortspec/core/canvas-edit";
 import { useInspectorBridge, type CanvasMode } from "../lib/useInspectorBridge";
 import { useComments } from "../lib/useComments";
 import { CommentsLayer } from "../components/run-canvas/CommentsLayer";
@@ -480,6 +483,24 @@ export function RunApp({
     }
   });
   const [applying, setApplying] = useState(false);
+
+  // Instant deterministic edits (change: instant-playground-edits): when the dev source-stamp
+  // is present, a variant/text/delete edit is written to source in the BACKGROUND — no Apply,
+  // no AI. Un-stamped or freeform-style edits fall through to the gated `pending`/Apply flow.
+  const persistQueue = useRef<{ file: string; edit: CanvasEdit }[]>([]);
+  const autoPersist = useMemo(
+    () =>
+      createAutoPersist({
+        debounceMs: 400,
+        persist: async () => {
+          const q = persistQueue.current;
+          persistQueue.current = [];
+          for (const it of q) await api.writeCanvasEdit(project.path, it.file, it.edit).catch(() => null);
+        },
+      }),
+    [project.path],
+  );
+  useEffect(() => () => autoPersist.dispose(), [autoPersist]);
   const [review, setReview] = useState(false);
   // Set when an Apply run finished but edited NO source file — the change is still
   // preview-only, so we keep the pending edits and tell the user instead of falsely
@@ -1185,36 +1206,52 @@ export function RunApp({
       const text = readoutRef.current?.text ?? null;
       const elementKey = fp || nodeId || "•";
       const uses = (n: string): number => tokensRef.current.find((t) => t.name === n)?.uses ?? 0;
-      setPending((p) => {
-        const next = { ...p };
-        for (const e of edits) {
-          const edit = classifyFieldEdit(sel, e.key, e.value, e.cssProps, uses, forceStyle, e.css, e.token);
-          // Key by element + field so the SAME property on two elements doesn't collide.
-          const id = `${elementKey}::${edit.key}`;
-          next[id] = {
-            ...edit,
-            id,
-            label: e.label ?? edit.label,
-            fingerprint: fp,
-            nodeId,
-            // A deletion removes the USAGE from the page being viewed, not the component's
-            // definition — so ground it to the current page (null → currentPageFile in Apply),
-            // never to sel.file (which for a component instance is the component's own source).
-            file: e.remove ? null : sel.file,
-            elementLabel: sel.label,
-            elementText: text,
-            elementClassName: readoutRef.current?.className ?? undefined,
-            resizeMode: e.resizeMode,
-            remove: e.remove,
-            // Tag the edit with the viewport it was made in — a mobile/tablet edit is scoped
-            // to that breakpoint in source (and in the live preview across viewport switches).
-            viewport: viewportIdRef.current,
-          };
-        }
-        return next;
-      });
+      // Build each edit, then route it: a deterministic-capable edit (variant/text/delete) on a
+      // stamped element writes to source in the BACKGROUND (no Apply, no AI); everything else
+      // stays in the gated `pending`/Apply ledger. The optimistic live override is already applied
+      // by the caller, so the preview is instant either way.
+      const deterministic: { file: string; edit: CanvasEdit }[] = [];
+      const ledger: PendingEdit[] = [];
+      for (const e of edits) {
+        const edit = classifyFieldEdit(sel, e.key, e.value, e.cssProps, uses, forceStyle, e.css, e.token);
+        // Key by element + field so the SAME property on two elements doesn't collide.
+        const id = `${elementKey}::${edit.key}`;
+        const full: PendingEdit = {
+          ...edit,
+          id,
+          label: e.label ?? edit.label,
+          fingerprint: fp,
+          nodeId,
+          // A deletion removes the USAGE from the page being viewed, not the component's
+          // definition — so ground it to the current page (null → currentPageFile in Apply),
+          // never to sel.file (which for a component instance is the component's own source).
+          file: e.remove ? null : sel.file,
+          elementLabel: sel.label,
+          elementText: text,
+          elementClassName: readoutRef.current?.className ?? undefined,
+          resizeMode: e.resizeMode,
+          remove: e.remove,
+          // Tag the edit with the viewport it was made in — a mobile/tablet edit is scoped
+          // to that breakpoint in source (and in the live preview across viewport switches).
+          viewport: viewportIdRef.current,
+        };
+        const det = toCanvasEdit(full, sel);
+        if (det) deterministic.push(det);
+        else ledger.push(full);
+      }
+      if (deterministic.length > 0) {
+        persistQueue.current.push(...deterministic);
+        autoPersist.schedule();
+      }
+      if (ledger.length > 0) {
+        setPending((p) => {
+          const next = { ...p };
+          for (const f of ledger) next[f.id] = f;
+          return next;
+        });
+      }
     },
-    [],
+    [autoPersist],
   );
 
   // Canvas drags (resize / padding / gap / margin) commit as per-element style
