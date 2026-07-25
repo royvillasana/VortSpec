@@ -2,15 +2,15 @@
 
 - [ ] 1.1 Stamp rendered elements with `data-source="file:line:col"` in dev (React JSX-source transform); confirm it never ships to the build output
 - [ ] 1.2 Bridge: surface each selected/hovered node's `data-source` anchor alongside the existing node id
-- [ ] 1.3 `resolvability` check: given an anchor, statically decide direct-JSX-child vs. inside `.map()`/loop/conditional/HOC (AST-based), returning a confidence + reason
+- [x] 1.3 `resolvability` check: given an anchor, statically decide direct-JSX-child vs. inside `.map()`/loop/conditional/HOC (AST-based), returning a confidence + reason
 - [ ] 1.4 Fallback matcher: keep `resembleComponent` as the low-confidence path; unit-test anchor vs. matcher agreement
 
 ## 2. Deterministic AST codemods (no AI)
 
-- [ ] 2.1 Add `ts-morph` codemod module in core: `setJsxAttr`, `setClassName`, `setCvaVariant`, `setTextNode` (preserve imports/formatting)
-- [ ] 2.2 Structural codemods: `insertComponent` (JSX child at index + ensure import), `moveNode` (cut+insert), `duplicateNode`, `deleteNode`
-- [ ] 2.3 New IPC `canvas:writeEdit` (parallel to `inspector:setTokenValue`), each write captured under the existing snapshot mechanism
-- [ ] 2.4 Unit tests per codemod: prop/className/CVA/text + insert/move/duplicate/delete, incl. import handling and idempotency
+- [x] 2.1 Add `ts-morph` codemod module in core: `setJsxAttr`, `setClassName`, `setCvaVariant`, `setTextNode` (preserve imports/formatting)
+- [x] 2.2 Structural codemods: `insertComponent` (JSX child at index + ensure import), `moveNode` (cut+insert), `duplicateNode`, `deleteNode`
+- [x] 2.3 New IPC `canvas:writeEdit` (parallel to `inspector:setTokenValue`), each write captured under the existing snapshot mechanism
+- [x] 2.4 Unit tests per codemod: prop/className/CVA/text + insert/move/duplicate/delete, incl. import handling and idempotency
 
 ## 3. The classification rule (the heart)
 

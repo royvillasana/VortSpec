@@ -1,0 +1,144 @@
+import { describe, expect, it } from "vitest";
+import {
+  checkResolvability,
+  setJsxAttr,
+  setClassName,
+  setCvaVariant,
+  setTextNode,
+  insertComponent,
+  deleteNode,
+  duplicateNode,
+  moveNode,
+  type Anchor,
+} from "./codemod";
+
+/** Locate the anchor (1-based line, 0-based column) of the `<` for a given tag occurrence. */
+function anchorAt(text: string, needle: string): Anchor {
+  const idx = text.indexOf(needle);
+  if (idx < 0) throw new Error(`needle not found: ${needle}`);
+  const before = text.slice(0, idx);
+  const line = before.split("\n").length;
+  const column = idx - (before.lastIndexOf("\n") + 1);
+  return { line, column };
+}
+
+const CARD = `import { Button } from "@/components/ui/Button";
+
+export function Card() {
+  return (
+    <div className="card">
+      <h2 className="title">Hello</h2>
+      <Button variant="primary" size="md">Save</Button>
+    </div>
+  );
+}
+`;
+
+describe("checkResolvability", () => {
+  it("marks a direct JSX child resolvable", () => {
+    expect(checkResolvability(CARD, anchorAt(CARD, "<Button")).resolvable).toBe(true);
+    expect(checkResolvability(CARD, anchorAt(CARD, "<h2")).resolvable).toBe(true);
+  });
+
+  it("marks an element inside a .map() un-resolvable", () => {
+    const src = `export function List({ items }) {
+  return <ul>{items.map((it) => <li className="row">{it}</li>)}</ul>;
+}`;
+    const r = checkResolvability(src, anchorAt(src, "<li"));
+    expect(r.resolvable).toBe(false);
+    expect(r.reason).toMatch(/list|map/i);
+  });
+
+  it("marks an element inside a ternary un-resolvable", () => {
+    const src = `export function C({ on }) {
+  return <div>{on ? <span className="x">A</span> : null}</div>;
+}`;
+    expect(checkResolvability(src, anchorAt(src, "<span")).resolvable).toBe(false);
+  });
+
+  it("marks an element inside an && short-circuit un-resolvable", () => {
+    const src = `export function C({ on }) {
+  return <div>{on && <span className="x">A</span>}</div>;
+}`;
+    expect(checkResolvability(src, anchorAt(src, "<span")).resolvable).toBe(false);
+  });
+});
+
+describe("field codemods", () => {
+  it("replaces an existing attribute", () => {
+    const out = setJsxAttr(CARD, anchorAt(CARD, "<Button"), "variant", { kind: "string", value: "secondary" });
+    expect(out).toContain('variant="secondary"');
+    expect(out).not.toContain('variant="primary"');
+  });
+
+  it("adds a new attribute when absent", () => {
+    const out = setJsxAttr(CARD, anchorAt(CARD, "<Button"), "disabled", { kind: "expression", value: "true" });
+    expect(out).toContain("disabled={true}");
+  });
+
+  it("setClassName rewrites className", () => {
+    const out = setClassName(CARD, anchorAt(CARD, "<h2"), "title title--lg");
+    expect(out).toContain('className="title title--lg"');
+  });
+
+  it("setCvaVariant sets a variant prop", () => {
+    const out = setCvaVariant(CARD, anchorAt(CARD, "<Button"), "size", "lg");
+    expect(out).toContain('size="lg"');
+  });
+
+  it("is idempotent — writing the same value twice yields the same source", () => {
+    const once = setJsxAttr(CARD, anchorAt(CARD, "<Button"), "variant", { kind: "string", value: "ghost" });
+    const twice = setJsxAttr(once, anchorAt(once, "<Button"), "variant", { kind: "string", value: "ghost" });
+    expect(twice).toBe(once);
+  });
+
+  it("setTextNode replaces leaf text", () => {
+    const out = setTextNode(CARD, anchorAt(CARD, "<h2"), "Welcome");
+    expect(out).toContain(">Welcome</h2>");
+    expect(out).not.toContain(">Hello<");
+  });
+
+  it("setTextNode refuses an element with child elements", () => {
+    expect(() => setTextNode(CARD, anchorAt(CARD, "<div"), "nope")).toThrow();
+  });
+});
+
+describe("structural codemods", () => {
+  it("insertComponent adds a child + ensures the import", () => {
+    const out = insertComponent(CARD, anchorAt(CARD, "<div"), { name: "Badge", importFrom: "@/components/ui/Badge" });
+    expect(out).toContain("<Badge />");
+    expect(out).toContain('import { Badge } from "@/components/ui/Badge"');
+  });
+
+  it("insertComponent reuses an existing import declaration", () => {
+    const out = insertComponent(CARD, anchorAt(CARD, "<div"), { name: "Icon", importFrom: "@/components/ui/Button" });
+    // added to the SAME import line, not a duplicate module import
+    expect(out.match(/from "@\/components\/ui\/Button"/g)?.length).toBe(1);
+    expect(out).toContain("Icon");
+  });
+
+  it("deleteNode removes the element", () => {
+    const out = deleteNode(CARD, anchorAt(CARD, "<Button"));
+    expect(out).not.toContain("<Button");
+    expect(out).toContain('<h2 className="title">'); // siblings untouched
+  });
+
+  it("duplicateNode inserts a copy after the original", () => {
+    const out = duplicateNode(CARD, anchorAt(CARD, "<Button"));
+    expect(out.match(/<Button /g)?.length).toBe(2);
+  });
+
+  it("moveNode reparents an element into another container", () => {
+    const src = `export function C() {
+  return (
+    <section>
+      <header className="hdr"></header>
+      <button className="cta">Go</button>
+    </section>
+  );
+}`;
+    const out = moveNode(src, anchorAt(src, "<button"), anchorAt(src, "<header"));
+    // the button now lives inside <header>…</header>
+    expect(out).toMatch(/<header[^>]*>[\s\S]*<button[^>]*>Go<\/button>[\s\S]*<\/header>/);
+  });
+});
