@@ -61,9 +61,15 @@ describe("toCanvasEdit", () => {
     expect(toCanvasEdit(edit, sel(null))).toBeNull();
   });
 
-  it("returns null for a freeform style edit (needs class inference → AI)", () => {
-    const edit: PendingEdit = { ...base, kind: "style", key: "radius", value: "12px" };
-    expect(toCanvasEdit(edit, sel("src/Button.tsx:4:6"))).toBeNull();
+  it("maps a freeform style edit to an inline style op (literal value, no AI)", () => {
+    const edit: PendingEdit = { ...base, kind: "style", key: "color", value: "#c53434", css: { color: "#c53434" } };
+    const r = toCanvasEdit(edit, sel("src/Button.tsx:4:6"));
+    expect(r).toEqual({ file: "src/Button.tsx", edit: { op: "style", anchor: { line: 4, column: 6 }, css: { color: "#c53434" } } });
+  });
+
+  it("returns null for a freeform style edit with no anchor (falls back to the ledger)", () => {
+    const edit: PendingEdit = { ...base, kind: "style", key: "color", value: "#c53434", css: { color: "#c53434" } };
+    expect(toCanvasEdit(edit, sel(null))).toBeNull();
   });
 });
 
@@ -86,30 +92,41 @@ describe("routeEdits — the split RunApp.commitEdits applies", () => {
   const stamped = sel("src/Button.tsx:4:6");
   const unstamped = sel(null);
   const variant: PendingEdit = { ...base, kind: "variant", key: "variant:size", elementClassName: "btn size-md", removeClasses: ["size-md"], addClasses: ["size-lg"] };
-  const freeform: PendingEdit = { ...base, kind: "style", key: "radius", value: "12px" };
+  // A freeform color edit — literal value, carries a css override (as classifyFieldEdit builds it).
+  const freeform: PendingEdit = { ...base, kind: "style", key: "color", value: "#c53434", css: { color: "#c53434" } };
+  // A token binding stays gated (needs the assistant to map to the token's utility class).
+  const binding: PendingEdit = { ...base, kind: "token", token: "--radius-md", value: "var(--radius-md)" };
 
-  it("routes a stamped deterministic edit to the write path, out of the ledger", () => {
+  it("routes a stamped variant edit to the write path, out of the ledger", () => {
     const { deterministic, ledger } = routeEdits([variant], stamped);
     expect(deterministic).toHaveLength(1);
     expect(deterministic[0].edit.op).toBe("attr");
     expect(ledger).toHaveLength(0); // no Apply needed
   });
 
-  it("keeps a freeform-style edit in the ledger (its own AI/Apply path)", () => {
+  it("routes a stamped freeform style edit to the write path (inline style op, no Apply)", () => {
     const { deterministic, ledger } = routeEdits([freeform], stamped);
+    expect(deterministic).toHaveLength(1);
+    expect(deterministic[0].edit.op).toBe("style");
+    expect(ledger).toHaveLength(0); // instant — the whole point
+  });
+
+  it("keeps a token BINDING in the ledger even on a stamped element (gated, needs the assistant)", () => {
+    const { deterministic, tokenValues, ledger } = routeEdits([binding], stamped);
     expect(deterministic).toHaveLength(0);
+    expect(tokenValues).toHaveLength(0);
     expect(ledger).toHaveLength(1);
   });
 
-  it("keeps everything in the ledger when the element is not stamped (today's behavior)", () => {
+  it("keeps anchor-dependent edits in the ledger when the element is not stamped", () => {
     const { deterministic, ledger } = routeEdits([variant, freeform], unstamped);
     expect(deterministic).toHaveLength(0);
     expect(ledger).toHaveLength(2);
   });
 
-  it("splits a mixed batch", () => {
-    const { deterministic, ledger } = routeEdits([variant, freeform], stamped);
-    expect(deterministic).toHaveLength(1);
+  it("splits a mixed batch (variant + freeform instant, binding gated)", () => {
+    const { deterministic, ledger } = routeEdits([variant, freeform, binding], stamped);
+    expect(deterministic).toHaveLength(2);
     expect(ledger).toHaveLength(1);
   });
 

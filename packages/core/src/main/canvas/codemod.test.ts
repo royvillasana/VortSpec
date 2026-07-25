@@ -4,6 +4,7 @@ import {
   setJsxAttr,
   setClassName,
   setCvaVariant,
+  setInlineStyle,
   setTextNode,
   insertComponent,
   deleteNode,
@@ -100,6 +101,35 @@ describe("field codemods", () => {
 
   it("setTextNode refuses an element with child elements", () => {
     expect(() => setTextNode(CARD, anchorAt(CARD, "<div"), "nope")).toThrow();
+  });
+});
+
+describe("setInlineStyle — freeform style → inline style object", () => {
+  it("adds a style attribute when the element has none (camelCases the CSS prop)", () => {
+    const out = setInlineStyle(CARD, anchorAt(CARD, "<h2"), { color: "#c53434", "background-color": "#fff" });
+    expect(out).toContain('style={{ color: "#c53434", backgroundColor: "#fff" }}');
+    // className is preserved.
+    expect(out).toContain('<h2 className="title"');
+  });
+
+  it("merges into an existing inline style object (updates a prop, adds a new one)", () => {
+    const src = `export function C() {
+  return <p style={{ color: "red", fontSize: "12px" }}>Hi</p>;
+}`;
+    const out = setInlineStyle(src, anchorAt(src, "<p"), { color: "#00f", "border-radius": "8px" });
+    expect(out).toContain('color: "#00f"'); // updated in place
+    expect(out).toContain('fontSize: "12px"'); // untouched
+    expect(out).toContain('borderRadius: "8px"'); // added
+  });
+
+  it("quotes a CSS custom-property key", () => {
+    const out = setInlineStyle(CARD, anchorAt(CARD, "<h2"), { "--brand": "#c53434" });
+    expect(out).toContain('"--brand": "#c53434"');
+  });
+
+  it("withholds (throws) when style is a non-object expression it can't safely merge", () => {
+    const src = `export function C({ s }) { return <p style={s}>Hi</p>; }`;
+    expect(() => setInlineStyle(src, anchorAt(src, "<p"), { color: "#000" })).toThrow();
   });
 });
 

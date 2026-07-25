@@ -126,6 +126,47 @@ export const setClassName = (text: string, a: Anchor, className: string): string
 export const setCvaVariant = (text: string, a: Anchor, prop: string, value: string): string =>
   setJsxAttr(text, a, prop, { kind: "string", value });
 
+/** CSS property name → React inline-style key (camelCase), leaving CSS custom props (`--x`) as-is. */
+function cssToStyleKey(prop: string): string {
+  return prop.startsWith("--") ? prop : prop.replace(/-([a-z])/g, (_m, c: string) => c.toUpperCase());
+}
+const isIdent = (k: string): boolean => /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(k);
+const styleKeyLiteral = (k: string): string => (isIdent(k) ? k : JSON.stringify(k));
+
+/**
+ * Merge CSS declarations into the anchored element's inline `style={{}}` object — the deterministic,
+ * literal-value write for a freeform style edit (no token, no class inference, no AI). Adds a `style`
+ * attribute when absent; updates/adds each property when present. Withholds (throws) only when the
+ * element already has a non-object `style` (e.g. `style={theme.x}`) we can't safely merge into.
+ */
+export function setInlineStyle(text: string, anchor: Anchor, css: Record<string, string>): string {
+  const { sf, el } = requireEl(text, anchor);
+  const open = openingOf(el);
+  const entries = Object.entries(css);
+  if (entries.length === 0) return sf.getFullText();
+  const existing = open.getAttribute("style");
+  if (existing && Node.isJsxAttribute(existing)) {
+    const init = existing.getInitializer();
+    const expr = init && Node.isJsxExpression(init) ? init.getExpression() : undefined;
+    if (!expr || !Node.isObjectLiteralExpression(expr)) {
+      throw new CodemodError("This element's style isn't an inline object, so it can't be edited in place.");
+    }
+    for (const [prop, value] of entries) {
+      const key = cssToStyleKey(prop);
+      const match = expr.getProperties().find((p) => {
+        if (!Node.isPropertyAssignment(p) && !Node.isShorthandPropertyAssignment(p)) return false;
+        return p.getName().replace(/^['"]|['"]$/g, "") === key;
+      });
+      if (match && Node.isPropertyAssignment(match)) match.setInitializer(JSON.stringify(value));
+      else expr.addPropertyAssignment({ name: styleKeyLiteral(key), initializer: JSON.stringify(value) });
+    }
+  } else {
+    const obj = entries.map(([p, v]) => `${styleKeyLiteral(cssToStyleKey(p))}: ${JSON.stringify(v)}`).join(", ");
+    open.addAttribute({ name: "style", initializer: `{{ ${obj} }}` });
+  }
+  return sf.getFullText();
+}
+
 /** Replace the anchored element's inline text (leaf text/expression children) with `newText`. */
 export function setTextNode(text: string, anchor: Anchor, newText: string): string {
   const { sf, el } = requireEl(text, anchor);

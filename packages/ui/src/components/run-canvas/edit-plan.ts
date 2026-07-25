@@ -64,7 +64,15 @@ export function toCanvasEdit(edit: PendingEdit, selection: Selection): { file: s
     return { file, edit: { op: "text", anchor, text: edit.value } };
   }
 
-  // token-value rewrites (token file) and freeform style→class inference stay on their own paths.
+  // A freeform style edit — literal CSS values (a color, a radius, a dragged padding/gap/margin),
+  // NOT a token. Write it inline to source deterministically (the Instatic-style literal write): no
+  // class inference, no AI. Token VALUE edits are routed away before this (their own instant lane);
+  // token BINDINGS (`var(--x)`) stay gated — in a Tailwind project a raw var wouldn't match the
+  // token's utility class, so the assistant maps those.
+  if (edit.kind === "style" && edit.css && Object.keys(edit.css).length > 0) {
+    return { file, edit: { op: "style", anchor, css: edit.css } };
+  }
+
   return null;
 }
 

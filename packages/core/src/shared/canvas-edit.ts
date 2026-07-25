@@ -30,10 +30,14 @@ export const attrValueSchema = z.discriminatedUnion("kind", [
 ]);
 export type AttrValue = z.infer<typeof attrValueSchema>;
 
-/** One deterministic edit op the codemod layer can execute. `attr` covers prop/style/variant. */
+/** One deterministic edit op the codemod layer can execute. `attr` covers prop/className/variant. */
 export const canvasEditSchema = z.discriminatedUnion("op", [
   z.object({ op: z.literal("attr"), anchor: anchorSchema, name: z.string(), value: attrValueSchema }),
   z.object({ op: z.literal("text"), anchor: anchorSchema, text: z.string() }),
+  // A freeform style change → merge CSS declarations into the element's inline `style={{}}` object
+  // (React camelCase). Instant + deterministic, the Instatic-style literal write. `css` keys are CSS
+  // property names (kebab or camel); values are CSS value strings.
+  z.object({ op: z.literal("style"), anchor: anchorSchema, css: z.record(z.string(), z.string()) }),
   z.object({
     op: z.literal("insert"),
     anchor: anchorSchema,

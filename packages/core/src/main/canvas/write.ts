@@ -14,6 +14,7 @@ import type { CanvasEdit, CanvasWriteResult } from "@vortspec/core/canvas-edit";
 import {
   checkResolvability,
   setJsxAttr,
+  setInlineStyle,
   setTextNode,
   insertComponent,
   deleteNode,
@@ -42,6 +43,9 @@ export async function applyCanvasEdit(
     switch (edit.op) {
       case "attr":
         after = setJsxAttr(before, edit.anchor, edit.name, edit.value);
+        break;
+      case "style":
+        after = setInlineStyle(before, edit.anchor, edit.css);
         break;
       case "text":
         after = setTextNode(before, edit.anchor, edit.text);
