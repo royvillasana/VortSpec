@@ -1,6 +1,6 @@
 import type { Selection } from "@vortspec/core/ipc";
 import { parseAnchor, type CanvasEdit } from "@vortspec/core/canvas-edit";
-import type { PendingEdit } from "./pending";
+import { isTokenBinding, type PendingEdit } from "./pending";
 
 /**
  * The deterministic side of the instant-edit loop (change: instant-playground-edits, Group 4).
@@ -69,23 +69,36 @@ export function toCanvasEdit(edit: PendingEdit, selection: Selection): { file: s
 }
 
 /**
- * Split a batch of built edits into the deterministic writes (variant/text/delete on a stamped
- * element → background `writeCanvasEdit`, no AI) and the ledger (everything else → the gated
- * pending/Apply path). This is exactly the routing `RunApp.commitEdits` applies, extracted so
- * the decision is unit-testable without the webview bridge.
+ * Split a batch of built edits into the three instant/gated lanes `RunApp.commitEdits` applies,
+ * extracted so the decision is unit-testable without the webview bridge:
+ *   • deterministic — variant/text/delete on a stamped element → background `writeCanvasEdit`, no AI
+ *   • tokenValues   — a token's VALUE change → background `setTokenValue`, no AI (also instant)
+ *   • ledger        — everything else (freeform style, token BINDINGS) → the gated pending/Apply path
+ *
+ * A token BINDING (`var(--x)`) is a per-element source edit, NOT a value rewrite, so it stays in the
+ * ledger (writing its value would produce `--x: var(--x)`).
  */
 export function routeEdits(
   edits: PendingEdit[],
   selection: Selection,
-): { deterministic: { file: string; edit: CanvasEdit }[]; ledger: PendingEdit[] } {
+): {
+  deterministic: { file: string; edit: CanvasEdit }[];
+  tokenValues: { token: string; value: string }[];
+  ledger: PendingEdit[];
+} {
   const deterministic: { file: string; edit: CanvasEdit }[] = [];
+  const tokenValues: { token: string; value: string }[] = [];
   const ledger: PendingEdit[] = [];
   for (const e of edits) {
+    if (e.kind === "token" && e.token && !isTokenBinding(e)) {
+      tokenValues.push({ token: e.token, value: e.value });
+      continue;
+    }
     const det = toCanvasEdit(e, selection);
     if (det) deterministic.push(det);
     else ledger.push(e);
   }
-  return { deterministic, ledger };
+  return { deterministic, tokenValues, ledger };
 }
 
 /**

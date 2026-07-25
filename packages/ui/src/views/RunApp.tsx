@@ -488,6 +488,10 @@ export function RunApp({
   // is present, a variant/text/delete edit is written to source in the BACKGROUND — no Apply,
   // no AI. Un-stamped or freeform-style edits fall through to the gated `pending`/Apply flow.
   const persistQueue = useRef<{ file: string; edit: CanvasEdit }[]>([]);
+  // Token-VALUE edits (change a token's value — deterministic, already committed via setTokenValue)
+  // ride the same instant lane: no Apply. A token binding (`var(--x)`) is a source edit and stays
+  // on the gated path.
+  const tokenQueue = useRef<{ token: string; value: string }[]>([]);
   // A background write failed or was withheld — the change is still shown; surfaced as a notice.
   const [writeError, setWriteError] = useState<string | null>(null);
   // Undo/redo for the instant edits (change: instant-playground-edits, task 4.3). Every background
@@ -503,7 +507,26 @@ export function RunApp({
         persist: async () => {
           const q = persistQueue.current;
           persistQueue.current = [];
+          const tq = tokenQueue.current;
+          tokenQueue.current = [];
           const undoEntry: FileSnapshot[] = [];
+          const remember = (snap: FileSnapshot[]): void => {
+            for (const s of snap) if (!undoEntry.some((e) => e.path === s.path)) undoEntry.push(s);
+          };
+          // Token-value edits first: snapshot the token scope ONCE (its pre-burst state, for undo),
+          // then commit each deterministically to the token file. HMR reflects the new value.
+          if (tq.length > 0) {
+            remember(await api.snapshotTokenScope(project.path).catch(() => [] as FileSnapshot[]));
+            for (const t of tq) {
+              try {
+                const r = await api.setTokenValue(project.path, t.token, t.value);
+                setTokens(r.tokens);
+                setWriteError(null);
+              } catch {
+                setWriteError("Couldn't save the token change to source — it's still shown.");
+              }
+            }
+          }
           for (const it of q) {
             const r = await api
               .writeCanvasEdit(project.path, it.file, it.edit)
@@ -514,8 +537,7 @@ export function RunApp({
             else {
               setWriteError(null);
               // First capture of each file across the flush = its true pre-burst content.
-              if (r && r.ok && r.snapshot)
-                for (const s of r.snapshot) if (!undoEntry.some((e) => e.path === s.path)) undoEntry.push(s);
+              if (r && r.ok && r.snapshot) remember(r.snapshot);
             }
           }
           if (undoEntry.length > 0) {
@@ -1260,11 +1282,12 @@ export function RunApp({
           viewport: viewportIdRef.current,
         };
       });
-      const { deterministic, ledger } = routeEdits(built, sel);
-      if (deterministic.length > 0) {
-        persistQueue.current.push(...deterministic);
-        autoPersist.schedule();
-      }
+      // Route into the instant lanes (deterministic source writes + token-value writes → no Apply)
+      // and the gated ledger. Token-VALUE edits commit via setTokenValue; a token BINDING stays gated.
+      const { deterministic, tokenValues, ledger } = routeEdits(built, sel);
+      if (tokenValues.length > 0) tokenQueue.current.push(...tokenValues);
+      if (deterministic.length > 0) persistQueue.current.push(...deterministic);
+      if (tokenValues.length > 0 || deterministic.length > 0) autoPersist.schedule();
       if (ledger.length > 0) {
         setPending((p) => {
           const next = { ...p };
@@ -1480,6 +1503,8 @@ export function RunApp({
       await api.restoreFiles(project.path, target);
       bridge.clearOverride();
       bridge.reload();
+      // A restored token file leaves the panel's token list stale — re-read it.
+      void api.inspectorTokens(project.path).then((r) => setTokens(r.tokens)).catch(() => {});
     },
     [project.path, bridge],
   );

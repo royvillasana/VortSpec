@@ -112,4 +112,26 @@ describe("routeEdits — the split RunApp.commitEdits applies", () => {
     expect(deterministic).toHaveLength(1);
     expect(ledger).toHaveLength(1);
   });
+
+  it("routes a token-VALUE edit to the instant token lane (setTokenValue, no Apply)", () => {
+    const tokenValue: PendingEdit = { ...base, kind: "token", token: "--color-primary", value: "#ff0000" };
+    const { deterministic, tokenValues, ledger } = routeEdits([tokenValue], stamped);
+    expect(tokenValues).toEqual([{ token: "--color-primary", value: "#ff0000" }]);
+    expect(deterministic).toHaveLength(0);
+    expect(ledger).toHaveLength(0); // no Apply — it's deterministic
+  });
+
+  it("keeps a token BINDING (var(--x)) in the ledger — it's a source edit, not a value rewrite", () => {
+    const binding: PendingEdit = { ...base, kind: "token", token: "--radius-md", value: "var(--radius-md)" };
+    const { tokenValues, ledger } = routeEdits([binding], stamped);
+    expect(tokenValues).toHaveLength(0);
+    expect(ledger).toHaveLength(1);
+  });
+
+  it("even unstamped, a token-value edit is still instant (token file, not an element anchor)", () => {
+    const tokenValue: PendingEdit = { ...base, kind: "token", token: "--space-4", value: "1.25rem" };
+    const { tokenValues, ledger } = routeEdits([tokenValue], unstamped);
+    expect(tokenValues).toHaveLength(1);
+    expect(ledger).toHaveLength(0);
+  });
 });
