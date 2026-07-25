@@ -52,7 +52,21 @@ import { vortspecSourceStamp } from ${JSON.stringify(pluginModuleUrl)};
 export default async (env) => {
   const loaded = await loadConfigFromFile(env, undefined, ${root});
   const base = loaded?.config ?? {};
-  return mergeConfig(base, { plugins: [vortspecSourceStamp({ root: ${root} })] });
+  const merged = mergeConfig(base, {
+    // Force POLLING for file-change detection. Instant edits write source in the background and rely
+    // on HMR re-running the stamp so the next edit's data-source anchors stay fresh. macOS FSEvents
+    // is unreliable for folders a spawned process can't watch (notably ~/Desktop under TCC) and for
+    // rapid external writes — without a firing watcher the transform freezes and every later edit
+    // targets a line that no longer exists, so nothing persists. Polling detects every write.
+    server: { watch: { usePolling: true, interval: 250 } },
+  });
+  // The stamp MUST run BEFORE @vitejs/plugin-react. Both are enforce:"pre", so order = array order;
+  // mergeConfig appends, which would put us AFTER react — and react prepends a ~19-line refresh
+  // preamble, so we'd stamp the shifted code and record line numbers offset by the preamble. Every
+  // codemod (which reads the real source) would then target the wrong line and silently miss.
+  // Prepending guarantees we stamp the RAW source, so data-source coordinates match the file on disk.
+  merged.plugins = [vortspecSourceStamp({ root: ${root} }), ...(merged.plugins ?? [])];
+  return merged;
 };
 `;
 }
