@@ -357,6 +357,8 @@ function readoutOf(el: Element, id: string): NodeReadout {
     computed,
     customProps,
     dataComponent: el.getAttribute("data-component"),
+    // The dev source-stamp anchor (instant-playground-edits): DOM node → exact JSX.
+    dataSource: el.getAttribute("data-source"),
     componentCandidates: reactComponentNames(el),
     // The parent's flow — Fixed/Hug/Fill resizing is axis-aware (needs the parent's axis).
     parentFlow: parentFlowOf(el),

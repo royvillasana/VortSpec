@@ -16,6 +16,7 @@ const selection: Selection = {
   label: "Button",
   component: "Button",
   file: "src/components/Button.tsx",
+  dataSource: null,
   resembles: null,
   rect: { x: 0, y: 0, width: 108, height: 38 },
   variants: [],
