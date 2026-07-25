@@ -27,7 +27,7 @@
 
 ## 5. Background persistence + per-island HMR
 
-- [ ] 5.1 Auto-persist controller (modeled on Instatic `usePersistence`): dirty subscribe, ~400 ms debounce, take snapshot before write, single-flight + one queued follow-up
+- [x] 5.1 Auto-persist controller (modeled on Instatic `usePersistence`): dirty subscribe, ~400 ms debounce, take snapshot before write, single-flight + one queued follow-up
 - [ ] 5.2 Remove the Apply/Keep/Save gate from `RunApp` manual edits; keep a passive "changes saved" indicator (open question in design)
 - [ ] 5.3 Per-element HMR: on a landed write, hot-swap only the touched module; clear that node's overlay; do NOT bump the webview key / full reload
 - [ ] 5.4 Failure handling: a failed write retains the optimistic edit and surfaces a fixable notice; HMR-unavailable falls back to one debounced reload, never per-edit
