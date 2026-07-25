@@ -31,6 +31,7 @@ function readout(over: Partial<NodeReadout> = {}): NodeReadout {
     customProps: over.customProps ?? {},
     fingerprint: over.fingerprint ?? "fp",
     dataComponent: over.dataComponent ?? "button",
+    dataSource: over.dataSource ?? null,
     componentCandidates: over.componentCandidates ?? [],
     parentFlow: over.parentFlow ?? "block",
     parentSize: over.parentSize ?? null,
@@ -245,5 +246,16 @@ describe("layout section controls", () => {
     const margin = layout.fields.find((f) => f.key === "margin")!;
     expect(margin.kind).toBe("box");
     expect(margin.value).toBe("12px|0px|0px|0px"); // top=12, right/bottom/left default 0
+  });
+});
+
+describe("data-source anchor (instant-playground-edits)", () => {
+  it("threads the element's data-source from readout to Selection", () => {
+    const sel = buildSelection(readout({ dataSource: "src/App.tsx:5:4" }), { tag: "main" });
+    expect(sel.dataSource).toBe("src/App.tsx:5:4");
+  });
+  it("is null when the element was not stamped", () => {
+    const sel = buildSelection(readout({ dataSource: null }), { tag: "main" });
+    expect(sel.dataSource).toBeNull();
   });
 });

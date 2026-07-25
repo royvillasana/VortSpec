@@ -17,6 +17,7 @@ const SELECTION: Selection = {
   label: "Card",
   component: "Card",
   file: "src/Card.tsx",
+  dataSource: null,
   resembles: null,
   rect: { x: 0, y: 0, width: 100, height: 40 },
   variants: [],

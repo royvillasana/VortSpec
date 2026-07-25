@@ -76,6 +76,9 @@ export const nodeReadoutSchema = z.object({
   customProps: z.record(z.string(), z.string()).default({}),
   /** `data-component` value, when present. */
   dataComponent: z.string().nullable().default(null),
+  /** `data-source` anchor (`relPath:line:column`) stamped in dev — maps the DOM node to its
+   *  exact JSX for deterministic edits (change: instant-playground-edits). Null when unstamped. */
+  dataSource: z.string().nullable().default(null),
   /**
    * Component display-names that rendered this element, nearest-first, read from the
    * React fiber (change: canvas — component detection). The host matches these against
@@ -186,6 +189,9 @@ export const selectionSchema = z.object({
   component: z.string().nullable().default(null),
   /** Project-relative source file of that component, when known. */
   file: z.string().nullable().default(null),
+  /** `data-source` anchor (`relPath:line:column`) of THIS element, for deterministic edits
+   *  (change: instant-playground-edits). Null when the dev stamp isn't present. */
+  dataSource: z.string().nullable().default(null),
   /** A component this element *resembles* by class signature but isn't using (suggest reuse). */
   resembles: z.object({ name: z.string(), file: z.string().nullable() }).nullable().default(null),
   rect: rectSchema,

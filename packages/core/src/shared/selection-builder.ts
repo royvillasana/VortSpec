@@ -128,6 +128,8 @@ export function buildSelection(
     label,
     component: opts.component?.name ?? null,
     file: opts.component?.file ?? null,
+    // The dev source-stamp anchor for THIS element — enables the deterministic write path.
+    dataSource: readout.dataSource,
     resembles: opts.component ? null : (opts.resembles ?? null),
     rect: readout.rect,
     variants,

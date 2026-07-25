@@ -1,9 +1,11 @@
 import { spawn, type ChildProcess } from "node:child_process";
-import { readFile } from "node:fs/promises";
+import { readFile, mkdir, copyFile, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import type { WebContents } from "electron";
 import { DEV_SERVER_UPDATE_CHANNEL, type DevServerStatus, type ServerKind } from "@vortspec/core/dev-server";
+import { isViteProject, viteStampInjection } from "../canvas/dev-stamp";
 
 /**
  * Manages one long-running dev/storybook server per project so the Dev Preview
@@ -185,6 +187,59 @@ function runStep(
   child.on("exit", (code, sig) => onDone({ code, signal: sig !== null, tail, url }));
 }
 
+/**
+ * Locate the shipped source-stamp bundle (`vortspec-stamp.mjs`) — the dev-only Vite plugin
+ * that stamps `data-source` anchors for instant Playground edits (change:
+ * instant-playground-edits). Packaged app → `resources/`; dev → the built resource in
+ * `@vortspec/core`; env override for tests. Returns null when it isn't built (feature off).
+ */
+function resolveStampBundle(): string | null {
+  const candidates = [
+    process.env.VORTSPEC_STAMP_BUNDLE,
+    process.resourcesPath ? join(process.resourcesPath, "vortspec-stamp.mjs") : null,
+    fileURLToPath(new URL("../../../resources/vortspec-stamp.mjs", import.meta.url)),
+  ].filter((c): c is string => Boolean(c));
+  for (const c of candidates) {
+    try {
+      if (existsSync(c)) return c;
+    } catch {
+      /* ignore */
+    }
+  }
+  return null;
+}
+
+/**
+ * Best-effort: for a Vite app, materialize the stamp into the project's `.vortspec/` and
+ * return the injected spawn command (`vite --config .vortspec/vite.stamp.mjs`), or null to
+ * fall back to the plain `<pm> run <script>`. NEVER throws — a missing bundle, a non-Vite
+ * project, or any I/O error just means no anchors (the feature degrades off, the dev server
+ * still starts exactly as before).
+ */
+export async function prepareViteStamp(
+  projectPath: string,
+  pm: string,
+  script: string,
+): Promise<{ cmd: string; args: string[] } | null> {
+  try {
+    const pkgRaw = await readFile(join(projectPath, "package.json"), "utf8").catch(() => null);
+    const pkg = pkgRaw ? (JSON.parse(pkgRaw) as Record<string, unknown>) : null;
+    if (!isViteProject(pkg, script)) return null;
+    const bundle = resolveStampBundle();
+    if (!bundle) return null;
+
+    const dir = join(projectPath, ".vortspec");
+    await mkdir(dir, { recursive: true });
+    await copyFile(bundle, join(dir, "vortspec-stamp.mjs"));
+    const injection = viteStampInjection({ projectPath, pm, pkg, script, pluginModuleUrl: "./vortspec-stamp.mjs" });
+    if (!injection) return null;
+    await writeFile(join(dir, "vite.stamp.mjs"), injection.wrapperContent, "utf8");
+    return { cmd: injection.argv[0], args: injection.argv.slice(1) };
+  } catch {
+    return null; // any failure → fall back to the plain dev script
+  }
+}
+
 export async function startServer(
   sender: WebContents,
   projectPath: string,
@@ -218,8 +273,15 @@ export async function startServer(
   };
   servers.set(key, server);
 
+  // For the live app runtime (not Storybook), run the project's own Vite through the stamp
+  // wrapper so `data-source` anchors appear in dev (instant Playground edits). Best-effort:
+  // non-Vite / no bundle → the plain `<pm> run <script>`, unchanged.
+  const stamp = kind === "app" ? await prepareViteStamp(projectPath, pm, script) : null;
+  const devCmd = stamp ? stamp.cmd : pm;
+  const devArgs = stamp ? stamp.args : ["run", script];
+
   const runDev = (): void => {
-    runStep(server, projectPath, kind, script, pm, ["run", script], true, ({ code, signal, tail, url }) => {
+    runStep(server, projectPath, kind, script, devCmd, devArgs, true, ({ code, signal, tail, url }) => {
       if (url !== null || server.status.state === "running" || signal) {
         // Reached the URL then exited, or we stopped it (SIGTERM) — a clean stop.
         server.status = { state: "stopped", url: null, script, message: null };
