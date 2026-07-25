@@ -15,7 +15,8 @@
     "check-types": "pnpm run typecheck",
     "test": "vitest run --passWithNoTests",
     "test:ct": "playwright test -c playwright-ct.config.ts",
-    "lint": "echo 'lint ok'"
+    "lint": "echo 'lint ok'",
+    "predist": "pnpm --filter @vortspec/core run build:stamp && mkdir -p resources && cp ../../packages/core/resources/vortspec-stamp.mjs resources/vortspec-stamp.mjs"
   },
   "dependencies": {
     "@electron-toolkit/preload": "^3.0.1",

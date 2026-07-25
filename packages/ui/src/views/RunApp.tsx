@@ -29,7 +29,7 @@ import {
   isTokenBinding,
   type PendingEdit,
 } from "../components/run-canvas/pending";
-import { toCanvasEdit } from "../components/run-canvas/edit-plan";
+import { routeEdits } from "../components/run-canvas/edit-plan";
 import { createAutoPersist } from "../components/run-canvas/auto-persist";
 import type { CanvasEdit } from "@vortspec/core/canvas-edit";
 import { useInspectorBridge, type CanvasMode } from "../lib/useInspectorBridge";
@@ -488,6 +488,8 @@ export function RunApp({
   // is present, a variant/text/delete edit is written to source in the BACKGROUND — no Apply,
   // no AI. Un-stamped or freeform-style edits fall through to the gated `pending`/Apply flow.
   const persistQueue = useRef<{ file: string; edit: CanvasEdit }[]>([]);
+  // A background write failed or was withheld — the change is still shown; surfaced as a notice.
+  const [writeError, setWriteError] = useState<string | null>(null);
   const autoPersist = useMemo(
     () =>
       createAutoPersist({
@@ -495,8 +497,17 @@ export function RunApp({
         persist: async () => {
           const q = persistQueue.current;
           persistQueue.current = [];
-          for (const it of q) await api.writeCanvasEdit(project.path, it.file, it.edit).catch(() => null);
+          for (const it of q) {
+            const r = await api
+              .writeCanvasEdit(project.path, it.file, it.edit)
+              .catch(() => ({ ok: false as const, reason: "Couldn't write the change to source." }));
+            // ok:false = the anchor wasn't statically resolvable (e.g. inside a list) — the
+            // deterministic write is withheld; the optimistic change stays on screen.
+            if (r && r.ok === false) setWriteError(r.reason ?? "This element can't be edited in place — try the assistant.");
+            else setWriteError(null);
+          }
         },
+        onError: () => setWriteError("Couldn't save a change to source — it's still shown. Try again, or use the assistant."),
       }),
     [project.path],
   );
@@ -1210,15 +1221,12 @@ export function RunApp({
       // stamped element writes to source in the BACKGROUND (no Apply, no AI); everything else
       // stays in the gated `pending`/Apply ledger. The optimistic live override is already applied
       // by the caller, so the preview is instant either way.
-      const deterministic: { file: string; edit: CanvasEdit }[] = [];
-      const ledger: PendingEdit[] = [];
-      for (const e of edits) {
+      const built: PendingEdit[] = edits.map((e) => {
         const edit = classifyFieldEdit(sel, e.key, e.value, e.cssProps, uses, forceStyle, e.css, e.token);
-        // Key by element + field so the SAME property on two elements doesn't collide.
-        const id = `${elementKey}::${edit.key}`;
-        const full: PendingEdit = {
+        return {
           ...edit,
-          id,
+          // Key by element + field so the SAME property on two elements doesn't collide.
+          id: `${elementKey}::${edit.key}`,
           label: e.label ?? edit.label,
           fingerprint: fp,
           nodeId,
@@ -1235,10 +1243,8 @@ export function RunApp({
           // to that breakpoint in source (and in the live preview across viewport switches).
           viewport: viewportIdRef.current,
         };
-        const det = toCanvasEdit(full, sel);
-        if (det) deterministic.push(det);
-        else ledger.push(full);
-      }
+      });
+      const { deterministic, ledger } = routeEdits(built, sel);
       if (deterministic.length > 0) {
         persistQueue.current.push(...deterministic);
         autoPersist.schedule();
@@ -1999,6 +2005,21 @@ export function RunApp({
                 </>
               )}
               <div className="relative min-w-0 flex-1">
+                {writeError && (
+                  <div
+                    role="status"
+                    className="absolute inset-x-0 top-0 z-20 flex items-center gap-2 border-b border-vs-warning/40 bg-vs-warning/10 px-3 py-1.5 text-[12px] text-vs-text-primary"
+                  >
+                    <span className="flex-1">{writeError}</span>
+                    <button
+                      type="button"
+                      className="text-vs-text-muted hover:text-vs-text-primary"
+                      onClick={() => setWriteError(null)}
+                    >
+                      Dismiss
+                    </button>
+                  </div>
+                )}
                 {composeActive && (
                   <ComposePanel
                     compose={compose}

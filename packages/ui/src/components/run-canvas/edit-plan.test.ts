@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyClassSwap, coalesceKey, toCanvasEdit, DirtySet } from "./edit-plan";
+import { applyClassSwap, coalesceKey, toCanvasEdit, routeEdits, DirtySet } from "./edit-plan";
 import type { PendingEdit } from "./pending";
 import type { Selection } from "@vortspec/core/ipc";
 
@@ -79,5 +79,37 @@ describe("DirtySet", () => {
       { file: "src/B.tsx", node: "n2" },
     ]);
     expect(d.size).toBe(0); // drained
+  });
+});
+
+describe("routeEdits — the split RunApp.commitEdits applies", () => {
+  const stamped = sel("src/Button.tsx:4:6");
+  const unstamped = sel(null);
+  const variant: PendingEdit = { ...base, kind: "variant", key: "variant:size", elementClassName: "btn size-md", removeClasses: ["size-md"], addClasses: ["size-lg"] };
+  const freeform: PendingEdit = { ...base, kind: "style", key: "radius", value: "12px" };
+
+  it("routes a stamped deterministic edit to the write path, out of the ledger", () => {
+    const { deterministic, ledger } = routeEdits([variant], stamped);
+    expect(deterministic).toHaveLength(1);
+    expect(deterministic[0].edit.op).toBe("attr");
+    expect(ledger).toHaveLength(0); // no Apply needed
+  });
+
+  it("keeps a freeform-style edit in the ledger (its own AI/Apply path)", () => {
+    const { deterministic, ledger } = routeEdits([freeform], stamped);
+    expect(deterministic).toHaveLength(0);
+    expect(ledger).toHaveLength(1);
+  });
+
+  it("keeps everything in the ledger when the element is not stamped (today's behavior)", () => {
+    const { deterministic, ledger } = routeEdits([variant, freeform], unstamped);
+    expect(deterministic).toHaveLength(0);
+    expect(ledger).toHaveLength(2);
+  });
+
+  it("splits a mixed batch", () => {
+    const { deterministic, ledger } = routeEdits([variant, freeform], stamped);
+    expect(deterministic).toHaveLength(1);
+    expect(ledger).toHaveLength(1);
   });
 });

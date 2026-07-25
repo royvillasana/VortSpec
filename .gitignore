@@ -42,3 +42,4 @@ apps/ide/release/
 # SDD-DE toolkit
 .sdd-de/
 packages/core/resources/vortspec-stamp.mjs
+apps/ide/resources/vortspec-stamp.mjs

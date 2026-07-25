@@ -69,6 +69,26 @@ export function toCanvasEdit(edit: PendingEdit, selection: Selection): { file: s
 }
 
 /**
+ * Split a batch of built edits into the deterministic writes (variant/text/delete on a stamped
+ * element → background `writeCanvasEdit`, no AI) and the ledger (everything else → the gated
+ * pending/Apply path). This is exactly the routing `RunApp.commitEdits` applies, extracted so
+ * the decision is unit-testable without the webview bridge.
+ */
+export function routeEdits(
+  edits: PendingEdit[],
+  selection: Selection,
+): { deterministic: { file: string; edit: CanvasEdit }[]; ledger: PendingEdit[] } {
+  const deterministic: { file: string; edit: CanvasEdit }[] = [];
+  const ledger: PendingEdit[] = [];
+  for (const e of edits) {
+    const det = toCanvasEdit(e, selection);
+    if (det) deterministic.push(det);
+    else ledger.push(e);
+  }
+  return { deterministic, ledger };
+}
+
+/**
  * The dirty set — which (file, node) pairs have un-persisted deterministic edits, so a
  * background write ships only the delta. Keyed by `<file>::<node>`.
  */
