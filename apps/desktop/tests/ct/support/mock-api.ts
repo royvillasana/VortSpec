@@ -210,6 +210,8 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
   // what was sent to Claude (injected grounding, agent tools/system prompt, …).
   const runPrompts: string[] = [];
   const runOpts: Record<string, unknown>[] = [];
+  // Records every deterministic canvas write so tests can assert the no-AI path fired.
+  const canvasWrites: { file: string; edit: unknown }[] = [];
   let lastRunId: string | null = null;
   const startRun = async (opts?: { prompt?: string }): Promise<{ runId: string }> => {
     if (typeof opts?.prompt === "string") runPrompts.push(opts.prompt);
@@ -556,6 +558,10 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
     inspectorComponents: async () =>
       (generated && cfg.componentsAfterRun) || cfg.components || EMPTY_COMPONENTS,
     setTokenValue: async () => cfg.tokens ?? EMPTY_TOKENS,
+    writeCanvasEdit: async (_projectPath: string, file: string, edit: unknown) => {
+      canvasWrites.push({ file, edit });
+      return { ok: true };
+    },
     // Token sanitation + edit methods (change: token-fidelity-sanitation). The
     // Inspector calls getSanitation on mount — a missing mock method is a synchronous
     // TypeError that unmounts React and blanks the page (see figmaEnsureConnected note
@@ -626,6 +632,7 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
 
   (window as unknown as { vortspec: unknown }).vortspec = api;
   (window as unknown as { __runPrompts: string[] }).__runPrompts = runPrompts;
+  (window as unknown as { __canvasWrites: { file: string; edit: unknown }[] }).__canvasWrites = canvasWrites;
   (window as unknown as { __runOpts: Record<string, unknown>[] }).__runOpts = runOpts;
   // Let tests drive an IDE action (as if Claude called a tool) and inspect replies.
   (window as unknown as { __pushIdeAction: (a: IdeAction) => void }).__pushIdeAction = (a) => {
