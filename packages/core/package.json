@@ -25,7 +25,8 @@
     "build": "tsc -p tsconfig.json --noEmit",
     "check-types": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
-    "lint": "echo 'lint ok'"
+    "lint": "echo 'lint ok'",
+    "build:stamp": "esbuild src/main/canvas/stamp-standalone.ts --bundle --format=esm --platform=node --legal-comments=none --banner:js='import{createRequire}from\"module\";const require=createRequire(import.meta.url);' --outfile=resources/vortspec-stamp.mjs"
   },
   "dependencies": {
     "zod": "^3.24.1",
@@ -37,6 +38,7 @@
     "@types/node": "^22.10.0",
     "electron": "^36.4.0",
     "typescript": "^5.9.0",
-    "vitest": "^3.2.0"
+    "vitest": "^3.2.0",
+    "esbuild": "^0.24.0"
   }
 }
