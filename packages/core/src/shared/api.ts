@@ -171,6 +171,13 @@ export interface VortSpecApi {
     value: string,
     context?: string,
   ): Promise<IpcResponse<"inspector:setTokenValue">>;
+  /** Deterministic canvas edit — write a JSX prop/text/structural change to source (no AI),
+   *  under a snapshot. Returns `{ ok:false, reason }` (write withheld) for an un-resolvable anchor. */
+  writeCanvasEdit(
+    projectPath: string,
+    file: string,
+    edit: import("./canvas-edit").CanvasEdit,
+  ): Promise<IpcResponse<"canvas:writeEdit">>;
   /** Persist the figma-mode → code-context map (transparent-cockpit editor). */
   setTokenModeMap(
     projectPath: string,

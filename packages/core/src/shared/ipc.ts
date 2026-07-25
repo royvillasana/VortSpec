@@ -28,6 +28,7 @@ import {
   importRequestSchema,
   publishRequestSchema,
 } from "./git";
+import { canvasEditSchema, canvasWriteResultSchema } from "./canvas-edit";
 import { flowSchema, stageStatusSchema, runHistoryResultSchema } from "./flow";
 import { devServerStatusSchema } from "./dev-server";
 import { manifestResultSchema, manifestVersionsResultSchema } from "./manifest";
@@ -660,6 +661,10 @@ export const ipcContract = {
       context: z.string().optional(),
     }),
     response: inspectorTokensResultSchema,
+  },
+  "canvas:writeEdit": {
+    request: z.object({ projectPath: z.string(), file: z.string(), edit: canvasEditSchema }),
+    response: canvasWriteResultSchema,
   },
   "inspector:setTokenModeMap": {
     request: z.object({

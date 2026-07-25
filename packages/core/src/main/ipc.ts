@@ -43,6 +43,7 @@ import {
   writeTokenModeMap,
   collapseTokenToAlias,
 } from "./inspector/token-parser";
+import { applyCanvasEdit } from "./canvas/write";
 import { getTokenSanitation } from "./inspector/token-sanitation";
 import { writeTokenLink } from "./inspector/token-resolver";
 import { discoverRoutes } from "./routes/route-discovery";
@@ -407,6 +408,11 @@ const handlers: Record<IpcChannel, Handler> = {
     value: string;
     context?: string;
   }) => setInspectorTokenValue(req.projectPath, req.name, req.value, req.context)) as Handler,
+  "canvas:writeEdit": ((req: {
+    projectPath: string;
+    file: string;
+    edit: import("@vortspec/core/canvas-edit").CanvasEdit;
+  }) => applyCanvasEdit(req.projectPath, req.file, req.edit)) as Handler,
   "inspector:setTokenModeMap": ((req: { projectPath: string; map: Record<string, string> }) =>
     writeTokenModeMap(req.projectPath, req.map)) as Handler,
   "inspector:createToken": ((req: {
