@@ -59,6 +59,25 @@ describe("createInspectorToken", () => {
     await expect(createInspectorToken(dir, "1bad name", "#222")).rejects.toThrow(/valid token name/);
   });
 
+  it("bootstraps a missing token file + wires the import on first create", async () => {
+    // A project whose configured token_file doesn't exist yet (the sample case).
+    const proj = await mkdtemp(join(tmpdir(), "vortspec-tokboot-"));
+    await mkdir(join(proj, ".sdd-de"), { recursive: true });
+    await writeFile(join(proj, ".sdd-de/project.yaml"), "token_file: src/styles/tokens.css\n", "utf8");
+    await mkdir(join(proj, "src"), { recursive: true });
+    await writeFile(join(proj, "src/main.tsx"), 'import { App } from "./App";\n', "utf8");
+
+    const r = await createInspectorToken(proj, "radius-sm", "4px", true);
+    expect(r.tokens.find((t) => t.name === "radius-sm")).toMatchObject({ resolvedValue: "4px" });
+    // The token file was created with the declaration…
+    const css = await readFile(join(proj, "src/styles/tokens.css"), "utf8");
+    expect(css).toContain("--radius-sm: 4px;");
+    // …and the app entry now imports it (so the var resolves in the preview).
+    const entry = await readFile(join(proj, "src/main.tsx"), "utf8");
+    expect(entry).toContain('import "./styles/tokens.css";');
+    await rm(proj, { recursive: true, force: true });
+  });
+
   it("rejects an empty value", async () => {
     await expect(createInspectorToken(dir, "ok-name", "  ")).rejects.toThrow(/needs a value/);
   });

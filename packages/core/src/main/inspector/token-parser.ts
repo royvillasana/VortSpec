@@ -1,4 +1,4 @@
-import { join, basename, dirname, extname } from "node:path";
+import { join, basename, dirname, extname, relative } from "node:path";
 import { readFile, readdir, writeFile, mkdir } from "node:fs/promises";
 import { readProjectConfig } from "../workspace/config-manager";
 import {
@@ -989,8 +989,12 @@ export async function createInspectorToken(
   const tokenFile = config?.tokenFile;
   if (!tokenFile) throw new Error("This project has no configured token file to write to.");
   const path = join(projectPath, tokenFile);
-  const css = await readFile(path, "utf8").catch(() => null);
-  if (css === null) throw new Error(`Couldn't read the token file at ${tokenFile}.`);
+  // Bootstrap the token file the FIRST time a token is created (change: instant-playground-edits):
+  // a project can declare a `token_file` that doesn't exist yet. Create it (an empty `:root {}`)
+  // and make the app import it, so the new `var(--x)` binding actually resolves in the preview.
+  const existingCss = await readFile(path, "utf8").catch(() => null);
+  const bootstrapping = existingCss === null;
+  const css = existingCss ?? ":root {\n}\n";
 
   // Dedup-before-create (change: token-fidelity-sanitation): refuse to mint a
   // token whose name or value already exists in Figma — reuse it instead. The
@@ -1014,9 +1018,41 @@ export async function createInspectorToken(
 
   const next = insertTokenDeclaration(css, clean, value);
   if (next === null) throw new Error(`A token named --${clean} already exists.`);
+  if (bootstrapping) await mkdir(dirname(path), { recursive: true });
   await writeFile(path, next, "utf8");
+  if (bootstrapping) await ensureTokenFileImported(projectPath, tokenFile);
   await markOverridden(projectPath, clean);
   return getInspectorTokens(projectPath);
+}
+
+/**
+ * Best-effort: make the app import a just-created token file so its CSS variables actually apply
+ * in the running preview. Finds the app entry (main/index), and prepends a relative CSS import if
+ * the file isn't imported anywhere already. Never throws — a missing/odd entry just means the user
+ * imports it themselves (the tokens still parse from the file for the picker).
+ */
+async function ensureTokenFileImported(projectPath: string, tokenFile: string): Promise<void> {
+  try {
+    const base = basename(tokenFile);
+    const entries = [
+      "src/main.tsx", "src/main.jsx", "src/main.ts", "src/main.js",
+      "src/index.tsx", "src/index.jsx", "src/index.ts", "src/index.js",
+      "src/App.tsx", "src/App.jsx",
+    ];
+    for (const rel of entries) {
+      const entryPath = join(projectPath, rel);
+      const src = await readFile(entryPath, "utf8").catch(() => null);
+      if (src === null) continue;
+      if (src.includes(base)) return; // already imported (or referenced) somewhere in the entry
+      // Relative path from the entry's dir to the token file.
+      let importPath = relative(dirname(rel), tokenFile) || `./${base}`;
+      if (!importPath.startsWith(".")) importPath = `./${importPath}`;
+      await writeFile(entryPath, `import "${importPath}";\n${src}`, "utf8");
+      return;
+    }
+  } catch {
+    /* best-effort — the token file still exists and parses */
+  }
 }
 
 /**

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { JSX, RefObject } from "react";
+import { CreateVariableRow } from "./CreateVariableRow";
 
 /**
  * Figma-style color control (change: run-canvas-visual-editor).
@@ -20,11 +21,13 @@ export function ColorTokenField({
   token,
   colorTokens,
   onChange,
+  onCreateToken,
 }: {
   value: string;
   token: string | null;
   colorTokens: ColorToken[];
   onChange: (cssValue: string) => void;
+  onCreateToken?: (name: string, value: string, tokenType?: string) => Promise<void>;
 }): JSX.Element {
   const [open, setOpen] = useState(false);
   const [anchor, setAnchor] = useState<DOMRect | null>(null);
@@ -112,6 +115,8 @@ export function ColorTokenField({
             initial={display.swatch}
             onPickToken={pickToken}
             onPickCustom={pickCustom}
+            onCreateToken={onCreateToken}
+            onCreated={(name) => pickToken({ name, value: display.swatch })}
             onClose={() => setOpen(false)}
           />,
           document.body,
@@ -160,6 +165,8 @@ function ColorPopover({
   initial,
   onPickToken,
   onPickCustom,
+  onCreateToken,
+  onCreated,
   onClose,
 }: {
   rootRef: RefObject<HTMLDivElement | null>;
@@ -168,9 +175,12 @@ function ColorPopover({
   initial: string;
   onPickToken: (t: ColorToken) => void;
   onPickCustom: (hex: string) => void;
+  onCreateToken?: (name: string, value: string, tokenType?: string) => Promise<void>;
+  onCreated: (name: string) => void;
   onClose: () => void;
 }): JSX.Element {
-  const [tab, setTab] = useState<"libraries" | "custom">(colorTokens.length ? "libraries" : "custom");
+  // Default to the Libraries tab when there are tokens to pick OR one can be created there.
+  const [tab, setTab] = useState<"libraries" | "custom">(colorTokens.length || onCreateToken ? "libraries" : "custom");
   const [q, setQ] = useState("");
   const filtered = colorTokens.filter((t) => t.name.toLowerCase().includes(q.toLowerCase()));
   const groups = groupTokens(filtered);
@@ -203,6 +213,7 @@ function ColorPopover({
 
       {tab === "libraries" ? (
         <div className="flex max-h-72 flex-col">
+          <CreateVariableRow value={toHex(initial)} tokenType="color" onCreateToken={onCreateToken} onCreated={onCreated} />
           <div className="border-b border-vs-border-subtle p-2">
             <input
               autoFocus
@@ -215,7 +226,9 @@ function ColorPopover({
           <div className="min-h-0 flex-1 overflow-y-auto p-2">
             {colorTokens.length === 0 ? (
               <p className="px-1 py-2 text-[11px] text-vs-text-muted">
-                No color tokens found in this project's token file.
+                {onCreateToken
+                  ? "No color tokens yet — use “＋ Create variable…” above to add one."
+                  : "No color tokens found in this project's token file."}
               </p>
             ) : (
               groups.map((g) => (

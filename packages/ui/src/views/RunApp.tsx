@@ -550,6 +550,17 @@ export function RunApp({
     [project.path],
   );
   useEffect(() => () => autoPersist.dispose(), [autoPersist]);
+  // Create a design token from a field's current literal value, then let the field bind to it
+  // (change: instant-playground-edits). Bootstraps the token file + import on first use. The bind
+  // itself (var(--name)) writes inline to source via the instant style lane — no Apply. Throws a
+  // human message (bad name / duplicate) that the picker surfaces.
+  const createTokenForField = useCallback(
+    async (name: string, value: string): Promise<void> => {
+      const r = await api.createToken(project.path, name, value);
+      setTokens(r.tokens);
+    },
+    [project.path],
+  );
   const [review, setReview] = useState(false);
   // Set when an Apply run finished but edited NO source file — the change is still
   // preview-only, so we keep the pending edits and tell the user instead of falsely
@@ -1840,6 +1851,7 @@ export function RunApp({
           onRevert={() => void revertEdits()}
           colorTokens={colorTokens}
           tokens={tokens}
+          onCreateToken={createTokenForField}
           onAssign={
             onSendToChat && selection
               ? () => {

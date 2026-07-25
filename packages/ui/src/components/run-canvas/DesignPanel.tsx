@@ -13,6 +13,7 @@ import { NodeTree } from "./NodeTree";
 import type { PendingEdit } from "./pending";
 import { matchTokenName, tokenNameFromVar, tokensForField } from "./compose";
 import { ColorTokenField, type ColorToken } from "./ColorPicker";
+import { CreateVariableRow } from "./CreateVariableRow";
 
 /**
  * The Run-section Design panel (change: run-canvas-visual-editor).
@@ -44,6 +45,7 @@ export function DesignPanel({
   onRevert,
   colorTokens = [],
   tokens = [],
+  onCreateToken,
   onAssign,
   owedScreenUpdates = [],
   onSaveScreenUpdates,
@@ -79,6 +81,9 @@ export function DesignPanel({
   colorTokens?: ColorToken[];
   /** All project tokens — length fields offer/recognize spacing/radius/typography ones. */
   tokens?: InspectorToken[];
+  /** Create a new design token from a field's current value, then bind the field to it. Bootstraps
+   *  the token file if the project has none yet. Throws with a human message on a bad name/dupe. */
+  onCreateToken?: (name: string, value: string, tokenType?: string) => Promise<void>;
   /** Open the assign/replace-component dialog for the current selection (on demand). */
   onAssign?: () => void;
   /** Screen files whose spec owes a Screen Creation update (deferred from an insert). */
@@ -127,6 +132,7 @@ export function DesignPanel({
             )}
             {selection.sections.map((section) => (
               <PropertySection
+                onCreateToken={onCreateToken}
                 key={section.id}
                 section={section}
                 onFieldChange={onFieldChange}
@@ -618,11 +624,13 @@ const PropertySection = memo(function PropertySection({
   onFieldChange,
   colorTokens = [],
   tokens = [],
+  onCreateToken,
 }: {
   section: DesignSection;
   onFieldChange?: (key: string, value: string) => void;
   colorTokens?: ColorToken[];
   tokens?: InspectorToken[];
+  onCreateToken?: (name: string, value: string, tokenType?: string) => Promise<void>;
 }): JSX.Element | null {
   if (section.fields.length === 0) return null;
   return (
@@ -630,7 +638,13 @@ const PropertySection = memo(function PropertySection({
       <div className="flex flex-col gap-2 px-3 pb-3">
         {section.fields.map((f) => (
           <Row key={f.key} label={f.label}>
-            <Field field={f} colorTokens={colorTokens} tokens={tokens} onChange={(val) => onFieldChange?.(f.key, val)} />
+            <Field
+              field={f}
+              colorTokens={colorTokens}
+              tokens={tokens}
+              onChange={(val) => onFieldChange?.(f.key, val)}
+              onCreateToken={onCreateToken}
+            />
           </Row>
         ))}
       </div>
@@ -643,11 +657,13 @@ function Field({
   colorTokens,
   tokens,
   onChange,
+  onCreateToken,
 }: {
   field: SectionField;
   colorTokens: ColorToken[];
   tokens: InspectorToken[];
   onChange: (value: string) => void;
+  onCreateToken?: (name: string, value: string, tokenType?: string) => Promise<void>;
 }): JSX.Element {
   const control =
     field.kind === "resize" ? (
@@ -655,7 +671,7 @@ function Field({
     ) : field.kind === "align" ? (
       <AlignGrid value={field.value} onChange={onChange} />
     ) : field.kind === "box" ? (
-      <BoxField value={field.value} tokens={tokens} tokenType={field.tokenType} onChange={onChange} />
+      <BoxField value={field.value} tokens={tokens} tokenType={field.tokenType} onChange={onChange} onCreateToken={onCreateToken} />
     ) : field.kind === "segment" ? (
       <SegmentedField
         value={field.value}
@@ -668,7 +684,7 @@ function Field({
     ) : field.kind === "toggle" ? (
       <SelectField value={field.value} options={["true", "false"]} onChange={onChange} />
     ) : field.kind === "color" ? (
-      <ColorTokenField value={field.value} token={field.token} colorTokens={colorTokens} onChange={onChange} />
+      <ColorTokenField value={field.value} token={field.token} colorTokens={colorTokens} onChange={onChange} onCreateToken={onCreateToken} />
     ) : field.kind === "length" ? (
       <LengthTokenField
         value={field.value}
@@ -676,6 +692,7 @@ function Field({
         tokenType={field.tokenType}
         tokens={tokens}
         onChange={onChange}
+        onCreateToken={onCreateToken}
       />
     ) : field.key === "content" ? (
       <ContentTextarea value={field.value} onChange={onChange} />
@@ -781,14 +798,19 @@ function LengthTokenField({
   tokenType,
   tokens,
   onChange,
+  onCreateToken,
 }: {
   value: string;
   token?: string | null;
   tokenType?: string;
   tokens: InspectorToken[];
   onChange: (v: string) => void;
+  onCreateToken?: (name: string, value: string, tokenType?: string) => Promise<void>;
 }): JSX.Element {
   const opts = tokensForField(tokens, tokenType);
+  // The picker is available when there are tokens to bind OR we can create one (bootstrapping the
+  // token file). This is what lets a user "put a token" on a field that has only a literal today.
+  const canPick = opts.length > 0 || !!onCreateToken;
   const [draft, setDraft] = useState(value);
   // The just-picked binding, reflected immediately so the field shows the new token
   // + its value BEFORE the (gated) apply refreshes the readout. `null` = detached to
@@ -828,6 +850,13 @@ function LengthTokenField({
     onChange(`var(--${name})`); // emit the binding — the guest resolves the real value
     setOpen(false);
   };
+  // A just-created token — its value IS the current draft, so bind straight to it.
+  const bindCreated = (name: string): void => {
+    setLocalToken(name);
+    editedRef.current = false;
+    onChange(`var(--${name})`);
+    setOpen(false);
+  };
   const detach = (): void => {
     // Fall back to a raw literal — the current resolved value (or the bound token's).
     const raw = opts.find((t) => t.name === matched)?.resolvedValue ?? draft;
@@ -847,7 +876,7 @@ function LengthTokenField({
   return (
     <div className="relative w-full">
       <div className="flex w-full items-center rounded border border-vs-border-default bg-vs-bg-surface pr-1 focus-within:border-vs-accent">
-        {opts.length > 0 && (
+        {canPick && (
           <button
             type="button"
             onClick={() => setOpen((o) => !o)}
@@ -875,10 +904,14 @@ function LengthTokenField({
           onCommit={commitRaw}
         />
       </div>
-      {open && opts.length > 0 && (
+      {open && canPick && (
         <>
           <div className="fixed inset-0 z-20" onClick={() => setOpen(false)} />
           <div className="absolute left-0 right-0 z-30 mt-1 max-h-56 overflow-y-auto rounded-md border border-vs-border-default bg-vs-bg-elevated py-1 shadow-2xl">
+            <CreateVariableRow value={draft} tokenType={tokenType} onCreateToken={onCreateToken} onCreated={bindCreated} />
+            {opts.length === 0 && !onCreateToken && (
+              <p className="px-2.5 py-1.5 text-[11px] text-vs-text-muted">No matching tokens in this project.</p>
+            )}
             {matched && (
               <button
                 type="button"
@@ -1026,6 +1059,7 @@ function BoxSideInput({
   tokens,
   tokenType,
   onCommit,
+  onCreateToken,
   menuAlign = "start",
 }: {
   glyph: JSX.Element;
@@ -1033,9 +1067,11 @@ function BoxSideInput({
   tokens: InspectorToken[];
   tokenType?: string;
   onCommit: (v: string) => void; // raw px, or "var(--name)"
+  onCreateToken?: (name: string, value: string, tokenType?: string) => Promise<void>;
   menuAlign?: "start" | "end"; // which edge the (wide) picker anchors to, so it never overflows the panel
 }): JSX.Element {
   const opts = tokensForField(tokens, tokenType);
+  const canPick = opts.length > 0 || !!onCreateToken;
   const [draft, setDraft] = useState(() => sideDisplay(value, opts));
   // localToken: undefined = follow the value; null = detached to a literal; string = just-picked.
   const [localToken, setLocalToken] = useState<string | null | undefined>(undefined);
@@ -1096,6 +1132,14 @@ function BoxSideInput({
     const t = draft.trim();
     onCommit(/^-?\d*\.?\d+$/.test(t) ? `${t}px` : t);
   };
+  // The current side value as a CSS length (draft is bare digits for a raw side).
+  const sideCssValue = /^-?\d*\.?\d+$/.test(draft.trim()) ? `${draft.trim()}px` : draft.trim();
+  const bindCreated = (name: string): void => {
+    setLocalToken(name);
+    editedRef.current = false;
+    onCommit(`var(--${name})`);
+    setOpen(false);
+  };
   return (
     <div className="relative min-w-0 flex-1">
       <div className="flex items-center gap-1 rounded border border-vs-border-default bg-vs-bg-surface py-1 pl-1.5 pr-1 focus-within:border-vs-accent">
@@ -1106,7 +1150,7 @@ function BoxSideInput({
         <TokenValueChip
           draft={draft}
           matched={matched}
-          showDot={opts.length > 0}
+          showDot={canPick}
           inputRef={inputRef}
           onOpen={() => setOpen((o) => !o)}
           onInput={(v) => {
@@ -1116,7 +1160,7 @@ function BoxSideInput({
           onCommit={commitRaw}
         />
       </div>
-      {open && opts.length > 0 && (
+      {open && canPick && (
         <>
           <div className="fixed inset-0 z-20" onClick={() => setOpen(false)} />
           {/* The picker is content-width (name + resolved value), not the narrow input's
@@ -1127,6 +1171,7 @@ function BoxSideInput({
               menuAlign === "end" ? "right-0" : "left-0"
             }`}
           >
+            <CreateVariableRow value={sideCssValue} tokenType={tokenType} onCreateToken={onCreateToken} onCreated={bindCreated} />
             {matched && (
               <button
                 type="button"
@@ -1164,11 +1209,13 @@ function BoxField({
   tokens,
   tokenType,
   onChange,
+  onCreateToken,
 }: {
   value: string;
   tokens: InspectorToken[];
   tokenType?: string;
   onChange: (v: string) => void;
+  onCreateToken?: (name: string, value: string, tokenType?: string) => Promise<void>;
 }): JSX.Element {
   const [tv, rv, bv, lv] = value.split("|");
   const base = { top: tv ?? "0px", right: rv ?? "0px", bottom: bv ?? "0px", left: lv ?? "0px" };
@@ -1194,7 +1241,7 @@ function BoxField({
     onCommit: (x: string) => void,
     menuAlign: "start" | "end" = "start",
   ): JSX.Element => (
-    <BoxSideInput glyph={glyph} value={v} tokens={tokens} tokenType={tokenType} onCommit={onCommit} menuAlign={menuAlign} />
+    <BoxSideInput glyph={glyph} value={v} tokens={tokens} tokenType={tokenType} onCommit={onCommit} onCreateToken={onCreateToken} menuAlign={menuAlign} />
   );
   const allEqual = cur.top === cur.right && cur.right === cur.bottom && cur.bottom === cur.left;
   const axisEqual = cur.top === cur.bottom && cur.left === cur.right;

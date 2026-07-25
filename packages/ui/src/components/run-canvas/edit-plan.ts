@@ -64,12 +64,12 @@ export function toCanvasEdit(edit: PendingEdit, selection: Selection): { file: s
     return { file, edit: { op: "text", anchor, text: edit.value } };
   }
 
-  // A freeform style edit — literal CSS values (a color, a radius, a dragged padding/gap/margin),
-  // NOT a token. Write it inline to source deterministically (the Instatic-style literal write): no
-  // class inference, no AI. Token VALUE edits are routed away before this (their own instant lane);
-  // token BINDINGS (`var(--x)`) stay gated — in a Tailwind project a raw var wouldn't match the
-  // token's utility class, so the assistant maps those.
-  if (edit.kind === "style" && edit.css && Object.keys(edit.css).length > 0) {
+  // Any edit that resolved to a concrete CSS override writes deterministically to the element's
+  // inline `style={{}}` — instant, no AI. This covers a freeform literal (a color/radius/padding)
+  // AND a token BINDING (`var(--x)`): a binding's css is `{ prop: "var(--name)" }`, which resolves
+  // wherever the token is a CSS custom property (how VortSpec token files, and Tailwind v4, define
+  // them). Token VALUE edits are routed away before this into their own instant lane.
+  if (edit.css && Object.keys(edit.css).length > 0) {
     return { file, edit: { op: "style", anchor, css: edit.css } };
   }
 
@@ -79,12 +79,12 @@ export function toCanvasEdit(edit: PendingEdit, selection: Selection): { file: s
 /**
  * Split a batch of built edits into the three instant/gated lanes `RunApp.commitEdits` applies,
  * extracted so the decision is unit-testable without the webview bridge:
- *   • deterministic — variant/text/delete on a stamped element → background `writeCanvasEdit`, no AI
+ *   • deterministic — variant/text/delete/style/binding on a stamped element → `writeCanvasEdit`, no AI
  *   • tokenValues   — a token's VALUE change → background `setTokenValue`, no AI (also instant)
- *   • ledger        — everything else (freeform style, token BINDINGS) → the gated pending/Apply path
+ *   • ledger        — only what can't be written deterministically (e.g. an un-stamped element)
  *
- * A token BINDING (`var(--x)`) is a per-element source edit, NOT a value rewrite, so it stays in the
- * ledger (writing its value would produce `--x: var(--x)`).
+ * A token-VALUE edit rewrites the token's own definition (its own lane); a token BINDING (`var(--x)`)
+ * writes `var(--x)` to the element's inline style (the deterministic lane), so the two must not mix.
  */
 export function routeEdits(
   edits: PendingEdit[],

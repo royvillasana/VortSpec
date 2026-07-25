@@ -94,8 +94,8 @@ describe("routeEdits — the split RunApp.commitEdits applies", () => {
   const variant: PendingEdit = { ...base, kind: "variant", key: "variant:size", elementClassName: "btn size-md", removeClasses: ["size-md"], addClasses: ["size-lg"] };
   // A freeform color edit — literal value, carries a css override (as classifyFieldEdit builds it).
   const freeform: PendingEdit = { ...base, kind: "style", key: "color", value: "#c53434", css: { color: "#c53434" } };
-  // A token binding stays gated (needs the assistant to map to the token's utility class).
-  const binding: PendingEdit = { ...base, kind: "token", token: "--radius-md", value: "var(--radius-md)" };
+  // A token binding — its css carries the var(); it writes inline to source deterministically.
+  const binding: PendingEdit = { ...base, kind: "token", token: "radius-md", value: "var(--radius-md)", css: { "border-radius": "var(--radius-md)" } };
 
   it("routes a stamped variant edit to the write path, out of the ledger", () => {
     const { deterministic, ledger } = routeEdits([variant], stamped);
@@ -111,11 +111,12 @@ describe("routeEdits — the split RunApp.commitEdits applies", () => {
     expect(ledger).toHaveLength(0); // instant — the whole point
   });
 
-  it("keeps a token BINDING in the ledger even on a stamped element (gated, needs the assistant)", () => {
+  it("routes a token BINDING to an inline style op (var(--x) written to source, no Apply)", () => {
     const { deterministic, tokenValues, ledger } = routeEdits([binding], stamped);
-    expect(deterministic).toHaveLength(0);
-    expect(tokenValues).toHaveLength(0);
-    expect(ledger).toHaveLength(1);
+    expect(tokenValues).toHaveLength(0); // not a value rewrite
+    expect(deterministic).toHaveLength(1);
+    expect(deterministic[0].edit).toMatchObject({ op: "style", css: { "border-radius": "var(--radius-md)" } });
+    expect(ledger).toHaveLength(0);
   });
 
   it("keeps anchor-dependent edits in the ledger when the element is not stamped", () => {
@@ -124,10 +125,10 @@ describe("routeEdits — the split RunApp.commitEdits applies", () => {
     expect(ledger).toHaveLength(2);
   });
 
-  it("splits a mixed batch (variant + freeform instant, binding gated)", () => {
+  it("splits a mixed batch (variant + freeform + binding all instant, no Apply)", () => {
     const { deterministic, ledger } = routeEdits([variant, freeform, binding], stamped);
-    expect(deterministic).toHaveLength(2);
-    expect(ledger).toHaveLength(1);
+    expect(deterministic).toHaveLength(3);
+    expect(ledger).toHaveLength(0);
   });
 
   it("routes a token-VALUE edit to the instant token lane (setTokenValue, no Apply)", () => {
