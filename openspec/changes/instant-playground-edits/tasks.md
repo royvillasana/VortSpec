@@ -1,6 +1,6 @@
 ## 1. Source anchors + resolvability guard (the enabler)
 
-- [ ] 1.1 Stamp rendered elements with `data-source="file:line:col"` in dev (React JSX-source transform); confirm it never ships to the build output
+- [x] 1.1 Stamp rendered elements with `data-source="file:line:col"` in dev (React JSX-source transform); confirm it never ships to the build output
 - [ ] 1.2 Bridge: surface each selected/hovered node's `data-source` anchor alongside the existing node id
 - [x] 1.3 `resolvability` check: given an anchor, statically decide direct-JSX-child vs. inside `.map()`/loop/conditional/HOC (AST-based), returning a confidence + reason
 - [ ] 1.4 Fallback matcher: keep `resembleComponent` as the low-confidence path; unit-test anchor vs. matcher agreement
