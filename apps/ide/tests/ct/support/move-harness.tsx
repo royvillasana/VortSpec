@@ -27,6 +27,7 @@ const TARGET: InsertTargetWire = {
   line: { x1: 120, y1: 0, x2: 120, y2: 60 },
   anchorLabel: "Sidebar",
   anchorText: "Filters",
+  anchorDataSource: null,
 };
 
 const record = (op: string): void => {

@@ -47,7 +47,15 @@ export const canvasEditSchema = z.discriminatedUnion("op", [
   }),
   z.object({ op: z.literal("delete"), anchor: anchorSchema }),
   z.object({ op: z.literal("duplicate"), anchor: anchorSchema }),
-  z.object({ op: z.literal("move"), anchor: anchorSchema, to: anchorSchema, index: z.number().optional() }),
+  // Move the anchored element. With `position`, `to` is a SIBLING anchor and the element is moved
+  // just before/after it (the drag-drop case). Without it, `to` is a CONTAINER anchor + `index`.
+  z.object({
+    op: z.literal("move"),
+    anchor: anchorSchema,
+    to: anchorSchema,
+    index: z.number().optional(),
+    position: z.enum(["before", "after"]).optional(),
+  }),
 ]);
 export type CanvasEdit = z.infer<typeof canvasEditSchema>;
 

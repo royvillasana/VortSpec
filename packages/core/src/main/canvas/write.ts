@@ -20,6 +20,7 @@ import {
   deleteNode,
   duplicateNode,
   moveNode,
+  moveNodeRelative,
   CodemodError,
 } from "./codemod";
 
@@ -37,6 +38,11 @@ export async function applyCanvasEdit(
   // The resolvability guard is a correctness gate: never rewrite an un-resolvable anchor.
   const guard = checkResolvability(before, edit.anchor);
   if (!guard.resolvable) return { ok: false, reason: guard.reason };
+  // A relative move must also resolve its DROP target statically (not a list/conditional).
+  if (edit.op === "move" && edit.position) {
+    const tGuard = checkResolvability(before, edit.to);
+    if (!tGuard.resolvable) return { ok: false, reason: tGuard.reason };
+  }
 
   let after: string;
   try {
@@ -64,7 +70,9 @@ export async function applyCanvasEdit(
         after = duplicateNode(before, edit.anchor);
         break;
       case "move":
-        after = moveNode(before, edit.anchor, edit.to, edit.index);
+        after = edit.position
+          ? moveNodeRelative(before, edit.anchor, edit.to, edit.position)
+          : moveNode(before, edit.anchor, edit.to, edit.index);
         break;
     }
   } catch (e) {

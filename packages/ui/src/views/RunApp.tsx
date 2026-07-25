@@ -31,7 +31,7 @@ import {
 } from "../components/run-canvas/pending";
 import { routeEdits } from "../components/run-canvas/edit-plan";
 import { createAutoPersist } from "../components/run-canvas/auto-persist";
-import type { CanvasEdit } from "@vortspec/core/canvas-edit";
+import { parseAnchor, type CanvasEdit } from "@vortspec/core/canvas-edit";
 import { useInspectorBridge, type CanvasMode } from "../lib/useInspectorBridge";
 import { useComments } from "../lib/useComments";
 import { CommentsLayer } from "../components/run-canvas/CommentsLayer";
@@ -1039,17 +1039,46 @@ export function RunApp({
     if (!dragMoveEnabled || !bridge.dragDrop || move.phase !== "idle") return;
     const drop = bridge.dragDrop;
     bridge.clearDragDrop();
-    // The guest already moved the element live — register it for Keep/Revert (no run).
-    // Use the guest-reported label + leading text so the reconcile run can locate the
-    // element's JSX (a bare tag alone is ambiguous across a screen).
-    move.onDrop(
-      {
-        fingerprint: drop.sourceFingerprint,
-        label: drop.sourceLabel || selectionRefForMove.current?.label || "the selected element",
-        text: drop.sourceText,
-      },
-      drop.target,
-    );
+    const gatedFallback = (): void =>
+      // The guest already moved the element live — register it for Keep/Revert (no run).
+      // Use the guest-reported label + leading text so the reconcile run can locate the
+      // element's JSX (a bare tag alone is ambiguous across a screen).
+      move.onDrop(
+        {
+          fingerprint: drop.sourceFingerprint,
+          label: drop.sourceLabel || selectionRefForMove.current?.label || "the selected element",
+          text: drop.sourceText,
+        },
+        drop.target!,
+      );
+    // Try a DETERMINISTIC instant move first (change: instant-playground-edits): both the dragged
+    // element and the drop anchor are stamped, in the same file, and statically resolvable → write
+    // the reordered JSX to source in the background (no Keep, no AI). Anything else (cross-file drop,
+    // a list/conditional, an un-stamped element) falls back to the gated reconcile.
+    const src = parseAnchor(drop.sourceDataSource);
+    const tgt = drop.target ? parseAnchor(drop.target.anchorDataSource) : null;
+    if (!drop.target || !src || !tgt || src.file !== tgt.file) {
+      gatedFallback();
+      return;
+    }
+    const edit: CanvasEdit = { op: "move", anchor: src.anchor, to: tgt.anchor, position: drop.target.position };
+    void api
+      .writeCanvasEdit(project.path, src.file, edit)
+      .then((r) => {
+        if (!r.ok) {
+          gatedFallback(); // un-resolvable in source — hand to the assistant
+          return;
+        }
+        if (r.snapshot) {
+          undoStack.current.push(r.snapshot);
+          redoStack.current = [];
+        }
+        // Source now reflects the move — drop the ephemeral overlay and reload from source.
+        bridge.clearMove();
+        bridge.reload();
+        setWriteError(null);
+      })
+      .catch(() => gatedFallback());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bridge.dragDrop]);
   // An invalid drop / forced cancel surfaces a transient sentence, auto-cleared.

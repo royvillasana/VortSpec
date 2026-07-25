@@ -10,6 +10,7 @@ import {
   deleteNode,
   duplicateNode,
   moveNode,
+  moveNodeRelative,
   type Anchor,
 } from "./codemod";
 
@@ -130,6 +131,27 @@ describe("setInlineStyle — freeform style → inline style object", () => {
   it("withholds (throws) when style is a non-object expression it can't safely merge", () => {
     const src = `export function C({ s }) { return <p style={s}>Hi</p>; }`;
     expect(() => setInlineStyle(src, anchorAt(src, "<p"), { color: "#000" })).toThrow();
+  });
+});
+
+describe("moveNodeRelative — drag-drop reorder", () => {
+  it("moves an element to BEFORE a sibling anchor", () => {
+    const out = moveNodeRelative(CARD, anchorAt(CARD, "<Button"), anchorAt(CARD, "<h2"), "before");
+    // Button now precedes the h2.
+    expect(out.indexOf("<Button")).toBeLessThan(out.indexOf("<h2"));
+    // No duplication and no loss.
+    expect(out.match(/<Button/g)).toHaveLength(1);
+    expect(out).toContain('<h2 className="title">Hello</h2>');
+  });
+
+  it("moves an element to AFTER a sibling anchor", () => {
+    const out = moveNodeRelative(CARD, anchorAt(CARD, "<h2"), anchorAt(CARD, "<Button"), "after");
+    expect(out.indexOf("<Button")).toBeLessThan(out.indexOf("<h2"));
+    expect(out.match(/<h2/g)).toHaveLength(1);
+  });
+
+  it("refuses to move an element into itself", () => {
+    expect(() => moveNodeRelative(CARD, anchorAt(CARD, "<div"), anchorAt(CARD, "<h2"), "after")).toThrow();
   });
 });
 

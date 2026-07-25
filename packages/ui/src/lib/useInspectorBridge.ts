@@ -102,6 +102,7 @@ export interface InspectorBridge {
     sourceFingerprint: string;
     sourceLabel: string;
     sourceText: string | null;
+    sourceDataSource: string | null;
     target: InsertTargetWire;
     poppedOut: boolean;
   } | null;
@@ -284,6 +285,7 @@ export function useInspectorBridge(): InspectorBridge {
             sourceFingerprint: event.sourceFingerprint,
             sourceLabel: event.sourceLabel,
             sourceText: event.sourceText,
+            sourceDataSource: event.sourceDataSource,
             target: event.target,
             poppedOut: event.poppedOut,
           });

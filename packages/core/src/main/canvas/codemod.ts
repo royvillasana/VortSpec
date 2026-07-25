@@ -255,6 +255,41 @@ export function moveNode(text: string, from: Anchor, to: Anchor, index?: number)
   return sf.getFullText();
 }
 
+/**
+ * Move the element at `from` to sit immediately before/after the SIBLING element at `target`
+ * (the drag-drop case — deterministic, no AI). Both anchors must resolve to real JSX nodes and
+ * neither may be the other's ancestor. Same-file only (the caller guards cross-file drops).
+ */
+export function moveNodeRelative(text: string, from: Anchor, target: Anchor, position: "before" | "after"): string {
+  const sf = sourceFileOf(text);
+  const src = jsxAt(sf, from);
+  const dst = jsxAt(sf, target);
+  if (!src) throw new CodemodError("Couldn't locate the element being moved.");
+  if (!dst) throw new CodemodError("Couldn't locate the drop target.");
+  if (src === dst) throw new CodemodError("The element is already there.");
+  if (src.getStart() <= dst.getStart() && src.getEnd() >= dst.getEnd()) {
+    throw new CodemodError("Can't move an element into itself.");
+  }
+  const moved = src.getText();
+  const indent = indentOf(sf, dst.getStart());
+  const rmStart = lineStart(sf, src.getStart());
+  const rmEnd = lineEnd(sf, src.getEnd());
+  // Insertion point: the start of the target's line (before) or the end of it (after).
+  const insertPos = position === "before" ? lineStart(sf, dst.getStart()) : lineEnd(sf, dst.getEnd());
+  const block = `${indent}${moved}\n`;
+  // Order the two edits so earlier offsets aren't invalidated by the later one.
+  if (insertPos <= rmStart) {
+    sf.insertText(insertPos, block);
+    const shift = block.length;
+    sf.replaceText([rmStart + shift, rmEnd + shift], "");
+  } else {
+    sf.replaceText([rmStart, rmEnd], "");
+    const shift = rmEnd - rmStart;
+    sf.insertText(insertPos - shift, block);
+  }
+  return sf.getFullText();
+}
+
 // ── helpers ───────────────────────────────────────────────────────────────
 function ensureImport(sf: ReturnType<typeof sourceFileOf>, name: string, from: string, named: boolean): void {
   const existing = sf.getImportDeclaration((d) => d.getModuleSpecifierValue() === from);

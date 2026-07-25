@@ -223,6 +223,9 @@ export const insertTargetSchema = z.object({
   anchorLabel: z.string().optional(),
   /** The anchor's leading text — the documented disambiguator for the run. */
   anchorText: z.string().nullable().optional(),
+  /** The anchor element's `data-source` — lets a drop become a DETERMINISTIC move (insert the
+   *  dragged JSX before/after this anchor in source, no AI) when both endpoints are stamped. */
+  anchorDataSource: z.string().nullable().optional(),
 });
 export type InsertTargetWire = z.infer<typeof insertTargetSchema>;
 
@@ -465,6 +468,8 @@ export const bridgeEventSchema = z.discriminatedUnion("t", [
     sourceLabel: z.string().default(""),
     /** Its leading text — the documented disambiguator for locating its JSX. */
     sourceText: z.string().nullable().default(null),
+    /** The dragged element's `data-source` — the origin anchor for a deterministic move. */
+    sourceDataSource: z.string().nullable().default(null),
     target: insertTargetSchema.nullable(),
     poppedOut: z.boolean().default(false),
   }),

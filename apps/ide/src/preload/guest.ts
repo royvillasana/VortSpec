@@ -599,6 +599,7 @@ function slotResolve(slot: Slot): { wire: InsertTargetWire; anchorEl: Element } 
       line: slot.line,
       anchorLabel: labelFor(anchorEl),
       anchorText: (anchorEl.textContent ?? "").trim().slice(0, 160) || null,
+      anchorDataSource: anchorEl.getAttribute("data-source"),
     },
   };
 }
@@ -696,7 +697,15 @@ function dropDrag(x: number, y: number, alt: boolean): void {
   // Instant feedback: reparent the real element into the slot before any agent runs,
   // using the live anchor element we already have (no lossy fingerprint round-trip).
   if (resolved) applyLiveMove(dragging.el, resolved.anchorEl, resolved.wire.position);
-  send({ t: "dragDrop", sourceFingerprint: dragging.fp, sourceLabel, sourceText, target: resolved?.wire ?? null, poppedOut: alt });
+  send({
+    t: "dragDrop",
+    sourceFingerprint: dragging.fp,
+    sourceLabel,
+    sourceText,
+    sourceDataSource: dragging.el.getAttribute("data-source"),
+    target: resolved?.wire ?? null,
+    poppedOut: alt,
+  });
   dragging = null;
 }
 
@@ -773,6 +782,7 @@ function insertTargetUnder(
       line: target.line,
       anchorLabel: labelFor(anchorEl),
       anchorText: (anchorEl.textContent ?? "").trim().slice(0, 160) || null,
+      anchorDataSource: anchorEl.getAttribute("data-source"),
     },
     container: found.container,
     anchorEl,
