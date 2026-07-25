@@ -474,6 +474,12 @@ export const bridgeEventSchema = z.discriminatedUnion("t", [
    * sentence for the canvas when the cancel was forced (null for a plain Escape).
    */
   z.object({ t: z.literal("dragCancel"), message: z.string().nullable().default(null) }),
+  /**
+   * Cmd/Ctrl+Z pressed while the webview had focus (change: instant-playground-edits, task 4.3).
+   * The host owns the instant-edit undo stack, so the guest just forwards the keystroke;
+   * `redo` true for Cmd/Ctrl+Shift+Z. Never fired while inline-editing text or in a form field.
+   */
+  z.object({ t: z.literal("undo"), redo: z.boolean().default(false) }),
 ]);
 export type BridgeEvent = z.infer<typeof bridgeEventSchema>;
 

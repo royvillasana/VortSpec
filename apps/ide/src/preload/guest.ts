@@ -1240,6 +1240,21 @@ function attach(): void {
     },
     { capture: true },
   );
+  // Cmd/Ctrl+Z forwards to the host, which owns the instant-edit undo stack (change:
+  // instant-playground-edits, task 4.3). The webview swallows keys while focused, so without
+  // this, undo would only work when the host chrome has focus. Skip while inline-editing text
+  // or in a form field so the native per-character undo still works there.
+  window.addEventListener(
+    "keydown",
+    (e: KeyboardEvent) => {
+      if (e.key.toLowerCase() !== "z" || !(e.metaKey || e.ctrlKey)) return;
+      const t = e.target as HTMLElement | null;
+      if (t?.tagName === "INPUT" || t?.tagName === "TEXTAREA" || t?.isContentEditable) return;
+      e.preventDefault();
+      send({ t: "undo", redo: e.shiftKey });
+    },
+    { capture: true },
+  );
   // Swallow the follow-up click so an inspected/commented/insert control doesn't also activate.
   window.addEventListener(
     "click",

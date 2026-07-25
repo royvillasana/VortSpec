@@ -22,6 +22,8 @@ export function makeBridge(overrides: Partial<InspectorBridge> = {}): InspectorB
     clearTextEdited: noop,
     contextMenu: null,
     clearContextMenu: noop,
+    undoSignal: null,
+    clearUndoSignal: noop,
     selectionLost: false,
     clearSelectionLost: noop,
     setText: noop,

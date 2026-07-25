@@ -194,10 +194,24 @@ function runStep(
  * `@vortspec/core`; env override for tests. Returns null when it isn't built (feature off).
  */
 function resolveStampBundle(): string | null {
+  // `@vortspec/core` is BUNDLED into the app's main process (electron-vite), so `import.meta.url`
+  // at runtime is `apps/<app>/out/main/index.js` — NOT this source file. Resolve relative to that.
+  const rel = (p: string): string | null => {
+    try {
+      return fileURLToPath(new URL(p, import.meta.url));
+    } catch {
+      return null;
+    }
+  };
   const candidates = [
     process.env.VORTSPEC_STAMP_BUNDLE,
+    // Packaged app: extraResources drops the bundle beside the app resources.
     process.resourcesPath ? join(process.resourcesPath, "vortspec-stamp.mjs") : null,
-    fileURLToPath(new URL("../../../resources/vortspec-stamp.mjs", import.meta.url)),
+    // App-local copy (predist copies it here for packaged builds; also present in dev after a
+    // `dist`/recipe run). From `apps/<app>/out/main/index.js` → `apps/<app>/resources/…`.
+    rel("../../resources/vortspec-stamp.mjs"),
+    // Monorepo dev: the `build:stamp` output in @vortspec/core, from `apps/<app>/out/main/`.
+    rel("../../../../packages/core/resources/vortspec-stamp.mjs"),
   ].filter((c): c is string => Boolean(c));
   for (const c of candidates) {
     try {
@@ -216,6 +230,17 @@ function resolveStampBundle(): string | null {
  * project, or any I/O error just means no anchors (the feature degrades off, the dev server
  * still starts exactly as before).
  */
+/**
+ * Whether to stamp `data-source` anchors for a server running `script`. TRUE for the project's
+ * own Vite app dev server — which serves BOTH the Playground (kind "storybook" falling through to
+ * `dev`/`start`/`preview` when there's no Storybook) and the live app runtime (kind "app"). FALSE
+ * only for a real Storybook server, whose own build the wrapper wouldn't apply to anyway. Gating on
+ * the SCRIPT (not the kind) is what makes instant edits work in the Playground. See issue #56.
+ */
+export function stampAppliesTo(script: string | null): boolean {
+  return script !== null && script !== "storybook";
+}
+
 export async function prepareViteStamp(
   projectPath: string,
   pm: string,
@@ -273,10 +298,13 @@ export async function startServer(
   };
   servers.set(key, server);
 
-  // For the live app runtime (not Storybook), run the project's own Vite through the stamp
-  // wrapper so `data-source` anchors appear in dev (instant Playground edits). Best-effort:
-  // non-Vite / no bundle → the plain `<pm> run <script>`, unchanged.
-  const stamp = kind === "app" ? await prepareViteStamp(projectPath, pm, script) : null;
+  // Stamp the project's OWN Vite app dev server so `data-source` anchors appear in dev (instant
+  // Playground edits). This must cover the PLAYGROUND — which runs under kind "storybook" but,
+  // for a plain app with no Storybook, falls through to the `dev`/`start`/`preview` script — as
+  // well as the live app runtime (kind "app"). Gate on the chosen SCRIPT, not the kind: any
+  // script except a real `storybook` is the project's own Vite app. Best-effort: non-Vite / no
+  // bundle → the plain `<pm> run <script>`, unchanged.
+  const stamp = stampAppliesTo(script) ? await prepareViteStamp(projectPath, pm, script) : null;
   const devCmd = stamp ? stamp.cmd : pm;
   const devArgs = stamp ? stamp.args : ["run", script];
 

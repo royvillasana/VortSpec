@@ -490,6 +490,12 @@ export function RunApp({
   const persistQueue = useRef<{ file: string; edit: CanvasEdit }[]>([]);
   // A background write failed or was withheld — the change is still shown; surfaced as a notice.
   const [writeError, setWriteError] = useState<string | null>(null);
+  // Undo/redo for the instant edits (change: instant-playground-edits, task 4.3). Every background
+  // write returns a pre-edit snapshot; one persist FLUSH pushes one combined entry, so Cmd/Ctrl+Z
+  // rolls back the whole debounced burst (Instatic-style autosave undo). No Apply gate — this IS
+  // the safety net that replaces it. Redo re-captures the post-edit state at undo time.
+  const undoStack = useRef<FileSnapshot[][]>([]);
+  const redoStack = useRef<FileSnapshot[][]>([]);
   const autoPersist = useMemo(
     () =>
       createAutoPersist({
@@ -497,6 +503,7 @@ export function RunApp({
         persist: async () => {
           const q = persistQueue.current;
           persistQueue.current = [];
+          const undoEntry: FileSnapshot[] = [];
           for (const it of q) {
             const r = await api
               .writeCanvasEdit(project.path, it.file, it.edit)
@@ -504,7 +511,16 @@ export function RunApp({
             // ok:false = the anchor wasn't statically resolvable (e.g. inside a list) — the
             // deterministic write is withheld; the optimistic change stays on screen.
             if (r && r.ok === false) setWriteError(r.reason ?? "This element can't be edited in place — try the assistant.");
-            else setWriteError(null);
+            else {
+              setWriteError(null);
+              // First capture of each file across the flush = its true pre-burst content.
+              if (r && r.ok && r.snapshot)
+                for (const s of r.snapshot) if (!undoEntry.some((e) => e.path === s.path)) undoEntry.push(s);
+            }
+          }
+          if (undoEntry.length > 0) {
+            undoStack.current.push(undoEntry);
+            redoStack.current = []; // a fresh edit invalidates the redo trail
           }
         },
         onError: () => setWriteError("Couldn't save a change to source — it's still shown. Try again, or use the assistant."),
@@ -1445,6 +1461,62 @@ export function RunApp({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [mode, deleteSelected]);
+
+  // Roll a persisted instant edit back to a captured file state (undo/redo share this).
+  // `save` receives the CURRENT on-disk content of the affected files so the inverse op can
+  // reinstate it; then restore `target` and reload so the preview re-renders from source.
+  const rollTo = useCallback(
+    async (target: FileSnapshot[], save: (current: FileSnapshot[]) => void): Promise<void> => {
+      const seen = new Set<string>();
+      const paths = target.map((s) => s.path).filter((p) => (seen.has(p) ? false : (seen.add(p), true)));
+      // Current disk content of exactly these files = the counterpart to push on the other stack.
+      const current = (
+        await Promise.all(paths.map((p) => api.snapshotComponent(project.path, p).catch(() => [] as FileSnapshot[])))
+      )
+        .flat()
+        .filter((s) => paths.includes(s.path));
+      const byPath = new Map(current.map((s) => [s.path, s] as const));
+      save(paths.map((p) => byPath.get(p) ?? target.find((s) => s.path === p)!));
+      await api.restoreFiles(project.path, target);
+      bridge.clearOverride();
+      bridge.reload();
+    },
+    [project.path, bridge],
+  );
+  const undoEdit = useCallback(async (): Promise<void> => {
+    const entry = undoStack.current.pop();
+    if (!entry) return;
+    await rollTo(entry, (current) => redoStack.current.push(current));
+    setWriteError(null);
+  }, [rollTo]);
+  const redoEdit = useCallback(async (): Promise<void> => {
+    const entry = redoStack.current.pop();
+    if (!entry) return;
+    await rollTo(entry, (current) => undoStack.current.push(current));
+    setWriteError(null);
+  }, [rollTo]);
+
+  // Cmd/Ctrl+Z undoes the last instant edit (Cmd/Ctrl+Shift+Z redoes) — the safety net that
+  // replaces the Apply/Keep gate for manual edits. Two entry points, exactly one fires per press
+  // depending on focus: this host handler (chrome focused) and the guest's forwarded `undoSignal`
+  // (canvas/webview focused). The webview swallows its own keys, so the paths never double-fire.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key.toLowerCase() !== "z" || !(e.metaKey || e.ctrlKey)) return;
+      const t = e.target as HTMLElement | null;
+      const tag = t?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || t?.isContentEditable) return;
+      e.preventDefault();
+      void (e.shiftKey ? redoEdit() : undoEdit());
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [undoEdit, redoEdit]);
+  useEffect(() => {
+    if (!bridge.undoSignal) return;
+    void (bridge.undoSignal.redo ? redoEdit() : undoEdit());
+    bridge.clearUndoSignal();
+  }, [bridge.undoSignal, bridge.clearUndoSignal, undoEdit, redoEdit]);
 
   // Apply — the ONLY path to disk (spec-first gate). Token values commit
   // deterministically; style/variant edits go through a gated Claude Code run.

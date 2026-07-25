@@ -3,7 +3,7 @@ import { mkdtemp, rm, writeFile, readFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { prepareViteStamp } from "./dev-server";
+import { prepareViteStamp, stampAppliesTo } from "./dev-server";
 
 let dir: string;
 let stub: string;
@@ -25,6 +25,20 @@ async function pkg(content: object): Promise<string> {
   await writeFile(join(proj, "package.json"), JSON.stringify(content), "utf8");
   return proj;
 }
+
+describe("stampAppliesTo — which server gets stamped", () => {
+  it("stamps the Playground's app dev server (kind 'storybook' falls through to dev/start/preview)", () => {
+    // Regression for issue #56: the Playground runs under kind 'storybook'. Gating on kind===app
+    // meant it never stamped, so instant edits fell back to the Apply ledger.
+    expect(stampAppliesTo("dev")).toBe(true);
+    expect(stampAppliesTo("start")).toBe(true);
+    expect(stampAppliesTo("preview")).toBe(true);
+  });
+  it("does NOT stamp a real Storybook server, or a missing script", () => {
+    expect(stampAppliesTo("storybook")).toBe(false);
+    expect(stampAppliesTo(null)).toBe(false);
+  });
+});
 
 describe("prepareViteStamp — dev-server injection", () => {
   it("materializes the stamp + wrapper and returns the vite command for a Vite app", async () => {

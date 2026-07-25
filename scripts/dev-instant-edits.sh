@@ -14,7 +14,10 @@ cd "$ROOT"
 
 echo "▸ [1/3] Building the source-stamp bundle (packages/core/resources/vortspec-stamp.mjs)…"
 pnpm --filter @vortspec/core run build:stamp >/dev/null
-echo "  ✓ bundle built"
+# Point the dev-server's stamp resolver straight at the freshly built bundle — the most reliable
+# candidate (the relative fallbacks work too, but this is layout-independent).
+export VORTSPEC_STAMP_BUNDLE="$ROOT/packages/core/resources/vortspec-stamp.mjs"
+echo "  ✓ bundle built → VORTSPEC_STAMP_BUNDLE=$VORTSPEC_STAMP_BUNDLE"
 
 SAMPLE="${VORTSPEC_SAMPLE:-$HOME/Desktop/vortspec-instant-edits-sample}"
 if [ ! -f "$SAMPLE/package.json" ]; then

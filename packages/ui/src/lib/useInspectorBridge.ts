@@ -50,6 +50,9 @@ export interface InspectorBridge {
   /** A pending context-menu request from a right-click ({nodeId, x, y} in guest coords), or null. */
   contextMenu: { nodeId: string; x: number; y: number } | null;
   clearContextMenu: () => void;
+  /** Cmd/Ctrl+Z forwarded from the canvas (webview focus) — `n` bumps per press so repeats fire. */
+  undoSignal: { redo: boolean; n: number } | null;
+  clearUndoSignal: () => void;
   /** True when the selected node's element vanished after a re-render (couldn't be re-acquired). */
   selectionLost: boolean;
   clearSelectionLost: () => void;
@@ -157,6 +160,7 @@ export function useInspectorBridge(): InspectorBridge {
   const [runtimeError, setRuntimeError] = useState<InspectorBridge["runtimeError"]>(null);
   const [textEdited, setTextEdited] = useState<InspectorBridge["textEdited"]>(null);
   const [contextMenu, setContextMenu] = useState<InspectorBridge["contextMenu"]>(null);
+  const [undoSignal, setUndoSignal] = useState<InspectorBridge["undoSignal"]>(null);
   const [selectionLost, setSelectionLost] = useState(false);
   const [commentTarget, setCommentTarget] = useState<InspectorBridge["commentTarget"]>(null);
   const [anchorRects, setAnchorRects] = useState<Record<string, Rect | null>>({});
@@ -218,6 +222,9 @@ export function useInspectorBridge(): InspectorBridge {
         return;
       case "contextMenu":
         setContextMenu({ nodeId: event.nodeId, x: event.x, y: event.y });
+        return;
+      case "undo":
+        setUndoSignal((s) => ({ redo: event.redo, n: (s?.n ?? 0) + 1 }));
         return;
       case "selectionLost":
         // The selected node's element is gone after a re-render — drop the stale
@@ -469,6 +476,8 @@ export function useInspectorBridge(): InspectorBridge {
     clearTextEdited: useCallback(() => setTextEdited(null), []),
     contextMenu,
     clearContextMenu: useCallback(() => setContextMenu(null), []),
+    undoSignal,
+    clearUndoSignal: useCallback(() => setUndoSignal(null), []),
     selectionLost,
     clearSelectionLost: useCallback(() => setSelectionLost(false), []),
     commentTarget,
