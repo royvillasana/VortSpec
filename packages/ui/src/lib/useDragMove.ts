@@ -88,6 +88,9 @@ export function useDragMove(args: { project: Project; bridge: InspectorBridge })
     const runId = `move-${Date.now()}`;
     runIdRef.current = runId;
     setError(null);
+    // Transition immediately so an AUTO-keep (no Keep click — the caller reconciles in the
+    // background) never flashes the "moved" Keep/Revert bar during the snapshot await.
+    setPhase("reconciling");
 
     // Snapshot the WHOLE source scope BEFORE any write (Decision 6): a move's
     // origin/destination is often a screen file outside component_dir, which the
@@ -110,7 +113,6 @@ export function useDragMove(args: { project: Project; bridge: InspectorBridge })
       snapshotFiles: snap.map((f) => f.path),
     });
 
-    setPhase("reconciling");
     await run.start({
       prompt: built,
       cwd: project.path,

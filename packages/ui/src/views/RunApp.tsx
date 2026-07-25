@@ -1050,10 +1050,12 @@ export function RunApp({
     if (!dragMoveEnabled || !bridge.dragDrop || move.phase !== "idle") return;
     const drop = bridge.dragDrop;
     bridge.clearDragDrop();
-    const gatedFallback = (): void =>
-      // The guest already moved the element live — register it for Keep/Revert (no run).
-      // Use the guest-reported label + leading text so the reconcile run can locate the
-      // element's JSX (a bare tag alone is ambiguous across a screen).
+    // Non-deterministic move (cross-file, a list/conditional, or an un-stamped element): there's no
+    // single JSX node to relocate statically, so run the AI reconcile AUTOMATICALLY in the
+    // background — no Keep gate (the user asked for every edit to just apply). The element is already
+    // moved live; onDrop registers it and keep() reconciles source + auto-accepts + reloads.
+    const autoReconcile = (): void => {
+      setWriteError(null);
       move.onDrop(
         {
           fingerprint: drop.sourceFingerprint,
@@ -1062,14 +1064,15 @@ export function RunApp({
         },
         drop.target!,
       );
+      void move.keep(); // auto-accept — don't wait for a Keep click
+    };
     // Try a DETERMINISTIC instant move first (change: instant-playground-edits): both the dragged
     // element and the drop anchor are stamped, in the same file, and statically resolvable → write
-    // the reordered JSX to source in the background (no Keep, no AI). Anything else (cross-file drop,
-    // a list/conditional, an un-stamped element) falls back to the gated reconcile.
+    // the reordered JSX to source in the background (no Keep, no AI).
     const src = parseAnchor(drop.sourceDataSource);
     const tgt = drop.target ? parseAnchor(drop.target.anchorDataSource) : null;
     if (!drop.target || !src || !tgt || src.file !== tgt.file) {
-      gatedFallback();
+      autoReconcile();
       return;
     }
     const edit: CanvasEdit = { op: "move", anchor: src.anchor, to: tgt.anchor, position: drop.target.position };
@@ -1077,7 +1080,7 @@ export function RunApp({
       .writeCanvasEdit(project.path, src.file, edit)
       .then((r) => {
         if (!r.ok) {
-          gatedFallback(); // un-resolvable in source — hand to the assistant
+          autoReconcile(); // un-resolvable in source (e.g. a mapped list item) — reconcile in background
           return;
         }
         if (r.snapshot) {
@@ -1089,7 +1092,7 @@ export function RunApp({
         bridge.reload();
         setWriteError(null);
       })
-      .catch(() => gatedFallback());
+      .catch(() => autoReconcile());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bridge.dragDrop]);
   // An invalid drop / forced cancel surfaces a transient sentence, auto-cleared.
