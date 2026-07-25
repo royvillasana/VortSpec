@@ -79,6 +79,9 @@ export const nodeReadoutSchema = z.object({
   /** `data-source` anchor (`relPath:line:column`) stamped in dev — maps the DOM node to its
    *  exact JSX for deterministic edits (change: instant-playground-edits). Null when unstamped. */
   dataSource: z.string().nullable().default(null),
+  /** A repeated (list) element's rendered ordinal among same-data-source siblings — lets a
+   *  delete/reorder edit the backing local array by index. Null when the element is unique. */
+  listIndex: z.number().nullable().optional(),
   /**
    * Component display-names that rendered this element, nearest-first, read from the
    * React fiber (change: canvas — component detection). The host matches these against
@@ -192,6 +195,8 @@ export const selectionSchema = z.object({
   /** `data-source` anchor (`relPath:line:column`) of THIS element, for deterministic edits
    *  (change: instant-playground-edits). Null when the dev stamp isn't present. */
   dataSource: z.string().nullable().default(null),
+  /** A repeated (list) element's rendered ordinal — lets delete/reorder edit the backing array. */
+  listIndex: z.number().nullable().optional(),
   /** A component this element *resembles* by class signature but isn't using (suggest reuse). */
   resembles: z.object({ name: z.string(), file: z.string().nullable() }).nullable().default(null),
   rect: rectSchema,
@@ -226,6 +231,8 @@ export const insertTargetSchema = z.object({
   /** The anchor element's `data-source` — lets a drop become a DETERMINISTIC move (insert the
    *  dragged JSX before/after this anchor in source, no AI) when both endpoints are stamped. */
   anchorDataSource: z.string().nullable().optional(),
+  /** The anchor's list ordinal when it's a repeated row — lets a same-list drop reorder the array. */
+  anchorListIndex: z.number().nullable().optional(),
 });
 export type InsertTargetWire = z.infer<typeof insertTargetSchema>;
 
@@ -470,6 +477,8 @@ export const bridgeEventSchema = z.discriminatedUnion("t", [
     sourceText: z.string().nullable().default(null),
     /** The dragged element's `data-source` — the origin anchor for a deterministic move. */
     sourceDataSource: z.string().nullable().default(null),
+    /** The dragged element's list ordinal when it's a repeated row — for a same-list array reorder. */
+    sourceListIndex: z.number().nullable().default(null),
     target: insertTargetSchema.nullable(),
     poppedOut: z.boolean().default(false),
   }),

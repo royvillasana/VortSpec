@@ -1066,33 +1066,55 @@ export function RunApp({
       );
       void move.keep(); // auto-accept — don't wait for a Keep click
     };
-    // Try a DETERMINISTIC instant move first (change: instant-playground-edits): both the dragged
-    // element and the drop anchor are stamped, in the same file, and statically resolvable → write
-    // the reordered JSX to source in the background (no Keep, no AI).
+    // Write a deterministic move/reorder in the background; on any withhold/failure, fall back to
+    // the auto-reconcile (no Keep gate either way).
+    const applyMoveEdit = (file: string, edit: CanvasEdit): void => {
+      void api
+        .writeCanvasEdit(project.path, file, edit)
+        .then((r) => {
+          if (!r.ok) {
+            autoReconcile();
+            return;
+          }
+          if (r.snapshot) {
+            undoStack.current.push(r.snapshot);
+            redoStack.current = [];
+          }
+          bridge.clearMove();
+          bridge.reload();
+          setWriteError(null);
+        })
+        .catch(() => autoReconcile());
+    };
     const src = parseAnchor(drop.sourceDataSource);
     const tgt = drop.target ? parseAnchor(drop.target.anchorDataSource) : null;
+
+    // Same-list REORDER (deterministic): the dragged row and the drop anchor are rows of the SAME
+    // map (identical template data-source) → reorder the backing LOCAL array by index, no AI. This
+    // is the "if I move one thing I might be moving more" case — editing the data, not one node.
+    if (
+      drop.target &&
+      src &&
+      drop.sourceListIndex != null &&
+      drop.target.anchorListIndex != null &&
+      drop.sourceDataSource &&
+      drop.sourceDataSource === drop.target.anchorDataSource
+    ) {
+      const from = drop.sourceListIndex;
+      const at = drop.target.anchorListIndex;
+      let to = drop.target.position === "before" ? at : at + 1;
+      if (from < to) to -= 1; // removing `from` (before the target) shifts the target left
+      applyMoveEdit(src.file, { op: "listReorder", anchor: src.anchor, from, to });
+      return;
+    }
+
+    // Otherwise a DETERMINISTIC element move: both ends stamped, same file, statically resolvable →
+    // write the reordered JSX to source. Anything else → auto-reconcile.
     if (!drop.target || !src || !tgt || src.file !== tgt.file) {
       autoReconcile();
       return;
     }
-    const edit: CanvasEdit = { op: "move", anchor: src.anchor, to: tgt.anchor, position: drop.target.position };
-    void api
-      .writeCanvasEdit(project.path, src.file, edit)
-      .then((r) => {
-        if (!r.ok) {
-          autoReconcile(); // un-resolvable in source (e.g. a mapped list item) — reconcile in background
-          return;
-        }
-        if (r.snapshot) {
-          undoStack.current.push(r.snapshot);
-          redoStack.current = [];
-        }
-        // Source now reflects the move — drop the ephemeral overlay and reload from source.
-        bridge.clearMove();
-        bridge.reload();
-        setWriteError(null);
-      })
-      .catch(() => autoReconcile());
+    applyMoveEdit(src.file, { op: "move", anchor: src.anchor, to: tgt.anchor, position: drop.target.position });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bridge.dragDrop]);
   // An invalid drop / forced cancel surfaces a transient sentence, auto-cleared.

@@ -21,6 +21,8 @@ import {
   duplicateNode,
   moveNode,
   moveNodeRelative,
+  removeArrayItem,
+  reorderArrayItem,
   CodemodError,
 } from "./codemod";
 
@@ -35,9 +37,15 @@ export async function applyCanvasEdit(
   const before = snapshot.find((s) => s.path === file)?.content;
   if (before === undefined) return { ok: false, reason: `Couldn't read ${file}.` };
 
+  // List-data edits target a MAPPED element on purpose (un-resolvable as a single node) — they edit
+  // the backing local array instead, so they skip the single-node resolvability guard; the codemod
+  // withholds if the array isn't a local literal.
+  const isListOp = edit.op === "listRemove" || edit.op === "listReorder";
   // The resolvability guard is a correctness gate: never rewrite an un-resolvable anchor.
-  const guard = checkResolvability(before, edit.anchor);
-  if (!guard.resolvable) return { ok: false, reason: guard.reason };
+  if (!isListOp) {
+    const guard = checkResolvability(before, edit.anchor);
+    if (!guard.resolvable) return { ok: false, reason: guard.reason };
+  }
   // A relative move must also resolve its DROP target statically (not a list/conditional).
   if (edit.op === "move" && edit.position) {
     const tGuard = checkResolvability(before, edit.to);
@@ -65,6 +73,12 @@ export async function applyCanvasEdit(
         break;
       case "delete":
         after = deleteNode(before, edit.anchor);
+        break;
+      case "listRemove":
+        after = removeArrayItem(before, edit.anchor, edit.index);
+        break;
+      case "listReorder":
+        after = reorderArrayItem(before, edit.anchor, edit.from, edit.to);
         break;
       case "duplicate":
         after = duplicateNode(before, edit.anchor);

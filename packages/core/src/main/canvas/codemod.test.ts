@@ -11,6 +11,9 @@ import {
   duplicateNode,
   moveNode,
   moveNodeRelative,
+  removeArrayItem,
+  reorderArrayItem,
+  listItems,
   type Anchor,
 } from "./codemod";
 
@@ -152,6 +155,49 @@ describe("moveNodeRelative — drag-drop reorder", () => {
 
   it("refuses to move an element into itself", () => {
     expect(() => moveNodeRelative(CARD, anchorAt(CARD, "<div"), anchorAt(CARD, "<h2"), "after")).toThrow();
+  });
+});
+
+describe("list-data codemods — reorder/remove a mapped element's backing local array", () => {
+  const LIST = `const items = ["Alpha", "Beta", "Gamma"];
+export function App() {
+  return (
+    <ul className="list">
+      {items.map((it) => (
+        <li className="row" key={it}>{it}</li>
+      ))}
+    </ul>
+  );
+}`;
+  const INLINE = `export function App() {
+  return <ul>{["A", "B", "C"].map((x) => <li key={x}>{x}</li>)}</ul>;
+}`;
+
+  it("resolves the backing array items from a mapped element", () => {
+    expect(listItems(LIST, anchorAt(LIST, "<li"))).toEqual(['"Alpha"', '"Beta"', '"Gamma"']);
+    expect(listItems(INLINE, anchorAt(INLINE, "<li"))).toEqual(['"A"', '"B"', '"C"']);
+  });
+
+  it("removes a list item by index (const array)", () => {
+    const out = removeArrayItem(LIST, anchorAt(LIST, "<li"), 1); // remove Beta
+    expect(out).toContain('const items = ["Alpha", "Gamma"];');
+  });
+
+  it("reorders a list item (move index 2 → 0)", () => {
+    const out = reorderArrayItem(LIST, anchorAt(LIST, "<li"), 2, 0); // Gamma to front
+    expect(out).toContain('const items = ["Gamma", "Alpha", "Beta"];');
+  });
+
+  it("edits an INLINE array literal too", () => {
+    const out = removeArrayItem(INLINE, anchorAt(INLINE, "<li"), 0);
+    expect(out).toContain('["B", "C"].map');
+  });
+
+  it("withholds (throws) when the list isn't a local array (props/import/state)", () => {
+    const src = `export function App({ items }) {
+  return <ul>{items.map((it) => <li key={it}>{it}</li>)}</ul>;
+}`;
+    expect(() => removeArrayItem(src, anchorAt(src, "<li"), 0)).toThrow(/local array/);
   });
 });
 

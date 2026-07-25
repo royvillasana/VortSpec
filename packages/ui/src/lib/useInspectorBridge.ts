@@ -103,6 +103,7 @@ export interface InspectorBridge {
     sourceLabel: string;
     sourceText: string | null;
     sourceDataSource: string | null;
+    sourceListIndex: number | null;
     target: InsertTargetWire;
     poppedOut: boolean;
   } | null;
@@ -286,6 +287,7 @@ export function useInspectorBridge(): InspectorBridge {
             sourceLabel: event.sourceLabel,
             sourceText: event.sourceText,
             sourceDataSource: event.sourceDataSource,
+            sourceListIndex: event.sourceListIndex,
             target: event.target,
             poppedOut: event.poppedOut,
           });

@@ -46,6 +46,12 @@ export const canvasEditSchema = z.discriminatedUnion("op", [
     index: z.number().optional(),
   }),
   z.object({ op: z.literal("delete"), anchor: anchorSchema }),
+  // List-data edits — a mapped element (`{items.map(...)}`) shares one JSX anchor across N rendered
+  // rows, so there's no single node to move/remove. When the backing array is a LOCAL literal these
+  // edit the DATA instead (splice/reorder the array), which React re-renders. `index` is the row's
+  // rendered ordinal. Deterministic; the codemod withholds when the array isn't a local literal.
+  z.object({ op: z.literal("listRemove"), anchor: anchorSchema, index: z.number() }),
+  z.object({ op: z.literal("listReorder"), anchor: anchorSchema, from: z.number(), to: z.number() }),
   z.object({ op: z.literal("duplicate"), anchor: anchorSchema }),
   // Move the anchored element. With `position`, `to` is a SIBLING anchor and the element is moved
   // just before/after it (the drag-drop case). Without it, `to` is a CONTAINER anchor + `index`.

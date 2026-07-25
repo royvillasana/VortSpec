@@ -334,6 +334,21 @@ function parentContentSize(el: Element): { width: number; height: number } | nul
   return { width: parseFloat(cs.width) || 0, height: parseFloat(cs.height) || 0 };
 }
 
+/**
+ * A repeated element's rendered ordinal (change: instant-playground-edits): the index of `el` among
+ * its parent's children that share the SAME `data-source` — i.e. rows of one `.map()`. null when the
+ * element is unique (not a list item), so list-data edits only fire on genuine repeated rows.
+ */
+function listIndexOf(el: Element): number | null {
+  const ds = el.getAttribute("data-source");
+  const parent = el.parentElement;
+  if (!ds || !parent) return null;
+  const sameDs = Array.from(parent.children).filter((c) => c.getAttribute("data-source") === ds);
+  if (sameDs.length < 2) return null; // not a repeated (list) item
+  const i = sameDs.indexOf(el);
+  return i >= 0 ? i : null;
+}
+
 function readoutOf(el: Element, id: string): NodeReadout {
   const cs = getComputedStyle(el);
   const computed: Record<string, string> = {};
@@ -359,6 +374,9 @@ function readoutOf(el: Element, id: string): NodeReadout {
     dataComponent: el.getAttribute("data-component"),
     // The dev source-stamp anchor (instant-playground-edits): DOM node → exact JSX.
     dataSource: el.getAttribute("data-source"),
+    // For a repeated (list) element — its rendered ordinal among siblings sharing the same
+    // data-source, so a delete/reorder can edit the backing array by index. null when unique.
+    listIndex: listIndexOf(el),
     componentCandidates: reactComponentNames(el),
     // The parent's flow — Fixed/Hug/Fill resizing is axis-aware (needs the parent's axis).
     parentFlow: parentFlowOf(el),
@@ -600,6 +618,7 @@ function slotResolve(slot: Slot): { wire: InsertTargetWire; anchorEl: Element } 
       anchorLabel: labelFor(anchorEl),
       anchorText: (anchorEl.textContent ?? "").trim().slice(0, 160) || null,
       anchorDataSource: anchorEl.getAttribute("data-source"),
+      anchorListIndex: listIndexOf(anchorEl),
     },
   };
 }
@@ -703,6 +722,7 @@ function dropDrag(x: number, y: number, alt: boolean): void {
     sourceLabel,
     sourceText,
     sourceDataSource: dragging.el.getAttribute("data-source"),
+    sourceListIndex: listIndexOf(dragging.el),
     target: resolved?.wire ?? null,
     poppedOut: alt,
   });

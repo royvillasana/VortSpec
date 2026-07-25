@@ -290,6 +290,83 @@ export function moveNodeRelative(text: string, from: Anchor, target: Anchor, pos
   return sf.getFullText();
 }
 
+/**
+ * From a mapped element's anchor, resolve the LOCAL array literal the `.map()` iterates — the one
+ * deterministically-editable data source for a list (change: instant-playground-edits). Returns the
+ * `ArrayLiteralExpression` for `[...].map(...)` or a local `const items = [...]` in the same file;
+ * null when the data isn't a local literal (props / state / an API / a chained `.filter().map()`),
+ * where reordering by rendered index would be ambiguous — those still hand off to the assistant.
+ */
+function mappedArrayLiteral(sf: ReturnType<typeof sourceFileOf>, anchor: Anchor): import("ts-morph").ArrayLiteralExpression | null {
+  const el = jsxAt(sf, anchor);
+  if (!el) return null;
+  let n: Node | undefined = el.getParent();
+  let call: import("ts-morph").CallExpression | undefined;
+  while (n) {
+    if (Node.isCallExpression(n)) {
+      const expr = n.getExpression();
+      if (Node.isPropertyAccessExpression(expr) && expr.getName() === "map") {
+        call = n;
+        break;
+      }
+    }
+    n = n.getParent();
+  }
+  if (!call) return null;
+  const access = call.getExpression();
+  if (!Node.isPropertyAccessExpression(access)) return null;
+  const mapped = access.getExpression();
+  // `[...].map(...)` — an inline literal.
+  if (Node.isArrayLiteralExpression(mapped)) return mapped;
+  // `items.map(...)` where `items` is a local `const items = [...]` in THIS file (only local, so
+  // props/imports/state — not resolvable here — correctly fall through to the assistant).
+  if (Node.isIdentifier(mapped)) {
+    const decl = sf.getVariableDeclaration(mapped.getText());
+    const init = decl?.getInitializer();
+    if (init && Node.isArrayLiteralExpression(init)) return init;
+  }
+  return null;
+}
+
+/** The rendered-order element texts of a list's backing array (for the host to build a preview). */
+export function listItems(text: string, anchor: Anchor): string[] | null {
+  const sf = sourceFileOf(text);
+  const arr = mappedArrayLiteral(sf, anchor);
+  return arr ? arr.getElements().map((e) => e.getText()) : null;
+}
+
+/** Remove the `index`-th item from a mapped element's backing LOCAL array literal. */
+export function removeArrayItem(text: string, anchor: Anchor, index: number): string {
+  const sf = sourceFileOf(text);
+  const arr = mappedArrayLiteral(sf, anchor);
+  if (!arr) throw new CodemodError("This list isn't backed by a local array, so its items can't be edited in place.");
+  const els = arr.getElements();
+  if (index < 0 || index >= els.length) throw new CodemodError("That list item is out of range.");
+  arr.removeElement(index);
+  return sf.getFullText();
+}
+
+/** Reorder a mapped element's backing LOCAL array: move item `from` to final index `to`. */
+export function reorderArrayItem(text: string, anchor: Anchor, from: number, to: number): string {
+  const sf = sourceFileOf(text);
+  const arr = mappedArrayLiteral(sf, anchor);
+  if (!arr) throw new CodemodError("This list isn't backed by a local array, so its items can't be reordered in place.");
+  const texts = arr.getElements().map((e) => e.getText());
+  if (from < 0 || from >= texts.length) throw new CodemodError("That list item is out of range.");
+  const [moved] = texts.splice(from, 1);
+  texts.splice(Math.max(0, Math.min(to, texts.length)), 0, moved);
+  const raw = arr.getText();
+  if (/\n/.test(raw)) {
+    // Preserve a one-item-per-line array's shape.
+    const m = raw.match(/\[\s*\n([ \t]*)/);
+    const indent = m ? m[1] : "  ";
+    arr.replaceWithText(`[\n${texts.map((t) => indent + t).join(",\n")},\n]`);
+  } else {
+    arr.replaceWithText(`[${texts.join(", ")}]`);
+  }
+  return sf.getFullText();
+}
+
 // ── helpers ───────────────────────────────────────────────────────────────
 function ensureImport(sf: ReturnType<typeof sourceFileOf>, name: string, from: string, named: boolean): void {
   const existing = sf.getImportDeclaration((d) => d.getModuleSpecifierValue() === from);

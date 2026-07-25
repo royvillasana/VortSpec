@@ -56,6 +56,12 @@ describe("toCanvasEdit", () => {
     expect(toCanvasEdit(edit, sel("src/Button.tsx:4:6"))?.edit).toEqual({ op: "delete", anchor: { line: 4, column: 6 } });
   });
 
+  it("maps a deletion of a LIST row to listRemove by index (edits the backing array)", () => {
+    const edit: PendingEdit = { ...base, remove: true };
+    const listSel = { ...sel("src/App.tsx:6:8"), listIndex: 1 } as Selection;
+    expect(toCanvasEdit(edit, listSel)?.edit).toEqual({ op: "listRemove", anchor: { line: 6, column: 8 }, index: 1 });
+  });
+
   it("returns null when there's no anchor (falls back to the other path)", () => {
     const edit: PendingEdit = { ...base, key: "content", value: "x" };
     expect(toCanvasEdit(edit, sel(null))).toBeNull();

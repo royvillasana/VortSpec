@@ -47,8 +47,12 @@ export function toCanvasEdit(edit: PendingEdit, selection: Selection): { file: s
   if (!parsed) return null;
   const { file, anchor } = parsed;
 
-  // A whole-element deletion.
+  // A whole-element deletion. For a repeated (list) row, delete the backing array item by index
+  // instead of the shared JSX node — deterministic when the array is a local literal.
   if (edit.remove) {
+    if (selection.listIndex != null) {
+      return { file, edit: { op: "listRemove", anchor, index: selection.listIndex } };
+    }
     return { file, edit: { op: "delete", anchor } };
   }
 
