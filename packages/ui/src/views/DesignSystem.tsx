@@ -90,8 +90,7 @@ export function DesignSystem({
         <iframe
           title="Design System palette"
           className="min-h-0 flex-1 border-0 bg-vs-bg-base"
-          // allow-scripts: the palette runs a tiny inline masonry layout script (no external loads).
-          sandbox="allow-same-origin allow-scripts"
+          sandbox="allow-same-origin"
           srcDoc={html ?? ""}
         />
       )}

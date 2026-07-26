@@ -133,10 +133,10 @@ body{margin:0;font:14px/1.5 system-ui,-apple-system,sans-serif;background:var(--
 .lp h1{font-size:20px;margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .lp h2{font-size:12px;margin:0 0 14px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
 .lp h3{font-size:13px;margin:0 0 12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-/* bento grid: uniform columns (every column filled → no horizontal gaps); a masonry script sets each
-   card's row-span from its measured height (→ no vertical gaps). One merged wall, cells touch. */
-.lp-bento{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));grid-auto-rows:8px;grid-auto-flow:row dense;gap:0}
-.lp-card{background:var(--card);border:1px solid var(--border);padding:16px;min-width:0;overflow:hidden}
+/* bento wall: CSS multi-column — cards flow to fill every column, balanced, with no gaps; foundations
+   + components are mixed into one wall. Pure CSS, so it can never collapse or overlap. */
+.lp-bento{columns:240px;column-gap:0}
+.lp-card{background:var(--card);border:1px solid var(--border);padding:16px;min-width:0;overflow:hidden;break-inside:avoid;-webkit-column-break-inside:avoid}
 .lp-tokens{display:flex;flex-direction:column;gap:9px}
 .lp-token{display:flex;align-items:center;gap:10px;min-width:0;overflow:hidden}
 .lp-name{font-size:11px;font-family:ui-monospace,monospace;flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -161,29 +161,9 @@ body{margin:0;font:14px/1.5 system-ui,-apple-system,sans-serif;background:var(--
 `;
 
 /**
- * A tiny inline masonry layout script (no external deps): it measures each card and sets its grid
- * row-span so cards pack with NO vertical gaps regardless of content height — the only reliable way to
- * do masonry in Chromium (native `masonry` isn't supported). Runs on load + resize. It's our own
- * trusted code and loads nothing, so it keeps the page self-contained.
- */
-const MASONRY_SCRIPT = `<script>
-(function(){
-  function layout(){
-    var cards=document.querySelectorAll('.lp-bento .lp-card'),i;
-    for(i=0;i<cards.length;i++){cards[i].style.gridRowEnd='';}
-    for(i=0;i<cards.length;i++){cards[i].style.gridRowEnd='span '+Math.max(1,Math.ceil(cards[i].getBoundingClientRect().height/8));}
-  }
-  function schedule(){window.requestAnimationFrame(layout);}
-  if(document.readyState!=='loading')schedule();else document.addEventListener('DOMContentLoaded',schedule);
-  window.addEventListener('load',schedule);
-  window.addEventListener('resize',schedule);
-})();
-</script>`;
-
-/**
- * Render the palette as a self-contained HTML document (inline styles + the inline masonry script, no
- * external assets). One merged bento wall — no Foundations/Components split (each card is self-labelled).
- * Throws if any framework pointer would leak from a stand-in — the shelf must stay framework-free.
+ * Render the palette as a SELF-CONTAINED HTML document (inline styles, no scripts, no external assets).
+ * One merged bento wall — no Foundations/Components split (each card is self-labelled). Throws if any
+ * framework pointer would leak from a stand-in — the shelf must stay framework-free.
  */
 export function renderPaletteHtml(p: Palette): string {
   const shelf = p.components.map(renderComponent);
@@ -196,7 +176,7 @@ export function renderPaletteHtml(p: Palette): string {
     .filter(Boolean)
     .join("");
   const body = `<div class="lp"><h1>${esc(p.name)}</h1><div class="lp-bento">${cards}</div></div>`;
-  const html = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>${PALETTE_CSS}</style></head><body>${body}${MASONRY_SCRIPT}</body></html>`;
+  const html = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>${PALETTE_CSS}</style></head><body>${body}</body></html>`;
 
   const leaks = findFrameworkPointers(shelf.join(""));
   if (leaks.length > 0) throw new Error(`palette would leak framework pointers from a stand-in (${leaks.join(", ")})`);
@@ -204,13 +184,12 @@ export function renderPaletteHtml(p: Palette): string {
 }
 
 /**
- * A self-contained palette makes no NETWORK requests: no EXTERNAL script and no external `src`/`href`
- * (data: URIs and in-page anchors are allowed). The inline masonry script is fine — it loads nothing.
- * Returns violations (empty ⇒ self-contained).
+ * A self-contained palette makes no framework-runtime or network requests: no `<script>`, and no
+ * external `src`/`href` (data: URIs and in-page anchors are allowed). Returns violations (empty ⇒ ok).
  */
 export function paletteSelfContainmentIssues(html: string): string[] {
   const issues: string[] = [];
-  if (/<script[^>]*\bsrc\s*=/i.test(html)) issues.push("loads an external script");
+  if (/<script[\s>]/i.test(html)) issues.push("contains a <script> tag");
   const ext = html.match(/\b(?:src|href)\s*=\s*"(?!data:|#)[^"]+"/gi);
   if (ext) issues.push(`loads external asset(s): ${ext.length}`);
   return issues;

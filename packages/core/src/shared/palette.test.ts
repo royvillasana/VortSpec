@@ -75,10 +75,9 @@ describe("renderPaletteHtml", () => {
 });
 
 describe("paletteSelfContainmentIssues", () => {
-  it("flags an EXTERNAL script and an external asset, but allows the inline masonry script", () => {
-    expect(paletteSelfContainmentIssues(`<script src="x.js"></script>`).some((i) => i.includes("external script"))).toBe(true);
+  it("flags a <script> tag and an external asset", () => {
+    expect(paletteSelfContainmentIssues(`<html><script>x</script></html>`)).toContain("contains a <script> tag");
     expect(paletteSelfContainmentIssues(`<img src="https://x/y.png">`).some((i) => i.includes("external"))).toBe(true);
-    expect(paletteSelfContainmentIssues(`<script>layout()</script>`)).toEqual([]); // inline is fine
   });
   it("allows data: URIs and in-page anchors", () => {
     expect(paletteSelfContainmentIssues(`<img src="data:image/png;base64,AAA"><a href="#top">t</a>`)).toEqual([]);
