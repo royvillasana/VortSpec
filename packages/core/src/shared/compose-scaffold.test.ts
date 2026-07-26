@@ -82,4 +82,19 @@ describe("stripScaffold", () => {
     expect(cleaned).not.toContain(`<Card variant="b" />`);
     expect(hasScaffold(cleaned)).toBe(false);
   });
+
+  it("strips the data-vs-option preview marker from a move's re-inserted element (no block)", () => {
+    // A move adds a BARE `data-vs-option="0"` to the moved element — no scaffold block wraps it.
+    const moved = `<main>\n  <h1 className="title" data-vs-option="0">Hi</h1>\n</main>`;
+    const cleaned = stripScaffold(moved, { runId: "mv", keepOption: 0 });
+    expect(cleaned).toBe(`<main>\n  <h1 className="title">Hi</h1>\n</main>`);
+    expect(cleaned).not.toContain("data-vs-option");
+  });
+
+  it("strips data-vs-option from a KEPT compose option's content", () => {
+    const src = wrapOption("r1", 0, `<Card variant="a" data-vs-option="0" />`);
+    const cleaned = stripScaffold(src, { runId: "r1", keepOption: 0 });
+    expect(cleaned).toContain(`<Card variant="a" />`);
+    expect(cleaned).not.toContain("data-vs-option");
+  });
 });

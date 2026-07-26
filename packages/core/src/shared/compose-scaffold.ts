@@ -78,9 +78,14 @@ function escapeRegExp(s: string): string {
  */
 export function stripScaffold(source: string, opts: { runId?: string; keepOption?: number } = {}): string {
   const { runId, keepOption } = opts;
-  const out = source.replace(blockRegex(runId), (_match, _run: string, option: string, inner: string) =>
+  let out = source.replace(blockRegex(runId), (_match, _run: string, option: string, inner: string) =>
     keepOption !== undefined && Number(option) === keepOption ? inner.replace(/^\n|\n$/g, "") : "",
   );
+  // Strip the `data-vs-option="N"` preview marker. The canvas hides non-selected options by this
+  // attribute during preview; it's never wanted in the final source. It survives on a kept option's
+  // inner content AND on a move's re-inserted element (which carries a bare marker, not a block), so
+  // remove it globally rather than only inside blocks.
+  out = out.replace(/\s+data-vs-option=(?:"[^"]*"|'[^']*'|\{[^}]*\})/g, "");
   // Collapse the blank lines a removed block leaves behind (3+ newlines → 2).
   return out.replace(/\n{3,}/g, "\n\n");
 }
