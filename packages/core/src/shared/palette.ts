@@ -89,9 +89,7 @@ function renderTokenGroup(group: TokenGroup, entries: LiteToken[]): string {
     }
     return `<div class="lp-token">${demo}<code class="lp-name" title="${esc(t.name)}">${esc(t.name)}</code><code class="lp-val" title="${v}">${v}</code></div>`;
   };
-  // Bento emphasis: the most visual groups get a wider cell.
-  const span = group === "colors" || group === "typography" ? " lp-span2" : "";
-  return `<section class="lp-card${span}"><h3>${esc(group)}</h3><div class="lp-tokens">${entries.map(swatch).join("")}</div></section>`;
+  return `<section class="lp-card"><h3>${esc(group)}</h3><div class="lp-tokens">${entries.map(swatch).join("")}</div></section>`;
 }
 
 /** Render one scale (spacing / margins / padding) as labelled bars. */
@@ -122,8 +120,7 @@ function renderComponent(c: PaletteComponent): string {
       return `<figure class="lp-variant"><div class="lp-render">${body}</div><figcaption>${esc(s.variant)}</figcaption></figure>`;
     })
     .join("");
-  const span = c.tier === "organism" || c.tier === "template" ? " lp-span2" : "";
-  return `<article class="lp-card lp-component${span}" data-component="${esc(c.name)}"><header><h3 title="${esc(c.name)}">${esc(c.name)}</h3><span class="lp-tier">${esc(c.tier)}</span>${badge}${placeholder}</header><div class="lp-variants">${variants}</div></article>`;
+  return `<article class="lp-card lp-component" data-component="${esc(c.name)}"><header><h3 title="${esc(c.name)}">${esc(c.name)}</h3><span class="lp-tier">${esc(c.tier)}</span>${badge}${placeholder}</header><div class="lp-variants">${variants}</div></article>`;
 }
 
 const PALETTE_CSS = `
@@ -132,7 +129,7 @@ const PALETTE_CSS = `
 *{box-sizing:border-box}
 html,body{height:100%}
 body{margin:0;font:14px/1.5 system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--fg)}
-.lp{padding:24px;display:flex;flex-direction:column;gap:28px;max-width:1440px}
+.lp{padding:24px;display:flex;flex-direction:column;gap:20px}
 .lp h1{font-size:20px;margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .lp h2{font-size:12px;margin:0 0 14px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
 .lp h3{font-size:13px;margin:0 0 12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
