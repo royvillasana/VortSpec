@@ -1,6 +1,6 @@
 ## 1. Projected node tree (read-only first — no behavior change)
 
-- [ ] 1.1 Define the `ProjectedNode` model: stable `id` (fingerprint/classSignature), `tag`, parent/children, `props`, `text`, `dataSource` (hint), `dataDriven` flag
+- [x] 1.1 Define the `ProjectedNode` model: stable `id` (fingerprint), parent/children, `props`, `text`, `dataSource`, `dataDriven` (pure `buildProjection` + identity lookup + DFS walk; 7 tests)
 - [ ] 1.2 Build the projection from the inspector bridge's structure snapshot + readouts; keep it in sync on bridge updates
 - [ ] 1.3 Mark `dataDriven` subtrees (rendered inside `.map`/conditional over non-local data) from the resolvability analysis
 - [ ] 1.4 Dev-only assertion: the projected tree matches the live DOM (same nodes, order, identities) — prove parity before routing anything through it
