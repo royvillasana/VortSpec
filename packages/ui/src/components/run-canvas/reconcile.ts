@@ -20,6 +20,80 @@ export type TreeChange =
   | { kind: "reorderList"; next: ProjectedNode; from: number; to: number }
   | { kind: "move"; prev: ProjectedNode; next: ProjectedNode };
 
+/**
+ * A user action applied to the projection (Stage 3.1c) — the in-memory "tree edit" the canvas makes
+ * instantly. Reconciliation then diffs the mutated tree against the last-persisted one.
+ */
+export type Mutation =
+  | { kind: "style"; id: string; css: Record<string, string> }
+  | { kind: "text"; id: string; text: string }
+  | { kind: "className"; id: string; className: string }
+  | { kind: "remove"; id: string }
+  | { kind: "move"; id: string; parentId: string; index: number }
+  | { kind: "reorder"; parentId: string; from: number; to: number };
+
+/** Apply a mutation, returning a NEW projection (touched nodes cloned; the rest shared). Pure. */
+export function applyMutation(p: Projection, m: Mutation): Projection {
+  const byId = new Map<string, ProjectedNode>();
+  for (const [id, n] of p.byId) byId.set(id, n);
+  const clone = (id: string): ProjectedNode | null => {
+    const n = byId.get(id);
+    if (!n) return null;
+    const c = { ...n, style: { ...n.style }, childIds: [...n.childIds] };
+    byId.set(id, c);
+    return c;
+  };
+  const detach = (id: string): void => {
+    const node = byId.get(id);
+    if (!node?.parentId) return;
+    const parent = clone(node.parentId);
+    if (parent) parent.childIds = parent.childIds.filter((c) => c !== id);
+  };
+  switch (m.kind) {
+    case "style": {
+      const n = clone(m.id);
+      if (n) n.style = { ...n.style, ...m.css };
+      break;
+    }
+    case "text": {
+      const n = clone(m.id);
+      if (n) n.text = m.text;
+      break;
+    }
+    case "className": {
+      const n = clone(m.id);
+      if (n) n.className = m.className;
+      break;
+    }
+    case "remove": {
+      detach(m.id);
+      byId.delete(m.id);
+      break;
+    }
+    case "move": {
+      const n = clone(m.id);
+      if (!n) break;
+      detach(m.id);
+      const parent = clone(m.parentId);
+      if (parent) {
+        const at = Math.max(0, Math.min(m.index, parent.childIds.length));
+        parent.childIds.splice(at, 0, m.id);
+        n.parentId = m.parentId;
+      }
+      break;
+    }
+    case "reorder": {
+      const parent = clone(m.parentId);
+      if (parent && m.from >= 0 && m.from < parent.childIds.length) {
+        const [moved] = parent.childIds.splice(m.from, 1);
+        parent.childIds.splice(Math.max(0, Math.min(m.to, parent.childIds.length)), 0, moved);
+      }
+      break;
+    }
+  }
+  return { root: p.root ? (byId.get(p.root.id) ?? null) : null, byId };
+}
+
 /** A repeated node's index among its SAME-fingerprint siblings (= the backing array index). */
 function listIndexOf(p: Projection, node: ProjectedNode): number | null {
   if (!node.parentId) return null;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { diffProjections, treeChangesToEdits } from "./reconcile";
+import { diffProjections, treeChangesToEdits, applyMutation } from "./reconcile";
 import type { Projection, ProjectedNode } from "./node-tree";
 
 const rect = { x: 0, y: 0, width: 1, height: 1 };
@@ -95,5 +95,50 @@ describe("diffProjections + treeChangesToEdits", () => {
     next = mutate(next, "a", { text: "AA" });
     const { edits } = treeChangesToEdits(diffProjections(projection(BASE), projection(next)));
     expect(edits).toHaveLength(2);
+  });
+});
+
+describe("applyMutation + round-trip (mutate the tree → diff → edit)", () => {
+  it("style mutation reflects in the tree and diffs to a style edit", () => {
+    const prev = projection(BASE);
+    const next = applyMutation(prev, { kind: "style", id: "h1", css: { color: "#c53434" } });
+    expect(next.byId.get("h1")?.style).toEqual({ color: "#c53434" });
+    expect(prev.byId.get("h1")?.style).toEqual({}); // prev untouched (pure)
+    const { edits } = treeChangesToEdits(diffProjections(prev, next));
+    expect(edits[0].edit).toMatchObject({ op: "style", css: { color: "#c53434" } });
+  });
+
+  it("text + className mutations round-trip to their edits", () => {
+    const prev = projection(BASE);
+    let next = applyMutation(prev, { kind: "text", id: "h1", text: "Hi" });
+    next = applyMutation(next, { kind: "className", id: "h1", className: "title big" });
+    const { edits } = treeChangesToEdits(diffProjections(prev, next));
+    expect(edits.map((e) => e.edit.op).sort()).toEqual(["attr", "text"]);
+  });
+
+  it("remove mutation detaches the node and diffs to listRemove for a row", () => {
+    const prev = projection(BASE);
+    const next = applyMutation(prev, { kind: "remove", id: "b" });
+    expect(next.byId.has("b")).toBe(false);
+    expect(next.byId.get("ul")?.childIds).toEqual(["a", "c"]);
+    const { edits } = treeChangesToEdits(diffProjections(prev, next));
+    expect(edits).toHaveLength(1);
+    expect(edits[0].edit).toMatchObject({ op: "listRemove", index: 1 });
+  });
+
+  it("reorder mutation round-trips to ONE listReorder (no spurious sibling moves)", () => {
+    const prev = projection(BASE);
+    const next = applyMutation(prev, { kind: "reorder", parentId: "ul", from: 2, to: 0 }); // c to front
+    expect(next.byId.get("ul")?.childIds).toEqual(["c", "a", "b"]);
+    const { edits } = treeChangesToEdits(diffProjections(prev, next));
+    expect(edits).toHaveLength(1);
+    expect(edits[0].edit).toMatchObject({ op: "listReorder", from: 2, to: 0 });
+  });
+
+  it("move mutation across parents is returned unmapped (drag flow handles the anchors)", () => {
+    const prev = projection(BASE);
+    const next = applyMutation(prev, { kind: "move", id: "h1", parentId: "ul", index: 0 });
+    const { unmapped } = treeChangesToEdits(diffProjections(prev, next));
+    expect(unmapped.some((c) => c.kind === "move")).toBe(true);
   });
 });
