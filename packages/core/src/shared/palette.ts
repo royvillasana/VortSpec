@@ -107,42 +107,53 @@ function renderComponent(c: PaletteComponent): string {
     : `<span class="lp-badge lp-light">light-only</span>`;
   const placeholder = c.isPlaceholder ? `<span class="lp-badge lp-placeholder">placeholder</span>` : "";
   const variants = c.standIns
-    .map((s) => `<figure class="lp-variant"><div class="lp-render">${s.html}</div><figcaption>${esc(s.variant)}</figcaption></figure>`)
+    .map((s) => {
+      // A placeholder stand-in has no real render yet — show a visible labelled stub, not an empty div,
+      // so the shelf never reads as a black void before harvest replaces it with the real render.
+      const body =
+        s.source === "placeholder"
+          ? `<div class="lp-ph">awaiting framework render</div>`
+          : s.html;
+      return `<figure class="lp-variant"><div class="lp-render">${body}</div><figcaption>${esc(s.variant)}</figcaption></figure>`;
+    })
     .join("");
   return `<article class="lp-component" data-component="${esc(c.name)}"><header><h3>${esc(c.name)}</h3><span class="lp-tier">${esc(c.tier)}</span>${badge}${placeholder}</header><div class="lp-variants">${variants}</div></article>`;
 }
 
 const PALETTE_CSS = `
-:root{color-scheme:light dark}
+:root{color-scheme:light dark;--bg:#ffffff;--fg:#1a1a1e;--muted:#6b7280;--card:#f6f6f8;--border:rgba(0,0,0,.12)}
+@media (prefers-color-scheme:dark){:root{--bg:#161619;--fg:#e8e8ec;--muted:#9aa0aa;--card:#202024;--border:rgba(255,255,255,.14)}}
 *{box-sizing:border-box}
-body{margin:0;font:14px/1.5 system-ui,sans-serif}
+html,body{height:100%}
+body{margin:0;font:14px/1.5 system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--fg)}
 .lp{padding:24px;display:flex;flex-direction:column;gap:32px}
 .lp h1{font-size:20px;margin:0}
-.lp h2{font-size:16px;margin:0 0 12px;text-transform:uppercase;letter-spacing:.04em;opacity:.7}
-.lp h3{font-size:13px;margin:0 0 8px;opacity:.8}
+.lp h2{font-size:13px;margin:0 0 12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.lp h3{font-size:13px;margin:0 0 10px;font-weight:600}
 .lp-groups,.lp-shelf{display:grid;gap:16px}
-.lp-groups{grid-template-columns:repeat(auto-fill,minmax(220px,1fr))}
+.lp-groups{grid-template-columns:repeat(auto-fill,minmax(240px,1fr))}
 .lp-shelf{grid-template-columns:repeat(auto-fill,minmax(240px,1fr))}
-.lp-tokens{display:flex;flex-direction:column;gap:6px}
-.lp-token{display:flex;align-items:center;gap:8px}
-.lp-name{font-size:11px;opacity:.9}
-.lp-val{font-size:11px;opacity:.5;margin-left:auto}
-.lp-chip{width:20px;height:20px;border-radius:4px;border:1px solid rgba(128,128,128,.3)}
-.lp-type{display:inline-block;min-width:28px;line-height:1}
-.lp-bar{display:inline-block;height:10px;background:currentColor;border-radius:2px;opacity:.6}
-.lp-shadow{display:inline-block;width:20px;height:20px;border-radius:4px;background:#fff}
-.lp-radius{display:inline-block;width:20px;height:20px;background:currentColor;opacity:.4}
-.lp-component,.lp-group{border:1px solid rgba(128,128,128,.25);border-radius:8px;padding:12px}
-.lp-component header{display:flex;align-items:center;gap:6px;margin-bottom:10px}
-.lp-tier{font-size:10px;text-transform:uppercase;opacity:.5;letter-spacing:.05em}
-.lp-badge{font-size:10px;padding:1px 6px;border-radius:99px;margin-left:auto}
+.lp-tokens{display:flex;flex-direction:column;gap:8px}
+.lp-token{display:flex;align-items:center;gap:10px}
+.lp-name{font-size:11px;font-family:ui-monospace,monospace}
+.lp-val{font-size:11px;color:var(--muted);margin-left:auto;font-family:ui-monospace,monospace}
+.lp-chip{width:22px;height:22px;border-radius:5px;border:1px solid var(--border);flex:none}
+.lp-type{display:inline-block;min-width:30px;line-height:1;flex:none}
+.lp-bar{display:inline-block;height:12px;background:var(--fg);border-radius:2px;opacity:.55;flex:none}
+.lp-shadow{display:inline-block;width:22px;height:22px;border-radius:5px;background:var(--card);flex:none}
+.lp-radius{display:inline-block;width:22px;height:22px;background:var(--fg);opacity:.35;flex:none}
+.lp-component,.lp-group{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px}
+.lp-component header{display:flex;align-items:center;gap:6px;margin-bottom:12px}
+.lp-tier{font-size:10px;text-transform:uppercase;color:var(--muted);letter-spacing:.05em}
+.lp-badge{font-size:10px;padding:1px 7px;border-radius:99px;margin-left:auto}
 .lp-light{background:#fde68a;color:#78350f}
 .lp-ready{background:#bbf7d0;color:#14532d}
 .lp-placeholder{background:#e5e7eb;color:#374151;margin-left:4px}
 .lp-variants{display:flex;flex-wrap:wrap;gap:12px}
-.lp-variant{margin:0;display:flex;flex-direction:column;gap:4px;align-items:flex-start}
-.lp-variant figcaption{font-size:10px;opacity:.5}
-.lp-render{display:flex;align-items:center;justify-content:center;min-height:40px}
+.lp-variant{margin:0;display:flex;flex-direction:column;gap:6px;align-items:flex-start}
+.lp-variant figcaption{font-size:10px;color:var(--muted);font-family:ui-monospace,monospace}
+.lp-render{display:flex;align-items:center;justify-content:center;min-height:48px;min-width:96px}
+.lp-ph{display:flex;align-items:center;justify-content:center;min-height:48px;min-width:120px;padding:8px 12px;border:1px dashed var(--border);border-radius:8px;color:var(--muted);font-size:11px}
 `;
 
 /**

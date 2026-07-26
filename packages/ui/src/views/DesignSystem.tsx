@@ -89,7 +89,7 @@ export function DesignSystem({
       ) : (
         <iframe
           title="Design System palette"
-          className="min-h-0 flex-1 border-0 bg-white"
+          className="min-h-0 flex-1 border-0 bg-vs-bg-base"
           sandbox="allow-same-origin"
           srcDoc={html ?? ""}
         />
