@@ -208,6 +208,18 @@
     "./FirstRunSetup": {
       "types": "./src/views/FirstRunSetup.tsx",
       "default": "./src/views/FirstRunSetup.tsx"
+    },
+    "./edit-plan": {
+      "types": "./src/components/run-canvas/edit-plan.ts",
+      "default": "./src/components/run-canvas/edit-plan.ts"
+    },
+    "./auto-persist": {
+      "types": "./src/components/run-canvas/auto-persist.ts",
+      "default": "./src/components/run-canvas/auto-persist.ts"
+    },
+    "./pending": {
+      "types": "./src/components/run-canvas/pending.ts",
+      "default": "./src/components/run-canvas/pending.ts"
     }
   },
   "scripts": {

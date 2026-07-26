@@ -56,6 +56,8 @@ export interface MockConfig {
   runScript?: RunEvent[];
   /** FileSnapshot[] returned by snapshotTokenScope() (compose flow). */
   snapshot?: { path: string; content: string }[];
+  /** Result writeCanvasEdit() returns — set `{ok:false, reason}` to exercise the withhold path. */
+  canvasWriteResult?: { ok: boolean; reason?: string };
   /** When false, composeCheckTarget() reports the run's file is not committable (§6.8). */
   composeTargetOk?: boolean;
   /** Manifest returned by getManifest(). */
@@ -560,7 +562,7 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
     setTokenValue: async () => cfg.tokens ?? EMPTY_TOKENS,
     writeCanvasEdit: async (_projectPath: string, file: string, edit: unknown) => {
       canvasWrites.push({ file, edit });
-      return { ok: true };
+      return cfg.canvasWriteResult ?? { ok: true };
     },
     // Token sanitation + edit methods (change: token-fidelity-sanitation). The
     // Inspector calls getSanitation on mount — a missing mock method is a synchronous

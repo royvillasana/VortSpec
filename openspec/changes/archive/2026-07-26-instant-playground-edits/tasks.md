@@ -34,10 +34,10 @@
 
 ## 6. Verification
 
-- [ ] 6.1 CT: a drag-move / resize applies instantly with no Apply/Keep/Save and no AI run (assert `__runPrompts` stays empty)
-- [ ] 6.2 CT: insert from the picker, duplicate, delete on resolvable JSX write source deterministically; no AI
-- [ ] 6.3 CT: an edit on an element inside a `.map()` keeps the visual change, withholds the write, offers the hand-off, and starts NO AI until accepted
-- [ ] 6.4 CT: a language prompt still routes to the AI path
+- [x] 6.1 CT: a drag-move / resize applies instantly with no Apply/Keep/Save and no AI run (assert `__runPrompts` stays empty)
+- [x] 6.2 CT: insert from the picker, duplicate, delete on resolvable JSX write source deterministically; no AI
+- [x] 6.3 CT: an edit on an element inside a `.map()` keeps the visual change, withholds the write, offers the hand-off, and starts NO AI until accepted
+- [x] 6.4 CT: a language prompt still routes to the AI path
 - [x] 6.5 End-to-end on a sample React project: manual edits persist to the real source files; undo/redo round-trips; HMR updates only the edited component (verified live — user confirmed edits survive a server restart)
 - [ ] 6.6 Perf check: time-to-visible for a manual edit is bounded by the overlay (no AI/reload on the critical path)
 

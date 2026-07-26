@@ -2,9 +2,7 @@
 
 ## Purpose
 The Run activity's hybrid browser + design canvas: the live dev-server app embedded in an instrumented webview inside a pan/zoom surface, a hover/select overlay with resize and spacing handles, and the Figma-style Design panel (Layers node tree + selection property sections) that replaces the file Explorer while the activity is active.
-
 ## Requirements
-
 ### Requirement: Run activity hosts a hybrid browser + design canvas
 
 In the Run activity (app kind), the live dev-server app SHALL render inside a pan/zoom **Run Canvas** surface instead of a plain iframe. The app SHALL remain fully interactive (clicks, scrolling, navigation) while an overlay layer draws selection and hover affordances on top. The canvas SHALL degrade gracefully: when the dev server is not running, it SHALL show the existing start/loading states; it SHALL NOT block on the inspector bridge failing to attach.
@@ -52,7 +50,7 @@ When the Run activity is active, the left sidebar SHALL present a **Figma-style 
 
 ### Requirement: Element selection shows manipulation handles
 
-Selecting a rendered element SHALL draw a bounding highlight with **resize handles** (corners/edges for size) and **spacing handles** (padding/margin edges), positioned in canvas coordinates. Hovering an element (without selecting) SHALL show a lighter highlight with its tag/size label.
+Selecting a rendered element SHALL draw a bounding highlight with **resize handles** (corners/edges for size) and **spacing handles** (padding/margin edges), positioned in canvas coordinates. Hovering an element (without selecting) SHALL show a lighter highlight with its tag/size label. Dragging a handle or the element itself SHALL apply the change to the live preview **optimistically and immediately**, and persist it to source **deterministically in the background** — with no Apply, Keep, or Save step (see the `instant-canvas-edits` capability). The manipulation handles are direct-manipulation inputs and therefore never trigger an AI run.
 
 #### Scenario: Handles appear on selection
 
@@ -63,3 +61,9 @@ Selecting a rendered element SHALL draw a bounding highlight with **resize handl
 
 - **WHEN** the user hovers an element without selecting it
 - **THEN** a lightweight highlight and a label (tag + dimensions) SHALL appear, and SHALL clear when the pointer leaves
+
+#### Scenario: Dragging a handle applies and persists without a gate
+
+- **WHEN** the user drags a resize or spacing handle on a resolvable element
+- **THEN** the preview updates immediately and the change is written to source deterministically in the background, with no Apply/Keep/Save step and no AI run
+
