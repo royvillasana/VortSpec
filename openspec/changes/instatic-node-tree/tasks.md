@@ -7,7 +7,7 @@
 
 ## 2. Route reads through the tree
 
-- [ ] 2.1 Layers panel + selection read from the projection (not ad-hoc DOM walks)
+- [x] 2.1 Layers panel reads from the projection (self-healing: projection when it matches bridge.tree, else fall back) (not ad-hoc DOM walks)
 - [ ] 2.2 Dirty set keyed by node `id` (not `(file, nodeId)` positional)
 
 ## 3. Identity-located reconciliation (retire positional writes)

@@ -30,7 +30,7 @@ import {
   type PendingEdit,
 } from "../components/run-canvas/pending";
 import { routeEdits, type DeterministicEdit } from "../components/run-canvas/edit-plan";
-import { buildProjection, validateProjection, treeParityIssues } from "../components/run-canvas/node-tree";
+import { buildProjection, validateProjection, treeParityIssues, projectionToBridgeTree } from "../components/run-canvas/node-tree";
 import { createAutoPersist } from "../components/run-canvas/auto-persist";
 import { parseAnchor, type CanvasEdit } from "@vortspec/core/canvas-edit";
 import { useInspectorBridge, type CanvasMode } from "../lib/useInspectorBridge";
@@ -569,10 +569,19 @@ export function RunApp({
     if (!dev) return;
     const issues = validateProjection(projection);
     if (issues.length) console.warn("[node-tree] projection parity issues:", issues.slice(0, 8));
-    // Stage 2.1: confirm the projection can drive the Layers (matches bridge.tree) before we swap.
     const layers = treeParityIssues(bridge.tree, projection);
     if (layers.length) console.warn("[node-tree] Layers parity vs bridge.tree:", layers.slice(0, 8));
   }, [projection, bridge.tree]);
+  // Stage 2.1: the Layers panel reads from the PROJECTION when it's proven equivalent to bridge.tree
+  // (the two guest walks could filter differently); otherwise fall back — a self-healing swap that
+  // can't regress. This makes the projection the single tree the Layers render from in the common case.
+  const layersTree = useMemo(
+    () =>
+      projection.byId.size > 0 && treeParityIssues(bridge.tree, projection).length === 0
+        ? projectionToBridgeTree(projection)
+        : bridge.tree,
+    [bridge.tree, projection],
+  );
   // Create a design token from a field's current literal value, then let the field bind to it
   // (change: instant-playground-edits). Bootstraps the token file + import on first use. The bind
   // itself (var(--name)) writes inline to source via the instant style lane — no Apply. Throws a
@@ -1915,7 +1924,7 @@ export function RunApp({
       ) : (
         <DesignPanel
           selection={selection}
-          tree={bridge.tree}
+          tree={layersTree}
           hoveredId={bridge.hoveredId}
           onSelectNode={onSelectNode}
           onHoverNode={onHoverNode}
