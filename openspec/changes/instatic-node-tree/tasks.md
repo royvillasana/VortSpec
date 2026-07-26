@@ -12,7 +12,7 @@
 
 ## 3. Identity-located reconciliation (retire positional writes)
 
-- [ ] 3.1 Reconciler: diff the tree vs. last-persisted tree → minimal codemod set
+- [x] 3.1 Reconciler: diff the tree vs last-persisted → minimal codemod set (diffProjections + LIS minimal-moves + treeChangesToEdits + applyMutation; pure, 13 tests) vs. last-persisted tree → minimal codemod set
 - [x] 3.2 Locate each target JSX by identity (DELIVERED by DR-2: writes carry the element identity and re-locate via matchBySignature; data-source is the hint) (`matchBySignature`), `data-source` only as a tiebreaker; line:col never drives a write
 - [x] 3.3 Reuse the existing codemods as emit targets (the write path already emits through them, identity-located) (no new codemods); route set-prop/text/move/insert/remove/reorder through the reconciler
 - [ ] 3.4 Retire the positional write path + its mitigations (RT-3 descending-line ordering, DR-2 anchor re-location) once parity holds
