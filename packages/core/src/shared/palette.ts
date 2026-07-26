@@ -140,14 +140,14 @@ body{margin:0;font:14px/1.5 system-ui,-apple-system,sans-serif;background:var(--
 .lp-bento{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));grid-auto-flow:row dense;gap:16px;align-items:start}
 .lp-span2{grid-column:span 2}
 @media (max-width:520px){.lp-span2{grid-column:span 1}}
-.lp-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;min-width:0}
+.lp-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;min-width:0;overflow:hidden}
 .lp-tokens{display:flex;flex-direction:column;gap:9px}
-.lp-token{display:flex;align-items:center;gap:10px;min-width:0}
+.lp-token{display:flex;align-items:center;gap:10px;min-width:0;overflow:hidden}
 .lp-name{font-size:11px;font-family:ui-monospace,monospace;flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .lp-val{font-size:11px;color:var(--muted);font-family:ui-monospace,monospace;flex:0 0 auto;max-width:45%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:right}
 .lp-chip{width:22px;height:22px;border-radius:6px;border:1px solid var(--border);flex:none}
 .lp-type{display:inline-block;min-width:30px;line-height:1;flex:none}
-.lp-bar{display:inline-block;height:12px;max-width:100%;background:var(--fg);border-radius:2px;opacity:.55;flex:none}
+.lp-bar{display:inline-block;height:12px;width:auto;max-width:96px;background:var(--fg);border-radius:2px;opacity:.55;flex:0 0 auto}
 .lp-shadow{display:inline-block;width:22px;height:22px;border-radius:6px;background:var(--card);border:1px solid var(--border);flex:none}
 .lp-radius{display:inline-block;width:22px;height:22px;background:var(--fg);opacity:.35;flex:none}
 .lp-component header{display:flex;align-items:center;gap:6px;margin-bottom:12px;min-width:0}
