@@ -66,6 +66,8 @@ export default function App(): JSX.Element {
     return el;
   });
   const [leftTab, setLeftTab] = useState<"section" | "chat">("section");
+  // Tokens workspace sub-tab: the data inspector vs. the visual design-system palette (light-design-system).
+  const [tokensTab, setTokensTab] = useState<"tokens" | "designsystem">("tokens");
   const [gitCounts, setGitCounts] = useState<{ changes: number; ahead: number }>({ changes: 0, ahead: 0 });
   // The live editor selection, surfaced to the assistant as grounding context.
   const [selection, setSelection] = useState<EditorSelection | null>(null);
@@ -534,13 +536,37 @@ export default function App(): JSX.Element {
       ) : a === "play" ? (
         <RunApp project={p} kind="storybook" hideRail sidebarSlot={sectionSlot} onBack={go("explorer")} onFlow={go("flow")} onRun={go("run")} onPlayground={go("play")} onTokens={go("tokens")} onManifest={go("manifest")} onHistory={go("explorer")} onSource={go("source")} />
       ) : a === "tokens" ? (
-        <Inspector project={p} hideRail sidebarSlot={sectionSlot} onBack={go("explorer")} onOpenPreview={go("explorer")} onOpenRun={go("run")} onOpenHistory={go("explorer")} onOpenManifest={go("manifest")} onOpenFile={(path) => { void wf.openFile(path); dispatch({ type: "setActivity", activity: "explorer" }); }} />
+        <div className="flex h-full min-h-0 w-full flex-col">
+          <div className="flex flex-none items-stretch gap-1 border-b border-vs-border-subtle bg-vs-bg-surface px-2 py-1 text-[12px]">
+            <button
+              type="button"
+              onClick={() => setTokensTab("tokens")}
+              aria-pressed={tokensTab === "tokens"}
+              className={`rounded px-2.5 py-1 font-medium transition-colors ${tokensTab === "tokens" ? "bg-vs-bg-hover text-vs-text-primary" : "text-vs-text-muted hover:text-vs-text-secondary"}`}
+            >
+              Tokens
+            </button>
+            <button
+              type="button"
+              onClick={() => setTokensTab("designsystem")}
+              aria-pressed={tokensTab === "designsystem"}
+              className={`rounded px-2.5 py-1 font-medium transition-colors ${tokensTab === "designsystem" ? "bg-vs-bg-hover text-vs-text-primary" : "text-vs-text-muted hover:text-vs-text-secondary"}`}
+            >
+              Design system
+            </button>
+          </div>
+          <div className="min-h-0 flex-1">
+            {tokensTab === "tokens" ? (
+              <Inspector project={p} hideRail sidebarSlot={sectionSlot} onBack={go("explorer")} onOpenPreview={go("explorer")} onOpenRun={go("run")} onOpenHistory={go("explorer")} onOpenManifest={go("manifest")} onOpenFile={(path) => { void wf.openFile(path); dispatch({ type: "setActivity", activity: "explorer" }); }} />
+            ) : (
+              <DesignSystem project={p} hideRail onBack={() => setTokensTab("tokens")} />
+            )}
+          </div>
+        </div>
       ) : a === "tasks" ? (
         <Tasks project={p} hideRail onBack={go("explorer")} onFlow={go("flow")} onRun={go("run")} onPlayground={go("explorer")} onTokens={go("tokens")} onManifest={go("manifest")} onHistory={go("explorer")} onSource={go("source")} />
       ) : a === "manifest" ? (
         <DesignManifest project={p} hideRail onBack={go("explorer")} onOpenRun={go("run")} onOpenPreview={go("explorer")} onOpenInspector={go("tokens")} onOpenHistory={go("explorer")} />
-      ) : a === "designsystem" ? (
-        <DesignSystem project={p} hideRail onBack={go("explorer")} />
       ) : a === "settings" ? (
         <Profile onBack={go("explorer")} />
       ) : (

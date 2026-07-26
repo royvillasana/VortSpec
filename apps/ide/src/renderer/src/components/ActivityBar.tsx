@@ -81,18 +81,8 @@ const SddPipelineMark = (
   </svg>
 );
 
-/** Lightweight design system — a 2×2 palette/component grid mark. */
-const DesignSystemMark = (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <rect x="3" y="3" width="7" height="7" rx="1" />
-    <rect x="14" y="3" width="7" height="7" rx="1" />
-    <rect x="3" y="14" width="7" height="7" rx="1" />
-    <rect x="14" y="14" width="7" height="7" rx="1" />
-  </svg>
-);
-
 // Order (top → bottom): Home, Explorer, Playground, Tokens, Design manifest,
-// Design system, Storybook, Jira (Tasks), Git (Source Control), SDD-DE pipeline.
+// Storybook, Jira (Tasks), Git (Source Control), SDD-DE pipeline.
 const TOP: Item[] = [
   {
     key: "home",
@@ -118,11 +108,6 @@ const TOP: Item[] = [
     key: "manifest",
     label: "Design manifest",
     custom: ManifestMark,
-  },
-  {
-    key: "designsystem",
-    label: "Design system — lightweight palette",
-    custom: DesignSystemMark,
   },
   {
     key: "play",
