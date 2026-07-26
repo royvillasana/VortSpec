@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildProjection, findByFingerprint, walkProjection } from "./node-tree";
+import { buildProjection, findByFingerprint, walkProjection, validateProjection } from "./node-tree";
 import type { StructureSnapshotWire } from "@vortspec/core/ipc";
 
 const rect = { x: 0, y: 0, width: 10, height: 10 };
@@ -64,6 +64,23 @@ describe("findByFingerprint — identity lookup (how reconciliation locates sour
   it("returns null when the fingerprint is ambiguous (list rows share one) — caller needs a tiebreaker", () => {
     const p = buildProjection(SNAP);
     expect(findByFingerprint(p, "main>ul>li.row")).toBeNull();
+  });
+});
+
+describe("validateProjection — parity gate (task 1.4)", () => {
+  it("a built projection is well-formed (no issues)", () => {
+    expect(validateProjection(buildProjection(SNAP))).toEqual([]);
+  });
+  it("flags a broken parent/child link", () => {
+    const p = buildProjection(SNAP);
+    p.byId.get("h1")!.parentId = "ul"; // lie: h1's parent says ul, but ul doesn't list h1
+    const issues = validateProjection(p);
+    expect(issues.some((i) => i.includes("h1"))).toBe(true);
+  });
+  it("flags an orphan not reachable from the root", () => {
+    const p = buildProjection(SNAP);
+    p.byId.get("main")!.childIds = ["ul"]; // drop h1 from the tree but leave it in byId
+    expect(validateProjection(p).some((i) => i.includes("h1"))).toBe(true);
   });
 });
 

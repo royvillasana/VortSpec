@@ -30,6 +30,7 @@ import {
   type PendingEdit,
 } from "../components/run-canvas/pending";
 import { routeEdits, type DeterministicEdit } from "../components/run-canvas/edit-plan";
+import { buildProjection, validateProjection } from "../components/run-canvas/node-tree";
 import { createAutoPersist } from "../components/run-canvas/auto-persist";
 import { parseAnchor, type CanvasEdit } from "@vortspec/core/canvas-edit";
 import { useInspectorBridge, type CanvasMode } from "../lib/useInspectorBridge";
@@ -558,6 +559,17 @@ export function RunApp({
     [project.path],
   );
   useEffect(() => () => autoPersist.dispose(), [autoPersist]);
+  // DR-1 (instatic-node-tree): the projected node tree, kept in sync with the bridge's structure
+  // snapshot. Nothing routes through it yet — a dev-only parity assertion proves it stays a
+  // well-formed tree (task 1.4) before later stages route reads/writes through it.
+  const projection = useMemo(() => buildProjection(bridge.structure), [bridge.structure]);
+  useEffect(() => {
+    // Dev-only (the ui package's tsconfig doesn't pull Vite's import.meta.env types — cast safely).
+    const dev = (import.meta as unknown as { env?: { DEV?: boolean } }).env?.DEV ?? false;
+    if (!dev) return;
+    const issues = validateProjection(projection);
+    if (issues.length) console.warn("[node-tree] projection parity issues:", issues.slice(0, 8));
+  }, [projection]);
   // Create a design token from a field's current literal value, then let the field bind to it
   // (change: instant-playground-edits). Bootstraps the token file + import on first use. The bind
   // itself (var(--name)) writes inline to source via the instant style lane — no Apply. Throws a

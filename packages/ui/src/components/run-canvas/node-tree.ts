@@ -85,6 +85,35 @@ export function findByFingerprint(projection: Projection, fingerprint: string): 
   return hit;
 }
 
+/**
+ * Structural parity check (task 1.4): the projection must be a well-formed tree before we route any
+ * read or write through it. Returns a list of violations (empty = valid) — bidirectional parent/child
+ * consistency, every non-root has a listing parent, no dangling child refs, and every node reachable
+ * from the root (no cycles/orphans). Runs as a dev-only assertion; it never mutates.
+ */
+export function validateProjection(projection: Projection): string[] {
+  const issues: string[] = [];
+  if (!projection.root && projection.byId.size > 0) issues.push("projection has nodes but no root");
+  for (const node of projection.byId.values()) {
+    for (const childId of node.childIds) {
+      const child = projection.byId.get(childId);
+      if (!child) issues.push(`${node.id} references missing child ${childId}`);
+      else if (child.parentId !== node.id) issues.push(`child ${childId} parent is ${child.parentId ?? "null"}, expected ${node.id}`);
+    }
+    if (node.parentId) {
+      const parent = projection.byId.get(node.parentId);
+      if (!parent) issues.push(`${node.id} has missing parent ${node.parentId}`);
+      else if (!parent.childIds.includes(node.id)) issues.push(`parent ${node.parentId} doesn't list child ${node.id}`);
+    } else if (projection.root && node.id !== projection.root.id) {
+      issues.push(`${node.id} has no parent but isn't the root`);
+    }
+  }
+  const reachable = new Set<string>();
+  walkProjection(projection, (n) => reachable.add(n.id));
+  for (const id of projection.byId.keys()) if (!reachable.has(id)) issues.push(`${id} not reachable from the root`);
+  return issues;
+}
+
 /** Depth-first walk from the root in DOM order (root first). */
 export function walkProjection(projection: Projection, visit: (node: ProjectedNode, depth: number) => void): void {
   const step = (id: string, depth: number): void => {
