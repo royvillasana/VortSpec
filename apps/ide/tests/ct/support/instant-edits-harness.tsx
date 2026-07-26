@@ -48,6 +48,9 @@ export function InstantEditsHarness({ stamped = true }: { stamped?: boolean }): 
   const persistQueue = useRef<{ file: string; edit: CanvasEdit }[]>([]);
   const [writeError, setWriteError] = useState<string | null>(null);
   const [pending, setPending] = useState<PendingEdit[]>([]);
+  // Stands in for the optimistic live overlay (`bridge.applyOverride`) the real app applies
+  // SYNCHRONOUSLY before committing — the thing that bounds time-to-visible (task 6.6).
+  const [overlayColor, setOverlayColor] = useState<string | null>(null);
 
   const autoPersist = useMemo(
     () =>
@@ -83,10 +86,16 @@ export function InstantEditsHarness({ stamped = true }: { stamped?: boolean }): 
     <div>
       <button
         type="button"
-        onClick={() => commit([{ ...base, kind: "style", key: "color", value: "#c53434", css: { color: "#c53434" } }])}
+        onClick={() => {
+          setOverlayColor("#c53434"); // optimistic overlay FIRST (synchronous, bounds time-to-visible)
+          commit([{ ...base, kind: "style", key: "color", value: "#c53434", css: { color: "#c53434" } }]);
+        }}
       >
         Change color
       </button>
+      <span data-testid="swatch" style={{ color: overlayColor ?? "inherit" }}>
+        {overlayColor ? `applied ${overlayColor}` : "no change"}
+      </span>
       <button type="button" onClick={() => commit([{ ...base, remove: true }])}>
         Delete element
       </button>

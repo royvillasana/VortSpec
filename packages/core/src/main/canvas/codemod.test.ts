@@ -14,6 +14,7 @@ import {
   removeArrayItem,
   reorderArrayItem,
   listItems,
+  matchBySignature,
   type Anchor,
 } from "./codemod";
 
@@ -155,6 +156,31 @@ describe("moveNodeRelative — drag-drop reorder", () => {
 
   it("refuses to move an element into itself", () => {
     expect(() => moveNodeRelative(CARD, anchorAt(CARD, "<div"), anchorAt(CARD, "<h2"), "after")).toThrow();
+  });
+});
+
+describe("matchBySignature — low-confidence fallback agrees with the anchor (task 1.4)", () => {
+  it("resolves the SAME anchor the high-confidence path (data-source / jsxAt) uses", () => {
+    // For each element, the class-signature match must equal the true anchor of its `<`.
+    for (const [tag, cls] of [["h2", "title"], ["Button", undefined] as const, ["div", "card"]] as const) {
+      const matched = matchBySignature(CARD, { tag, className: cls });
+      expect(matched).toEqual(anchorAt(CARD, `<${tag}`));
+      // …and both resolve to the same element (writing via the matched anchor hits it).
+      const out = setJsxAttr(CARD, matched!, "data-x", { kind: "string", value: "1" });
+      expect(out).toContain(`<${tag}`);
+    }
+  });
+
+  it("returns null when the signature is ambiguous (2+ matches → hand off, never guess)", () => {
+    const src = `export function C() {
+  return (<div><span className="tag">a</span><span className="tag">b</span></div>);
+}`;
+    expect(matchBySignature(src, { tag: "span", className: "tag" })).toBeNull();
+  });
+
+  it("returns null when nothing matches", () => {
+    expect(matchBySignature(CARD, { tag: "section" })).toBeNull();
+    expect(matchBySignature(CARD, { tag: "h2", className: "nope" })).toBeNull();
   });
 });
 

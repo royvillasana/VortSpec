@@ -58,6 +58,9 @@ export interface MockConfig {
   snapshot?: { path: string; content: string }[];
   /** Result writeCanvasEdit() returns — set `{ok:false, reason}` to exercise the withhold path. */
   canvasWriteResult?: { ok: boolean; reason?: string };
+  /** When true, writeCanvasEdit() records the attempt but never resolves — to prove the visible
+   *  result comes from the optimistic overlay, not the (background) write. */
+  canvasWriteHang?: boolean;
   /** When false, composeCheckTarget() reports the run's file is not committable (§6.8). */
   composeTargetOk?: boolean;
   /** Manifest returned by getManifest(). */
@@ -560,9 +563,10 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
     inspectorComponents: async () =>
       (generated && cfg.componentsAfterRun) || cfg.components || EMPTY_COMPONENTS,
     setTokenValue: async () => cfg.tokens ?? EMPTY_TOKENS,
-    writeCanvasEdit: async (_projectPath: string, file: string, edit: unknown) => {
+    writeCanvasEdit: (_projectPath: string, file: string, edit: unknown) => {
       canvasWrites.push({ file, edit });
-      return cfg.canvasWriteResult ?? { ok: true };
+      if (cfg.canvasWriteHang) return new Promise<never>(() => {}); // never resolves — off the critical path
+      return Promise.resolve(cfg.canvasWriteResult ?? { ok: true });
     },
     // Token sanitation + edit methods (change: token-fidelity-sanitation). The
     // Inspector calls getSanitation on mount — a missing mock method is a synchronous

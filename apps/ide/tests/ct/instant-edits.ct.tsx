@@ -57,6 +57,17 @@ test("6.4 the assistant button routes to the AI path (a run starts)", async ({ m
   expect(await canvasWrites(c)).toEqual([]);
 });
 
+test("6.6 time-to-visible is bounded by the overlay — the change shows even if the write never lands", async ({ mount }) => {
+  // writeCanvasEdit hangs forever: if the visible result depended on the write, the swatch would
+  // never update. It updates immediately from the optimistic overlay → write is off the critical path.
+  const c = await mount(<InstantEditsHarness />, { hooksConfig: { mock: { canvasWriteHang: true } } });
+  await c.getByRole("button", { name: "Change color" }).click();
+  await expect(c.getByTestId("swatch")).toContainText("applied #c53434");
+  // The write was ATTEMPTED (queued), but nothing was reloaded and no AI ran on the critical path.
+  await expect.poll(() => canvasWrites(c).then((w) => w.length)).toBe(1);
+  expect(await runPrompts(c)).toEqual([]);
+});
+
 test("6.3b an un-stamped element falls to the gated ledger (Apply), not a silent AI run", async ({ mount }) => {
   const c = await mount(<InstantEditsHarness stamped={false} />);
   await c.getByRole("button", { name: "Change color" }).click();

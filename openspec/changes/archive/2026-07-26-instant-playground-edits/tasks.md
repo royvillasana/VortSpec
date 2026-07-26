@@ -3,7 +3,7 @@
 - [x] 1.1 Stamp rendered elements with `data-source="file:line:col"` in dev (React JSX-source transform); confirm it never ships to the build output
 - [x] 1.2 Bridge: surface each selected/hovered node's `data-source` anchor alongside the existing node id
 - [x] 1.3 `resolvability` check: given an anchor, statically decide direct-JSX-child vs. inside `.map()`/loop/conditional/HOC (AST-based), returning a confidence + reason
-- [ ] 1.4 Fallback matcher: keep `resembleComponent` as the low-confidence path; unit-test anchor vs. matcher agreement
+- [x] 1.4 Fallback matcher: keep `resembleComponent` as the low-confidence path; unit-test anchor vs. matcher agreement
 
 ## 2. Deterministic AST codemods (no AI)
 
@@ -39,7 +39,7 @@
 - [x] 6.3 CT: an edit on an element inside a `.map()` keeps the visual change, withholds the write, offers the hand-off, and starts NO AI until accepted
 - [x] 6.4 CT: a language prompt still routes to the AI path
 - [x] 6.5 End-to-end on a sample React project: manual edits persist to the real source files; undo/redo round-trips; HMR updates only the edited component (verified live — user confirmed edits survive a server restart)
-- [ ] 6.6 Perf check: time-to-visible for a manual edit is bounded by the overlay (no AI/reload on the critical path)
+- [x] 6.6 Perf check: time-to-visible for a manual edit is bounded by the overlay (no AI/reload on the critical path)
 
 ## 7. Ship
 

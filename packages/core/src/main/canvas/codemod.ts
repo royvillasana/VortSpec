@@ -94,6 +94,42 @@ export function checkResolvability(text: string, anchor: Anchor): Resolvability 
   return { resolvable: true };
 }
 
+/** The className string of an opening element, when it's a plain string literal (not an expression). */
+function classNameOf(open: JsxOpeningElement | JsxSelfClosingElement): string | undefined {
+  const attr = open.getAttribute("className");
+  if (!attr || !Node.isJsxAttribute(attr)) return undefined;
+  const init = attr.getInitializer();
+  if (init && Node.isStringLiteral(init)) return init.getLiteralValue();
+  if (init && Node.isJsxExpression(init)) {
+    const expr = init.getExpression();
+    if (expr && Node.isStringLiteral(expr)) return expr.getLiteralValue();
+  }
+  return undefined;
+}
+
+/**
+ * The LOW-CONFIDENCE fallback matcher (change: instant-playground-edits, task 1.4): locate a JSX
+ * element by its tag + className signature (what `classSignature`/the fingerprint encodes) — the
+ * path used when a `data-source` anchor is absent or stale. Returns the anchor of the UNIQUE match,
+ * or null when zero or many match (ambiguous → hand off, never guess). The high-confidence path is
+ * the anchor itself; this exists so the two can be cross-checked and to survive a lost anchor.
+ */
+export function matchBySignature(text: string, sig: { tag: string; className?: string }): Anchor | null {
+  const sf = sourceFileOf(text);
+  const hits: (JsxOpeningElement | JsxSelfClosingElement)[] = [];
+  sf.forEachDescendant((node) => {
+    if (!Node.isJsxElement(node) && !Node.isJsxSelfClosingElement(node)) return;
+    const open = openingOf(node);
+    if (open.getTagNameNode().getText() !== sig.tag) return;
+    if (sig.className !== undefined && classNameOf(open) !== sig.className) return;
+    hits.push(open);
+  });
+  if (hits.length !== 1) return null;
+  const start = hits[0].getStart();
+  const { line, character } = sf.compilerNode.getLineAndCharacterOfPosition(start);
+  return { line: line + 1, column: character };
+}
+
 function requireEl(text: string, anchor: Anchor): { sf: ReturnType<typeof sourceFileOf>; el: JsxLike } {
   const sf = sourceFileOf(text);
   const el = jsxAt(sf, anchor);
