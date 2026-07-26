@@ -54,7 +54,7 @@ export function DesignSystem({
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col bg-vs-bg-base">
+    <div className="flex h-full min-h-0 w-full flex-col bg-vs-bg-base">
       <header className="flex flex-none items-center gap-2 border-b border-vs-border-subtle px-3 py-2 text-[13px]">
         {!hideRail && (
           <Button variant="ghost" onClick={onBack}>
