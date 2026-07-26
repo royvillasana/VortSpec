@@ -43,3 +43,4 @@ apps/ide/release/
 .sdd-de/
 packages/core/resources/vortspec-stamp.mjs
 apps/ide/resources/vortspec-stamp.mjs
+apps/desktop/resources/vortspec-stamp.mjs
