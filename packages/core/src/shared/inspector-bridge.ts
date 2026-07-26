@@ -262,6 +262,8 @@ export const structureNodeSchema = z.object({
   dataDriven: z.boolean().default(false),
   /** `data-component` value — the element→component hint used for the Layers label. Empty when none. */
   component: z.string().default(""),
+  /** The element's DIRECT text (immediate text-node children only), for text-edit reconciliation. */
+  text: z.string().default(""),
 });
 export type StructureNodeWire = z.infer<typeof structureNodeSchema>;
 

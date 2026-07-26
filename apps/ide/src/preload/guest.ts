@@ -586,6 +586,12 @@ function buildStructureSnapshot(rootEl: Element): StructureSnapshotWire {
       dataSource: el.getAttribute("data-source"),
       dataDriven: listIndexOf(el) != null,
       component: el.getAttribute("data-component") ?? "",
+      // Direct text only (immediate Text children) — a container's text is its own, not descendants'.
+      text: Array.from(el.childNodes)
+        .filter((c) => c.nodeType === 3)
+        .map((c) => c.textContent ?? "")
+        .join("")
+        .trim(),
     };
     for (const k of kids) walk(k);
     return id;

@@ -34,6 +34,11 @@ export interface ProjectedNode {
   dataDriven: boolean;
   /** `data-component` value (Layers label hint), empty when none. */
   component: string;
+  /** The node's direct inline text (immediate text children) — the reconciler diffs this for text edits. */
+  text: string;
+  /** Inline style overrides applied to this node since the last persist (baseline {} from source).
+   *  The reconciler diffs this for style edits; setInlineStyle merges the delta into source. */
+  style: Record<string, string>;
 }
 
 export interface Projection {
@@ -64,6 +69,8 @@ export function buildProjection(snapshot: StructureSnapshotWire | null): Project
       dataSource: n.dataSource,
       dataDriven: n.dataDriven,
       component: n.component,
+      text: n.text,
+      style: {}, // baseline — source styles aren't captured; the diff tracks the delta from mutations
     });
   }
   // Second pass: wire parents from each node's children.

@@ -11,7 +11,7 @@ const n = (
   className: string,
   childIds: string[],
   extra: { dataSource?: string | null; dataDriven?: boolean } = {},
-) => ({ id, fingerprint, rect, computed: {}, childIds, tag, className, dataSource: extra.dataSource ?? null, dataDriven: extra.dataDriven ?? false, component: "" });
+) => ({ id, fingerprint, rect, computed: {}, childIds, tag, className, dataSource: extra.dataSource ?? null, dataDriven: extra.dataDriven ?? false, component: "", text: "" });
 // main > (h1, ul > (li#a, li#b)) — the two li share a fingerprint (list rows) and are data-driven.
 const SNAP: StructureSnapshotWire = {
   rootId: "main",
