@@ -33,10 +33,10 @@
 
 ## 5. Soft Screen Creation gate
 
-- [ ] 5.1 Allow page composition against `light-only` components (remove the hard "all components first" block for composition).
-- [ ] 5.2 Gate page→framework compile per component on `framework-ready`; report and name blocking `light-only` components.
-- [ ] 5.3 Update CLAUDE.md's Screen Creation prerequisites to the soft, per-component gate (docs).
-- [ ] 5.4 Verify: composing with not-ready components works; compiling names the blockers; a fully-ready page compiles with no block.
+- [ ] 5.1 Allow page composition against `light-only` components (remove the hard "all components first" block for composition). → DEFERRED (live): VortSpec's compose softly gates on a non-empty ROSTER (`ComposePanel` "components first", `useComposeRun` §6.4); the change is to make the light palette's components count in the roster. Integration + live verify.
+- [x] 5.2 Gate page→framework compile per component on `framework-ready`; report and name blocking `light-only` components. → CORE done: `compileBlockers()` in `readiness.ts` (names the not-yet-ready components). Wiring into the compile flow lands with group 6.
+- [ ] 5.3 Update CLAUDE.md's Screen Creation prerequisites to the soft, per-component gate (docs). → DEFERRED to ship-time per design.md migration §5 ("once the flow is proven"); boundary-sensitive — do NOT edit the SDD-DE toolkit CLAUDE.md gate before the flow ships.
+- [ ] 5.4 Verify: composing with not-ready components works; compiling names the blockers; a fully-ready page compiles with no block. → compile-blocker naming is unit-tested (readiness); compose-with-not-ready + fully-ready-compiles are live (need group 6 + roster wiring).
 
 ## 6. Deterministic light→framework compile (React-CVA first)
 
