@@ -2,7 +2,7 @@ import { describe, expect, it, beforeEach, afterEach } from "vitest";
 import { mkdtemp, rm, mkdir, writeFile, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { applyCanvasEdit } from "./write";
+import { applyCanvasEdit, isEditableProjectFile } from "./write";
 import type { Anchor } from "@vortspec/core/canvas-edit";
 
 function anchorAt(text: string, needle: string): Anchor {
@@ -32,6 +32,36 @@ beforeEach(async () => {
 });
 afterEach(async () => {
   await rm(dir, { recursive: true, force: true });
+});
+
+describe("isEditableProjectFile — RT-1 path-containment gate", () => {
+  const proj = "/tmp/proj";
+  it("accepts source files inside the project", () => {
+    expect(isEditableProjectFile(proj, "src/App.tsx")).toBe(true);
+    expect(isEditableProjectFile(proj, "src/components/Card.jsx")).toBe(true);
+  });
+  it("rejects path traversal out of the project", () => {
+    expect(isEditableProjectFile(proj, "../../../etc/passwd.tsx")).toBe(false);
+    expect(isEditableProjectFile(proj, "../sibling/App.tsx")).toBe(false);
+    expect(isEditableProjectFile(proj, "/etc/hosts")).toBe(false);
+  });
+  it("rejects non-source files (even inside the project)", () => {
+    expect(isEditableProjectFile(proj, "index.html")).toBe(false);
+    expect(isEditableProjectFile(proj, "src/styles.css")).toBe(false);
+    expect(isEditableProjectFile(proj, "")).toBe(false);
+  });
+});
+
+describe("applyCanvasEdit refuses an out-of-project / non-source target BEFORE any I/O", () => {
+  it("returns ok:false for a traversal path and never touches disk", async () => {
+    const res = await applyCanvasEdit(dir, "../../../etc/passwd.tsx", { op: "delete", anchor: { line: 1, column: 0 } });
+    expect(res.ok).toBe(false);
+    expect(res.reason).toMatch(/outside the project|not a source file/);
+  });
+  it("returns ok:false for index.html (not a JSX source file)", async () => {
+    const res = await applyCanvasEdit(dir, "index.html", { op: "delete", anchor: { line: 9, column: 4 } });
+    expect(res.ok).toBe(false);
+  });
 });
 
 describe("applyCanvasEdit", () => {

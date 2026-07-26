@@ -7,7 +7,7 @@
  * statically resolvable the write is WITHHELD and a reason is returned — the caller keeps
  * the optimistic overlay and offers the assistant hand-off (never a silent AI run).
  */
-import { join } from "node:path";
+import { join, resolve, relative, isAbsolute } from "node:path";
 import { writeFile } from "node:fs/promises";
 import { snapshotComponent } from "../inspector/component-reader";
 import type { CanvasEdit, CanvasWriteResult } from "@vortspec/core/canvas-edit";
@@ -28,11 +28,27 @@ import {
 
 export type { CanvasEdit, CanvasWriteResult };
 
+/**
+ * Security gate (red-team RT-1): `file` derives from the DOM's `data-source`, which is UNTRUSTED —
+ * a project (or a hostile page) can render `data-source="../../../etc/passwd:1:1"`. Refuse anything
+ * that escapes the project root or isn't a source file, BEFORE we read or write it. Path-traversal
+ * and non-source targets are rejected here so no codemod ever touches a file outside the project.
+ */
+export function isEditableProjectFile(projectPath: string, file: string): boolean {
+  if (typeof file !== "string" || file.length === 0) return false;
+  const rel = relative(projectPath, resolve(projectPath, file));
+  if (rel === "" || rel.startsWith("..") || isAbsolute(rel)) return false; // escapes the project root
+  return /\.(tsx|jsx|ts|js|mjs|cjs)$/.test(file);
+}
+
 export async function applyCanvasEdit(
   projectPath: string,
   file: string,
   edit: CanvasEdit,
 ): Promise<CanvasWriteResult> {
+  if (!isEditableProjectFile(projectPath, file)) {
+    return { ok: false, reason: `Refusing to edit "${file}" — it's outside the project or not a source file.` };
+  }
   const snapshot = await snapshotComponent(projectPath, file);
   const before = snapshot.find((s) => s.path === file)?.content;
   if (before === undefined) return { ok: false, reason: `Couldn't read ${file}.` };
