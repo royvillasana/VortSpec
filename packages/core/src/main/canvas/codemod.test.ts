@@ -248,6 +248,13 @@ export function App() {
 }`;
     expect(() => removeArrayItem(src, anchorAt(src, "<li"), 0)).toThrow(/local array/);
   });
+
+  it("withholds when the map callback isn't 1 element/item (conditional → index may not align)", () => {
+    const cond = `const items = ["a","b"];
+export function App(){ return <ul>{items.map((it) => it ? <li className="row">{it}</li> : null)}</ul>; }`;
+    expect(listItems(cond, anchorAt(cond, "<li"))).toBeNull();
+    expect(() => removeArrayItem(cond, anchorAt(cond, "<li"), 0)).toThrow(/local array/);
+  });
 });
 
 describe("structural codemods", () => {

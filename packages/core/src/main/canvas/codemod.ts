@@ -359,6 +359,24 @@ export function moveNodeRelative(text: string, from: Anchor, target: Anchor, pos
  * null when the data isn't a local literal (props / state / an API / a chained `.filter().map()`),
  * where reordering by rendered index would be ambiguous — those still hand off to the assistant.
  */
+/** Whether a `.map()` callback renders exactly one JSX element per item (so rendered index = array
+ *  index). Rejects a conditional (ternary / `&&`), a fragment (0..N children), or multiple returns. */
+function mapRendersOneElement(call: import("ts-morph").CallExpression): boolean {
+  const cb = call.getArguments()[0];
+  if (!cb || (!Node.isArrowFunction(cb) && !Node.isFunctionExpression(cb))) return false;
+  const body = cb.getBody();
+  let ret: Node | undefined;
+  if (Node.isBlock(body)) {
+    const returns = body.getDescendantsOfKind(SyntaxKind.ReturnStatement);
+    if (returns.length !== 1) return false; // conditional / multiple returns → index may not align
+    ret = returns[0].getExpression();
+  } else {
+    ret = body;
+  }
+  while (ret && Node.isParenthesizedExpression(ret)) ret = ret.getExpression();
+  return !!ret && (Node.isJsxElement(ret) || Node.isJsxSelfClosingElement(ret));
+}
+
 function mappedArrayLiteral(sf: ReturnType<typeof sourceFileOf>, anchor: Anchor): import("ts-morph").ArrayLiteralExpression | null {
   const el = jsxAt(sf, anchor);
   if (!el) return null;
@@ -375,6 +393,10 @@ function mappedArrayLiteral(sf: ReturnType<typeof sourceFileOf>, anchor: Anchor)
     n = n.getParent();
   }
   if (!call) return null;
+  // The rendered index only equals the ARRAY index when the callback renders exactly ONE element per
+  // item, unconditionally. A ternary/`&&`/fragment/multi-return callback can skip or emit multiple
+  // elements, so a by-index list edit could hit the wrong item — withhold and hand off instead.
+  if (!mapRendersOneElement(call)) return null;
   const access = call.getExpression();
   if (!Node.isPropertyAccessExpression(access)) return null;
   const mapped = access.getExpression();
