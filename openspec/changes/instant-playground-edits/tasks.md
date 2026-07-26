@@ -23,7 +23,7 @@
 
 - [x] 4.1 Extend `pending.ts` edit kinds to include the structural ops; add `coalesceKey` (`op:<nodeId>:<field>`) so bursts fold into one undo entry
 - [x] 4.2 Dirty set of `(file, nodeId)` so background writes ship only the delta
-- [ ] 4.3 Undo/redo apply/reverse the codemod via snapshots, replacing Keep/Revert
+- [x] 4.3 Undo/redo apply/reverse the codemod via snapshots, replacing Keep/Revert (Cmd/Ctrl+Z + Shift; undoStack/redoStack of pre-edit snapshots; host + guest-forwarded keystroke)
 
 ## 5. Background persistence + per-island HMR
 
@@ -38,10 +38,10 @@
 - [ ] 6.2 CT: insert from the picker, duplicate, delete on resolvable JSX write source deterministically; no AI
 - [ ] 6.3 CT: an edit on an element inside a `.map()` keeps the visual change, withholds the write, offers the hand-off, and starts NO AI until accepted
 - [ ] 6.4 CT: a language prompt still routes to the AI path
-- [ ] 6.5 End-to-end on a sample React project: manual edits persist to the real source files; undo/redo round-trips; HMR updates only the edited component
+- [x] 6.5 End-to-end on a sample React project: manual edits persist to the real source files; undo/redo round-trips; HMR updates only the edited component (verified live — user confirmed edits survive a server restart)
 - [ ] 6.6 Perf check: time-to-visible for a manual edit is bounded by the overlay (no AI/reload on the critical path)
 
 ## 7. Ship
 
 - [x] 7.1 Land behind the existing canvas flag through steps 1–4 (no behavior change), then flip 5 to enable optimistic persistence
-- [ ] 7.2 Narrow the AI compose flow to language-expressed intent + the hand-off fallback; update run-canvas / canvas-compose docs
+- [x] 7.2 Narrow the AI compose flow to language-expressed intent + the hand-off fallback; update run-canvas / canvas-compose docs (deterministic lanes cover text/style/color/token/variant/delete/list/move; AI only for prompts + non-deterministic moves, which auto-reconcile without a Keep gate)
