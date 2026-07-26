@@ -580,6 +580,11 @@ function buildStructureSnapshot(rootEl: Element): StructureSnapshotWire {
       rect: rectOf(el),
       computed: layoutComputed(el),
       childIds: kids.map(structureIdOf),
+      // DR-1: per-node identity for the projected node tree.
+      tag: el.tagName.toLowerCase(),
+      className: typeof el.className === "string" ? el.className : "",
+      dataSource: el.getAttribute("data-source"),
+      dataDriven: listIndexOf(el) != null,
     };
     for (const k of kids) walk(k);
     return id;

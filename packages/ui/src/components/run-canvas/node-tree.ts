@@ -24,9 +24,14 @@ export interface ProjectedNode {
   rect: { x: number; y: number; width: number; height: number };
   /** Computed layout subset (display, flex-direction, gap, …). */
   computed: Record<string, string>;
-  /** True when the node is rendered from external data (a `.map`/conditional over props/state/API)
-   *  and so isn't directly editable in source — filled during enrichment (task 1.3). */
-  dataDriven?: boolean;
+  /** Lowercase tag name. */
+  tag: string;
+  /** className string (empty when none). */
+  className: string;
+  /** `data-source` anchor — a HINT for reconciliation; identity is the fingerprint. Null unstamped. */
+  dataSource: string | null;
+  /** True when rendered from a list (a data-driven node) — not directly editable as a single JSX node. */
+  dataDriven: boolean;
 }
 
 export interface Projection {
@@ -52,6 +57,10 @@ export function buildProjection(snapshot: StructureSnapshotWire | null): Project
       childIds: n.childIds.filter((c) => c in snapshot.nodes),
       rect: n.rect,
       computed: n.computed,
+      tag: n.tag,
+      className: n.className,
+      dataSource: n.dataSource,
+      dataDriven: n.dataDriven,
     });
   }
   // Second pass: wire parents from each node's children.

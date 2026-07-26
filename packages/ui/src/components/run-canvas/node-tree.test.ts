@@ -3,15 +3,23 @@ import { buildProjection, findByFingerprint, walkProjection } from "./node-tree"
 import type { StructureSnapshotWire } from "@vortspec/core/ipc";
 
 const rect = { x: 0, y: 0, width: 10, height: 10 };
-// main > (h1, ul > (li#a, li#b))
+const n = (
+  id: string,
+  fingerprint: string,
+  tag: string,
+  className: string,
+  childIds: string[],
+  extra: { dataSource?: string | null; dataDriven?: boolean } = {},
+) => ({ id, fingerprint, rect, computed: {}, childIds, tag, className, dataSource: extra.dataSource ?? null, dataDriven: extra.dataDriven ?? false });
+// main > (h1, ul > (li#a, li#b)) — the two li share a fingerprint (list rows) and are data-driven.
 const SNAP: StructureSnapshotWire = {
   rootId: "main",
   nodes: {
-    main: { id: "main", fingerprint: "main", rect, computed: {}, childIds: ["h1", "ul"] },
-    h1: { id: "h1", fingerprint: "main>h1.title", rect, computed: {}, childIds: [] },
-    ul: { id: "ul", fingerprint: "main>ul.list", rect, computed: {}, childIds: ["li-a", "li-b"] },
-    "li-a": { id: "li-a", fingerprint: "main>ul>li.row", rect, computed: {}, childIds: [] },
-    "li-b": { id: "li-b", fingerprint: "main>ul>li.row", rect, computed: {}, childIds: [] },
+    main: n("main", "main", "main", "page", ["h1", "ul"], { dataSource: "src/App.tsx:7:4" }),
+    h1: n("h1", "main>h1.title", "h1", "title", [], { dataSource: "src/App.tsx:8:6" }),
+    ul: n("ul", "main>ul.list", "ul", "list", ["li-a", "li-b"]),
+    "li-a": n("li-a", "main>ul>li.row", "li", "row", [], { dataDriven: true }),
+    "li-b": n("li-b", "main>ul>li.row", "li", "row", [], { dataDriven: true }),
   },
 };
 
@@ -31,8 +39,14 @@ describe("buildProjection", () => {
   });
 
   it("drops a child reference that isn't in nodes (defensive)", () => {
-    const p = buildProjection({ rootId: "main", nodes: { main: { id: "main", fingerprint: "main", rect, computed: {}, childIds: ["ghost"] } } });
+    const p = buildProjection({ rootId: "main", nodes: { main: n("main", "main", "main", "", ["ghost"]) } });
     expect(p.byId.get("main")?.childIds).toEqual([]);
+  });
+
+  it("carries the enriched identity fields (tag/className/dataSource/dataDriven)", () => {
+    const p = buildProjection(SNAP);
+    expect(p.byId.get("h1")).toMatchObject({ tag: "h1", className: "title", dataSource: "src/App.tsx:8:6", dataDriven: false });
+    expect(p.byId.get("li-a")).toMatchObject({ tag: "li", className: "row", dataDriven: true });
   });
 
   it("returns an empty projection for a null snapshot", () => {

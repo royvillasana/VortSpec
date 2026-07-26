@@ -251,6 +251,15 @@ export const structureNodeSchema = z.object({
   computed: z.record(z.string(), z.string()).default({}),
   /** Element-child ids in DOM order (empty for a leaf). */
   childIds: z.array(z.string()).default([]),
+  // DR-1 (instatic-node-tree) enrichment: per-node identity for the projected node tree.
+  /** Lowercase tag name. */
+  tag: z.string().default(""),
+  /** className string (empty when none). */
+  className: z.string().default(""),
+  /** `data-source` anchor (a hint; identity is the fingerprint). Null when unstamped. */
+  dataSource: z.string().nullable().default(null),
+  /** True when rendered from a list (shares its data-source with siblings) — a data-driven node. */
+  dataDriven: z.boolean().default(false),
 });
 export type StructureNodeWire = z.infer<typeof structureNodeSchema>;
 
