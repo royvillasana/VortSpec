@@ -8,11 +8,11 @@
 
 ## 2. Light "design system" palette
 
-- [ ] 2.1 Build the fast/low-cost (Haiku-tier) generator: contract + `designer.md` → light HTML/CSS/JS shelf entry per component, styled from resolved token values, no framework runtime.
-- [ ] 2.2 Generate the visual-reference section: components, spacing, margins, padding, tokens — each with resolved value.
-- [ ] 2.3 Enforce the no-direct-Figma constraint: generator reads only extracted artifacts; add a check that it makes no Figma call.
-- [ ] 2.4 Surface the palette as a browsable "design system" view in the Playground/IDE (packages/ui), distinct from real Storybook.
-- [ ] 2.5 Verify: palette renders every contract component before any framework component exists; real Storybook still generated separately.
+- [x] 2.1 Build the fast/low-cost (Haiku-tier) generator: contract + `designer.md` → light HTML/CSS/JS shelf entry per component, styled from resolved token values, no framework runtime. → `renderPaletteHtml()` in `packages/core/src/shared/palette.ts` (self-contained HTML, inline styles from resolved values)
+- [x] 2.2 Generate the visual-reference section: components, spacing, margins, padding, tokens — each with resolved value. → `buildPalette()` foundations + `renderTokenGroup`/`renderScale` (colors/type/spacing/margins/padding/shadows/radius swatches with resolved values)
+- [x] 2.3 Enforce the no-direct-Figma constraint: generator reads only extracted artifacts; add a check that it makes no Figma call. → pure over the manifest (no network); `paletteSelfContainmentIssues()` guard = no `<script>`/external assets; `findFrameworkPointers()` guard on stand-ins
+- [ ] 2.4 Surface the palette as a browsable "design system" view in the Playground/IDE (packages/ui), distinct from real Storybook. → NEXT: IPC (designer.md → palette HTML) + a `DesignSystem` iframe view + rail entry; needs live verification in the app
+- [x] 2.5 Verify: palette renders every contract component before any framework component exists; real Storybook still generated separately. → 9 tests in `palette.test.ts` (renders every component incl. placeholders; Storybook untouched)
 
 ## 3. Component stand-in harvest
 
