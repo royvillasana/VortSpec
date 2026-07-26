@@ -87,18 +87,23 @@ function renderTokenGroup(group: TokenGroup, entries: LiteToken[]): string {
         demo = `<span class="lp-radius" style="border-radius:${v}"></span>`;
         break;
     }
-    return `<div class="lp-token">${demo}<code class="lp-name">${esc(t.name)}</code><code class="lp-val">${v}</code></div>`;
+    return `<div class="lp-token">${demo}<code class="lp-name" title="${esc(t.name)}">${esc(t.name)}</code><code class="lp-val" title="${v}">${v}</code></div>`;
   };
-  return `<section class="lp-group"><h3>${esc(group)}</h3><div class="lp-tokens">${entries.map(swatch).join("")}</div></section>`;
+  // Bento emphasis: the most visual groups get a wider cell.
+  const span = group === "colors" || group === "typography" ? " lp-span2" : "";
+  return `<section class="lp-card${span}"><h3>${esc(group)}</h3><div class="lp-tokens">${entries.map(swatch).join("")}</div></section>`;
 }
 
 /** Render one scale (spacing / margins / padding) as labelled bars. */
 function renderScale(label: string, entries: LiteToken[]): string {
   if (entries.length === 0) return "";
   const bars = entries
-    .map((t) => `<div class="lp-token"><span class="lp-bar" style="width:${esc(t.value)}"></span><code class="lp-name">${esc(t.name)}</code><code class="lp-val">${esc(t.value)}</code></div>`)
+    .map((t) => {
+      const v = esc(t.value);
+      return `<div class="lp-token"><span class="lp-bar" style="width:${v}"></span><code class="lp-name" title="${esc(t.name)}">${esc(t.name)}</code><code class="lp-val" title="${v}">${v}</code></div>`;
+    })
     .join("");
-  return `<section class="lp-group"><h3>${esc(label)}</h3><div class="lp-tokens">${bars}</div></section>`;
+  return `<section class="lp-card"><h3>${esc(label)}</h3><div class="lp-tokens">${bars}</div></section>`;
 }
 
 function renderComponent(c: PaletteComponent): string {
@@ -117,7 +122,8 @@ function renderComponent(c: PaletteComponent): string {
       return `<figure class="lp-variant"><div class="lp-render">${body}</div><figcaption>${esc(s.variant)}</figcaption></figure>`;
     })
     .join("");
-  return `<article class="lp-component" data-component="${esc(c.name)}"><header><h3>${esc(c.name)}</h3><span class="lp-tier">${esc(c.tier)}</span>${badge}${placeholder}</header><div class="lp-variants">${variants}</div></article>`;
+  const span = c.tier === "organism" || c.tier === "template" ? " lp-span2" : "";
+  return `<article class="lp-card lp-component${span}" data-component="${esc(c.name)}"><header><h3 title="${esc(c.name)}">${esc(c.name)}</h3><span class="lp-tier">${esc(c.tier)}</span>${badge}${placeholder}</header><div class="lp-variants">${variants}</div></article>`;
 }
 
 const PALETTE_CSS = `
@@ -126,34 +132,36 @@ const PALETTE_CSS = `
 *{box-sizing:border-box}
 html,body{height:100%}
 body{margin:0;font:14px/1.5 system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--fg)}
-.lp{padding:24px;display:flex;flex-direction:column;gap:32px}
-.lp h1{font-size:20px;margin:0}
-.lp h2{font-size:13px;margin:0 0 12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
-.lp h3{font-size:13px;margin:0 0 10px;font-weight:600}
-.lp-groups,.lp-shelf{display:grid;gap:16px}
-.lp-groups{grid-template-columns:repeat(auto-fill,minmax(240px,1fr))}
-.lp-shelf{grid-template-columns:repeat(auto-fill,minmax(240px,1fr))}
-.lp-tokens{display:flex;flex-direction:column;gap:8px}
-.lp-token{display:flex;align-items:center;gap:10px}
-.lp-name{font-size:11px;font-family:ui-monospace,monospace}
-.lp-val{font-size:11px;color:var(--muted);margin-left:auto;font-family:ui-monospace,monospace}
-.lp-chip{width:22px;height:22px;border-radius:5px;border:1px solid var(--border);flex:none}
+.lp{padding:24px;display:flex;flex-direction:column;gap:28px;max-width:1440px}
+.lp h1{font-size:20px;margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lp h2{font-size:12px;margin:0 0 14px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+.lp h3{font-size:13px;margin:0 0 12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* bento grid: dense auto-flow; emphasis cells span two columns */
+.lp-bento{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));grid-auto-flow:row dense;gap:16px;align-items:start}
+.lp-span2{grid-column:span 2}
+@media (max-width:520px){.lp-span2{grid-column:span 1}}
+.lp-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;min-width:0}
+.lp-tokens{display:flex;flex-direction:column;gap:9px}
+.lp-token{display:flex;align-items:center;gap:10px;min-width:0}
+.lp-name{font-size:11px;font-family:ui-monospace,monospace;flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lp-val{font-size:11px;color:var(--muted);font-family:ui-monospace,monospace;flex:0 0 auto;max-width:45%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:right}
+.lp-chip{width:22px;height:22px;border-radius:6px;border:1px solid var(--border);flex:none}
 .lp-type{display:inline-block;min-width:30px;line-height:1;flex:none}
-.lp-bar{display:inline-block;height:12px;background:var(--fg);border-radius:2px;opacity:.55;flex:none}
-.lp-shadow{display:inline-block;width:22px;height:22px;border-radius:5px;background:var(--card);flex:none}
+.lp-bar{display:inline-block;height:12px;max-width:100%;background:var(--fg);border-radius:2px;opacity:.55;flex:none}
+.lp-shadow{display:inline-block;width:22px;height:22px;border-radius:6px;background:var(--card);border:1px solid var(--border);flex:none}
 .lp-radius{display:inline-block;width:22px;height:22px;background:var(--fg);opacity:.35;flex:none}
-.lp-component,.lp-group{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px}
-.lp-component header{display:flex;align-items:center;gap:6px;margin-bottom:12px}
-.lp-tier{font-size:10px;text-transform:uppercase;color:var(--muted);letter-spacing:.05em}
-.lp-badge{font-size:10px;padding:1px 7px;border-radius:99px;margin-left:auto}
+.lp-component header{display:flex;align-items:center;gap:6px;margin-bottom:12px;min-width:0}
+.lp-component h3{margin:0;flex:0 1 auto}
+.lp-tier{font-size:10px;text-transform:uppercase;color:var(--muted);letter-spacing:.05em;flex:none}
+.lp-badge{font-size:10px;padding:1px 7px;border-radius:99px;margin-left:auto;flex:none;white-space:nowrap}
 .lp-light{background:#fde68a;color:#78350f}
 .lp-ready{background:#bbf7d0;color:#14532d}
 .lp-placeholder{background:#e5e7eb;color:#374151;margin-left:4px}
 .lp-variants{display:flex;flex-wrap:wrap;gap:12px}
-.lp-variant{margin:0;display:flex;flex-direction:column;gap:6px;align-items:flex-start}
-.lp-variant figcaption{font-size:10px;color:var(--muted);font-family:ui-monospace,monospace}
-.lp-render{display:flex;align-items:center;justify-content:center;min-height:48px;min-width:96px}
-.lp-ph{display:flex;align-items:center;justify-content:center;min-height:48px;min-width:120px;padding:8px 12px;border:1px dashed var(--border);border-radius:8px;color:var(--muted);font-size:11px}
+.lp-variant{margin:0;display:flex;flex-direction:column;gap:6px;align-items:flex-start;min-width:0;max-width:100%}
+.lp-variant figcaption{font-size:10px;color:var(--muted);font-family:ui-monospace,monospace;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lp-render{display:flex;align-items:center;justify-content:center;min-height:48px;min-width:96px;max-width:100%;overflow:hidden}
+.lp-ph{display:flex;align-items:center;justify-content:center;min-height:48px;min-width:120px;padding:8px 12px;border:1px dashed var(--border);border-radius:8px;color:var(--muted);font-size:11px;text-align:center}
 `;
 
 /**
@@ -168,7 +176,7 @@ export function renderPaletteHtml(p: Palette): string {
     renderScale("padding", p.foundations.padding),
   ].join("");
   const shelf = p.components.map(renderComponent).join("");
-  const body = `<div class="lp"><h1>${esc(p.name)}</h1><section><h2>Foundations</h2><div class="lp-groups">${foundations}</div></section><section><h2>Components</h2><div class="lp-shelf">${shelf}</div></section></div>`;
+  const body = `<div class="lp"><h1>${esc(p.name)}</h1><section><h2>Foundations</h2><div class="lp-bento">${foundations}</div></section><section><h2>Components</h2><div class="lp-bento">${shelf}</div></section></div>`;
   const html = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>${PALETTE_CSS}</style></head><body>${body}</body></html>`;
 
   const leaks = findFrameworkPointers(shelf);
