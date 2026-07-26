@@ -13,6 +13,7 @@ import { snapshotComponent } from "../inspector/component-reader";
 import type { CanvasEdit, CanvasWriteResult } from "@vortspec/core/canvas-edit";
 import {
   checkResolvability,
+  resolveEditAnchor,
   setJsxAttr,
   setInlineStyle,
   setTextNode,
@@ -45,6 +46,8 @@ export async function applyCanvasEdit(
   projectPath: string,
   file: string,
   edit: CanvasEdit,
+  /** The selected element's identity (tag + className) so a stale anchor can be re-located (DR-2). */
+  expect?: { tag?: string; className?: string },
 ): Promise<CanvasWriteResult> {
   if (!isEditableProjectFile(projectPath, file)) {
     return { ok: false, reason: `Refusing to edit "${file}" — it's outside the project or not a source file.` };
@@ -59,13 +62,24 @@ export async function applyCanvasEdit(
     return { ok: false, reason: "This file is too large to edit in the canvas — use the assistant." };
   }
 
+  // DR-2: for a single-node edit, VERIFY the anchor points at the expected element (tag + className)
+  // and re-locate by identity if it's stale. List/move ops resolve differently and keep raw anchors.
+  const singleNode =
+    edit.op === "attr" || edit.op === "style" || edit.op === "text" || edit.op === "delete" || edit.op === "duplicate" || edit.op === "insert";
+  let anchor = edit.anchor;
+  if (singleNode && expect && (expect.tag || expect.className !== undefined)) {
+    const resolved = resolveEditAnchor(before, edit.anchor, expect);
+    if (!resolved) return { ok: false, reason: "Couldn't confidently locate this element in source — try the assistant." };
+    anchor = resolved;
+  }
+
   // List-data edits target a MAPPED element on purpose (un-resolvable as a single node) — they edit
   // the backing local array instead, so they skip the single-node resolvability guard; the codemod
   // withholds if the array isn't a local literal.
   const isListOp = edit.op === "listRemove" || edit.op === "listReorder";
   // The resolvability guard is a correctness gate: never rewrite an un-resolvable anchor.
   if (!isListOp) {
-    const guard = checkResolvability(before, edit.anchor);
+    const guard = checkResolvability(before, anchor);
     if (!guard.resolvable) return { ok: false, reason: guard.reason };
   }
   // A relative move must also resolve its DROP target statically (not a list/conditional).
@@ -78,23 +92,23 @@ export async function applyCanvasEdit(
   try {
     switch (edit.op) {
       case "attr":
-        after = setJsxAttr(before, edit.anchor, edit.name, edit.value);
+        after = setJsxAttr(before, anchor, edit.name, edit.value);
         break;
       case "style":
-        after = setInlineStyle(before, edit.anchor, edit.css);
+        after = setInlineStyle(before, anchor, edit.css);
         break;
       case "text":
-        after = setTextNode(before, edit.anchor, edit.text);
+        after = setTextNode(before, anchor, edit.text);
         break;
       case "insert":
-        after = insertComponent(before, edit.anchor, {
+        after = insertComponent(before, anchor, {
           name: edit.name,
           importFrom: edit.importFrom,
           index: edit.index,
         });
         break;
       case "delete":
-        after = deleteNode(before, edit.anchor);
+        after = deleteNode(before, anchor);
         break;
       case "listRemove":
         after = removeArrayItem(before, edit.anchor, edit.index);
@@ -103,7 +117,7 @@ export async function applyCanvasEdit(
         after = reorderArrayItem(before, edit.anchor, edit.from, edit.to);
         break;
       case "duplicate":
-        after = duplicateNode(before, edit.anchor);
+        after = duplicateNode(before, anchor);
         break;
       case "move":
         after = edit.position

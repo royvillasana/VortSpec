@@ -177,6 +177,8 @@ export interface VortSpecApi {
     projectPath: string,
     file: string,
     edit: import("./canvas-edit").CanvasEdit,
+    /** The element's tag+className, so a stale anchor can be re-located by identity (DR-2). */
+    expect?: { tag?: string; className?: string },
   ): Promise<IpcResponse<"canvas:writeEdit">>;
   /** Persist the figma-mode → code-context map (transparent-cockpit editor). */
   setTokenModeMap(

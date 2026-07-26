@@ -15,6 +15,7 @@ import {
   reorderArrayItem,
   listItems,
   matchBySignature,
+  resolveEditAnchor,
   type Anchor,
 } from "./codemod";
 
@@ -156,6 +157,28 @@ describe("moveNodeRelative — drag-drop reorder", () => {
 
   it("refuses to move an element into itself", () => {
     expect(() => moveNodeRelative(CARD, anchorAt(CARD, "<div"), anchorAt(CARD, "<h2"), "after")).toThrow();
+  });
+});
+
+describe("resolveEditAnchor — verify/re-locate by identity (DR-2)", () => {
+  it("keeps the raw anchor when the element there matches the expected identity", () => {
+    const a = anchorAt(CARD, "<h2");
+    expect(resolveEditAnchor(CARD, a, { tag: "h2", className: "title" })).toEqual(a);
+  });
+  it("re-locates when the anchor is STALE (points at the wrong element)", () => {
+    // Anchor at <div>, but we expect the h2.title → re-locate to the h2's real anchor.
+    const stale = anchorAt(CARD, "<div");
+    expect(resolveEditAnchor(CARD, stale, { tag: "h2", className: "title" })).toEqual(anchorAt(CARD, "<h2"));
+  });
+  it("returns null when a stale anchor can't be uniquely re-located", () => {
+    const src = `export function C(){return <div><span className="t">a</span><span className="t">b</span></div>;}`;
+    const stale = anchorAt(src, "<div");
+    expect(resolveEditAnchor(src, stale, { tag: "span", className: "t" })).toBeNull();
+  });
+  it("passes through when there's nothing to verify against", () => {
+    const a = anchorAt(CARD, "<h2");
+    expect(resolveEditAnchor(CARD, a, undefined)).toEqual(a);
+    expect(resolveEditAnchor(CARD, a, {})).toEqual(a);
   });
 });
 

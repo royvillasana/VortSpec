@@ -42,40 +42,41 @@ export function coalesceKey(edit: PendingEdit): string {
  * anchor. Returns null when the edit can't be written deterministically (no anchor, or a kind
  * that needs class inference / the token file) — the caller then keeps it on the AI/other path.
  */
-export function toCanvasEdit(edit: PendingEdit, selection: Selection): { file: string; edit: CanvasEdit } | null {
+/** The selected element's identity, so a stale anchor can be re-located by signature at write time (DR-2). */
+export type EditExpect = { tag?: string; className?: string };
+export type DeterministicEdit = { file: string; edit: CanvasEdit; expect: EditExpect };
+
+export function toCanvasEdit(edit: PendingEdit, selection: Selection): DeterministicEdit | null {
   const parsed = parseAnchor(selection.dataSource);
   if (!parsed) return null;
   const { file, anchor } = parsed;
+  // Carried to the write so it verifies/re-locates the anchor by identity (DR-2).
+  const expect: EditExpect = { tag: selection.label || undefined, className: edit.elementClassName || undefined };
+  const det = (e: CanvasEdit): DeterministicEdit => ({ file, edit: e, expect });
 
   // A whole-element deletion. For a repeated (list) row, delete the backing array item by index
   // instead of the shared JSX node — deterministic when the array is a local literal.
   if (edit.remove) {
-    if (selection.listIndex != null) {
-      return { file, edit: { op: "listRemove", anchor, index: selection.listIndex } };
-    }
-    return { file, edit: { op: "delete", anchor } };
+    if (selection.listIndex != null) return det({ op: "listRemove", anchor, index: selection.listIndex });
+    return det({ op: "delete", anchor });
   }
 
   // A variant change is a className swap — deterministic when we know the current classes.
   if (edit.kind === "variant" && (edit.addClasses?.length || edit.removeClasses?.length)) {
     if (edit.elementClassName === undefined) return null;
     const next = applyClassSwap(edit.elementClassName, edit.removeClasses, edit.addClasses);
-    return { file, edit: { op: "attr", anchor, name: "className", value: { kind: "string", value: next } } };
+    return det({ op: "attr", anchor, name: "className", value: { kind: "string", value: next } });
   }
 
   // An inline-text edit.
-  if (edit.key === "content") {
-    return { file, edit: { op: "text", anchor, text: edit.value } };
-  }
+  if (edit.key === "content") return det({ op: "text", anchor, text: edit.value });
 
   // Any edit that resolved to a concrete CSS override writes deterministically to the element's
   // inline `style={{}}` — instant, no AI. This covers a freeform literal (a color/radius/padding)
   // AND a token BINDING (`var(--x)`): a binding's css is `{ prop: "var(--name)" }`, which resolves
   // wherever the token is a CSS custom property (how VortSpec token files, and Tailwind v4, define
   // them). Token VALUE edits are routed away before this into their own instant lane.
-  if (edit.css && Object.keys(edit.css).length > 0) {
-    return { file, edit: { op: "style", anchor, css: edit.css } };
-  }
+  if (edit.css && Object.keys(edit.css).length > 0) return det({ op: "style", anchor, css: edit.css });
 
   return null;
 }
@@ -94,11 +95,11 @@ export function routeEdits(
   edits: PendingEdit[],
   selection: Selection,
 ): {
-  deterministic: { file: string; edit: CanvasEdit }[];
+  deterministic: DeterministicEdit[];
   tokenValues: { token: string; value: string }[];
   ledger: PendingEdit[];
 } {
-  const deterministic: { file: string; edit: CanvasEdit }[] = [];
+  const deterministic: DeterministicEdit[] = [];
   const tokenValues: { token: string; value: string }[] = [];
   const ledger: PendingEdit[] = [];
   for (const e of edits) {

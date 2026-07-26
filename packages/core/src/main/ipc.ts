@@ -412,7 +412,8 @@ const handlers: Record<IpcChannel, Handler> = {
     projectPath: string;
     file: string;
     edit: import("@vortspec/core/canvas-edit").CanvasEdit;
-  }) => applyCanvasEdit(req.projectPath, req.file, req.edit)) as Handler,
+    expect?: { tag?: string; className?: string };
+  }) => applyCanvasEdit(req.projectPath, req.file, req.edit, req.expect)) as Handler,
   "inspector:setTokenModeMap": ((req: { projectPath: string; map: Record<string, string> }) =>
     writeTokenModeMap(req.projectPath, req.map)) as Handler,
   "inspector:createToken": ((req: {

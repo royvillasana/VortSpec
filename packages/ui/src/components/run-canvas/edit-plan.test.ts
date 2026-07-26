@@ -39,16 +39,18 @@ describe("toCanvasEdit", () => {
   it("maps a variant edit to a className swap using the anchor", () => {
     const edit: PendingEdit = { ...base, kind: "variant", key: "variant:size", elementClassName: "btn size-md", removeClasses: ["size-md"], addClasses: ["size-lg"] };
     const r = toCanvasEdit(edit, sel("src/Button.tsx:4:6"));
-    expect(r).toEqual({
+    expect(r).toMatchObject({
       file: "src/Button.tsx",
       edit: { op: "attr", anchor: { line: 4, column: 6 }, name: "className", value: { kind: "string", value: "btn size-lg" } },
     });
+    // DR-2: carries the element identity so a stale anchor can be re-located.
+    expect(r?.expect).toEqual({ tag: "Button", className: "btn size-md" });
   });
 
   it("maps a text edit to setTextNode", () => {
     const edit: PendingEdit = { ...base, key: "content", value: "Save changes" };
     const r = toCanvasEdit(edit, sel("src/Button.tsx:7:8"));
-    expect(r).toEqual({ file: "src/Button.tsx", edit: { op: "text", anchor: { line: 7, column: 8 }, text: "Save changes" } });
+    expect(r).toMatchObject({ file: "src/Button.tsx", edit: { op: "text", anchor: { line: 7, column: 8 }, text: "Save changes" } });
   });
 
   it("maps a deletion to deleteNode", () => {
@@ -70,7 +72,7 @@ describe("toCanvasEdit", () => {
   it("maps a freeform style edit to an inline style op (literal value, no AI)", () => {
     const edit: PendingEdit = { ...base, kind: "style", key: "color", value: "#c53434", css: { color: "#c53434" } };
     const r = toCanvasEdit(edit, sel("src/Button.tsx:4:6"));
-    expect(r).toEqual({ file: "src/Button.tsx", edit: { op: "style", anchor: { line: 4, column: 6 }, css: { color: "#c53434" } } });
+    expect(r).toMatchObject({ file: "src/Button.tsx", edit: { op: "style", anchor: { line: 4, column: 6 }, css: { color: "#c53434" } } });
   });
 
   it("returns null for a freeform style edit with no anchor (falls back to the ledger)", () => {

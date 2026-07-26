@@ -247,8 +247,12 @@ const api: VortSpecApi = {
   metadataPlan: (projectPath: string) => invoke("inspector:metadataPlan", projectPath),
   setTokenValue: (projectPath: string, name: string, value: string, context?: string) =>
     invoke("inspector:setTokenValue", { projectPath, name, value, context }),
-  writeCanvasEdit: (projectPath: string, file: string, edit: import("@vortspec/core/canvas-edit").CanvasEdit) =>
-    invoke("canvas:writeEdit", { projectPath, file, edit }),
+  writeCanvasEdit: (
+    projectPath: string,
+    file: string,
+    edit: import("@vortspec/core/canvas-edit").CanvasEdit,
+    expect?: { tag?: string; className?: string },
+  ) => invoke("canvas:writeEdit", { projectPath, file, edit, expect }),
   setTokenModeMap: (projectPath: string, map: Record<string, string>) =>
     invoke("inspector:setTokenModeMap", { projectPath, map }),
   createToken: (projectPath: string, name: string, value: string, allowDuplicate?: boolean) =>

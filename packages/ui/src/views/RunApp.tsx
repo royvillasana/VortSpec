@@ -29,7 +29,7 @@ import {
   isTokenBinding,
   type PendingEdit,
 } from "../components/run-canvas/pending";
-import { routeEdits } from "../components/run-canvas/edit-plan";
+import { routeEdits, type DeterministicEdit } from "../components/run-canvas/edit-plan";
 import { createAutoPersist } from "../components/run-canvas/auto-persist";
 import { parseAnchor, type CanvasEdit } from "@vortspec/core/canvas-edit";
 import { useInspectorBridge, type CanvasMode } from "../lib/useInspectorBridge";
@@ -487,7 +487,7 @@ export function RunApp({
   // Instant deterministic edits (change: instant-playground-edits): when the dev source-stamp
   // is present, a variant/text/delete edit is written to source in the BACKGROUND — no Apply,
   // no AI. Un-stamped or freeform-style edits fall through to the gated `pending`/Apply flow.
-  const persistQueue = useRef<{ file: string; edit: CanvasEdit }[]>([]);
+  const persistQueue = useRef<DeterministicEdit[]>([]);
   // Token-VALUE edits (change a token's value — deterministic, already committed via setTokenValue)
   // ride the same instant lane: no Apply. A token binding (`var(--x)`) is a source edit and stays
   // on the gated path.
@@ -536,7 +536,7 @@ export function RunApp({
           const ordered = [...q].sort((a, b) => b.edit.anchor.line - a.edit.anchor.line);
           for (const it of ordered) {
             const r = await api
-              .writeCanvasEdit(project.path, it.file, it.edit)
+              .writeCanvasEdit(project.path, it.file, it.edit, it.expect)
               .catch(() => ({ ok: false as const, reason: "Couldn't write the change to source." }));
             // ok:false = the anchor wasn't statically resolvable (e.g. inside a list) — the
             // deterministic write is withheld; the optimistic change stays on screen.

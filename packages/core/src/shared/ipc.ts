@@ -663,7 +663,13 @@ export const ipcContract = {
     response: inspectorTokensResultSchema,
   },
   "canvas:writeEdit": {
-    request: z.object({ projectPath: z.string(), file: z.string(), edit: canvasEditSchema }),
+    request: z.object({
+      projectPath: z.string(),
+      file: z.string(),
+      edit: canvasEditSchema,
+      // The element's tag+className, so a stale anchor re-locates by identity at write time (DR-2).
+      expect: z.object({ tag: z.string().optional(), className: z.string().optional() }).optional(),
+    }),
     response: canvasWriteResultSchema,
   },
   "inspector:setTokenModeMap": {

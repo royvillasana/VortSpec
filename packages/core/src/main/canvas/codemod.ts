@@ -130,6 +130,32 @@ export function matchBySignature(text: string, sig: { tag: string; className?: s
   return { line: line + 1, column: character };
 }
 
+/**
+ * Resolve the anchor to actually edit (design-review DR-2): trust the `data-source` line:col, but
+ * VERIFY the element there matches the expected identity (tag + className the selection carried). If
+ * it doesn't — a stale/offset anchor, the class of bug that made writes silently miss — re-locate by
+ * class signature (`matchBySignature`). Returns the raw anchor when there's nothing to verify against,
+ * the re-located anchor on a unique signature match, or null when it can't be trusted (→ withhold).
+ */
+export function resolveEditAnchor(
+  text: string,
+  anchor: Anchor,
+  expect?: { tag?: string; className?: string },
+): Anchor | null {
+  if (!expect || (!expect.tag && expect.className === undefined)) return anchor;
+  const sf = sourceFileOf(text);
+  const el = jsxAt(sf, anchor);
+  if (el) {
+    const open = openingOf(el);
+    const tagOk = !expect.tag || open.getTagNameNode().getText() === expect.tag;
+    const clsOk = expect.className === undefined || classNameOf(open) === expect.className;
+    if (tagOk && clsOk) return anchor; // the raw anchor points at the right element — use it
+  }
+  // Anchor is stale or points at the wrong node → fall back to the identity matcher.
+  if (!expect.tag) return null; // can't re-locate without a tag
+  return matchBySignature(text, { tag: expect.tag, className: expect.className });
+}
+
 function requireEl(text: string, anchor: Anchor): { sf: ReturnType<typeof sourceFileOf>; el: JsxLike } {
   const sf = sourceFileOf(text);
   const el = jsxAt(sf, anchor);
