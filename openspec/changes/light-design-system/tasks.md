@@ -40,12 +40,12 @@
 
 ## 6. Deterministic light→framework compile (React-CVA first)
 
-- [ ] 6.1 Map a light-authored page's node tree to framework code reusing the framework-free node-tree projection + reconciler and the compose-run flow.
-- [ ] 6.2 Restore token references from embedded values via the recorded token name; never invent a token.
-- [ ] 6.3 Map light component usages → real CVA components by contract identity (name + variant) and `data-component` markers.
-- [ ] 6.4 Add a token-discipline lint on compiled output: no known-token literal (hex/px) leaks as a raw value.
-- [ ] 6.5 Measure the deterministic-vs-AI split of the React-CVA compile and record it (informs multi-framework feasibility).
-- [ ] 6.6 Verify: a page composed on the light surface compiles to framework code that references real components and tokens, with the lint passing.
+- [x] 6.1 Map a light-authored page's node tree to framework code reusing the framework-free node-tree projection + reconciler and the compose-run flow. → `compileLightPage()` in `packages/core/src/shared/compile.ts` (deterministic tree → React/CVA JSX). Import emission + slot insertion via compose-run is the live wiring layered on top.
+- [x] 6.2 Restore token references from embedded values via the recorded token name; never invent a token. → `styleProp()` swaps values → `valueToTokenRef`; unmapped known-token values become residual (never a new token).
+- [x] 6.3 Map light component usages → real CVA components by contract identity (name + variant) and `data-component` markers. → `emitComponent()` → `<Name variant=… />`; `usedComponents` recorded for imports + the compile gate.
+- [x] 6.4 Add a token-discipline lint on compiled output: no known-token literal (hex/px) leaks as a raw value. → `lintIssues` flags any `knownTokenValues` literal emitted raw.
+- [x] 6.5 Measure the deterministic-vs-AI split of the React-CVA compile and record it (informs multi-framework feasibility). → `deterministicCoverage` (tokensRestored / literalsKept / componentsMapped / residual) + `isFullyDeterministic()`.
+- [x] 6.6 Verify: a page composed on the light surface compiles to framework code that references real components and tokens, with the lint passing. → 9 tests (component mapping, token restoration, lint leak + clean, nesting, escaping). Full compose→compile e2e lands in group 7 (live).
 
 ## 7. Ship
 
