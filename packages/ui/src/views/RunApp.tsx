@@ -1117,13 +1117,23 @@ export function RunApp({
       return;
     }
 
-    // Otherwise a DETERMINISTIC element move: both ends stamped, same file, statically resolvable →
-    // write the reordered JSX to source. Anything else → auto-reconcile.
-    if (!drop.target || !src || !tgt || src.file !== tgt.file) {
-      autoReconcile();
+    // The origin isn't locatable, or the drop target isn't an editable JSX element (e.g. index.html's
+    // #root mount point, a portal, a lib-rendered node — no data-source). There is nowhere to write
+    // this move: REFUSE it (undo the live move + a short notice) rather than hand a dead-end to the
+    // assistant, which would just fail with a wall of text. (The guest also stops offering such
+    // targets, so this is mostly a safety net.)
+    if (!src || !drop.target || !tgt) {
+      bridge.revertMove();
+      setWriteError("You can't move it there — drop it onto an element inside your page.");
       return;
     }
-    applyMoveEdit(src.file, { op: "move", anchor: src.anchor, to: tgt.anchor, position: drop.target.position });
+    // Same file → DETERMINISTIC move, no AI. Different files but both editable JSX → genuinely needs
+    // the assistant to relocate across components; auto-reconcile in the background (no Keep gate).
+    if (src.file === tgt.file) {
+      applyMoveEdit(src.file, { op: "move", anchor: src.anchor, to: tgt.anchor, position: drop.target.position });
+      return;
+    }
+    autoReconcile();
   }
   // An invalid drop / forced cancel surfaces a transient sentence, auto-cleared.
   useEffect(() => {

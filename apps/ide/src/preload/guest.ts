@@ -608,6 +608,10 @@ let dragging: {
 function slotResolve(slot: Slot): { wire: InsertTargetWire; anchorEl: Element } | null {
   const anchorEl = structureEls.get(slot.anchorId);
   if (!anchorEl?.isConnected) return null;
+  // Only STAMPED elements are editable in source — never offer an unstampable anchor (index.html's
+  // #root mount point, a portal root, a lib-rendered node) as a drop target: there is no JSX sibling
+  // to write the move against, and the host would otherwise hand a dead-end move to the assistant.
+  if (!anchorEl.getAttribute("data-source")) return null;
   return {
     anchorEl,
     wire: {
