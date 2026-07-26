@@ -1,10 +1,10 @@
 ## 1. Lite manifest (`designer.md`)
 
-- [x] 1.1 Define the `designer.md` schema: dual-keyed tokens (name + resolved value), foundations (spacing/margins/padding/tokens), and per-component stand-in entries keyed by name + variant. → `.sdd-de/docs/lite-design-manifest-model.md`
-- [x] 1.2 Implement the derivation from `DESIGN.md` + `components.json` + Component Specs: pull resolved token values, the token→css-property map, variants, sizes-in-px, and states — no re-derivation. → `generate-lite-manifest` skill, steps 1–3
-- [x] 1.3 Strip all framework/Storybook pointers (JSX imports, `.variants.ts`, `localhost:6006`, `@/…`) so the manifest is a coherent light-only world. → skill step 4
-- [x] 1.4 Make generation idempotent: regenerate on extraction / `DESIGN.md` change; never preserve hand edits as authoritative. → skill step 5
-- [x] 1.5 Verify: generated `designer.md` for a sample contract contains no framework pointers and every token carries name + value. → skill step 6 (grep gate)
+- [x] 1.1 Define the `designer.md` schema: dual-keyed tokens (name + resolved value), foundations (spacing/margins/padding/tokens), and per-component stand-in entries keyed by name + variant. → VortSpec-native types in `packages/core/src/shared/lite-manifest.ts` (`LiteManifest`, `LiteToken`, `StandIn`, …)
+- [x] 1.2 Implement the derivation from `DESIGN.md` + `components.json` + Component Specs: pull resolved token values, the token→css-property map, variants, sizes-in-px, and states — no re-derivation. → pure `deriveLiteManifest()` + `serializeLiteManifest()` in `lite-manifest.ts` (fs/reader orchestration in `main/` follows in a later task)
+- [x] 1.3 Strip all framework/Storybook pointers (JSX imports, `.variants.ts`, `localhost:6006`, `@/…`) so the manifest is a coherent light-only world. → `findFrameworkPointers()` guard; `serializeLiteManifest` throws on any leak
+- [x] 1.4 Make generation idempotent: regenerate on extraction / `DESIGN.md` change; never preserve hand edits as authoritative. → derivation is a pure projection of its inputs (no merge/state); orchestrator will overwrite in place
+- [x] 1.5 Verify: generated `designer.md` for a sample contract contains no framework pointers and every token carries name + value. → 9 unit tests in `lite-manifest.test.ts` (all green)
 
 ## 2. Light "design system" palette
 
