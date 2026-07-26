@@ -11,8 +11,9 @@
 export interface AutoPersist {
   /** A new edit landed — schedule a (debounced) write. */
   schedule(): void;
-  /** Persist now (Cmd+S / unmount), bypassing the debounce. */
-  flush(): void;
+  /** Persist now (Cmd+S / unmount / before a move so source is current), bypassing the debounce.
+   *  Awaitable — resolves once the pending writes (and any single-flight follow-up) have drained. */
+  flush(): Promise<void>;
   /** True while a write is on the wire. */
   readonly busy: boolean;
   /** Cancel any pending timer (teardown). */
@@ -41,22 +42,24 @@ export function createAutoPersist(opts: AutoPersistOptions): AutoPersist {
   let queued = false;
 
   const run = async (): Promise<void> => {
-    // Single-flight: coalesce a request during a write into ONE follow-up.
+    // Single-flight: a request during a write coalesces into ONE follow-up. The owner run drains
+    // every follow-up before resolving, so `await run()` (via flush) truly waits for a settled disk.
     if (inFlight) {
       queued = true;
       return;
     }
     inFlight = true;
     try {
-      await opts.persist();
-    } catch (err) {
-      opts.onError?.(err);
+      do {
+        queued = false;
+        try {
+          await opts.persist();
+        } catch (err) {
+          opts.onError?.(err);
+        }
+      } while (queued);
     } finally {
       inFlight = false;
-      if (queued) {
-        queued = false;
-        void run();
-      }
     }
   };
 
@@ -77,7 +80,7 @@ export function createAutoPersist(opts: AutoPersistOptions): AutoPersist {
     },
     flush() {
       clearTimer();
-      void run();
+      return run(); // run() drains all follow-ups before resolving
     },
     get busy() {
       return inFlight;

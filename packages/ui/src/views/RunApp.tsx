@@ -1050,6 +1050,15 @@ export function RunApp({
     if (!dragMoveEnabled || !bridge.dragDrop || move.phase !== "idle") return;
     const drop = bridge.dragDrop;
     bridge.clearDragDrop();
+    void handleDrop(drop);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bridge.dragDrop]);
+  async function handleDrop(drop: NonNullable<typeof bridge.dragDrop>): Promise<void> {
+    // FLUSH pending deterministic writes first, so a move — deterministic OR the AI reconcile — sees
+    // the CURRENT source. Without this, editing an element then immediately moving it snapshots stale
+    // source (the debounced text/style write hasn't landed), and the AI reports "the element doesn't
+    // exist" because it's looking for the live text that isn't in source yet.
+    await autoPersist.flush().catch(() => {});
     // Non-deterministic move (cross-file, a list/conditional, or an un-stamped element): there's no
     // single JSX node to relocate statically, so run the AI reconcile AUTOMATICALLY in the
     // background — no Keep gate (the user asked for every edit to just apply). The element is already
@@ -1115,8 +1124,7 @@ export function RunApp({
       return;
     }
     applyMoveEdit(src.file, { op: "move", anchor: src.anchor, to: tgt.anchor, position: drop.target.position });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bridge.dragDrop]);
+  }
   // An invalid drop / forced cancel surfaces a transient sentence, auto-cleared.
   useEffect(() => {
     if (!bridge.dragMessage) return;
