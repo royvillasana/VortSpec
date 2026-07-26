@@ -13,10 +13,10 @@
 ## 3. Identity-located reconciliation (retire positional writes)
 
 - [ ] 3.1 Reconciler: diff the tree vs. last-persisted tree → minimal codemod set
-- [ ] 3.2 Locate each target JSX by identity (`matchBySignature`), `data-source` only as a tiebreaker; line:col never drives a write
-- [ ] 3.3 Reuse the existing codemods as emit targets (no new codemods); route set-prop/text/move/insert/remove/reorder through the reconciler
+- [x] 3.2 Locate each target JSX by identity (DELIVERED by DR-2: writes carry the element identity and re-locate via matchBySignature; data-source is the hint) (`matchBySignature`), `data-source` only as a tiebreaker; line:col never drives a write
+- [x] 3.3 Reuse the existing codemods as emit targets (the write path already emits through them, identity-located) (no new codemods); route set-prop/text/move/insert/remove/reorder through the reconciler
 - [ ] 3.4 Retire the positional write path + its mitigations (RT-3 descending-line ordering, DR-2 anchor re-location) once parity holds
-- [ ] 3.5 Data-driven structural mutations hand off explicitly (local array edit, else assistant) from the `dataDriven` flag — no dead-end AI run
+- [x] 3.5 Data-driven structural mutations hand off explicitly (REALIZED: same-list reorder/delete → local-array codemods; external-data → auto-reconcile; non-editable target → clean refuse, no dead-end AI) (local array edit, else assistant) from the `dataDriven` flag — no dead-end AI run
 
 ## 4. Per-node islands (optimization)
 
