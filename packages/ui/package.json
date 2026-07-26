@@ -104,6 +104,10 @@
       "types": "./src/views/DesignManifest.tsx",
       "default": "./src/views/DesignManifest.tsx"
     },
+    "./DesignSystem": {
+      "types": "./src/views/DesignSystem.tsx",
+      "default": "./src/views/DesignSystem.tsx"
+    },
     "./Profile": {
       "types": "./src/views/Profile.tsx",
       "default": "./src/views/Profile.tsx"

@@ -12,7 +12,6 @@ import { basename, join } from "node:path";
 import { writeFile } from "node:fs/promises";
 import { getInspectorTokens } from "../inspector/token-parser";
 import { getInspectorComponents } from "../inspector/component-reader";
-import type { InspectorToken, InspectorComponent } from "../../shared/inspector";
 import {
   deriveLiteManifest,
   serializeLiteManifest,
@@ -55,9 +54,17 @@ export function mapTier(level: string | undefined): ComponentTier {
   }
 }
 
+/** A prop control (structural subset of the inspector's PropControl) the mapping reads. */
+interface PropLike {
+  key: string;
+  kind: string;
+  options: string[];
+  defaultValue?: string;
+}
+
 /** The variant axis: the options of a prop literally named `variant` (the CVA convention); else none. */
-function variantsOf(component: Pick<InspectorComponent, "props">): string[] {
-  const variant = component.props.find((p) => p.key.toLowerCase() === "variant" && p.kind === "enum");
+function variantsOf(props: PropLike[]): string[] {
+  const variant = props.find((p) => p.key.toLowerCase() === "variant" && p.kind === "enum");
   return variant?.options ?? [];
 }
 
@@ -68,8 +75,8 @@ function variantsOf(component: Pick<InspectorComponent, "props">): string[] {
  */
 export function buildDeriveInput(
   projectName: string,
-  tokens: Pick<InspectorToken, "name" | "type" | "resolvedValue">[],
-  components: Pick<InspectorComponent, "name" | "level" | "props">[],
+  tokens: { name: string; type: string; resolvedValue: string }[],
+  components: { name: string; level?: string; props: PropLike[] }[],
 ): DeriveInput {
   const mapped: DeriveInput["tokens"] = [];
   for (const t of tokens) {
@@ -82,7 +89,7 @@ export function buildDeriveInput(
     components: components.map((c) => ({
       name: c.name,
       tier: mapTier(c.level),
-      variants: variantsOf(c),
+      variants: variantsOf(c.props),
       props: c.props.map((p) => ({ name: p.key, type: p.kind, default: p.defaultValue })),
     })),
   };

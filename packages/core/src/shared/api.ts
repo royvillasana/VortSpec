@@ -128,6 +128,10 @@ export interface VortSpecApi {
   getHistory(projectPath: string): Promise<IpcResponse<"flow:getHistory">>;
   setPublishTarget(projectPath: string, repoUrl: string): Promise<IpcResponse<"flow:setPublishTarget">>;
 
+  // lite design system (light-design-system)
+  getLitePalette(projectPath: string): Promise<IpcResponse<"lite:palette">>;
+  writeDesignerManifest(projectPath: string): Promise<IpcResponse<"lite:writeDesigner">>;
+
   // manifest (DESIGN.md)
   getManifest(projectPath: string): Promise<IpcResponse<"manifest:get">>;
   saveManifest(projectPath: string, content: string): Promise<IpcResponse<"manifest:save">>;

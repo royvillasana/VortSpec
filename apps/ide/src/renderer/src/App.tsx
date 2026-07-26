@@ -13,6 +13,7 @@ import { Inspector } from "@vortspec/ui/Inspector";
 import { GuidedFlow } from "@vortspec/ui/GuidedFlow";
 import { Tasks } from "@vortspec/ui/Tasks";
 import { DesignManifest } from "@vortspec/ui/DesignManifest";
+import { DesignSystem } from "@vortspec/ui/DesignSystem";
 import { RunApp } from "@vortspec/ui/RunApp";
 import { Profile } from "@vortspec/ui/Profile";
 import { ProjectSetup } from "@vortspec/ui/ProjectSetup";
@@ -538,6 +539,8 @@ export default function App(): JSX.Element {
         <Tasks project={p} hideRail onBack={go("explorer")} onFlow={go("flow")} onRun={go("run")} onPlayground={go("explorer")} onTokens={go("tokens")} onManifest={go("manifest")} onHistory={go("explorer")} onSource={go("source")} />
       ) : a === "manifest" ? (
         <DesignManifest project={p} hideRail onBack={go("explorer")} onOpenRun={go("run")} onOpenPreview={go("explorer")} onOpenInspector={go("tokens")} onOpenHistory={go("explorer")} />
+      ) : a === "designsystem" ? (
+        <DesignSystem project={p} hideRail onBack={go("explorer")} />
       ) : a === "settings" ? (
         <Profile onBack={go("explorer")} />
       ) : (

@@ -596,6 +596,9 @@ export const ipcContract = {
     }),
   },
   "manifest:get": { request: z.string(), response: manifestResultSchema },
+  // lite design system (light-design-system): derive the browsable palette / write designer.md
+  "lite:palette": { request: z.string(), response: z.string() },
+  "lite:writeDesigner": { request: z.string(), response: z.string() },
   "manifest:save": {
     request: z.object({ projectPath: z.string(), content: z.string() }),
     response: manifestResultSchema,

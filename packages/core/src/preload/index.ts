@@ -146,6 +146,8 @@ const api: VortSpecApi = {
     invoke("flow:completeInput", { projectPath, stageId }),
   getHistory: (projectPath: string) => invoke("flow:getHistory", projectPath),
   getManifest: (projectPath: string) => invoke("manifest:get", projectPath),
+  getLitePalette: (projectPath: string) => invoke("lite:palette", projectPath),
+  writeDesignerManifest: (projectPath: string) => invoke("lite:writeDesigner", projectPath),
   saveManifest: (projectPath: string, content: string) =>
     invoke("manifest:save", { projectPath, content }),
   listManifestVersions: (projectPath: string) =>
