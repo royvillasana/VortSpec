@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { buildProjection, findByFingerprint, walkProjection, validateProjection } from "./node-tree";
+import { buildProjection, findByFingerprint, walkProjection, validateProjection, projectionToBridgeTree, treeParityIssues } from "./node-tree";
+import type { BridgeTree } from "@vortspec/core/ipc";
 import type { StructureSnapshotWire } from "@vortspec/core/ipc";
 
 const rect = { x: 0, y: 0, width: 10, height: 10 };
@@ -10,7 +11,7 @@ const n = (
   className: string,
   childIds: string[],
   extra: { dataSource?: string | null; dataDriven?: boolean } = {},
-) => ({ id, fingerprint, rect, computed: {}, childIds, tag, className, dataSource: extra.dataSource ?? null, dataDriven: extra.dataDriven ?? false });
+) => ({ id, fingerprint, rect, computed: {}, childIds, tag, className, dataSource: extra.dataSource ?? null, dataDriven: extra.dataDriven ?? false, component: "" });
 // main > (h1, ul > (li#a, li#b)) — the two li share a fingerprint (list rows) and are data-driven.
 const SNAP: StructureSnapshotWire = {
   rootId: "main",
@@ -81,6 +82,31 @@ describe("validateProjection — parity gate (task 1.4)", () => {
     const p = buildProjection(SNAP);
     p.byId.get("main")!.childIds = ["ul"]; // drop h1 from the tree but leave it in byId
     expect(validateProjection(p).some((i) => i.includes("h1"))).toBe(true);
+  });
+});
+
+describe("projectionToBridgeTree + treeParityIssues (Stage 2.1)", () => {
+  it("adapts the projection to the Layers BridgeTree shape (ids/tag/classes/children)", () => {
+    const bt = projectionToBridgeTree(buildProjection(SNAP));
+    expect(bt.roots).toEqual(["main"]);
+    expect(bt.nodes["h1"]).toMatchObject({ id: "h1", tag: "h1", classes: ["title"], childCount: 0 });
+    expect(bt.children["ul"]).toEqual(["li-a", "li-b"]);
+  });
+
+  it("reports no parity issues when the projection matches bridge.tree", () => {
+    const p = buildProjection(SNAP);
+    const bridgeTree = projectionToBridgeTree(p); // same source → parity
+    expect(treeParityIssues(bridgeTree, p)).toEqual([]);
+  });
+
+  it("flags a divergent node set / children", () => {
+    const p = buildProjection(SNAP);
+    const bridgeTree: BridgeTree = projectionToBridgeTree(p);
+    delete bridgeTree.nodes["h1"]; // bridge.tree is missing a node the projection has
+    bridgeTree.children["main"] = ["ul"];
+    const issues = treeParityIssues(bridgeTree, p);
+    expect(issues.some((i) => i.includes("h1"))).toBe(true);
+    expect(issues.some((i) => i.includes("children differ for main"))).toBe(true);
   });
 });
 

@@ -1,4 +1,4 @@
-import type { StructureSnapshotWire } from "@vortspec/core/ipc";
+import type { StructureSnapshotWire, BridgeTree } from "@vortspec/core/ipc";
 
 /**
  * Projected node tree (change: instatic-node-tree, DR-1, task 1.1). An in-memory projection of the
@@ -32,6 +32,8 @@ export interface ProjectedNode {
   dataSource: string | null;
   /** True when rendered from a list (a data-driven node) — not directly editable as a single JSX node. */
   dataDriven: boolean;
+  /** `data-component` value (Layers label hint), empty when none. */
+  component: string;
 }
 
 export interface Projection {
@@ -61,6 +63,7 @@ export function buildProjection(snapshot: StructureSnapshotWire | null): Project
       className: n.className,
       dataSource: n.dataSource,
       dataDriven: n.dataDriven,
+      component: n.component,
     });
   }
   // Second pass: wire parents from each node's children.
@@ -111,6 +114,50 @@ export function validateProjection(projection: Projection): string[] {
   const reachable = new Set<string>();
   walkProjection(projection, (n) => reachable.add(n.id));
   for (const id of projection.byId.keys()) if (!reachable.has(id)) issues.push(`${id} not reachable from the root`);
+  return issues;
+}
+
+/**
+ * Adapt the projection to the `BridgeTree` shape the Layers panel renders (Stage 2.1). The projection
+ * shares the guest's uid scheme, so ids line up with selection; this lets the Layers read from the
+ * ONE projection instead of the separate `bridge.tree` walk. Component/tag/classes drive the label.
+ */
+export function projectionToBridgeTree(projection: Projection): BridgeTree {
+  const nodes: BridgeTree["nodes"] = {};
+  const children: BridgeTree["children"] = {};
+  for (const node of projection.byId.values()) {
+    nodes[node.id] = {
+      id: node.id,
+      tag: node.tag,
+      classes: node.className.split(/\s+/).filter(Boolean),
+      component: node.component || undefined,
+      childCount: node.childIds.length,
+    };
+    children[node.id] = node.childIds;
+  }
+  return { roots: projection.root ? [projection.root.id] : [], nodes, children };
+}
+
+/**
+ * Stage 2.1 parity gate: does the projection-derived tree match the existing `bridge.tree` (same node
+ * set + same children per node)? Returns violations (empty = parity). Run as a dev assertion so we
+ * confirm the projection can drive the Layers BEFORE swapping the source — the two guest walks
+ * (buildTree vs buildStructureSnapshot) could filter differently, and this catches it.
+ */
+export function treeParityIssues(bridgeTree: BridgeTree | null, projection: Projection): string[] {
+  if (!bridgeTree || projection.byId.size === 0) return [];
+  const issues: string[] = [];
+  const derived = projectionToBridgeTree(projection);
+  const btIds = new Set(Object.keys(bridgeTree.nodes));
+  const pjIds = new Set(Object.keys(derived.nodes));
+  for (const id of pjIds) if (!btIds.has(id)) issues.push(`projection has extra node ${id}`);
+  for (const id of btIds) if (!pjIds.has(id)) issues.push(`projection missing node ${id}`);
+  for (const id of pjIds) {
+    if (!btIds.has(id)) continue;
+    const a = (derived.children[id] ?? []).join(",");
+    const b = (bridgeTree.children[id] ?? []).join(",");
+    if (a !== b) issues.push(`children differ for ${id}`);
+  }
   return issues;
 }
 

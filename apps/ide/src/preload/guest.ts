@@ -585,6 +585,7 @@ function buildStructureSnapshot(rootEl: Element): StructureSnapshotWire {
       className: typeof el.className === "string" ? el.className : "",
       dataSource: el.getAttribute("data-source"),
       dataDriven: listIndexOf(el) != null,
+      component: el.getAttribute("data-component") ?? "",
     };
     for (const k of kids) walk(k);
     return id;

@@ -260,6 +260,8 @@ export const structureNodeSchema = z.object({
   dataSource: z.string().nullable().default(null),
   /** True when rendered from a list (shares its data-source with siblings) — a data-driven node. */
   dataDriven: z.boolean().default(false),
+  /** `data-component` value — the element→component hint used for the Layers label. Empty when none. */
+  component: z.string().default(""),
 });
 export type StructureNodeWire = z.infer<typeof structureNodeSchema>;
 

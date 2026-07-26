@@ -30,7 +30,7 @@ import {
   type PendingEdit,
 } from "../components/run-canvas/pending";
 import { routeEdits, type DeterministicEdit } from "../components/run-canvas/edit-plan";
-import { buildProjection, validateProjection } from "../components/run-canvas/node-tree";
+import { buildProjection, validateProjection, treeParityIssues } from "../components/run-canvas/node-tree";
 import { createAutoPersist } from "../components/run-canvas/auto-persist";
 import { parseAnchor, type CanvasEdit } from "@vortspec/core/canvas-edit";
 import { useInspectorBridge, type CanvasMode } from "../lib/useInspectorBridge";
@@ -569,7 +569,10 @@ export function RunApp({
     if (!dev) return;
     const issues = validateProjection(projection);
     if (issues.length) console.warn("[node-tree] projection parity issues:", issues.slice(0, 8));
-  }, [projection]);
+    // Stage 2.1: confirm the projection can drive the Layers (matches bridge.tree) before we swap.
+    const layers = treeParityIssues(bridge.tree, projection);
+    if (layers.length) console.warn("[node-tree] Layers parity vs bridge.tree:", layers.slice(0, 8));
+  }, [projection, bridge.tree]);
   // Create a design token from a field's current literal value, then let the field bind to it
   // (change: instant-playground-edits). Bootstraps the token file + import on first use. The bind
   // itself (var(--name)) writes inline to source via the instant style lane — no Apply. Throws a
