@@ -29,7 +29,7 @@ import {
   isTokenBinding,
   type PendingEdit,
 } from "../components/run-canvas/pending";
-import { routeEdits, type DeterministicEdit } from "../components/run-canvas/edit-plan";
+import { routeEdits, coalesceDeterministic, type DeterministicEdit } from "../components/run-canvas/edit-plan";
 import { buildProjection, validateProjection, treeParityIssues, projectionToBridgeTree } from "../components/run-canvas/node-tree";
 import { createAutoPersist } from "../components/run-canvas/auto-persist";
 import { parseAnchor, type CanvasEdit } from "@vortspec/core/canvas-edit";
@@ -534,7 +534,7 @@ export function RunApp({
           // the flush, so applying a lower-line edit first would leave the higher-line ones stale and
           // hit the wrong node. Editing from the bottom up means each edit lands before anything above
           // it can shift it. Cross-file edits don't interact, so a single descending-line sort is safe.
-          const ordered = [...q].sort((a, b) => b.edit.anchor.line - a.edit.anchor.line);
+          const ordered = coalesceDeterministic(q).sort((a, b) => b.edit.anchor.line - a.edit.anchor.line);
           for (const it of ordered) {
             const r = await api
               .writeCanvasEdit(project.path, it.file, it.edit, it.expect)

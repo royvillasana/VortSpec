@@ -115,6 +115,37 @@ export function routeEdits(
 }
 
 /**
+ * Coalesce a burst of deterministic edits by node IDENTITY + op + field (Stage 2.2), so rapid edits
+ * on one property (dragging a color, typing) collapse to ONE write — last-write-wins — instead of N
+ * redundant codemods. Keyed by identity (tag+className), never by line:col. Structural ops
+ * (delete/insert/move/list) are never coalesced — each is a distinct change and order matters.
+ */
+export function coalesceDeterministic(edits: DeterministicEdit[]): DeterministicEdit[] {
+  const byKey = new Map<string, DeterministicEdit>();
+  const structural: DeterministicEdit[] = [];
+  for (const e of edits) {
+    const id = `${e.file}|${e.expect.tag ?? ""}|${e.expect.className ?? ""}`;
+    let key: string | null;
+    switch (e.edit.op) {
+      case "attr":
+        key = `${id}|attr|${e.edit.name}`;
+        break;
+      case "style":
+        key = `${id}|style|${Object.keys(e.edit.css).sort().join(",")}`;
+        break;
+      case "text":
+        key = `${id}|text`;
+        break;
+      default:
+        key = null; // delete / insert / move / list — structural, keep each
+    }
+    if (key === null) structural.push(e);
+    else byKey.set(key, e); // last write wins
+  }
+  return [...byKey.values(), ...structural];
+}
+
+/**
  * The dirty set — which (file, node) pairs have un-persisted deterministic edits, so a
  * background write ships only the delta. Keyed by `<file>::<node>`.
  */

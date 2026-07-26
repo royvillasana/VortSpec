@@ -8,7 +8,7 @@
 ## 2. Route reads through the tree
 
 - [x] 2.1 Layers panel reads from the projection (self-healing: projection when it matches bridge.tree, else fall back) (not ad-hoc DOM walks)
-- [ ] 2.2 Dirty set keyed by node `id` (not `(file, nodeId)` positional)
+- [x] 2.2 Persist queue coalesced by node identity + op + field (last-write-wins; a slider drag → one write) `id` (not `(file, nodeId)` positional)
 
 ## 3. Identity-located reconciliation (retire positional writes)
 

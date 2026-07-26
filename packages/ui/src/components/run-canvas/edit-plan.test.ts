@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { applyClassSwap, coalesceKey, toCanvasEdit, routeEdits, DirtySet } from "./edit-plan";
+import { applyClassSwap, coalesceKey, toCanvasEdit, routeEdits, DirtySet, coalesceDeterministic } from "./edit-plan";
+import type { DeterministicEdit } from "./edit-plan";
 import type { PendingEdit } from "./pending";
 import type { Selection } from "@vortspec/core/ipc";
 
@@ -159,5 +160,44 @@ describe("routeEdits — the split RunApp.commitEdits applies", () => {
     const { tokenValues, ledger } = routeEdits([tokenValue], unstamped);
     expect(tokenValues).toHaveLength(1);
     expect(ledger).toHaveLength(0);
+  });
+});
+
+describe("coalesceDeterministic (Stage 2.2) — collapse a burst by identity + op + field", () => {
+  const de = (op: DeterministicEdit["edit"], cls = "btn"): DeterministicEdit => ({
+    file: "src/A.tsx",
+    edit: op,
+    expect: { tag: "button", className: cls },
+  });
+  it("keeps only the LAST write for the same element/prop", () => {
+    const out = coalesceDeterministic([
+      de({ op: "style", anchor: { line: 4, column: 6 }, css: { color: "#111" } }),
+      de({ op: "style", anchor: { line: 4, column: 6 }, css: { color: "#222" } }),
+      de({ op: "style", anchor: { line: 4, column: 6 }, css: { color: "#333" } }),
+    ]);
+    expect(out).toHaveLength(1);
+    expect(out[0].edit).toMatchObject({ op: "style", css: { color: "#333" } });
+  });
+  it("keeps distinct props/ops separately", () => {
+    const out = coalesceDeterministic([
+      de({ op: "style", anchor: { line: 4, column: 6 }, css: { color: "#111" } }),
+      de({ op: "text", anchor: { line: 4, column: 6 }, text: "Hi" }),
+      de({ op: "attr", anchor: { line: 4, column: 6 }, name: "className", value: { kind: "string", value: "btn lg" } }),
+    ]);
+    expect(out).toHaveLength(3);
+  });
+  it("never coalesces structural ops (each delete/move is distinct)", () => {
+    const out = coalesceDeterministic([
+      de({ op: "delete", anchor: { line: 4, column: 6 } }),
+      de({ op: "delete", anchor: { line: 8, column: 6 } }, "row"),
+    ]);
+    expect(out).toHaveLength(2);
+  });
+  it("distinguishes the same op on DIFFERENT elements (by className identity)", () => {
+    const out = coalesceDeterministic([
+      de({ op: "style", anchor: { line: 4, column: 6 }, css: { color: "#111" } }, "btn-a"),
+      de({ op: "style", anchor: { line: 9, column: 6 }, css: { color: "#222" } }, "btn-b"),
+    ]);
+    expect(out).toHaveLength(2);
   });
 });
