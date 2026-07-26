@@ -87,7 +87,14 @@
       "node_modules/ts-morph/**",
       "node_modules/@ts-morph/**",
       "node_modules/typescript/**",
-      "node_modules/code-block-writer/**"
+      "node_modules/code-block-writer/**",
+      "node_modules/minimatch/**",
+      "node_modules/brace-expansion/**",
+      "node_modules/balanced-match/**",
+      "node_modules/tinyglobby/**",
+      "node_modules/fdir/**",
+      "node_modules/picomatch/**",
+      "node_modules/path-browserify/**"
     ],
     "extraResources": [
       {
