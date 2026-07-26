@@ -500,6 +500,7 @@ export function RunApp({
   // the safety net that replaces it. Redo re-captures the post-edit state at undo time.
   const undoStack = useRef<FileSnapshot[][]>([]);
   const redoStack = useRef<FileSnapshot[][]>([]);
+  const MAX_HISTORY = 50; // cap undo/redo depth so a long session can't grow snapshots unbounded
   const autoPersist = useMemo(
     () =>
       createAutoPersist({
@@ -527,7 +528,13 @@ export function RunApp({
               }
             }
           }
-          for (const it of q) {
+          // RT-3: apply the burst BOTTOM-UP (highest anchor line first). A structural edit (delete /
+          // insert / list op) shifts the line numbers BELOW it; the anchors were all captured before
+          // the flush, so applying a lower-line edit first would leave the higher-line ones stale and
+          // hit the wrong node. Editing from the bottom up means each edit lands before anything above
+          // it can shift it. Cross-file edits don't interact, so a single descending-line sort is safe.
+          const ordered = [...q].sort((a, b) => b.edit.anchor.line - a.edit.anchor.line);
+          for (const it of ordered) {
             const r = await api
               .writeCanvasEdit(project.path, it.file, it.edit)
               .catch(() => ({ ok: false as const, reason: "Couldn't write the change to source." }));
@@ -542,6 +549,7 @@ export function RunApp({
           }
           if (undoEntry.length > 0) {
             undoStack.current.push(undoEntry);
+            if (undoStack.current.length > MAX_HISTORY) undoStack.current.shift(); // bound memory
             redoStack.current = []; // a fresh edit invalidates the redo trail
           }
         },
@@ -1040,7 +1048,17 @@ export function RunApp({
   // Behind a feature flag (Decision 3): when off, a drag is simply never opened as
   // a move and inspect works as before.
   const dragMoveEnabled = true;
-  const move = useDragMove({ project, bridge });
+  const move = useDragMove({
+    project,
+    bridge,
+    // RT-5: an AI-reconciled move is undoable too — push its pre-move snapshot onto the shared stack.
+    onCommitted: (preMoveSnapshot) => {
+      if (preMoveSnapshot.length === 0) return;
+      undoStack.current.push(preMoveSnapshot);
+      if (undoStack.current.length > MAX_HISTORY) undoStack.current.shift();
+      redoStack.current = [];
+    },
+  });
   // A completed drop over a valid slot opens the gated move. The dragged element was
   // the selected node, so its label grounds the origin anchor; the drop clears once
   // consumed so a re-render can't re-open it.
@@ -1594,13 +1612,19 @@ export function RunApp({
   const undoEdit = useCallback(async (): Promise<void> => {
     const entry = undoStack.current.pop();
     if (!entry) return;
-    await rollTo(entry, (current) => redoStack.current.push(current));
+    await rollTo(entry, (current) => {
+      redoStack.current.push(current);
+      if (redoStack.current.length > MAX_HISTORY) redoStack.current.shift();
+    });
     setWriteError(null);
   }, [rollTo]);
   const redoEdit = useCallback(async (): Promise<void> => {
     const entry = redoStack.current.pop();
     if (!entry) return;
-    await rollTo(entry, (current) => undoStack.current.push(current));
+    await rollTo(entry, (current) => {
+      undoStack.current.push(current);
+      if (undoStack.current.length > MAX_HISTORY) undoStack.current.shift();
+    });
     setWriteError(null);
   }, [rollTo]);
 

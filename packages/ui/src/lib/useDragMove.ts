@@ -44,7 +44,13 @@ export interface UseDragMove {
   reset: () => void;
 }
 
-export function useDragMove(args: { project: Project; bridge: InspectorBridge }): UseDragMove {
+export function useDragMove(args: {
+  project: Project;
+  bridge: InspectorBridge;
+  /** Called when an AI-reconciled move is accepted to source, with the PRE-move snapshot — so the
+   *  host can put it on the shared undo stack (RT-5: an AI move must be Cmd+Z-undoable like any edit). */
+  onCommitted?: (preMoveSnapshot: FileSnapshot[]) => void;
+}): UseDragMove {
   const run = useAgentRun();
   const [phase, setPhase] = useState<MovePhase>("idle");
   const [result, setResult] = useState<ComposeResult | null>(null);
@@ -173,6 +179,9 @@ export function useDragMove(args: { project: Project; bridge: InspectorBridge })
         // is the ONE action: no separate screen-spec "Save changes" prompt for a move
         // (a relocation is a layout tweak; the spec sync isn't worth a second confirm).
         await api.composeAccept(ctx.current.project.path, file, runIdRef.current, 0);
+        // RT-5: the AI move wrote source with no Keep gate — hand the PRE-move snapshot to the host
+        // so Cmd+Z can roll it back like any other instant edit.
+        if (snapshotRef.current) ctx.current.onCommitted?.(snapshotRef.current);
         ctx.current.bridge.clearMove();
         ctx.current.bridge.reload();
         reset();

@@ -52,6 +52,12 @@ export async function applyCanvasEdit(
   const snapshot = await snapshotComponent(projectPath, file);
   const before = snapshot.find((s) => s.path === file)?.content;
   if (before === undefined) return { ok: false, reason: `Couldn't read ${file}.` };
+  // RT-4: ts-morph parses synchronously on the main process. Cap the file size so a pathological /
+  // machine-generated source can't freeze the app on an edit. 2 MB is far above any hand-written
+  // component; a real file that hits this should be edited in the assistant, not the canvas.
+  if (before.length > 2_000_000) {
+    return { ok: false, reason: "This file is too large to edit in the canvas — use the assistant." };
+  }
 
   // List-data edits target a MAPPED element on purpose (un-resolvable as a single node) — they edit
   // the backing local array instead, so they skip the single-node resolvability guard; the codemod
