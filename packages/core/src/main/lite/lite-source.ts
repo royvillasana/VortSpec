@@ -9,18 +9,21 @@
  * unit-testable without the fs; the `*Project*` functions are the thin fs wrappers.
  */
 import { basename, join } from "node:path";
-import { writeFile } from "node:fs/promises";
+import { writeFile, readFile, readdir } from "node:fs/promises";
 import { getInspectorTokens } from "../inspector/token-parser";
 import { getInspectorComponents } from "../inspector/component-reader";
 import {
   deriveLiteManifest,
   serializeLiteManifest,
+  findFrameworkPointers,
   type DeriveInput,
   type LiteManifest,
+  type StandIn,
   type TokenGroup,
   type ComponentTier,
 } from "../../shared/lite-manifest";
 import { buildPalette, renderPaletteHtml } from "../../shared/palette";
+import { LIGHT_HTML_DIR, normSegment } from "../../shared/light-standin";
 
 /** Map an inspector token `type` (singular) to a manifest token group (plural); null ⇒ skip. */
 export function mapTokenGroup(type: string): TokenGroup | null {
@@ -95,13 +98,53 @@ export function buildDeriveInput(
   };
 }
 
-/** Read the real project sources and derive the in-memory lite manifest. */
+/**
+ * Read the Figma-derived stand-ins the agent wrote under `.vortspec/light-html/<component>/<variant>.html`
+ * (light-standin.ts). Keyed by the NORMALIZED component segment so the caller can join by component name.
+ * A stand-in that leaked a framework pointer is skipped (never shown as a light-only-world preview).
+ */
+export async function readFigmaStandIns(projectPath: string): Promise<Record<string, StandIn[]>> {
+  const root = join(projectPath, LIGHT_HTML_DIR);
+  const out: Record<string, StandIn[]> = {};
+  let comps: string[];
+  try {
+    comps = (await readdir(root, { withFileTypes: true })).filter((e) => e.isDirectory()).map((e) => e.name);
+  } catch {
+    return out; // no light-html dir yet — palette falls back to placeholders
+  }
+  for (const comp of comps) {
+    const standIns: StandIn[] = [];
+    let files: string[];
+    try {
+      files = (await readdir(join(root, comp))).filter((f) => f.endsWith(".html"));
+    } catch {
+      continue;
+    }
+    for (const file of files.sort()) {
+      const html = (await readFile(join(root, comp, file), "utf8").catch(() => "")).trim();
+      if (!html || findFrameworkPointers(html).length > 0) continue;
+      standIns.push({ variant: file.replace(/\.html$/, ""), html, source: "harvested" });
+    }
+    if (standIns.length > 0) out[comp] = standIns;
+  }
+  return out;
+}
+
+/** Read the real project sources and derive the in-memory lite manifest (with Figma stand-ins if present). */
 export async function deriveProjectLiteManifest(projectPath: string): Promise<LiteManifest> {
-  const [tokensResult, componentsResult] = await Promise.all([
+  const [tokensResult, componentsResult, figmaStandIns] = await Promise.all([
     getInspectorTokens(projectPath),
     getInspectorComponents(projectPath),
+    readFigmaStandIns(projectPath),
   ]);
   const input = buildDeriveInput(basename(projectPath) || "Project", tokensResult.tokens, componentsResult.components);
+  // Join stand-ins to components by the normalized segment (matches how light-standin wrote them).
+  const standIns: Record<string, StandIn[]> = {};
+  for (const c of input.components) {
+    const hit = figmaStandIns[normSegment(c.name)];
+    if (hit) standIns[c.name] = hit;
+  }
+  input.standIns = standIns;
   return deriveLiteManifest(input);
 }
 
