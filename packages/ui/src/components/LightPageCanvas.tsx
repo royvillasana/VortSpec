@@ -304,11 +304,27 @@ export function LightPageCanvas({
         if (d.slot && d.id && d.el.parentNode) {
           const container = d.elById.get(d.slot.containerId);
           const anchor = d.elById.get(d.slot.anchorId);
-          if (container && anchor) {
+          // Re-validate against the LIVE DOM before touching it: the anchor must still be a child of the
+          // container, the container must be connected, and it must NOT live inside the dragged subtree
+          // (a cycle). A degenerate slot then simply does nothing — it can never corrupt the page.
+          const valid =
+            container &&
+            anchor &&
+            container.isConnected &&
+            anchor.parentNode === container &&
+            !d.el.contains(container) &&
+            d.el !== container;
+          if (valid) {
             const ref = d.slot.position === "before" ? anchor : anchor.nextElementSibling;
-            if (ref !== d.el) container.insertBefore(d.el, ref ?? null);
-            selectEl(d.el);
-            save();
+            if (ref !== d.el) {
+              try {
+                container.insertBefore(d.el, ref ?? null);
+                selectEl(d.el);
+                save();
+              } catch {
+                /* bad reference node — leave the page exactly as it was */
+              }
+            }
           }
         }
       },
@@ -512,6 +528,17 @@ function TokenField({
  * DOM access, so we walk elements, read the layout-relevant computed styles + bounding rects, and hand the
  * flat map to the pure `buildStructuralModel`. Ids are transient (per drag) and never touch the saved HTML.
  */
+/** Elements that occupy no layout box — they must never appear as children in the drag geometry, or a
+ *  phantom zero-rect sibling skews the slot resolution (stand-ins embed their own <style> blocks). */
+const NON_RENDERED_TAGS = new Set(["STYLE", "SCRIPT", "LINK", "META", "HEAD", "TITLE", "NOSCRIPT", "TEMPLATE"]);
+
+/** A child is real content for the geometry only if it's rendered (has a layout box) and not our overlay. */
+function isLayoutChild(el: Element): boolean {
+  if (NON_RENDERED_TAGS.has(el.tagName)) return false;
+  if (el.hasAttribute("data-lp-drop")) return false; // never treat our own overlay as content
+  return el.getClientRects().length > 0; // excludes display:none and other non-rendered elements
+}
+
 function snapshotFromDom(root: Element, win: Window): { snap: StructureSnapshot; elById: Map<string, Element> } {
   const nodes: Record<string, NodeDesc> = {};
   const elById = new Map<string, Element>();
@@ -521,9 +548,11 @@ function snapshotFromDom(root: Element, win: Window): { snap: StructureSnapshot;
     elById.set(id, el);
     const cs = win.getComputedStyle(el);
     const r = el.getBoundingClientRect();
-    const childIds = Array.from(el.children)
-      .filter((c) => !c.hasAttribute("data-lp-drop")) // never treat our own overlay as content
-      .map((c) => walk(c));
+    // An island is an ATOMIC unit: never descend into another `[data-component]`'s interior, or a drop
+    // would nest one component inside another's content (a card dropped before some card's <p>). Treat
+    // islands as opaque leaves so slots resolve only BETWEEN islands, in their real layout containers.
+    const isIsland = el !== root && el.hasAttribute("data-component");
+    const childIds = isIsland ? [] : Array.from(el.children).filter(isLayoutChild).map((c) => walk(c));
     nodes[id] = {
       id,
       fingerprint: id,
