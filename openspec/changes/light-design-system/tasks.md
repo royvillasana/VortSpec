@@ -49,6 +49,6 @@
 
 ## 7. Ship
 
-- [ ] 7.1 End-to-end validation on a real Figma-extracted project: extract → light shelf in minutes → compose a page → framework catches up → compile.
-- [ ] 7.2 Confirm invariants: no direct Figma, real Storybook preserved, token discipline end-to-end, single source of truth per phase.
+- [~] 7.1 End-to-end validation on a real Figma-extracted project: extract → light shelf in minutes → compose a page → framework catches up → compile. → Automated data-flow e2e lands: `light-design-system.e2e.test.ts` threads contract → manifest → designer.md → two-track prompt → authored page → deterministic compile → readiness gate (5 phases). Live GUI run on a real Figma project stays MANUAL (needs the packaged app + user's Figma MCP).
+- [x] 7.2 Confirm invariants: no direct Figma, real Storybook preserved, token discipline end-to-end, single source of truth per phase. → Asserted by the e2e test: prompts route the read through the Figma MCP (core never calls Figma); token discipline (lint clean, all values restored); single token set drives palette AND compile; identity convergence via `diverged`.
 - [ ] 7.3 Document the flow (skill/docs) and keep the old hard-gated path available as fallback until proven.
