@@ -41,6 +41,11 @@ a light page's DOM *is* its source, so persisting an edit is a lossless serializ
   not part of editing.
 - Playground page creation authors these HTML/CSS/JS screens via the chat; the selected
   framework's version is produced only by the Flow's Generate step.
+- **Automatic background component build.** While the user creates/edits screens, the design-system
+  COMPONENTS (in the framework the user selected in the initial flow) build AUTOMATICALLY in the
+  background — 5 at a time, each BUILT and VERIFIED — with no button click. The user keeps working;
+  they're informed when the whole build completes. This is the "React (or Vue/…) under the hood" that
+  makes the Flow's Generate step fast, done proactively rather than on demand.
 
 ## Capabilities
 
@@ -55,6 +60,9 @@ a light page's DOM *is* its source, so persisting an edit is a lossless serializ
   components, audit, AI + visual validation.
 - `screen-terminology`: the UI presents these as plain "pages"/"screens" and never exposes the
   "light"/"lightweight"/HTML-implementation detail to the user.
+- `auto-background-component-build`: the design-system components build AUTOMATICALLY in the
+  background (5 at a time, build + verify, in the selected framework) while the user works, with a
+  completion notification.
 
 ### Modified Capabilities
 - None. The framework (React/ts-morph) canvas path is untouched; light-page support is added

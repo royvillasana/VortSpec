@@ -56,3 +56,14 @@
 - [ ] 8.3 Framework screens still edit via the ts-morph path, unchanged.
 - [ ] 8.4 "Generate code" from the Flow produces validated pages in the SELECTED framework; screens intact.
 - [ ] 8.5 No user-visible "light"/"lightweight" wording remains anywhere in the Playground UI.
+
+## 9. Automatic background component build
+
+- [ ] 9.1 Auto-start the component build in the BACKGROUND when a project has detected-but-unbuilt
+  components (reuse GuidedFlow's chunked build: `buildRemaining(verify=true)` → `chunkByLevel` 5 at a
+  time → `buildChunkPrompt` build + verify per chunk), in the configured framework — no button click.
+- [ ] 9.2 Make it non-blocking + resilient: it runs while the user works in the Playground, survives
+  navigation, and doesn't fight a user-started build (guard so it starts once, skips if already building).
+- [ ] 9.3 Surface progress unobtrusively and notify the user on completion (built + verified all remaining).
+- [ ] 9.4 Verify: with unbuilt components, the build auto-starts 5-at-a-time build+verify in the selected
+  framework; the user can keep editing; a completion notice fires; already-built projects don't re-run.
