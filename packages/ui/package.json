@@ -108,10 +108,6 @@
       "types": "./src/views/DesignSystem.tsx",
       "default": "./src/views/DesignSystem.tsx"
     },
-    "./LightPages": {
-      "types": "./src/views/LightPages.tsx",
-      "default": "./src/views/LightPages.tsx"
-    },
     "./Profile": {
       "types": "./src/views/Profile.tsx",
       "default": "./src/views/Profile.tsx"

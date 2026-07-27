@@ -14,7 +14,6 @@ import { GuidedFlow } from "@vortspec/ui/GuidedFlow";
 import { Tasks } from "@vortspec/ui/Tasks";
 import { DesignManifest } from "@vortspec/ui/DesignManifest";
 import { DesignSystem } from "@vortspec/ui/DesignSystem";
-import { LightPages } from "@vortspec/ui/LightPages";
 import { RunApp } from "@vortspec/ui/RunApp";
 import { Profile } from "@vortspec/ui/Profile";
 import { ProjectSetup } from "@vortspec/ui/ProjectSetup";
@@ -71,8 +70,6 @@ export default function App(): JSX.Element {
   // the palette; the Tokens (data) tab only appears once the project actually has tokens.
   const [tokensTab, setTokensTab] = useState<"tokens" | "designsystem">("designsystem");
   const [hasTokens, setHasTokens] = useState(false);
-  // Playground sub-tab: compose pages from the light design system, vs. the live app preview.
-  const [playTab, setPlayTab] = useState<"light" | "app">("light");
   const [gitCounts, setGitCounts] = useState<{ changes: number; ahead: number }>({ changes: 0, ahead: 0 });
   // The live editor selection, surfaced to the assistant as grounding context.
   const [selection, setSelection] = useState<EditorSelection | null>(null);
@@ -550,40 +547,14 @@ export default function App(): JSX.Element {
           onOpenTasks={go("tasks")}
         />
       ) : a === "run" ? (
-        <div className="flex h-full min-h-0 w-full flex-col">
-          <div className="flex flex-none items-stretch gap-1 border-b border-vs-border-subtle bg-vs-bg-surface px-2 py-1 text-[12px]">
-            <button
-              type="button"
-              onClick={() => setPlayTab("light")}
-              aria-pressed={playTab === "light"}
-              className={`rounded px-2.5 py-1 font-medium transition-colors ${playTab === "light" ? "bg-vs-bg-hover text-vs-text-primary" : "text-vs-text-muted hover:text-vs-text-secondary"}`}
-            >
-              Light pages
-            </button>
-            <button
-              type="button"
-              onClick={() => setPlayTab("app")}
-              aria-pressed={playTab === "app"}
-              className={`rounded px-2.5 py-1 font-medium transition-colors ${playTab === "app" ? "bg-vs-bg-hover text-vs-text-primary" : "text-vs-text-muted hover:text-vs-text-secondary"}`}
-            >
-              App preview
-            </button>
-          </div>
-          <div className="min-h-0 flex-1">
-            {playTab === "light" ? (
-              <LightPages project={p} />
-            ) : (
-              <RunApp project={p} kind="app" hideRail canvas saveSignal={saveSignal} assistantBusy={dockBusy} sidebarSlot={sectionSlot} onBack={go("explorer")} onFlow={go("flow")} onRun={go("run")} onPlayground={go("play")} onTokens={go("tokens")} onManifest={go("manifest")} onHistory={go("explorer")} onSource={go("source")}
-                onSendToChat={(text, file) => {
-                  setLeftTab("chat"); // reveal the chat tab in the left dock
-                  // A canvas selection has no honest line range — carry it as a canvas
-                  // selection with a label, not a fabricated file+line reference.
-                  setPendingRef({ source: "canvas", label: file ?? "Run canvas selection", text, nonce: ++refNonce.current });
-                }}
-              />
-            )}
-          </div>
-        </div>
+        <RunApp project={p} kind="app" hideRail canvas saveSignal={saveSignal} assistantBusy={dockBusy} sidebarSlot={sectionSlot} onBack={go("explorer")} onFlow={go("flow")} onRun={go("run")} onPlayground={go("play")} onTokens={go("tokens")} onManifest={go("manifest")} onHistory={go("explorer")} onSource={go("source")}
+          onSendToChat={(text, file) => {
+            setLeftTab("chat"); // reveal the chat tab in the left dock
+            // A canvas selection has no honest line range — carry it as a canvas
+            // selection with a label, not a fabricated file+line reference.
+            setPendingRef({ source: "canvas", label: file ?? "Run canvas selection", text, nonce: ++refNonce.current });
+          }}
+        />
       ) : a === "play" ? (
         <RunApp project={p} kind="storybook" hideRail sidebarSlot={sectionSlot} onBack={go("explorer")} onFlow={go("flow")} onRun={go("run")} onPlayground={go("play")} onTokens={go("tokens")} onManifest={go("manifest")} onHistory={go("explorer")} onSource={go("source")} />
       ) : a === "tokens" ? (

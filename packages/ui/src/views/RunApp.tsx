@@ -272,6 +272,8 @@ export function RunApp({
   // instead of navigating the app webview (light-design-system).
   const [lightPage, setLightPage] = useState<string | null>(null);
   const [lightPageHtml, setLightPageHtml] = useState("");
+  const [creatingPage, setCreatingPage] = useState(false);
+  const [newPageName, setNewPageName] = useState("");
   // The source file of the page currently on screen — grounds canvas Apply so the agent
   // edits the previewed page (not index.html's mount shell) when an element has no known
   // component file of its own. Walks the route tree for the node at `currentPath`.
@@ -403,6 +405,17 @@ export function RunApp({
       alive = false;
     };
   }, [lightPage, project.path]);
+
+  // Create a light page THROUGH THE REAL CHAT (like any page): compose it from the design system.
+  // The agent writes `.vortspec/light-pages/<name>.html`; the idle rescan folds it into the sitemap.
+  async function createLightPage(): Promise<void> {
+    const name = newPageName.trim();
+    if (!name) return;
+    const prompt = await api.litepagePrompt(project.path, name, "");
+    dispatchTask?.({ title: `Create light page: ${name}`, allowModify: true, prompt });
+    setCreatingPage(false);
+    setNewPageName("");
+  }
 
   // A state-navigated screen has no URL — reveal its source file so the user can edit it.
   const openScreenFile = useCallback(
@@ -1919,6 +1932,37 @@ export function RunApp({
   // an <aside> on desktop, or PORTALED into the IDE's unified left-dock slot (sidebarSlot).
   const sidebarBody = (
     <>
+      {/* New light page — composed from the design system, created via the real chat. */}
+      {dispatchTask && (
+        <div className="flex flex-none items-center gap-1 border-b border-vs-border-subtle px-2 py-1.5">
+          {creatingPage ? (
+            <>
+              <input
+                autoFocus
+                value={newPageName}
+                onChange={(e) => setNewPageName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") void createLightPage();
+                  if (e.key === "Escape") setCreatingPage(false);
+                }}
+                placeholder="Light page name…"
+                className="min-w-0 flex-1 rounded border border-vs-border-default bg-vs-bg-surface px-2 py-1 text-[12px] text-vs-text-primary focus:outline-none"
+              />
+              <button type="button" onClick={() => void createLightPage()} className="rounded bg-vs-accent px-2 py-1 text-[11px] font-medium text-white">
+                Create
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setCreatingPage(true)}
+              className="flex w-full items-center gap-1.5 rounded px-1.5 py-1 text-left text-[12px] text-vs-text-secondary hover:bg-vs-bg-hover hover:text-vs-text-primary"
+            >
+              <span className="text-[14px] leading-none">+</span> New light page
+            </button>
+          )}
+        </div>
+      )}
       {/* Sitemap: navigate the preview to the app's pages, in any mode. */}
       <Sitemap
         discovery={routes}
