@@ -16,7 +16,6 @@ export type WorkPanel =
   | "tokens"
   | "tasks"
   | "manifest"
-  | "pages"
   | "history";
 export type Activity = SidebarView | WorkPanel;
 export type PanelTab = "terminal";

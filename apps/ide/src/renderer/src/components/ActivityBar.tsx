@@ -81,16 +81,8 @@ const SddPipelineMark = (
   </svg>
 );
 
-/** Light pages — composed from the design system. A document/page mark. */
-const PagesMark = (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <rect x="4" y="3" width="16" height="18" rx="2" />
-    <path d="M8 8h8M8 12h8M8 16h5" />
-  </svg>
-);
-
 // Order (top → bottom): Home, Explorer, Playground, Tokens, Design manifest,
-// Pages, Storybook, Jira (Tasks), Git (Source Control), SDD-DE pipeline.
+// Storybook, Jira (Tasks), Git (Source Control), SDD-DE pipeline.
 const TOP: Item[] = [
   {
     key: "home",
@@ -116,11 +108,6 @@ const TOP: Item[] = [
     key: "manifest",
     label: "Design manifest",
     custom: ManifestMark,
-  },
-  {
-    key: "pages",
-    label: "Pages — composed from the light design system",
-    custom: PagesMark,
   },
   {
     key: "play",
