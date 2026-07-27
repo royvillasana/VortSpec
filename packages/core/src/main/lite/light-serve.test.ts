@@ -40,6 +40,24 @@ describe("light-serve", () => {
     }
   });
 
+  it("injects the project's design-tokens CSS so var(--token) resolves in the served page", async () => {
+    const proj = await mkdtemp(join(tmpdir(), "lp-serve-tok-"));
+    await mkdir(join(proj, LIGHT_PAGES_DIR), { recursive: true });
+    await mkdir(join(proj, ".sdd-de"), { recursive: true });
+    await writeFile(join(proj, ".sdd-de", "project.yaml"), "token_file: tokens.css\n", "utf8");
+    await writeFile(join(proj, "tokens.css"), ":root{--space-4:16px}", "utf8");
+    await writeFile(join(proj, LIGHT_PAGES_DIR, "P.html"), "<!doctype html><html><head></head><body><div>x</div></body></html>", "utf8");
+    const base = await serveLightPages(proj);
+    try {
+      const html = await (await fetch(lightPageUrl(base, "P"))).text();
+      expect(html).toContain("--space-4:16px");
+      expect(html).toContain('data-vs-style="vs-tokens"'); // marked so serializeDom strips it (never saved)
+    } finally {
+      stopLightServe(proj);
+      await rm(proj, { recursive: true, force: true });
+    }
+  });
+
   it("lightPageUrl sanitizes the name and appends .html once", () => {
     expect(lightPageUrl("http://127.0.0.1:1/", "Airbnb Landing")).toBe("http://127.0.0.1:1/Airbnb%20Landing.html");
     expect(lightPageUrl("http://127.0.0.1:1/", "a/b")).toBe("http://127.0.0.1:1/a-b.html");
