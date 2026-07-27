@@ -135,8 +135,8 @@ body{margin:0;font:14px/1.5 system-ui,-apple-system,sans-serif;background:var(--
 .lp h3{font-size:13px;margin:0 0 12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 /* bento wall: CSS multi-column — cards flow to fill every column, balanced, with no gaps; foundations
    + components are mixed into one wall. Pure CSS, so it can never collapse or overlap. */
-.lp-bento{columns:240px;column-gap:0}
-.lp-card{background:var(--card);border:1px solid var(--border);padding:16px;min-width:0;overflow:hidden;break-inside:avoid;-webkit-column-break-inside:avoid}
+.lp-bento{columns:240px;column-gap:8px}
+.lp-card{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:16px;margin-bottom:8px;min-width:0;overflow:hidden;break-inside:avoid;-webkit-column-break-inside:avoid}
 .lp-tokens{display:flex;flex-direction:column;gap:9px}
 .lp-token{display:flex;align-items:center;gap:10px;min-width:0;overflow:hidden}
 .lp-name{font-size:11px;font-family:ui-monospace,monospace;flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
