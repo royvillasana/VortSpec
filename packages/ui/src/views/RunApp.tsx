@@ -2278,6 +2278,7 @@ export function RunApp({
               projectPath={project.path}
               name={lightPage}
               html={lightPageHtml}
+              tokens={tokens}
               onConvert={
                 dispatchTask
                   ? () =>

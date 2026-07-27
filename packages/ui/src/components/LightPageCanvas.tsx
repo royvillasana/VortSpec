@@ -1,38 +1,55 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { buildStructuralModel, slotAt } from "@vortspec/core/structure-model";
 import type { StructureSnapshot, StructuralNode, Slot, NodeDesc } from "@vortspec/core/structure-model";
+import type { InspectorToken } from "@vortspec/core/ipc";
 import { api } from "../lib/api";
 
 /**
- * Editable light-page canvas on the ISLANDS model (light-design-system, task 5.1 + drag polish). The
- * light page's source IS the DOM, so we render it in a SAME-ORIGIN iframe and instrument it FROM THE
- * PARENT (no guest preload): click selects the nearest `data-component` island, double-click makes text
- * editable, and dragging an island MOVES it — container-aware — to a valid drop slot. Any edit serializes
- * the whole document straight back to `.vortspec/light-pages/<name>.html` (lossless, no codemods). The
- * framework version is transformed from these same islands in the background.
+ * Editable light-page canvas on the ISLANDS model (light-design-system, task 5.1 + drag + token polish).
+ * The light page's source IS the DOM, so we render it in a SAME-ORIGIN iframe and instrument it FROM THE
+ * PARENT (no guest preload). Three edit gestures, all instant + no-Apply, all persisted straight to
+ * `.vortspec/light-pages/<name>.html`:
+ *   • click an island to select it, double-click to edit its text;
+ *   • drag an island to MOVE it — container-aware (see below);
+ *   • with an island selected, restyle it from the design tokens in the side panel.
  *
- * Container-aware moves reuse the SAME pure geometry as the framework canvas: the parent serializes a
- * `StructureSnapshot` off the live iframe DOM (the "guest serializer" here is just direct same-origin
- * DOM access), `buildStructuralModel` turns it into the nested section→row→column tree, and `slotAt`
- * resolves the deepest valid insertion slot under the cursor — excluding the dragged subtree so a drop
- * can't land inside itself. We then move the real DOM node into that slot and persist.
+ * Container-aware moves reuse the framework canvas's pure geometry: the parent serializes a
+ * `StructureSnapshot` off the live iframe DOM, `buildStructuralModel` builds the nested
+ * section→row→column tree, and `slotAt` resolves the deepest valid slot under the cursor (excluding the
+ * dragged subtree so a drop can't land inside itself).
+ *
+ * Token editing writes the token's RESOLVED value into the element's `style` ATTRIBUTE string directly
+ * (never via CSSOM, which would normalize `#6b8afd`→`rgb(...)` and break the compile step's value→token
+ * lookup). So the saved HTML keeps exact token values, and `compileLightPage` restores the token
+ * reference by that value — token discipline stays correct-by-construction.
  */
 export function LightPageCanvas({
   projectPath,
   name,
   html,
+  tokens = [],
   onConvert,
 }: {
   projectPath: string;
   name: string;
   html: string;
+  /** Design tokens (name + resolved value + category) — the only values the style panel offers. */
+  tokens?: InspectorToken[];
   /** "Convert to code" — generate the real framework page in the background (task 6). */
   onConvert?: () => void;
 }): React.JSX.Element {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const saveTimer = useRef<number | undefined>(undefined);
-  const [selected, setSelected] = useState<string | null>(null);
+  const [selectedEl, setSelectedEl] = useState<HTMLElement | null>(null);
+  const [rev, setRev] = useState(0); // bump to re-read the selected element's inline styles
   const [saved, setSaved] = useState(false);
+
+  // A new page remounts the iframe (key={name}); drop any selection from the old one.
+  useEffect(() => setSelectedEl(null), [name]);
+
+  const colorTokens = tokens.filter((t) => t.type === "color");
+  const spacingTokens = tokens.filter((t) => t.type === "spacing");
+  const radiusTokens = tokens.filter((t) => t.type === "radius");
 
   function save(): void {
     const doc = iframeRef.current?.contentDocument;
@@ -53,6 +70,14 @@ export function LightPageCanvas({
     saveTimer.current = window.setTimeout(save, 500);
   }
 
+  /** Apply (or clear, when value is "") a token value to a CSS property on the selected island. */
+  function applyToken(prop: string, value: string): void {
+    if (!selectedEl) return;
+    setInlineStyle(selectedEl, prop, value || null);
+    setRev((r) => r + 1);
+    save();
+  }
+
   function instrument(): void {
     const doc = iframeRef.current?.contentDocument;
     if (!doc || doc.querySelector("style[data-lp-style]")) return; // already instrumented
@@ -62,6 +87,12 @@ export function LightPageCanvas({
       "[data-lp-selected]{outline:2px solid #6b8afd!important;outline-offset:1px;cursor:grab}" +
       "[data-lp-drop]{position:fixed;background:#6b8afd;border-radius:2px;pointer-events:none;z-index:2147483647;box-shadow:0 0 0 1px rgba(107,138,253,.35)}";
     doc.head?.appendChild(style);
+
+    const select = (el: Element): void => {
+      doc.querySelectorAll("[data-lp-selected]").forEach((n) => n.removeAttribute("data-lp-selected"));
+      el.setAttribute("data-lp-selected", "");
+      setSelectedEl(el as HTMLElement);
+    };
 
     // ── drag state (per page-load; lives with these listeners) ────────────────
     type Drag = {
@@ -112,10 +143,7 @@ export function LightPageCanvas({
         const t = e.target as Element | null;
         if (!t) return;
         e.preventDefault();
-        const island = t.closest("[data-component]") ?? t;
-        doc.querySelectorAll("[data-lp-selected]").forEach((n) => n.removeAttribute("data-lp-selected"));
-        island.setAttribute("data-lp-selected", "");
-        setSelected(island.getAttribute("data-component") ?? island.tagName.toLowerCase());
+        select(t.closest("[data-component]") ?? t);
       },
       true,
     );
@@ -202,9 +230,7 @@ export function LightPageCanvas({
           if (container && anchor) {
             const ref = d.slot.position === "before" ? anchor : anchor.nextElementSibling;
             if (ref !== d.el) container.insertBefore(d.el, ref ?? null);
-            doc.querySelectorAll("[data-lp-selected]").forEach((n) => n.removeAttribute("data-lp-selected"));
-            d.el.setAttribute("data-lp-selected", "");
-            setSelected(d.el.getAttribute("data-component") ?? d.el.tagName.toLowerCase());
+            select(d.el);
             save();
           }
         }
@@ -223,12 +249,16 @@ export function LightPageCanvas({
     );
   }
 
+  const selName = selectedEl ? selectedEl.dataset.component ?? selectedEl.tagName.toLowerCase() : null;
+  // `rev` is read so the panel re-computes active tokens after each applyToken.
+  void rev;
+
   return (
     <div className="flex h-full min-h-0 w-full flex-col">
       <div className="flex flex-none items-center gap-3 border-b border-vs-border-subtle px-3 py-1.5 text-[12px]">
         <span className="text-vs-text-muted">Editing</span>
         <span className="font-medium text-vs-text-primary">{name}</span>
-        {selected && <span className="rounded bg-vs-bg-hover px-2 py-0.5 text-[11px] text-vs-text-secondary">island: {selected}</span>}
+        {selName && <span className="rounded bg-vs-bg-hover px-2 py-0.5 text-[11px] text-vs-text-secondary">island: {selName}</span>}
         <span className="ml-auto text-[11px] text-vs-text-muted">{saved ? "Saved ✓" : "Click to select · drag to move · double-click to edit text"}</span>
         {onConvert && (
           <button
@@ -242,15 +272,38 @@ export function LightPageCanvas({
         )}
       </div>
       {html.trim() ? (
-        <iframe
-          key={name}
-          ref={iframeRef}
-          title={`Edit ${name}`}
-          className="min-h-0 flex-1 border-0 bg-white"
-          sandbox="allow-same-origin"
-          srcDoc={html}
-          onLoad={instrument}
-        />
+        <div className="flex min-h-0 flex-1">
+          <iframe
+            key={name}
+            ref={iframeRef}
+            title={`Edit ${name}`}
+            className="min-h-0 flex-1 border-0 bg-white"
+            sandbox="allow-same-origin"
+            srcDoc={html}
+            onLoad={instrument}
+          />
+          {selectedEl && (colorTokens.length > 0 || spacingTokens.length > 0 || radiusTokens.length > 0) && (
+            <aside className="flex w-56 flex-none flex-col gap-3 overflow-auto border-l border-vs-border-subtle p-3 text-[12px]">
+              <div className="font-medium text-vs-text-primary">{selName}</div>
+              {colorTokens.length > 0 && (
+                <>
+                  <TokenField label="Background" swatch value={getInlineStyle(selectedEl, "background-color")} options={colorTokens} onPick={(v) => applyToken("background-color", v)} />
+                  <TokenField label="Text color" swatch value={getInlineStyle(selectedEl, "color")} options={colorTokens} onPick={(v) => applyToken("color", v)} />
+                </>
+              )}
+              {spacingTokens.length > 0 && (
+                <>
+                  <TokenField label="Padding" value={getInlineStyle(selectedEl, "padding")} options={spacingTokens} onPick={(v) => applyToken("padding", v)} />
+                  <TokenField label="Gap" value={getInlineStyle(selectedEl, "gap")} options={spacingTokens} onPick={(v) => applyToken("gap", v)} />
+                </>
+              )}
+              {radiusTokens.length > 0 && (
+                <TokenField label="Radius" value={getInlineStyle(selectedEl, "border-radius")} options={radiusTokens} onPick={(v) => applyToken("border-radius", v)} />
+              )}
+              <p className="mt-1 text-[11px] leading-snug text-vs-text-muted">Values come from your design tokens — the framework build restores each token reference.</p>
+            </aside>
+          )}
+        </div>
       ) : (
         <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 p-6 text-center text-[13px] text-vs-text-muted">
           <p>
@@ -261,6 +314,44 @@ export function LightPageCanvas({
         </div>
       )}
     </div>
+  );
+}
+
+/** One token-picker row: a native select of tokens, showing the active one when the value matches. */
+function TokenField({
+  label,
+  value,
+  options,
+  onPick,
+  swatch,
+}: {
+  label: string;
+  value: string;
+  options: InspectorToken[];
+  onPick: (value: string) => void;
+  swatch?: boolean;
+}): React.JSX.Element {
+  // A select shows the active token only when the inline value EXACTLY matches a token value.
+  const active = options.find((t) => t.resolvedValue === value)?.resolvedValue ?? "";
+  return (
+    <label className="block">
+      <span className="mb-1 block text-vs-text-muted">{label}</span>
+      <div className="flex items-center gap-2">
+        {swatch && <span className="h-4 w-4 flex-none rounded border border-vs-border-subtle" style={{ background: value || "transparent" }} />}
+        <select
+          className="min-w-0 flex-1 rounded border border-vs-border-subtle bg-vs-bg-base px-1.5 py-1 text-[11px] text-vs-text-primary"
+          value={active}
+          onChange={(e) => onPick(e.target.value)}
+        >
+          <option value="">{value && !active ? "(custom)" : "default"}</option>
+          {options.map((t) => (
+            <option key={t.name} value={t.resolvedValue}>
+              {t.name} · {t.resolvedValue}
+            </option>
+          ))}
+        </select>
+      </div>
+    </label>
   );
 }
 
@@ -298,4 +389,36 @@ function snapshotFromDom(root: Element, win: Window): { snap: StructureSnapshot;
   };
   const rootId = walk(root);
   return { snap: { rootId, nodes }, elById };
+}
+
+// ── inline-style attribute helpers ──────────────────────────────────────────
+// We edit the `style` ATTRIBUTE string (not CSSOM) so exact token values survive serialization: setting
+// `el.style.backgroundColor = "#6b8afd"` would round-trip as `rgb(107,138,253)` and miss the compile
+// step's value→token lookup. Writing the attribute keeps the literal the token carries.
+
+function parseStyle(attr: string | null): Array<[string, string]> {
+  return (attr ?? "")
+    .split(";")
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .map((pair) => {
+      const i = pair.indexOf(":");
+      return [pair.slice(0, i).trim().toLowerCase(), pair.slice(i + 1).trim()] as [string, string];
+    })
+    .filter(([k]) => k.length > 0);
+}
+
+/** Read the value of a single CSS property from an element's inline `style` attribute (last wins). */
+function getInlineStyle(el: Element, prop: string): string {
+  const found = parseStyle(el.getAttribute("style")).filter(([k]) => k === prop);
+  return found.length ? found[found.length - 1][1] : "";
+}
+
+/** Set (or, when value is null, remove) a single CSS property in an element's inline `style` attribute. */
+function setInlineStyle(el: Element, prop: string, value: string | null): void {
+  const pairs = parseStyle(el.getAttribute("style")).filter(([k]) => k !== prop);
+  if (value != null && value !== "") pairs.push([prop, value]);
+  const s = pairs.map(([k, v]) => `${k}: ${v}`).join("; ");
+  if (s) el.setAttribute("style", s);
+  else el.removeAttribute("style");
 }
