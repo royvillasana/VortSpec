@@ -12,6 +12,7 @@ import { basename, join } from "node:path";
 import { writeFile, readFile, readdir } from "node:fs/promises";
 import { getInspectorTokens } from "../inspector/token-parser";
 import { getInspectorComponents } from "../inspector/component-reader";
+import { readFigmaComponents } from "../inspector/figma-reconcile";
 import {
   deriveLiteManifest,
   serializeLiteManifest,
@@ -138,7 +139,11 @@ export async function deriveProjectLiteManifest(projectPath: string): Promise<Li
     getInspectorComponents(projectPath),
     readFigmaStandIns(projectPath),
   ]);
-  const input = buildDeriveInput(basename(projectPath) || "Project", tokensResult.tokens, componentsResult.components);
+  // A light-first design system shows ALL designed components — include Figma components that aren't
+  // coded yet (`figmaOnly`) alongside the code roster, so the palette reflects the whole design system.
+  const figmaOnly = componentsResult.figmaOnly.map((f) => ({ name: f.name, props: [] as { key: string; kind: string; options: string[]; defaultValue?: string }[] }));
+  const components = [...componentsResult.components, ...figmaOnly];
+  const input = buildDeriveInput(basename(projectPath) || "Project", tokensResult.tokens, components);
   // Join stand-ins to components by the normalized segment (matches how light-standin wrote them).
   const standIns: Record<string, StandIn[]> = {};
   for (const c of input.components) {
@@ -162,29 +167,49 @@ export async function writeDesignerMd(projectPath: string): Promise<string> {
   return path;
 }
 
-/** Stand-in targets: variant VALUES from the roster (enum props) + Figma refs from `components.json`. */
+/**
+ * Stand-in targets = every design-system component with its Figma ref. Sourced from the SAME places
+ * the palette shows components: the code roster (variant VALUES from enum props) PLUS Figma components
+ * not yet coded (`figmaOnly`). Figma refs (node id / componentKey) come from `.vortspec/figma-components.json`
+ * — matched to code components by name — with `.sdd-de/components.json` as a fallback. This is why the
+ * earlier prompt was empty: it read only `.sdd-de/components.json`, which was empty for this project.
+ */
 export async function buildStandInTargets(projectPath: string): Promise<StandInTarget[]> {
-  const [componentsResult, raw] = await Promise.all([
+  const [componentsResult, figmaAll, raw] = await Promise.all([
     getInspectorComponents(projectPath),
+    readFigmaComponents(projectPath),
     readFile(join(projectPath, ".sdd-de/components.json"), "utf8").catch(() => ""),
   ]);
-  const variantsByName = new Map<string, string[]>();
-  for (const c of componentsResult.components) variantsByName.set(c.name, variantsOf(c.props));
-  let detected: { name: string; figmaNodeId?: string; nodeId?: string; componentKey?: string }[] = [];
+  const key = (s: string) => normSegment(s).toLowerCase();
+  const figByName = new Map((figmaAll ?? []).map((f) => [key(f.name), f]));
+  // Fallback refs from the detected inventory (.sdd-de/components.json), if present.
   if (raw) {
     try {
       const parsed = detectedComponentsSchema.safeParse(JSON.parse(raw));
-      if (parsed.success) detected = parsed.data;
+      if (parsed.success)
+        for (const d of parsed.data) {
+          const k = key(d.name);
+          if (!figByName.has(k) && (d.figmaNodeId || d.nodeId || d.componentKey))
+            figByName.set(k, { name: d.name, isSet: false, variants: [], id: d.figmaNodeId ?? d.nodeId, key: d.componentKey });
+        }
     } catch {
-      /* malformed components.json → no Figma refs (targets still usable for name/variants) */
+      /* malformed → rely on figma-components.json only */
     }
   }
-  return detected.map((d) => ({
-    name: d.name,
-    figmaNodeId: d.figmaNodeId ?? d.nodeId,
-    componentKey: d.componentKey,
-    variants: variantsByName.get(d.name) ?? [],
-  }));
+
+  const targets: StandInTarget[] = [];
+  const seen = new Set<string>();
+  for (const c of componentsResult.components) {
+    seen.add(key(c.name));
+    const f = figByName.get(key(c.name));
+    targets.push({ name: c.name, figmaNodeId: f?.id, componentKey: f?.key, variants: variantsOf(c.props) });
+  }
+  // Figma-designed components not (yet) in the code roster — the light-first case.
+  for (const f of figmaAll ?? []) {
+    if (seen.has(key(f.name))) continue;
+    targets.push({ name: f.name, figmaNodeId: f.id, componentKey: f.key, variants: f.variants ?? [] });
+  }
+  return targets;
 }
 
 /**
