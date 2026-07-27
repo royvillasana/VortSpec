@@ -60,9 +60,21 @@ export function LightPageCanvas({
   const [rev, setRev] = useState(0); // bump to re-read the selected element's inline styles
   const [saved, setSaved] = useState(false);
   const [insertOpen, setInsertOpen] = useState(false);
+  // The page HTML can arrive AFTER selection (the agent is still composing it), and the parent only
+  // re-reads on a page change — so keep a local copy we can refresh on demand from disk.
+  const [reloadedHtml, setReloadedHtml] = useState<string | null>(null);
+  const effHtml = reloadedHtml ?? html;
 
-  // A new page remounts the iframe (key={name}); drop any selection from the old one.
-  useEffect(() => setSelectedEl(null), [name]);
+  // A new page (or new incoming html) remounts the iframe (key={name}); drop selection + any stale reload.
+  useEffect(() => {
+    setSelectedEl(null);
+    setReloadedHtml(null);
+  }, [name, html]);
+
+  /** Re-read the light page from disk — recovers the case where the file was written after selection. */
+  function reloadPage(): void {
+    void api.liteReadPage(projectPath, name).then((h) => setReloadedHtml(h)).catch(() => {});
+  }
 
   /** Select an element (or clear) — the single selection path shared by click, drag-drop, and edits. */
   function selectEl(el: Element | null): void {
@@ -394,15 +406,18 @@ export function LightPageCanvas({
           </button>
         )}
       </div>
-      {html.trim() ? (
-        <div className="flex min-h-0 flex-1">
+      {effHtml.trim() ? (
+        <div className="flex min-h-0 flex-1 bg-white">
           <iframe
             key={name}
             ref={iframeRef}
             title={`Edit ${name}`}
-            className="min-h-0 flex-1 border-0 bg-white"
+            // h-full is REQUIRED: in this flex ROW, flex-1 only grows width; an <iframe> (a replaced
+            // element) won't stretch to the row's height on its own, so without h-full it collapses to
+            // its default height and the dark IDE background shows through as a "black" preview.
+            className="h-full min-h-0 flex-1 border-0 bg-white"
             sandbox="allow-same-origin"
-            srcDoc={html}
+            srcDoc={effHtml}
             onLoad={instrument}
           />
           {selectedEl && (
@@ -454,12 +469,22 @@ export function LightPageCanvas({
           )}
         </div>
       ) : (
-        <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 p-6 text-center text-[13px] text-vs-text-muted">
+        <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 bg-vs-bg-base p-6 text-center text-[13px] text-vs-text-secondary">
           <p>
-            This light page is <span className="text-vs-text-secondary">empty</span> — the composed HTML for “{name}” couldn’t be read
-            (no content at <code>.vortspec/light-pages/{name}.html</code>).
+            This light page is <span className="text-vs-text-primary">empty</span> — no content yet at{" "}
+            <code className="text-vs-text-muted">.vortspec/light-pages/{name}.html</code>.
           </p>
-          <p className="text-[12px]">Recompose it: use “+ New light page” with the same name, or describe it in the chat.</p>
+          <p className="text-[12px] text-vs-text-muted">
+            If the assistant is still composing it, give it a moment and reload. Otherwise recompose it with “+ New light page”
+            (same name) or describe it in the chat.
+          </p>
+          <button
+            type="button"
+            onClick={reloadPage}
+            className="rounded border border-vs-border-subtle px-3 py-1 text-[12px] font-medium text-vs-text-primary hover:bg-vs-bg-hover"
+          >
+            Reload from disk
+          </button>
         </div>
       )}
     </div>
