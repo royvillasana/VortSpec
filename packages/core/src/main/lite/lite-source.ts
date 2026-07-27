@@ -105,6 +105,26 @@ export function buildDeriveInput(
  * (light-standin.ts). Keyed by the NORMALIZED component segment so the caller can join by component name.
  * A stand-in that leaked a framework pointer is skipped (never shown as a light-only-world preview).
  */
+/**
+ * Strip document-level shell + global styles from a stand-in so it can't hijack the palette. A Figma
+ * stand-in emitted as a full document (`<html>`, `<head><style>body{...}</style>`, `<body ...>`) would
+ * otherwise leak a page background / global rules into the palette (that's the "grid updated but colors
+ * stayed light" symptom). We keep the visible markup + inline styles; document shell, <style>, <head>,
+ * <script>, <link>, <meta>, <title> are removed.
+ */
+export function sanitizeStandInHtml(html: string): string {
+  return html
+    .replace(/<!doctype[^>]*>/gi, "")
+    .replace(/<\/?html[^>]*>/gi, "")
+    .replace(/<head[\s\S]*?<\/head>/gi, "")
+    .replace(/<\/?body[^>]*>/gi, "")
+    .replace(/<style[\s\S]*?<\/style>/gi, "")
+    .replace(/<script[\s\S]*?<\/script>/gi, "")
+    .replace(/<(?:link|meta)[^>]*>/gi, "")
+    .replace(/<title[\s\S]*?<\/title>/gi, "")
+    .trim();
+}
+
 export async function readFigmaStandIns(projectPath: string): Promise<Record<string, StandIn[]>> {
   const root = join(projectPath, LIGHT_HTML_DIR);
   const out: Record<string, StandIn[]> = {};
@@ -123,7 +143,8 @@ export async function readFigmaStandIns(projectPath: string): Promise<Record<str
       continue;
     }
     for (const file of files.sort()) {
-      const html = (await readFile(join(root, comp, file), "utf8").catch(() => "")).trim();
+      const raw = (await readFile(join(root, comp, file), "utf8").catch(() => "")).trim();
+      const html = sanitizeStandInHtml(raw);
       if (!html || findFrameworkPointers(html).length > 0) continue;
       standIns.push({ variant: file.replace(/\.html$/, ""), html, source: "harvested" });
     }
@@ -156,7 +177,15 @@ export async function deriveProjectLiteManifest(projectPath: string): Promise<Li
 
 /** Derive the manifest and render the browsable palette HTML (what the IDE "Design System" view embeds). */
 export async function getProjectPaletteHtml(projectPath: string): Promise<string> {
-  return renderPaletteHtml(buildPalette(await deriveProjectLiteManifest(projectPath)));
+  const html = renderPaletteHtml(buildPalette(await deriveProjectLiteManifest(projectPath)));
+  // Debug (temporary): confirm at RUNTIME what we actually generate. `stray*` > 1 means a stand-in
+  // leaked document-level tags/styles into the palette (the light-chrome symptom).
+  console.error(
+    `[lite:palette] len=${html.length} rootDark=${/:root\{color-scheme:dark/.test(html)} ` +
+      `strayStyle=${(html.match(/<style/gi) || []).length} strayBody=${(html.match(/<body/gi) || []).length} ` +
+      `strayHtml=${(html.match(/<html/gi) || []).length}`,
+  );
+  return html;
 }
 
 /** Write `designer.md` (the light-authoring manifest) to the project root; returns its path. */
