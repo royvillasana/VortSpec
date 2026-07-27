@@ -13,6 +13,7 @@ import { Sitemap } from "../components/run-canvas/Sitemap";
 import type { RouteDiscovery, RouteNode, Rect } from "@vortspec/core/ipc";
 import { RunCanvas } from "../components/run-canvas/RunCanvas";
 import { LightPageCanvas } from "../components/LightPageCanvas";
+import { Logo } from "../components/Logo";
 import { buildConvertToFrameworkPrompt } from "@vortspec/core/light-page";
 import { viewportsFromTokens, appliesInViewport, type ViewportId, type DeviceFrameKind } from "../components/run-canvas/viewports";
 import {
@@ -275,8 +276,6 @@ export function RunApp({
   const [lightPageHtml, setLightPageHtml] = useState("");
   const [liteStandIns, setLiteStandIns] = useState<{ component: string; variant: string; html: string }[]>([]);
   const [liteReadiness, setLiteReadiness] = useState<Record<string, "light-only" | "framework-ready">>({});
-  const [creatingPage, setCreatingPage] = useState(false);
-  const [newPageName, setNewPageName] = useState("");
   // The source file of the page currently on screen — grounds canvas Apply so the agent
   // edits the previewed page (not index.html's mount shell) when an element has no known
   // component file of its own. Walks the route tree for the node at `currentPath`.
@@ -295,6 +294,15 @@ export function RunApp({
   const rediscoverRoutes = useCallback(() => {
     void api.discoverRoutes(project.path).then(setRoutes);
   }, [project.path]);
+  // How many navigable/light pages the project has — 0 ⇒ a brand-new project with nothing to preview yet,
+  // which the Playground answers with a big "create from the chat" message instead of a dev-server error.
+  const pageCount = useMemo(() => {
+    if (!routes) return 0;
+    let n = 0;
+    const walk = (ns: RouteNode[]): void => ns.forEach((r) => ((r.navigable || r.light) && n++, walk(r.children)));
+    walk(routes.routes);
+    return n;
+  }, [routes]);
   useEffect(() => {
     if (!canvas) return;
     let alive = true;
@@ -413,17 +421,6 @@ export function RunApp({
       alive = false;
     };
   }, [lightPage, project.path]);
-
-  // Create a light page THROUGH THE REAL CHAT (like any page): compose it from the design system.
-  // The agent writes `.vortspec/light-pages/<name>.html`; the idle rescan folds it into the sitemap.
-  async function createLightPage(): Promise<void> {
-    const name = newPageName.trim();
-    if (!name) return;
-    const prompt = await api.litepagePrompt(project.path, name, "");
-    dispatchTask?.({ title: `Create light page: ${name}`, allowModify: true, prompt });
-    setCreatingPage(false);
-    setNewPageName("");
-  }
 
   // A state-navigated screen has no URL — reveal its source file so the user can edit it.
   const openScreenFile = useCallback(
@@ -1940,37 +1937,7 @@ export function RunApp({
   // an <aside> on desktop, or PORTALED into the IDE's unified left-dock slot (sidebarSlot).
   const sidebarBody = (
     <>
-      {/* New light page — composed from the design system, created via the real chat. */}
-      {dispatchTask && (
-        <div className="flex flex-none items-center gap-1 border-b border-vs-border-subtle px-2 py-1.5">
-          {creatingPage ? (
-            <>
-              <input
-                autoFocus
-                value={newPageName}
-                onChange={(e) => setNewPageName(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") void createLightPage();
-                  if (e.key === "Escape") setCreatingPage(false);
-                }}
-                placeholder="Light page name…"
-                className="min-w-0 flex-1 rounded border border-vs-border-default bg-vs-bg-surface px-2 py-1 text-[12px] text-vs-text-primary focus:outline-none"
-              />
-              <button type="button" onClick={() => void createLightPage()} className="rounded bg-vs-accent px-2 py-1 text-[11px] font-medium text-white">
-                Create
-              </button>
-            </>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setCreatingPage(true)}
-              className="flex w-full items-center gap-1.5 rounded px-1.5 py-1 text-left text-[12px] text-vs-text-secondary hover:bg-vs-bg-hover hover:text-vs-text-primary"
-            >
-              <span className="text-[14px] leading-none">+</span> New light page
-            </button>
-          )}
-        </div>
-      )}
+      {/* Pages are created by ASKING in the Chat sidebar (light-first) — no create form/button here. */}
       {/* Sitemap: navigate the preview to the app's pages, in any mode. */}
       <Sitemap
         discovery={routes}
@@ -2299,6 +2266,23 @@ export function RunApp({
                   : undefined
               }
             />
+          ) : isApp && !lightPage && routes !== null && pageCount === 0 && (dev.state === "stopped" || dev.state === "no-script") ? (
+            // Brand-new project: nothing built yet. Don't show a dev-server/no-script error — greet the user
+            // and point them at the one thing they need (the Chat sidebar). Pages are created by asking.
+            <Centered>
+              <div className="flex max-w-xl flex-col items-center gap-6 text-center">
+                <Logo size={56} className="opacity-90" />
+                <div className="flex flex-col gap-3">
+                  <p className="text-2xl font-semibold tracking-[-0.01em] text-vs-text-primary">
+                    Create whatever you want from a single prompt.
+                  </p>
+                  <p className="text-sm leading-relaxed text-vs-text-secondary">
+                    Just describe it in the <b className="text-vs-text-primary">Chat sidebar</b> — it’s composed from
+                    your design system and previews here, live. No forms, no buttons. That’s it.
+                  </p>
+                </div>
+              </div>
+            </Centered>
           ) : dev.state === "starting" ? (
             <Centered>
               <Spinner /> {dev.message ?? `Starting ${isApp ? "your app's dev server" : "Storybook"}…`}
@@ -2535,21 +2519,25 @@ export function RunApp({
             </Centered>
           ) : isApp ? (
             <Centered>
-              <div className="flex max-w-md flex-col items-center gap-2 text-center">
-                <span className="text-2xl" aria-hidden>
-                  📄
-                </span>
-                <p className="text-sm font-semibold text-vs-text-primary">
-                  This is your Playground — where your pages preview.
-                </p>
-                <p className="text-xs leading-relaxed text-vs-text-muted">
-                  You don’t have any pages yet. Once your components are built, just describe the page you want in the{" "}
-                  <b>Chat sidebar</b> — it’s composed from your design-system components and appears here live. No
-                  forms or buttons to hunt for; you create pages by asking.
-                </p>
-                <Button variant="primary" className="mt-2" onClick={() => void start()}>
-                  Start app
-                </Button>
+              <div className="flex max-w-xl flex-col items-center gap-6 text-center">
+                <Logo size={56} className="opacity-90" />
+                <div className="flex flex-col gap-3">
+                  <p className="text-2xl font-semibold tracking-[-0.01em] text-vs-text-primary">
+                    Create whatever you want from a single prompt.
+                  </p>
+                  <p className="text-sm leading-relaxed text-vs-text-secondary">
+                    Just describe it in the <b className="text-vs-text-primary">Chat sidebar</b> — it’s composed from
+                    your design system and previews here, live. No forms, no buttons. That’s it.
+                  </p>
+                </div>
+                {/* De-emphasized: start the real app dev server (only if this project has one). */}
+                <button
+                  type="button"
+                  onClick={() => void start()}
+                  className="text-[11px] text-vs-text-muted underline-offset-2 hover:text-vs-text-secondary hover:underline"
+                >
+                  or start the app dev server
+                </button>
               </div>
             </Centered>
           ) : (
