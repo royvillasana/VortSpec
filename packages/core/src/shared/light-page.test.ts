@@ -17,9 +17,16 @@ describe("buildLightPagePrompt", () => {
 
   it("pins the light-first contract: read designer.md, reuse components, framework-free, transform later", () => {
     expect(prompt).toContain("designer.md");
-    expect(prompt).toMatch(/light design system/i);
-    expect(prompt).toMatch(/do NOT author any framework\/React code/i);
+    expect(prompt).toMatch(/framework-free/i);
     expect(prompt).toMatch(/transform step/i);
+  });
+
+  it("forcefully OVERRIDES the framework-first workflow (no gap check, no scaffold, no components, no new tokens)", () => {
+    expect(prompt).toMatch(/OVERRIDES the project'?s normal framework-first workflow/i);
+    expect(prompt).toMatch(/do NOT run Component Gap Detection/i);
+    expect(prompt).toMatch(/do NOT scaffold/i);
+    expect(prompt).toMatch(/do NOT implement React\/framework components/i);
+    expect(prompt).toMatch(/do NOT add, modify, or invent design tokens/i);
   });
 
   it("requires framework-free output and data-component mapping + the write path", () => {
