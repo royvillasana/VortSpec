@@ -2266,9 +2266,10 @@ export function RunApp({
                   : undefined
               }
             />
-          ) : isApp && !lightPage && routes !== null && pageCount === 0 && (dev.state === "stopped" || dev.state === "no-script") ? (
-            // Brand-new project: nothing built yet. Don't show a dev-server/no-script error — greet the user
-            // and point them at the one thing they need (the Chat sidebar). Pages are created by asking.
+          ) : isApp && !lightPage && routes !== null && pageCount === 0 && dev.state !== "starting" && dev.state !== "running" && dev.state !== "error" ? (
+            // Brand-new blank project: nothing built yet, no pages. Don't show a dev-server/no-script error
+            // or any other project's pages — greet the user and point them at the one thing they need (the
+            // Chat sidebar). Pages are created by asking; nothing else is shown here.
             <Centered>
               <div className="flex max-w-xl flex-col items-center gap-6 text-center">
                 <Logo size={56} className="opacity-90" />

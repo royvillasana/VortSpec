@@ -43,18 +43,18 @@ import { READ_TOOLS, MODIFY_TOOLS, buildAgentList, type Agent } from "./ai/agent
  * it never interferes with other assistant tasks (fixes, refactors, component builds).
  */
 const LIGHT_FIRST_PAGE_DIRECTIVE =
-  "PAGE/SCREEN CREATION IS LIGHT-FIRST BY DEFAULT. When the user asks to create, build, or add a page or " +
-  "screen, and this project has a light design system (a `designer.md` and/or `.vortspec/light-html/` " +
-  "stand-ins), create a LIGHT PAGE: framework-free HTML written to `.vortspec/light-pages/<name>.html`, " +
-  "composed ONLY from the light design system (its stand-ins + the dual-keyed tokens in `designer.md`), " +
-  "with each design-system instance marked `data-component=\"<Name>\"`. For a create-page request you MUST " +
-  "NOT, in the foreground: scaffold or set up a React/Tailwind/Vite app (no package.json, vite, Tailwind " +
-  "config, App.tsx); build React/framework components or run a 7-step cycle; create a `src/screens|pages/*." +
-  "tsx` screen; or extract/invent tokens. The real framework version (React + Tailwind + components) is " +
-  "generated LATER, in the BACKGROUND, only when the user chooses \"Convert to code\". This OVERRIDES any " +
-  "framework-first \"Screen Creation\" workflow in the project's CLAUDE.md for the create-page step. If the " +
-  "project has NO light design system yet, say so and offer to set it up (light-first) rather than " +
-  "scaffolding a framework app.";
+  "PLAYGROUND PAGE CREATION IS ALWAYS LIGHTWEIGHT — NOW AND FOREVER. When the user asks to create, build, " +
+  "or add a page or screen, ALWAYS create a LIGHTWEIGHT PAGE: a self-contained, framework-free HTML/CSS/JS " +
+  "document written to `.vortspec/light-pages/<name>.html`. If a light design system exists (a `designer.md` " +
+  "and/or `.vortspec/light-html/` stand-ins), compose the page from it and mark each design-system instance " +
+  "with `data-component=\"<Name>\"`; if there is NO design system yet, compose a clean self-contained " +
+  "lightweight page directly (still framework-free HTML/CSS/JS) — do NOT stop to set one up first. " +
+  "For a create-page request you MUST NEVER, in the foreground: scaffold or set up a React/Tailwind/Vite " +
+  "app (no package.json, vite, Tailwind config, App.tsx); build React/framework components; run a 7-step " +
+  "cycle; or create a `src/screens|pages/*.tsx` file. The real framework version (React + Tailwind + " +
+  "components) is generated LATER, in the BACKGROUND, ONLY when the user is comfortable with the page and " +
+  "explicitly chooses \"Convert to code\" — that is a separate step, never part of creating the page. This " +
+  "is permanent and OVERRIDES any framework-first \"Screen Creation\" workflow in the project's CLAUDE.md.";
 
 /**
  * A persistent, project-scoped assistant **conversation**. It talks to the user's
