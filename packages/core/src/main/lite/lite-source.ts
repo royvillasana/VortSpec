@@ -168,6 +168,20 @@ export async function listInsertableStandIns(projectPath: string): Promise<Array
   return out;
 }
 
+/**
+ * Per-component readiness for the Playground canvas (light-design-system, 4.4). The actionable question
+ * when composing a light page is: does a REAL framework component exist for this island (Convert reuses
+ * it → `framework-ready`), or is it designed-only (Convert must build it → `light-only`)? That is exactly
+ * the coded-roster vs figma-only split — the same soft gate `compileBlockers` reasons about. (This is the
+ * compile-gate signal; the palette's badge additionally requires a harvested preview render.)
+ */
+export async function listComponentReadiness(projectPath: string): Promise<Array<{ name: string; readiness: "light-only" | "framework-ready" }>> {
+  const { components, figmaOnly } = await getInspectorComponents(projectPath);
+  const coded = new Set(components.map((c) => c.name));
+  const names = [...new Set([...components.map((c) => c.name), ...figmaOnly.map((f) => f.name)])];
+  return names.map((name) => ({ name, readiness: coded.has(name) ? "framework-ready" : "light-only" }));
+}
+
 /** Read the real project sources and derive the in-memory lite manifest (with Figma stand-ins if present). */
 export async function deriveProjectLiteManifest(projectPath: string): Promise<LiteManifest> {
   const [tokensResult, componentsResult, figmaStandIns] = await Promise.all([

@@ -38,6 +38,7 @@ export function LightPageCanvas({
   html,
   tokens = [],
   standIns = [],
+  readiness = {},
   onConvert,
 }: {
   projectPath: string;
@@ -47,6 +48,8 @@ export function LightPageCanvas({
   tokens?: InspectorToken[];
   /** Insertable design-system stand-ins for the Insert menu (empty until Figma previews are generated). */
   standIns?: InsertableStandIn[];
+  /** component name → readiness: `framework-ready` (real code, Convert reuses) vs `light-only` (Convert builds it). */
+  readiness?: Record<string, "light-only" | "framework-ready">;
   /** "Convert to code" — generate the real framework page in the background (task 6). Receives the
    *  deterministic compile of the CURRENT canvas so the background build gets an authoritative skeleton. */
   onConvert?: (compiled?: CompileResult) => void;
@@ -351,10 +354,13 @@ export function LightPageCanvas({
                     key={`${si.component}·${si.variant}`}
                     type="button"
                     onClick={() => insertStandIn(si)}
-                    className="block w-full truncate px-3 py-1.5 text-left text-[11px] text-vs-text-primary hover:bg-vs-bg-hover"
+                    className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[11px] text-vs-text-primary hover:bg-vs-bg-hover"
                   >
-                    {si.component}
-                    {si.variant && si.variant !== "default" && <span className="text-vs-text-muted"> · {si.variant}</span>}
+                    <span className="min-w-0 truncate">
+                      {si.component}
+                      {si.variant && si.variant !== "default" && <span className="text-vs-text-muted"> · {si.variant}</span>}
+                    </span>
+                    <ReadinessBadge readiness={readiness[si.component]} className="ml-auto flex-none" />
                   </button>
                 ))}
               </div>
@@ -386,7 +392,10 @@ export function LightPageCanvas({
           {selectedEl && (
             <aside className="flex w-56 flex-none flex-col gap-3 overflow-auto border-l border-vs-border-subtle p-3 text-[12px]">
               <div className="flex items-center justify-between gap-2">
-                <span className="min-w-0 truncate font-medium text-vs-text-primary">{selName}</span>
+                <span className="flex min-w-0 items-center gap-1.5">
+                  <span className="min-w-0 truncate font-medium text-vs-text-primary">{selName}</span>
+                  {selectedEl.dataset.component && <ReadinessBadge readiness={readiness[selectedEl.dataset.component]} className="flex-none" />}
+                </span>
                 <span className="flex flex-none gap-1">
                   <button
                     type="button"
@@ -438,6 +447,24 @@ export function LightPageCanvas({
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * Readiness badge for a design-system component on the canvas: "in code" (a real framework component
+ * exists — Convert reuses it) vs "light-only" (designed but not yet coded — Convert will build it). The
+ * soft gate made visible; nothing renders for a plain element with no known component.
+ */
+function ReadinessBadge({ readiness, className = "" }: { readiness?: "light-only" | "framework-ready"; className?: string }): React.JSX.Element | null {
+  if (!readiness) return null;
+  const ready = readiness === "framework-ready";
+  return (
+    <span
+      title={ready ? "A real framework component exists — Convert reuses it" : "Designed only — Convert will build this component"}
+      className={`rounded-full px-1.5 py-px text-[9px] font-medium ${ready ? "bg-vs-success/20 text-vs-success" : "bg-vs-warning/20 text-vs-warning"} ${className}`}
+    >
+      {ready ? "in code" : "light-only"}
+    </span>
   );
 }
 

@@ -274,6 +274,7 @@ export function RunApp({
   const [lightPage, setLightPage] = useState<string | null>(null);
   const [lightPageHtml, setLightPageHtml] = useState("");
   const [liteStandIns, setLiteStandIns] = useState<{ component: string; variant: string; html: string }[]>([]);
+  const [liteReadiness, setLiteReadiness] = useState<Record<string, "light-only" | "framework-ready">>({});
   const [creatingPage, setCreatingPage] = useState(false);
   const [newPageName, setNewPageName] = useState("");
   // The source file of the page currently on screen — grounds canvas Apply so the agent
@@ -404,6 +405,10 @@ export function RunApp({
     let alive = true;
     void api.liteReadPage(project.path, lightPage).then((h) => alive && setLightPageHtml(h));
     void api.liteStandIns(project.path).then((s) => alive && setLiteStandIns(s)).catch(() => alive && setLiteStandIns([]));
+    void api
+      .liteReadiness(project.path)
+      .then((r) => alive && setLiteReadiness(Object.fromEntries(r.map((c) => [c.name, c.readiness]))))
+      .catch(() => alive && setLiteReadiness({}));
     return () => {
       alive = false;
     };
@@ -2282,6 +2287,7 @@ export function RunApp({
               html={lightPageHtml}
               tokens={tokens}
               standIns={liteStandIns}
+              readiness={liteReadiness}
               onConvert={
                 dispatchTask
                   ? (compiled) =>

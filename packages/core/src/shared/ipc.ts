@@ -606,6 +606,11 @@ export const ipcContract = {
     request: z.string(),
     response: z.array(z.object({ component: z.string(), variant: z.string(), html: z.string() })),
   },
+  // per-component readiness for the canvas: coded (framework-ready, Convert reuses) vs designed-only (light-only).
+  "lite:readiness": {
+    request: z.string(),
+    response: z.array(z.object({ name: z.string(), readiness: z.enum(["light-only", "framework-ready"]) })),
+  },
   // light page authoring (task 5.1): compose a page from the light design system, then read/list them.
   "lite:pagePrompt": { request: z.object({ projectPath: z.string(), name: z.string(), description: z.string() }), response: z.string() },
   "lite:page": { request: z.object({ projectPath: z.string(), name: z.string() }), response: z.string() },

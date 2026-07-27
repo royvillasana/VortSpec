@@ -133,6 +133,7 @@ export interface VortSpecApi {
   writeDesignerManifest(projectPath: string): Promise<IpcResponse<"lite:writeDesigner">>;
   liteStandInPrompt(projectPath: string): Promise<IpcResponse<"lite:standInPrompt">>;
   liteStandIns(projectPath: string): Promise<IpcResponse<"lite:standins">>;
+  liteReadiness(projectPath: string): Promise<IpcResponse<"lite:readiness">>;
   litepagePrompt(projectPath: string, name: string, description: string): Promise<IpcResponse<"lite:pagePrompt">>;
   liteReadPage(projectPath: string, name: string): Promise<IpcResponse<"lite:page">>;
   litePages(projectPath: string): Promise<IpcResponse<"lite:pages">>;
