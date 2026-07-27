@@ -2284,11 +2284,11 @@ export function RunApp({
               standIns={liteStandIns}
               onConvert={
                 dispatchTask
-                  ? () =>
+                  ? (compiled) =>
                       dispatchTask({
                         title: `Convert to code: ${lightPage}`,
                         allowModify: true,
-                        prompt: buildConvertToFrameworkPrompt(lightPage),
+                        prompt: buildConvertToFrameworkPrompt(lightPage, compiled),
                       })
                   : undefined
               }

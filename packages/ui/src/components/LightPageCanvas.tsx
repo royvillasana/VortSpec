@@ -2,7 +2,9 @@ import { useEffect, useRef, useState } from "react";
 import { buildStructuralModel, slotAt } from "@vortspec/core/structure-model";
 import type { StructureSnapshot, StructuralNode, Slot, NodeDesc } from "@vortspec/core/structure-model";
 import type { InspectorToken } from "@vortspec/core/ipc";
+import type { CompileResult } from "@vortspec/core/compile";
 import { api } from "../lib/api";
+import { compileLightHtml } from "../lib/light-compile";
 
 /**
  * Editable light-page canvas on the ISLANDS model (light-design-system, task 5.1 + drag + token polish).
@@ -45,8 +47,9 @@ export function LightPageCanvas({
   tokens?: InspectorToken[];
   /** Insertable design-system stand-ins for the Insert menu (empty until Figma previews are generated). */
   standIns?: InsertableStandIn[];
-  /** "Convert to code" — generate the real framework page in the background (task 6). */
-  onConvert?: () => void;
+  /** "Convert to code" — generate the real framework page in the background (task 6). Receives the
+   *  deterministic compile of the CURRENT canvas so the background build gets an authoritative skeleton. */
+  onConvert?: (compiled?: CompileResult) => void;
 }): React.JSX.Element {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const saveTimer = useRef<number | undefined>(undefined);
@@ -109,19 +112,38 @@ export function LightPageCanvas({
   const spacingTokens = tokens.filter((t) => t.type === "spacing");
   const radiusTokens = tokens.filter((t) => t.type === "radius");
 
-  function save(): void {
+  /** The current page as clean HTML (a clone with all editing artifacts stripped), or null if not ready. */
+  function serialize(): string | null {
     const doc = iframeRef.current?.contentDocument;
-    if (!doc) return;
-    // Serialize a CLONE with our editing artifacts stripped, so the saved page stays clean.
+    if (!doc) return null;
     const clone = doc.documentElement.cloneNode(true) as HTMLElement;
     clone.querySelectorAll("[data-lp-selected]").forEach((n) => n.removeAttribute("data-lp-selected"));
     clone.querySelectorAll("[contenteditable]").forEach((n) => n.removeAttribute("contenteditable"));
     clone.querySelectorAll("[data-lp-drop]").forEach((n) => n.remove());
     clone.querySelectorAll("style[data-lp-style]").forEach((n) => n.remove());
-    void api.liteWritePage(projectPath, name, `<!doctype html>\n${clone.outerHTML}`).then(() => {
+    return `<!doctype html>\n${clone.outerHTML}`;
+  }
+
+  function save(): void {
+    const html = serialize();
+    if (html == null) return;
+    void api.liteWritePage(projectPath, name, html).then(() => {
       setSaved(true);
       window.setTimeout(() => setSaved(false), 1200);
     });
+  }
+
+  /** Convert: deterministically compile the CURRENT canvas, then hand it to the background build. */
+  function handleConvert(): void {
+    if (!onConvert) return;
+    const html = serialize();
+    let compiled: CompileResult | undefined;
+    try {
+      compiled = html ? compileLightHtml(html, tokens) : undefined;
+    } catch {
+      compiled = undefined; // a parse/compile hiccup must never block Convert — the agent falls back to the HTML
+    }
+    onConvert(compiled);
   }
   function scheduleSave(): void {
     window.clearTimeout(saveTimer.current);
@@ -342,7 +364,7 @@ export function LightPageCanvas({
         {onConvert && (
           <button
             type="button"
-            onClick={onConvert}
+            onClick={handleConvert}
             title="Generate the real framework page from this light page, in the background"
             className="rounded bg-vs-accent px-2.5 py-1 text-[11px] font-medium text-white hover:opacity-90"
           >

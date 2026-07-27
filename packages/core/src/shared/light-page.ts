@@ -9,6 +9,7 @@
  * writes the page; VortSpec never authors framework code here.
  */
 import { normSegment } from "./light-standin";
+import type { CompileResult } from "./compile";
 
 /** Where composed light pages live. */
 export const LIGHT_PAGES_DIR = ".vortspec/light-pages";
@@ -58,11 +59,42 @@ export function buildLightPagePrompt(name: string, description: string): string 
 }
 
 /**
+ * The deterministic-compile block of the convert prompt (light-design-system, group 6). When the light
+ * page compiled cleanly, its JSX is the AUTHORITATIVE structure — token references already restored and
+ * design-system components already mapped by lookup — so the agent places it instead of re-deriving layout
+ * or re-picking tokens (that's where AI drifts). Only `residual`/`lintIssues` items need the agent's
+ * judgment. Absent (or empty) compile → no block, and the agent builds from the light HTML as before.
+ */
+function convertCompileSection(compiled?: CompileResult): string[] {
+  if (!compiled || !compiled.code.trim()) return [];
+  const cov = compiled.deterministicCoverage;
+  const needsJudgment = [...compiled.lintIssues, ...cov.residual];
+  return [
+    "DETERMINISTIC COMPILE (authoritative — use this as the page's exact structure):",
+    "The light page has been compiled to framework JSX by pure lookup — token references are already",
+    "restored (`var(--…)`) and every `data-component` is already mapped to its real component. Do NOT",
+    "re-derive the layout, re-pick tokens, or rename components; reproduce this JSX and spend your effort",
+    "only on imports, building any missing component, and routing.",
+    "",
+    "```tsx",
+    compiled.code,
+    "```",
+    "",
+    compiled.usedComponents.length > 0 ? `Components used (ensure each exists, then import): ${compiled.usedComponents.join(", ")}.` : "No design-system components were used (all plain elements).",
+    `Deterministic coverage: ${cov.tokensRestored} token value(s) restored, ${cov.componentsMapped} component(s) mapped, ${cov.literalsKept} literal(s) kept.`,
+    needsJudgment.length > 0
+      ? `NEEDS YOUR JUDGMENT (the only non-deterministic parts): ${needsJudgment.join("; ")}.`
+      : "Nothing was left unresolved — the compile is fully deterministic; keep it faithful.",
+    "",
+  ];
+}
+
+/**
  * Build the "convert to code" prompt (light-design-system, task 6). Triggered when the user is happy
  * with the LIGHT page — now do the real framework build in the background, using the light page as the
  * spec. THIS is where the framework-first work (scaffold + components + page) legitimately happens.
  */
-export function buildConvertToFrameworkPrompt(name: string): string {
+export function buildConvertToFrameworkPrompt(name: string, compiled?: CompileResult): string {
   return [
     `CONVERT the light page "${name}" into real framework code. The user is happy with the light preview —`,
     "now build the real thing, using the light page as the authoritative spec.",
@@ -71,6 +103,7 @@ export function buildConvertToFrameworkPrompt(name: string): string {
     "component instance is marked `data-component=\"<Name>\"`. This is the SPEC — match its layout, content,",
     "and component usage exactly.",
     "",
+    ...convertCompileSection(compiled),
     "Read `.sdd-de/project.yaml` for the target framework/language/styling and follow the project's standards.",
     "Then do the full build FOR THIS PAGE (this is the framework-first work, now that it's wanted):",
     "1. If the app isn't scaffolded yet, scaffold it for the configured framework (package.json, entry,",
