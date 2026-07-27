@@ -32,9 +32,8 @@
 
 ## 6. User-facing terminology (no "light")
 
-- [ ] 6.1 Audit and remove every user-visible "light"/"lightweight" term (site tree labels/badges,
-  canvas headers, empty states, tooltips, buttons); present them as plain "pages"/"screens".
-- [ ] 6.2 Keep internal names/paths (`.vortspec/light-pages/`, page-kind routing) as-is — internal only.
+- [x] 6.1 Removed user-visible "light"/"lightweight" wording: DesignSystem header "— lightweight palette" → "— components & tokens"; GuidedFlow toggle "← Light design system" → "← Design system" (+ title); framework-view subtext "the React component roster" → "the component roster" (framework-agnostic). Sitemap had no light label; the AssistantDock directive stays (AI-facing, internal, not user UI).
+- [x] 6.2 Kept internal names/paths (`.vortspec/light-pages/`, page-kind routing, code comments) — internal only.
 
 ## 7. Optional: Astro Dynamic Islands for interactivity
 
@@ -52,7 +51,7 @@
 
 ## 9. Automatic background component build
 
-- [x] 9.1 Auto-start the component build in the BACKGROUND when a project has detected-but-unbuilt (`status === "unknown"`) components → `useAutoComponentBuild` hook (`chunkByLevel` 5 at a time → `buildChunkPrompt({verify,storybook,manifest})` per chunk, chained on run-done), in the configured framework (agent reads project.yaml), no click.
+- [x] 9.1 Auto-start the component build in the BACKGROUND when a project has detected-but-unbuilt (`status === "unknown"`) components → `useAutoComponentBuild` hook (`chunkByLevel` 5 at a time → `buildChunkPrompt({verify,storybook,manifest})` per chunk, chained on run-done), in the configured framework (agent reads project.yaml), no click. POLLED (15s) so it fires the MOMENT the design system is created mid-session, not only if components exist at open.
 - [x] 9.2 Non-blocking + resilient: runs at the APP level via the run machinery (survives navigation); starts at most once per project (`startedRef`), and only when `hasActiveRun` is false — never fights a user-started build. ensureStyling + ensureStorybook first.
 - [x] 9.3 App-level running indicator ("Building … N left") + a completion toast when `justFinished` bumps.
 - [ ] 9.4 Verify in the app (GUI — needs user check): auto-start 5-at-a-time build+verify in the selected framework; user keeps editing; completion notice; already-built projects don't re-run.

@@ -111,7 +111,7 @@ export function DesignSystem({
           </Button>
         )}
         <span className="font-medium text-vs-text-primary">Design System</span>
-        <span className="text-vs-text-muted">— lightweight palette</span>
+        <span className="text-vs-text-muted">— components &amp; tokens</span>
         {headerExtra}
         <div className="ml-auto flex items-center gap-2">
           {wrote && <span className="text-[12px] text-vs-text-muted">{wrote}</span>}

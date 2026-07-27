@@ -587,7 +587,7 @@ export function GuidedFlow({
             <button
               type="button"
               onClick={() => setShowFramework(true)}
-              title="Token extraction + the React component roster — the framework build that runs under the hood"
+              title="Token extraction + the component roster — the framework build that runs under the hood"
               className="rounded border border-vs-border-default px-2.5 py-1 text-[11px] text-vs-text-secondary hover:text-vs-text-primary"
             >
               Framework build (under the hood) →
@@ -631,15 +631,15 @@ export function GuidedFlow({
         <header className="flex flex-none items-center gap-3.5 border-b border-vs-border-default px-8 pb-4 pt-5">
           <div className="flex flex-col gap-0.5">
             <h1 className="text-xl font-semibold tracking-[-0.01em]">Framework build</h1>
-            <span className="text-xs text-vs-text-secondary">Under the hood — token extraction + the React component roster. {!foundationReady ? status : ""}</span>
+            <span className="text-xs text-vs-text-secondary">Under the hood — token extraction + the component roster. {!foundationReady ? status : ""}</span>
           </div>
           <button
             type="button"
             onClick={() => setShowFramework(false)}
-            title="Back to the light design system — the primary surface"
+            title="Back to the design system — the primary surface"
             className="rounded border border-vs-border-default px-2.5 py-1 text-[11px] text-vs-text-secondary hover:text-vs-text-primary"
           >
-            ← Light design system
+            ← Design system
           </button>
           <div className="flex-1" />
           {/* Status pills — foundation state + built/verified counts (design: dashboard). */}

@@ -46,28 +46,37 @@ export function useAutoComponentBuild(
     });
   }, [project, run]);
 
-  // Start once per project: only when there are unbuilt components AND nothing is already running (so it
-  // never fights a user-started build). Best-effort styling + Storybook setup first, like the Flow.
+  // Start when the design system exists: unbuilt components present AND nothing already running (so it
+  // never fights a user-started build). POLLED, so it fires the MOMENT the design system is created
+  // during the session (extraction detects the components) — not only if they exist at project open.
+  // Once per project (startedRef); best-effort styling + Storybook setup first, like the Flow.
   useEffect(() => {
-    if (!project || startedRef.current === project.path) return;
+    if (!project) return;
     let alive = true;
-    void (async () => {
+    let poll: number | undefined;
+    const check = async (): Promise<void> => {
+      if (!alive || startedRef.current === project.path) return;
       const [comps, active] = await Promise.all([
         api.inspectorComponents(project.path).catch(() => null),
         api.hasActiveRun(project.path).catch(() => false),
       ]);
-      if (!alive || !comps || active) return;
+      if (!alive || startedRef.current === project.path) return;
+      if (!comps || active) return; // no data yet, or a run is in flight — re-check next tick
       const unbuilt = comps.components.filter((c) => c.status === "unknown");
-      if (unbuilt.length === 0) return;
+      if (unbuilt.length === 0) return; // design system not created yet — keep polling
       startedRef.current = project.path; // claim this project so we don't double-start
+      if (poll) window.clearInterval(poll);
       await api.ensureStylingPipeline(project.path).catch(() => {});
       void api.ensureStorybook(project.path).catch(() => {});
       queueRef.current = { chunks: chunkByLevel(unbuilt, 5).map((ch) => ch.map((c) => c.name)), index: 0 };
       setBuilding(true);
       void runNextChunk();
-    })();
+    };
+    void check();
+    poll = window.setInterval(() => void check(), 15000); // catch the design system being created mid-session
     return () => {
       alive = false;
+      if (poll) window.clearInterval(poll);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project?.path]);
