@@ -148,6 +148,7 @@ const api: VortSpecApi = {
   getManifest: (projectPath: string) => invoke("manifest:get", projectPath),
   getLitePalette: (projectPath: string) => invoke("lite:palette", projectPath),
   writeDesignerManifest: (projectPath: string) => invoke("lite:writeDesigner", projectPath),
+  liteStandInPrompt: (projectPath: string) => invoke("lite:standInPrompt", projectPath),
   saveManifest: (projectPath: string, content: string) =>
     invoke("manifest:save", { projectPath, content }),
   listManifestVersions: (projectPath: string) =>

@@ -131,6 +131,7 @@ export interface VortSpecApi {
   // lite design system (light-design-system)
   getLitePalette(projectPath: string): Promise<IpcResponse<"lite:palette">>;
   writeDesignerManifest(projectPath: string): Promise<IpcResponse<"lite:writeDesigner">>;
+  liteStandInPrompt(projectPath: string): Promise<IpcResponse<"lite:standInPrompt">>;
 
   // manifest (DESIGN.md)
   getManifest(projectPath: string): Promise<IpcResponse<"manifest:get">>;

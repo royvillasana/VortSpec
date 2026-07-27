@@ -23,7 +23,8 @@ import {
   type ComponentTier,
 } from "../../shared/lite-manifest";
 import { buildPalette, renderPaletteHtml } from "../../shared/palette";
-import { LIGHT_HTML_DIR, normSegment } from "../../shared/light-standin";
+import { LIGHT_HTML_DIR, normSegment, buildLightStandInPrompt, type StandInTarget } from "../../shared/light-standin";
+import { detectedComponentsSchema } from "../../shared/flow";
 
 /** Map an inspector token `type` (singular) to a manifest token group (plural); null ⇒ skip. */
 export function mapTokenGroup(type: string): TokenGroup | null {
@@ -159,4 +160,40 @@ export async function writeDesignerMd(projectPath: string): Promise<string> {
   const path = join(projectPath, "designer.md");
   await writeFile(path, text, "utf8");
   return path;
+}
+
+/** Stand-in targets: variant VALUES from the roster (enum props) + Figma refs from `components.json`. */
+export async function buildStandInTargets(projectPath: string): Promise<StandInTarget[]> {
+  const [componentsResult, raw] = await Promise.all([
+    getInspectorComponents(projectPath),
+    readFile(join(projectPath, ".sdd-de/components.json"), "utf8").catch(() => ""),
+  ]);
+  const variantsByName = new Map<string, string[]>();
+  for (const c of componentsResult.components) variantsByName.set(c.name, variantsOf(c.props));
+  let detected: { name: string; figmaNodeId?: string; nodeId?: string; componentKey?: string }[] = [];
+  if (raw) {
+    try {
+      const parsed = detectedComponentsSchema.safeParse(JSON.parse(raw));
+      if (parsed.success) detected = parsed.data;
+    } catch {
+      /* malformed components.json → no Figma refs (targets still usable for name/variants) */
+    }
+  }
+  return detected.map((d) => ({
+    name: d.name,
+    figmaNodeId: d.figmaNodeId ?? d.nodeId,
+    componentKey: d.componentKey,
+    variants: variantsByName.get(d.name) ?? [],
+  }));
+}
+
+/**
+ * Build the agent prompt that generates Figma-derived light stand-ins for the whole project (task 3.1).
+ * The renderer runs this via the existing agent-run machinery (`useAgentRun`) so the Figma MCP is used
+ * by the agent, not by VortSpec core.
+ */
+export async function buildProjectStandInPrompt(projectPath: string): Promise<string> {
+  const targets = await buildStandInTargets(projectPath);
+  const withRefs = targets.filter((t) => t.figmaNodeId || t.componentKey);
+  return buildLightStandInPrompt(withRefs.length > 0 ? withRefs : targets);
 }

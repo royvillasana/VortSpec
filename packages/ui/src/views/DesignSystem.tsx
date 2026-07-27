@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import type { Project } from "@vortspec/core/ipc";
 import { api } from "../lib/api";
 import { Button, Spinner } from "@vortspec/ui/ui";
+import { RunPanel } from "@vortspec/ui/RunPanel";
+import { useAgentRun } from "../lib/useAgentRun";
 
 /**
  * The lightweight "design system" view (OpenSpec change: light-design-system, task 2.4). Renders the
@@ -25,6 +27,7 @@ export function DesignSystem({
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [wrote, setWrote] = useState("");
+  const gen = useAgentRun();
 
   async function load(): Promise<void> {
     setLoading(true);
@@ -53,6 +56,24 @@ export function DesignSystem({
     }
   }
 
+  // Reuse the SAME Figma read that builds the framework components: run an agent that reads each
+  // component's node once and emits the light HTML stand-in first (task 3.1, design D5). The palette
+  // reads `.vortspec/light-html/…` on refresh, so real previews replace the placeholders.
+  async function generatePreviews(): Promise<void> {
+    try {
+      const prompt = await api.liteStandInPrompt(project.path);
+      await gen.start({ prompt, cwd: project.path, bypassPermissions: true });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  // When the generation run finishes, refresh the palette so the new stand-ins show.
+  useEffect(() => {
+    if (gen.model.status === "done") void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gen.model.status]);
+
   return (
     <div className="flex h-full min-h-0 w-full flex-col bg-vs-bg-base">
       <header className="flex flex-none items-center gap-2 border-b border-vs-border-subtle px-3 py-2 text-[13px]">
@@ -68,11 +89,20 @@ export function DesignSystem({
           <Button variant="ghost" onClick={() => void load()}>
             Refresh
           </Button>
+          <Button variant="ghost" onClick={() => void generatePreviews()} disabled={gen.running}>
+            {gen.running ? "Generating…" : "Generate previews from Figma"}
+          </Button>
           <Button variant="primary" onClick={() => void writeDesigner()}>
             Write designer.md
           </Button>
         </div>
       </header>
+
+      {(gen.running || gen.model.status === "done") && (
+        <div className="flex-none border-b border-vs-border-subtle">
+          <RunPanel model={gen.model} onSend={(t) => void gen.send(t)} canChat={gen.canChat} />
+        </div>
+      )}
 
       {loading ? (
         <div className="flex flex-1 items-center justify-center">

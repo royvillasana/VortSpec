@@ -104,7 +104,7 @@ import {
   snapshotManifest,
 } from "./manifest/manifest-reader";
 import type { SnapshotReason } from "@vortspec/core/manifest";
-import { getProjectPaletteHtml, writeDesignerMd } from "./lite/lite-source";
+import { getProjectPaletteHtml, writeDesignerMd, buildProjectStandInPrompt } from "./lite/lite-source";
 import {
   startDevServer,
   stopDevServer,
@@ -339,6 +339,7 @@ const handlers: Record<IpcChannel, Handler> = {
   "manifest:get": ((projectPath: string) => getManifest(projectPath)) as Handler,
   "lite:palette": ((projectPath: string) => getProjectPaletteHtml(projectPath)) as Handler,
   "lite:writeDesigner": ((projectPath: string) => writeDesignerMd(projectPath)) as Handler,
+  "lite:standInPrompt": ((projectPath: string) => buildProjectStandInPrompt(projectPath)) as Handler,
   "manifest:save": ((req: { projectPath: string; content: string }) =>
     saveManifest(req.projectPath, req.content, new Date().toISOString())) as Handler,
   "manifest:listVersions": ((projectPath: string) =>

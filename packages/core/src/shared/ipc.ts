@@ -596,9 +596,11 @@ export const ipcContract = {
     }),
   },
   "manifest:get": { request: z.string(), response: manifestResultSchema },
-  // lite design system (light-design-system): derive the browsable palette / write designer.md
+  // lite design system (light-design-system): derive the browsable palette / write designer.md /
+  // build the Figma-stand-in agent prompt (the renderer runs it via useAgentRun).
   "lite:palette": { request: z.string(), response: z.string() },
   "lite:writeDesigner": { request: z.string(), response: z.string() },
+  "lite:standInPrompt": { request: z.string(), response: z.string() },
   "manifest:save": {
     request: z.object({ projectPath: z.string(), content: z.string() }),
     response: manifestResultSchema,
