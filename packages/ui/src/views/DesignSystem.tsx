@@ -27,6 +27,7 @@ export function DesignSystem({
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [wrote, setWrote] = useState("");
+  const [showDetails, setShowDetails] = useState(false);
   const gen = useAgentRun();
 
   async function load(): Promise<void> {
@@ -99,8 +100,31 @@ export function DesignSystem({
       </header>
 
       {(gen.running || gen.model.status === "done") && (
-        <div className="flex-none border-b border-vs-border-subtle">
-          <RunPanel model={gen.model} onSend={(t) => void gen.send(t)} canChat={gen.canChat} />
+        <div className="flex-none border-b border-vs-border-subtle px-4 py-2.5">
+          {/* Compact progress — like the token generation: a bar + status, details on demand. */}
+          <div className="flex items-center gap-3 text-[12px]">
+            {gen.running ? <Spinner /> : <span className="text-vs-success">✓</span>}
+            <span className="text-vs-text-secondary">
+              {gen.running ? "Generating light previews from Figma…" : "Previews generated from Figma"}
+            </span>
+            <div className="h-1 w-40 overflow-hidden rounded-full bg-vs-border-default">
+              <div
+                className={`h-full rounded-full bg-vs-accent transition-[width] duration-500 ${gen.running ? "w-2/3 animate-pulse" : "w-full"}`}
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowDetails((v) => !v)}
+              className="ml-auto text-[11px] text-vs-text-muted hover:text-vs-text-secondary"
+            >
+              {showDetails ? "Hide details" : "Details"}
+            </button>
+          </div>
+          {showDetails && (
+            <div className="mt-2 max-h-[280px] overflow-auto rounded border border-vs-border-subtle">
+              <RunPanel model={gen.model} onSend={(t) => void gen.send(t)} canChat={gen.canChat} />
+            </div>
+          )}
         </div>
       )}
 
