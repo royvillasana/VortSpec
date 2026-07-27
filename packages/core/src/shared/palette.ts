@@ -124,8 +124,8 @@ function renderComponent(c: PaletteComponent): string {
 }
 
 const PALETTE_CSS = `
-:root{color-scheme:light dark;--bg:#ffffff;--fg:#1a1a1e;--muted:#6b7280;--card:#f6f6f8;--border:rgba(0,0,0,.12)}
-@media (prefers-color-scheme:dark){:root{--bg:#161619;--fg:#e8e8ec;--muted:#9aa0aa;--card:#202024;--border:rgba(255,255,255,.14)}}
+:root{color-scheme:light dark;--bg:#f4f4f6;--fg:#1a1a1e;--muted:#6b7280;--card:#ffffff;--border:rgba(0,0,0,.16)}
+@media (prefers-color-scheme:dark){:root{--bg:#141417;--fg:#e8e8ec;--muted:#9aa0aa;--card:#26262c;--border:rgba(255,255,255,.22)}}
 *{box-sizing:border-box}
 html,body{height:100%}
 body{margin:0;font:14px/1.5 system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--fg)}
