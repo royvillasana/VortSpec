@@ -25,7 +25,7 @@ import {
 } from "../../shared/lite-manifest";
 import { buildPalette, renderPaletteHtml } from "../../shared/palette";
 import { LIGHT_HTML_DIR, normSegment, buildLightStandInPrompt, type StandInTarget } from "../../shared/light-standin";
-import { LIGHT_PAGES_DIR, lightPagePath, buildLightPagePrompt } from "../../shared/light-page";
+import { LIGHT_PAGES_DIR, buildLightPagePrompt } from "../../shared/light-page";
 import { detectedComponentsSchema } from "../../shared/flow";
 
 /** Map an inspector token `type` (singular) to a manifest token group (plural); null ⇒ skip. */
@@ -264,9 +264,15 @@ export async function buildProjectLightPagePrompt(projectPath: string, name: str
   return buildLightPagePrompt(name, description);
 }
 
+/** The on-disk filename for a light page — the EXACT name the sitemap derived from the file, so read
+ *  and write hit the same file the agent actually wrote (only path separators are stripped for safety). */
+function lightPageFile(projectPath: string, name: string): string {
+  return join(projectPath, LIGHT_PAGES_DIR, `${name.replace(/[/\\]/g, "-")}.html`);
+}
+
 /** Read a composed light page's HTML (rendered as-is in its own iframe). Empty when it doesn't exist. */
 export async function readLightPage(projectPath: string, name: string): Promise<string> {
-  return (await readFile(join(projectPath, lightPagePath(name)), "utf8").catch(() => "")).trim();
+  return (await readFile(lightPageFile(projectPath, name), "utf8").catch(() => "")).trim();
 }
 
 /**
@@ -275,11 +281,7 @@ export async function readLightPage(projectPath: string, name: string): Promise<
  * free). A guard keeps writes inside the project's `.vortspec/light-pages`.
  */
 export async function writeLightPage(projectPath: string, name: string, html: string): Promise<void> {
-  const rel = lightPagePath(name);
-  const full = join(projectPath, rel);
-  if (!full.startsWith(join(projectPath, LIGHT_PAGES_DIR) + "/") && full !== join(projectPath, rel)) {
-    throw new Error(`refused to write outside ${LIGHT_PAGES_DIR}`);
-  }
+  const full = lightPageFile(projectPath, name); // slashes stripped → stays inside LIGHT_PAGES_DIR
   await mkdir(dirname(full), { recursive: true });
   await writeFile(full, html, "utf8");
 }

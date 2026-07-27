@@ -109,15 +109,25 @@ export function LightPageCanvas({
           </button>
         )}
       </div>
-      <iframe
-        key={name}
-        ref={iframeRef}
-        title={`Edit ${name}`}
-        className="min-h-0 flex-1 border-0 bg-white"
-        sandbox="allow-same-origin"
-        srcDoc={html}
-        onLoad={instrument}
-      />
+      {html.trim() ? (
+        <iframe
+          key={name}
+          ref={iframeRef}
+          title={`Edit ${name}`}
+          className="min-h-0 flex-1 border-0 bg-white"
+          sandbox="allow-same-origin"
+          srcDoc={html}
+          onLoad={instrument}
+        />
+      ) : (
+        <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 p-6 text-center text-[13px] text-vs-text-muted">
+          <p>
+            This light page is <span className="text-vs-text-secondary">empty</span> — the composed HTML for “{name}” couldn’t be read
+            (no content at <code>.vortspec/light-pages/{name}.html</code>).
+          </p>
+          <p className="text-[12px]">Recompose it: use “+ New light page” with the same name, or describe it in the chat.</p>
+        </div>
+      )}
     </div>
   );
 }
