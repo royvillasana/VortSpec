@@ -145,6 +145,8 @@ export interface InspectorBridge {
    * light page — where the DOM IS the source (light-pages-on-canvas). Null if the webview isn't ready.
    */
   serializeDom: () => Promise<string | null>;
+  /** Tell the guest whether it's a light page (drop targets don't need a `data-source` dev-stamp). */
+  setLightMode: (on: boolean) => void;
 }
 
 /**
@@ -463,6 +465,7 @@ export function useInspectorBridge(): InspectorBridge {
   );
   const requestTree = useCallback(() => send({ t: "requestTree" }), [send]);
   const reload = useCallback(() => webviewRef.current?.reload(), []);
+  const setLightMode = useCallback((on: boolean) => send({ t: "setLightMode", on }), [send]);
   const loadUrl = useCallback((url: string) => {
     try {
       webviewRef.current?.loadURL(url);
@@ -552,5 +555,6 @@ export function useInspectorBridge(): InspectorBridge {
     reload,
     loadUrl,
     serializeDom,
+    setLightMode,
   };
 }

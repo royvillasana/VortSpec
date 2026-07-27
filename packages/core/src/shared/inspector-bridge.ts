@@ -385,6 +385,11 @@ export const bridgeCommandSchema = z.discriminatedUnion("t", [
    */
   z.object({ t: z.literal("revertMove") }),
   z.object({ t: z.literal("clearMove") }),
+  /**
+   * Light-page mode (light-pages-on-canvas): when on, drop targets don't require a `data-source`
+   * dev-stamp — a light page's DOM IS its source, so any element is a valid drop anchor.
+   */
+  z.object({ t: z.literal("setLightMode"), on: z.boolean() }),
 ]);
 export type BridgeCommand = z.infer<typeof bridgeCommandSchema>;
 

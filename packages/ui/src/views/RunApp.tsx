@@ -432,6 +432,13 @@ export function RunApp({
     };
   }, [lightPage, project.path]);
 
+  // Tell the guest bridge whether this is a light page (drop targets skip the data-source dev-stamp
+  // requirement — a light page's DOM IS its source). Re-sent when the page kind changes OR the bridge
+  // re-attaches (a webview load resets the guest's flag).
+  useEffect(() => {
+    if (bridge.ready) bridge.setLightMode(isLightPage);
+  }, [isLightPage, bridge.ready, bridge.setLightMode]);
+
   // A state-navigated screen has no URL — reveal its source file so the user can edit it.
   const openScreenFile = useCallback(
     (relPath: string) => {

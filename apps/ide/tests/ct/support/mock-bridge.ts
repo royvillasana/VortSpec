@@ -64,6 +64,8 @@ export function makeBridge(overrides: Partial<InspectorBridge> = {}): InspectorB
     requestTree: noop,
     reload: noop,
     loadUrl: noop,
+    serializeDom: async () => null,
+    setLightMode: noop,
     ...overrides,
   };
 }
