@@ -22,6 +22,7 @@ import {
   type StandIn,
   type TokenGroup,
   type ComponentTier,
+  type Readiness,
 } from "../../shared/lite-manifest";
 import { buildPalette, renderPaletteHtml } from "../../shared/palette";
 import { LIGHT_HTML_DIR, normSegment, buildLightStandInPrompt, type StandInTarget } from "../../shared/light-standin";
@@ -82,7 +83,7 @@ function variantsOf(props: PropLike[]): string[] {
 export function buildDeriveInput(
   projectName: string,
   tokens: { name: string; type: string; resolvedValue: string }[],
-  components: { name: string; level?: string; props: PropLike[] }[],
+  components: { name: string; level?: string; props: PropLike[]; readiness?: Readiness }[],
 ): DeriveInput {
   const mapped: DeriveInput["tokens"] = [];
   for (const t of tokens) {
@@ -97,6 +98,9 @@ export function buildDeriveInput(
       tier: mapTier(c.level),
       variants: variantsOf(c.props),
       props: c.props.map((p) => ({ name: p.key, type: p.kind, default: p.defaultValue })),
+      // Coded components are framework-ready CANDIDATES; deriveLiteManifest confirms it only when every
+      // stand-in is also harvested (a real render), else it stays light-only (no false convergence).
+      readiness: c.readiness,
     })),
   };
 }
@@ -191,8 +195,11 @@ export async function deriveProjectLiteManifest(projectPath: string): Promise<Li
   ]);
   // A light-first design system shows ALL designed components — include Figma components that aren't
   // coded yet (`figmaOnly`) alongside the code roster, so the palette reflects the whole design system.
-  const figmaOnly = componentsResult.figmaOnly.map((f) => ({ name: f.name, props: [] as { key: string; kind: string; options: string[]; defaultValue?: string }[] }));
-  const components = [...componentsResult.components, ...figmaOnly];
+  // Coded components exist in the framework track → framework-ready CANDIDATES (confirmed only when their
+  // stand-ins are harvested). Figma-only components are designed but not built → always light-only.
+  const coded = componentsResult.components.map((c) => ({ ...c, readiness: "framework-ready" as Readiness }));
+  const figmaOnly = componentsResult.figmaOnly.map((f) => ({ name: f.name, props: [] as { key: string; kind: string; options: string[]; defaultValue?: string }[], readiness: "light-only" as Readiness }));
+  const components = [...coded, ...figmaOnly];
   const input = buildDeriveInput(basename(projectPath) || "Project", tokensResult.tokens, components);
   // Join stand-ins to components by the normalized segment (matches how light-standin wrote them).
   const standIns: Record<string, StandIn[]> = {};

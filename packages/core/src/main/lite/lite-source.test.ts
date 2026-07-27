@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { mapTokenGroup, mapTier, buildDeriveInput } from "./lite-source";
+import { deriveLiteManifest } from "../../shared/lite-manifest";
 
 describe("mapTokenGroup", () => {
   it("maps inspector token types (singular) to manifest groups (plural)", () => {
@@ -63,5 +64,28 @@ describe("buildDeriveInput — inspector shapes → derive input", () => {
 
   it("carries the project name through", () => {
     expect(buildDeriveInput("Acme", [], []).projectName).toBe("Acme");
+  });
+
+  it("passes each component's readiness through (so the palette badge can be meaningful, not always light-only)", () => {
+    const input = buildDeriveInput("Acme", [], [
+      { name: "Button", level: "atom", props: [], readiness: "framework-ready" },
+      { name: "Hero", level: "organism", props: [], readiness: "light-only" },
+    ]);
+    expect(input.components.map((c) => [c.name, c.readiness])).toEqual([
+      ["Button", "framework-ready"],
+      ["Hero", "light-only"],
+    ]);
+  });
+
+  it("end-to-end: a coded (framework-ready) component with HARVESTED stand-ins surfaces framework-ready in the manifest", () => {
+    const input = buildDeriveInput("Acme", [], [{ name: "Button", level: "atom", props: [], readiness: "framework-ready" }]);
+    input.standIns = { Button: [{ variant: "default", html: "<button>Go</button>", source: "harvested" }] };
+    expect(deriveLiteManifest(input).components[0].readiness).toBe("framework-ready");
+  });
+
+  it("end-to-end: a coded component with only a PLACEHOLDER preview stays light-only (no false convergence)", () => {
+    const input = buildDeriveInput("Acme", [], [{ name: "Button", level: "atom", props: [], readiness: "framework-ready" }]);
+    // no stand-ins provided → deriveLiteManifest fills placeholders → not harvested → light-only
+    expect(deriveLiteManifest(input).components[0].readiness).toBe("light-only");
   });
 });
