@@ -166,10 +166,11 @@ export default function App(): JSX.Element {
     };
   }, [workspace?.path, layout.activity]);
 
-  // Auto-start the SDD-DE pipeline: when a project is opened whose design-system
-  // foundation isn't set up yet (no extracted tokens, no detected components),
-  // land on the Flow/foundation instead of the Explorer. A founded project keeps
-  // its default (Explorer). Runs once per opened project.
+  // Light-first onboarding: a brand-new / not-yet-set-up project (no extracted tokens, no detected
+  // components) lands on the PLAYGROUND, where it's greeted with the "create whatever you want from a
+  // single prompt — use the Chat sidebar" welcome. Page creation is light-first, and the design-system
+  // foundation (tokens + React components) builds under the hood later — so the user starts by creating,
+  // not by a setup screen. A founded project keeps its default (Explorer). Runs once per opened project.
   useEffect(() => {
     if (!workspace) return;
     let alive = true;
@@ -185,7 +186,7 @@ export default function App(): JSX.Element {
       } catch {
         ready = false;
       }
-      if (alive && !ready) dispatch({ type: "setActivity", activity: "flow" });
+      if (alive && !ready) dispatch({ type: "setActivity", activity: "run" });
     })();
     return () => {
       alive = false;
