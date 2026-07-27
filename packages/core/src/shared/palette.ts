@@ -124,8 +124,9 @@ function renderComponent(c: PaletteComponent): string {
 }
 
 const PALETTE_CSS = `
-:root{color-scheme:light dark;--bg:#f4f4f6;--fg:#1a1a1e;--muted:#6b7280;--card:#ffffff;--border:rgba(0,0,0,.16)}
-@media (prefers-color-scheme:dark){:root{--bg:#141417;--fg:#e8e8ec;--muted:#9aa0aa;--card:#26262c;--border:rgba(255,255,255,.22)}}
+/* Force dark chrome to match the VortSpec IDE (the iframe would otherwise follow the OS theme).
+   Component previews keep their own colors — this only themes the palette surface. */
+:root{color-scheme:dark;--bg:#141417;--fg:#e8e8ec;--muted:#9aa0aa;--card:#26262c;--border:rgba(255,255,255,.22)}
 *{box-sizing:border-box}
 html,body{height:100%}
 body{margin:0;font:14px/1.5 system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--fg)}
@@ -156,7 +157,11 @@ body{margin:0;font:14px/1.5 system-ui,-apple-system,sans-serif;background:var(--
 .lp-variants{display:flex;flex-wrap:wrap;gap:12px}
 .lp-variant{margin:0;display:flex;flex-direction:column;gap:6px;align-items:flex-start;min-width:0;max-width:100%}
 .lp-variant figcaption{font-size:10px;color:var(--muted);font-family:ui-monospace,monospace;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.lp-render{display:flex;align-items:center;justify-content:center;min-height:48px;min-width:96px;max-width:100%;overflow:hidden}
+.lp-render{display:flex;align-items:center;justify-content:center;min-height:48px;min-width:0;max-width:100%;overflow:hidden}
+/* Bound Figma stand-ins (which carry fixed px widths) to the card so cards stay narrow → the bento
+   multi-column layout is preserved instead of one wide card forcing a single column. */
+.lp-render *{max-width:100%!important;box-sizing:border-box}
+.lp-render img{height:auto}
 .lp-ph{display:flex;align-items:center;justify-content:center;min-height:48px;min-width:120px;padding:8px 12px;border:1px dashed var(--border);border-radius:8px;color:var(--muted);font-size:11px;text-align:center}
 `;
 
