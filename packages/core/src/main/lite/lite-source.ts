@@ -26,6 +26,7 @@ import {
 } from "../../shared/lite-manifest";
 import { buildPalette, renderPaletteHtml } from "../../shared/palette";
 import { LIGHT_HTML_DIR, normSegment, buildLightStandInPrompt, type StandInTarget } from "../../shared/light-standin";
+import { buildTwoTrackBuildPrompt } from "../../shared/two-track";
 import { LIGHT_PAGES_DIR, buildLightPagePrompt } from "../../shared/light-page";
 import { detectedComponentsSchema } from "../../shared/flow";
 
@@ -286,6 +287,19 @@ export async function buildProjectStandInPrompt(projectPath: string): Promise<st
   const targets = await buildStandInTargets(projectPath);
   const withRefs = targets.filter((t) => t.figmaNodeId || t.componentKey);
   return buildLightStandInPrompt(withRefs.length > 0 ? withRefs : targets);
+}
+
+/**
+ * Build the TWO-TRACK design-system prompt (task 4.2): light stand-ins first, then the framework
+ * components (7-step cycle) in atomic order, over one Figma read. Attaches each target's atomic tier from
+ * the code roster (figma-only components have no tier yet → built last) so the framework track is ordered.
+ */
+export async function buildProjectTwoTrackPrompt(projectPath: string): Promise<string> {
+  const [targets, componentsResult] = await Promise.all([buildStandInTargets(projectPath), getInspectorComponents(projectPath)]);
+  const tierByName = new Map(componentsResult.components.map((c) => [c.name, mapTier(c.level)]));
+  const withRefs = targets.filter((t) => t.figmaNodeId || t.componentKey);
+  const chosen = withRefs.length > 0 ? withRefs : targets;
+  return buildTwoTrackBuildPrompt(chosen.map((t) => ({ ...t, tier: tierByName.get(t.name) })));
 }
 
 /**

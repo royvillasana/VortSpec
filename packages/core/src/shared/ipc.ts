@@ -601,6 +601,8 @@ export const ipcContract = {
   "lite:palette": { request: z.string(), response: z.string() },
   "lite:writeDesigner": { request: z.string(), response: z.string() },
   "lite:standInPrompt": { request: z.string(), response: z.string() },
+  // two-track build prompt (4.2): light stand-ins first, then framework components, over one Figma read.
+  "lite:twoTrackPrompt": { request: z.string(), response: z.string() },
   // insertable design-system stand-ins (component + variant + framework-free HTML) for the canvas Insert menu.
   "lite:standins": {
     request: z.string(),

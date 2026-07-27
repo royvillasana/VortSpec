@@ -25,9 +25,9 @@
 ## 4. Contract-first parallel build + readiness
 
 - [x] 4.1 Establish the shared contract as the single identity source both tracks build to (reuse `extract-design-system` output; no second Figma read). → `ContractIdentity` is the authority in `packages/core/src/shared/readiness.ts`; readiness/convergence are computed against it (consumes `components.json`; no new Figma read).
-- [ ] 4.2 Wire the two tracks: fast light track (contract → palette) and background framework track (contract → 7-step cycle) running concurrently. → DEFERRED (batched live): agent-run orchestration; the model here feeds it.
+- [x] 4.2 Wire the two tracks: fast light track (contract → palette) and background framework track (contract → 7-step cycle) running concurrently. → `buildTwoTrackBuildPrompt` (shared/two-track.ts) sequences light stand-ins FIRST then framework 7-step (atomic order) over ONE Figma read; `buildProjectTwoTrackPrompt` (main) + `lite:twoTrackPrompt` IPC + "Build components" button in DesignSystem dispatches it via useAgentRun. 6 tests.
 - [x] 4.3 Add per-component readiness state (`light-only` / `framework-ready`) and the transition on framework completion + harvest. → `computeReadiness()` (framework-ready iff exists AND every variant harvested).
-- [ ] 4.4 Surface readiness in the Playground (mark catching-up components). → DEFERRED (batched live UI); data ready via `buildReadinessReport().catchingUp`.
+- [x] 4.4 Surface readiness in the Playground (mark catching-up components). → `ReadinessBadge` on the light-page canvas (Insert menu + selected island): "in code" (framework-ready) vs "light-only", via `lite:readiness` IPC (`listComponentReadiness` = coded roster vs figma-only). Palette badges also made meaningful (buildDeriveInput threads coded→framework-ready).
 - [x] 4.5 Add the convergence assertion: a component's light and framework identities (name + variants + props) match the contract. → `convergenceIssues()` + report `diverged` (name/variant/prop drift).
 - [x] 4.6 Verify: light shelf usable immediately after extraction; readiness flips correctly as framework components land. → 13 tests: `paletteUsable` true independent of framework; readiness flips on exists+harvest; drift surfaced.
 

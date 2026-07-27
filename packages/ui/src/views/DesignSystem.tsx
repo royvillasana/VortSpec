@@ -28,6 +28,7 @@ export function DesignSystem({
   const [loading, setLoading] = useState(true);
   const [wrote, setWrote] = useState("");
   const [showDetails, setShowDetails] = useState(false);
+  const [runKind, setRunKind] = useState<"previews" | "build" | null>(null);
   const gen = useAgentRun();
 
   async function load(): Promise<void> {
@@ -63,6 +64,19 @@ export function DesignSystem({
   async function generatePreviews(): Promise<void> {
     try {
       const prompt = await api.liteStandInPrompt(project.path);
+      setRunKind("previews");
+      await gen.start({ prompt, cwd: project.path, bypassPermissions: true });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  // The full two-track build (4.2): light stand-ins first (the palette lights up), then the real
+  // framework components (7-step cycle, atomic order) in the background — one Figma read, light-first.
+  async function buildComponents(): Promise<void> {
+    try {
+      const prompt = await api.liteTwoTrackPrompt(project.path);
+      setRunKind("build");
       await gen.start({ prompt, cwd: project.path, bypassPermissions: true });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -91,7 +105,10 @@ export function DesignSystem({
             Refresh
           </Button>
           <Button variant="ghost" onClick={() => void generatePreviews()} disabled={gen.running}>
-            {gen.running ? "Generating…" : "Generate previews from Figma"}
+            {gen.running && runKind === "previews" ? "Generating…" : "Generate previews from Figma"}
+          </Button>
+          <Button variant="ghost" onClick={() => void buildComponents()} disabled={gen.running} title="Light stand-ins first, then the real framework components — one Figma read, light-first">
+            {gen.running && runKind === "build" ? "Building…" : "Build components"}
           </Button>
           <Button variant="primary" onClick={() => void writeDesigner()}>
             Write designer.md
@@ -105,7 +122,13 @@ export function DesignSystem({
           <div className="flex items-center gap-3 text-[12px]">
             {gen.running ? <Spinner /> : <span className="text-vs-success">✓</span>}
             <span className="text-vs-text-secondary">
-              {gen.running ? "Generating light previews from Figma…" : "Previews generated from Figma"}
+              {runKind === "build"
+                ? gen.running
+                  ? "Building the design system — light previews first, then framework components…"
+                  : "Design system built (light + framework)"
+                : gen.running
+                  ? "Generating light previews from Figma…"
+                  : "Previews generated from Figma"}
             </span>
             <div className="h-1 w-40 overflow-hidden rounded-full bg-vs-border-default">
               <div
