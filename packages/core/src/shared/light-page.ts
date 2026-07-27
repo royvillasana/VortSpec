@@ -56,3 +56,34 @@ export function buildLightPagePrompt(name: string, description: string): string 
     "End with the file written. Do not create, scaffold, or modify anything else.",
   ].join("\n");
 }
+
+/**
+ * Build the "convert to code" prompt (light-design-system, task 6). Triggered when the user is happy
+ * with the LIGHT page — now do the real framework build in the background, using the light page as the
+ * spec. THIS is where the framework-first work (scaffold + components + page) legitimately happens.
+ */
+export function buildConvertToFrameworkPrompt(name: string): string {
+  return [
+    `CONVERT the light page "${name}" into real framework code. The user is happy with the light preview —`,
+    "now build the real thing, using the light page as the authoritative spec.",
+    "",
+    `The light page is at \`${lightPagePath(name)}\`: a framework-free composition where each design-system`,
+    "component instance is marked `data-component=\"<Name>\"`. This is the SPEC — match its layout, content,",
+    "and component usage exactly.",
+    "",
+    "Read `.sdd-de/project.yaml` for the target framework/language/styling and follow the project's standards.",
+    "Then do the full build FOR THIS PAGE (this is the framework-first work, now that it's wanted):",
+    "1. If the app isn't scaffolded yet, scaffold it for the configured framework (package.json, entry,",
+    "   index/App, Tailwind wired to the token file) — minimal but runnable.",
+    "2. For EACH `data-component` island, ensure the real framework component exists — build any missing one",
+    "   from the design system (its Figma reference + the tokens), following the project's component",
+    "   standards (e.g. CVA + `cn()` + token-referenced classes). REUSE components that already exist.",
+    "3. Compose the page as a real framework page/route that uses those components and reproduces the light",
+    "   page's layout + content. EVERY color/spacing/radius/type value MUST reference a design token.",
+    "4. Wire the page into the app's routing so it's reachable (and, for a router-less app, the",
+    "   screen-preview harness) — so it appears as a normal navigable route.",
+    "",
+    "The light page stays as-is (it remains the editable source of truth). End with the framework page +",
+    "any new components created and the route wired, so the Playground can navigate to the real page.",
+  ].join("\n");
+}

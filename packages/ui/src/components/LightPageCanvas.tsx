@@ -11,7 +11,18 @@ import { api } from "../lib/api";
  * This is the foundational slice — select + edit-text + persist. Drag/container-moves (reusing
  * node-tree/reconcile/layout-structure) and the background transform layer on top.
  */
-export function LightPageCanvas({ projectPath, name, html }: { projectPath: string; name: string; html: string }): React.JSX.Element {
+export function LightPageCanvas({
+  projectPath,
+  name,
+  html,
+  onConvert,
+}: {
+  projectPath: string;
+  name: string;
+  html: string;
+  /** "Convert to code" — generate the real framework page in the background (task 6). */
+  onConvert?: () => void;
+}): React.JSX.Element {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const saveTimer = useRef<number | undefined>(undefined);
   const [selected, setSelected] = useState<string | null>(null);
@@ -87,6 +98,16 @@ export function LightPageCanvas({ projectPath, name, html }: { projectPath: stri
         <span className="font-medium text-vs-text-primary">{name}</span>
         {selected && <span className="rounded bg-vs-bg-hover px-2 py-0.5 text-[11px] text-vs-text-secondary">island: {selected}</span>}
         <span className="ml-auto text-[11px] text-vs-text-muted">{saved ? "Saved ✓" : "Click to select · double-click to edit text"}</span>
+        {onConvert && (
+          <button
+            type="button"
+            onClick={onConvert}
+            title="Generate the real framework page from this light page, in the background"
+            className="rounded bg-vs-accent px-2.5 py-1 text-[11px] font-medium text-white hover:opacity-90"
+          >
+            Convert to code
+          </button>
+        )}
       </div>
       <iframe
         key={name}

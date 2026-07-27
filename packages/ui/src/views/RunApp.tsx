@@ -13,6 +13,7 @@ import { Sitemap } from "../components/run-canvas/Sitemap";
 import type { RouteDiscovery, RouteNode, Rect } from "@vortspec/core/ipc";
 import { RunCanvas } from "../components/run-canvas/RunCanvas";
 import { LightPageCanvas } from "../components/LightPageCanvas";
+import { buildConvertToFrameworkPrompt } from "@vortspec/core/light-page";
 import { viewportsFromTokens, appliesInViewport, type ViewportId, type DeviceFrameKind } from "../components/run-canvas/viewports";
 import {
   resolveComponent,
@@ -2269,7 +2270,21 @@ export function RunApp({
             </Centered>
           ) : lightPage ? (
             // A light page — edit it in the light canvas (no dev server needed).
-            <LightPageCanvas projectPath={project.path} name={lightPage} html={lightPageHtml} />
+            <LightPageCanvas
+              projectPath={project.path}
+              name={lightPage}
+              html={lightPageHtml}
+              onConvert={
+                dispatchTask
+                  ? () =>
+                      dispatchTask({
+                        title: `Convert to code: ${lightPage}`,
+                        allowModify: true,
+                        prompt: buildConvertToFrameworkPrompt(lightPage),
+                      })
+                  : undefined
+              }
+            />
           ) : dev.state === "starting" ? (
             <Centered>
               <Spinner /> {dev.message ?? `Starting ${isApp ? "your app's dev server" : "Storybook"}…`}
