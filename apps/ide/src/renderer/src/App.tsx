@@ -31,6 +31,7 @@ import { useLayout } from "./lib/useLayout";
 import { effectiveWidths, isSidebarView, STORYBOOK_SIDEBAR_WIDTH, type Activity } from "./lib/layout";
 import { IdeContext, buildSeedContext, buildLiveContext, type EditorSelection } from "./lib/ide-context";
 import { useIdeMcp, IDE_MCP_TOOL_GROUP } from "./lib/useIdeMcp";
+import { useAutoComponentBuild } from "@vortspec/ui/useAutoComponentBuild";
 import { IdeActionDialog } from "./components/IdeActionDialog";
 import { StatusBranch } from "./components/StatusBranch";
 
@@ -96,6 +97,18 @@ export default function App(): JSX.Element {
   );
 
   const wf = useWorkspaceFiles(workspace?.path ?? null);
+
+  // Automatic background component build (light-pages-on-canvas §9): while the user works on screens,
+  // build the design-system components (5 at a time, build + verify, in the configured framework) in the
+  // background, and notify on completion.
+  const autoBuild = useAutoComponentBuild(workspace);
+  const [buildNotice, setBuildNotice] = useState<string | null>(null);
+  useEffect(() => {
+    if (autoBuild.justFinished === 0) return;
+    setBuildNotice("Design-system components are built and verified — ready for Generate code.");
+    const t = window.setTimeout(() => setBuildNotice(null), 8000);
+    return () => window.clearTimeout(t);
+  }, [autoBuild.justFinished]);
 
   // Central routing for opening a folder. A set-up project (has
   // .sdd-de/project.yaml → toolkit.configured) opens directly in the workspace.
@@ -607,6 +620,25 @@ export default function App(): JSX.Element {
      <AssistantTaskProvider value={dispatchAssistantTask}>
       <CanvasSelectionProvider>
       <div className="flex h-screen w-screen flex-col overflow-hidden bg-vs-bg-primary text-vs-text-primary">
+        {/* Automatic background component build (light-pages-on-canvas §9): a quiet running indicator +
+            a completion toast, so the user knows the design-system components are building while they work. */}
+        {(autoBuild.building || buildNotice) && (
+          <div className="pointer-events-none fixed bottom-4 left-1/2 z-[60] -translate-x-1/2">
+            <div className="pointer-events-auto flex items-center gap-2 rounded-lg border border-vs-border-default bg-vs-bg-elevated/95 px-3 py-2 text-[12px] text-vs-text-secondary shadow-lg backdrop-blur">
+              {buildNotice ? (
+                <>
+                  <span className="text-vs-success">✓</span>
+                  <span className="text-vs-text-primary">{buildNotice}</span>
+                </>
+              ) : (
+                <>
+                  <span className="h-3 w-3 animate-spin rounded-full border-2 border-vs-border-strong border-t-vs-accent" aria-hidden />
+                  <span>Building design-system components in the background…{autoBuild.remaining > 0 ? ` ${autoBuild.remaining} left` : ""}</span>
+                </>
+              )}
+            </div>
+          </div>
+        )}
         <header
           className="relative flex h-9 shrink-0 items-center justify-end border-b border-vs-border-default bg-vs-bg-surface pr-2 text-xs text-vs-text-muted"
           style={{ WebkitAppRegion: "drag" } as unknown as CSSProperties}

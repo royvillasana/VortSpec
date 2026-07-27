@@ -56,6 +56,10 @@
       "types": "./src/lib/assistant-task.ts",
       "default": "./src/lib/assistant-task.ts"
     },
+    "./useAutoComponentBuild": {
+      "types": "./src/lib/useAutoComponentBuild.ts",
+      "default": "./src/lib/useAutoComponentBuild.ts"
+    },
     "./canvas-selection": {
       "types": "./src/lib/canvas-selection.tsx",
       "default": "./src/lib/canvas-selection.tsx"

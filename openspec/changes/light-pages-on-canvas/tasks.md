@@ -57,11 +57,7 @@
 
 ## 9. Automatic background component build
 
-- [ ] 9.1 Auto-start the component build in the BACKGROUND when a project has detected-but-unbuilt
-  components (reuse GuidedFlow's chunked build: `buildRemaining(verify=true)` → `chunkByLevel` 5 at a
-  time → `buildChunkPrompt` build + verify per chunk), in the configured framework — no button click.
-- [ ] 9.2 Make it non-blocking + resilient: it runs while the user works in the Playground, survives
-  navigation, and doesn't fight a user-started build (guard so it starts once, skips if already building).
-- [ ] 9.3 Surface progress unobtrusively and notify the user on completion (built + verified all remaining).
-- [ ] 9.4 Verify: with unbuilt components, the build auto-starts 5-at-a-time build+verify in the selected
-  framework; the user can keep editing; a completion notice fires; already-built projects don't re-run.
+- [x] 9.1 Auto-start the component build in the BACKGROUND when a project has detected-but-unbuilt (`status === "unknown"`) components → `useAutoComponentBuild` hook (`chunkByLevel` 5 at a time → `buildChunkPrompt({verify,storybook,manifest})` per chunk, chained on run-done), in the configured framework (agent reads project.yaml), no click.
+- [x] 9.2 Non-blocking + resilient: runs at the APP level via the run machinery (survives navigation); starts at most once per project (`startedRef`), and only when `hasActiveRun` is false — never fights a user-started build. ensureStyling + ensureStorybook first.
+- [x] 9.3 App-level running indicator ("Building … N left") + a completion toast when `justFinished` bumps.
+- [ ] 9.4 Verify in the app (GUI — needs user check): auto-start 5-at-a-time build+verify in the selected framework; user keeps editing; completion notice; already-built projects don't re-run.
