@@ -153,6 +153,8 @@ const api: VortSpecApi = {
     invoke("lite:pagePrompt", { projectPath, name, description }),
   liteReadPage: (projectPath: string, name: string) => invoke("lite:page", { projectPath, name }),
   litePages: (projectPath: string) => invoke("lite:pages", projectPath),
+  liteWritePage: (projectPath: string, name: string, html: string) =>
+    invoke("lite:writePage", { projectPath, name, html }),
   saveManifest: (projectPath: string, content: string) =>
     invoke("manifest:save", { projectPath, content }),
   listManifestVersions: (projectPath: string) =>

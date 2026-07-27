@@ -4,6 +4,7 @@ import { api } from "../lib/api";
 import { Button, Spinner } from "@vortspec/ui/ui";
 import { RunPanel } from "@vortspec/ui/RunPanel";
 import { useAgentRun } from "../lib/useAgentRun";
+import { LightPageCanvas } from "../components/LightPageCanvas";
 
 /**
  * Light page authoring (light-design-system, task 5.1). Create a page FROM the live design system —
@@ -142,7 +143,7 @@ export function LightPages({ project }: { project: Project }): React.JSX.Element
               <pre className="max-w-[52ch] whitespace-pre-wrap text-[12px] text-vs-text-secondary">{error}</pre>
             </div>
           ) : selected && html ? (
-            <iframe title={`Light page: ${selected}`} className="h-full w-full border-0 bg-white" sandbox="allow-same-origin" srcDoc={html} />
+            <LightPageCanvas projectPath={project.path} name={selected} html={html} />
           ) : (
             <div className="flex h-full items-center justify-center text-[13px] text-vs-text-muted">
               {selected ? "Empty page." : "Select or create a page to preview it."}

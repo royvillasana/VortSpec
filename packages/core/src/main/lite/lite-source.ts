@@ -8,8 +8,8 @@
  * The mapping from the inspector shapes → the derive input is kept PURE (`buildDeriveInput`) so it is
  * unit-testable without the fs; the `*Project*` functions are the thin fs wrappers.
  */
-import { basename, join } from "node:path";
-import { writeFile, readFile, readdir } from "node:fs/promises";
+import { basename, dirname, join } from "node:path";
+import { writeFile, readFile, readdir, mkdir } from "node:fs/promises";
 import { getInspectorTokens } from "../inspector/token-parser";
 import { getInspectorComponents } from "../inspector/component-reader";
 import { readFigmaComponents } from "../inspector/figma-reconcile";
@@ -267,6 +267,21 @@ export async function buildProjectLightPagePrompt(projectPath: string, name: str
 /** Read a composed light page's HTML (rendered as-is in its own iframe). Empty when it doesn't exist. */
 export async function readLightPage(projectPath: string, name: string): Promise<string> {
   return (await readFile(join(projectPath, lightPagePath(name)), "utf8").catch(() => "")).trim();
+}
+
+/**
+ * Persist a light page edit (task 5.1, islands editing). The page's source IS the DOM — the canvas
+ * serializes the whole edited document and we write it straight to the `.html` (no codemods; framework-
+ * free). A guard keeps writes inside the project's `.vortspec/light-pages`.
+ */
+export async function writeLightPage(projectPath: string, name: string, html: string): Promise<void> {
+  const rel = lightPagePath(name);
+  const full = join(projectPath, rel);
+  if (!full.startsWith(join(projectPath, LIGHT_PAGES_DIR) + "/") && full !== join(projectPath, rel)) {
+    throw new Error(`refused to write outside ${LIGHT_PAGES_DIR}`);
+  }
+  await mkdir(dirname(full), { recursive: true });
+  await writeFile(full, html, "utf8");
 }
 
 /** List the composed light pages (by name, without the `.html`). */

@@ -605,6 +605,7 @@ export const ipcContract = {
   "lite:pagePrompt": { request: z.object({ projectPath: z.string(), name: z.string(), description: z.string() }), response: z.string() },
   "lite:page": { request: z.object({ projectPath: z.string(), name: z.string() }), response: z.string() },
   "lite:pages": { request: z.string(), response: z.array(z.string()) },
+  "lite:writePage": { request: z.object({ projectPath: z.string(), name: z.string(), html: z.string() }), response: z.void() },
   "manifest:save": {
     request: z.object({ projectPath: z.string(), content: z.string() }),
     response: manifestResultSchema,

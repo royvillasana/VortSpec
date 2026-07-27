@@ -135,6 +135,7 @@ export interface VortSpecApi {
   litepagePrompt(projectPath: string, name: string, description: string): Promise<IpcResponse<"lite:pagePrompt">>;
   liteReadPage(projectPath: string, name: string): Promise<IpcResponse<"lite:page">>;
   litePages(projectPath: string): Promise<IpcResponse<"lite:pages">>;
+  liteWritePage(projectPath: string, name: string, html: string): Promise<IpcResponse<"lite:writePage">>;
 
   // manifest (DESIGN.md)
   getManifest(projectPath: string): Promise<IpcResponse<"manifest:get">>;
