@@ -38,6 +38,7 @@ import { UsageWarning } from "../components/UsageWarning";
 import { useUsageWarning } from "../lib/useUsageWarning";
 import { FigmaHealthCheck } from "../components/FigmaHealthCheck";
 import { ProjectRail, projectRailItems } from "../components/ProjectRail";
+import { DesignSystem } from "./DesignSystem";
 
 /**
  * The Design System workspace (design: "Guided Flow.dc.html", reframed to v2).
@@ -175,6 +176,11 @@ export function GuidedFlow({
     null | { chunks: InspectorComponent[][]; index: number; verify: boolean; url: string | null; isFigma: boolean }
   >(null);
   const cancelChunksRef = useRef(false);
+  // Light-first design system (light-design-system): the light palette is the PRIMARY workspace surface;
+  // token extraction + the React component roster run "under the hood" behind this toggle.
+  const [showFramework, setShowFramework] = useState(false);
+  const [dsReload, setDsReload] = useState(0); // bump the palette to re-read after a background extraction
+  const autoFoundationRef = useRef(false); // kick the background foundation extraction at most once
 
   async function reload(): Promise<void> {
     const [cfg, comps, toks, man] = await Promise.all([
@@ -264,6 +270,9 @@ export function GuidedFlow({
         flash("Your Claude plan runs everything on its default model — model routing is off.");
       }
       void reload();
+      // The light palette is derived from the same tokens/components — refresh it too so a background
+      // foundation extraction (or a build) shows up on the light-first surface without a manual Refresh.
+      setDsReload((n) => n + 1);
       // A run is what moves session usage — re-check the warning thresholds now.
       usageWarn.refresh();
       // Refresh resume state (a completed run clears it) after this run finishes.
@@ -515,6 +524,52 @@ export function GuidedFlow({
     ? "Set up the foundation to begin"
     : `Foundation ready · ${builtCount}/${total} built · ${verifiedCount} verified`;
 
+  // Light-first: on first entry to a not-yet-set-up project with a configured source, kick the foundation
+  // extraction (tokens + component detection) in the BACKGROUND so the light palette populates itself —
+  // the heavy React/token work happens under the hood while the light design system is the surface.
+  useEffect(() => {
+    if (autoFoundationRef.current || foundationReady || busy) return;
+    if (!config || !config.designSource) return;
+    autoFoundationRef.current = true;
+    void op(
+      "Setting up your design system in the background — extracting tokens + detecting components",
+      FOUNDATION_DEF.promptTemplate ?? "Extract tokens and detect components.",
+      { tools: FOUNDATION_DEF.allowedTools, kind: "source" },
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [config, foundationReady, busy]);
+
+  // Light-first surface (default): the light design system palette IS the design-system workspace, with
+  // its own actions (Generate previews from Figma · Build components · Write designer.md). The framework
+  // build — token extraction + the React component roster — lives one click away, "under the hood".
+  if (!showFramework) {
+    return (
+      <DesignSystem
+        project={project}
+        hideRail={hideRail}
+        onBack={onBack}
+        reloadSignal={dsReload}
+        headerExtra={
+          <div className="flex items-center gap-3">
+            {busy && opKind === "source" && (
+              <span className="flex items-center gap-1.5 text-[11px] text-vs-text-muted">
+                <Spinner /> Setting up under the hood…
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={() => setShowFramework(true)}
+              title="Token extraction + the React component roster — the framework build that runs under the hood"
+              className="rounded border border-vs-border-default px-2.5 py-1 text-[11px] text-vs-text-secondary hover:text-vs-text-primary"
+            >
+              Framework build (under the hood) →
+            </button>
+          </div>
+        }
+      />
+    );
+  }
+
   return (
     <div
       className={`flex w-full overflow-hidden bg-vs-bg-primary text-[13px] text-vs-text-primary ${
@@ -547,9 +602,17 @@ export function GuidedFlow({
       <main className="flex min-w-0 flex-1 flex-col bg-vs-bg-primary">
         <header className="flex flex-none items-center gap-3.5 border-b border-vs-border-default px-8 pb-4 pt-5">
           <div className="flex flex-col gap-0.5">
-            <h1 className="text-xl font-semibold tracking-[-0.01em]">Design system</h1>
-            {!foundationReady && <span className="text-xs text-vs-text-secondary">{status}</span>}
+            <h1 className="text-xl font-semibold tracking-[-0.01em]">Framework build</h1>
+            <span className="text-xs text-vs-text-secondary">Under the hood — token extraction + the React component roster. {!foundationReady ? status : ""}</span>
           </div>
+          <button
+            type="button"
+            onClick={() => setShowFramework(false)}
+            title="Back to the light design system — the primary surface"
+            className="rounded border border-vs-border-default px-2.5 py-1 text-[11px] text-vs-text-secondary hover:text-vs-text-primary"
+          >
+            ← Light design system
+          </button>
           <div className="flex-1" />
           {/* Status pills — foundation state + built/verified counts (design: dashboard). */}
           {foundationReady && (

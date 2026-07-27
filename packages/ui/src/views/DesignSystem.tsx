@@ -18,10 +18,16 @@ export function DesignSystem({
   project,
   hideRail = false,
   onBack,
+  headerExtra,
+  reloadSignal,
 }: {
   project: Project;
   hideRail?: boolean;
   onBack: () => void;
+  /** Extra header content (e.g. a background-setup note + an "under the hood" toggle from the Flow). */
+  headerExtra?: React.ReactNode;
+  /** Bump to re-read the palette from disk — e.g. after a background foundation extraction lands. */
+  reloadSignal?: number;
 }): React.JSX.Element {
   const [html, setHtml] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -47,6 +53,13 @@ export function DesignSystem({
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project.path]);
+
+  // The Flow bumps reloadSignal when a background foundation extraction finishes — re-read the palette
+  // so the newly-extracted tokens + detected components show without the user hitting Refresh.
+  useEffect(() => {
+    if (reloadSignal !== undefined) void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reloadSignal]);
 
   async function writeDesigner(): Promise<void> {
     try {
@@ -99,6 +112,7 @@ export function DesignSystem({
         )}
         <span className="font-medium text-vs-text-primary">Design System</span>
         <span className="text-vs-text-muted">— lightweight palette</span>
+        {headerExtra}
         <div className="ml-auto flex items-center gap-2">
           {wrote && <span className="text-[12px] text-vs-text-muted">{wrote}</span>}
           <Button variant="ghost" onClick={() => void load()}>
