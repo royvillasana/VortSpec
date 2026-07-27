@@ -39,6 +39,14 @@ describe("buildLightPagePrompt", () => {
   it("falls back to an inferred layout when no description is given", () => {
     expect(buildLightPagePrompt("Pricing", "")).toMatch(/infer a sensible layout/i);
   });
+
+  it("allows Astro-style interactive islands (bounded vanilla JS, only where needed, marked data-island)", () => {
+    expect(prompt).toMatch(/Astro-style islands/i);
+    expect(prompt).toMatch(/vanilla JS/i);
+    expect(prompt).toMatch(/SELF-CONTAINED/i);
+    expect(prompt).toContain("data-island");
+    expect(prompt).toMatch(/only where interactivity is actually required|ONLY where a screen genuinely needs/i);
+  });
 });
 
 describe("buildConvertToFrameworkPrompt", () => {
@@ -104,5 +112,11 @@ describe("buildGenerateCodePrompt", () => {
     expect(p).toMatch(/AUDIT/);
     expect(p).toMatch(/VISUAL-VALIDATE/);
     expect(p).toMatch(/stay UNCHANGED|remain the editable source/i);
+  });
+
+  it("converts interactive data-island markers to idiomatic framework components (not copied scripts)", () => {
+    expect(p).toContain("data-island");
+    expect(p).toMatch(/framework's idiomatic way|interactive component with the equivalent/i);
+    expect(p).toMatch(/NOT a copied <script>/i);
   });
 });

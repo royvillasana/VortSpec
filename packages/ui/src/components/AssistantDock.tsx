@@ -49,6 +49,9 @@ const LIGHT_FIRST_PAGE_DIRECTIVE =
   "and/or `.vortspec/light-html/` stand-ins), compose the page from it and mark each design-system instance " +
   "with `data-component=\"<Name>\"`; if there is NO design system yet, compose a clean self-contained " +
   "lightweight page directly (still framework-free HTML/CSS/JS) — do NOT stop to set one up first. " +
+  "For interactivity (tabs, accordion, toggle/menu, carousel, dropdown), add a small SELF-CONTAINED " +
+  "vanilla-JS island (Astro-style) scoped to that component, marked `data-island`, ONLY where behavior is " +
+  "genuinely needed — no frameworks, no imports, no external scripts; keep the rest static. " +
   "For a create-page request you MUST NEVER, in the foreground: scaffold or set up a React/Tailwind/Vite " +
   "app (no package.json, vite, Tailwind config, App.tsx); build React/framework components; run a 7-step " +
   "cycle; or create a `src/screens|pages/*.tsx` file. The real framework version (React + Tailwind + " +

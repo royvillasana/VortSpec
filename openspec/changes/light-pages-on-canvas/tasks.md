@@ -37,9 +37,13 @@
 
 ## 7. Optional: Astro Dynamic Islands for interactivity
 
-- [ ] 7.1 Where a screen needs client interactivity, allow authoring it as an Astro-style Dynamic
+- [x] 7.1 Where a screen needs client interactivity, allow authoring it as an Astro-style Dynamic
   Island (bounded hydration) that maps onto the existing island/`data-component` model — used only
-  where interactivity is actually needed, staying framework-free from the user's view.
+  where interactivity is actually needed, staying framework-free from the user's view. → `buildLightPagePrompt`
+  step 5 (SELF-CONTAINED framework-free `<script>` island scoped to a `data-component`, marked
+  `data-island`, only where needed); `LIGHT_FIRST_PAGE_DIRECTIVE` (AssistantDock) mirrors it; `serializeDom`
+  preserves islands (only strips `script[data-vs]`); `buildGenerateCodePrompt` step 4 converts each
+  `data-island` to the framework's idiomatic interactive component (not a copied script). 2 tests.
 
 ## 8. Verify end-to-end
 
