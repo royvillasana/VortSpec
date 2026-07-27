@@ -154,6 +154,20 @@ export async function readFigmaStandIns(projectPath: string): Promise<Record<str
   return out;
 }
 
+/**
+ * Flatten the Figma-harvested stand-ins into an insertable catalog for the light-page canvas Insert menu
+ * (component + variant + framework-free HTML). Only real (harvested) stand-ins are offered — placeholder
+ * stand-ins render nothing, so a component with no Figma preview yet simply doesn't appear until the user
+ * runs "Generate previews from Figma".
+ */
+export async function listInsertableStandIns(projectPath: string): Promise<Array<{ component: string; variant: string; html: string }>> {
+  const byComp = await readFigmaStandIns(projectPath);
+  const out: Array<{ component: string; variant: string; html: string }> = [];
+  for (const comp of Object.keys(byComp).sort())
+    for (const s of byComp[comp]) out.push({ component: comp, variant: s.variant, html: s.html });
+  return out;
+}
+
 /** Read the real project sources and derive the in-memory lite manifest (with Figma stand-ins if present). */
 export async function deriveProjectLiteManifest(projectPath: string): Promise<LiteManifest> {
   const [tokensResult, componentsResult, figmaStandIns] = await Promise.all([

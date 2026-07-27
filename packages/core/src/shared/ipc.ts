@@ -601,6 +601,11 @@ export const ipcContract = {
   "lite:palette": { request: z.string(), response: z.string() },
   "lite:writeDesigner": { request: z.string(), response: z.string() },
   "lite:standInPrompt": { request: z.string(), response: z.string() },
+  // insertable design-system stand-ins (component + variant + framework-free HTML) for the canvas Insert menu.
+  "lite:standins": {
+    request: z.string(),
+    response: z.array(z.object({ component: z.string(), variant: z.string(), html: z.string() })),
+  },
   // light page authoring (task 5.1): compose a page from the light design system, then read/list them.
   "lite:pagePrompt": { request: z.object({ projectPath: z.string(), name: z.string(), description: z.string() }), response: z.string() },
   "lite:page": { request: z.object({ projectPath: z.string(), name: z.string() }), response: z.string() },

@@ -104,7 +104,7 @@ import {
   snapshotManifest,
 } from "./manifest/manifest-reader";
 import type { SnapshotReason } from "@vortspec/core/manifest";
-import { getProjectPaletteHtml, writeDesignerMd, buildProjectStandInPrompt, buildProjectLightPagePrompt, readLightPage, listLightPages, writeLightPage } from "./lite/lite-source";
+import { getProjectPaletteHtml, writeDesignerMd, buildProjectStandInPrompt, buildProjectLightPagePrompt, readLightPage, listLightPages, writeLightPage, listInsertableStandIns } from "./lite/lite-source";
 import {
   startDevServer,
   stopDevServer,
@@ -340,6 +340,7 @@ const handlers: Record<IpcChannel, Handler> = {
   "lite:palette": ((projectPath: string) => getProjectPaletteHtml(projectPath)) as Handler,
   "lite:writeDesigner": ((projectPath: string) => writeDesignerMd(projectPath)) as Handler,
   "lite:standInPrompt": ((projectPath: string) => buildProjectStandInPrompt(projectPath)) as Handler,
+  "lite:standins": ((projectPath: string) => listInsertableStandIns(projectPath)) as Handler,
   "lite:pagePrompt": ((r: { projectPath: string; name: string; description: string }) =>
     buildProjectLightPagePrompt(r.projectPath, r.name, r.description)) as Handler,
   "lite:page": ((r: { projectPath: string; name: string }) => readLightPage(r.projectPath, r.name)) as Handler,

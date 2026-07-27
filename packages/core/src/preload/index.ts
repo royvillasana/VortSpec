@@ -149,6 +149,7 @@ const api: VortSpecApi = {
   getLitePalette: (projectPath: string) => invoke("lite:palette", projectPath),
   writeDesignerManifest: (projectPath: string) => invoke("lite:writeDesigner", projectPath),
   liteStandInPrompt: (projectPath: string) => invoke("lite:standInPrompt", projectPath),
+  liteStandIns: (projectPath: string) => invoke("lite:standins", projectPath),
   litepagePrompt: (projectPath: string, name: string, description: string) =>
     invoke("lite:pagePrompt", { projectPath, name, description }),
   liteReadPage: (projectPath: string, name: string) => invoke("lite:page", { projectPath, name }),

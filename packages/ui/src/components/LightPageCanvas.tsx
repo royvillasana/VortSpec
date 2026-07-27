@@ -23,11 +23,19 @@ import { api } from "../lib/api";
  * lookup). So the saved HTML keeps exact token values, and `compileLightPage` restores the token
  * reference by that value — token discipline stays correct-by-construction.
  */
+/** An insertable design-system stand-in: a framework-free HTML snippet for one component variant. */
+export interface InsertableStandIn {
+  component: string;
+  variant: string;
+  html: string;
+}
+
 export function LightPageCanvas({
   projectPath,
   name,
   html,
   tokens = [],
+  standIns = [],
   onConvert,
 }: {
   projectPath: string;
@@ -35,6 +43,8 @@ export function LightPageCanvas({
   html: string;
   /** Design tokens (name + resolved value + category) — the only values the style panel offers. */
   tokens?: InspectorToken[];
+  /** Insertable design-system stand-ins for the Insert menu (empty until Figma previews are generated). */
+  standIns?: InsertableStandIn[];
   /** "Convert to code" — generate the real framework page in the background (task 6). */
   onConvert?: () => void;
 }): React.JSX.Element {
@@ -43,9 +53,57 @@ export function LightPageCanvas({
   const [selectedEl, setSelectedEl] = useState<HTMLElement | null>(null);
   const [rev, setRev] = useState(0); // bump to re-read the selected element's inline styles
   const [saved, setSaved] = useState(false);
+  const [insertOpen, setInsertOpen] = useState(false);
 
   // A new page remounts the iframe (key={name}); drop any selection from the old one.
   useEffect(() => setSelectedEl(null), [name]);
+
+  /** Select an element (or clear) — the single selection path shared by click, drag-drop, and edits. */
+  function selectEl(el: Element | null): void {
+    const doc = iframeRef.current?.contentDocument;
+    doc?.querySelectorAll("[data-lp-selected]").forEach((n) => n.removeAttribute("data-lp-selected"));
+    if (el) el.setAttribute("data-lp-selected", "");
+    setSelectedEl((el as HTMLElement) ?? null);
+  }
+
+  /** Insert a design-system stand-in as a new island — after the selection, else at the page end. */
+  function insertStandIn(si: InsertableStandIn): void {
+    const doc = iframeRef.current?.contentDocument;
+    if (!doc) return;
+    const tmpl = doc.createElement("template");
+    tmpl.innerHTML = si.html.trim();
+    let root = tmpl.content.firstElementChild as HTMLElement | null;
+    if (!root || tmpl.content.children.length !== 1) {
+      // Multiple (or zero) roots → wrap into a single island so it's one selectable/draggable unit.
+      const wrap = doc.createElement("div");
+      wrap.append(...Array.from(tmpl.content.childNodes));
+      root = wrap;
+    }
+    if (!root.hasAttribute("data-component")) root.setAttribute("data-component", si.component);
+    if (selectedEl?.parentNode) selectedEl.after(root);
+    else doc.body.appendChild(root);
+    selectEl(root);
+    setInsertOpen(false);
+    save();
+  }
+
+  /** Duplicate the selected island right after itself. */
+  function duplicateSelected(): void {
+    if (!selectedEl?.parentNode) return;
+    const clone = selectedEl.cloneNode(true) as HTMLElement;
+    clone.removeAttribute("data-lp-selected");
+    selectedEl.after(clone);
+    selectEl(clone);
+    save();
+  }
+
+  /** Remove the selected island. */
+  function deleteSelected(): void {
+    if (!selectedEl) return;
+    selectedEl.remove();
+    selectEl(null);
+    save();
+  }
 
   const colorTokens = tokens.filter((t) => t.type === "color");
   const spacingTokens = tokens.filter((t) => t.type === "spacing");
@@ -87,12 +145,6 @@ export function LightPageCanvas({
       "[data-lp-selected]{outline:2px solid #6b8afd!important;outline-offset:1px;cursor:grab}" +
       "[data-lp-drop]{position:fixed;background:#6b8afd;border-radius:2px;pointer-events:none;z-index:2147483647;box-shadow:0 0 0 1px rgba(107,138,253,.35)}";
     doc.head?.appendChild(style);
-
-    const select = (el: Element): void => {
-      doc.querySelectorAll("[data-lp-selected]").forEach((n) => n.removeAttribute("data-lp-selected"));
-      el.setAttribute("data-lp-selected", "");
-      setSelectedEl(el as HTMLElement);
-    };
 
     // ── drag state (per page-load; lives with these listeners) ────────────────
     type Drag = {
@@ -143,7 +195,7 @@ export function LightPageCanvas({
         const t = e.target as Element | null;
         if (!t) return;
         e.preventDefault();
-        select(t.closest("[data-component]") ?? t);
+        selectEl(t.closest("[data-component]") ?? t);
       },
       true,
     );
@@ -230,7 +282,7 @@ export function LightPageCanvas({
           if (container && anchor) {
             const ref = d.slot.position === "before" ? anchor : anchor.nextElementSibling;
             if (ref !== d.el) container.insertBefore(d.el, ref ?? null);
-            select(d.el);
+            selectEl(d.el);
             save();
           }
         }
@@ -260,6 +312,33 @@ export function LightPageCanvas({
         <span className="font-medium text-vs-text-primary">{name}</span>
         {selName && <span className="rounded bg-vs-bg-hover px-2 py-0.5 text-[11px] text-vs-text-secondary">island: {selName}</span>}
         <span className="ml-auto text-[11px] text-vs-text-muted">{saved ? "Saved ✓" : "Click to select · drag to move · double-click to edit text"}</span>
+        {standIns.length > 0 && (
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setInsertOpen((o) => !o)}
+              title={selName ? `Insert a component after ${selName}` : "Insert a component at the end of the page"}
+              className="rounded border border-vs-border-subtle px-2 py-1 text-[11px] font-medium text-vs-text-primary hover:bg-vs-bg-hover"
+            >
+              ＋ Insert ▾
+            </button>
+            {insertOpen && (
+              <div className="absolute right-0 z-10 mt-1 max-h-72 w-56 overflow-auto rounded border border-vs-border-subtle bg-vs-bg-base py-1 shadow-lg">
+                {standIns.map((si) => (
+                  <button
+                    key={`${si.component}·${si.variant}`}
+                    type="button"
+                    onClick={() => insertStandIn(si)}
+                    className="block w-full truncate px-3 py-1.5 text-left text-[11px] text-vs-text-primary hover:bg-vs-bg-hover"
+                  >
+                    {si.component}
+                    {si.variant && si.variant !== "default" && <span className="text-vs-text-muted"> · {si.variant}</span>}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
         {onConvert && (
           <button
             type="button"
@@ -282,9 +361,32 @@ export function LightPageCanvas({
             srcDoc={html}
             onLoad={instrument}
           />
-          {selectedEl && (colorTokens.length > 0 || spacingTokens.length > 0 || radiusTokens.length > 0) && (
+          {selectedEl && (
             <aside className="flex w-56 flex-none flex-col gap-3 overflow-auto border-l border-vs-border-subtle p-3 text-[12px]">
-              <div className="font-medium text-vs-text-primary">{selName}</div>
+              <div className="flex items-center justify-between gap-2">
+                <span className="min-w-0 truncate font-medium text-vs-text-primary">{selName}</span>
+                <span className="flex flex-none gap-1">
+                  <button
+                    type="button"
+                    onClick={duplicateSelected}
+                    title="Duplicate this island"
+                    className="rounded border border-vs-border-subtle px-1.5 py-0.5 text-[11px] text-vs-text-secondary hover:bg-vs-bg-hover"
+                  >
+                    Duplicate
+                  </button>
+                  <button
+                    type="button"
+                    onClick={deleteSelected}
+                    title="Delete this island"
+                    className="rounded border border-vs-border-subtle px-1.5 py-0.5 text-[11px] text-vs-error hover:bg-vs-bg-hover"
+                  >
+                    Delete
+                  </button>
+                </span>
+              </div>
+              {colorTokens.length + spacingTokens.length + radiusTokens.length === 0 && (
+                <p className="text-[11px] leading-snug text-vs-text-muted">No design tokens loaded — style editing appears once tokens are available.</p>
+              )}
               {colorTokens.length > 0 && (
                 <>
                   <TokenField label="Background" swatch value={getInlineStyle(selectedEl, "background-color")} options={colorTokens} onPick={(v) => applyToken("background-color", v)} />

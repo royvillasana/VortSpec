@@ -273,6 +273,7 @@ export function RunApp({
   // instead of navigating the app webview (light-design-system).
   const [lightPage, setLightPage] = useState<string | null>(null);
   const [lightPageHtml, setLightPageHtml] = useState("");
+  const [liteStandIns, setLiteStandIns] = useState<{ component: string; variant: string; html: string }[]>([]);
   const [creatingPage, setCreatingPage] = useState(false);
   const [newPageName, setNewPageName] = useState("");
   // The source file of the page currently on screen — grounds canvas Apply so the agent
@@ -402,6 +403,7 @@ export function RunApp({
     }
     let alive = true;
     void api.liteReadPage(project.path, lightPage).then((h) => alive && setLightPageHtml(h));
+    void api.liteStandIns(project.path).then((s) => alive && setLiteStandIns(s)).catch(() => alive && setLiteStandIns([]));
     return () => {
       alive = false;
     };
@@ -2279,6 +2281,7 @@ export function RunApp({
               name={lightPage}
               html={lightPageHtml}
               tokens={tokens}
+              standIns={liteStandIns}
               onConvert={
                 dispatchTask
                   ? () =>
