@@ -12,6 +12,7 @@ import { StorybookSidebar } from "../components/run-canvas/StorybookSidebar";
 import { Sitemap } from "../components/run-canvas/Sitemap";
 import type { RouteDiscovery, RouteNode, Rect } from "@vortspec/core/ipc";
 import { RunCanvas } from "../components/run-canvas/RunCanvas";
+import { LightPageCanvas } from "../components/LightPageCanvas";
 import { viewportsFromTokens, appliesInViewport, type ViewportId, type DeviceFrameKind } from "../components/run-canvas/viewports";
 import {
   resolveComponent,
@@ -267,6 +268,10 @@ export function RunApp({
   // ── Sitemap: the app's page/route tree, read from source (change: sitemap-tree) ──
   const [routes, setRoutes] = useState<RouteDiscovery | null>(null);
   const [currentPath, setCurrentPath] = useState("/");
+  // Selected LIGHT page (from a `light://` sitemap node) — rendered in the editable light canvas
+  // instead of navigating the app webview (light-design-system).
+  const [lightPage, setLightPage] = useState<string | null>(null);
+  const [lightPageHtml, setLightPageHtml] = useState("");
   // The source file of the page currently on screen — grounds canvas Apply so the agent
   // edits the previewed page (not index.html's mount shell) when an element has no known
   // component file of its own. Walks the route tree for the node at `currentPath`.
@@ -370,6 +375,13 @@ export function RunApp({
   // Navigate the preview to a route (SPA fallback or a real Next.js URL both work).
   const navigateTo = useCallback(
     (path: string) => {
+      // A light page has no URL — render it in the light canvas instead of navigating the webview.
+      if (path.startsWith("light://")) {
+        setLightPage(path.slice("light://".length));
+        setCurrentPath(path);
+        return;
+      }
+      setLightPage(null);
       if (!dev.url) return;
       const url = new URL(path.startsWith("/") ? path.slice(1) : path, dev.url.replace(/\/+$/, "") + "/").href;
       bridge.loadUrl(url);
@@ -378,6 +390,19 @@ export function RunApp({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [dev.url, bridge.loadUrl],
   );
+
+  // Load the selected light page's HTML for the editable canvas.
+  useEffect(() => {
+    if (!lightPage) {
+      setLightPageHtml("");
+      return;
+    }
+    let alive = true;
+    void api.liteReadPage(project.path, lightPage).then((h) => alive && setLightPageHtml(h));
+    return () => {
+      alive = false;
+    };
+  }, [lightPage, project.path]);
 
   // A state-navigated screen has no URL — reveal its source file so the user can edit it.
   const openScreenFile = useCallback(
@@ -2198,6 +2223,9 @@ export function RunApp({
                 )}
               </div>
             </Centered>
+          ) : lightPage ? (
+            // A light page — edit it in the light canvas (no dev server needed).
+            <LightPageCanvas projectPath={project.path} name={lightPage} html={lightPageHtml} />
           ) : dev.state === "starting" ? (
             <Centered>
               <Spinner /> {dev.message ?? `Starting ${isApp ? "your app's dev server" : "Storybook"}…`}
