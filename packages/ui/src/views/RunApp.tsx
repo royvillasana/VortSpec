@@ -1156,6 +1156,14 @@ export function RunApp({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bridge.dragDrop]);
   async function handleDrop(drop: NonNullable<typeof bridge.dragDrop>): Promise<void> {
+    // Light page: the ephemeral move is ALREADY applied to the guest DOM, and the DOM IS the source —
+    // so there's no ts-morph reconcile and no data-source to require. Keep the move (forget the guest's
+    // revert tracking) and persist the serialized DOM. Never fall through to the refuse/reconcile below.
+    if (isLightPageRef.current) {
+      bridge.clearMove();
+      schedulePersistLight();
+      return;
+    }
     // FLUSH pending deterministic writes first, so a move — deterministic OR the AI reconcile — sees
     // the CURRENT source. Without this, editing an element then immediately moving it snapshots stale
     // source (the debounced text/style write hasn't landed), and the AI reports "the element doesn't
