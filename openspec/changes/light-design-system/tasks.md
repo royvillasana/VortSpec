@@ -14,13 +14,13 @@
 - [x] 2.4 Surface the palette as a browsable "design system" view in the Playground/IDE (packages/ui), distinct from real Storybook. → WIRED end-to-end + all 3 packages typecheck clean: `lite:palette`/`lite:writeDesigner` IPC (contract+handler+preload+api) → `main/lite/lite-source.ts` orchestrator → `packages/ui/src/views/DesignSystem.tsx` (sandboxed iframe) → ActivityBar "Design system" entry + App router branch + ui export. ⚠️ Live render is USER-verified (build+run the IDE) — I can't drive the packaged GUI.
 - [x] 2.5 Verify: palette renders every contract component before any framework component exists; real Storybook still generated separately. → 9 tests in `palette.test.ts` (renders every component incl. placeholders; Storybook untouched)
 
-## 3. Component stand-in harvest
+## 3. Component stand-ins — derived from Figma (NOT Storybook — design D4, per user correction)
 
-- [~] 3.1 Implement harvest: for each framework component's Storybook stories (per variant/state), snapshot real rendered DOM + computed styles via the inspector-bridge structure-snapshot machinery. → TRANSFORM done: `standInHtml()` + `HARVEST_STYLE_PROPS` in `packages/core/src/shared/harvest.ts`. Deferred (batched live pass): the preload `buildHarvestSnapshot` DOM walk that produces `HarvestNode` trees against Storybook.
-- [x] 3.2 Freeze the snapshot as the component's framework-free stand-in (name + variant keyed) and write it into `designer.md`. → `harvestStandIn()` → `StandIn{source:"harvested"}`; name-keyed via `DeriveInput.standIns`; serialized by `serializeLiteManifest`.
-- [x] 3.3 Placeholder path: before a framework component exists, emit a fast Figma-derived stand-in marked as placeholder. → `placeholderStandIns()` in `lite-manifest.ts` (marked `source:"placeholder"`; palette badges it).
-- [x] 3.4 On `framework-ready`, replace the placeholder stand-in with the harvested real render. → `mergeHarvestedStandIns()` (harvested variants win; others kept; new ones appended) + tests.
-- [~] 3.5 Verify: a harvested stand-in visually matches the real component render; placeholder is clearly marked until replaced. → STRUCTURE + framework-free purity + placeholder-marking verified by 10 tests. Visual-match-to-real-render needs the live capture (with 3.1's deferred DOM walk).
+- [~] 3.1 Read each component's Figma node (geometry / fills / text / layout) via the read-only Figma MCP during extraction and convert it to a framework-free, token-referenced HTML stand-in (available immediately, no framework/Storybook). → TRANSFORM done: `standInHtml()` (node-tree → framework-free HTML) + `matchTokenUses()` in `packages/core/src/shared/harvest.ts`, source-agnostic. Remaining: the extraction-time Figma-node → `HarvestNode` reader (agent/MCP step) + persist per component.
+- [x] 3.2 Emit the Figma-derived stand-in as the component's stand-in (name + variant keyed) and write it into `designer.md`. → `harvestStandIn()` → `StandIn`; name-keyed via `DeriveInput.standIns`; serialized by `serializeLiteManifest`.
+- [x] 3.3 Placeholder path: a minimal marked stand-in before the Figma-derived one exists. → `placeholderStandIns()` in `lite-manifest.ts` (marked `source:"placeholder"`; palette badges it).
+- [x] 3.4 Merge/replace stand-ins as better data arrives (Figma-derived replaces placeholder). → `mergeHarvestedStandIns()` (derived variants win; others kept; new ones appended) + tests.
+- [~] 3.5 Verify: a Figma-derived stand-in reflects the component's design + is framework-free; placeholder is clearly marked until replaced. → STRUCTURE + framework-free purity + placeholder-marking verified by 10 tests. The Figma-node read + visual fidelity needs the live extraction step.
 
 ## 4. Contract-first parallel build + readiness
 
