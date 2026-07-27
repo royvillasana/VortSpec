@@ -151,6 +151,7 @@ const api: VortSpecApi = {
   liteStandInPrompt: (projectPath: string) => invoke("lite:standInPrompt", projectPath),
   liteTwoTrackPrompt: (projectPath: string) => invoke("lite:twoTrackPrompt", projectPath),
   litePageUrl: (projectPath: string, name: string) => invoke("lite:pageUrl", { projectPath, name }),
+  liteGeneratePrompt: (projectPath: string) => invoke("lite:generatePrompt", projectPath),
   liteStandIns: (projectPath: string) => invoke("lite:standins", projectPath),
   liteReadiness: (projectPath: string) => invoke("lite:readiness", projectPath),
   litepagePrompt: (projectPath: string, name: string, description: string) =>

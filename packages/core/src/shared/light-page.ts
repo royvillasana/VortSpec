@@ -120,3 +120,46 @@ export function buildConvertToFrameworkPrompt(name: string, compiled?: CompileRe
     "any new components created and the route wired, so the Playground can navigate to the real page.",
   ].join("\n");
 }
+
+/**
+ * Build the Flow's "Generate code" prompt (light-pages-on-canvas, group 5). The user has created + approved
+ * their screens in the Playground; now convert ALL of them, in one run, to real code in the framework the
+ * user selected during the initial flow — build/reuse the design-system components, then AUDIT and VALIDATE
+ * (AI review + visual comparison against each screen). The screens stay as the editable source of truth.
+ * Framework-agnostic: the target framework/language/styling come from `.sdd-de/project.yaml`, NOT hardcoded.
+ */
+export function buildGenerateCodePrompt(names: string[]): string {
+  const list = names.map((n) => `  - \`${lightPagePath(n)}\`  (screen "${n}")`).join("\n");
+  return [
+    "GENERATE FRAMEWORK CODE for the screens the user built and approved in the Playground. Convert ALL of",
+    "the screens below into real code in the framework the user selected during setup — this is the",
+    "deliberate framework build, now that the user is ready.",
+    "",
+    "FIRST, read `.sdd-de/project.yaml` for the target framework/language/styling (React, Vue, Svelte,",
+    "Angular, …) and the component/token paths. Produce code in THAT framework — do NOT default to React.",
+    "",
+    "Screens to convert (each file is framework-free HTML/CSS/JS and is the AUTHORITATIVE spec — match its",
+    "layout, content, and every `data-component=\"<Name>\"` usage exactly):",
+    list,
+    "",
+    "For the whole set:",
+    "1. If the app isn't scaffolded for the configured framework yet, scaffold it minimally but runnable",
+    "   (entry, root, styling wired to the token file).",
+    "2. For EACH `data-component` island across the screens, ensure the real component exists in the",
+    "   configured framework — build any missing one from the design system (its Figma reference + tokens),",
+    "   following the project's component standards; REUSE components that already exist. (These may already",
+    "   be built by the background component build — reuse them.)",
+    "3. Compose each screen as a real framework page/route that uses those components and reproduces the",
+    "   screen's layout + content. EVERY color/spacing/radius/type value MUST reference a design token.",
+    "4. Wire each page into the app's routing (or the router-less screen-preview harness) so it's navigable.",
+    "",
+    "THEN VALIDATE — do not consider a screen done until it passes:",
+    "5. AUDIT the generated code (token discipline: no hardcoded values; correct component reuse; a11y).",
+    "6. VISUAL-VALIDATE each generated page against its screen file — render it and compare; fix any",
+    "   discrepancy so the framework page matches the screen the user approved.",
+    "",
+    "The screens (`.vortspec/light-pages/*.html`) stay UNCHANGED — they remain the editable source of truth.",
+    "End with: every screen converted to the selected framework, components built/reused, routes wired, and",
+    "each page audited + visually validated against its screen.",
+  ].join("\n");
+}

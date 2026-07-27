@@ -606,6 +606,8 @@ export const ipcContract = {
   // serve a light page from a local http origin + return its URL, so the framework canvas webview can
   // load it with the guest inspector-bridge (light-pages-on-canvas, task 1).
   "lite:pageUrl": { request: z.object({ projectPath: z.string(), name: z.string() }), response: z.string() },
+  // the Flow "Generate code" prompt: convert ALL screens to the selected framework + audit/validate (5).
+  "lite:generatePrompt": { request: z.string(), response: z.string() },
   // insertable design-system stand-ins (component + variant + framework-free HTML) for the canvas Insert menu.
   "lite:standins": {
     request: z.string(),

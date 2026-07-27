@@ -142,6 +142,7 @@ export function GuidedFlow({
   const [components, setComponents] = useState<InspectorComponent[] | null>(null);
   const [tokenCount, setTokenCount] = useState<number | null>(null);
   const [manifestExists, setManifestExists] = useState(false);
+  const [screenCount, setScreenCount] = useState(0); // Playground screens available to "Generate code"
   const [foundationOpen, setFoundationOpen] = useState(false);
   const [addNew, setAddNew] = useState(false);
   // Figma component reconciliation (Wave 3): figma-cli reads the design system's
@@ -183,11 +184,12 @@ export function GuidedFlow({
   const autoFoundationRef = useRef(false); // kick the background foundation extraction at most once
 
   async function reload(): Promise<void> {
-    const [cfg, comps, toks, man] = await Promise.all([
+    const [cfg, comps, toks, man, screens] = await Promise.all([
       api.projectConfig(project.path),
       api.inspectorComponents(project.path),
       api.inspectorTokens(project.path),
       api.getManifest(project.path),
+      api.litePages(project.path).catch(() => [] as string[]),
     ]);
     setConfig(cfg);
     setComponents(comps.components);
@@ -195,6 +197,19 @@ export function GuidedFlow({
     setFigmaCompSynced(comps.figmaSynced ?? false);
     setTokenCount(toks.tokens.length);
     setManifestExists(man.exists);
+    setScreenCount(screens.length);
+  }
+
+  // "Generate code" (light-pages-on-canvas §5): convert ALL the screens the user built in the Playground
+  // to the configured framework, building/reusing components + auditing + visually validating. Runs in the
+  // background via the same agent-run machinery as a build.
+  async function generateCode(): Promise<void> {
+    const prompt = await api.liteGeneratePrompt(project.path);
+    if (!prompt) {
+      flash("No screens to generate yet — create some in the Playground first.");
+      return;
+    }
+    await op(`Generating framework code for ${screenCount} screen${screenCount === 1 ? "" : "s"}`, prompt, { kind: "build" });
   }
 
   function flash(msg: string): void {
@@ -556,6 +571,19 @@ export function GuidedFlow({
                 <Spinner /> Setting up under the hood…
               </span>
             )}
+            <button
+              type="button"
+              disabled={busy || screenCount === 0}
+              onClick={() => void generateCode()}
+              title={
+                screenCount === 0
+                  ? "Create screens in the Playground first, then generate their code"
+                  : `Convert your ${screenCount} screen${screenCount === 1 ? "" : "s"} to ${config?.framework ?? "framework"} code — build/reuse components, audit + visually validate`
+              }
+              className="rounded bg-vs-accent px-2.5 py-1 text-[11px] font-medium text-white hover:opacity-90 disabled:opacity-50"
+            >
+              Generate code{screenCount > 0 ? ` (${screenCount})` : ""}
+            </button>
             <button
               type="button"
               onClick={() => setShowFramework(true)}

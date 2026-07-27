@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildLightPagePrompt, buildConvertToFrameworkPrompt, lightPagePath, LIGHT_PAGES_DIR } from "./light-page";
+import { buildLightPagePrompt, buildConvertToFrameworkPrompt, buildGenerateCodePrompt, lightPagePath, LIGHT_PAGES_DIR } from "./light-page";
 import type { CompileResult } from "./compile";
 
 describe("lightPagePath", () => {
@@ -80,5 +80,29 @@ describe("buildConvertToFrameworkPrompt", () => {
   it("ignores an empty compile (no code) — same as no compile", () => {
     const empty: CompileResult = { code: "  ", usedComponents: [], lintIssues: [], deterministicCoverage: { tokensRestored: 0, literalsKept: 0, componentsMapped: 0, residual: [] } };
     expect(buildConvertToFrameworkPrompt("X", empty)).not.toMatch(/DETERMINISTIC COMPILE/);
+  });
+});
+
+describe("buildGenerateCodePrompt", () => {
+  const p = buildGenerateCodePrompt(["Home", "Pricing"]);
+
+  it("targets the CONFIGURED framework, not hardcoded React", () => {
+    expect(p).toMatch(/read `\.sdd-de\/project\.yaml` for the target framework/i);
+    expect(p).toMatch(/do NOT default to React/i);
+  });
+
+  it("lists every screen by its light-page path as the authoritative spec", () => {
+    expect(p).toContain(lightPagePath("Home"));
+    expect(p).toContain(lightPagePath("Pricing"));
+    expect(p).toMatch(/AUTHORITATIVE spec/i);
+    expect(p).toContain("data-component");
+  });
+
+  it("requires build/reuse components + audit + visual validation, keeping screens intact", () => {
+    expect(p).toMatch(/REUSE components that already exist/i);
+    expect(p).toMatch(/reference a design token/i);
+    expect(p).toMatch(/AUDIT/);
+    expect(p).toMatch(/VISUAL-VALIDATE/);
+    expect(p).toMatch(/stay UNCHANGED|remain the editable source/i);
   });
 });

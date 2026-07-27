@@ -134,6 +134,7 @@ export interface VortSpecApi {
   liteStandInPrompt(projectPath: string): Promise<IpcResponse<"lite:standInPrompt">>;
   liteTwoTrackPrompt(projectPath: string): Promise<IpcResponse<"lite:twoTrackPrompt">>;
   litePageUrl(projectPath: string, name: string): Promise<IpcResponse<"lite:pageUrl">>;
+  liteGeneratePrompt(projectPath: string): Promise<IpcResponse<"lite:generatePrompt">>;
   liteStandIns(projectPath: string): Promise<IpcResponse<"lite:standins">>;
   liteReadiness(projectPath: string): Promise<IpcResponse<"lite:readiness">>;
   litepagePrompt(projectPath: string, name: string, description: string): Promise<IpcResponse<"lite:pagePrompt">>;

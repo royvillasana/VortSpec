@@ -26,14 +26,9 @@
 
 ## 5. Move framework generation to the Flow
 
-- [ ] 5.1 Add a "Generate code" action in the Flow (design-system workspace) that batches the
-  screens → framework conversion, targeting the framework selected in the initial flow
-  (`.sdd-de/project.yaml` `framework`), reusing the deterministic compile (`compile.ts`) as the
-  authoritative skeleton for React and the framework-specific compose flow for others.
-- [ ] 5.2 The Generate step builds/reuses design-system components, then AUDITS + runs AI validation
-  + visual validation against the screens; the screens remain the editable source of truth.
-- [ ] 5.3 Surface Generate progress/results in the Flow (not the canvas); wire it to the existing
-  agent-run + verify machinery.
+- [x] 5.1 "Generate code" action in the Flow → `buildGenerateCodePrompt(names)` (converts ALL screens, targets the framework from `.sdd-de/project.yaml`, NOT hardcoded React) + `buildProjectGenerateCodePrompt` (lists screens via `listLightPages`) + `lite:generatePrompt` IPC; button in the Flow's palette header (`GuidedFlow`), gated on screenCount. 3 tests.
+- [x] 5.2 The prompt builds/reuses components, requires token discipline, then AUDITS + VISUAL-VALIDATEs each page against its screen; the screens stay UNCHANGED as the editable source of truth.
+- [x] 5.3 Runs via the Flow's `op()` (agent-run machinery, shows the run card); progress surfaces in the Flow, not the canvas.
 
 ## 6. User-facing terminology (no "light")
 

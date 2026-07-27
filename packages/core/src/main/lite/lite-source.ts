@@ -27,7 +27,7 @@ import {
 import { buildPalette, renderPaletteHtml } from "../../shared/palette";
 import { LIGHT_HTML_DIR, normSegment, buildLightStandInPrompt, type StandInTarget } from "../../shared/light-standin";
 import { buildTwoTrackBuildPrompt } from "../../shared/two-track";
-import { LIGHT_PAGES_DIR, buildLightPagePrompt } from "../../shared/light-page";
+import { LIGHT_PAGES_DIR, buildLightPagePrompt, buildGenerateCodePrompt } from "../../shared/light-page";
 import { detectedComponentsSchema } from "../../shared/flow";
 
 /** Map an inspector token `type` (singular) to a manifest token group (plural); null ⇒ skip. */
@@ -345,4 +345,14 @@ export async function listLightPages(projectPath: string): Promise<string[]> {
   } catch {
     return [];
   }
+}
+
+/**
+ * Build the Flow's "Generate code" prompt for ALL of a project's screens (light-pages-on-canvas, group 5):
+ * convert every `.vortspec/light-pages/*.html` to the configured framework, build/reuse components, audit +
+ * visual-validate. Returns "" when there are no screens to convert (the caller disables the action).
+ */
+export async function buildProjectGenerateCodePrompt(projectPath: string): Promise<string> {
+  const names = await listLightPages(projectPath);
+  return names.length ? buildGenerateCodePrompt(names) : "";
 }
