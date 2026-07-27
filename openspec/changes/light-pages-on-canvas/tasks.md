@@ -20,11 +20,9 @@
 
 ## 4. Remove the parallel light editor
 
-- [ ] 4.1 Delete `LightPageCanvas.tsx`, its right-side panel, the token-field/insert/duplicate/delete
-  controls, and the light-compile-on-Convert glue that fed the on-canvas button.
-- [ ] 4.2 Remove the on-canvas "Convert to code" button and its `onConvert` wiring in RunApp.
-- [ ] 4.3 Remove now-dead light-canvas IPC/props (keep `readLightPage`/`writeLightPage`,
-  `lite:standins`, `lite:readiness`, and the light-page prompts — still used).
+- [x] 4.1 Delete `LightPageCanvas.tsx` (its right-side panel, token-field/insert/duplicate/delete controls). Done — file removed; `light-compile.ts` kept for the Flow Generate step.
+- [x] 4.2 Remove the on-canvas "Convert to code" button + `onConvert` wiring — gone with the LightPageCanvas branch; dropped the dead `buildConvertToFrameworkPrompt` import.
+- [x] 4.3 Removed now-dead RunApp state (`lightPageHtml`/`liteStandIns`/`liteReadiness` + their loads); kept `readLightPage`/`writeLightPage`, `lite:standins`, `lite:readiness`, and the light-page prompts.
 
 ## 5. Move framework generation to the Flow
 

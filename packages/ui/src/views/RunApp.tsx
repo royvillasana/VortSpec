@@ -13,7 +13,6 @@ import { Sitemap } from "../components/run-canvas/Sitemap";
 import type { RouteDiscovery, RouteNode, Rect } from "@vortspec/core/ipc";
 import { RunCanvas } from "../components/run-canvas/RunCanvas";
 import { Logo } from "../components/Logo";
-import { buildConvertToFrameworkPrompt } from "@vortspec/core/light-page";
 import { viewportsFromTokens, appliesInViewport, type ViewportId, type DeviceFrameKind } from "../components/run-canvas/viewports";
 import {
   resolveComponent,
@@ -271,11 +270,8 @@ export function RunApp({
   // Selected LIGHT page (from a `light://` sitemap node) — rendered in the editable light canvas
   // instead of navigating the app webview (light-design-system).
   const [lightPage, setLightPage] = useState<string | null>(null);
-  const [lightPageHtml, setLightPageHtml] = useState("");
   // The served URL for the current light page — loaded into the RunCanvas webview (light-pages-on-canvas).
   const [lightPageSrc, setLightPageSrc] = useState("");
-  const [liteStandIns, setLiteStandIns] = useState<{ component: string; variant: string; html: string }[]>([]);
-  const [liteReadiness, setLiteReadiness] = useState<Record<string, "light-only" | "framework-ready">>({});
 
   // A light page is edited in the SAME canvas: it's served from a local origin and loaded into the
   // RunCanvas webview with the guest bridge, exactly like a framework page — so every left-sidebar
@@ -414,19 +410,12 @@ export function RunApp({
   // Load the selected light page: its served URL (loaded into the canvas webview) + its standins/readiness.
   useEffect(() => {
     if (!lightPage) {
-      setLightPageHtml("");
       setLightPageSrc("");
       return;
     }
     let alive = true;
     // Serve the page and point the canvas webview at it — the guest bridge instruments it like any page.
     void api.litePageUrl(project.path, lightPage).then((u) => alive && setLightPageSrc(u)).catch(() => alive && setLightPageSrc(""));
-    void api.liteReadPage(project.path, lightPage).then((h) => alive && setLightPageHtml(h));
-    void api.liteStandIns(project.path).then((s) => alive && setLiteStandIns(s)).catch(() => alive && setLiteStandIns([]));
-    void api
-      .liteReadiness(project.path)
-      .then((r) => alive && setLiteReadiness(Object.fromEntries(r.map((c) => [c.name, c.readiness]))))
-      .catch(() => alive && setLiteReadiness({}));
     return () => {
       alive = false;
     };
