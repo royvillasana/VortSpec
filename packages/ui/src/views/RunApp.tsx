@@ -2052,6 +2052,10 @@ export function RunApp({
       {/* Storybook: portal the story nav into the dock's Section tab (canvas is app-only,
           so Storybook has no Design panel — its nav goes here instead). */}
       {!isApp && sidebarSlot && embedUrl && createPortal(storybookNav, sidebarSlot)}
+      {/* Light-first: when there's no running app canvas, the Design panel (Sitemap + "+ New light
+          page") still portals here — so light pages work WITHOUT an app scaffold. */}
+      {isApp && sidebarSlot && !canvasReady &&
+        createPortal(<div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-vs-bg-surface">{sidebarBody}</div>, sidebarSlot)}
       <main className="flex min-w-0 flex-1 flex-col bg-vs-bg-primary">
         <header className="flex flex-none items-center gap-3 border-b border-vs-border-default px-5 py-3">
           <span className="text-[15px] font-semibold">{isApp ? "Playground" : "Storybook"}</span>
