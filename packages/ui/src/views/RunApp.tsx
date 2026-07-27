@@ -1423,6 +1423,10 @@ export function RunApp({
   // views clears every override and re-applies just those that apply at the new breakpoint. A
   // viewport switch only resizes the webview (no reload), so node ids stay valid.
   useEffect(() => {
+    // A light page has no per-viewport source edits and its edits live in the DOM (persisted on save),
+    // NOT in `pending` — so clearing overrides here would just WIPE the user's edits on a viewport switch.
+    // Skip the re-scope entirely for a light page; its single DOM applies at every viewport.
+    if (isLightPageRef.current) return;
     bridge.clearOverride();
     for (const e of Object.values(pendingRef.current)) {
       if (!e.nodeId || !appliesInViewport(e.viewport, viewportId)) continue;
@@ -2108,7 +2112,19 @@ export function RunApp({
               : "Your component library, running live from Storybook."}
           </span>
           <div className="flex-1" />
-          {dev.state === "running" && dev.url ? (
+          {isLightPage ? (
+            // A light page is already served + live in the canvas — no dev server to start/stop. Offer
+            // to open it in a browser and reload, not "Start app".
+            <>
+              {lightPageSrc && <span className="font-mono text-[11px] text-vs-text-secondary">{lightPageSrc.replace(/^https?:\/\//, "")}</span>}
+              <Button variant="ghost" disabled={!lightPageSrc} onClick={() => lightPageSrc && void api.openInstall(lightPageSrc)}>
+                Open in browser
+              </Button>
+              <Button variant="ghost" onClick={refresh} title="Reload the preview">
+                <RefreshIcon /> Refresh
+              </Button>
+            </>
+          ) : dev.state === "running" && dev.url ? (
             <>
               <span className="font-mono text-[11px] text-vs-text-secondary">{dev.url.replace(/^https?:\/\//, "")}</span>
               <Button variant="ghost" onClick={() => void api.openInstall(dev.url!)}>Open in browser</Button>

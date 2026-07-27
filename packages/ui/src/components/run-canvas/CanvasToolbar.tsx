@@ -29,7 +29,7 @@ import { VIEWPORT_ORDER, DEFAULT_VIEWPORTS, frameApplies, type Viewport, type Vi
 /** Modes, their labels + icons, in bar order. Interact leads — it is the resting state. */
 const MODES: { key: CanvasMode; label: string; hint: string; icon: ComponentType<{ size?: number; strokeWidth?: number }> }[] = [
   { key: "interact", label: "Interact", hint: "Use the running app — VortSpec doesn't intercept anything", icon: MousePointer2 },
-  { key: "inspect", label: "Inspect", hint: "Hover and click to select an element", icon: SquareMousePointer },
+  { key: "inspect", label: "Edit", hint: "Click to select and edit an element", icon: SquareMousePointer },
   { key: "comment", label: "Comment", hint: "Pin a comment thread to the page", icon: MessageSquare },
   { key: "insert", label: "Insert", hint: "Point at the gap between elements to compose something new there", icon: Plus },
 ];
