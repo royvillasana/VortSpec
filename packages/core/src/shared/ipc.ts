@@ -603,6 +603,9 @@ export const ipcContract = {
   "lite:standInPrompt": { request: z.string(), response: z.string() },
   // two-track build prompt (4.2): light stand-ins first, then framework components, over one Figma read.
   "lite:twoTrackPrompt": { request: z.string(), response: z.string() },
+  // serve a light page from a local http origin + return its URL, so the framework canvas webview can
+  // load it with the guest inspector-bridge (light-pages-on-canvas, task 1).
+  "lite:pageUrl": { request: z.object({ projectPath: z.string(), name: z.string() }), response: z.string() },
   // insertable design-system stand-ins (component + variant + framework-free HTML) for the canvas Insert menu.
   "lite:standins": {
     request: z.string(),
