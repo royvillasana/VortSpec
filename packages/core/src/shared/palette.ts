@@ -134,10 +134,10 @@ body{margin:0;font:14px/1.5 system-ui,-apple-system,sans-serif;background:var(--
 .lp h1{font-size:20px;margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .lp h2{font-size:12px;margin:0 0 14px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
 .lp h3{font-size:13px;margin:0 0 12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-/* bento wall: CSS multi-column — cards flow to fill every column, balanced, with no gaps; foundations
-   + components are mixed into one wall. Pure CSS, so it can never collapse or overlap. */
-.lp-bento{columns:240px;column-gap:8px}
-.lp-card{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:16px;margin-bottom:8px;min-width:0;overflow:hidden;break-inside:avoid;-webkit-column-break-inside:avoid}
+/* bento wall: CSS Grid auto-fill — ALWAYS multiple columns (a wide preview is clipped by the card's
+   overflow, never expands the track). Foundations + components mixed; 8px gaps; cards top-aligned. */
+.lp-bento{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px;align-items:start}
+.lp-card{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:16px;min-width:0;overflow:hidden}
 .lp-tokens{display:flex;flex-direction:column;gap:9px}
 .lp-token{display:flex;align-items:center;gap:10px;min-width:0;overflow:hidden}
 .lp-name{font-size:11px;font-family:ui-monospace,monospace;flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
