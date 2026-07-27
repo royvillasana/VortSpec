@@ -601,6 +601,10 @@ export const ipcContract = {
   "lite:palette": { request: z.string(), response: z.string() },
   "lite:writeDesigner": { request: z.string(), response: z.string() },
   "lite:standInPrompt": { request: z.string(), response: z.string() },
+  // light page authoring (task 5.1): compose a page from the light design system, then read/list them.
+  "lite:pagePrompt": { request: z.object({ projectPath: z.string(), name: z.string(), description: z.string() }), response: z.string() },
+  "lite:page": { request: z.object({ projectPath: z.string(), name: z.string() }), response: z.string() },
+  "lite:pages": { request: z.string(), response: z.array(z.string()) },
   "manifest:save": {
     request: z.object({ projectPath: z.string(), content: z.string() }),
     response: manifestResultSchema,

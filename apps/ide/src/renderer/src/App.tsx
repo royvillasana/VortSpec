@@ -14,6 +14,7 @@ import { GuidedFlow } from "@vortspec/ui/GuidedFlow";
 import { Tasks } from "@vortspec/ui/Tasks";
 import { DesignManifest } from "@vortspec/ui/DesignManifest";
 import { DesignSystem } from "@vortspec/ui/DesignSystem";
+import { LightPages } from "@vortspec/ui/LightPages";
 import { RunApp } from "@vortspec/ui/RunApp";
 import { Profile } from "@vortspec/ui/Profile";
 import { ProjectSetup } from "@vortspec/ui/ProjectSetup";
@@ -593,6 +594,8 @@ export default function App(): JSX.Element {
         <Tasks project={p} hideRail onBack={go("explorer")} onFlow={go("flow")} onRun={go("run")} onPlayground={go("explorer")} onTokens={go("tokens")} onManifest={go("manifest")} onHistory={go("explorer")} onSource={go("source")} />
       ) : a === "manifest" ? (
         <DesignManifest project={p} hideRail onBack={go("explorer")} onOpenRun={go("run")} onOpenPreview={go("explorer")} onOpenInspector={go("tokens")} onOpenHistory={go("explorer")} />
+      ) : a === "pages" ? (
+        <LightPages project={p} />
       ) : a === "settings" ? (
         <Profile onBack={go("explorer")} />
       ) : (

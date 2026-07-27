@@ -25,6 +25,7 @@ import {
 } from "../../shared/lite-manifest";
 import { buildPalette, renderPaletteHtml } from "../../shared/palette";
 import { LIGHT_HTML_DIR, normSegment, buildLightStandInPrompt, type StandInTarget } from "../../shared/light-standin";
+import { LIGHT_PAGES_DIR, lightPagePath, buildLightPagePrompt } from "../../shared/light-page";
 import { detectedComponentsSchema } from "../../shared/flow";
 
 /** Map an inspector token `type` (singular) to a manifest token group (plural); null ⇒ skip. */
@@ -250,4 +251,32 @@ export async function buildProjectStandInPrompt(projectPath: string): Promise<st
   const targets = await buildStandInTargets(projectPath);
   const withRefs = targets.filter((t) => t.figmaNodeId || t.componentKey);
   return buildLightStandInPrompt(withRefs.length > 0 ? withRefs : targets);
+}
+
+/**
+ * Build the prompt to compose a LIGHT PAGE from the design system (task 5.1). Ensures `designer.md`
+ * exists first (the agent composes from it), then returns the page-composition prompt. The renderer
+ * runs it via `useAgentRun`; the composed page is a framework-free light preview, transformed to the
+ * framework later.
+ */
+export async function buildProjectLightPagePrompt(projectPath: string, name: string, description: string): Promise<string> {
+  await writeDesignerMd(projectPath); // refresh the light design-system context the agent reads
+  return buildLightPagePrompt(name, description);
+}
+
+/** Read a composed light page's HTML (rendered as-is in its own iframe). Empty when it doesn't exist. */
+export async function readLightPage(projectPath: string, name: string): Promise<string> {
+  return (await readFile(join(projectPath, lightPagePath(name)), "utf8").catch(() => "")).trim();
+}
+
+/** List the composed light pages (by name, without the `.html`). */
+export async function listLightPages(projectPath: string): Promise<string[]> {
+  try {
+    return (await readdir(join(projectPath, LIGHT_PAGES_DIR)))
+      .filter((f) => f.endsWith(".html"))
+      .map((f) => f.replace(/\.html$/, ""))
+      .sort();
+  } catch {
+    return [];
+  }
 }

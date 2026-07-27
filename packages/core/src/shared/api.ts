@@ -132,6 +132,9 @@ export interface VortSpecApi {
   getLitePalette(projectPath: string): Promise<IpcResponse<"lite:palette">>;
   writeDesignerManifest(projectPath: string): Promise<IpcResponse<"lite:writeDesigner">>;
   liteStandInPrompt(projectPath: string): Promise<IpcResponse<"lite:standInPrompt">>;
+  litepagePrompt(projectPath: string, name: string, description: string): Promise<IpcResponse<"lite:pagePrompt">>;
+  liteReadPage(projectPath: string, name: string): Promise<IpcResponse<"lite:page">>;
+  litePages(projectPath: string): Promise<IpcResponse<"lite:pages">>;
 
   // manifest (DESIGN.md)
   getManifest(projectPath: string): Promise<IpcResponse<"manifest:get">>;
