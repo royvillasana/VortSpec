@@ -189,13 +189,39 @@ You can run `/storybook` and `/design-doc` at any time to update documentation a
 
 Compose components into complete screens, layouts, and product features.
 
+> ## 🟢 LIGHT-FIRST BY DEFAULT — READ FIRST
+>
+> **When the user asks to create a page or screen in the Playground, create a LIGHT PAGE by default.**
+> A light page is framework-free HTML written to `.vortspec/light-pages/<name>.html`, composed from the
+> light design system (`designer.md` + the `.vortspec/light-html/` stand-ins). This is the DEFAULT and
+> what the user sees and edits.
+>
+> On a create-page request you MUST NOT, in the foreground:
+> - scaffold or set up a React/Tailwind/Vite app (no `package.json`, no `vite`, no Tailwind config, no `App.tsx`),
+> - build React/framework components or run the 7-step cycle,
+> - create a `src/screens/…` or `src/pages/…` `.tsx` screen,
+> - extract or invent tokens.
+>
+> The real framework version (React + Tailwind + components) is generated **LATER, in the BACKGROUND**,
+> only when the user is happy with the light page and triggers **"Convert to code"**. Token extraction and
+> React component creation happen under the hood — never as the visible result of "create a page".
+>
+> Follow `buildLightPagePrompt`'s contract: read `designer.md`, reuse the light stand-ins, emit framework-free
+> HTML, mark each design-system instance with `data-component="<Name>"`, and write the single `.html` file.
+>
+> The framework-first path below (7-step cycle, `/storybook`, gap detection, `src/…` screens) is **Path B —
+> opt-in**: use it ONLY when the user explicitly asks to build the real framework screen up front. Do not
+> default to it.
+
 | Level | Examples |
 |---|---|
 | **Templates** | Two-column layout, full-bleed hero, dashboard shell |
 | **Screens** | Homepage, Login, Dashboard, Settings |
 | **Features** | Checkout flow, Onboarding wizard, Search results |
 
-Run the **7-step cycle** once per screen or feature.
+Run the **7-step cycle** once per screen or feature **only on Path B** (the explicit framework build).
+On the default light-first path, creating the light page IS the deliverable; the 7-step framework cycle
+runs later, in the background, at Convert time.
 
 #### Prerequisites before starting Screen Creation
 
