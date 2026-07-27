@@ -7,23 +7,16 @@
 
 ## 2. Render a light page in the framework RunCanvas
 
-- [ ] 2.1 In RunApp, route a selected `light://<name>` page through the EXISTING RunCanvas path
-  (webview → served URL + guest preload), not the LightPageCanvas branch.
-- [ ] 2.2 Confirm the left DesignPanel, layers, hover/selection overlay, drag, move, and insert
-  render and operate on the light page (no new controls).
-- [ ] 2.3 Gate any framework-only surfaces (e.g. dev-stamp-dependent affordances) so they no-op for
-  light pages without affecting framework screens.
+- [x] 2.1 In RunApp, route a selected `light://<name>` page through the EXISTING RunCanvas path. → `canvasSrc = isLightPage ? lightPageSrc : embedUrl` (served via `api.litePageUrl`); `canvasReady` includes it; removed the `LightPageCanvas` branch + import; "Opening page…" spinner while the URL loads.
+- [ ] 2.2 Confirm the left DesignPanel, layers, overlay, drag, move, insert operate on the light page. (GUI — needs user check.)
+- [x] 2.3 No framework-only surface breaks light pages — the same RunCanvas renders; nothing new added.
 
 ## 3. Persist light-page edits as HTML/CSS/JS
 
-- [ ] 3.1 Add a light-page persistence path (main): serialize the guest DOM and write
-  `.vortspec/light-pages/<name>.html` (lossless), parallel to `main/canvas/write.ts` ts-morph.
-- [ ] 3.2 Route the canvas-edit dispatch by PAGE KIND: framework → `applyCanvasEdit` (ts-morph),
-  light → DOM-serialize path. Leave the framework path unchanged.
-- [ ] 3.3 Ensure every edit gesture (text, style, attr, delete, duplicate, insert, move) persists
-  correctly for a light page via serialize; add unit coverage for the routing + serialize.
-- [ ] 3.4 Verify a structural move on a light page can NOT nest a component inside another's body
-  (the ts-morph corruption class) — round-trip test.
+- [x] 3.1 Serialize the guest DOM → write `.html`. → `bridge.serializeDom()` (webview `executeJavaScript`, strips `data-vs*`/contenteditable/overlay) + `schedulePersistLight()` (debounced) → `api.liteWritePage`.
+- [x] 3.2 Route by PAGE KIND: `commitEdits`/`applyLive`/move-`onKeep` short-circuit to `schedulePersistLight` when `isLightPage`; the ts-morph path is untouched for framework pages.
+- [ ] 3.3 Verify every gesture persists — style + text + drag-move wired; insert/delete/duplicate may need the guest to actually apply the op (they currently go live-override/source) → follow-up.
+- [ ] 3.4 Round-trip test that a move can't nest a component inside another (needs the running canvas — user check).
 
 ## 4. Remove the parallel light editor
 

@@ -12,7 +12,6 @@ import { StorybookSidebar } from "../components/run-canvas/StorybookSidebar";
 import { Sitemap } from "../components/run-canvas/Sitemap";
 import type { RouteDiscovery, RouteNode, Rect } from "@vortspec/core/ipc";
 import { RunCanvas } from "../components/run-canvas/RunCanvas";
-import { LightPageCanvas } from "../components/LightPageCanvas";
 import { Logo } from "../components/Logo";
 import { buildConvertToFrameworkPrompt } from "@vortspec/core/light-page";
 import { viewportsFromTokens, appliesInViewport, type ViewportId, type DeviceFrameKind } from "../components/run-canvas/viewports";
@@ -265,7 +264,6 @@ export function RunApp({
     isApp ? api.stopAppServer(project.path) : api.stopDevServer(project.path);
 
   const embedUrl = dev.url ? dev.url.replace(/\/+$/, "") + "/" : "";
-  const canvasReady = canvas && isApp && !!embedUrl;
 
   // ── Sitemap: the app's page/route tree, read from source (change: sitemap-tree) ──
   const [routes, setRoutes] = useState<RouteDiscovery | null>(null);
@@ -274,8 +272,17 @@ export function RunApp({
   // instead of navigating the app webview (light-design-system).
   const [lightPage, setLightPage] = useState<string | null>(null);
   const [lightPageHtml, setLightPageHtml] = useState("");
+  // The served URL for the current light page — loaded into the RunCanvas webview (light-pages-on-canvas).
+  const [lightPageSrc, setLightPageSrc] = useState("");
   const [liteStandIns, setLiteStandIns] = useState<{ component: string; variant: string; html: string }[]>([]);
   const [liteReadiness, setLiteReadiness] = useState<Record<string, "light-only" | "framework-ready">>({});
+
+  // A light page is edited in the SAME canvas: it's served from a local origin and loaded into the
+  // RunCanvas webview with the guest bridge, exactly like a framework page — so every left-sidebar
+  // control works on it. The canvas src is the served light-page URL for a light page, else the dev URL.
+  const isLightPage = !!lightPage;
+  const canvasSrc = isLightPage ? lightPageSrc : embedUrl;
+  const canvasReady = canvas && isApp && !!canvasSrc;
   // The source file of the page currently on screen — grounds canvas Apply so the agent
   // edits the previewed page (not index.html's mount shell) when an element has no known
   // component file of its own. Walks the route tree for the node at `currentPath`.
@@ -404,13 +411,16 @@ export function RunApp({
     [dev.url, bridge.loadUrl],
   );
 
-  // Load the selected light page's HTML for the editable canvas.
+  // Load the selected light page: its served URL (loaded into the canvas webview) + its standins/readiness.
   useEffect(() => {
     if (!lightPage) {
       setLightPageHtml("");
+      setLightPageSrc("");
       return;
     }
     let alive = true;
+    // Serve the page and point the canvas webview at it — the guest bridge instruments it like any page.
+    void api.litePageUrl(project.path, lightPage).then((u) => alive && setLightPageSrc(u)).catch(() => alive && setLightPageSrc(""));
     void api.liteReadPage(project.path, lightPage).then((h) => alive && setLightPageHtml(h));
     void api.liteStandIns(project.path).then((s) => alive && setLiteStandIns(s)).catch(() => alive && setLiteStandIns([]));
     void api
@@ -1265,7 +1275,12 @@ export function RunApp({
           phase: move.phase as "moved" | "reconciling" | "error",
           error: move.error,
           progress: move.progress,
-          onKeep: () => void move.keep(),
+          // Light page: the ephemeral move is already in the guest DOM — persist the serialized DOM.
+          // (move.keep() still clears the gate; its ts-morph reconcile no-ops with no React source file.)
+          onKeep: () => {
+            if (isLightPageRef.current) schedulePersistLight();
+            void move.keep();
+          },
           onRevert: () => void move.revert(),
           onStop: () => void move.cancel(),
         }
@@ -1368,6 +1383,25 @@ export function RunApp({
   // effect without stale closures or re-subscribing.
   const viewportIdRef = useRef(viewportId);
   viewportIdRef.current = viewportId;
+  // light-pages-on-canvas: pages edited in the Playground are ALWAYS light now. Their edits apply live to
+  // the guest DOM (overrides + ephemeral moves); we persist by serializing that DOM back to the .html (the
+  // DOM IS the source) — never the ts-morph React path. Refs so the debounced writer reads fresh values.
+  const isLightPageRef = useRef(isLightPage);
+  isLightPageRef.current = isLightPage;
+  const lightPageRef = useRef(lightPage);
+  lightPageRef.current = lightPage;
+  const lightPersistTimer = useRef<number | undefined>(undefined);
+  const schedulePersistLight = useCallback(() => {
+    if (!isLightPageRef.current) return;
+    window.clearTimeout(lightPersistTimer.current);
+    lightPersistTimer.current = window.setTimeout(() => {
+      const name = lightPageRef.current;
+      if (!name) return;
+      void bridge.serializeDom().then((html) => {
+        if (html != null) void api.liteWritePage(project.path, name, html);
+      });
+    }, 500);
+  }, [bridge, project.path]);
 
   // Re-scope live overrides when the viewport changes (responsive preview): a mobile/tablet
   // edit renders only in its own viewport — matching how it commits to source — so switching
@@ -1397,8 +1431,9 @@ export function RunApp({
     (css: Record<string, string>) => {
       const id = selectedIdRef.current;
       if (id) applyOverride(id, css);
+      schedulePersistLight(); // light page: the live override IS the edit — persist the serialized DOM
     },
-    [applyOverride],
+    [applyOverride, schedulePersistLight],
   );
 
   // Record pending edits once (e.g. on drag end), never per frame.
@@ -1418,6 +1453,12 @@ export function RunApp({
     ) => {
       const sel = selectionRef.current;
       if (!sel) return;
+      // A light page persists by serializing the live guest DOM (the edit is already applied there via the
+      // override/text/move) — the ts-morph React source path below never runs for it.
+      if (isLightPageRef.current) {
+        schedulePersistLight();
+        return;
+      }
       const fp = readoutRef.current?.fingerprint || undefined;
       const nodeId = selectedIdRef.current ?? undefined;
       const text = readoutRef.current?.text ?? null;
@@ -1464,7 +1505,7 @@ export function RunApp({
         });
       }
     },
-    [autoPersist],
+    [autoPersist, schedulePersistLight],
   );
 
   // Canvas drags (resize / padding / gap / margin) commit as per-element style
@@ -2246,26 +2287,11 @@ export function RunApp({
                 )}
               </div>
             </Centered>
-          ) : lightPage ? (
-            // A light page — edit it in the light canvas (no dev server needed).
-            <LightPageCanvas
-              projectPath={project.path}
-              name={lightPage}
-              html={lightPageHtml}
-              tokens={tokens}
-              standIns={liteStandIns}
-              readiness={liteReadiness}
-              onConvert={
-                dispatchTask
-                  ? (compiled) =>
-                      dispatchTask({
-                        title: `Convert to code: ${lightPage}`,
-                        allowModify: true,
-                        prompt: buildConvertToFrameworkPrompt(lightPage, compiled),
-                      })
-                  : undefined
-              }
-            />
+          ) : isLightPage && !canvasReady ? (
+            // A page is selected; its served URL is loading — it renders in the RunCanvas (below) once ready.
+            <Centered>
+              <Spinner /> Opening page…
+            </Centered>
           ) : isApp && !lightPage && routes !== null && pageCount === 0 && dev.state !== "starting" && dev.state !== "running" && dev.state !== "error" ? (
             // Brand-new blank project: nothing built yet, no pages. Don't show a dev-server/no-script error
             // or any other project's pages — greet the user and point them at the one thing they need (the
@@ -2371,7 +2397,7 @@ export function RunApp({
                   </div>
                 )}
                 <RunCanvas
-                  src={embedUrl}
+                  src={canvasSrc}
                   guestPreloadUrl={guestPreload}
                   bridge={bridge}
                   mode={mode}

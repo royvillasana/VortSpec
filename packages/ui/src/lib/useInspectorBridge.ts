@@ -15,6 +15,7 @@ interface WebviewEl extends HTMLElement {
   send(channel: string, ...args: unknown[]): void;
   reload(): void;
   loadURL(url: string): void;
+  executeJavaScript(code: string): Promise<unknown>;
 }
 
 /** Canvas input mode: select (inspect), use the app (interact), pin a comment, or place an insert slot. */
@@ -139,6 +140,11 @@ export interface InspectorBridge {
   reload: () => void;
   /** Navigate the preview to a URL (sitemap navigation) — the bridge re-attaches on load. */
   loadUrl: (url: string) => void;
+  /**
+   * Serialize the guest's LIVE DOM to clean HTML (bridge instrumentation stripped), for persisting a
+   * light page — where the DOM IS the source (light-pages-on-canvas). Null if the webview isn't ready.
+   */
+  serializeDom: () => Promise<string | null>;
 }
 
 /**
@@ -464,6 +470,29 @@ export function useInspectorBridge(): InspectorBridge {
       /* webview not ready — the caller can retry */
     }
   }, []);
+  const serializeDom = useCallback(async (): Promise<string | null> => {
+    const wv = webviewRef.current;
+    if (!wv) return null;
+    // Run in the guest: clone the live document, strip the bridge's instrumentation (any `data-vs*`
+    // attribute, contenteditable, overlay/injected style/script), and return clean HTML. The live DOM
+    // already reflects every edit (live overrides + ephemeral moves), so this is the page's new source.
+    const code = `(() => {
+      const root = document.documentElement.cloneNode(true);
+      root.querySelectorAll('[data-vs-overlay]').forEach((n) => n.remove());
+      root.querySelectorAll('style[data-vs-style], style[data-vs], script[data-vs]').forEach((n) => n.remove());
+      root.querySelectorAll('*').forEach((el) => {
+        Array.from(el.attributes).forEach((a) => { if (a.name.indexOf('data-vs') === 0) el.removeAttribute(a.name); });
+        if (el.hasAttribute('contenteditable')) el.removeAttribute('contenteditable');
+      });
+      return '<!doctype html>\\n' + root.outerHTML;
+    })()`;
+    try {
+      const html = await wv.executeJavaScript(code);
+      return typeof html === "string" ? html : null;
+    } catch {
+      return null;
+    }
+  }, []);
 
   return {
     attach,
@@ -522,5 +551,6 @@ export function useInspectorBridge(): InspectorBridge {
     requestTree,
     reload,
     loadUrl,
+    serializeDom,
   };
 }
