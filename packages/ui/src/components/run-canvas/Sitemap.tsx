@@ -1,7 +1,11 @@
 import { useState } from "react";
 import type { JSX } from "react";
-import { ChevronRight, ChevronDown, House, FileCode, Sparkles, Loader2 } from "lucide-react";
+import { ChevronRight, ChevronDown, House, FileCode, Sparkles, Loader2, Hammer, RefreshCw, Check } from "lucide-react";
 import type { RouteDiscovery, RouteNode } from "@vortspec/core/ipc";
+import { HoverTip } from "../HoverTip";
+
+/** Per-page framework-generation state (drives the Sitemap's Generate/Update icon). */
+export type PageGenState = "ungenerated" | "synced" | "stale";
 
 /**
  * The sitemap tree (change: sitemap-tree).
@@ -18,6 +22,10 @@ export function Sitemap({
   onOpenFile,
   onRetryScreenPreview,
   screenPreviewState,
+  framework,
+  generatingPage,
+  pageStates,
+  onGeneratePage,
 }: {
   discovery: RouteDiscovery | null;
   /** The route currently shown in the preview (highlighted). */
@@ -30,6 +38,14 @@ export function Sitemap({
   onRetryScreenPreview?: () => void;
   /** Progress of the automatic screen-preview setup, while it isn't yet enabled. */
   screenPreviewState?: "setting-up" | "failed";
+  /** The target framework (from project.yaml) — names it in the per-page "Generate code" tooltip. */
+  framework?: string;
+  /** The light page whose framework-code conversion is currently running (spinner on that row). */
+  generatingPage?: string | null;
+  /** Per light-page name → generation state (ungenerated / synced / stale). Drives the row's icon. */
+  pageStates?: Record<string, PageGenState>;
+  /** Convert ONE screen to the configured framework (light-pages-on-canvas §5). Absent ⇒ no per-row action. */
+  onGeneratePage?: (name: string) => void;
 }): JSX.Element {
   const [open, setOpen] = useState(true);
   const count = discovery ? countRoutes(discovery.routes) : 0;
@@ -62,6 +78,10 @@ export function Sitemap({
                   currentPath={currentPath}
                   onNavigate={onNavigate}
                   onOpenFile={onOpenFile}
+                  framework={framework}
+                  generatingPage={generatingPage}
+                  pageStates={pageStates}
+                  onGeneratePage={onGeneratePage}
                 />
               ))}
               {discovery.note && (
@@ -99,12 +119,20 @@ function RouteRow({
   currentPath,
   onNavigate,
   onOpenFile,
+  framework,
+  generatingPage,
+  pageStates,
+  onGeneratePage,
 }: {
   node: RouteNode;
   depth: number;
   currentPath: string;
   onNavigate: (path: string) => void;
   onOpenFile?: (file: string) => void;
+  framework?: string;
+  generatingPage?: string | null;
+  pageStates?: Record<string, PageGenState>;
+  onGeneratePage?: (name: string) => void;
 }): JSX.Element {
   const [open, setOpen] = useState(depth < 2);
   const hasChildren = node.children.length > 0;
@@ -117,6 +145,20 @@ function RouteRow({
   const isHome = node.path === "/";
   // A state-navigated screen: either navigable via `?param=name` or file-only via `#screen/…`.
   const isScreen = node.path.startsWith("#screen/") || node.path.startsWith("?");
+  // A VortSpec light page (`light://<name>`) — the user-created screens that can be converted to
+  // real framework code, one page at a time, via the per-row action.
+  const lightName = node.light ? node.path.slice("light://".length) : null;
+  const generating = !!lightName && generatingPage === lightName;
+  const genState: PageGenState = (lightName && pageStates?.[lightName]) || "ungenerated";
+  const fw = framework ?? "framework";
+  // Icon + tooltip by state: not generated → build it; edited since → update it; up to date → a check.
+  const genTip = generating
+    ? `Generating ${fw} code…`
+    : genState === "stale"
+      ? `Update ${fw} code`
+      : genState === "synced"
+        ? `${fw} code up to date`
+        : `Generate ${fw} code`;
   return (
     <div>
       <div
@@ -159,6 +201,32 @@ function RouteRow({
             <span className="flex-none rounded bg-vs-bg-hover px-1 text-[9px] text-vs-text-muted">screen</span>
           )}
         </button>
+        {/* Per-page "Generate code": convert THIS screen into real framework code. Icon-only with the
+            same tooltip UI as the activity bar. Hammer = generate; refresh = update after an edit; check =
+            up to date. Shown on every light page in the tree. */}
+        {lightName && onGeneratePage && (
+          <HoverTip label={genTip}>
+            <button
+              type="button"
+              disabled={generating}
+              onClick={() => onGeneratePage(lightName)}
+              aria-label={genTip}
+              className={`flex-none rounded p-1 transition-colors hover:bg-vs-bg-hover disabled:cursor-not-allowed ${
+                genState === "stale" ? "text-vs-accent hover:text-vs-accent" : "text-vs-text-muted hover:text-vs-accent"
+              }`}
+            >
+              {generating ? (
+                <Loader2 size={13} className="animate-spin text-vs-accent" />
+              ) : genState === "stale" ? (
+                <RefreshCw size={13} />
+              ) : genState === "synced" ? (
+                <Check size={13} className="text-vs-success" />
+              ) : (
+                <Hammer size={13} />
+              )}
+            </button>
+          </HoverTip>
+        )}
       </div>
       {open && hasChildren && (
         <div>
@@ -170,6 +238,10 @@ function RouteRow({
               currentPath={currentPath}
               onNavigate={onNavigate}
               onOpenFile={onOpenFile}
+              framework={framework}
+              generatingPage={generatingPage}
+              pageStates={pageStates}
+              onGeneratePage={onGeneratePage}
             />
           ))}
         </div>

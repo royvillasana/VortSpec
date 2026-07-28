@@ -9,7 +9,7 @@ import { ProjectRail, projectRailItems } from "@vortspec/ui/ProjectRail";
 import { DesignPanel, ChangesBar } from "../components/run-canvas/DesignPanel";
 import { FigmaMcpBanner } from "../components/FigmaMcpBanner";
 import { StorybookSidebar } from "../components/run-canvas/StorybookSidebar";
-import { Sitemap } from "../components/run-canvas/Sitemap";
+import { Sitemap, type PageGenState } from "../components/run-canvas/Sitemap";
 import type { RouteDiscovery, RouteNode, Rect } from "@vortspec/core/ipc";
 import { RunCanvas } from "../components/run-canvas/RunCanvas";
 import { Logo } from "../components/Logo";
@@ -306,6 +306,54 @@ export function RunApp({
     walk(routes.routes);
     return n;
   }, [routes]);
+  // "Generate code" (light-pages-on-canvas §5) — PER PAGE, from the Sitemap's per-row hammer action:
+  // convert ONE Playground screen to the configured framework (build/reuse components, then audit +
+  // visually validate). Runs in the background via the same agent-run machinery; the screen stays the
+  // editable source of truth. `generatingPage` tracks which page is in flight (spinner on that row).
+  const generateMod = useAgentRun();
+  const [generatingPage, setGeneratingPage] = useState<string | null>(null);
+  // Per light-page generation state (ungenerated / synced / stale) → the Sitemap's Generate/Update icon.
+  const [pageStates, setPageStates] = useState<Record<string, PageGenState>>({});
+  const loadGenStatus = useCallback(() => {
+    void api
+      .liteGenStatus(project.path)
+      .then((rows) => {
+        const next: Record<string, PageGenState> = {};
+        for (const r of rows) next[r.name] = !r.generated ? "ungenerated" : r.stale ? "stale" : "synced";
+        setPageStates(next);
+      })
+      .catch(() => undefined);
+  }, [project.path]);
+  const generatePage = useCallback(async (name: string): Promise<void> => {
+    const prompt = await api.liteConvertPage(project.path, name).catch(() => "");
+    if (!prompt) return;
+    setGeneratingPage(name);
+    await generateMod.start({
+      prompt,
+      cwd: project.path,
+      allowedTools: ["Read", "Write", "Edit", "Bash"],
+      bypassPermissions: true,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project.path]);
+  // When a conversion run finishes: mark that page generated (records its current HTML hash, so a later
+  // edit reads as "stale" → the icon becomes Update), then refresh the status and clear the spinner.
+  useEffect(() => {
+    if (generateMod.model.status !== "done") return;
+    const done = generatingPage;
+    setGeneratingPage(null);
+    if (done) void api.liteMarkGenerated(project.path, done).catch(() => undefined).then(loadGenStatus);
+    else loadGenStatus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [generateMod.model.status]);
+  // Load / refresh the generation status when the project or its page set changes (a new page, or an
+  // edit persisted to a light page, changes what's stale).
+  useEffect(() => loadGenStatus(), [loadGenStatus, routes]);
+  // The configured framework (project.yaml) — names it in the per-page "Generate code" tooltip.
+  const [framework, setFramework] = useState<string | null>(null);
+  useEffect(() => {
+    void api.projectConfig(project.path).then((c) => setFramework(c?.framework ?? null)).catch(() => setFramework(null));
+  }, [project.path]);
   useEffect(() => {
     if (!canvas) return;
     let alive = true;
@@ -1402,10 +1450,12 @@ export function RunApp({
       const name = lightPageRef.current;
       if (!name) return;
       void bridge.serializeDom().then((html) => {
-        if (html != null) void api.liteWritePage(project.path, name, html);
+        // Persist the edit, then refresh generation status: editing a page that was already generated
+        // makes it "stale" (its framework code no longer matches) → the row icon flips to Update.
+        if (html != null) void api.liteWritePage(project.path, name, html).then(loadGenStatus);
       });
     }, 500);
-  }, [bridge, project.path]);
+  }, [bridge, project.path, loadGenStatus]);
 
   // Re-scope live overrides when the viewport changes (responsive preview): a mobile/tablet
   // edit renders only in its own viewport — matching how it commits to source — so switching
@@ -1995,6 +2045,10 @@ export function RunApp({
         onOpenFile={openScreenFile}
         onRetryScreenPreview={enableScreenPreview}
         screenPreviewState={screenPreviewState}
+        framework={framework ?? undefined}
+        generatingPage={generatingPage}
+        pageStates={pageStates}
+        onGeneratePage={(name) => void generatePage(name)}
       />
       {mode === "comment" ? (
         <>
@@ -2103,23 +2157,38 @@ export function RunApp({
           <div className="flex-1" />
           {isLightPage ? (
             // A light page is already served + live in the canvas — no dev server to start/stop. Offer
-            // to open it in a browser and reload, not "Start app".
+            // to open it in a browser and reload (icon-only), not "Start app".
             <>
               {lightPageSrc && <span className="font-mono text-[11px] text-vs-text-secondary">{lightPageSrc.replace(/^https?:\/\//, "")}</span>}
-              <Button variant="ghost" disabled={!lightPageSrc} onClick={() => lightPageSrc && void api.openInstall(lightPageSrc)}>
-                Open in browser
-              </Button>
-              <Button variant="ghost" onClick={refresh} title="Reload the preview">
-                <RefreshIcon /> Refresh
-              </Button>
+              <button
+                type="button"
+                disabled={!lightPageSrc}
+                onClick={() => lightPageSrc && void api.openInstall(lightPageSrc)}
+                title="Open in browser"
+                aria-label="Open in browser"
+                className={HEADER_ICON_BTN}
+              >
+                <ExternalLinkIcon />
+              </button>
+              <button type="button" onClick={refresh} title="Reload the preview" aria-label="Refresh" className={HEADER_ICON_BTN}>
+                <RefreshIcon />
+              </button>
             </>
           ) : dev.state === "running" && dev.url ? (
             <>
               <span className="font-mono text-[11px] text-vs-text-secondary">{dev.url.replace(/^https?:\/\//, "")}</span>
-              <Button variant="ghost" onClick={() => void api.openInstall(dev.url!)}>Open in browser</Button>
-              <Button variant="ghost" onClick={refresh} title="Reload the live preview">
-                <RefreshIcon /> Refresh
-              </Button>
+              <button
+                type="button"
+                onClick={() => void api.openInstall(dev.url!)}
+                title="Open in browser"
+                aria-label="Open in browser"
+                className={HEADER_ICON_BTN}
+              >
+                <ExternalLinkIcon />
+              </button>
+              <button type="button" onClick={refresh} title="Reload the live preview" aria-label="Refresh" className={HEADER_ICON_BTN}>
+                <RefreshIcon />
+              </button>
               <Button variant="ghost" onClick={() => void stopFor()}>Stop</Button>
             </>
           ) : (
@@ -2619,3 +2688,17 @@ function RefreshIcon(): React.JSX.Element {
     </svg>
   );
 }
+
+function ExternalLinkIcon(): React.JSX.Element {
+  return (
+    <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M11 4h5v5" />
+      <path d="M16 4l-7 7" />
+      <path d="M8 4H5.5A1.5 1.5 0 0 0 4 5.5v9A1.5 1.5 0 0 0 5.5 16h9a1.5 1.5 0 0 0 1.5-1.5V12" />
+    </svg>
+  );
+}
+
+/** Shared style for the Playground header's icon-only actions (Open in browser, Refresh). */
+const HEADER_ICON_BTN =
+  "rounded p-1.5 text-vs-text-muted transition-colors hover:bg-vs-bg-hover hover:text-vs-text-primary disabled:cursor-not-allowed disabled:opacity-50";

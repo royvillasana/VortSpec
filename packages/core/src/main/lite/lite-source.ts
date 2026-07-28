@@ -10,6 +10,7 @@
  */
 import { basename, dirname, join } from "node:path";
 import { writeFile, readFile, readdir, mkdir } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import { getInspectorTokens } from "../inspector/token-parser";
 import { getInspectorComponents } from "../inspector/component-reader";
 import { readFigmaComponents } from "../inspector/figma-reconcile";
@@ -355,4 +356,75 @@ export async function listLightPages(projectPath: string): Promise<string[]> {
 export async function buildProjectGenerateCodePrompt(projectPath: string): Promise<string> {
   const names = await listLightPages(projectPath);
   return names.length ? buildGenerateCodePrompt(names) : "";
+}
+
+/**
+ * Build the "Generate code" prompt for ONE screen (per-page, from the Sitemap's per-row action):
+ * convert just `.vortspec/light-pages/<name>.html` to the configured framework — build/reuse components,
+ * then audit + visual-validate — reusing the same batch prompt with a single-screen list so behavior
+ * (framework from project.yaml, token discipline, validation) is identical. "" when the page is unknown.
+ */
+export async function buildProjectConvertPagePrompt(projectPath: string, name: string): Promise<string> {
+  const names = await listLightPages(projectPath);
+  return names.includes(name) ? buildGenerateCodePrompt([name]) : "";
+}
+
+// ── Per-page framework-generation state (Sitemap hammer/update icon) ──────────────────────────────
+//
+// After a light page is converted to framework code, we record a HASH of the light HTML that was
+// generated. That lets the Playground show, per page: "not generated yet" (Generate), "generated and
+// unchanged since" (up to date), or "generated but the light page was edited afterwards" (Update).
+// The record is a single JSON file — the light HTML is the source of truth; this is just a marker.
+
+const GENERATED_RECORD = `${LIGHT_PAGES_DIR}/.generated.json`;
+
+/** Content hash of a light page's HTML (null if it doesn't exist). */
+async function lightPageHash(projectPath: string, name: string): Promise<string | null> {
+  try {
+    const html = await readFile(join(projectPath, LIGHT_PAGES_DIR, `${normSegment(name)}.html`), "utf8");
+    return createHash("sha1").update(html).digest("hex");
+  } catch {
+    return null;
+  }
+}
+
+/** Read the name→hash record of light pages that have been generated to framework code. */
+async function readGeneratedRecord(projectPath: string): Promise<Record<string, string>> {
+  try {
+    const raw = await readFile(join(projectPath, GENERATED_RECORD), "utf8");
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" ? (parsed as Record<string, string>) : {};
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Per-page framework-generation status for the Sitemap. For every light page: `generated` (a framework
+ * version was produced) and `stale` (the light page was edited since that version — the code should be
+ * re-generated). An ungenerated page is `{ generated: false, stale: false }`.
+ */
+export async function liteGenerationStatus(
+  projectPath: string,
+): Promise<Array<{ name: string; generated: boolean; stale: boolean }>> {
+  const [names, record] = await Promise.all([listLightPages(projectPath), readGeneratedRecord(projectPath)]);
+  return Promise.all(
+    names.map(async (name) => {
+      const recorded = record[name];
+      if (!recorded) return { name, generated: false, stale: false };
+      const current = await lightPageHash(projectPath, name);
+      return { name, generated: true, stale: current !== null && current !== recorded };
+    }),
+  );
+}
+
+/** Mark a light page as generated: record its current HTML hash (so later edits read as "stale"). */
+export async function markPageGenerated(projectPath: string, name: string): Promise<boolean> {
+  const hash = await lightPageHash(projectPath, name);
+  if (!hash) return false;
+  const record = await readGeneratedRecord(projectPath);
+  record[name] = hash;
+  await mkdir(join(projectPath, LIGHT_PAGES_DIR), { recursive: true });
+  await writeFile(join(projectPath, GENERATED_RECORD), JSON.stringify(record, null, 2), "utf8");
+  return true;
 }

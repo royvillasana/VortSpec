@@ -104,7 +104,7 @@ import {
   snapshotManifest,
 } from "./manifest/manifest-reader";
 import type { SnapshotReason } from "@vortspec/core/manifest";
-import { getProjectPaletteHtml, writeDesignerMd, buildProjectStandInPrompt, buildProjectTwoTrackPrompt, buildProjectLightPagePrompt, buildProjectGenerateCodePrompt, readLightPage, listLightPages, writeLightPage, listInsertableStandIns, listComponentReadiness } from "./lite/lite-source";
+import { getProjectPaletteHtml, writeDesignerMd, buildProjectStandInPrompt, buildProjectTwoTrackPrompt, buildProjectLightPagePrompt, buildProjectGenerateCodePrompt, buildProjectConvertPagePrompt, liteGenerationStatus, markPageGenerated, readLightPage, listLightPages, writeLightPage, listInsertableStandIns, listComponentReadiness } from "./lite/lite-source";
 import { serveLightPages, lightPageUrl } from "./lite/light-serve";
 import {
   startDevServer,
@@ -345,6 +345,11 @@ const handlers: Record<IpcChannel, Handler> = {
   "lite:pageUrl": ((r: { projectPath: string; name: string }) =>
     serveLightPages(r.projectPath).then((base) => lightPageUrl(base, r.name))) as Handler,
   "lite:generatePrompt": ((projectPath: string) => buildProjectGenerateCodePrompt(projectPath)) as Handler,
+  "lite:convertPage": ((r: { projectPath: string; name: string }) =>
+    buildProjectConvertPagePrompt(r.projectPath, r.name)) as Handler,
+  "lite:genStatus": ((projectPath: string) => liteGenerationStatus(projectPath)) as Handler,
+  "lite:markGenerated": ((r: { projectPath: string; name: string }) =>
+    markPageGenerated(r.projectPath, r.name)) as Handler,
   "lite:standins": ((projectPath: string) => listInsertableStandIns(projectPath)) as Handler,
   "lite:readiness": ((projectPath: string) => listComponentReadiness(projectPath)) as Handler,
   "lite:pagePrompt": ((r: { projectPath: string; name: string; description: string }) =>

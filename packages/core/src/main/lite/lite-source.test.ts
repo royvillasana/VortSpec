@@ -1,5 +1,8 @@
-import { describe, expect, it } from "vitest";
-import { mapTokenGroup, mapTier, buildDeriveInput } from "./lite-source";
+import { afterEach, describe, expect, it } from "vitest";
+import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { mapTokenGroup, mapTier, buildDeriveInput, liteGenerationStatus, markPageGenerated } from "./lite-source";
 import { deriveLiteManifest } from "../../shared/lite-manifest";
 
 describe("mapTokenGroup", () => {
@@ -87,5 +90,49 @@ describe("buildDeriveInput — inspector shapes → derive input", () => {
     const input = buildDeriveInput("Acme", [], [{ name: "Button", level: "atom", props: [], readiness: "framework-ready" }]);
     // no stand-ins provided → deriveLiteManifest fills placeholders → not harvested → light-only
     expect(deriveLiteManifest(input).components[0].readiness).toBe("light-only");
+  });
+});
+
+describe("per-page framework-generation status", () => {
+  const dirs: string[] = [];
+  afterEach(async () => {
+    await Promise.all(dirs.splice(0).map((d) => rm(d, { recursive: true, force: true })));
+  });
+  async function project(pages: Record<string, string>): Promise<string> {
+    const root = await mkdtemp(join(tmpdir(), "vs-genstatus-"));
+    dirs.push(root);
+    const pagesDir = join(root, ".vortspec", "light-pages");
+    await mkdir(pagesDir, { recursive: true });
+    for (const [name, html] of Object.entries(pages)) await writeFile(join(pagesDir, `${name}.html`), html, "utf8");
+    return root;
+  }
+
+  it("an unconverted page is neither generated nor stale", async () => {
+    const root = await project({ Home: "<h1>Home</h1>" });
+    expect(await liteGenerationStatus(root)).toEqual([{ name: "Home", generated: false, stale: false }]);
+  });
+
+  it("after markPageGenerated it's generated + up to date; editing the page makes it stale", async () => {
+    const root = await project({ Home: "<h1>Home</h1>" });
+    expect(await markPageGenerated(root, "Home")).toBe(true);
+    expect(await liteGenerationStatus(root)).toEqual([{ name: "Home", generated: true, stale: false }]);
+
+    // Edit the light page → its hash changes → status reads stale (needs re-generation).
+    await writeFile(join(root, ".vortspec", "light-pages", "Home.html"), "<h1>Home v2</h1>", "utf8");
+    expect(await liteGenerationStatus(root)).toEqual([{ name: "Home", generated: true, stale: true }]);
+
+    // Re-generating (mark again) records the new hash → back to up to date.
+    await markPageGenerated(root, "Home");
+    expect(await liteGenerationStatus(root)).toEqual([{ name: "Home", generated: true, stale: false }]);
+  });
+
+  it("tracks pages independently and marking a missing page is a no-op", async () => {
+    const root = await project({ Home: "<h1>Home</h1>", About: "<h1>About</h1>" });
+    await markPageGenerated(root, "Home");
+    expect(await markPageGenerated(root, "Ghost")).toBe(false);
+    expect(await liteGenerationStatus(root)).toEqual([
+      { name: "About", generated: false, stale: false },
+      { name: "Home", generated: true, stale: false },
+    ]);
   });
 });

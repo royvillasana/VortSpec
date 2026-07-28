@@ -608,6 +608,15 @@ export const ipcContract = {
   "lite:pageUrl": { request: z.object({ projectPath: z.string(), name: z.string() }), response: z.string() },
   // the Flow "Generate code" prompt: convert ALL screens to the selected framework + audit/validate (5).
   "lite:generatePrompt": { request: z.string(), response: z.string() },
+  // per-page "Generate code" prompt (Sitemap per-row action): convert ONE screen to the selected framework.
+  "lite:convertPage": { request: z.object({ projectPath: z.string(), name: z.string() }), response: z.string() },
+  // per-page framework-generation status: generated (has a framework version) + stale (edited since).
+  "lite:genStatus": {
+    request: z.string(),
+    response: z.array(z.object({ name: z.string(), generated: z.boolean(), stale: z.boolean() })),
+  },
+  // record that a light page was generated to framework code (so later edits read as "needs update").
+  "lite:markGenerated": { request: z.object({ projectPath: z.string(), name: z.string() }), response: z.boolean() },
   // insertable design-system stand-ins (component + variant + framework-free HTML) for the canvas Insert menu.
   "lite:standins": {
     request: z.string(),

@@ -60,6 +60,10 @@
       "types": "./src/lib/useAutoComponentBuild.ts",
       "default": "./src/lib/useAutoComponentBuild.ts"
     },
+    "./useAutoFoundation": {
+      "types": "./src/lib/useAutoFoundation.ts",
+      "default": "./src/lib/useAutoFoundation.ts"
+    },
     "./canvas-selection": {
       "types": "./src/lib/canvas-selection.tsx",
       "default": "./src/lib/canvas-selection.tsx"

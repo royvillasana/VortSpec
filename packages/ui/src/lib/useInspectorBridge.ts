@@ -159,7 +159,11 @@ export interface InspectorBridge {
  */
 export function useInspectorBridge(): InspectorBridge {
   const webviewRef = useRef<WebviewEl | null>(null);
-  const attached = useRef(false);
+  // The element we've wired listeners onto. The <webview> REMOUNTS when its `src`/key changes
+  // (e.g. opening a light page), so we must re-attach to each NEW element — a once-only boolean
+  // guard would leave the remounted webview with no listeners (no "ready", no tree → uneditable
+  // until the whole app reloads). Track the element identity instead.
+  const attachedEl = useRef<WebviewEl | null>(null);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [tree, setTree] = useState<BridgeTree | null>(null);
@@ -314,8 +318,18 @@ export function useInspectorBridge(): InspectorBridge {
   const attach = useCallback(
     (el: WebviewEl | null) => {
       webviewRef.current = el;
-      if (el && !attached.current) {
-        attached.current = true;
+      if (!el) {
+        // Old element unmounted (React calls the ref with null before mounting the new one).
+        attachedEl.current = null;
+        return;
+      }
+      if (attachedEl.current !== el) {
+        // A NEW webview element (first mount, or a remount after `src`/key changed) — wire it up.
+        // Force `ready` false now: a remount carries over the old element's `ready=true`, and if the
+        // new element's `did-start-loading` is missed, the ready→true transition (which re-syncs mode,
+        // light-mode, and the tree) would never fire. Starting from false guarantees that transition.
+        attachedEl.current = el;
+        setReady(false);
         el.addEventListener("ipc-message", onIpcMessage);
         // Reset on load START (before the guest re-attaches) so we don't clobber
         // the guest's `ready`/`tree` that arrive right after DOMContentLoaded.
