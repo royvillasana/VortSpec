@@ -2227,7 +2227,22 @@ export function RunApp({
 
       {/* Storybook: portal the story nav into the dock's Section tab (canvas is app-only,
           so Storybook has no Design panel — its nav goes here instead). */}
-      {!isApp && sidebarSlot && embedUrl && createPortal(storybookNav, sidebarSlot)}
+      {/* The dock's cropped-manager sidebar drives a story-only canvas — used for VortSpec's own Storybook.
+          For an enterprise (client) Storybook, embed the FULL native manager (its own sidebar + preview) in
+          the canvas instead (reliable cross-origin); the dock just notes where it is. */}
+      {!isApp && sidebarSlot && embedUrl &&
+        createPortal(
+          enterpriseSbUrl ? (
+            <div className="flex min-h-0 flex-1 flex-col gap-2 bg-vs-bg-surface p-4 text-[12px] leading-relaxed text-vs-text-muted">
+              <span className="font-medium text-vs-text-secondary">Your Storybook</span>
+              <span>Your component library is shown live in the canvas — browse it with its own sidebar there.</span>
+              <span>Use <b className="text-vs-text-secondary">Update snapshot</b> in the header after you change a component.</span>
+            </div>
+          ) : (
+            storybookNav
+          ),
+          sidebarSlot,
+        )}
       {/* Light-first: when there's no running app canvas, the Design panel (Sitemap + "+ New light
           page") still portals here — so light pages work WITHOUT an app scaffold. */}
       {isApp && sidebarSlot && !canvasReady &&
@@ -2712,7 +2727,9 @@ export function RunApp({
                 // In the dock (sidebarSlot), the VortSpec nav drives Storybook, so show the
                 // STORY only (iframe.html) — no in-iframe manager sidebar. Otherwise (desktop)
                 // embed the full Storybook manager at its root.
-                const storyOnly = !isApp && sidebarSlot && storyId;
+                // Enterprise (client) Storybook → embed the full native manager (self-contained sidebar +
+                // preview), which works cross-origin without the dock-sidebar → story-only sync.
+                const storyOnly = !isApp && !enterpriseSbUrl && sidebarSlot && storyId;
                 const src = storyOnly
                   ? `${embedUrl}iframe.html?id=${encodeURIComponent(storyId)}&viewMode=${storyViewMode}`
                   : embedUrl;
