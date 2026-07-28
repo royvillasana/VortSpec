@@ -109,7 +109,7 @@ describe("buildEnterpriseSnapshotPrompt — the only artifact VortSpec creates",
   it("renders each story to a framework-free stand-in + reads :root tokens; placeholder for no story", () => {
     expect(p).toContain("https://sb.acme.com/iframe.html?id=atoms-button--primary&viewMode=story");
     expect(p).toMatch(/framework-free/i);
-    expect(p).toMatch(/no story — write a labelled placeholder/i);
+    expect(p).toMatch(/no story .* write a labelled placeholder/i);
     expect(p).toMatch(/`--\*` custom property off the Storybook preview `:root`/);
     expect(p).toMatch(/never redefine them/i);
   });

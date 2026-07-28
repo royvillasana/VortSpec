@@ -67,8 +67,8 @@ async function serveStaticDir(dir: string): Promise<string> {
 }
 
 /**
- * Resolve the client's Storybook to an embeddable base URL. `url` → used as-is; `static` → the
- * `storybook_source` dir served locally; `repo` → null (needs a build first). Null when not enterprise.
+ * Resolve the client's Storybook to an embeddable base URL. `url` -> used as-is; `static` -> the
+ * `storybook_source` dir served locally; `repo` -> null (needs a build first). Null when not enterprise.
  */
 export async function resolveEnterpriseStorybookUrl(projectPath: string): Promise<string | null> {
   const cfg = await readProjectConfig(projectPath);

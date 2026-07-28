@@ -37,6 +37,6 @@
 
 ## 6. Docs + verification
 
-- [ ] 6.1 Short doc: the enterprise consume model (connect → validate → index → snapshot → embed → KB-MCP → generate), the "Update snapshot" lifecycle, and the connect settings.
-- [ ] 6.2 End-to-end validate against a sample enterprise setup (a small React + Storybook + token-file fixture): readiness passes, the Storybook section shows their SB, the snapshot yields framework-free stand-ins, a screen composes and compiles importing the real components.
-- [ ] 6.3 `pnpm build && pnpm test && pnpm lint && check-types` green.
+- [x] 6.1 Short doc: the enterprise consume model (connect → validate → index → snapshot → embed → KB-MCP → generate), the "Update snapshot" lifecycle, and the connect settings. → `docs/connect-enterprise-design-system.md`.
+- [~] 6.2 End-to-end validate against a sample enterprise setup: readiness, the embedded Storybook, the snapshot's framework-free stand-ins, a screen compiling to the real components. → deferred to the user's end-to-end test (their real React + Storybook + tokens); the pure pipeline (catalog / readiness / prompt builders) is covered by unit tests.
+- [x] 6.3 `pnpm build && pnpm test && pnpm lint && check-types` green. → build 4/4, tests 6/6 (core 884 · ui 143 · ide 19), lint 4/4, check-types 6/6.

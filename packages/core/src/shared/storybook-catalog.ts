@@ -1,7 +1,7 @@
 /**
  * Storybook story catalog (connect-enterprise-design-system, group 3). Parse a Storybook's own
- * machine-readable index — `index.json` (Storybook v7/v8) or `stories.json` (v6) — into the model VortSpec
- * consumes: each component (`title`) → its stories/variants. This is the catalog that drives both the
+ * machine-readable index - `index.json` (Storybook v7/v8) or `stories.json` (v6) - into the model VortSpec
+ * consumes: each component (`title`) -> its stories/variants. This is the catalog that drives both the
  * readiness check ("does every component have a story?") and the harvest (which story renders to snapshot).
  * Pure: the fetch of the index (URL or static dir) is wiring layered on top.
  */
@@ -19,7 +19,7 @@ export interface StoryEntry {
 /** A component in the catalog: its title, a display name, and its stories. */
 export interface CatalogComponent {
   title: string;
-  /** Display name — the last path segment of the title (e.g. "Atoms/Button" → "Button"). */
+  /** Display name - the last path segment of the title (e.g. "Atoms/Button" -> "Button"). */
   component: string;
   stories: StoryEntry[];
 }
@@ -41,7 +41,7 @@ interface RawEntry {
 }
 
 /**
- * Parse a Storybook index (either `index.json` v7/v8 — `{ entries: {...} }` — or `stories.json` v6 —
+ * Parse a Storybook index (either `index.json` v7/v8 - `{ entries: {...} }` - or `stories.json` v6 -
  * `{ stories: {...} }`) into a `StoryCatalog`. Only `story` entries are kept (docs/mdx pages are
  * skipped); stories are grouped by `title` in first-seen order. Returns `[]` for an unrecognized shape.
  */
@@ -53,7 +53,7 @@ export function parseStorybookIndex(raw: unknown): StoryCatalog {
   const byTitle = new Map<string, CatalogComponent>();
   for (const value of Object.values(map as Record<string, RawEntry>)) {
     if (!value || typeof value !== "object") continue;
-    // v7/v8 entries carry a `type`; keep only stories. v6 stories.json has no type → treat as a story.
+    // v7/v8 entries carry a `type`; keep only stories. v6 stories.json has no type -> treat as a story.
     if (typeof value.type === "string" && value.type !== "story") continue;
     const id = typeof value.id === "string" ? value.id : "";
     const title = typeof value.title === "string" ? value.title : "";
