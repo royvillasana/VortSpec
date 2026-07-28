@@ -326,6 +326,50 @@ function SetupStep({
             )}
           </div>
         )}
+        {a.designSource === "enterprise" && (
+          <div className="mt-2 flex flex-col gap-3">
+            <p className="text-[11px] leading-relaxed text-vs-text-muted">
+              VortSpec <b className="text-vs-text-secondary">consumes</b> your existing design system — it references your
+              components, tokens, Storybook, and knowledge base, and never rebuilds or copies them.
+            </p>
+            {/* Storybook — required; the single source for the embedded Storybook view AND the light snapshot. */}
+            <div className="flex flex-col gap-2">
+              <Radios
+                options={[
+                  { value: "url", label: "Storybook URL", hint: "Hosted or a local dev server (localhost:6006)" },
+                  { value: "static", label: "Static build", hint: "A storybook-static/ folder" },
+                  { value: "repo", label: "Build from repo", hint: "We run build-storybook" },
+                ]}
+                value={a.enterpriseStorybookKind ?? "url"}
+                onChange={(v) => set("enterpriseStorybookKind", v as SetupAnswers["enterpriseStorybookKind"])}
+              />
+              {(a.enterpriseStorybookKind ?? "url") === "static" ? (
+                <Text label="Static Storybook folder" value={a.enterpriseStorybookRef ?? ""} placeholder="storybook-static" onChange={(v) => set("enterpriseStorybookRef", v)} />
+              ) : (a.enterpriseStorybookKind ?? "url") === "repo" ? (
+                <Text label="Repository (we build the Storybook)" value={a.enterpriseStorybookRef ?? ""} placeholder="https://github.com/org/design-system" onChange={(v) => set("enterpriseStorybookRef", v)} />
+              ) : (
+                <Text label="Storybook URL" value={a.enterpriseStorybookRef ?? ""} placeholder="https://storybook.acme.com or http://localhost:6006" onChange={(v) => set("enterpriseStorybookRef", v)} />
+              )}
+            </div>
+            {/* Optional: code repo so Generate code can import their real components. */}
+            <Text label="Component code repository (optional)" value={a.enterpriseRepoUrl ?? ""} placeholder="https://github.com/org/design-system — lets Generate code import your real components" onChange={(v) => set("enterpriseRepoUrl", v)} />
+            {/* Optional: knowledge base, consumed read-only via MCP as grounding. */}
+            <div className="flex flex-col gap-2">
+              <Radios
+                options={[
+                  { value: "docs-repo", label: "Docs repository", hint: "Markdown/docs repo (zero setup)" },
+                  { value: "site", label: "Docs site / wiki", hint: "A URL we read" },
+                  { value: "mcp", label: "Your MCP server", hint: "You already expose a KB MCP endpoint" },
+                ]}
+                value={a.enterpriseKbKind ?? "docs-repo"}
+                onChange={(v) => set("enterpriseKbKind", v as SetupAnswers["enterpriseKbKind"])}
+              />
+              <Text label="Knowledge base (optional)" value={a.enterpriseKbRef ?? ""} placeholder="repo URL, docs site URL, or your MCP endpoint — how your org uses the design system" onChange={(v) => set("enterpriseKbRef", v)} />
+            </div>
+            {/* Optional: read-only Figma reference. VortSpec never calls Figma directly — only via the read-only MCP. */}
+            <Text label="Figma design system (optional, read-only)" value={a.figmaFileUrl ?? ""} placeholder="https://www.figma.com/design/… — read-only reference" onChange={(v) => set("figmaFileUrl", v)} />
+          </div>
+        )}
       </Field>
 
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
@@ -634,6 +678,8 @@ function isReady(a: SetupAnswers): boolean {
       ? (a.stitchApiKey ?? "").trim().length >= 10
       : (a.stitchZipPath ?? "").endsWith(".zip");
   }
+  // Enterprise: a Storybook source is required (the single source we consume); the rest is optional.
+  if (a.designSource === "enterprise") return (a.enterpriseStorybookRef ?? "").trim().length > 0;
   return a.tokenFile.trim().length > 0 && a.componentDir.trim().length > 0;
 }
 
