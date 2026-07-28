@@ -2263,16 +2263,31 @@ export function RunApp({
               Unsaved
             </span>
           )}
-          <span className="rounded border border-vs-border-default px-1.5 py-px text-[10px] uppercase tracking-wide text-vs-text-muted">
-            localhost
-          </span>
+          {!(!isApp && enterpriseSbUrl) && (
+            <span className="rounded border border-vs-border-default px-1.5 py-px text-[10px] uppercase tracking-wide text-vs-text-muted">
+              localhost
+            </span>
+          )}
           <span className="text-xs text-vs-text-muted">
             {isApp
               ? "Describe a screen in Chat — it's built from your components and appears here live."
-              : "Your component library, running live from Storybook."}
+              : !isApp && enterpriseSbUrl
+                ? "Your Storybook, embedded as-is."
+                : "Your component library, running live from Storybook."}
           </span>
           <div className="flex-1" />
-          {isLightPage ? (
+          {!isApp && enterpriseSbUrl ? (
+            // Enterprise: the client's own Storybook, embedded as-is — no VortSpec server to start/stop.
+            <>
+              <span className="font-mono text-[11px] text-vs-text-secondary">{enterpriseSbUrl.replace(/^https?:\/\//, "")}</span>
+              <button type="button" onClick={() => void api.openInstall(enterpriseSbUrl)} title="Open in browser" aria-label="Open in browser" className={HEADER_ICON_BTN}>
+                <ExternalLinkIcon />
+              </button>
+              <button type="button" onClick={refresh} title="Reload" aria-label="Refresh" className={HEADER_ICON_BTN}>
+                <RefreshIcon />
+              </button>
+            </>
+          ) : isLightPage ? (
             // A light page is already served + live in the canvas — no dev server to start/stop. Offer
             // to open it in a browser and reload (icon-only), not "Start app".
             <>
@@ -2424,7 +2439,7 @@ export function RunApp({
           </div>
         )}
 
-        {!isApp && sb.phase === "gap" && (
+        {!isApp && !enterpriseSbUrl && sb.phase === "gap" && (
           <div className="flex flex-none items-center gap-3 border-b border-vs-warning/40 bg-vs-warning/10 px-5 py-2.5 text-[12px]">
             <span className="text-vs-warning">⚠</span>
             <span className="min-w-0 flex-1 text-vs-text-primary">
