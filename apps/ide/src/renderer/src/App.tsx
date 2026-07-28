@@ -644,7 +644,7 @@ export default function App(): JSX.Element {
               ) : autoFoundation.extracting ? (
                 <>
                   <span className="h-3 w-3 animate-spin rounded-full border-2 border-vs-border-strong border-t-vs-accent" aria-hidden />
-                  <span>Setting up your design system in the background — extracting tokens &amp; detecting components…</span>
+                  <span>Setting up your design system in the background — this can take a few minutes…</span>
                 </>
               ) : (
                 <>

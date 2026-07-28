@@ -74,7 +74,12 @@ export async function resolveEnterpriseStorybookUrl(projectPath: string): Promis
   const cfg = await readProjectConfig(projectPath);
   if (cfg?.designSource !== "enterprise" || !cfg.storybookSource) return null;
   const kind = cfg.storybookSourceKind ?? "url";
-  if (kind === "url") return cfg.storybookSource.replace(/\/+$/, "") + "/";
+  if (kind === "url") {
+    // Users often paste the Storybook MANAGER url (…/?path=/story/…) — strip the query/hash to the base
+    // so `iframe.html` + `index.json` resolve against the Storybook root, not a specific story view.
+    const base = cfg.storybookSource.split(/[?#]/)[0].replace(/\/+$/, "");
+    return base + "/";
+  }
   if (kind === "static") {
     const dir = isAbsolute(cfg.storybookSource) ? cfg.storybookSource : join(projectPath, cfg.storybookSource);
     try {
