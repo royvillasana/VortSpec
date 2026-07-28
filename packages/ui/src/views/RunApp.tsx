@@ -363,18 +363,17 @@ export function RunApp({
   useEffect(() => loadGenStatus(), [loadGenStatus, routes]);
   // The configured framework (project.yaml) — names it in the per-page "Generate code" tooltip.
   useEffect(() => {
-    void api
-      .projectConfig(project.path)
-      .then((c) => {
-        setFramework(c?.framework ?? null);
-        const isEnterpriseUrlSb =
-          c?.designSource === "enterprise" && (c?.storybookSourceKind ?? "url") === "url" && !!c?.storybookSource;
-        setEnterpriseSbUrl(isEnterpriseUrlSb ? (c!.storybookSource as string) : null);
-      })
-      .catch(() => {
-        setFramework(null);
-        setEnterpriseSbUrl(null);
-      });
+    void api.projectConfig(project.path).then((c) => setFramework(c?.framework ?? null)).catch(() => setFramework(null));
+    // Resolve the enterprise Storybook to an embeddable URL (a client URL as-is, or a served static build).
+    void api.enterpriseStorybookUrl(project.path).then(setEnterpriseSbUrl).catch(() => setEnterpriseSbUrl(null));
+  }, [project.path]);
+  // "Update snapshot" (enterprise): re-read the client's Storybook and regenerate the light stand-ins.
+  const snapshotMod = useAgentRun();
+  const updateSnapshot = useCallback(async (): Promise<void> => {
+    const prompt = await api.enterpriseSnapshotPrompt(project.path).catch(() => "");
+    if (!prompt) return;
+    await snapshotMod.start({ prompt, cwd: project.path, allowedTools: ["Read", "Write", "Edit", "Bash"], bypassPermissions: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project.path]);
   useEffect(() => {
     if (!canvas) return;
@@ -2230,6 +2229,24 @@ export function RunApp({
       <main className="flex min-w-0 flex-1 flex-col bg-vs-bg-primary">
         <header className="flex flex-none items-center gap-3 border-b border-vs-border-default px-5 py-3">
           <span className="text-[15px] font-semibold">{isApp ? "Playground" : "Storybook"}</span>
+          {/* Enterprise: this is the CLIENT's Storybook, embedded as-is. "Update snapshot" re-reads it and
+              regenerates the Playground's light stand-ins (created once, refreshed on demand). */}
+          {!isApp && enterpriseSbUrl && (
+            <>
+              <span className="rounded border border-vs-border-default px-1.5 py-px text-[10px] uppercase tracking-wide text-vs-text-muted">
+                your Storybook
+              </span>
+              <button
+                type="button"
+                disabled={snapshotMod.running}
+                onClick={() => void updateSnapshot()}
+                title="Re-read your Storybook and refresh the Playground's design-system snapshot (the light stand-ins)."
+                className="rounded border border-vs-border-strong px-2.5 py-1 text-[11px] text-vs-text-secondary hover:border-vs-accent hover:text-vs-text-primary disabled:opacity-50"
+              >
+                {snapshotMod.running ? "Updating snapshot…" : "Update snapshot"}
+              </button>
+            </>
+          )}
           {dirty && (
             <span
               data-testid="canvas-dirty"

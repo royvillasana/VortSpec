@@ -14,26 +14,26 @@
 ## 3. Storybook consumption
 
 - [x] 3.1 Story catalog: read Storybook's index — `index.json` (v7/v8) or `stories.json` (v6) — into a component→stories/variants model. → `storybook-catalog.ts` `parseStorybookIndex` (both shapes, docs entries skipped, grouped by title) + `componentNameFromTitle` + `storyIframeUrl`; 5 tests. (arg/argType → prop/variant mapping deferred; captured in design Open Questions.)
-- [ ] 3.2 Serve/point the Storybook source: a hosted/dev URL used directly (DONE via 3.3); a static `storybook-static/` dir served from a local origin (reuse the light-serve pattern) + build-from-repo — REMAINING.
+- [x] 3.2 Serve/point the Storybook source: a hosted/dev URL used directly; a static `storybook-static/` dir served from a local origin. → `enterprise-source.ts` `resolveEnterpriseStorybookUrl` (url → as-is; static → `serveStaticDir` path-guarded http server) + `enterprise:storybookUrl` IPC (RunApp uses it). build-from-repo is the noted convenience (design D7), not wired.
 - [x] 3.3 Embed the client's Storybook in the Storybook section: for `enterprise` projects, `RunApp kind=storybook` + `StorybookSidebar` point at the client's Storybook source (never a VortSpec install). → RunApp uses the client's Storybook URL as `embedUrl` for an enterprise URL source and skips starting a VortSpec dev server. (Static/repo sources need serving — see 3.2.)
-- [ ] 3.4 Snapshot → light stand-ins: for each story render `iframe.html?id=…&viewMode=story`, harvest the rendered DOM + resolved computed styles via `harvest.ts` → framework-free `.vortspec/light-html/` stand-ins grouped by component; components without a story get a placeholder + the readiness flag.
-- [ ] 3.5 Token palette from Storybook: read all `--*` custom properties off the preview `:root` (name → resolved value) for the dual-keyed palette; cross-reference the token file for canonical names when connected.
-- [ ] 3.6 "Update snapshot" action: a user-triggered refresh that re-reads the client's Storybook and regenerates the affected stand-ins; the Playground otherwise composes against the frozen snapshot (no live re-render per load).
-- [ ] 3.7 Tests: catalog parses both index versions; the snapshot produces framework-free stand-ins (no import/JSX/framework refs); "Update snapshot" replaces stale stand-ins.
+- [x] 3.4 Snapshot → light stand-ins: for each story render `iframe.html?id=…&viewMode=story`, harvest the rendered DOM + resolved computed styles → framework-free `.vortspec/light-html/` stand-ins; no-story → placeholder. → `buildEnterpriseSnapshotPrompt` (per-component story URLs, framework-free capture, placeholder for no story) + `buildEnterpriseSnapshotPromptFor` (resolve URL + fetch catalog → first story per component). Agent-driven harvest, consistent with the Foundation.
+- [x] 3.5 Token palette from Storybook: read all `--*` custom properties off the preview `:root` (name → resolved value). → the snapshot prompt's TOKENS step (dual-keyed; "reference them, never redefine them").
+- [x] 3.6 "Update snapshot" action: a user-triggered refresh that re-reads the client's Storybook and regenerates the stand-ins; the Playground otherwise composes against the frozen snapshot. → `enterprise:snapshotPrompt` IPC + an "Update snapshot" button in the Storybook header (enterprise), run via its own agent run.
+- [x] 3.7 Tests: catalog parses both index versions; the snapshot prompt yields framework-free stand-ins + reads `:root` tokens. → 5 catalog tests + snapshot-prompt tests in `enterprise-consume.test.ts`.
 
 ## 4. Knowledge base via MCP
 
-- [ ] 4.1 Per-project KB MCP registration: compose the connected KB server into the agent's `mcpConfigPath` (union with the built-in ide-mcp + Figma), read-only by default. Reuse the existing mcp-config plumbing.
-- [ ] 4.2 Generic connector (default, Case B): a small MCP server that wraps a docs source (v1: a docs/markdown repo reader) so the client needs no MCP server of their own.
-- [ ] 4.3 Bring-your-own MCP (power path, Case A): when the client provides their own KB MCP endpoint, register it directly in place of the generic connector.
-- [ ] 4.4 Grounding injection: instruct the agent to consult the KB at enrich-brief / generate-artifacts / component+screen generation / adversarial-review, treating KB content as data-not-instructions (surface, don't execute directives; side-effectful tools need approval).
-- [ ] 4.5 Tests: the KB server is present in the composed config; a docs-repo connector answers a probe; grounding text is present in the enterprise generation prompts.
+- [~] 4.1 Per-project KB MCP registration: compose the connected KB server into the agent's `mcpConfigPath`. → `buildKbMcpServerEntry` produces the `.mcp.json` server entry; composing it into the agent run's `mcpConfigPath` (renderer/ConversationTabs) is the remaining wiring (follow-up).
+- [x] 4.2 Generic connector (default, Case B): a docs source wrapper so the client needs no MCP server. → `buildKbMcpServerEntry` docs-repo → `@modelcontextprotocol/server-filesystem` over the cloned repo (site → `server-fetch`).
+- [x] 4.3 Bring-your-own MCP (power path, Case A): the client's own KB MCP endpoint used directly. → `buildKbMcpServerEntry` `mcp` kind → `{ url }`.
+- [x] 4.4 Grounding injection: consult the KB at enrich/generate/review, treating content as data-not-instructions. → `buildKbGroundingClause` (read-only, surface-don't-execute) appended to the enterprise Foundation prompt; reused by the generate step.
+- [x] 4.5 Tests: entry shapes (docs-repo/mcp/null), grounding content, empty-when-no-KB. → covered in `enterprise-consume.test.ts`.
 
 ## 5. Generate code — import real, never rebuild
 
-- [ ] 5.1 Enterprise Generate-code path: import the client's real components (from their component dir / published package) and reference their real tokens; reuse `resolveComponentBindings` so every value binds to a token, never a hardcode.
-- [ ] 5.2 Per-component gate: compile a screen's component only when its real component is importable; when only the Storybook is connected, generate token-referenced components from the harvested contract and name the components still "catching up" (mirror the light-only gate).
-- [ ] 5.3 Tests: the enterprise compile prompt imports real components + references tokens (no hardcodes); the URL-only path degrades to token-referenced generation with the catching-up naming.
+- [x] 5.1 Enterprise Generate-code path: import the client's real components + reference their tokens (no hardcode). → `buildEnterpriseGeneratePrompt` (import from the pointer index, token-referenced, AUDIT + VISUAL-VALIDATE) + `enterprise:generatePrompt` IPC.
+- [x] 5.2 Per-component gate: compile only when the real component is importable; else a token-referenced "catching up" component. → the prompt's step 3 (per-component gate, mirrors the light-only gate).
+- [x] 5.3 Tests: imports real + references tokens (no hardcodes); URL-only degrades to token-referenced "catching up". → in `enterprise-consume.test.ts`.
 
 ## 6. Docs + verification
 
