@@ -56,11 +56,19 @@ export function useAutoComponentBuild(
     let poll: number | undefined;
     const check = async (): Promise<void> => {
       if (!alive || startedRef.current === project.path) return;
-      const [comps, active] = await Promise.all([
+      const [comps, active, cfg] = await Promise.all([
         api.inspectorComponents(project.path).catch(() => null),
         api.hasActiveRun(project.path).catch(() => false),
+        api.projectConfig(project.path).catch(() => null),
       ]);
       if (!alive || startedRef.current === project.path) return;
+      // Enterprise projects CONSUME an existing component library — never auto-BUILD their components
+      // (that would create VortSpec-owned look-alikes that drift from their source). Claim + stop.
+      if (cfg?.designSource === "enterprise") {
+        startedRef.current = project.path;
+        if (poll) window.clearInterval(poll);
+        return;
+      }
       if (!comps || active) return; // no data yet, or a run is in flight — re-check next tick
       const unbuilt = comps.components.filter((c) => c.status === "unknown");
       if (unbuilt.length === 0) return; // design system not created yet — keep polling
