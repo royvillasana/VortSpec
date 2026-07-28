@@ -15,7 +15,10 @@
 
 - [x] 3.1 Serialize the guest DOM → write `.html`. → `bridge.serializeDom()` (webview `executeJavaScript`, strips `data-vs*`/contenteditable/overlay) + `schedulePersistLight()` (debounced) → `api.liteWritePage`.
 - [x] 3.2 Route by PAGE KIND: `commitEdits`/`applyLive`/move-`onKeep` short-circuit to `schedulePersistLight` when `isLightPage`; the ts-morph path is untouched for framework pages.
-- [ ] 3.3 Verify every gesture persists — style + text + drag-move wired; insert/delete/duplicate may need the guest to actually apply the op (they currently go live-override/source) → follow-up.
+- [x] 3.3 Verify every gesture persists — style + text + drag-move wired. DELETE now truly removes the
+  node on a light page (new `removeNode` bridge command → guest detaches the element → serialized DOM
+  omits it), instead of a `display:none` override that persisted it hidden. (Insert composes real
+  stand-in DOM which serializes; duplicate has no dedicated gesture yet.)
 - [ ] 3.4 Round-trip test that a move can't nest a component inside another (needs the running canvas — user check).
 
 ## 4. Remove the parallel light editor

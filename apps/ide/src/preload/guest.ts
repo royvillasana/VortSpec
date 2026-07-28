@@ -1044,6 +1044,16 @@ function handleCommand(cmd: BridgeCommand): void {
       }
       return;
     }
+    case "removeNode": {
+      // True delete for a light page: detach the element so it's gone from the serialized DOM
+      // (a `display:none` override would persist it, hidden). Refresh the tree so layers update.
+      const el = resolve(cmd.nodeId);
+      if (el && el !== document.body && el !== document.documentElement) {
+        el.remove();
+        send({ t: "tree", tree: buildTree() });
+      }
+      return;
+    }
     case "setClass": {
       const el = resolve(cmd.nodeId);
       if (el) {

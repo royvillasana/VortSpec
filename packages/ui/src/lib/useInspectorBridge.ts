@@ -59,6 +59,8 @@ export interface InspectorBridge {
   clearSelectionLost: () => void;
   /** Set an element's visible text live (from the sidebar Content input). */
   setText: (id: string, text: string) => void;
+  /** Remove an element from the DOM — a true delete for a light page (DOM is the source). */
+  removeNode: (id: string) => void;
   /** Swap classes on an element for a live variant preview. */
   setClass: (id: string, remove: string[], add: string[]) => void;
   select: (id: string | null) => void;
@@ -442,6 +444,7 @@ export function useInspectorBridge(): InspectorBridge {
   }, []);
 
   const setText = useCallback((id: string, text: string) => send({ t: "setText", nodeId: id, text }), [send]);
+  const removeNode = useCallback((id: string) => send({ t: "removeNode", nodeId: id }), [send]);
   const setClass = useCallback(
     (id: string, remove: string[], add: string[]) => send({ t: "setClass", nodeId: id, remove, add }),
     [send],
@@ -557,6 +560,7 @@ export function useInspectorBridge(): InspectorBridge {
     scrollToAnchor,
     captureThumbnail,
     setText,
+    removeNode,
     setClass,
     select,
     hover,

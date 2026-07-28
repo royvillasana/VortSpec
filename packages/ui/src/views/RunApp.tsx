@@ -1579,11 +1579,20 @@ export function RunApp({
   const deleteSelected = useCallback(() => {
     const id = selectedIdRef.current;
     if (!id || !selectionRef.current) return;
+    // A light page's DOM IS its source: actually REMOVE the node so it's gone from the serialized
+    // HTML (a display:none override would persist it, hidden), then persist. Framework pages keep the
+    // override + ts-morph source-delete path.
+    if (isLightPageRef.current) {
+      bridge.removeNode(id);
+      select(null);
+      schedulePersistLight();
+      return;
+    }
     const css = { display: "none" };
     applyOverride(id, css);
     commitEdits([{ key: "remove", value: "", cssProps: ["display"], css, remove: true, label: "Delete element" }]);
     select(null);
-  }, [applyOverride, commitEdits, select]);
+  }, [applyOverride, commitEdits, select, bridge, schedulePersistLight]);
 
   // A Design-panel field edit → live override + a recorded pending edit.
   const onFieldChange = useCallback(
