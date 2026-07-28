@@ -2227,22 +2227,9 @@ export function RunApp({
 
       {/* Storybook: portal the story nav into the dock's Section tab (canvas is app-only,
           so Storybook has no Design panel — its nav goes here instead). */}
-      {/* The dock's cropped-manager sidebar drives a story-only canvas — used for VortSpec's own Storybook.
-          For an enterprise (client) Storybook, embed the FULL native manager (its own sidebar + preview) in
-          the canvas instead (reliable cross-origin); the dock just notes where it is. */}
-      {!isApp && sidebarSlot && embedUrl &&
-        createPortal(
-          enterpriseSbUrl ? (
-            <div className="flex min-h-0 flex-1 flex-col gap-2 bg-vs-bg-surface p-4 text-[12px] leading-relaxed text-vs-text-muted">
-              <span className="font-medium text-vs-text-secondary">Your Storybook</span>
-              <span>Your component library is shown live in the canvas — browse it with its own sidebar there.</span>
-              <span>Use <b className="text-vs-text-secondary">Update snapshot</b> in the header after you change a component.</span>
-            </div>
-          ) : (
-            storybookNav
-          ),
-          sidebarSlot,
-        )}
+      {/* The dock's cropped-manager sidebar (a <webview>) drives the story-only canvas — the same split for
+          VortSpec's OWN Storybook and a client's enterprise Storybook. */}
+      {!isApp && sidebarSlot && embedUrl && createPortal(storybookNav, sidebarSlot)}
       {/* Light-first: when there's no running app canvas, the Design panel (Sitemap + "+ New light
           page") still portals here — so light pages work WITHOUT an app scaffold. */}
       {isApp && sidebarSlot && !canvasReady &&
@@ -2724,19 +2711,17 @@ export function RunApp({
           ) : embedUrl ? (
             <div className="relative h-full min-h-[340px]">
               {(() => {
-                // In the dock (sidebarSlot), the VortSpec nav drives Storybook, so show the
-                // STORY only (iframe.html) — no in-iframe manager sidebar. Otherwise (desktop)
-                // embed the full Storybook manager at its root.
-                // Enterprise (client) Storybook → embed the full native manager (self-contained sidebar +
-                // preview), which works cross-origin without the dock-sidebar → story-only sync.
-                const storyOnly = !isApp && !enterpriseSbUrl && sidebarSlot && storyId;
+                // In the dock (sidebarSlot), the nav drives Storybook, so the canvas shows the STORY ONLY
+                // (iframe.html) — no in-frame manager sidebar. Otherwise (desktop) embed the full manager.
+                // Same split for VortSpec's own AND a client's enterprise Storybook.
+                const storyOnly = !isApp && sidebarSlot && storyId;
                 const src = storyOnly
                   ? `${embedUrl}iframe.html?id=${encodeURIComponent(storyId)}&viewMode=${storyViewMode}`
                   : embedUrl;
                 // A cross-origin HOSTED Storybook (enterprise) won't render in an <iframe> — its
                 // X-Frame-Options blocks it. A <webview> is a separate WebContents, not subject to that,
-                // so it loads the client's Storybook the same way the dock nav does. Same-origin VortSpec
-                // Storybook stays an <iframe> (lighter, and the story-only sync needs it).
+                // so it loads the client's story the same way the dock nav loads its manager. Same-origin
+                // VortSpec Storybook stays an <iframe> (lighter).
                 return enterpriseSbUrl
                   ? // Electron <webview> intrinsic (not in React's JSX types) — created imperatively, like
                     // RunCanvas/StorybookSidebar. A separate WebContents, so X-Frame-Options can't block it.
