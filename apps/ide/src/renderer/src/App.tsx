@@ -108,8 +108,12 @@ export default function App(): JSX.Element {
   // user lands there straight from intake instead of having to visit the SDD-DE pipeline first.
   const autoFoundation = useAutoFoundation(workspace);
   const [buildNotice, setBuildNotice] = useState<string | null>(null);
+  // The background-build indicator is dismissable — once the user hides it, keep it hidden for the rest
+  // of this build session; a fresh completion notice re-shows it (reset below).
+  const [buildIndicatorDismissed, setBuildIndicatorDismissed] = useState(false);
   useEffect(() => {
     if (autoBuild.justFinished === 0) return;
+    setBuildIndicatorDismissed(false); // the "✓ ready" notice shows even if the spinner was dismissed
     setBuildNotice("Design-system components are built and verified — ready for Generate code.");
     const t = window.setTimeout(() => setBuildNotice(null), 8000);
     return () => window.clearTimeout(t);
@@ -629,7 +633,7 @@ export default function App(): JSX.Element {
       <div className="flex h-screen w-screen flex-col overflow-hidden bg-vs-bg-primary text-vs-text-primary">
         {/* Automatic background component build (light-pages-on-canvas §9): a quiet running indicator +
             a completion toast, so the user knows the design-system components are building while they work. */}
-        {(autoFoundation.extracting || autoBuild.building || buildNotice) && (
+        {(autoFoundation.extracting || autoBuild.building || buildNotice) && !buildIndicatorDismissed && (
           <div className="pointer-events-none fixed bottom-4 left-1/2 z-[60] -translate-x-1/2">
             <div className="pointer-events-auto flex items-center gap-2 rounded-lg border border-vs-border-default bg-vs-bg-elevated/95 px-3 py-2 text-[12px] text-vs-text-secondary shadow-lg backdrop-blur">
               {buildNotice ? (
@@ -648,6 +652,17 @@ export default function App(): JSX.Element {
                   <span>Building design-system components in the background…{autoBuild.remaining > 0 ? ` ${autoBuild.remaining} left` : ""}</span>
                 </>
               )}
+              <button
+                type="button"
+                onClick={() => setBuildIndicatorDismissed(true)}
+                aria-label="Dismiss"
+                title="Dismiss — the build keeps running in the background"
+                className="ml-1 rounded p-0.5 text-vs-text-muted transition-colors hover:bg-vs-bg-hover hover:text-vs-text-primary"
+              >
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" aria-hidden>
+                  <path d="M3 3l6 6M9 3l-6 6" />
+                </svg>
+              </button>
             </div>
           </div>
         )}
