@@ -332,6 +332,17 @@ export const bridgeCommandSchema = z.discriminatedUnion("t", [
    * detaches it so it's actually gone. Framework pages use the ts-morph source-delete path instead.
    */
   z.object({ t: z.literal("removeNode"), nodeId: z.string() }),
+  /**
+   * MOVE a node before/after another (layers-tree drag-to-reorder). Reinserts `nodeId` into
+   * `targetId`'s parent at the given side — the page rearranges to match the new order. Rejected
+   * when the target is inside the node's own subtree. Persisted by serializing the DOM (light page).
+   */
+  z.object({
+    t: z.literal("moveNode"),
+    nodeId: z.string(),
+    targetId: z.string(),
+    position: z.enum(["before", "after"]),
+  }),
   /** Swap classes on a node for a live variant preview (remove old, add new). */
   z.object({
     t: z.literal("setClass"),

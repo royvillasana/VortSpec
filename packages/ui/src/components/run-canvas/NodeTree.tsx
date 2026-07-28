@@ -16,15 +16,21 @@ export const NodeTree = memo(function NodeTree({
   hoveredId,
   onSelect,
   onHover,
+  onReorder,
 }: {
   tree: BridgeTree | null;
   selectedId: string | null;
   hoveredId?: string | null;
   onSelect: (id: string) => void;
   onHover?: (id: string | null) => void;
+  /** Drag-to-reorder: move `nodeId` before/after `targetId` (the page rearranges to match). */
+  onReorder?: (nodeId: string, targetId: string, position: "before" | "after") => void;
 }): JSX.Element {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const selectedRef = useRef<HTMLButtonElement | null>(null);
+  // Drag-to-reorder state: the row being dragged, and the current drop target + side.
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [dropAt, setDropAt] = useState<{ id: string; pos: "before" | "after" } | null>(null);
 
   // child id → parent id, so we can reveal a node selected on the canvas.
   const parentOf = useMemo(() => {
@@ -77,16 +83,60 @@ export const NodeTree = memo(function NodeTree({
     const hasKids = kids.length > 0 || node.childCount > 0;
     const isOpen = expanded.has(id);
     const isSelected = selectedId === id;
+    const dropHere = dropAt?.id === id ? dropAt.pos : null;
     const row = (
       <button
         key={id}
         ref={isSelected ? selectedRef : undefined}
         type="button"
+        draggable={!!onReorder}
         onClick={() => onSelect(id)}
         onMouseEnter={() => onHover?.(id)}
         onMouseLeave={() => onHover?.(null)}
+        onDragStart={
+          onReorder
+            ? (e) => {
+                setDragId(id);
+                e.dataTransfer.effectAllowed = "move";
+                // Firefox needs data set for a drag to start.
+                e.dataTransfer.setData("text/plain", id);
+              }
+            : undefined
+        }
+        onDragOver={
+          onReorder
+            ? (e) => {
+                if (!dragId || dragId === id) return;
+                e.preventDefault();
+                e.dataTransfer.dropEffect = "move";
+                const r = e.currentTarget.getBoundingClientRect();
+                const pos: "before" | "after" = e.clientY < r.top + r.height / 2 ? "before" : "after";
+                setDropAt((cur) => (cur?.id === id && cur.pos === pos ? cur : { id, pos }));
+              }
+            : undefined
+        }
+        onDrop={
+          onReorder
+            ? (e) => {
+                e.preventDefault();
+                if (dragId && dragId !== id && dropAt?.id === id) onReorder(dragId, id, dropAt.pos);
+                setDragId(null);
+                setDropAt(null);
+              }
+            : undefined
+        }
+        onDragEnd={
+          onReorder
+            ? () => {
+                setDragId(null);
+                setDropAt(null);
+              }
+            : undefined
+        }
         style={{ paddingLeft: 6 + depth * 12 }}
-        className={`flex w-full items-center gap-1 py-[3px] pr-2 text-left text-[12px] ${
+        className={`relative flex w-full items-center gap-1 py-[3px] pr-2 text-left text-[12px] ${
+          dragId === id ? "opacity-40" : ""
+        } ${
           isSelected
             ? "bg-vs-accent-subtle text-vs-text-primary"
             : hoveredId === id
@@ -94,6 +144,15 @@ export const NodeTree = memo(function NodeTree({
               : "text-vs-text-secondary hover:bg-vs-bg-hover"
         }`}
       >
+        {/* Drop indicator — an accent line at the row's top/bottom edge. */}
+        {dropHere && (
+          <span
+            aria-hidden
+            className={`pointer-events-none absolute inset-x-1 h-0.5 rounded-full bg-vs-accent ${
+              dropHere === "before" ? "top-0" : "bottom-0"
+            }`}
+          />
+        )}
         <span
           role={hasKids ? "button" : undefined}
           onClick={

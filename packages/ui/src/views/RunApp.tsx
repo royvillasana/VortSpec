@@ -1641,6 +1641,19 @@ export function RunApp({
     select(null);
   }, [applyOverride, commitEdits, select, bridge, schedulePersistLight]);
 
+  // Layers-tree drag-to-reorder: move a node before/after another in the guest DOM, so the page
+  // rearranges to match, then persist (serialize the DOM). Light pages only — a framework page's order
+  // lives in React source, which this DOM move wouldn't write. Persist captures the undo baseline too,
+  // so a reorder is a Cmd/Ctrl+Z step like any other edit.
+  const reorderNode = useCallback(
+    (nodeId: string, targetId: string, position: "before" | "after") => {
+      if (!isLightPageRef.current) return;
+      bridge.moveNode(nodeId, targetId, position);
+      schedulePersistLight();
+    },
+    [bridge, schedulePersistLight],
+  );
+
   // A Design-panel field edit → live override + a recorded pending edit.
   const onFieldChange = useCallback(
     (key: string, value: string) => {
@@ -2131,6 +2144,7 @@ export function RunApp({
           hoveredId={bridge.hoveredId}
           onSelectNode={onSelectNode}
           onHoverNode={onHoverNode}
+          onReorderNode={reorderNode}
           onFieldChange={onFieldChange}
           onDelete={deleteSelected}
           onVariantChange={onVariantChange}

@@ -1054,6 +1054,19 @@ function handleCommand(cmd: BridgeCommand): void {
       }
       return;
     }
+    case "moveNode": {
+      // Layers-tree drag-to-reorder: reinsert the dragged element before/after the target within the
+      // target's parent, so the page rearranges to match. Never drop a node into its own subtree.
+      const el = resolve(cmd.nodeId);
+      const target = resolve(cmd.targetId);
+      if (!el || !target || el === target || el.contains(target)) return;
+      const parent = target.parentElement;
+      if (!parent) return;
+      parent.insertBefore(el, cmd.position === "after" ? target.nextSibling : target);
+      send({ t: "tree", tree: buildTree() });
+      emitGeometry(cmd.nodeId);
+      return;
+    }
     case "setClass": {
       const el = resolve(cmd.nodeId);
       if (el) {

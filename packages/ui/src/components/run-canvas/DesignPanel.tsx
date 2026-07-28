@@ -31,6 +31,7 @@ export function DesignPanel({
   hoveredId,
   onSelectNode,
   onHoverNode,
+  onReorderNode,
   onFieldChange,
   onVariantChange,
   onDelete,
@@ -57,6 +58,8 @@ export function DesignPanel({
   hoveredId?: string | null;
   onSelectNode: (id: string) => void;
   onHoverNode?: (id: string | null) => void;
+  /** Drag-to-reorder a layer: move `nodeId` before/after `targetId` — the page rearranges to match. */
+  onReorderNode?: (nodeId: string, targetId: string, position: "before" | "after") => void;
   /** An ephemeral property edit (section field key → new value). */
   onFieldChange?: (key: string, value: string) => void;
   /** A variant switch (variant prop key → new option). */
@@ -114,6 +117,7 @@ export function DesignPanel({
         hoveredId={hoveredId}
         onSelectNode={onSelectNode}
         onHoverNode={onHoverNode}
+        onReorderNode={onReorderNode}
       />
 
       <div className="min-h-0 flex-1 overflow-y-auto">
@@ -501,12 +505,14 @@ function LayersRegion({
   hoveredId,
   onSelectNode,
   onHoverNode,
+  onReorderNode,
 }: {
   tree: BridgeTree | null;
   selectedId: string | null;
   hoveredId?: string | null;
   onSelectNode: (id: string) => void;
   onHoverNode?: (id: string | null) => void;
+  onReorderNode?: (nodeId: string, targetId: string, position: "before" | "after") => void;
 }): JSX.Element {
   const [open, setOpen] = useState(true);
   return (
@@ -529,6 +535,7 @@ function LayersRegion({
             hoveredId={hoveredId}
             onSelect={onSelectNode}
             onHover={onHoverNode}
+            onReorder={onReorderNode}
           />
         </div>
       )}
