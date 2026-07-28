@@ -119,6 +119,31 @@ export default function App(): JSX.Element {
     return () => window.clearTimeout(t);
   }, [autoBuild.justFinished]);
 
+  // Once the design system foundation is set up (ANY intake — Figma, library, enterprise, …), write the
+  // design manifest (designer.md) so pages/screens can be composed in the Playground, and tell the user
+  // it's ready. This is the file the light-first page authoring reads, so it must exist before they create.
+  useEffect(() => {
+    if (autoFoundation.justFinished === 0 || !workspace) return;
+    let alive = true;
+    let timer: number | undefined;
+    void api
+      .writeDesignerManifest(workspace.path)
+      .catch(() => null)
+      .then((path) => {
+        if (!alive || !path) return;
+        setBuildIndicatorDismissed(false);
+        setBuildNotice(
+          "Your design system is ready — designer.md created. You can now create pages & screens from the Chat in the Playground.",
+        );
+        timer = window.setTimeout(() => setBuildNotice(null), 9000);
+      });
+    return () => {
+      alive = false;
+      if (timer) window.clearTimeout(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoFoundation.justFinished]);
+
   // Central routing for opening a folder. A set-up project (has
   // .sdd-de/project.yaml → toolkit.configured) opens directly in the workspace.
   // An empty or not-yet-configured folder goes through intake first — the same

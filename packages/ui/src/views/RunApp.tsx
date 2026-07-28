@@ -375,6 +375,12 @@ export function RunApp({
     await snapshotMod.start({ prompt, cwd: project.path, allowedTools: ["Read", "Write", "Edit", "Bash"], bypassPermissions: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project.path]);
+  // When a snapshot finishes, the design system changed — (re)write the design manifest (designer.md, the
+  // file page authoring reads) so composing pages reflects the refreshed tokens/stand-ins.
+  useEffect(() => {
+    if (snapshotMod.model.status === "done") void api.writeDesignerManifest(project.path).catch(() => undefined);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [snapshotMod.model.status]);
   useEffect(() => {
     if (!canvas) return;
     let alive = true;
