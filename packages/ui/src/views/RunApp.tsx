@@ -1443,16 +1443,63 @@ export function RunApp({
   const lightPageRef = useRef(lightPage);
   lightPageRef.current = lightPage;
   const lightPersistTimer = useRef<number | undefined>(undefined);
+  // The current light page's project-relative .html path — the file the undo stack snapshots. Derived
+  // from the route node (authoritative on-disk path) so undo restores the exact file.
+  const lightPageFile = useMemo(() => {
+    if (!lightPage) return null;
+    const target = `light://${lightPage}`;
+    const find = (nodes: RouteNode[]): string | null => {
+      for (const n of nodes) {
+        if (n.path === target && n.file) return n.file;
+        const hit = find(n.children);
+        if (hit) return hit;
+      }
+      return null;
+    };
+    return find(routes?.routes ?? []);
+  }, [routes, lightPage]);
+  const lightPageFileRef = useRef(lightPageFile);
+  lightPageFileRef.current = lightPageFile;
+  // Full per-action undo for light pages (feeds the SAME undo/redo stack + Cmd/Ctrl+Z as framework edits):
+  // capture the page's pre-edit HTML ONCE per debounced burst; commit it as one undo entry on flush. So
+  // every gesture (style / text / move / delete / insert) is a step you can walk back until nothing's left.
+  const lightUndoBaselineRef = useRef<FileSnapshot[] | null>(null);
+  const lightUndoCapturingRef = useRef(false);
   const schedulePersistLight = useCallback(() => {
     if (!isLightPageRef.current) return;
+    // Snapshot the pre-edit file once at the start of a burst (before the flush overwrites it).
+    if (!lightUndoBaselineRef.current && !lightUndoCapturingRef.current && lightPageFileRef.current) {
+      lightUndoCapturingRef.current = true;
+      const file = lightPageFileRef.current;
+      void api
+        .snapshotComponent(project.path, file)
+        .then((snap) => {
+          if (snap.length && !lightUndoBaselineRef.current) lightUndoBaselineRef.current = snap;
+        })
+        .catch(() => {})
+        .finally(() => {
+          lightUndoCapturingRef.current = false;
+        });
+    }
     window.clearTimeout(lightPersistTimer.current);
     lightPersistTimer.current = window.setTimeout(() => {
       const name = lightPageRef.current;
       if (!name) return;
       void bridge.serializeDom().then((html) => {
+        if (html == null) return;
         // Persist the edit, then refresh generation status: editing a page that was already generated
         // makes it "stale" (its framework code no longer matches) → the row icon flips to Update.
-        if (html != null) void api.liteWritePage(project.path, name, html).then(loadGenStatus);
+        void api.liteWritePage(project.path, name, html).then(() => {
+          loadGenStatus();
+          // Commit the burst's pre-edit snapshot as one undo entry (a fresh edit clears the redo trail).
+          const baseline = lightUndoBaselineRef.current;
+          lightUndoBaselineRef.current = null;
+          if (baseline && baseline.length > 0) {
+            undoStack.current.push(baseline);
+            if (undoStack.current.length > MAX_HISTORY) undoStack.current.shift();
+            redoStack.current = [];
+          }
+        });
       });
     }, 500);
   }, [bridge, project.path, loadGenStatus]);
