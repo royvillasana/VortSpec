@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { Project } from "@vortspec/core/ipc";
 import { DEFAULT_FLOW } from "@vortspec/core/flow";
+import { buildEnterpriseFoundationPrompt } from "@vortspec/core/enterprise-consume";
 import { api } from "./api";
 import { useAgentRun } from "./useAgentRun";
 
@@ -40,10 +41,15 @@ export function useAutoFoundation(project: Project | null): { extracting: boolea
       if (ready || active || !cfg?.designSource) return;
       startedRef.current = project.path; // claim this project so we don't double-start
       setExtracting(true);
+      // Enterprise projects CONSUME an existing design system: run the validate → index → snapshot
+      // Foundation (never extraction/build). Every other source uses the extract-and-detect Foundation.
+      const enterprise = cfg.designSource === "enterprise";
       await run.start({
-        prompt: FOUNDATION_DEF.promptTemplate ?? "Extract tokens and detect components.",
+        prompt: enterprise
+          ? buildEnterpriseFoundationPrompt(cfg)
+          : (FOUNDATION_DEF.promptTemplate ?? "Extract tokens and detect components."),
         cwd: project.path,
-        allowedTools: FOUNDATION_DEF.allowedTools,
+        allowedTools: enterprise ? ["Read", "Write", "Edit", "Bash"] : FOUNDATION_DEF.allowedTools,
         bypassPermissions: true,
       });
     })();

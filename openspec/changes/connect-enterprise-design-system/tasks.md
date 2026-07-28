@@ -6,10 +6,10 @@
 
 ## 2. Foundation branch — validate + index (not extract)
 
-- [ ] 2.1 Branch the Foundation for `design_source: enterprise`: skip Figma extraction, the 7-step build, `/provision-library`, and VortSpec's own `/storybook` install.
-- [ ] 2.2 Build the pointer INDEX: write `components.json` entries that reference each component's real import path/export + Storybook story id (no VortSpec-authored definitions); point `token_file` at the client's real token file when connected.
-- [ ] 2.3 Readiness report (validate, not extract): per-asset pass/gap — tokens parse + resolve via the token resolver (component values → their tokens, flag unmatched); each component importable/buildable AND has a story; KB probe answers. Emit a structured report + a UI surface.
-- [ ] 2.4 Unit-test readiness: value-matched tokens pass, an unmatched value is flagged, a component without a story is flagged "lower fidelity", an unreachable KB is a gap.
+- [x] 2.1 Branch the Foundation for `design_source: enterprise`: skip Figma extraction, the 7-step build, `/provision-library`, and VortSpec's own `/storybook` install. → `buildEnterpriseFoundationPrompt` (consume/validate/index/snapshot, explicitly forbids extract/build/provision/SB-install/copy); `useAutoFoundation` runs it (with Bash) for enterprise projects.
+- [x] 2.2 Build the pointer INDEX: write `components.json` entries that reference each component's real import path/export + Storybook story id (no VortSpec-authored definitions); point `token_file` at the client's real token file when connected. → `EnterpriseComponentEntry` shape (importPath/export/storyId/tier) + the prompt's INDEX step ("POINTERS", "NEVER author a competing definition"), token_file → their real file.
+- [~] 2.3 Readiness report (validate, not extract): per-asset pass/gap — tokens parse + resolve via the token resolver (flag unmatched); each component importable + has a story; KB probe. → `analyzeEnterpriseReadiness` (pure structured report: tokens/components/componentDetail/knowledgeBase + `usable`) + the Foundation prompt's VALIDATE step. A dedicated readiness UI panel is deferred (the agent surfaces the report in its run output for now).
+- [x] 2.4 Unit-test readiness: value-matched tokens pass, an unmatched value is flagged, a component without a story is flagged "lower fidelity", an unreachable KB is a gap. → 7 tests in `enterprise-consume.test.ts` (5 readiness + 2 prompt-content).
 
 ## 3. Storybook consumption
 
