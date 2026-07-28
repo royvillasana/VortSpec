@@ -23,14 +23,15 @@ export const NodeTree = memo(function NodeTree({
   hoveredId?: string | null;
   onSelect: (id: string) => void;
   onHover?: (id: string | null) => void;
-  /** Drag-to-reorder: move `nodeId` before/after `targetId` (the page rearranges to match). */
-  onReorder?: (nodeId: string, targetId: string, position: "before" | "after") => void;
+  /** Drag a layer: `before`/`after` reorders; `inside` nests it into the target container. */
+  onReorder?: (nodeId: string, targetId: string, position: "before" | "after" | "inside") => void;
 }): JSX.Element {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const selectedRef = useRef<HTMLButtonElement | null>(null);
-  // Drag-to-reorder state: the row being dragged, and the current drop target + side.
+  // Drag state: the row being dragged, and the current drop target + zone (before/after reorder, or
+  // inside = nest into that container).
   const [dragId, setDragId] = useState<string | null>(null);
-  const [dropAt, setDropAt] = useState<{ id: string; pos: "before" | "after" } | null>(null);
+  const [dropAt, setDropAt] = useState<{ id: string; pos: "before" | "after" | "inside" } | null>(null);
 
   // child id → parent id, so we can reveal a node selected on the canvas.
   const parentOf = useMemo(() => {
@@ -81,6 +82,9 @@ export const NodeTree = memo(function NodeTree({
     if (!node) return [];
     const kids = tree!.children[id] ?? [];
     const hasKids = kids.length > 0 || node.childCount > 0;
+    // Can this row accept a nested child? Anything that already has children, or a container-category
+    // element (a div/section/nav/… — even an empty one you want to drop the first child into).
+    const canNest = hasKids || NESTABLE_GROUPS.has(TAG_GROUP[node.tag] ?? "");
     const isOpen = expanded.has(id);
     const isSelected = selectedId === id;
     const dropHere = dropAt?.id === id ? dropAt.pos : null;
@@ -110,7 +114,18 @@ export const NodeTree = memo(function NodeTree({
                 e.preventDefault();
                 e.dataTransfer.dropEffect = "move";
                 const r = e.currentTarget.getBoundingClientRect();
-                const pos: "before" | "after" = e.clientY < r.top + r.height / 2 ? "before" : "after";
+                const frac = (e.clientY - r.top) / r.height;
+                // A container gets three zones — top band = before, middle = nest INSIDE, bottom = after.
+                // A leaf splits 50/50 before/after (nothing to nest into).
+                const pos: "before" | "after" | "inside" = canNest
+                  ? frac < 0.28
+                    ? "before"
+                    : frac > 0.72
+                      ? "after"
+                      : "inside"
+                  : frac < 0.5
+                    ? "before"
+                    : "after";
                 setDropAt((cur) => (cur?.id === id && cur.pos === pos ? cur : { id, pos }));
               }
             : undefined
@@ -137,6 +152,8 @@ export const NodeTree = memo(function NodeTree({
         className={`relative flex w-full items-center gap-1 py-[3px] pr-2 text-left text-[12px] ${
           dragId === id ? "opacity-40" : ""
         } ${
+          dropHere === "inside" ? "ring-1 ring-inset ring-vs-accent bg-vs-accent-subtle" : ""
+        } ${
           isSelected
             ? "bg-vs-accent-subtle text-vs-text-primary"
             : hoveredId === id
@@ -144,8 +161,9 @@ export const NodeTree = memo(function NodeTree({
               : "text-vs-text-secondary hover:bg-vs-bg-hover"
         }`}
       >
-        {/* Drop indicator — an accent line at the row's top/bottom edge. */}
-        {dropHere && (
+        {/* Drop indicator: a line at the top/bottom edge for reorder; the whole row is ringed for a
+            nest (drop INSIDE the container). */}
+        {(dropHere === "before" || dropHere === "after") && (
           <span
             aria-hidden
             className={`pointer-events-none absolute inset-x-1 h-0.5 rounded-full bg-vs-accent ${
@@ -209,6 +227,9 @@ function Stroke({ children }: { children: React.ReactNode }): JSX.Element {
     </svg>
   );
 }
+
+/** Icon categories whose elements can hold nested children (accept an "inside" drop even when empty). */
+const NESTABLE_GROUPS = new Set(["container", "section", "nav", "bar", "form", "list", "table"]);
 
 /** Tag → icon category. */
 const TAG_GROUP: Record<string, string> = {

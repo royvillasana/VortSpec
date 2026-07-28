@@ -61,8 +61,8 @@ export interface InspectorBridge {
   setText: (id: string, text: string) => void;
   /** Remove an element from the DOM — a true delete for a light page (DOM is the source). */
   removeNode: (id: string) => void;
-  /** Reorder an element before/after another (layers-tree drag) — the page rearranges to match. */
-  moveNode: (id: string, targetId: string, position: "before" | "after") => void;
+  /** Move an element before/after (reorder) or inside (nest) another — the page rearranges to match. */
+  moveNode: (id: string, targetId: string, position: "before" | "after" | "inside") => void;
   /** Swap classes on an element for a live variant preview. */
   setClass: (id: string, remove: string[], add: string[]) => void;
   select: (id: string | null) => void;
@@ -448,7 +448,7 @@ export function useInspectorBridge(): InspectorBridge {
   const setText = useCallback((id: string, text: string) => send({ t: "setText", nodeId: id, text }), [send]);
   const removeNode = useCallback((id: string) => send({ t: "removeNode", nodeId: id }), [send]);
   const moveNode = useCallback(
-    (id: string, targetId: string, position: "before" | "after") => send({ t: "moveNode", nodeId: id, targetId, position }),
+    (id: string, targetId: string, position: "before" | "after" | "inside") => send({ t: "moveNode", nodeId: id, targetId, position }),
     [send],
   );
   const setClass = useCallback(

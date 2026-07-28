@@ -59,7 +59,7 @@ export function DesignPanel({
   onSelectNode: (id: string) => void;
   onHoverNode?: (id: string | null) => void;
   /** Drag-to-reorder a layer: move `nodeId` before/after `targetId` — the page rearranges to match. */
-  onReorderNode?: (nodeId: string, targetId: string, position: "before" | "after") => void;
+  onReorderNode?: (nodeId: string, targetId: string, position: "before" | "after" | "inside") => void;
   /** An ephemeral property edit (section field key → new value). */
   onFieldChange?: (key: string, value: string) => void;
   /** A variant switch (variant prop key → new option). */
@@ -512,7 +512,7 @@ function LayersRegion({
   hoveredId?: string | null;
   onSelectNode: (id: string) => void;
   onHoverNode?: (id: string | null) => void;
-  onReorderNode?: (nodeId: string, targetId: string, position: "before" | "after") => void;
+  onReorderNode?: (nodeId: string, targetId: string, position: "before" | "after" | "inside") => void;
 }): JSX.Element {
   const [open, setOpen] = useState(true);
   return (

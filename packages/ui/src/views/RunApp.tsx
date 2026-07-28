@@ -1646,7 +1646,7 @@ export function RunApp({
   // lives in React source, which this DOM move wouldn't write. Persist captures the undo baseline too,
   // so a reorder is a Cmd/Ctrl+Z step like any other edit.
   const reorderNode = useCallback(
-    (nodeId: string, targetId: string, position: "before" | "after") => {
+    (nodeId: string, targetId: string, position: "before" | "after" | "inside") => {
       if (!isLightPageRef.current) return;
       bridge.moveNode(nodeId, targetId, position);
       schedulePersistLight();

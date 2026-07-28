@@ -333,15 +333,16 @@ export const bridgeCommandSchema = z.discriminatedUnion("t", [
    */
   z.object({ t: z.literal("removeNode"), nodeId: z.string() }),
   /**
-   * MOVE a node before/after another (layers-tree drag-to-reorder). Reinserts `nodeId` into
-   * `targetId`'s parent at the given side — the page rearranges to match the new order. Rejected
-   * when the target is inside the node's own subtree. Persisted by serializing the DOM (light page).
+   * MOVE a node relative to another (layers-tree drag). `before`/`after` reinsert `nodeId` into
+   * `targetId`'s parent at that side (reorder); `inside` appends it as a child of `targetId` (nest it
+   * INTO that container). The page rearranges to match. Rejected when the target is inside the node's
+   * own subtree. Persisted by serializing the DOM (light page).
    */
   z.object({
     t: z.literal("moveNode"),
     nodeId: z.string(),
     targetId: z.string(),
-    position: z.enum(["before", "after"]),
+    position: z.enum(["before", "after", "inside"]),
   }),
   /** Swap classes on a node for a live variant preview (remove old, add new). */
   z.object({

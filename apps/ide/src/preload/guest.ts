@@ -1055,14 +1055,18 @@ function handleCommand(cmd: BridgeCommand): void {
       return;
     }
     case "moveNode": {
-      // Layers-tree drag-to-reorder: reinsert the dragged element before/after the target within the
-      // target's parent, so the page rearranges to match. Never drop a node into its own subtree.
+      // Layers-tree drag: reorder (before/after → into the target's parent) or NEST (inside → append
+      // as a child of the target container), so the page rearranges to match. Never drop into own subtree.
       const el = resolve(cmd.nodeId);
       const target = resolve(cmd.targetId);
       if (!el || !target || el === target || el.contains(target)) return;
-      const parent = target.parentElement;
-      if (!parent) return;
-      parent.insertBefore(el, cmd.position === "after" ? target.nextSibling : target);
+      if (cmd.position === "inside") {
+        target.appendChild(el); // nest the dragged element into the container
+      } else {
+        const parent = target.parentElement;
+        if (!parent) return;
+        parent.insertBefore(el, cmd.position === "after" ? target.nextSibling : target);
+      }
       send({ t: "tree", tree: buildTree() });
       emitGeometry(cmd.nodeId);
       return;
