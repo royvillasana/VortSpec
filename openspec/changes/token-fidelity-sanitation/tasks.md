@@ -27,10 +27,13 @@
 
 ## 5. Push-back + collapse
 
-- [ ] 5.1 Orphan push: build a plan via `computePushPlan` (layered routing/aliasing) for the confirmed orphan set; gated.
+- [x] 5.1 Orphan push: build a plan via `computePushPlan` (layered routing/aliasing) for the confirmed orphan set; gated. → `computeOrphanPushPlan(tokens, orphanNames, figmaVars, opts)` restricts the push to exactly the confirmed orphan names (normalized), reusing `computePushPlan` so each entry is layer-routed + aliases an existing sibling; in-sync raced tokens are skipped (no duplicate). IPC `figma:computeOrphanPushPlan` + preload + api wired; feeds the existing `figma:pushVariables` apply flow.
 - [x] 5.2 Collapse action: re-alias a duplicate/ flattened semantic to its canonical token in the token file, gated + previewed.
 - [x] 5.3 IPC + preload + api wiring for: resolve, orphan/duplicate report, write link, push orphans, collapse.
-- [ ] 5.4 Unit-test push-plan for orphans + gated collapse rewrite.
+- [~] 5.4 Unit-test push-plan for orphans + gated collapse rewrite. → Orphan push-plan covered by 3 tests
+  in `figma-push.test.ts` (confirmed-set only, all `create`, matched/unconfirmed excluded, gated to real
+  tokens, in-sync raced token skipped). Collapse-rewrite (`collapseTokenToAlias`, shipped in 5.2) test
+  still pending.
 
 ## 6. UI (Inspector)
 

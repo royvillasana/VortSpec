@@ -199,3 +199,22 @@ export function computePushPlan(
   }
   return { collection, ...(mode ? { mode } : {}), entries };
 }
+
+/**
+ * Push plan for the CONFIRMED orphan set (token-fidelity-sanitation 5.1). Orphans are code tokens with
+ * no Figma counterpart; the user confirms which to push back. This restricts the push to exactly those
+ * tokens (matched by normalized name) and reuses `computePushPlan` — so each entry is layer-routed and
+ * aliases a sibling when its `var(--…)` reference already exists in Figma. Confirmed-set gated: a name
+ * not present in `tokens` is ignored, and an orphan that turns out to already exist in Figma (raced sync)
+ * is skipped by the in-sync check rather than duplicated.
+ */
+export function computeOrphanPushPlan(
+  tokens: PushToken[],
+  orphanNames: readonly string[],
+  figmaVars: FigmaVariable[],
+  opts: { collection?: string; mode?: string } = {},
+): PushPlan {
+  const want = new Set(orphanNames.map((n) => normName(n)));
+  const orphanTokens = tokens.filter((t) => want.has(normName(t.name)));
+  return computePushPlan(orphanTokens, figmaVars, opts);
+}

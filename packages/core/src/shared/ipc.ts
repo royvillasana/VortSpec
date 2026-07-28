@@ -461,6 +461,12 @@ export const ipcContract = {
   },
   // Code→Figma token push (change: add-code-to-figma-token-push).
   "figma:computePushPlan": { request: z.string(), response: pushPlanSchema },
+  // Push plan for the CONFIRMED orphan set only (token-fidelity-sanitation 5.1) — gated push-back of
+  // code-only tokens the user selected, layer-routed via computePushPlan.
+  "figma:computeOrphanPushPlan": {
+    request: z.object({ projectPath: z.string(), orphanNames: z.array(z.string()) }),
+    response: pushPlanSchema,
+  },
   "figma:pushVariables": {
     request: z.object({ projectPath: z.string(), plan: pushPlanSchema }),
     response: figmaPushResultSchema,

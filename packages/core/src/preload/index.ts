@@ -245,6 +245,8 @@ const api: VortSpecApi = {
   figmaTokenStatus: () => invoke("figma:tokenStatus", undefined),
   setFigmaToken: (req) => invoke("figma:setToken", req),
   figmaComputePushPlan: (projectPath: string) => invoke("figma:computePushPlan", projectPath),
+  figmaComputeOrphanPushPlan: (projectPath: string, orphanNames: string[]) =>
+    invoke("figma:computeOrphanPushPlan", { projectPath, orphanNames }),
   figmaPushVariables: (projectPath: string, plan: PushPlan) =>
     invoke("figma:pushVariables", { projectPath, plan }),
   setPublishTarget: (projectPath: string, repoUrl: string) =>
