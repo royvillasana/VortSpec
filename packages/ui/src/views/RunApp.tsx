@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createElement, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { DevServerStatus, Project, InspectorToken, InspectorComponent, FileSnapshot, StorybookEntry } from "@vortspec/core/ipc";
 import { buildSelection, alignToCss, flowToCss, gapModeCss } from "@vortspec/core/selection-builder";
@@ -2733,17 +2733,29 @@ export function RunApp({
                 const src = storyOnly
                   ? `${embedUrl}iframe.html?id=${encodeURIComponent(storyId)}&viewMode=${storyViewMode}`
                   : embedUrl;
-                return (
-                  <iframe
-                    key={`${src}:${reloadNonce}`}
-                    title={noun}
-                    src={src}
-                    onLoad={() => setFrameLoading(false)}
-                    className="h-full min-h-[340px] w-full border-0 bg-white"
-                  />
-                );
+                // A cross-origin HOSTED Storybook (enterprise) won't render in an <iframe> — its
+                // X-Frame-Options blocks it. A <webview> is a separate WebContents, not subject to that,
+                // so it loads the client's Storybook the same way the dock nav does. Same-origin VortSpec
+                // Storybook stays an <iframe> (lighter, and the story-only sync needs it).
+                return enterpriseSbUrl
+                  ? // Electron <webview> intrinsic (not in React's JSX types) — created imperatively, like
+                    // RunCanvas/StorybookSidebar. A separate WebContents, so X-Frame-Options can't block it.
+                    createElement("webview", {
+                      key: `${src}:${reloadNonce}`,
+                      src,
+                      className: "h-full min-h-[340px] w-full border-0 bg-white",
+                    })
+                  : (
+                    <iframe
+                      key={`${src}:${reloadNonce}`}
+                      title={noun}
+                      src={src}
+                      onLoad={() => setFrameLoading(false)}
+                      className="h-full min-h-[340px] w-full border-0 bg-white"
+                    />
+                  );
               })()}
-              {frameLoading && (
+              {frameLoading && !enterpriseSbUrl && (
                 <div className="absolute inset-0 grid place-items-center bg-vs-bg-primary/60 text-xs text-vs-text-secondary">
                   Loading {noun}…
                 </div>
