@@ -262,7 +262,19 @@ export function RunApp({
   const stopFor = (): Promise<void> =>
     isApp ? api.stopAppServer(project.path) : api.stopDevServer(project.path);
 
-  const embedUrl = dev.url ? dev.url.replace(/\/+$/, "") + "/" : "";
+  // The configured framework (project.yaml) — names it in the per-page "Generate code" tooltip.
+  const [framework, setFramework] = useState<string | null>(null);
+  // Enterprise projects (Connect Enterprise Design System) embed the CLIENT's own Storybook as-is —
+  // when it's a URL we point the Storybook view straight at it, instead of starting a VortSpec Storybook.
+  const [enterpriseSbUrl, setEnterpriseSbUrl] = useState<string | null>(null);
+  // Enterprise Storybook (kind=storybook + a client URL) is embedded as-is — its URL wins over any VortSpec
+  // dev server. Every other case uses the managed dev-server URL.
+  const embedUrl =
+    !isApp && enterpriseSbUrl
+      ? enterpriseSbUrl.replace(/\/+$/, "") + "/"
+      : dev.url
+        ? dev.url.replace(/\/+$/, "") + "/"
+        : "";
 
   // ── Sitemap: the app's page/route tree, read from source (change: sitemap-tree) ──
   const [routes, setRoutes] = useState<RouteDiscovery | null>(null);
@@ -350,9 +362,19 @@ export function RunApp({
   // edit persisted to a light page, changes what's stale).
   useEffect(() => loadGenStatus(), [loadGenStatus, routes]);
   // The configured framework (project.yaml) — names it in the per-page "Generate code" tooltip.
-  const [framework, setFramework] = useState<string | null>(null);
   useEffect(() => {
-    void api.projectConfig(project.path).then((c) => setFramework(c?.framework ?? null)).catch(() => setFramework(null));
+    void api
+      .projectConfig(project.path)
+      .then((c) => {
+        setFramework(c?.framework ?? null);
+        const isEnterpriseUrlSb =
+          c?.designSource === "enterprise" && (c?.storybookSourceKind ?? "url") === "url" && !!c?.storybookSource;
+        setEnterpriseSbUrl(isEnterpriseUrlSb ? (c!.storybookSource as string) : null);
+      })
+      .catch(() => {
+        setFramework(null);
+        setEnterpriseSbUrl(null);
+      });
   }, [project.path]);
   useEffect(() => {
     if (!canvas) return;
@@ -2052,17 +2074,19 @@ export function RunApp({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project.path, kind]);
 
-  // Auto-start the runtime on entry.
+  // Auto-start the runtime on entry — EXCEPT an enterprise Storybook, which is the client's own
+  // (embedded as-is via its URL); there's nothing for VortSpec to start.
   useEffect(() => {
     if (autoRef.current) return;
     autoRef.current = true;
+    if (!isApp && enterpriseSbUrl) return; // client's Storybook — no VortSpec server
     void (async () => {
       const s = await statusFor();
       if (s.url) setDev(s);
       else setDev(await startFor());
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [project.path, kind]);
+  }, [project.path, kind, enterpriseSbUrl]);
 
   useEffect(() => setFrameLoading(true), [embedUrl]);
 

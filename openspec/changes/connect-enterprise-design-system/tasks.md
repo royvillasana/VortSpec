@@ -13,9 +13,9 @@
 
 ## 3. Storybook consumption
 
-- [ ] 3.1 Story catalog: read Storybook's index — `index.json` (v7/v8) or `stories.json` (v6) — into a component→stories/variants model (title, story ids, argTypes→props, args→variants). Handle both shapes; clear error when neither is found.
-- [ ] 3.2 Serve/point the Storybook source: a hosted/dev URL used directly; a static `storybook-static/` dir served from a local origin (reuse the light-serve pattern); build-from-repo (`build-storybook`) as an optional convenience producing the static dir.
-- [ ] 3.3 Embed the client's Storybook in the Storybook section: for `enterprise` projects, `RunApp kind=storybook` + `StorybookSidebar` point at the client's Storybook source (never a VortSpec install).
+- [x] 3.1 Story catalog: read Storybook's index — `index.json` (v7/v8) or `stories.json` (v6) — into a component→stories/variants model. → `storybook-catalog.ts` `parseStorybookIndex` (both shapes, docs entries skipped, grouped by title) + `componentNameFromTitle` + `storyIframeUrl`; 5 tests. (arg/argType → prop/variant mapping deferred; captured in design Open Questions.)
+- [ ] 3.2 Serve/point the Storybook source: a hosted/dev URL used directly (DONE via 3.3); a static `storybook-static/` dir served from a local origin (reuse the light-serve pattern) + build-from-repo — REMAINING.
+- [x] 3.3 Embed the client's Storybook in the Storybook section: for `enterprise` projects, `RunApp kind=storybook` + `StorybookSidebar` point at the client's Storybook source (never a VortSpec install). → RunApp uses the client's Storybook URL as `embedUrl` for an enterprise URL source and skips starting a VortSpec dev server. (Static/repo sources need serving — see 3.2.)
 - [ ] 3.4 Snapshot → light stand-ins: for each story render `iframe.html?id=…&viewMode=story`, harvest the rendered DOM + resolved computed styles via `harvest.ts` → framework-free `.vortspec/light-html/` stand-ins grouped by component; components without a story get a placeholder + the readiness flag.
 - [ ] 3.5 Token palette from Storybook: read all `--*` custom properties off the preview `:root` (name → resolved value) for the dual-keyed palette; cross-reference the token file for canonical names when connected.
 - [ ] 3.6 "Update snapshot" action: a user-triggered refresh that re-reads the client's Storybook and regenerates the affected stand-ins; the Playground otherwise composes against the frozen snapshot (no live re-render per load).
