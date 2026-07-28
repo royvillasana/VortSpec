@@ -110,8 +110,11 @@ describe("buildEnterpriseSnapshotPrompt — the only artifact VortSpec creates",
     expect(p).toContain("https://sb.acme.com/iframe.html?id=atoms-button--primary&viewMode=story");
     expect(p).toMatch(/framework-free/i);
     expect(p).toMatch(/no story .* write a labelled placeholder/i);
-    expect(p).toMatch(/custom properties if present/i);
-    expect(p).toMatch(/WRITE\s+them to the project's configured token_file/i);
+    expect(p).toMatch(/ALL FIVE categories/i);
+    // every category is named (spacing + shadow were the missed ones).
+    for (const cat of ["color", "spacing", "radius", "typography", "shadow"]) expect(p.toLowerCase()).toContain(cat);
+    expect(p).toMatch(/FOUNDATIONS \/ token stories/i);
+    expect(p).toMatch(/WRITE every token to the\s+configured token_file/i);
     expect(p).toMatch(/reference, never invent/i);
   });
 });
