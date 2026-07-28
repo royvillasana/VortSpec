@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   resolveToken,
+  resolveComponentBindings,
   readTokenLinks,
   writeTokenLink,
   type ResolveCandidate,
@@ -151,6 +152,26 @@ describe("component-token binding — the Accordion (11/11)", () => {
     // The component would bind var(--font-size-md) for Figma's typography/font-size/md.
     const fontSize = resolveToken(c("typography/font-size/md", "18px"), projectTokens);
     expect(fontSize.match?.name).toBe("--font-size-md");
+  });
+
+  it("resolveComponentBindings emits var(--token) for every binding — zero hardcoded values (7.1)", () => {
+    const bound = resolveComponentBindings(figmaBindings, projectTokens);
+    expect(bound).toHaveLength(11);
+    // Every binding emits a token reference; none is null (which would force a hardcode/raw name).
+    expect(bound.every((b) => b.css !== null)).toBe(true);
+    expect(bound.every((b) => /^var\(--[\w-]+\)$/.test(b.css ?? ""))).toBe(true);
+    // The emitted CSS references the resolved project token, not the Figma path.
+    const fontSize = bound.find((b) => b.figmaVar === "typography/font-size/md");
+    expect(fontSize?.css).toBe("var(--font-size-md)");
+    expect(fontSize?.token).toBe("font-size-md");
+  });
+
+  it("resolveComponentBindings flags an unmatched binding as none with no css (→ dedup-create/orphan, 7.2)", () => {
+    const bound = resolveComponentBindings(
+      [c("color/brand/unknown", "#ABCDEF")], // no name/value/alias match in the project
+      projectTokens,
+    );
+    expect(bound[0]).toMatchObject({ figmaVar: "color/brand/unknown", token: null, signal: "none", css: null });
   });
 });
 

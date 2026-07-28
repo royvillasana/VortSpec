@@ -7,6 +7,7 @@ import type {
   FigmaVariable,
   FileSnapshot,
   InspectorToken,
+  MatchSignal,
   Project,
   PushPlan,
   TokenSanitation,
@@ -110,6 +111,15 @@ const TYPE_LABEL: Record<TokenType, string> = {
   radius: "Radius",
   shadow: "Shadow",
   other: "Other",
+};
+/** Human labels for the resolver match signal (token-fidelity-sanitation 6.1). */
+const MATCH_SIGNAL_META: Record<MatchSignal, { label: string; title: string }> = {
+  key: { label: "key", title: "Matched by the Figma variable's publish-stable key — survives renames and value changes." },
+  link: { label: "link", title: "Matched by a durable link you confirmed (.vortspec/token-links.json)." },
+  name: { label: "name", title: "Matched by name." },
+  value: { label: "value", title: "Matched by resolved value — the token or variable was renamed on one side. Pin it to make the link durable." },
+  alias: { label: "alias", title: "Matched by alias-graph position (both point at the same primitive)." },
+  none: { label: "unmatched", title: "No Figma counterpart found." },
 };
 const SOURCE: Record<TokenSource, { label: string; dot: string; text: string; line: string }> = {
   "figma-variable": {
@@ -1064,6 +1074,9 @@ export function Inspector({
           onSave={saveValue}
           onRename={requestRename}
           onDelete={requestDelete}
+          onLink={(codeName, figmaPath) => {
+            void api.linkToken(project.path, codeName, figmaPath).then(() => reloadTokens());
+          }}
           canOpen={(component) => Boolean(componentFile[component])}
           onOpenComponent={openComponent}
         />
@@ -1626,6 +1639,7 @@ function TokenDrawer({
   onSave,
   onRename,
   onDelete,
+  onLink,
   canOpen,
   onOpenComponent,
 }: {
@@ -1641,6 +1655,8 @@ function TokenDrawer({
   onSave: (name: string, value: string) => Promise<void>;
   onRename: (name: string, newName: string) => void;
   onDelete: (name: string) => void;
+  /** Pin an ambiguous match (matched by value/alias) as a durable link, so a rename survives. */
+  onLink?: (codeName: string, figmaPath: string) => void;
   /** Whether a where-used component resolves to an openable source file. */
   canOpen: (component: string) => boolean;
   /** Jump to a where-used component's source. */
@@ -1742,6 +1758,16 @@ function TokenDrawer({
               <span className="text-[11px] font-semibold uppercase tracking-wide text-vs-text-muted">
                 Figma variable{modeLabel ? ` · ${modeLabel}` : ""}
               </span>
+              {/* How this token matched its Figma variable (token-fidelity-sanitation 6.1): name is the
+                  obvious case; value/alias/key/link are worth surfacing so a non-name match is visible. */}
+              {token.matchSignal && token.matchSignal !== "name" && (
+                <span
+                  title={MATCH_SIGNAL_META[token.matchSignal].title}
+                  className="rounded-full border border-vs-border-strong bg-vs-bg-elevated px-1.5 py-0.5 text-[10px] font-medium text-vs-text-secondary"
+                >
+                  matched by {MATCH_SIGNAL_META[token.matchSignal].label}
+                </span>
+              )}
               {view.readOnly ? (
                 <span className="text-[10px] text-vs-text-muted">read-only</span>
               ) : view.drift === "drifted" ? (
@@ -1757,6 +1783,22 @@ function TokenDrawer({
                 </span>
               )}
             </div>
+            {/* Link-confirm affordance: a value/alias/key match is inferred and would break if either side
+                is renamed. Pin it as a durable link so the binding survives a rename. A `link` match is
+                already pinned. */}
+            {onLink && token.figmaPath && (token.matchSignal === "value" || token.matchSignal === "alias" || token.matchSignal === "key") && (
+              <button
+                onClick={() => onLink(token.name, token.figmaPath!)}
+                disabled={busy}
+                title="Confirm this match as a durable link (.vortspec/token-links.json) so it survives a rename on either side."
+                className="self-start rounded-md border border-vs-border-strong px-2.5 py-1 text-[11px] text-vs-text-secondary hover:border-vs-accent hover:text-vs-text-primary disabled:opacity-50"
+              >
+                Pin this match →
+              </button>
+            )}
+            {onLink && token.matchSignal === "link" && (
+              <span className="self-start text-[10px] text-vs-success">✓ linked</span>
+            )}
             <div className="flex items-center justify-between font-mono text-[11px]">
               <span className="text-vs-text-muted">Figma</span>
               <span className="text-vs-text-primary">{view.figmaValue}</span>
