@@ -367,20 +367,7 @@ export function RunApp({
     // Resolve the enterprise Storybook to an embeddable URL (a client URL as-is, or a served static build).
     void api.enterpriseStorybookUrl(project.path).then(setEnterpriseSbUrl).catch(() => setEnterpriseSbUrl(null));
   }, [project.path]);
-  // "Update snapshot" (enterprise): re-read the client's Storybook and regenerate the light stand-ins.
-  const snapshotMod = useAgentRun();
-  const updateSnapshot = useCallback(async (): Promise<void> => {
-    const prompt = await api.enterpriseSnapshotPrompt(project.path).catch(() => "");
-    if (!prompt) return;
-    await snapshotMod.start({ prompt, cwd: project.path, allowedTools: ["Read", "Write", "Edit", "Bash"], bypassPermissions: true });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [project.path]);
-  // When a snapshot finishes, the design system changed — (re)write the design manifest (designer.md, the
-  // file page authoring reads) so composing pages reflects the refreshed tokens/stand-ins.
-  useEffect(() => {
-    if (snapshotMod.model.status === "done") void api.writeDesignerManifest(project.path).catch(() => undefined);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [snapshotMod.model.status]);
+  // (Enterprise "Update snapshot" lives on the Design System page now — see DesignSystem.tsx.)
   useEffect(() => {
     if (!canvas) return;
     let alive = true;
@@ -2237,23 +2224,12 @@ export function RunApp({
       <main className="flex min-w-0 flex-1 flex-col bg-vs-bg-primary">
         <header className="flex flex-none items-center gap-3 border-b border-vs-border-default px-5 py-3">
           <span className="text-[15px] font-semibold">{isApp ? "Playground" : "Storybook"}</span>
-          {/* Enterprise: this is the CLIENT's Storybook, embedded as-is. "Update snapshot" re-reads it and
-              regenerates the Playground's light stand-ins (created once, refreshed on demand). */}
+          {/* Enterprise: this is the CLIENT's Storybook, embedded as-is. Refreshing the design system
+              ("Update snapshot") lives on the Design System page, not here. */}
           {!isApp && enterpriseSbUrl && (
-            <>
-              <span className="rounded border border-vs-border-default px-1.5 py-px text-[10px] uppercase tracking-wide text-vs-text-muted">
-                your Storybook
-              </span>
-              <button
-                type="button"
-                disabled={snapshotMod.running}
-                onClick={() => void updateSnapshot()}
-                title="Re-read your Storybook and refresh the Playground's design-system snapshot (the light stand-ins)."
-                className="rounded border border-vs-border-strong px-2.5 py-1 text-[11px] text-vs-text-secondary hover:border-vs-accent hover:text-vs-text-primary disabled:opacity-50"
-              >
-                {snapshotMod.running ? "Updating snapshot…" : "Update snapshot"}
-              </button>
-            </>
+            <span className="rounded border border-vs-border-default px-1.5 py-px text-[10px] uppercase tracking-wide text-vs-text-muted">
+              your Storybook
+            </span>
           )}
           {dirty && (
             <span
