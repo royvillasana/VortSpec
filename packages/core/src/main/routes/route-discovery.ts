@@ -8,6 +8,7 @@ import {
   type RouteNode,
   type ScreenPreviewManifest,
 } from "../../shared/routes";
+import { LIGHT_PAGES_DIR } from "../../shared/light-page";
 
 /**
  * Discover the app's page routes from source (change: sitemap-tree).
@@ -133,7 +134,37 @@ async function discoverReactRouter(projectPath: string): Promise<RouteNode[]> {
   return buildRouteTree([...seen].map(([path, file]) => ({ path, file })));
 }
 
+/**
+ * Discover routes AND fold in VortSpec light pages (light-design-system). Light pages live in
+ * `.vortspec/light-pages/*.html` and belong in the SAME site tree as framework pages — so the user
+ * creates/edits them via the same Playground + Sitemap. They appear under Home as `light://<name>`
+ * nodes (rendered in the editable light canvas). A page "converts" by writing a real router file, which
+ * the base discovery then classifies as a normal route on the next rescan.
+ */
 export async function discoverRoutes(projectPath: string): Promise<RouteDiscovery> {
+  const [base, lightNodes] = await Promise.all([discoverBaseRoutes(projectPath), readLightPageNodes(projectPath)]);
+  if (lightNodes.length === 0) return base;
+  const hasHome = base.routes.some((r) => r.path === "/");
+  const routes = hasHome
+    ? base.routes.map((r) => (r.path === "/" ? { ...r, children: [...r.children, ...lightNodes] } : r))
+    : [...base.routes, ...lightNodes];
+  return { ...base, routes };
+}
+
+/** Read `.vortspec/light-pages/*.html` as `light://` route nodes (rendered in the light canvas). */
+async function readLightPageNodes(projectPath: string): Promise<RouteNode[]> {
+  try {
+    const files = (await readdir(join(projectPath, LIGHT_PAGES_DIR))).filter((f) => f.endsWith(".html"));
+    return files.sort().map((f) => {
+      const name = f.replace(/\.html$/, "");
+      return { path: `light://${name}`, label: name, file: `${LIGHT_PAGES_DIR}/${f}`, dynamic: false, navigable: true, light: true, children: [] };
+    });
+  } catch {
+    return [];
+  }
+}
+
+async function discoverBaseRoutes(projectPath: string): Promise<RouteDiscovery> {
   const pkg = await readPkg(projectPath);
   const deps = { ...(pkg?.dependencies as object), ...(pkg?.devDependencies as object) } as Record<string, string>;
   const has = (name: string): boolean => name in deps;

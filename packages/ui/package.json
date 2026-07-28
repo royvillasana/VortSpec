@@ -56,6 +56,14 @@
       "types": "./src/lib/assistant-task.ts",
       "default": "./src/lib/assistant-task.ts"
     },
+    "./useAutoComponentBuild": {
+      "types": "./src/lib/useAutoComponentBuild.ts",
+      "default": "./src/lib/useAutoComponentBuild.ts"
+    },
+    "./useAutoFoundation": {
+      "types": "./src/lib/useAutoFoundation.ts",
+      "default": "./src/lib/useAutoFoundation.ts"
+    },
     "./canvas-selection": {
       "types": "./src/lib/canvas-selection.tsx",
       "default": "./src/lib/canvas-selection.tsx"
@@ -103,6 +111,10 @@
     "./DesignManifest": {
       "types": "./src/views/DesignManifest.tsx",
       "default": "./src/views/DesignManifest.tsx"
+    },
+    "./DesignSystem": {
+      "types": "./src/views/DesignSystem.tsx",
+      "default": "./src/views/DesignSystem.tsx"
     },
     "./Profile": {
       "types": "./src/views/Profile.tsx",

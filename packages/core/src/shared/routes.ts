@@ -27,6 +27,8 @@ export interface RouteNode {
    * (no URL) or a page-less branch; clicking opens its source file instead.
    */
   navigable: boolean;
+  /** True → a VortSpec LIGHT page (`light://<name>`): rendered in the editable light canvas, not a URL. */
+  light?: boolean;
   children: RouteNode[];
 }
 
@@ -37,6 +39,7 @@ export const routeNodeSchema: z.ZodType<RouteNode> = z.lazy(() =>
     file: z.string().nullable(),
     dynamic: z.boolean(),
     navigable: z.boolean(),
+    light: z.boolean().optional(),
     children: z.array(routeNodeSchema),
   }),
 );

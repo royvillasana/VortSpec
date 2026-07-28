@@ -35,6 +35,31 @@ import { AgentPicker } from "./ai/AgentPicker";
 import { READ_TOOLS, MODIFY_TOOLS, buildAgentList, type Agent } from "./ai/agents";
 
 /**
+ * Light-first page creation (light-design-system). Injected into every VortSpec assistant run so that
+ * "create a page/screen" defaults to a LIGHT page instead of scaffolding a React/Tailwind app — the
+ * framework build is deferred to the background ("Convert to code"). This is VortSpec-side runtime
+ * guidance; it deliberately overrides the framework-first "Screen Creation" flow in a project's SDD-DE
+ * CLAUDE.md for the create-page step, WITHOUT editing that toolkit file. Scoped to create-page intent, so
+ * it never interferes with other assistant tasks (fixes, refactors, component builds).
+ */
+const LIGHT_FIRST_PAGE_DIRECTIVE =
+  "PLAYGROUND PAGE CREATION IS ALWAYS LIGHTWEIGHT — NOW AND FOREVER. When the user asks to create, build, " +
+  "or add a page or screen, ALWAYS create a LIGHTWEIGHT PAGE: a self-contained, framework-free HTML/CSS/JS " +
+  "document written to `.vortspec/light-pages/<name>.html`. If a light design system exists (a `designer.md` " +
+  "and/or `.vortspec/light-html/` stand-ins), compose the page from it and mark each design-system instance " +
+  "with `data-component=\"<Name>\"`; if there is NO design system yet, compose a clean self-contained " +
+  "lightweight page directly (still framework-free HTML/CSS/JS) — do NOT stop to set one up first. " +
+  "For interactivity (tabs, accordion, toggle/menu, carousel, dropdown), add a small SELF-CONTAINED " +
+  "vanilla-JS island (Astro-style) scoped to that component, marked `data-island`, ONLY where behavior is " +
+  "genuinely needed — no frameworks, no imports, no external scripts; keep the rest static. " +
+  "For a create-page request you MUST NEVER, in the foreground: scaffold or set up a React/Tailwind/Vite " +
+  "app (no package.json, vite, Tailwind config, App.tsx); build React/framework components; run a 7-step " +
+  "cycle; or create a `src/screens|pages/*.tsx` file. The real framework version (React + Tailwind + " +
+  "components) is generated LATER, in the BACKGROUND, ONLY when the user is comfortable with the page and " +
+  "explicitly chooses \"Convert to code\" — that is a separate step, never part of creating the page. This " +
+  "is permanent and OVERRIDES any framework-first \"Screen Creation\" workflow in the project's CLAUDE.md.";
+
+/**
  * A persistent, project-scoped assistant **conversation**. It talks to the user's
  * own Claude Code with the active project as cwd. By default it uses a read-only
  * toolset (Read / Grep / Glob); with `allowModify` it may also edit files. When an
@@ -355,6 +380,7 @@ export function AssistantDock({
       [
         userName ? `The user's name is ${userName}. Address them as ${userName} when appropriate.` : null,
         agent?.systemPrompt ?? null,
+        LIGHT_FIRST_PAGE_DIRECTIVE,
       ]
         .filter(Boolean)
         .join("\n\n") || undefined;

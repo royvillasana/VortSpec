@@ -13,6 +13,7 @@ import { Inspector } from "@vortspec/ui/Inspector";
 import { GuidedFlow } from "@vortspec/ui/GuidedFlow";
 import { Tasks } from "@vortspec/ui/Tasks";
 import { DesignManifest } from "@vortspec/ui/DesignManifest";
+import { DesignSystem } from "@vortspec/ui/DesignSystem";
 import { RunApp } from "@vortspec/ui/RunApp";
 import { Profile } from "@vortspec/ui/Profile";
 import { ProjectSetup } from "@vortspec/ui/ProjectSetup";
@@ -30,6 +31,8 @@ import { useLayout } from "./lib/useLayout";
 import { effectiveWidths, isSidebarView, STORYBOOK_SIDEBAR_WIDTH, type Activity } from "./lib/layout";
 import { IdeContext, buildSeedContext, buildLiveContext, type EditorSelection } from "./lib/ide-context";
 import { useIdeMcp, IDE_MCP_TOOL_GROUP } from "./lib/useIdeMcp";
+import { useAutoComponentBuild } from "@vortspec/ui/useAutoComponentBuild";
+import { useAutoFoundation } from "@vortspec/ui/useAutoFoundation";
 import { IdeActionDialog } from "./components/IdeActionDialog";
 import { StatusBranch } from "./components/StatusBranch";
 
@@ -65,6 +68,10 @@ export default function App(): JSX.Element {
     return el;
   });
   const [leftTab, setLeftTab] = useState<"section" | "chat">("section");
+  // Tokens workspace sub-tab (light-design-system): the data inspector vs. the visual palette. Default to
+  // the palette; the Tokens (data) tab only appears once the project actually has tokens.
+  const [tokensTab, setTokensTab] = useState<"tokens" | "designsystem">("designsystem");
+  const [hasTokens, setHasTokens] = useState(false);
   const [gitCounts, setGitCounts] = useState<{ changes: number; ahead: number }>({ changes: 0, ahead: 0 });
   // The live editor selection, surfaced to the assistant as grounding context.
   const [selection, setSelection] = useState<EditorSelection | null>(null);
@@ -91,6 +98,22 @@ export default function App(): JSX.Element {
   );
 
   const wf = useWorkspaceFiles(workspace?.path ?? null);
+
+  // Automatic background component build (light-pages-on-canvas §9): while the user works on screens,
+  // build the design-system components (5 at a time, build + verify, in the configured framework) in the
+  // background, and notify on completion.
+  const autoBuild = useAutoComponentBuild(workspace);
+  // Extract the design-system foundation (tokens + component detection) in the background when a fresh
+  // project is opened, so the Design System page (in the Design-tokens section) populates itself — the
+  // user lands there straight from intake instead of having to visit the SDD-DE pipeline first.
+  const autoFoundation = useAutoFoundation(workspace);
+  const [buildNotice, setBuildNotice] = useState<string | null>(null);
+  useEffect(() => {
+    if (autoBuild.justFinished === 0) return;
+    setBuildNotice("Design-system components are built and verified — ready for Generate code.");
+    const t = window.setTimeout(() => setBuildNotice(null), 8000);
+    return () => window.clearTimeout(t);
+  }, [autoBuild.justFinished]);
 
   // Central routing for opening a folder. A set-up project (has
   // .sdd-de/project.yaml → toolkit.configured) opens directly in the workspace.
@@ -161,10 +184,10 @@ export default function App(): JSX.Element {
     };
   }, [workspace?.path, layout.activity]);
 
-  // Auto-start the SDD-DE pipeline: when a project is opened whose design-system
-  // foundation isn't set up yet (no extracted tokens, no detected components),
-  // land on the Flow/foundation instead of the Explorer. A founded project keeps
-  // its default (Explorer). Runs once per opened project.
+  // Onboarding landing: a brand-new / not-yet-set-up project (no extracted tokens, no detected
+  // components) lands on the DESIGN SYSTEM page — the "Design system" tab in the Design-tokens section
+  // (tokensTab defaults to "designsystem"). The foundation extracts under the hood (useAutoFoundation),
+  // so the palette fills in there. A founded project keeps its default (Explorer). Once per opened project.
   useEffect(() => {
     if (!workspace) return;
     let alive = true;
@@ -180,13 +203,36 @@ export default function App(): JSX.Element {
       } catch {
         ready = false;
       }
-      if (alive && !ready) dispatch({ type: "setActivity", activity: "flow" });
+      if (alive && !ready) {
+        setTokensTab("designsystem");
+        dispatch({ type: "setActivity", activity: "tokens" });
+      }
     })();
     return () => {
       alive = false;
     };
     // Only re-evaluate when a different project is opened.
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workspace?.path]);
+
+  // Whether the project has design tokens — gates the Tokens (data) sub-tab in the Tokens workspace.
+  useEffect(() => {
+    if (!workspace?.path) {
+      setHasTokens(false);
+      return;
+    }
+    let alive = true;
+    void api
+      .inspectorTokens(workspace.path)
+      .then((r) => {
+        if (alive) setHasTokens((r.tokens?.length ?? 0) > 0);
+      })
+      .catch(() => {
+        if (alive) setHasTokens(false);
+      });
+    return () => {
+      alive = false;
+    };
   }, [workspace?.path]);
 
   // The editor state the assistant's IDE tools read (via the MCP bridge).
@@ -533,7 +579,37 @@ export default function App(): JSX.Element {
       ) : a === "play" ? (
         <RunApp project={p} kind="storybook" hideRail sidebarSlot={sectionSlot} onBack={go("explorer")} onFlow={go("flow")} onRun={go("run")} onPlayground={go("play")} onTokens={go("tokens")} onManifest={go("manifest")} onHistory={go("explorer")} onSource={go("source")} />
       ) : a === "tokens" ? (
-        <Inspector project={p} hideRail sidebarSlot={sectionSlot} onBack={go("explorer")} onOpenPreview={go("explorer")} onOpenRun={go("run")} onOpenHistory={go("explorer")} onOpenManifest={go("manifest")} onOpenFile={(path) => { void wf.openFile(path); dispatch({ type: "setActivity", activity: "explorer" }); }} />
+        hasTokens ? (
+          <div className="flex h-full min-h-0 w-full flex-col">
+            <div className="flex flex-none items-stretch gap-1 border-b border-vs-border-subtle bg-vs-bg-surface px-2 py-1 text-[12px]">
+              <button
+                type="button"
+                onClick={() => setTokensTab("tokens")}
+                aria-pressed={tokensTab === "tokens"}
+                className={`rounded px-2.5 py-1 font-medium transition-colors ${tokensTab === "tokens" ? "bg-vs-bg-hover text-vs-text-primary" : "text-vs-text-muted hover:text-vs-text-secondary"}`}
+              >
+                Tokens
+              </button>
+              <button
+                type="button"
+                onClick={() => setTokensTab("designsystem")}
+                aria-pressed={tokensTab === "designsystem"}
+                className={`rounded px-2.5 py-1 font-medium transition-colors ${tokensTab === "designsystem" ? "bg-vs-bg-hover text-vs-text-primary" : "text-vs-text-muted hover:text-vs-text-secondary"}`}
+              >
+                Design system
+              </button>
+            </div>
+            <div className="min-h-0 flex-1">
+              {tokensTab === "tokens" ? (
+                <Inspector project={p} hideRail sidebarSlot={sectionSlot} onBack={go("explorer")} onOpenPreview={go("explorer")} onOpenRun={go("run")} onOpenHistory={go("explorer")} onOpenManifest={go("manifest")} onOpenFile={(path) => { void wf.openFile(path); dispatch({ type: "setActivity", activity: "explorer" }); }} />
+              ) : (
+                <DesignSystem project={p} hideRail onBack={() => setTokensTab("tokens")} extracting={autoFoundation.extracting} reloadSignal={autoFoundation.justFinished + autoBuild.justFinished} />
+              )}
+            </div>
+          </div>
+        ) : (
+          <DesignSystem project={p} hideRail onBack={go("explorer")} extracting={autoFoundation.extracting} reloadSignal={autoFoundation.justFinished + autoBuild.justFinished} />
+        )
       ) : a === "tasks" ? (
         <Tasks project={p} hideRail onBack={go("explorer")} onFlow={go("flow")} onRun={go("run")} onPlayground={go("explorer")} onTokens={go("tokens")} onManifest={go("manifest")} onHistory={go("explorer")} onSource={go("source")} />
       ) : a === "manifest" ? (
@@ -551,6 +627,30 @@ export default function App(): JSX.Element {
      <AssistantTaskProvider value={dispatchAssistantTask}>
       <CanvasSelectionProvider>
       <div className="flex h-screen w-screen flex-col overflow-hidden bg-vs-bg-primary text-vs-text-primary">
+        {/* Automatic background component build (light-pages-on-canvas §9): a quiet running indicator +
+            a completion toast, so the user knows the design-system components are building while they work. */}
+        {(autoFoundation.extracting || autoBuild.building || buildNotice) && (
+          <div className="pointer-events-none fixed bottom-4 left-1/2 z-[60] -translate-x-1/2">
+            <div className="pointer-events-auto flex items-center gap-2 rounded-lg border border-vs-border-default bg-vs-bg-elevated/95 px-3 py-2 text-[12px] text-vs-text-secondary shadow-lg backdrop-blur">
+              {buildNotice ? (
+                <>
+                  <span className="text-vs-success">✓</span>
+                  <span className="text-vs-text-primary">{buildNotice}</span>
+                </>
+              ) : autoFoundation.extracting ? (
+                <>
+                  <span className="h-3 w-3 animate-spin rounded-full border-2 border-vs-border-strong border-t-vs-accent" aria-hidden />
+                  <span>Setting up your design system in the background — extracting tokens &amp; detecting components…</span>
+                </>
+              ) : (
+                <>
+                  <span className="h-3 w-3 animate-spin rounded-full border-2 border-vs-border-strong border-t-vs-accent" aria-hidden />
+                  <span>Building design-system components in the background…{autoBuild.remaining > 0 ? ` ${autoBuild.remaining} left` : ""}</span>
+                </>
+              )}
+            </div>
+          </div>
+        )}
         <header
           className="relative flex h-9 shrink-0 items-center justify-end border-b border-vs-border-default bg-vs-bg-surface pr-2 text-xs text-vs-text-muted"
           style={{ WebkitAppRegion: "drag" } as unknown as CSSProperties}
@@ -591,7 +691,7 @@ export default function App(): JSX.Element {
                   : layout.activity === "play"
                     ? "Stories"
                     : layout.activity === "flow"
-                      ? "Design system"
+                      ? "Components"
                       : layout.activity === "tokens"
                         ? "Variables"
                         : "Panel"
@@ -690,7 +790,7 @@ export default function App(): JSX.Element {
                 {workspace.name}
               </button>
               <span className="text-vs-text-muted/50">/</span>
-              <span className="capitalize text-vs-text-secondary">{layout.activity}</span>
+              <span className="text-vs-text-secondary">{breadcrumbLabel(layout.activity)}</span>
               {/* The active editor tab, appended when a file is open in the Explorer view. */}
               {isExplorer && wf.activePath && (
                 <>
@@ -784,6 +884,24 @@ export default function App(): JSX.Element {
      </AssistantTaskProvider>
     </IdeContext.Provider>
   );
+}
+
+/** Breadcrumb label for the current activity — the user-facing name of each section
+ *  (e.g. `run` → "Playground", `play` → "Storybook", `flow` → "Components"). */
+function breadcrumbLabel(a: Activity): string {
+  const LABELS: Partial<Record<Activity, string>> = {
+    explorer: "Explorer",
+    run: "Playground",
+    play: "Storybook",
+    flow: "Components",
+    tokens: "Design tokens",
+    manifest: "Design manifest",
+    source: "Source Control",
+    tasks: "Tasks",
+    settings: "Settings",
+    history: "History",
+  };
+  return LABELS[a] ?? a.charAt(0).toUpperCase() + a.slice(1);
 }
 
 /** Friendly name for the screen a fix-it was dispatched from (the resume banner). */

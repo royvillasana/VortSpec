@@ -677,7 +677,7 @@ export function Inspector({
   );
 
   return (
-    <div className="flex h-[calc(100vh-3rem)] w-full overflow-hidden bg-vs-bg-primary text-[13px] text-vs-text-primary">
+    <div className={`flex w-full overflow-hidden bg-vs-bg-primary text-[13px] text-vs-text-primary ${hideRail ? "h-full min-h-0" : "h-[calc(100vh-3rem)]"}`}>
       {/* Figma-style Collections/Groups nav — portaled into the IDE left-dock Section tab. */}
       {sidebarSlot !== undefined && sidebarSlot && createPortal(tokenNav, sidebarSlot)}
       {!hideRail && (

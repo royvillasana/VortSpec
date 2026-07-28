@@ -15,6 +15,7 @@ interface WebviewEl extends HTMLElement {
   send(channel: string, ...args: unknown[]): void;
   reload(): void;
   loadURL(url: string): void;
+  executeJavaScript(code: string): Promise<unknown>;
 }
 
 /** Canvas input mode: select (inspect), use the app (interact), pin a comment, or place an insert slot. */
@@ -139,6 +140,13 @@ export interface InspectorBridge {
   reload: () => void;
   /** Navigate the preview to a URL (sitemap navigation) — the bridge re-attaches on load. */
   loadUrl: (url: string) => void;
+  /**
+   * Serialize the guest's LIVE DOM to clean HTML (bridge instrumentation stripped), for persisting a
+   * light page — where the DOM IS the source (light-pages-on-canvas). Null if the webview isn't ready.
+   */
+  serializeDom: () => Promise<string | null>;
+  /** Tell the guest whether it's a light page (drop targets don't need a `data-source` dev-stamp). */
+  setLightMode: (on: boolean) => void;
 }
 
 /**
@@ -151,7 +159,11 @@ export interface InspectorBridge {
  */
 export function useInspectorBridge(): InspectorBridge {
   const webviewRef = useRef<WebviewEl | null>(null);
-  const attached = useRef(false);
+  // The element we've wired listeners onto. The <webview> REMOUNTS when its `src`/key changes
+  // (e.g. opening a light page), so we must re-attach to each NEW element — a once-only boolean
+  // guard would leave the remounted webview with no listeners (no "ready", no tree → uneditable
+  // until the whole app reloads). Track the element identity instead.
+  const attachedEl = useRef<WebviewEl | null>(null);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [tree, setTree] = useState<BridgeTree | null>(null);
@@ -306,8 +318,18 @@ export function useInspectorBridge(): InspectorBridge {
   const attach = useCallback(
     (el: WebviewEl | null) => {
       webviewRef.current = el;
-      if (el && !attached.current) {
-        attached.current = true;
+      if (!el) {
+        // Old element unmounted (React calls the ref with null before mounting the new one).
+        attachedEl.current = null;
+        return;
+      }
+      if (attachedEl.current !== el) {
+        // A NEW webview element (first mount, or a remount after `src`/key changed) — wire it up.
+        // Force `ready` false now: a remount carries over the old element's `ready=true`, and if the
+        // new element's `did-start-loading` is missed, the ready→true transition (which re-syncs mode,
+        // light-mode, and the tree) would never fire. Starting from false guarantees that transition.
+        attachedEl.current = el;
+        setReady(false);
         el.addEventListener("ipc-message", onIpcMessage);
         // Reset on load START (before the guest re-attaches) so we don't clobber
         // the guest's `ready`/`tree` that arrive right after DOMContentLoaded.
@@ -457,11 +479,35 @@ export function useInspectorBridge(): InspectorBridge {
   );
   const requestTree = useCallback(() => send({ t: "requestTree" }), [send]);
   const reload = useCallback(() => webviewRef.current?.reload(), []);
+  const setLightMode = useCallback((on: boolean) => send({ t: "setLightMode", on }), [send]);
   const loadUrl = useCallback((url: string) => {
     try {
       webviewRef.current?.loadURL(url);
     } catch {
       /* webview not ready — the caller can retry */
+    }
+  }, []);
+  const serializeDom = useCallback(async (): Promise<string | null> => {
+    const wv = webviewRef.current;
+    if (!wv) return null;
+    // Run in the guest: clone the live document, strip the bridge's instrumentation (any `data-vs*`
+    // attribute, contenteditable, overlay/injected style/script), and return clean HTML. The live DOM
+    // already reflects every edit (live overrides + ephemeral moves), so this is the page's new source.
+    const code = `(() => {
+      const root = document.documentElement.cloneNode(true);
+      root.querySelectorAll('[data-vs-overlay]').forEach((n) => n.remove());
+      root.querySelectorAll('style[data-vs-style], style[data-vs], script[data-vs]').forEach((n) => n.remove());
+      root.querySelectorAll('*').forEach((el) => {
+        Array.from(el.attributes).forEach((a) => { if (a.name.indexOf('data-vs') === 0) el.removeAttribute(a.name); });
+        if (el.hasAttribute('contenteditable')) el.removeAttribute('contenteditable');
+      });
+      return '<!doctype html>\\n' + root.outerHTML;
+    })()`;
+    try {
+      const html = await wv.executeJavaScript(code);
+      return typeof html === "string" ? html : null;
+    } catch {
+      return null;
     }
   }, []);
 
@@ -522,5 +568,7 @@ export function useInspectorBridge(): InspectorBridge {
     requestTree,
     reload,
     loadUrl,
+    serializeDom,
+    setLightMode,
   };
 }

@@ -515,6 +515,12 @@ export function GuidedFlow({
     ? "Set up the foundation to begin"
     : `Foundation ready · ${builtCount}/${total} built · ${verifiedCount} verified`;
 
+  // Foundation extraction (tokens + component detection) is kicked in the BACKGROUND at the app level
+  // (useAutoFoundation) the moment a fresh project opens — so it no longer needs to run from here.
+
+  // The flow section IS the component workspace: the roster of components being created (build/verify),
+  // component creation, the design manifest, and outputs. The browsable design-system palette lives in
+  // the Design-tokens section now (its "Design system" tab) — not here.
   return (
     <div
       className={`flex w-full overflow-hidden bg-vs-bg-primary text-[13px] text-vs-text-primary ${
@@ -547,8 +553,8 @@ export function GuidedFlow({
       <main className="flex min-w-0 flex-1 flex-col bg-vs-bg-primary">
         <header className="flex flex-none items-center gap-3.5 border-b border-vs-border-default px-8 pb-4 pt-5">
           <div className="flex flex-col gap-0.5">
-            <h1 className="text-xl font-semibold tracking-[-0.01em]">Design system</h1>
-            {!foundationReady && <span className="text-xs text-vs-text-secondary">{status}</span>}
+            <h1 className="text-xl font-semibold tracking-[-0.01em]">Components</h1>
+            <span className="text-xs text-vs-text-secondary">Build &amp; verify your design-system components, then generate the manifest. {!foundationReady ? status : ""}</span>
           </div>
           <div className="flex-1" />
           {/* Status pills — foundation state + built/verified counts (design: dashboard). */}

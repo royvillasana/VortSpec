@@ -596,6 +596,42 @@ export const ipcContract = {
     }),
   },
   "manifest:get": { request: z.string(), response: manifestResultSchema },
+  // lite design system (light-design-system): derive the browsable palette / write designer.md /
+  // build the Figma-stand-in agent prompt (the renderer runs it via useAgentRun).
+  "lite:palette": { request: z.string(), response: z.string() },
+  "lite:writeDesigner": { request: z.string(), response: z.string() },
+  "lite:standInPrompt": { request: z.string(), response: z.string() },
+  // two-track build prompt (4.2): light stand-ins first, then framework components, over one Figma read.
+  "lite:twoTrackPrompt": { request: z.string(), response: z.string() },
+  // serve a light page from a local http origin + return its URL, so the framework canvas webview can
+  // load it with the guest inspector-bridge (light-pages-on-canvas, task 1).
+  "lite:pageUrl": { request: z.object({ projectPath: z.string(), name: z.string() }), response: z.string() },
+  // the Flow "Generate code" prompt: convert ALL screens to the selected framework + audit/validate (5).
+  "lite:generatePrompt": { request: z.string(), response: z.string() },
+  // per-page "Generate code" prompt (Sitemap per-row action): convert ONE screen to the selected framework.
+  "lite:convertPage": { request: z.object({ projectPath: z.string(), name: z.string() }), response: z.string() },
+  // per-page framework-generation status: generated (has a framework version) + stale (edited since).
+  "lite:genStatus": {
+    request: z.string(),
+    response: z.array(z.object({ name: z.string(), generated: z.boolean(), stale: z.boolean() })),
+  },
+  // record that a light page was generated to framework code (so later edits read as "needs update").
+  "lite:markGenerated": { request: z.object({ projectPath: z.string(), name: z.string() }), response: z.boolean() },
+  // insertable design-system stand-ins (component + variant + framework-free HTML) for the canvas Insert menu.
+  "lite:standins": {
+    request: z.string(),
+    response: z.array(z.object({ component: z.string(), variant: z.string(), html: z.string() })),
+  },
+  // per-component readiness for the canvas: coded (framework-ready, Convert reuses) vs designed-only (light-only).
+  "lite:readiness": {
+    request: z.string(),
+    response: z.array(z.object({ name: z.string(), readiness: z.enum(["light-only", "framework-ready"]) })),
+  },
+  // light page authoring (task 5.1): compose a page from the light design system, then read/list them.
+  "lite:pagePrompt": { request: z.object({ projectPath: z.string(), name: z.string(), description: z.string() }), response: z.string() },
+  "lite:page": { request: z.object({ projectPath: z.string(), name: z.string() }), response: z.string() },
+  "lite:pages": { request: z.string(), response: z.array(z.string()) },
+  "lite:writePage": { request: z.object({ projectPath: z.string(), name: z.string(), html: z.string() }), response: z.void() },
   "manifest:save": {
     request: z.object({ projectPath: z.string(), content: z.string() }),
     response: manifestResultSchema,

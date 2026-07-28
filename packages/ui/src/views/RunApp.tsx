@@ -9,9 +9,10 @@ import { ProjectRail, projectRailItems } from "@vortspec/ui/ProjectRail";
 import { DesignPanel, ChangesBar } from "../components/run-canvas/DesignPanel";
 import { FigmaMcpBanner } from "../components/FigmaMcpBanner";
 import { StorybookSidebar } from "../components/run-canvas/StorybookSidebar";
-import { Sitemap } from "../components/run-canvas/Sitemap";
+import { Sitemap, type PageGenState } from "../components/run-canvas/Sitemap";
 import type { RouteDiscovery, RouteNode, Rect } from "@vortspec/core/ipc";
 import { RunCanvas } from "../components/run-canvas/RunCanvas";
+import { Logo } from "../components/Logo";
 import { viewportsFromTokens, appliesInViewport, type ViewportId, type DeviceFrameKind } from "../components/run-canvas/viewports";
 import {
   resolveComponent,
@@ -262,11 +263,22 @@ export function RunApp({
     isApp ? api.stopAppServer(project.path) : api.stopDevServer(project.path);
 
   const embedUrl = dev.url ? dev.url.replace(/\/+$/, "") + "/" : "";
-  const canvasReady = canvas && isApp && !!embedUrl;
 
   // ── Sitemap: the app's page/route tree, read from source (change: sitemap-tree) ──
   const [routes, setRoutes] = useState<RouteDiscovery | null>(null);
   const [currentPath, setCurrentPath] = useState("/");
+  // Selected LIGHT page (from a `light://` sitemap node) — rendered in the editable light canvas
+  // instead of navigating the app webview (light-design-system).
+  const [lightPage, setLightPage] = useState<string | null>(null);
+  // The served URL for the current light page — loaded into the RunCanvas webview (light-pages-on-canvas).
+  const [lightPageSrc, setLightPageSrc] = useState("");
+
+  // A light page is edited in the SAME canvas: it's served from a local origin and loaded into the
+  // RunCanvas webview with the guest bridge, exactly like a framework page — so every left-sidebar
+  // control works on it. The canvas src is the served light-page URL for a light page, else the dev URL.
+  const isLightPage = !!lightPage;
+  const canvasSrc = isLightPage ? lightPageSrc : embedUrl;
+  const canvasReady = canvas && isApp && !!canvasSrc;
   // The source file of the page currently on screen — grounds canvas Apply so the agent
   // edits the previewed page (not index.html's mount shell) when an element has no known
   // component file of its own. Walks the route tree for the node at `currentPath`.
@@ -284,6 +296,63 @@ export function RunApp({
   }, [routes, currentPath]);
   const rediscoverRoutes = useCallback(() => {
     void api.discoverRoutes(project.path).then(setRoutes);
+  }, [project.path]);
+  // How many navigable/light pages the project has — 0 ⇒ a brand-new project with nothing to preview yet,
+  // which the Playground answers with a big "create from the chat" message instead of a dev-server error.
+  const pageCount = useMemo(() => {
+    if (!routes) return 0;
+    let n = 0;
+    const walk = (ns: RouteNode[]): void => ns.forEach((r) => ((r.navigable || r.light) && n++, walk(r.children)));
+    walk(routes.routes);
+    return n;
+  }, [routes]);
+  // "Generate code" (light-pages-on-canvas §5) — PER PAGE, from the Sitemap's per-row hammer action:
+  // convert ONE Playground screen to the configured framework (build/reuse components, then audit +
+  // visually validate). Runs in the background via the same agent-run machinery; the screen stays the
+  // editable source of truth. `generatingPage` tracks which page is in flight (spinner on that row).
+  const generateMod = useAgentRun();
+  const [generatingPage, setGeneratingPage] = useState<string | null>(null);
+  // Per light-page generation state (ungenerated / synced / stale) → the Sitemap's Generate/Update icon.
+  const [pageStates, setPageStates] = useState<Record<string, PageGenState>>({});
+  const loadGenStatus = useCallback(() => {
+    void api
+      .liteGenStatus(project.path)
+      .then((rows) => {
+        const next: Record<string, PageGenState> = {};
+        for (const r of rows) next[r.name] = !r.generated ? "ungenerated" : r.stale ? "stale" : "synced";
+        setPageStates(next);
+      })
+      .catch(() => undefined);
+  }, [project.path]);
+  const generatePage = useCallback(async (name: string): Promise<void> => {
+    const prompt = await api.liteConvertPage(project.path, name).catch(() => "");
+    if (!prompt) return;
+    setGeneratingPage(name);
+    await generateMod.start({
+      prompt,
+      cwd: project.path,
+      allowedTools: ["Read", "Write", "Edit", "Bash"],
+      bypassPermissions: true,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project.path]);
+  // When a conversion run finishes: mark that page generated (records its current HTML hash, so a later
+  // edit reads as "stale" → the icon becomes Update), then refresh the status and clear the spinner.
+  useEffect(() => {
+    if (generateMod.model.status !== "done") return;
+    const done = generatingPage;
+    setGeneratingPage(null);
+    if (done) void api.liteMarkGenerated(project.path, done).catch(() => undefined).then(loadGenStatus);
+    else loadGenStatus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [generateMod.model.status]);
+  // Load / refresh the generation status when the project or its page set changes (a new page, or an
+  // edit persisted to a light page, changes what's stale).
+  useEffect(() => loadGenStatus(), [loadGenStatus, routes]);
+  // The configured framework (project.yaml) — names it in the per-page "Generate code" tooltip.
+  const [framework, setFramework] = useState<string | null>(null);
+  useEffect(() => {
+    void api.projectConfig(project.path).then((c) => setFramework(c?.framework ?? null)).catch(() => setFramework(null));
   }, [project.path]);
   useEffect(() => {
     if (!canvas) return;
@@ -370,6 +439,13 @@ export function RunApp({
   // Navigate the preview to a route (SPA fallback or a real Next.js URL both work).
   const navigateTo = useCallback(
     (path: string) => {
+      // A light page has no URL — render it in the light canvas instead of navigating the webview.
+      if (path.startsWith("light://")) {
+        setLightPage(path.slice("light://".length));
+        setCurrentPath(path);
+        return;
+      }
+      setLightPage(null);
       if (!dev.url) return;
       const url = new URL(path.startsWith("/") ? path.slice(1) : path, dev.url.replace(/\/+$/, "") + "/").href;
       bridge.loadUrl(url);
@@ -378,6 +454,27 @@ export function RunApp({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [dev.url, bridge.loadUrl],
   );
+
+  // Load the selected light page: its served URL (loaded into the canvas webview) + its standins/readiness.
+  useEffect(() => {
+    if (!lightPage) {
+      setLightPageSrc("");
+      return;
+    }
+    let alive = true;
+    // Serve the page and point the canvas webview at it — the guest bridge instruments it like any page.
+    void api.litePageUrl(project.path, lightPage).then((u) => alive && setLightPageSrc(u)).catch(() => alive && setLightPageSrc(""));
+    return () => {
+      alive = false;
+    };
+  }, [lightPage, project.path]);
+
+  // Tell the guest bridge whether this is a light page (drop targets skip the data-source dev-stamp
+  // requirement — a light page's DOM IS its source). Re-sent when the page kind changes OR the bridge
+  // re-attaches (a webview load resets the guest's flag).
+  useEffect(() => {
+    if (bridge.ready) bridge.setLightMode(isLightPage);
+  }, [isLightPage, bridge.ready, bridge.setLightMode]);
 
   // A state-navigated screen has no URL — reveal its source file so the user can edit it.
   const openScreenFile = useCallback(
@@ -1096,6 +1193,14 @@ export function RunApp({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bridge.dragDrop]);
   async function handleDrop(drop: NonNullable<typeof bridge.dragDrop>): Promise<void> {
+    // Light page: the ephemeral move is ALREADY applied to the guest DOM, and the DOM IS the source —
+    // so there's no ts-morph reconcile and no data-source to require. Keep the move (forget the guest's
+    // revert tracking) and persist the serialized DOM. Never fall through to the refuse/reconcile below.
+    if (isLightPageRef.current) {
+      bridge.clearMove();
+      schedulePersistLight();
+      return;
+    }
     // FLUSH pending deterministic writes first, so a move — deterministic OR the AI reconcile — sees
     // the CURRENT source. Without this, editing an element then immediately moving it snapshots stale
     // source (the debounced text/style write hasn't landed), and the AI reports "the element doesn't
@@ -1222,7 +1327,12 @@ export function RunApp({
           phase: move.phase as "moved" | "reconciling" | "error",
           error: move.error,
           progress: move.progress,
-          onKeep: () => void move.keep(),
+          // Light page: the ephemeral move is already in the guest DOM — persist the serialized DOM.
+          // (move.keep() still clears the gate; its ts-morph reconcile no-ops with no React source file.)
+          onKeep: () => {
+            if (isLightPageRef.current) schedulePersistLight();
+            void move.keep();
+          },
           onRevert: () => void move.revert(),
           onStop: () => void move.cancel(),
         }
@@ -1325,12 +1435,37 @@ export function RunApp({
   // effect without stale closures or re-subscribing.
   const viewportIdRef = useRef(viewportId);
   viewportIdRef.current = viewportId;
+  // light-pages-on-canvas: pages edited in the Playground are ALWAYS light now. Their edits apply live to
+  // the guest DOM (overrides + ephemeral moves); we persist by serializing that DOM back to the .html (the
+  // DOM IS the source) — never the ts-morph React path. Refs so the debounced writer reads fresh values.
+  const isLightPageRef = useRef(isLightPage);
+  isLightPageRef.current = isLightPage;
+  const lightPageRef = useRef(lightPage);
+  lightPageRef.current = lightPage;
+  const lightPersistTimer = useRef<number | undefined>(undefined);
+  const schedulePersistLight = useCallback(() => {
+    if (!isLightPageRef.current) return;
+    window.clearTimeout(lightPersistTimer.current);
+    lightPersistTimer.current = window.setTimeout(() => {
+      const name = lightPageRef.current;
+      if (!name) return;
+      void bridge.serializeDom().then((html) => {
+        // Persist the edit, then refresh generation status: editing a page that was already generated
+        // makes it "stale" (its framework code no longer matches) → the row icon flips to Update.
+        if (html != null) void api.liteWritePage(project.path, name, html).then(loadGenStatus);
+      });
+    }, 500);
+  }, [bridge, project.path, loadGenStatus]);
 
   // Re-scope live overrides when the viewport changes (responsive preview): a mobile/tablet
   // edit renders only in its own viewport — matching how it commits to source — so switching
   // views clears every override and re-applies just those that apply at the new breakpoint. A
   // viewport switch only resizes the webview (no reload), so node ids stay valid.
   useEffect(() => {
+    // A light page has no per-viewport source edits and its edits live in the DOM (persisted on save),
+    // NOT in `pending` — so clearing overrides here would just WIPE the user's edits on a viewport switch.
+    // Skip the re-scope entirely for a light page; its single DOM applies at every viewport.
+    if (isLightPageRef.current) return;
     bridge.clearOverride();
     for (const e of Object.values(pendingRef.current)) {
       if (!e.nodeId || !appliesInViewport(e.viewport, viewportId)) continue;
@@ -1354,8 +1489,9 @@ export function RunApp({
     (css: Record<string, string>) => {
       const id = selectedIdRef.current;
       if (id) applyOverride(id, css);
+      schedulePersistLight(); // light page: the live override IS the edit — persist the serialized DOM
     },
-    [applyOverride],
+    [applyOverride, schedulePersistLight],
   );
 
   // Record pending edits once (e.g. on drag end), never per frame.
@@ -1375,6 +1511,12 @@ export function RunApp({
     ) => {
       const sel = selectionRef.current;
       if (!sel) return;
+      // A light page persists by serializing the live guest DOM (the edit is already applied there via the
+      // override/text/move) — the ts-morph React source path below never runs for it.
+      if (isLightPageRef.current) {
+        schedulePersistLight();
+        return;
+      }
       const fp = readoutRef.current?.fingerprint || undefined;
       const nodeId = selectedIdRef.current ?? undefined;
       const text = readoutRef.current?.text ?? null;
@@ -1421,7 +1563,7 @@ export function RunApp({
         });
       }
     },
-    [autoPersist],
+    [autoPersist, schedulePersistLight],
   );
 
   // Canvas drags (resize / padding / gap / margin) commit as per-element style
@@ -1894,6 +2036,7 @@ export function RunApp({
   // an <aside> on desktop, or PORTALED into the IDE's unified left-dock slot (sidebarSlot).
   const sidebarBody = (
     <>
+      {/* Pages are created by ASKING in the Chat sidebar (light-first) — no create form/button here. */}
       {/* Sitemap: navigate the preview to the app's pages, in any mode. */}
       <Sitemap
         discovery={routes}
@@ -1902,6 +2045,10 @@ export function RunApp({
         onOpenFile={openScreenFile}
         onRetryScreenPreview={enableScreenPreview}
         screenPreviewState={screenPreviewState}
+        framework={framework ?? undefined}
+        generatingPage={generatingPage}
+        pageStates={pageStates}
+        onGeneratePage={(name) => void generatePage(name)}
       />
       {mode === "comment" ? (
         <>
@@ -1982,6 +2129,10 @@ export function RunApp({
       {/* Storybook: portal the story nav into the dock's Section tab (canvas is app-only,
           so Storybook has no Design panel — its nav goes here instead). */}
       {!isApp && sidebarSlot && embedUrl && createPortal(storybookNav, sidebarSlot)}
+      {/* Light-first: when there's no running app canvas, the Design panel (Sitemap + "+ New light
+          page") still portals here — so light pages work WITHOUT an app scaffold. */}
+      {isApp && sidebarSlot && !canvasReady &&
+        createPortal(<div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-vs-bg-surface">{sidebarBody}</div>, sidebarSlot)}
       <main className="flex min-w-0 flex-1 flex-col bg-vs-bg-primary">
         <header className="flex flex-none items-center gap-3 border-b border-vs-border-default px-5 py-3">
           <span className="text-[15px] font-semibold">{isApp ? "Playground" : "Storybook"}</span>
@@ -2004,13 +2155,40 @@ export function RunApp({
               : "Your component library, running live from Storybook."}
           </span>
           <div className="flex-1" />
-          {dev.state === "running" && dev.url ? (
+          {isLightPage ? (
+            // A light page is already served + live in the canvas — no dev server to start/stop. Offer
+            // to open it in a browser and reload (icon-only), not "Start app".
+            <>
+              {lightPageSrc && <span className="font-mono text-[11px] text-vs-text-secondary">{lightPageSrc.replace(/^https?:\/\//, "")}</span>}
+              <button
+                type="button"
+                disabled={!lightPageSrc}
+                onClick={() => lightPageSrc && void api.openInstall(lightPageSrc)}
+                title="Open in browser"
+                aria-label="Open in browser"
+                className={HEADER_ICON_BTN}
+              >
+                <ExternalLinkIcon />
+              </button>
+              <button type="button" onClick={refresh} title="Reload the preview" aria-label="Refresh" className={HEADER_ICON_BTN}>
+                <RefreshIcon />
+              </button>
+            </>
+          ) : dev.state === "running" && dev.url ? (
             <>
               <span className="font-mono text-[11px] text-vs-text-secondary">{dev.url.replace(/^https?:\/\//, "")}</span>
-              <Button variant="ghost" onClick={() => void api.openInstall(dev.url!)}>Open in browser</Button>
-              <Button variant="ghost" onClick={refresh} title="Reload the live preview">
-                <RefreshIcon /> Refresh
-              </Button>
+              <button
+                type="button"
+                onClick={() => void api.openInstall(dev.url!)}
+                title="Open in browser"
+                aria-label="Open in browser"
+                className={HEADER_ICON_BTN}
+              >
+                <ExternalLinkIcon />
+              </button>
+              <button type="button" onClick={refresh} title="Reload the live preview" aria-label="Refresh" className={HEADER_ICON_BTN}>
+                <RefreshIcon />
+              </button>
               <Button variant="ghost" onClick={() => void stopFor()}>Stop</Button>
             </>
           ) : (
@@ -2198,6 +2376,29 @@ export function RunApp({
                 )}
               </div>
             </Centered>
+          ) : isLightPage && !canvasReady ? (
+            // A page is selected; its served URL is loading — it renders in the RunCanvas (below) once ready.
+            <Centered>
+              <Spinner /> Opening page…
+            </Centered>
+          ) : isApp && !lightPage && routes !== null && pageCount === 0 && dev.state !== "starting" && dev.state !== "running" && dev.state !== "error" ? (
+            // Brand-new blank project: nothing built yet, no pages. Don't show a dev-server/no-script error
+            // or any other project's pages — greet the user and point them at the one thing they need (the
+            // Chat sidebar). Pages are created by asking; nothing else is shown here.
+            <Centered>
+              <div className="flex max-w-xl flex-col items-center gap-6 text-center">
+                <Logo size={56} className="opacity-90" />
+                <div className="flex flex-col gap-3">
+                  <p className="text-2xl font-semibold tracking-[-0.01em] text-vs-text-primary">
+                    Create whatever you want from a single prompt.
+                  </p>
+                  <p className="text-sm leading-relaxed text-vs-text-secondary">
+                    Just describe it in the <b className="text-vs-text-primary">Chat sidebar</b> — it’s composed from
+                    your design system and previews here, live. No forms, no buttons. That’s it.
+                  </p>
+                </div>
+              </div>
+            </Centered>
           ) : dev.state === "starting" ? (
             <Centered>
               <Spinner /> {dev.message ?? `Starting ${isApp ? "your app's dev server" : "Storybook"}…`}
@@ -2285,7 +2486,7 @@ export function RunApp({
                   </div>
                 )}
                 <RunCanvas
-                  src={embedUrl}
+                  src={canvasSrc}
                   guestPreloadUrl={guestPreload}
                   bridge={bridge}
                   mode={mode}
@@ -2434,21 +2635,25 @@ export function RunApp({
             </Centered>
           ) : isApp ? (
             <Centered>
-              <div className="flex max-w-md flex-col items-center gap-2 text-center">
-                <span className="text-2xl" aria-hidden>
-                  📄
-                </span>
-                <p className="text-sm font-semibold text-vs-text-primary">
-                  This is your Playground — where your pages preview.
-                </p>
-                <p className="text-xs leading-relaxed text-vs-text-muted">
-                  You don’t have any pages yet. Once your components are built, just describe the page you want in the{" "}
-                  <b>Chat sidebar</b> — it’s composed from your design-system components and appears here live. No
-                  forms or buttons to hunt for; you create pages by asking.
-                </p>
-                <Button variant="primary" className="mt-2" onClick={() => void start()}>
-                  Start app
-                </Button>
+              <div className="flex max-w-xl flex-col items-center gap-6 text-center">
+                <Logo size={56} className="opacity-90" />
+                <div className="flex flex-col gap-3">
+                  <p className="text-2xl font-semibold tracking-[-0.01em] text-vs-text-primary">
+                    Create whatever you want from a single prompt.
+                  </p>
+                  <p className="text-sm leading-relaxed text-vs-text-secondary">
+                    Just describe it in the <b className="text-vs-text-primary">Chat sidebar</b> — it’s composed from
+                    your design system and previews here, live. No forms, no buttons. That’s it.
+                  </p>
+                </div>
+                {/* De-emphasized: start the real app dev server (only if this project has one). */}
+                <button
+                  type="button"
+                  onClick={() => void start()}
+                  className="text-[11px] text-vs-text-muted underline-offset-2 hover:text-vs-text-secondary hover:underline"
+                >
+                  or start the app dev server
+                </button>
               </div>
             </Centered>
           ) : (
@@ -2483,3 +2688,17 @@ function RefreshIcon(): React.JSX.Element {
     </svg>
   );
 }
+
+function ExternalLinkIcon(): React.JSX.Element {
+  return (
+    <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M11 4h5v5" />
+      <path d="M16 4l-7 7" />
+      <path d="M8 4H5.5A1.5 1.5 0 0 0 4 5.5v9A1.5 1.5 0 0 0 5.5 16h9a1.5 1.5 0 0 0 1.5-1.5V12" />
+    </svg>
+  );
+}
+
+/** Shared style for the Playground header's icon-only actions (Open in browser, Refresh). */
+const HEADER_ICON_BTN =
+  "rounded p-1.5 text-vs-text-muted transition-colors hover:bg-vs-bg-hover hover:text-vs-text-primary disabled:cursor-not-allowed disabled:opacity-50";

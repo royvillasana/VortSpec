@@ -128,6 +128,23 @@ export interface VortSpecApi {
   getHistory(projectPath: string): Promise<IpcResponse<"flow:getHistory">>;
   setPublishTarget(projectPath: string, repoUrl: string): Promise<IpcResponse<"flow:setPublishTarget">>;
 
+  // lite design system (light-design-system)
+  getLitePalette(projectPath: string): Promise<IpcResponse<"lite:palette">>;
+  writeDesignerManifest(projectPath: string): Promise<IpcResponse<"lite:writeDesigner">>;
+  liteStandInPrompt(projectPath: string): Promise<IpcResponse<"lite:standInPrompt">>;
+  liteTwoTrackPrompt(projectPath: string): Promise<IpcResponse<"lite:twoTrackPrompt">>;
+  litePageUrl(projectPath: string, name: string): Promise<IpcResponse<"lite:pageUrl">>;
+  liteGeneratePrompt(projectPath: string): Promise<IpcResponse<"lite:generatePrompt">>;
+  liteConvertPage(projectPath: string, name: string): Promise<IpcResponse<"lite:convertPage">>;
+  liteGenStatus(projectPath: string): Promise<IpcResponse<"lite:genStatus">>;
+  liteMarkGenerated(projectPath: string, name: string): Promise<IpcResponse<"lite:markGenerated">>;
+  liteStandIns(projectPath: string): Promise<IpcResponse<"lite:standins">>;
+  liteReadiness(projectPath: string): Promise<IpcResponse<"lite:readiness">>;
+  litepagePrompt(projectPath: string, name: string, description: string): Promise<IpcResponse<"lite:pagePrompt">>;
+  liteReadPage(projectPath: string, name: string): Promise<IpcResponse<"lite:page">>;
+  litePages(projectPath: string): Promise<IpcResponse<"lite:pages">>;
+  liteWritePage(projectPath: string, name: string, html: string): Promise<IpcResponse<"lite:writePage">>;
+
   // manifest (DESIGN.md)
   getManifest(projectPath: string): Promise<IpcResponse<"manifest:get">>;
   saveManifest(projectPath: string, content: string): Promise<IpcResponse<"manifest:save">>;

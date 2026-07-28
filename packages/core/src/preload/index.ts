@@ -146,6 +146,23 @@ const api: VortSpecApi = {
     invoke("flow:completeInput", { projectPath, stageId }),
   getHistory: (projectPath: string) => invoke("flow:getHistory", projectPath),
   getManifest: (projectPath: string) => invoke("manifest:get", projectPath),
+  getLitePalette: (projectPath: string) => invoke("lite:palette", projectPath),
+  writeDesignerManifest: (projectPath: string) => invoke("lite:writeDesigner", projectPath),
+  liteStandInPrompt: (projectPath: string) => invoke("lite:standInPrompt", projectPath),
+  liteTwoTrackPrompt: (projectPath: string) => invoke("lite:twoTrackPrompt", projectPath),
+  litePageUrl: (projectPath: string, name: string) => invoke("lite:pageUrl", { projectPath, name }),
+  liteGeneratePrompt: (projectPath: string) => invoke("lite:generatePrompt", projectPath),
+  liteConvertPage: (projectPath: string, name: string) => invoke("lite:convertPage", { projectPath, name }),
+  liteGenStatus: (projectPath: string) => invoke("lite:genStatus", projectPath),
+  liteMarkGenerated: (projectPath: string, name: string) => invoke("lite:markGenerated", { projectPath, name }),
+  liteStandIns: (projectPath: string) => invoke("lite:standins", projectPath),
+  liteReadiness: (projectPath: string) => invoke("lite:readiness", projectPath),
+  litepagePrompt: (projectPath: string, name: string, description: string) =>
+    invoke("lite:pagePrompt", { projectPath, name, description }),
+  liteReadPage: (projectPath: string, name: string) => invoke("lite:page", { projectPath, name }),
+  litePages: (projectPath: string) => invoke("lite:pages", projectPath),
+  liteWritePage: (projectPath: string, name: string, html: string) =>
+    invoke("lite:writePage", { projectPath, name, html }),
   saveManifest: (projectPath: string, content: string) =>
     invoke("manifest:save", { projectPath, content }),
   listManifestVersions: (projectPath: string) =>

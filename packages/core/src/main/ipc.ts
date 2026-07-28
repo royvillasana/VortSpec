@@ -104,6 +104,8 @@ import {
   snapshotManifest,
 } from "./manifest/manifest-reader";
 import type { SnapshotReason } from "@vortspec/core/manifest";
+import { getProjectPaletteHtml, writeDesignerMd, buildProjectStandInPrompt, buildProjectTwoTrackPrompt, buildProjectLightPagePrompt, buildProjectGenerateCodePrompt, buildProjectConvertPagePrompt, liteGenerationStatus, markPageGenerated, readLightPage, listLightPages, writeLightPage, listInsertableStandIns, listComponentReadiness } from "./lite/lite-source";
+import { serveLightPages, lightPageUrl } from "./lite/light-serve";
 import {
   startDevServer,
   stopDevServer,
@@ -336,6 +338,26 @@ const handlers: Record<IpcChannel, Handler> = {
     completeInput(req.projectPath, req.stageId)) as Handler,
   "flow:getHistory": ((projectPath: string) => getRunHistory(projectPath)) as Handler,
   "manifest:get": ((projectPath: string) => getManifest(projectPath)) as Handler,
+  "lite:palette": ((projectPath: string) => getProjectPaletteHtml(projectPath)) as Handler,
+  "lite:writeDesigner": ((projectPath: string) => writeDesignerMd(projectPath)) as Handler,
+  "lite:standInPrompt": ((projectPath: string) => buildProjectStandInPrompt(projectPath)) as Handler,
+  "lite:twoTrackPrompt": ((projectPath: string) => buildProjectTwoTrackPrompt(projectPath)) as Handler,
+  "lite:pageUrl": ((r: { projectPath: string; name: string }) =>
+    serveLightPages(r.projectPath).then((base) => lightPageUrl(base, r.name))) as Handler,
+  "lite:generatePrompt": ((projectPath: string) => buildProjectGenerateCodePrompt(projectPath)) as Handler,
+  "lite:convertPage": ((r: { projectPath: string; name: string }) =>
+    buildProjectConvertPagePrompt(r.projectPath, r.name)) as Handler,
+  "lite:genStatus": ((projectPath: string) => liteGenerationStatus(projectPath)) as Handler,
+  "lite:markGenerated": ((r: { projectPath: string; name: string }) =>
+    markPageGenerated(r.projectPath, r.name)) as Handler,
+  "lite:standins": ((projectPath: string) => listInsertableStandIns(projectPath)) as Handler,
+  "lite:readiness": ((projectPath: string) => listComponentReadiness(projectPath)) as Handler,
+  "lite:pagePrompt": ((r: { projectPath: string; name: string; description: string }) =>
+    buildProjectLightPagePrompt(r.projectPath, r.name, r.description)) as Handler,
+  "lite:page": ((r: { projectPath: string; name: string }) => readLightPage(r.projectPath, r.name)) as Handler,
+  "lite:pages": ((projectPath: string) => listLightPages(projectPath)) as Handler,
+  "lite:writePage": ((r: { projectPath: string; name: string; html: string }) =>
+    writeLightPage(r.projectPath, r.name, r.html)) as Handler,
   "manifest:save": ((req: { projectPath: string; content: string }) =>
     saveManifest(req.projectPath, req.content, new Date().toISOString())) as Handler,
   "manifest:listVersions": ((projectPath: string) =>

@@ -189,28 +189,77 @@ You can run `/storybook` and `/design-doc` at any time to update documentation a
 
 Compose components into complete screens, layouts, and product features.
 
+> ## 🟢 LIGHT-FIRST BY DEFAULT — READ FIRST
+>
+> **When the user asks to create a page or screen in the Playground, create a LIGHT PAGE by default.**
+> A light page is framework-free HTML written to `.vortspec/light-pages/<name>.html`, composed from the
+> light design system (`designer.md` + the `.vortspec/light-html/` stand-ins). This is the DEFAULT and
+> what the user sees and edits.
+>
+> On a create-page request you MUST NOT, in the foreground:
+> - scaffold or set up a React/Tailwind/Vite app (no `package.json`, no `vite`, no Tailwind config, no `App.tsx`),
+> - build React/framework components or run the 7-step cycle,
+> - create a `src/screens/…` or `src/pages/…` `.tsx` screen,
+> - extract or invent tokens.
+>
+> The real framework version (React + Tailwind + components) is generated **LATER, in the BACKGROUND**,
+> only when the user is happy with the light page and triggers **"Convert to code"**. Token extraction and
+> React component creation happen under the hood — never as the visible result of "create a page".
+>
+> Follow `buildLightPagePrompt`'s contract: read `designer.md`, reuse the light stand-ins, emit framework-free
+> HTML, mark each design-system instance with `data-component="<Name>"`, and write the single `.html` file.
+>
+> The framework-first path below (7-step cycle, `/storybook`, gap detection, `src/…` screens) is **Path B —
+> opt-in**: use it ONLY when the user explicitly asks to build the real framework screen up front. Do not
+> default to it.
+
 | Level | Examples |
 |---|---|
 | **Templates** | Two-column layout, full-bleed hero, dashboard shell |
 | **Screens** | Homepage, Login, Dashboard, Settings |
 | **Features** | Checkout flow, Onboarding wizard, Search results |
 
-Run the **7-step cycle** once per screen or feature.
+Run the **7-step cycle** once per screen or feature **only on Path B** (the explicit framework build).
+On the default light-first path, creating the light page IS the deliverable; the 7-step framework cycle
+runs later, in the background, at Convert time.
 
 #### Prerequisites before starting Screen Creation
 
-Before creating ANY screen, these must be completed:
+There are **two paths** to a screen. Pick based on how ready the design system is; the gate is
+**soft and per-component**, not an all-or-nothing block.
+
+**Path A — Light-first (soft gate; default when you want to move fast).** Compose the screen
+immediately in the Playground against the **light design system** (the palette + `designer.md`
+stand-ins), even if the framework components don't exist yet. Missing components are **not** a
+blocker here: you compose against `light-only` stand-ins, edit live, and the real framework code
+is generated later by **Convert to code**. Compiling to shippable framework code is gated **per
+component** on its framework version existing (the blockers are named — see Component Gap
+Detection) — never on the whole library being built first. **No `/storybook` or `/design-doc`
+prerequisite for this path.**
+
+**Path B — Classic framework-first (hard gate; the original flow, still fully supported).** Build
+the whole component library first, then compose screens from real components. This path requires:
 
 1. **`/storybook` has been run** — all existing components have stories and are browsable
 2. **`/design-doc` has been run** — DESIGN.md exists and passes `npx @google/design.md lint`
 
-These are mandatory. Do not begin Screen Creation without them.
+These prerequisites are mandatory **for Path B only**. Path A needs neither — it is the
+light-first soft gate that makes time-to-first-screen minutes instead of a whole library.
 
-#### Component Gap Detection — MANDATORY
+#### Component Gap Detection — SOFT for Path A, MANDATORY for Path B
 
-When the user requests a screen, **before starting the 7-step cycle**, scan the screen's
-design (Figma frame, brief, or description) and inventory every distinct UI element it
-contains. Compare this inventory against the components that already exist in `[component_dir]`.
+**Path A (light-first): a gap is NOT a block.** Compose the screen against each component's light
+stand-in (marked `light-only` in the Playground, which shows what is still "catching up"). When
+you're happy with the light preview, **Convert to code** builds any missing framework component in
+the background. Only compiling a page to shippable framework code is gated — **per component**, on
+its framework version existing — and the blocking `light-only` components are **named**, not the
+whole library. So don't run the hard gap block below on Path A; just compose and note the
+catching-up components.
+
+**Path B (framework-first): the hard gap gate applies.** When the user requests a screen,
+**before starting the 7-step cycle**, scan the screen's design (Figma frame, brief, or
+description) and inventory every distinct UI element it contains. Compare this inventory against
+the components that already exist in `[component_dir]`.
 
 If components are missing, **do not proceed with screen creation**. Instead:
 

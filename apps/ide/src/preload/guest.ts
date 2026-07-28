@@ -603,6 +603,8 @@ function buildStructureSnapshot(rootEl: Element): StructureSnapshotWire {
 
 /** How far the pointer must travel from the press point before a click becomes a drag. */
 const DRAG_THRESHOLD = 4;
+/** Light-page mode: the DOM IS the source, so drop targets don't require a `data-source` dev-stamp. */
+let lightMode = false;
 /** A press on the selected element, armed but not yet past the movement threshold. */
 let dragArm: { id: string; el: Element; startX: number; startY: number; grabX: number; grabY: number } | null = null;
 /** The live drag: the dragged element, its fingerprint, the cached structural model, and the grab offset. */
@@ -623,7 +625,8 @@ function slotResolve(slot: Slot): { wire: InsertTargetWire; anchorEl: Element } 
   // Only STAMPED elements are editable in source — never offer an unstampable anchor (index.html's
   // #root mount point, a portal root, a lib-rendered node) as a drop target: there is no JSX sibling
   // to write the move against, and the host would otherwise hand a dead-end move to the assistant.
-  if (!anchorEl.getAttribute("data-source")) return null;
+  // EXCEPT a light page (light-pages-on-canvas): its DOM IS the source, so any element is a valid anchor.
+  if (!lightMode && !anchorEl.getAttribute("data-source")) return null;
   return {
     anchorEl,
     wire: {
@@ -1096,6 +1099,9 @@ function handleCommand(cmd: BridgeCommand): void {
       // Host-initiated abort (the move panel closed) — tear down without an event.
       dragArm = null;
       dragging = null;
+      return;
+    case "setLightMode":
+      lightMode = cmd.on;
       return;
     case "revertMove":
       revertLiveMove();

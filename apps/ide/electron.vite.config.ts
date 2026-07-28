@@ -31,6 +31,11 @@ export default defineConfig({
     },
   },
   renderer: {
+    // The IDE's own dev renderer must NOT sit on Vite's default 5173 — the user's project apps default
+    // to 5173 too, and the collision makes the Playground preview a running project a black webview
+    // (it ends up pointing at the IDE's renderer instead of the app). 5273 keeps them clear. The main
+    // process loads from ELECTRON_RENDERER_URL, which electron-vite derives from this port.
+    server: { port: 5273, strictPort: true },
     resolve: {
       alias: {
         "@renderer": resolve("src/renderer/src"),
