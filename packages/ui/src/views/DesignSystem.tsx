@@ -109,16 +109,21 @@ export function DesignSystem({
               {snapshot.running ? "Updating…" : "Update snapshot"}
             </button>
           )}
-          <button
-            type="button"
-            onClick={() => void load()}
-            disabled={loading}
-            title="Refresh — re-read the palette from disk (the design system builds automatically in the background)"
-            aria-label="Refresh"
-            className="rounded p-1.5 text-vs-text-muted transition-colors hover:bg-vs-bg-hover hover:text-vs-text-primary disabled:opacity-50"
-          >
-            <RotateCw size={14} className={loading ? "animate-spin" : undefined} />
-          </button>
+          {/* The plain Refresh (re-read from disk) is only useful when there's no Update snapshot — the
+              enterprise Update snapshot already reloads the palette on completion, so it'd be a redundant
+              second "refresh" button there. */}
+          {!isEnterprise && (
+            <button
+              type="button"
+              onClick={() => void load()}
+              disabled={loading}
+              title="Refresh — re-read the palette from disk (the design system builds automatically in the background)"
+              aria-label="Refresh"
+              className="rounded p-1.5 text-vs-text-muted transition-colors hover:bg-vs-bg-hover hover:text-vs-text-primary disabled:opacity-50"
+            >
+              <RotateCw size={14} className={loading ? "animate-spin" : undefined} />
+            </button>
+          )}
         </div>
       </header>
 
