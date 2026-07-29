@@ -1044,6 +1044,33 @@ function handleCommand(cmd: BridgeCommand): void {
       }
       return;
     }
+    case "removeNode": {
+      // True delete for a light page: detach the element so it's gone from the serialized DOM
+      // (a `display:none` override would persist it, hidden). Refresh the tree so layers update.
+      const el = resolve(cmd.nodeId);
+      if (el && el !== document.body && el !== document.documentElement) {
+        el.remove();
+        send({ t: "tree", tree: buildTree() });
+      }
+      return;
+    }
+    case "moveNode": {
+      // Layers-tree drag: reorder (before/after → into the target's parent) or NEST (inside → append
+      // as a child of the target container), so the page rearranges to match. Never drop into own subtree.
+      const el = resolve(cmd.nodeId);
+      const target = resolve(cmd.targetId);
+      if (!el || !target || el === target || el.contains(target)) return;
+      if (cmd.position === "inside") {
+        target.appendChild(el); // nest the dragged element into the container
+      } else {
+        const parent = target.parentElement;
+        if (!parent) return;
+        parent.insertBefore(el, cmd.position === "after" ? target.nextSibling : target);
+      }
+      send({ t: "tree", tree: buildTree() });
+      emitGeometry(cmd.nodeId);
+      return;
+    }
     case "setClass": {
       const el = resolve(cmd.nodeId);
       if (el) {

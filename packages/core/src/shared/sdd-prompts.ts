@@ -53,6 +53,14 @@ const DESIGN_REFERENCE_CLAUSE = [
   "component (an alert is NOT a restyled button). The component's own node reference takes precedence over",
   "the design-system index. If the node truly cannot be resolved by any method, do NOT fabricate from the",
   "name: build nothing and report it unreferenced, so it is never mistaken for a design-matched component.",
+  "TOKEN BINDING (fidelity): for every design VALUE the node binds to a Figma variable, resolve that",
+  "variable to the project's OWN token and emit `var(--<token>)` — match by link → exact name → resolved",
+  "VALUE → alias, so a token the extractor renamed still binds by its value (e.g. Figma",
+  "`typography/font-size/md` = 18px → `var(--font-size-md)`). NEVER hardcode a hex/rgba/px for a bound",
+  "value, and NEVER emit a raw Figma variable name or a dangling `var(--…)`. If a bound variable resolves",
+  "to NO existing project token, add it to the token file FIRST — but only after checking it isn't a",
+  "duplicate of a token that already has that value (reuse that one instead) — then reference the new token;",
+  "never inline the literal.",
 ].join(" ");
 
 /**

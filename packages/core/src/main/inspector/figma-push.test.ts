@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  computeOrphanPushPlan,
   computePushPlan,
   decomposeShadow,
   figmaTypeFor,
@@ -172,5 +173,36 @@ describe("pushLayerOf", () => {
     expect(entry).toMatchObject({ op: "update", value: "#2A2540", currentFigmaValue: "#111111" });
     // The same token is in-sync for Light → no entry when pushing Light.
     expect(computePushPlan(tokens, figma, { mode: "Light" }).entries).toHaveLength(0);
+  });
+});
+
+describe("computeOrphanPushPlan — push only the confirmed orphan set", () => {
+  const tokens: TokenInput[] = [
+    tok("color-brand", "#7C6FF0", "color"), // matched in Figma below
+    tok("color-orphan-a", "#123456", "color"), // orphan
+    tok("space-orphan", "8px", "spacing"), // orphan
+    tok("radius-md", "6px", "radius"), // orphan, but NOT confirmed
+  ];
+  const figma: FigmaVariable[] = [fvar("color/brand", "#7C6FF0")];
+
+  it("builds create entries only for the confirmed orphans, layer-routed, skipping matched/unconfirmed", () => {
+    const plan = computeOrphanPushPlan(tokens, ["color-orphan-a", "space-orphan"], figma);
+    expect(plan.collection).toBe(VORTSPEC_COLLECTION);
+    const names = plan.entries.map((e) => e.tokenName).sort();
+    expect(names).toEqual(["color-orphan-a", "space-orphan"]);
+    // Orphans have no Figma counterpart → every entry is a create.
+    expect(plan.entries.every((e) => e.op === "create")).toBe(true);
+    // A matched token (color-brand) and an unconfirmed orphan (radius-md) never appear.
+    expect(names).not.toContain("color-brand");
+    expect(names).not.toContain("radius-md");
+  });
+
+  it("ignores confirmed names that aren't in the token set (gated to real tokens)", () => {
+    expect(computeOrphanPushPlan(tokens, ["ghost-token"], figma).entries).toHaveLength(0);
+  });
+
+  it("skips an 'orphan' that actually already exists in Figma in-sync (raced sync → no duplicate)", () => {
+    // color-brand is confirmed as an orphan but its value matches Figma → the in-sync check drops it.
+    expect(computeOrphanPushPlan(tokens, ["color-brand"], figma).entries).toHaveLength(0);
   });
 });

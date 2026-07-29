@@ -27,6 +27,8 @@ export function makeBridge(overrides: Partial<InspectorBridge> = {}): InspectorB
     selectionLost: false,
     clearSelectionLost: noop,
     setText: noop,
+    removeNode: noop,
+    moveNode: noop,
     setClass: noop,
     select: noop,
     hover: noop,

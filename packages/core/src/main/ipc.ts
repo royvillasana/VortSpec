@@ -47,7 +47,7 @@ import { applyCanvasEdit } from "./canvas/write";
 import { getTokenSanitation } from "./inspector/token-sanitation";
 import { writeTokenLink } from "./inspector/token-resolver";
 import { discoverRoutes } from "./routes/route-discovery";
-import { computePushPlan, VORTSPEC_COLLECTION } from "./inspector/figma-push";
+import { computePushPlan, computeOrphanPushPlan, VORTSPEC_COLLECTION } from "./inspector/figma-push";
 import { readFigmaVariables } from "./inspector/figma-reconcile";
 import type { PushPlan } from "@vortspec/core/ipc";
 import {
@@ -255,6 +255,16 @@ const handlers: Record<IpcChannel, Handler> = {
     // to VortSpec's own auto-created collection when the project isn't synced —
     // writing into the active mode so per-mode values round-trip.
     return computePushPlan(result.tokens, figmaVars ?? [], {
+      collection: result.activeCollection ?? VORTSPEC_COLLECTION,
+      ...(result.activeMode ? { mode: result.activeMode } : {}),
+    });
+  }) as Handler,
+  "figma:computeOrphanPushPlan": (async (r: { projectPath: string; orphanNames: string[] }) => {
+    const [result, figmaVars] = await Promise.all([
+      getInspectorTokens(r.projectPath),
+      readFigmaVariables(r.projectPath),
+    ]);
+    return computeOrphanPushPlan(result.tokens, r.orphanNames, figmaVars ?? [], {
       collection: result.activeCollection ?? VORTSPEC_COLLECTION,
       ...(result.activeMode ? { mode: result.activeMode } : {}),
     });

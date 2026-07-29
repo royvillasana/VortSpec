@@ -310,6 +310,7 @@ export interface VortSpecApi {
   setFigmaToken(req: { token: string }): Promise<IpcResponse<"figma:setToken">>;
   /** Compute the code→Figma push plan locally (diff token file vs. Figma-variable cache). Never calls Figma. */
   figmaComputePushPlan(projectPath: string): Promise<IpcResponse<"figma:computePushPlan">>;
+  figmaComputeOrphanPushPlan(projectPath: string, orphanNames: string[]): Promise<IpcResponse<"figma:computeOrphanPushPlan">>;
   /** Apply a confirmed push plan to Figma Variables via figma-cli (source: null → use the MCP fallback). */
   figmaPushVariables(projectPath: string, plan: PushPlan): Promise<IpcResponse<"figma:pushVariables">>;
 

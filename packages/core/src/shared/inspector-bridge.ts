@@ -326,6 +326,24 @@ export const bridgeCommandSchema = z.discriminatedUnion("t", [
   }),
   /** Set the visible text of a node (live text-content edit). */
   z.object({ t: z.literal("setText"), nodeId: z.string(), text: z.string() }),
+  /**
+   * REMOVE a node from the DOM (a true delete for a light page, where the serialized DOM IS the
+   * source). Unlike a `display:none` override — which leaves the element in the saved HTML — this
+   * detaches it so it's actually gone. Framework pages use the ts-morph source-delete path instead.
+   */
+  z.object({ t: z.literal("removeNode"), nodeId: z.string() }),
+  /**
+   * MOVE a node relative to another (layers-tree drag). `before`/`after` reinsert `nodeId` into
+   * `targetId`'s parent at that side (reorder); `inside` appends it as a child of `targetId` (nest it
+   * INTO that container). The page rearranges to match. Rejected when the target is inside the node's
+   * own subtree. Persisted by serializing the DOM (light page).
+   */
+  z.object({
+    t: z.literal("moveNode"),
+    nodeId: z.string(),
+    targetId: z.string(),
+    position: z.enum(["before", "after", "inside"]),
+  }),
   /** Swap classes on a node for a live variant preview (remove old, add new). */
   z.object({
     t: z.literal("setClass"),

@@ -91,6 +91,48 @@ export function resolveToken(
   return { match: null, signal: "none" };
 }
 
+/** One component binding resolved to the CSS it should emit (token-fidelity-sanitation 7.1). */
+export interface ComponentBindingResult {
+  /** The Figma variable the component property is bound to (slash path). */
+  figmaVar: string;
+  /** The matched project token, WITHOUT the leading `--` (null on no match). */
+  token: string | null;
+  /** Which resolver layer produced the match (`none` when unresolved). */
+  signal: MatchSignal;
+  /** What the component should emit: `var(--token)` on a match, else null — NEVER a hardcoded value. */
+  css: string | null;
+  /** Value-ambiguous candidate token names (leading `--` stripped) to confirm, when signal is `none`. */
+  suggestions?: string[];
+  /** A link exists but its target is missing — needs re-linking, not a fresh bind. */
+  staleLink?: boolean;
+}
+
+/**
+ * Resolve a component's Figma variable bindings to project-token CSS references (task 7.1). Each binding
+ * runs through {@link resolveToken} (link → name → value → alias); a match emits `var(--token)` so a
+ * generated component NEVER hardcodes a hex/px or emits a raw Figma name. A `none` carries the signal
+ * plus any ambiguous suggestions so the caller can dedup-create a token or flag an orphan (task 7.2)
+ * instead of emitting a broken reference. Pure — the same seam the reconcile/dedup paths use.
+ */
+export function resolveComponentBindings(
+  bindings: ResolveCandidate[],
+  projectTokens: ResolveCandidate[],
+  opts: { links?: TokenLinkMap } = {},
+): ComponentBindingResult[] {
+  return bindings.map((b) => {
+    const r = resolveToken(b, projectTokens, opts);
+    const token = r.match ? r.match.name.replace(/^--/, "") : null;
+    return {
+      figmaVar: b.name,
+      token,
+      signal: r.signal,
+      css: token ? `var(--${token})` : null,
+      ...(r.suggestions ? { suggestions: r.suggestions.map((s) => s.name.replace(/^--/, "")) } : {}),
+      ...(r.staleLink ? { staleLink: true } : {}),
+    };
+  });
+}
+
 // ── Link store (`.vortspec/token-links.json`) — local-first, like token-overrides ──
 
 const LINKS_PATH = ".vortspec/token-links.json";

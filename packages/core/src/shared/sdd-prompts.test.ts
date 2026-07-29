@@ -84,6 +84,18 @@ describe("design-anchored build — reproduce the Figma node, resolved autonomou
     expect(p).toMatch(/build nothing and report it unreferenced/);
   });
 
+  it("binds every Figma-bound value to a project token via the resolver, never a hardcode (7.1/7.2)", () => {
+    const p = buildOnePrompt("accordion");
+    expect(p).toMatch(/TOKEN BINDING/);
+    expect(p).toMatch(/resolve that\s+variable to the project's OWN token and emit `var\(--<token>\)`/);
+    // The layered resolver order, incl. value recovery for a renamed token.
+    expect(p).toMatch(/link → exact name → resolved\s+VALUE → alias/);
+    expect(p).toMatch(/NEVER emit a raw Figma variable name or a dangling `var\(--…\)`/);
+    // On no match: dedup-checked create, never inline the literal.
+    expect(p).toMatch(/isn't a\s+duplicate of a token that already has that value/);
+    expect(p).toMatch(/never inline the literal/);
+  });
+
   it("buildChunkPrompt carries the design reference for its components", () => {
     const p = buildChunkPrompt(["alert", "badge"]);
     expect(p).toMatch(/authoritative reference for a component is its own Figma/);
