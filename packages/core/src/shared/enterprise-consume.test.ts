@@ -92,7 +92,10 @@ describe("buildEnterpriseFoundationPrompt — consume, never rebuild", () => {
     expect(p).toMatch(/VALIDATE \(a readiness report, not extraction\)/);
     expect(p).toMatch(/INDEX, don't copy/);
     expect(p).toMatch(/POINTERS/);
-    expect(p).toMatch(/NEVER author a competing token or component definition/i);
+    expect(p).toMatch(/NEVER author a competing component definition/i);
+    // token_file points at the client's REAL source (option 1: reference, don't copy).
+    expect(p).toMatch(/POINT `token_file` at it \(reference, don't copy\)/i);
+    expect(p).toMatch(/UPDATE `token_file` in `\.sdd-de\/project\.yaml` to the/i);
     expect(p).toMatch(/light stand-ins/);
     expect(p).toContain("https://sb.acme.com");
   });
@@ -113,8 +116,9 @@ describe("buildEnterpriseSnapshotPrompt — the only artifact VortSpec creates",
     expect(p).toMatch(/ALL FIVE categories/i);
     // every category is named (spacing + shadow were the missed ones).
     for (const cat of ["color", "spacing", "radius", "typography", "shadow"]) expect(p.toLowerCase()).toContain(cat);
-    expect(p).toMatch(/FOUNDATIONS \/ token stories/i);
-    expect(p).toMatch(/WRITE every token to the\s+configured token_file/i);
+    expect(p).toMatch(/Foundations\/token stories/i);
+    expect(p).toMatch(/token_file`? in `\.sdd-de\/project\.yaml` POINTS at the client's REAL token source/i);
+    expect(p).toMatch(/do NOT write a VortSpec/i);
     expect(p).toMatch(/reference, never invent/i);
   });
 });
