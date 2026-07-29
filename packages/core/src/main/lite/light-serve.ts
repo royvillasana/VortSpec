@@ -88,6 +88,40 @@ const MIME: Record<string, string> = {
 };
 
 /**
+ * SAFETY NET against a page that hard-freezes the app. An AI (or a paste) can inline a megabyte of video
+ * or image as a base64 `data:` URI; the webview then chokes decoding/painting it while the inspector
+ * serializes the huge DOM. Any base64 payload larger than this cap is swapped for a 1×1 placeholder in the
+ * PREVIEW ONLY — the on-disk file is never touched — so the canvas always stays responsive. Legit media
+ * belongs in `assets/` and is referenced by path (served above), which never inflates the HTML.
+ */
+const MAX_INLINE_DATA_URI = 200_000; // base64 chars ≈ 150KB decoded
+const TINY_PLACEHOLDER = "data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==";
+
+/** Swap any oversized inline base64 `data:` payload for a 1×1 placeholder. Returns the count swapped. */
+function neutralizeHugeInlineData(html: string): { html: string; stripped: number } {
+  let stripped = 0;
+  const out = html.replace(/data:[a-z0-9.+/-]*;base64,([A-Za-z0-9+/=]+)/gi, (m: string, payload: string) => {
+    if (payload.length > MAX_INLINE_DATA_URI) {
+      stripped++;
+      return TINY_PLACEHOLDER;
+    }
+    return m;
+  });
+  return { html: out, stripped };
+}
+
+/**
+ * A preview-only notice (a `data-vs-style` <style>, so `serializeDom` strips it — never saved) telling the
+ * user WHY their inline media is blank: it was too large to inline and belongs in `assets/`.
+ */
+function inlineMediaNotice(count: number): string {
+  const msg =
+    `${count} oversized inline media item${count === 1 ? "" : "s"} skipped in preview — save media under ` +
+    `.vortspec/light-pages/assets/ and reference it by path (assets/…), don't inline it.`;
+  return `<style data-vs-style="vs-notice">body::before{content:${JSON.stringify("⚠ " + msg)};position:fixed;left:0;right:0;bottom:0;z-index:2147483647;margin:0;padding:8px 14px;font:12px/1.4 system-ui,-apple-system,sans-serif;color:#fff;background:rgba(176,42,55,.95);text-align:center;pointer-events:none}</style>`;
+}
+
+/**
  * Resolve a request path to a file INSIDE the pages dir, or null if it escapes (traversal). A path with
  * no extension is treated as a page (`<name>.html`); any other extension is served verbatim as an asset
  * a page references (e.g. `assets/hero.mp4`) — so a hero video/image loads from a real file instead of a
@@ -156,11 +190,17 @@ export async function serveLightPages(projectPath: string): Promise<string> {
       const ext = extname(file).toLowerCase();
       try {
         if (ext === ".html") {
-          const html = await readFile(file, "utf8");
-          const withTokens = injectTokens(html, await tokenCssFor(projectPath));
+          const raw = await readFile(file, "utf8");
+          // Safety net FIRST: neutralize any app-freezing oversized inline media before it reaches the webview.
+          const safe = neutralizeHugeInlineData(raw);
+          let out = injectTokens(safe.html, await tokenCssFor(projectPath));
+          if (safe.stripped > 0) {
+            const notice = inlineMediaNotice(safe.stripped);
+            out = out.includes("</body>") ? out.replace(/<\/body>/i, `${notice}</body>`) : out + notice;
+          }
           // no-store: the canvas always reflects the on-disk page (edits persist to it, then reload).
           res.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" });
-          res.end(withTokens);
+          res.end(out);
           return;
         }
         // A page-referenced asset (video/image/font/…): stream it with Range support so video seeks.

@@ -91,6 +91,30 @@ describe("light-serve", () => {
     }
   });
 
+  it("neutralizes oversized inline base64 media in the preview so a page can't freeze the app", async () => {
+    const proj = await mkdtemp(join(tmpdir(), "lp-serve-huge-"));
+    await mkdir(join(proj, LIGHT_PAGES_DIR), { recursive: true });
+    const huge = "A".repeat(300_000); // > the 200k inline cap → must be swapped out
+    const tiny = "B".repeat(100); // small icon → left intact
+    await writeFile(
+      join(proj, LIGHT_PAGES_DIR, "Hero.html"),
+      `<!doctype html><html><body><video><source src="data:video/mp4;base64,${huge}"></video>` +
+        `<img src="data:image/svg+xml;base64,${tiny}"></body></html>`,
+      "utf8",
+    );
+    const base = await serveLightPages(proj);
+    try {
+      const html = await (await fetch(lightPageUrl(base, "Hero"))).text();
+      expect(html).not.toContain(huge); // the megabyte payload never reaches the webview
+      expect(html).toContain(`base64,${tiny}`); // a small inline URI is untouched
+      expect(html).toMatch(/skipped in preview/i); // the user is told why, via a stripped-on-save notice
+      expect(html).toContain('data-vs-style="vs-notice"');
+    } finally {
+      stopLightServe(proj);
+      await rm(proj, { recursive: true, force: true });
+    }
+  });
+
   it("lightPageUrl sanitizes the name and appends .html once", () => {
     expect(lightPageUrl("http://127.0.0.1:1/", "Airbnb Landing")).toBe("http://127.0.0.1:1/Airbnb%20Landing.html");
     expect(lightPageUrl("http://127.0.0.1:1/", "a/b")).toBe("http://127.0.0.1:1/a-b.html");
