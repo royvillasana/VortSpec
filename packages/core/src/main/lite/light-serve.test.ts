@@ -58,6 +58,63 @@ describe("light-serve", () => {
     }
   });
 
+  it("serves a page-referenced asset with its content-type and HTTP Range (206) for video seeking", async () => {
+    const proj = await mkdtemp(join(tmpdir(), "lp-serve-asset-"));
+    await mkdir(join(proj, LIGHT_PAGES_DIR, "assets"), { recursive: true });
+    // A stand-in "video" file — the point is the transfer (content-type, Accept-Ranges, 206), not codec.
+    const bytes = Buffer.from("0123456789abcdef");
+    await writeFile(join(proj, LIGHT_PAGES_DIR, "assets", "hero.mp4"), bytes);
+    const base = await serveLightPages(proj);
+    try {
+      // Full GET: right content-type, advertises range support, full body.
+      const full = await fetch(`${base}assets/hero.mp4`);
+      expect(full.status).toBe(200);
+      expect(full.headers.get("content-type")).toBe("video/mp4");
+      expect(full.headers.get("accept-ranges")).toBe("bytes");
+      expect(new Uint8Array(await full.arrayBuffer())).toHaveLength(bytes.length);
+
+      // Ranged GET (what a <video> issues to seek): 206 + Content-Range + just the slice.
+      const ranged = await fetch(`${base}assets/hero.mp4`, { headers: { Range: "bytes=4-9" } });
+      expect(ranged.status).toBe(206);
+      expect(ranged.headers.get("content-range")).toBe(`bytes 4-9/${bytes.length}`);
+      expect(await ranged.text()).toBe("456789");
+
+      // Unsatisfiable range → 416, not a broken 200.
+      const bad = await fetch(`${base}assets/hero.mp4`, { headers: { Range: "bytes=999-1000" } });
+      expect(bad.status).toBe(416);
+
+      // An asset path still can't escape the pages dir.
+      expect((await fetch(`${base}assets/..%2f..%2f..%2fetc%2fpasswd`)).status).toBe(404);
+    } finally {
+      stopLightServe(proj);
+      await rm(proj, { recursive: true, force: true });
+    }
+  });
+
+  it("neutralizes oversized inline base64 media in the preview so a page can't freeze the app", async () => {
+    const proj = await mkdtemp(join(tmpdir(), "lp-serve-huge-"));
+    await mkdir(join(proj, LIGHT_PAGES_DIR), { recursive: true });
+    const huge = "A".repeat(300_000); // > the 200k inline cap → must be swapped out
+    const tiny = "B".repeat(100); // small icon → left intact
+    await writeFile(
+      join(proj, LIGHT_PAGES_DIR, "Hero.html"),
+      `<!doctype html><html><body><video><source src="data:video/mp4;base64,${huge}"></video>` +
+        `<img src="data:image/svg+xml;base64,${tiny}"></body></html>`,
+      "utf8",
+    );
+    const base = await serveLightPages(proj);
+    try {
+      const html = await (await fetch(lightPageUrl(base, "Hero"))).text();
+      expect(html).not.toContain(huge); // the megabyte payload never reaches the webview
+      expect(html).toContain(`base64,${tiny}`); // a small inline URI is untouched
+      expect(html).toMatch(/skipped in preview/i); // the user is told why, via a stripped-on-save notice
+      expect(html).toContain('data-vs-style="vs-notice"');
+    } finally {
+      stopLightServe(proj);
+      await rm(proj, { recursive: true, force: true });
+    }
+  });
+
   it("lightPageUrl sanitizes the name and appends .html once", () => {
     expect(lightPageUrl("http://127.0.0.1:1/", "Airbnb Landing")).toBe("http://127.0.0.1:1/Airbnb%20Landing.html");
     expect(lightPageUrl("http://127.0.0.1:1/", "a/b")).toBe("http://127.0.0.1:1/a-b.html");

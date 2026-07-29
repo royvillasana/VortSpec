@@ -52,6 +52,23 @@ const LIGHT_FIRST_PAGE_DIRECTIVE =
   "For interactivity (tabs, accordion, toggle/menu, carousel, dropdown), add a small SELF-CONTAINED " +
   "vanilla-JS island (Astro-style) scoped to that component, marked `data-island`, ONLY where behavior is " +
   "genuinely needed — no frameworks, no imports, no external scripts; keep the rest static. " +
+  "MEDIA & ASSETS: NEVER inline video/audio or any large binary as a base64 `data:` URI — it bloats the " +
+  "page and FREEZES the live preview. To use a local or attached/dropped media file, COPY it into " +
+  "`.vortspec/light-pages/assets/` with a shell command (e.g. `cp \"<source path>\" .vortspec/light-pages/" +
+  "assets/`) — do NOT Read the binary (that pulls its bytes into context and leads to base64 inlining) — " +
+  "then reference it by a RELATIVE path, e.g. `<video src=\"assets/hero.mp4\" autoplay muted loop " +
+  "playsinline></video>`; the light preview serves that folder with HTTP range support so it streams. For " +
+  "a HOSTED video use a DIRECT video-file URL (.mp4/.webm) in `<video>` (muted so it can autoplay) — a " +
+  "YouTube/Vimeo PAGE link is not a video file, use their iframe embed instead. If a video is requested but " +
+  "no real source exists, use a lightweight poster image or a CSS gradient placeholder pointing at an " +
+  "`assets/…` path; NEVER fabricate or base64-encode a video. Only tiny inline `data:` URIs (small SVG " +
+  "icons, under ~2KB) are acceptable. " +
+  "ANIMATED / SHADER BACKGROUNDS: for a decorative animated or shader background, use a bounded WebGL " +
+  "(or 2D canvas) vanilla-JS island — a `<canvas>` plus a small SELF-CONTAINED `<script>` marked " +
+  "`data-island` that owns just that background — never a framework or an external library. Keep it " +
+  "performant: cap `devicePixelRatio` to ~1.5, stop the render loop when the canvas is offscreen (an " +
+  "IntersectionObserver) and when `matchMedia('(prefers-reduced-motion: reduce)')` matches (render one " +
+  "static frame instead), and keep the shader/source compact. " +
   "For a create-page request you MUST NEVER, in the foreground: scaffold or set up a React/Tailwind/Vite " +
   "app (no package.json, vite, Tailwind config, App.tsx); build React/framework components; run a 7-step " +
   "cycle; or create a `src/screens|pages/*.tsx` file. The real framework version (React + Tailwind + " +

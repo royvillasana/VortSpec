@@ -1,6 +1,7 @@
 import http from "node:http";
-import { readFile } from "node:fs/promises";
-import { join, resolve, sep } from "node:path";
+import { readFile, stat } from "node:fs/promises";
+import { createReadStream } from "node:fs";
+import { extname, join, resolve, sep } from "node:path";
 import { LIGHT_PAGES_DIR } from "../../shared/light-page";
 import { readProjectConfig } from "../workspace/config-manager";
 
@@ -55,15 +56,118 @@ function injectTokens(html: string, css: string): string {
   return tag + html;
 }
 
-/** Resolve a request path to a file INSIDE the pages dir, or null if it escapes / isn't an .html page. */
-function resolvePageFile(dir: string, urlPath: string): string | null {
+/** Content-type by extension — HTML pages plus the assets a page references (video/image/font/…). */
+const MIME: Record<string, string> = {
+  ".html": "text/html; charset=utf-8",
+  ".css": "text/css; charset=utf-8",
+  ".js": "text/javascript; charset=utf-8",
+  ".mjs": "text/javascript; charset=utf-8",
+  ".json": "application/json; charset=utf-8",
+  ".mp4": "video/mp4",
+  ".webm": "video/webm",
+  ".ogv": "video/ogg",
+  ".mov": "video/quicktime",
+  ".m4v": "video/x-m4v",
+  ".mp3": "audio/mpeg",
+  ".m4a": "audio/mp4",
+  ".wav": "audio/wav",
+  ".ogg": "audio/ogg",
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".gif": "image/gif",
+  ".webp": "image/webp",
+  ".avif": "image/avif",
+  ".svg": "image/svg+xml",
+  ".ico": "image/x-icon",
+  ".woff": "font/woff",
+  ".woff2": "font/woff2",
+  ".ttf": "font/ttf",
+  ".otf": "font/otf",
+  ".eot": "application/vnd.ms-fontobject",
+};
+
+/**
+ * SAFETY NET against a page that hard-freezes the app. An AI (or a paste) can inline a megabyte of video
+ * or image as a base64 `data:` URI; the webview then chokes decoding/painting it while the inspector
+ * serializes the huge DOM. Any base64 payload larger than this cap is swapped for a 1×1 placeholder in the
+ * PREVIEW ONLY — the on-disk file is never touched — so the canvas always stays responsive. Legit media
+ * belongs in `assets/` and is referenced by path (served above), which never inflates the HTML.
+ */
+const MAX_INLINE_DATA_URI = 200_000; // base64 chars ≈ 150KB decoded
+const TINY_PLACEHOLDER = "data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==";
+
+/** Swap any oversized inline base64 `data:` payload for a 1×1 placeholder. Returns the count swapped. */
+function neutralizeHugeInlineData(html: string): { html: string; stripped: number } {
+  let stripped = 0;
+  const out = html.replace(/data:[a-z0-9.+/-]*;base64,([A-Za-z0-9+/=]+)/gi, (m: string, payload: string) => {
+    if (payload.length > MAX_INLINE_DATA_URI) {
+      stripped++;
+      return TINY_PLACEHOLDER;
+    }
+    return m;
+  });
+  return { html: out, stripped };
+}
+
+/**
+ * A preview-only notice (a `data-vs-style` <style>, so `serializeDom` strips it — never saved) telling the
+ * user WHY their inline media is blank: it was too large to inline and belongs in `assets/`.
+ */
+function inlineMediaNotice(count: number): string {
+  const msg =
+    `${count} oversized inline media item${count === 1 ? "" : "s"} skipped in preview — save media under ` +
+    `.vortspec/light-pages/assets/ and reference it by path (assets/…), don't inline it.`;
+  return `<style data-vs-style="vs-notice">body::before{content:${JSON.stringify("⚠ " + msg)};position:fixed;left:0;right:0;bottom:0;z-index:2147483647;margin:0;padding:8px 14px;font:12px/1.4 system-ui,-apple-system,sans-serif;color:#fff;background:rgba(176,42,55,.95);text-align:center;pointer-events:none}</style>`;
+}
+
+/**
+ * Resolve a request path to a file INSIDE the pages dir, or null if it escapes (traversal). A path with
+ * no extension is treated as a page (`<name>.html`); any other extension is served verbatim as an asset
+ * a page references (e.g. `assets/hero.mp4`) — so a hero video/image loads from a real file instead of a
+ * megabyte of inline base64. Subdirectories (an `assets/` folder) are allowed; `..` traversal is not.
+ */
+function resolveFile(dir: string, urlPath: string): string | null {
   const raw = decodeURIComponent((urlPath || "/").split("?")[0]).replace(/^\/+/, "");
   if (!raw) return null;
-  const withExt = raw.endsWith(".html") ? raw : `${raw}.html`;
-  const abs = resolve(dir, withExt);
-  // Containment guard: the resolved file must live directly under the pages dir (no traversal).
-  if (abs !== join(dir, withExt) || !abs.startsWith(dir + sep)) return null;
+  const rel = extname(raw) ? raw : `${raw}.html`;
+  const abs = resolve(dir, rel);
+  // Containment guard: the resolved file must live under the pages dir (allows subdirs; blocks `..`).
+  if (abs !== join(dir, rel) || !abs.startsWith(dir + sep)) return null;
   return abs;
+}
+
+/**
+ * Serve a static asset (video/image/font/…) with HTTP Range support — video playback in the canvas
+ * <webview> issues Range requests and needs a 206 for seeking, so a full-body 200 alone breaks scrubbing.
+ */
+async function serveAsset(res: http.ServerResponse, file: string, ext: string, range?: string): Promise<void> {
+  const { size } = await stat(file);
+  const type = MIME[ext] ?? "application/octet-stream";
+  const m = range?.match(/^bytes=(\d*)-(\d*)$/);
+  if (m && (m[1] || m[2])) {
+    let start = m[1] ? parseInt(m[1], 10) : 0;
+    let end = m[2] ? parseInt(m[2], 10) : size - 1;
+    if (Number.isNaN(start) || Number.isNaN(end) || start > end || end >= size) {
+      // Unsatisfiable range → 416 with the valid extent, per HTTP spec.
+      res.writeHead(416, { "content-range": `bytes */${size}`, "accept-ranges": "bytes" });
+      res.end();
+      return;
+    }
+    start = Math.max(0, start);
+    end = Math.min(end, size - 1);
+    res.writeHead(206, {
+      "content-type": type,
+      "content-range": `bytes ${start}-${end}/${size}`,
+      "accept-ranges": "bytes",
+      "content-length": end - start + 1,
+      "cache-control": "no-store",
+    });
+    createReadStream(file, { start, end }).pipe(res);
+    return;
+  }
+  res.writeHead(200, { "content-type": type, "content-length": size, "accept-ranges": "bytes", "cache-control": "no-store" });
+  createReadStream(file).pipe(res);
 }
 
 /**
@@ -77,18 +181,30 @@ export async function serveLightPages(projectPath: string): Promise<string> {
   const dir = pagesDir(projectPath);
   const server = http.createServer((req, res) => {
     void (async () => {
-      const file = resolvePageFile(dir, req.url ?? "/");
+      const file = resolveFile(dir, req.url ?? "/");
       if (!file) {
         res.writeHead(404, { "content-type": "text/plain" });
         res.end("not found");
         return;
       }
+      const ext = extname(file).toLowerCase();
       try {
-        const html = await readFile(file, "utf8");
-        const withTokens = injectTokens(html, await tokenCssFor(projectPath));
-        // no-store: the canvas always reflects the on-disk page (edits persist to it, then reload).
-        res.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" });
-        res.end(withTokens);
+        if (ext === ".html") {
+          const raw = await readFile(file, "utf8");
+          // Safety net FIRST: neutralize any app-freezing oversized inline media before it reaches the webview.
+          const safe = neutralizeHugeInlineData(raw);
+          let out = injectTokens(safe.html, await tokenCssFor(projectPath));
+          if (safe.stripped > 0) {
+            const notice = inlineMediaNotice(safe.stripped);
+            out = out.includes("</body>") ? out.replace(/<\/body>/i, `${notice}</body>`) : out + notice;
+          }
+          // no-store: the canvas always reflects the on-disk page (edits persist to it, then reload).
+          res.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" });
+          res.end(out);
+          return;
+        }
+        // A page-referenced asset (video/image/font/…): stream it with Range support so video seeks.
+        await serveAsset(res, file, ext, req.headers.range);
       } catch {
         res.writeHead(404, { "content-type": "text/plain" });
         res.end("not found");

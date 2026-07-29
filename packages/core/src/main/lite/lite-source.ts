@@ -215,15 +215,7 @@ export async function deriveProjectLiteManifest(projectPath: string): Promise<Li
 
 /** Derive the manifest and render the browsable palette HTML (what the IDE "Design System" view embeds). */
 export async function getProjectPaletteHtml(projectPath: string): Promise<string> {
-  const html = renderPaletteHtml(buildPalette(await deriveProjectLiteManifest(projectPath)));
-  // Debug (temporary): confirm at RUNTIME what we actually generate. `stray*` > 1 means a stand-in
-  // leaked document-level tags/styles into the palette (the light-chrome symptom).
-  console.error(
-    `[lite:palette] len=${html.length} rootDark=${/:root\{color-scheme:dark/.test(html)} ` +
-      `strayStyle=${(html.match(/<style/gi) || []).length} strayBody=${(html.match(/<body/gi) || []).length} ` +
-      `strayHtml=${(html.match(/<html/gi) || []).length}`,
-  );
-  return html;
+  return renderPaletteHtml(buildPalette(await deriveProjectLiteManifest(projectPath)));
 }
 
 /** Write `designer.md` (the light-authoring manifest) to the project root; returns its path. */
