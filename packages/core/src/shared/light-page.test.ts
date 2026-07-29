@@ -40,6 +40,15 @@ describe("buildLightPagePrompt", () => {
     expect(buildLightPagePrompt("Pricing", "")).toMatch(/infer a sensible layout/i);
   });
 
+  it("forbids inlining video/large binaries as base64 and points media at the served assets folder", () => {
+    // The whole-app freeze came from an AI-inlined base64 <video> — the prompt must rule that out.
+    expect(prompt).toMatch(/NEVER inline video/i);
+    expect(prompt).toMatch(/base64/i);
+    expect(prompt).toMatch(/FREEZES the live preview/i);
+    expect(prompt).toContain(".vortspec/light-pages/assets/");
+    expect(prompt).toMatch(/assets\/hero\.mp4/); // a served relative path, not a data: URI
+  });
+
   it("allows Astro-style interactive islands (bounded vanilla JS, only where needed, marked data-island)", () => {
     expect(prompt).toMatch(/Astro-style islands/i);
     expect(prompt).toMatch(/vanilla JS/i);

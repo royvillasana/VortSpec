@@ -483,6 +483,38 @@ export function RunApp({
     };
   }, [lightPage, project.path]);
 
+  // Navigate a light page imperatively, exactly like framework routes (which call `bridge.loadUrl`).
+  // The canvas <webview> has a STABLE key so a viewport switch never remounts it — which means changing
+  // the `src` prop only updates the attribute in place, and Electron doesn't reliably navigate a
+  // <webview> on an in-place attribute change. That left a just-created page BLANK until a full app
+  // reload (a reload remounts the webview with the page as its INITIAL src, which does load). When the
+  // webview is already mounted (showing the dev URL or a prior page), drive it with loadUrl; on the very
+  // first mount loadUrl no-ops (view not dom-ready yet) and the initial `src` attribute loads the page.
+  useEffect(() => {
+    if (isLightPage && lightPageSrc) bridge.loadUrl(lightPageSrc);
+  }, [isLightPage, lightPageSrc, bridge.loadUrl]);
+
+  // Auto-open the existing page when arriving at the Playground. A light-first project has a light page
+  // but no framework dev server — so without this it opened on the "No app dev script found" error and
+  // the user had to click the page to see it. If a light page exists, nothing is selected yet, and there
+  // is no framework preview to show instead, navigate to the first light page so their screen shows
+  // immediately. Also covers a just-created page: the assistant finishes → routes rediscover → this fires.
+  useEffect(() => {
+    if (!canvas || !isApp) return;
+    if (lightPage || currentPath !== "/") return; // already showing a page / the user navigated
+    if (embedUrl || dev.state === "starting") return; // a framework app preview is (or is about to be) shown
+    const findLight = (nodes: RouteNode[]): RouteNode | null => {
+      for (const n of nodes) {
+        if (n.light && n.navigable) return n;
+        const hit = findLight(n.children);
+        if (hit) return hit;
+      }
+      return null;
+    };
+    const first = findLight(routes?.routes ?? []);
+    if (first) navigateTo(first.path);
+  }, [canvas, isApp, lightPage, currentPath, embedUrl, dev.state, routes, navigateTo]);
+
   // Tell the guest bridge whether this is a light page (drop targets skip the data-source dev-stamp
   // requirement — a light page's DOM IS its source). Re-sent when the page kind changes OR the bridge
   // re-attaches (a webview load resets the guest's flag).
@@ -505,6 +537,21 @@ export function RunApp({
     setReloadNonce((n) => n + 1);
     bridge.reload();
   };
+
+  // The chat assistant edits files on disk, but the canvas keeps showing the DOM it already loaded —
+  // so an AI change (e.g. "make the content bigger") wouldn't appear until a manual reload. Reload the
+  // canvas when the assistant finishes a turn (busy → idle), so AI edits show immediately, exactly like
+  // deterministic edits (which mutate the live DOM in place). A light page re-fetches from its no-store
+  // server → the new HTML; a framework page reloads its dev URL. Its own ref, independent of the
+  // route-rediscovery effect above, so neither clobbers the other's busy-transition tracking.
+  const assistantBusyForReload = useRef(false);
+  useEffect(() => {
+    if (!canvas) return;
+    if (assistantBusyForReload.current && !assistantBusy) refresh();
+    assistantBusyForReload.current = assistantBusy;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [assistantBusy, canvas]);
+
   const [guestPreload, setGuestPreload] = useState<string | null>(null);
   const [tokens, setTokens] = useState<InspectorToken[]>([]);
   const [components, setComponents] = useState<InspectorComponent[]>([]);

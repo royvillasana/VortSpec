@@ -1,6 +1,7 @@
 import http from "node:http";
-import { readFile } from "node:fs/promises";
-import { join, resolve, sep } from "node:path";
+import { readFile, stat } from "node:fs/promises";
+import { createReadStream } from "node:fs";
+import { extname, join, resolve, sep } from "node:path";
 import { LIGHT_PAGES_DIR } from "../../shared/light-page";
 import { readProjectConfig } from "../workspace/config-manager";
 
@@ -55,15 +56,84 @@ function injectTokens(html: string, css: string): string {
   return tag + html;
 }
 
-/** Resolve a request path to a file INSIDE the pages dir, or null if it escapes / isn't an .html page. */
-function resolvePageFile(dir: string, urlPath: string): string | null {
+/** Content-type by extension — HTML pages plus the assets a page references (video/image/font/…). */
+const MIME: Record<string, string> = {
+  ".html": "text/html; charset=utf-8",
+  ".css": "text/css; charset=utf-8",
+  ".js": "text/javascript; charset=utf-8",
+  ".mjs": "text/javascript; charset=utf-8",
+  ".json": "application/json; charset=utf-8",
+  ".mp4": "video/mp4",
+  ".webm": "video/webm",
+  ".ogv": "video/ogg",
+  ".mov": "video/quicktime",
+  ".m4v": "video/x-m4v",
+  ".mp3": "audio/mpeg",
+  ".m4a": "audio/mp4",
+  ".wav": "audio/wav",
+  ".ogg": "audio/ogg",
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".gif": "image/gif",
+  ".webp": "image/webp",
+  ".avif": "image/avif",
+  ".svg": "image/svg+xml",
+  ".ico": "image/x-icon",
+  ".woff": "font/woff",
+  ".woff2": "font/woff2",
+  ".ttf": "font/ttf",
+  ".otf": "font/otf",
+  ".eot": "application/vnd.ms-fontobject",
+};
+
+/**
+ * Resolve a request path to a file INSIDE the pages dir, or null if it escapes (traversal). A path with
+ * no extension is treated as a page (`<name>.html`); any other extension is served verbatim as an asset
+ * a page references (e.g. `assets/hero.mp4`) — so a hero video/image loads from a real file instead of a
+ * megabyte of inline base64. Subdirectories (an `assets/` folder) are allowed; `..` traversal is not.
+ */
+function resolveFile(dir: string, urlPath: string): string | null {
   const raw = decodeURIComponent((urlPath || "/").split("?")[0]).replace(/^\/+/, "");
   if (!raw) return null;
-  const withExt = raw.endsWith(".html") ? raw : `${raw}.html`;
-  const abs = resolve(dir, withExt);
-  // Containment guard: the resolved file must live directly under the pages dir (no traversal).
-  if (abs !== join(dir, withExt) || !abs.startsWith(dir + sep)) return null;
+  const rel = extname(raw) ? raw : `${raw}.html`;
+  const abs = resolve(dir, rel);
+  // Containment guard: the resolved file must live under the pages dir (allows subdirs; blocks `..`).
+  if (abs !== join(dir, rel) || !abs.startsWith(dir + sep)) return null;
   return abs;
+}
+
+/**
+ * Serve a static asset (video/image/font/…) with HTTP Range support — video playback in the canvas
+ * <webview> issues Range requests and needs a 206 for seeking, so a full-body 200 alone breaks scrubbing.
+ */
+async function serveAsset(res: http.ServerResponse, file: string, ext: string, range?: string): Promise<void> {
+  const { size } = await stat(file);
+  const type = MIME[ext] ?? "application/octet-stream";
+  const m = range?.match(/^bytes=(\d*)-(\d*)$/);
+  if (m && (m[1] || m[2])) {
+    let start = m[1] ? parseInt(m[1], 10) : 0;
+    let end = m[2] ? parseInt(m[2], 10) : size - 1;
+    if (Number.isNaN(start) || Number.isNaN(end) || start > end || end >= size) {
+      // Unsatisfiable range → 416 with the valid extent, per HTTP spec.
+      res.writeHead(416, { "content-range": `bytes */${size}`, "accept-ranges": "bytes" });
+      res.end();
+      return;
+    }
+    start = Math.max(0, start);
+    end = Math.min(end, size - 1);
+    res.writeHead(206, {
+      "content-type": type,
+      "content-range": `bytes ${start}-${end}/${size}`,
+      "accept-ranges": "bytes",
+      "content-length": end - start + 1,
+      "cache-control": "no-store",
+    });
+    createReadStream(file, { start, end }).pipe(res);
+    return;
+  }
+  res.writeHead(200, { "content-type": type, "content-length": size, "accept-ranges": "bytes", "cache-control": "no-store" });
+  createReadStream(file).pipe(res);
 }
 
 /**
@@ -77,18 +147,24 @@ export async function serveLightPages(projectPath: string): Promise<string> {
   const dir = pagesDir(projectPath);
   const server = http.createServer((req, res) => {
     void (async () => {
-      const file = resolvePageFile(dir, req.url ?? "/");
+      const file = resolveFile(dir, req.url ?? "/");
       if (!file) {
         res.writeHead(404, { "content-type": "text/plain" });
         res.end("not found");
         return;
       }
+      const ext = extname(file).toLowerCase();
       try {
-        const html = await readFile(file, "utf8");
-        const withTokens = injectTokens(html, await tokenCssFor(projectPath));
-        // no-store: the canvas always reflects the on-disk page (edits persist to it, then reload).
-        res.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" });
-        res.end(withTokens);
+        if (ext === ".html") {
+          const html = await readFile(file, "utf8");
+          const withTokens = injectTokens(html, await tokenCssFor(projectPath));
+          // no-store: the canvas always reflects the on-disk page (edits persist to it, then reload).
+          res.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" });
+          res.end(withTokens);
+          return;
+        }
+        // A page-referenced asset (video/image/font/…): stream it with Range support so video seeks.
+        await serveAsset(res, file, ext, req.headers.range);
       } catch {
         res.writeHead(404, { "content-type": "text/plain" });
         res.end("not found");
