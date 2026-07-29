@@ -89,7 +89,9 @@ function renderTokenGroup(group: TokenGroup, entries: LiteToken[]): string {
     }
     return `<div class="lp-token">${demo}<code class="lp-name" title="${esc(t.name)}">${esc(t.name)}</code><code class="lp-val" title="${v}">${v}</code></div>`;
   };
-  return `<section class="lp-card"><h3>${esc(group)}</h3><div class="lp-tokens">${entries.map(swatch).join("")}</div></section>`;
+  // Colors get a full-width, multi-column card at the top of the bento (the palette's primary reference).
+  const cls = group === "colors" ? "lp-card lp-colors" : "lp-card";
+  return `<section class="${cls}"><h3>${esc(group)}</h3><div class="lp-tokens">${entries.map(swatch).join("")}</div></section>`;
 }
 
 /** Render one scale (spacing / margins / padding) as labelled bars. */
@@ -130,15 +132,24 @@ const PALETTE_CSS = `
 *{box-sizing:border-box}
 html,body{height:100%}
 body{margin:0;font:14px/1.5 system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--fg)}
-.lp{padding:24px;display:flex;flex-direction:column;gap:20px}
-.lp h1{font-size:20px;margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.lp h2{font-size:12px;margin:0 0 14px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
-.lp h3{font-size:13px;margin:0 0 12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lp{padding:24px;display:flex;flex-direction:column;gap:24px}
+/* Headings are scoped to the palette's OWN structure (direct children / card headers), never a bare
+   '.lp h*' descendant — otherwise a harvested component stand-in's own h2/h3 under .lp-render would
+   inherit this tiny muted styling. Keep them tight (better-typography: headings ~1.1, not body 1.5). */
+.lp>h1{font-size:20px;line-height:1.15;margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lp-card>h3,.lp-component header>h3{font-size:13px;line-height:1.2;margin:0;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lp-card>h3{margin-bottom:12px}
 /* bento wall: CSS Grid auto-fill — ALWAYS multiple columns (a wide preview is clipped by the card's
-   overflow, never expands the track). Foundations + components mixed; 8px gaps; cards top-aligned. */
-.lp-bento{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px;align-items:start}
-.lp-card{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:16px;min-width:0;overflow:hidden}
-.lp-tokens{display:flex;flex-direction:column;gap:9px}
+   overflow, never expands the track). Foundations + components mixed; cards top-aligned. The inter-card
+   gap (16px) must stay ≥ 2× the intra-card token gap (8px) so each tile reads as a distinct group,
+   not noise (better-layout: groups separate with ≥2× the space used inside them). */
+.lp-bento{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px;align-items:start}
+.lp-card{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:16px;min-width:0;overflow:hidden;box-shadow:0 1px 2px rgba(0,0,0,.28),0 4px 12px rgba(0,0,0,.18)}
+/* Colors: the full-width top card (it sits in the flex column, outside the bento), with its swatches
+   flowing into as many ~200px columns as fit — the primary token reference. */
+.lp-colors{width:100%}
+.lp-colors .lp-tokens{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px 24px}
+.lp-tokens{display:flex;flex-direction:column;gap:8px}
 .lp-token{display:flex;align-items:center;gap:10px;min-width:0;overflow:hidden}
 .lp-name{font-size:11px;font-family:ui-monospace,monospace;flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .lp-val{font-size:11px;color:var(--muted);font-family:ui-monospace,monospace;flex:0 0 auto;max-width:45%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:right}
@@ -172,15 +183,19 @@ body{margin:0;font:14px/1.5 system-ui,-apple-system,sans-serif;background:var(--
  */
 export function renderPaletteHtml(p: Palette): string {
   const shelf = p.components.map(renderComponent);
-  const cards = [
-    ...p.foundations.tokens.map((t) => renderTokenGroup(t.group, t.entries)),
+  // Bento layout: COLORS first, full-width, multi-column (the primary reference); then everything else —
+  // the other token groups, the spacing-derived scales, and the component shelf — in the bento wall below.
+  const colorsGroup = p.foundations.tokens.find((t) => t.group === "colors");
+  const colorsCard = colorsGroup ? renderTokenGroup("colors", colorsGroup.entries) : "";
+  const restCards = [
+    ...p.foundations.tokens.filter((t) => t.group !== "colors").map((t) => renderTokenGroup(t.group, t.entries)),
     renderScale("margins", p.foundations.margins),
     renderScale("padding", p.foundations.padding),
     ...shelf,
   ]
     .filter(Boolean)
     .join("");
-  const body = `<div class="lp"><h1>${esc(p.name)}</h1><div class="lp-bento">${cards}</div></div>`;
+  const body = `<div class="lp"><h1>${esc(p.name)}</h1>${colorsCard}<div class="lp-bento">${restCards}</div></div>`;
   const html = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>${PALETTE_CSS}</style></head><body>${body}</body></html>`;
 
   const leaks = findFrameworkPointers(shelf.join(""));

@@ -105,6 +105,7 @@ import {
 } from "./manifest/manifest-reader";
 import type { SnapshotReason } from "@vortspec/core/manifest";
 import { getProjectPaletteHtml, writeDesignerMd, buildProjectStandInPrompt, buildProjectTwoTrackPrompt, buildProjectLightPagePrompt, buildProjectGenerateCodePrompt, buildProjectConvertPagePrompt, liteGenerationStatus, markPageGenerated, readLightPage, listLightPages, writeLightPage, listInsertableStandIns, listComponentReadiness } from "./lite/lite-source";
+import { resolveEnterpriseStorybookUrl, buildEnterpriseSnapshotPromptFor, buildEnterpriseGeneratePromptFor } from "./enterprise/enterprise-source";
 import { serveLightPages, lightPageUrl } from "./lite/light-serve";
 import {
   startDevServer,
@@ -357,6 +358,9 @@ const handlers: Record<IpcChannel, Handler> = {
   "lite:generatePrompt": ((projectPath: string) => buildProjectGenerateCodePrompt(projectPath)) as Handler,
   "lite:convertPage": ((r: { projectPath: string; name: string }) =>
     buildProjectConvertPagePrompt(r.projectPath, r.name)) as Handler,
+  "enterprise:storybookUrl": ((projectPath: string) => resolveEnterpriseStorybookUrl(projectPath)) as Handler,
+  "enterprise:snapshotPrompt": ((projectPath: string) => buildEnterpriseSnapshotPromptFor(projectPath)) as Handler,
+  "enterprise:generatePrompt": ((projectPath: string) => buildEnterpriseGeneratePromptFor(projectPath)) as Handler,
   "lite:genStatus": ((projectPath: string) => liteGenerationStatus(projectPath)) as Handler,
   "lite:markGenerated": ((r: { projectPath: string; name: string }) =>
     markPageGenerated(r.projectPath, r.name)) as Handler,

@@ -616,6 +616,11 @@ export const ipcContract = {
   "lite:generatePrompt": { request: z.string(), response: z.string() },
   // per-page "Generate code" prompt (Sitemap per-row action): convert ONE screen to the selected framework.
   "lite:convertPage": { request: z.object({ projectPath: z.string(), name: z.string() }), response: z.string() },
+  // Connect Enterprise Design System (change: connect-enterprise-design-system): resolve the client's
+  // Storybook to an embeddable URL, and build the snapshot / generate prompts from the connected assets.
+  "enterprise:storybookUrl": { request: z.string(), response: z.string().nullable() },
+  "enterprise:snapshotPrompt": { request: z.string(), response: z.string() },
+  "enterprise:generatePrompt": { request: z.string(), response: z.string() },
   // per-page framework-generation status: generated (has a framework version) + stale (edited since).
   "lite:genStatus": {
     request: z.string(),

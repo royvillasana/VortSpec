@@ -26,7 +26,14 @@ export const designSourceSchema = z.enum([
   "stitch",
   "claude-design",
   "zip",
+  // Connect Enterprise Design System (change: connect-enterprise-design-system): the client already
+  // has a coded component library + Storybook + tokens + knowledge base; VortSpec CONSUMES them.
+  "enterprise",
 ]);
+/** How the client's Storybook is reached for an enterprise project. */
+export const enterpriseStorybookKindSchema = z.enum(["url", "static", "repo"]);
+/** How the client's knowledge base is reached (docs repo / site → generic connector; mcp → their server). */
+export const enterpriseKbKindSchema = z.enum(["docs-repo", "site", "mcp"]);
 export const componentLibrarySchema = z.enum([
   "shadcn",
   "radix",
@@ -74,6 +81,12 @@ export const setupAnswersSchema = z.object({
   stitchZipPath: z.string().optional(),
   // Claude Design (live link, read via the design MCP)
   claudeDesignUrl: z.string().optional(),
+  // Enterprise — Connect Enterprise Design System (consume an existing design system, don't rebuild).
+  enterpriseStorybookKind: enterpriseStorybookKindSchema.optional(),
+  enterpriseStorybookRef: z.string().optional(), // a URL, a static build dir, or a repo (per kind)
+  enterpriseRepoUrl: z.string().optional(), // optional code repo (for importable components)
+  enterpriseKbKind: enterpriseKbKindSchema.optional(),
+  enterpriseKbRef: z.string().optional(), // a docs repo / site URL, or an MCP endpoint (per kind)
   // Common
   styling: stylingSchema,
   tokenFile: z.string(),
@@ -103,6 +116,7 @@ export const DESIGN_SOURCE_OPTIONS = [
   { value: "stitch", label: "Google Stitch", hint: "Google's AI design tool — via the Stitch MCP" },
   { value: "claude-design", label: "Claude Design", hint: "A claude.ai/design project, read via the design MCP" },
   { value: "zip", label: "ZIP File", hint: "Exported from Stitch, Claude Design, or any other design tool" },
+  { value: "enterprise", label: "Connect Enterprise Design System", hint: "Consume your existing components, Storybook, tokens & knowledge base — not rebuild them" },
 ] as const;
 
 /**
@@ -225,6 +239,12 @@ export const projectConfigSchema = z.object({
   zipFilePath: z.string().optional(),
   stitchConnection: z.string().optional(),
   claudeDesignUrl: z.string().optional(),
+  // Enterprise (Connect Enterprise Design System) — the connected assets we consume.
+  storybookSourceKind: z.string().optional(),
+  storybookSource: z.string().optional(),
+  enterpriseRepoUrl: z.string().optional(),
+  knowledgeBaseKind: z.string().optional(),
+  knowledgeBase: z.string().optional(),
   framework: z.string().optional(),
   language: z.string().optional(),
   styling: z.string().optional(),
@@ -244,7 +264,7 @@ export function buildProjectYaml(a: SetupAnswers): string {
     `language: ${a.language}`,
     `styling: ${a.styling}`,
     "",
-    "# Design system source: figma | library | github | stitch | claude-design | zip",
+    "# Design system source: figma | library | github | stitch | claude-design | zip | enterprise",
     `design_source: ${a.designSource}`,
   ];
 
@@ -274,6 +294,17 @@ export function buildProjectYaml(a: SetupAnswers): string {
     }
   } else if (a.designSource === "claude-design") {
     lines.push(`claude_design_url: "${a.claudeDesignUrl ?? ""}"`);
+  } else if (a.designSource === "enterprise") {
+    // Consume an existing design system: point at the client's Storybook (required), and optionally
+    // their code repo, knowledge base, and (read-only) Figma. VortSpec references these, never copies.
+    lines.push(`storybook_source_kind: ${a.enterpriseStorybookKind ?? "url"}`);
+    lines.push(`storybook_source: "${a.enterpriseStorybookRef ?? ""}"`);
+    if (a.enterpriseRepoUrl) lines.push(`enterprise_repo_url: "${a.enterpriseRepoUrl}"`);
+    if (a.enterpriseKbRef) {
+      lines.push(`knowledge_base_kind: ${a.enterpriseKbKind ?? "docs-repo"}`);
+      lines.push(`knowledge_base: "${a.enterpriseKbRef}"`);
+    }
+    if (a.figmaFileUrl) lines.push(`figma_file_url: "${a.figmaFileUrl}"`); // optional, read-only
   }
 
   lines.push("");

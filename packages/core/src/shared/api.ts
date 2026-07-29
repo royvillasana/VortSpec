@@ -136,6 +136,9 @@ export interface VortSpecApi {
   litePageUrl(projectPath: string, name: string): Promise<IpcResponse<"lite:pageUrl">>;
   liteGeneratePrompt(projectPath: string): Promise<IpcResponse<"lite:generatePrompt">>;
   liteConvertPage(projectPath: string, name: string): Promise<IpcResponse<"lite:convertPage">>;
+  enterpriseStorybookUrl(projectPath: string): Promise<IpcResponse<"enterprise:storybookUrl">>;
+  enterpriseSnapshotPrompt(projectPath: string): Promise<IpcResponse<"enterprise:snapshotPrompt">>;
+  enterpriseGeneratePrompt(projectPath: string): Promise<IpcResponse<"enterprise:generatePrompt">>;
   liteGenStatus(projectPath: string): Promise<IpcResponse<"lite:genStatus">>;
   liteMarkGenerated(projectPath: string, name: string): Promise<IpcResponse<"lite:markGenerated">>;
   liteStandIns(projectPath: string): Promise<IpcResponse<"lite:standins">>;

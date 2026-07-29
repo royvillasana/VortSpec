@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createElement, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { DevServerStatus, Project, InspectorToken, InspectorComponent, FileSnapshot, StorybookEntry } from "@vortspec/core/ipc";
 import { buildSelection, alignToCss, flowToCss, gapModeCss } from "@vortspec/core/selection-builder";
@@ -262,7 +262,19 @@ export function RunApp({
   const stopFor = (): Promise<void> =>
     isApp ? api.stopAppServer(project.path) : api.stopDevServer(project.path);
 
-  const embedUrl = dev.url ? dev.url.replace(/\/+$/, "") + "/" : "";
+  // The configured framework (project.yaml) — names it in the per-page "Generate code" tooltip.
+  const [framework, setFramework] = useState<string | null>(null);
+  // Enterprise projects (Connect Enterprise Design System) embed the CLIENT's own Storybook as-is —
+  // when it's a URL we point the Storybook view straight at it, instead of starting a VortSpec Storybook.
+  const [enterpriseSbUrl, setEnterpriseSbUrl] = useState<string | null>(null);
+  // Enterprise Storybook (kind=storybook + a client URL) is embedded as-is — its URL wins over any VortSpec
+  // dev server. Every other case uses the managed dev-server URL.
+  const embedUrl =
+    !isApp && enterpriseSbUrl
+      ? enterpriseSbUrl.replace(/\/+$/, "") + "/"
+      : dev.url
+        ? dev.url.replace(/\/+$/, "") + "/"
+        : "";
 
   // ── Sitemap: the app's page/route tree, read from source (change: sitemap-tree) ──
   const [routes, setRoutes] = useState<RouteDiscovery | null>(null);
@@ -350,10 +362,12 @@ export function RunApp({
   // edit persisted to a light page, changes what's stale).
   useEffect(() => loadGenStatus(), [loadGenStatus, routes]);
   // The configured framework (project.yaml) — names it in the per-page "Generate code" tooltip.
-  const [framework, setFramework] = useState<string | null>(null);
   useEffect(() => {
     void api.projectConfig(project.path).then((c) => setFramework(c?.framework ?? null)).catch(() => setFramework(null));
+    // Resolve the enterprise Storybook to an embeddable URL (a client URL as-is, or a served static build).
+    void api.enterpriseStorybookUrl(project.path).then(setEnterpriseSbUrl).catch(() => setEnterpriseSbUrl(null));
   }, [project.path]);
+  // (Enterprise "Update snapshot" lives on the Design System page now — see DesignSystem.tsx.)
   useEffect(() => {
     if (!canvas) return;
     let alive = true;
@@ -2052,17 +2066,19 @@ export function RunApp({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project.path, kind]);
 
-  // Auto-start the runtime on entry.
+  // Auto-start the runtime on entry — EXCEPT an enterprise Storybook, which is the client's own
+  // (embedded as-is via its URL); there's nothing for VortSpec to start.
   useEffect(() => {
     if (autoRef.current) return;
     autoRef.current = true;
+    if (!isApp && enterpriseSbUrl) return; // client's Storybook — no VortSpec server
     void (async () => {
       const s = await statusFor();
       if (s.url) setDev(s);
       else setDev(await startFor());
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [project.path, kind]);
+  }, [project.path, kind, enterpriseSbUrl]);
 
   useEffect(() => setFrameLoading(true), [embedUrl]);
 
@@ -2198,6 +2214,8 @@ export function RunApp({
 
       {/* Storybook: portal the story nav into the dock's Section tab (canvas is app-only,
           so Storybook has no Design panel — its nav goes here instead). */}
+      {/* The dock's cropped-manager sidebar (a <webview>) drives the story-only canvas — the same split for
+          VortSpec's OWN Storybook and a client's enterprise Storybook. */}
       {!isApp && sidebarSlot && embedUrl && createPortal(storybookNav, sidebarSlot)}
       {/* Light-first: when there's no running app canvas, the Design panel (Sitemap + "+ New light
           page") still portals here — so light pages work WITHOUT an app scaffold. */}
@@ -2206,6 +2224,13 @@ export function RunApp({
       <main className="flex min-w-0 flex-1 flex-col bg-vs-bg-primary">
         <header className="flex flex-none items-center gap-3 border-b border-vs-border-default px-5 py-3">
           <span className="text-[15px] font-semibold">{isApp ? "Playground" : "Storybook"}</span>
+          {/* Enterprise: this is the CLIENT's Storybook, embedded as-is. Refreshing the design system
+              ("Update snapshot") lives on the Design System page, not here. */}
+          {!isApp && enterpriseSbUrl && (
+            <span className="rounded border border-vs-border-default px-1.5 py-px text-[10px] uppercase tracking-wide text-vs-text-muted">
+              your Storybook
+            </span>
+          )}
           {dirty && (
             <span
               data-testid="canvas-dirty"
@@ -2216,16 +2241,31 @@ export function RunApp({
               Unsaved
             </span>
           )}
-          <span className="rounded border border-vs-border-default px-1.5 py-px text-[10px] uppercase tracking-wide text-vs-text-muted">
-            localhost
-          </span>
+          {!(!isApp && enterpriseSbUrl) && (
+            <span className="rounded border border-vs-border-default px-1.5 py-px text-[10px] uppercase tracking-wide text-vs-text-muted">
+              localhost
+            </span>
+          )}
           <span className="text-xs text-vs-text-muted">
             {isApp
               ? "Describe a screen in Chat — it's built from your components and appears here live."
-              : "Your component library, running live from Storybook."}
+              : !isApp && enterpriseSbUrl
+                ? "Your Storybook, embedded as-is."
+                : "Your component library, running live from Storybook."}
           </span>
           <div className="flex-1" />
-          {isLightPage ? (
+          {!isApp && enterpriseSbUrl ? (
+            // Enterprise: the client's own Storybook, embedded as-is — no VortSpec server to start/stop.
+            <>
+              <span className="font-mono text-[11px] text-vs-text-secondary">{enterpriseSbUrl.replace(/^https?:\/\//, "")}</span>
+              <button type="button" onClick={() => void api.openInstall(enterpriseSbUrl)} title="Open in browser" aria-label="Open in browser" className={HEADER_ICON_BTN}>
+                <ExternalLinkIcon />
+              </button>
+              <button type="button" onClick={refresh} title="Reload" aria-label="Refresh" className={HEADER_ICON_BTN}>
+                <RefreshIcon />
+              </button>
+            </>
+          ) : isLightPage ? (
             // A light page is already served + live in the canvas — no dev server to start/stop. Offer
             // to open it in a browser and reload (icon-only), not "Start app".
             <>
@@ -2377,7 +2417,7 @@ export function RunApp({
           </div>
         )}
 
-        {!isApp && sb.phase === "gap" && (
+        {!isApp && !enterpriseSbUrl && sb.phase === "gap" && (
           <div className="flex flex-none items-center gap-3 border-b border-vs-warning/40 bg-vs-warning/10 px-5 py-2.5 text-[12px]">
             <span className="text-vs-warning">⚠</span>
             <span className="min-w-0 flex-1 text-vs-text-primary">
@@ -2647,24 +2687,36 @@ export function RunApp({
           ) : embedUrl ? (
             <div className="relative h-full min-h-[340px]">
               {(() => {
-                // In the dock (sidebarSlot), the VortSpec nav drives Storybook, so show the
-                // STORY only (iframe.html) — no in-iframe manager sidebar. Otherwise (desktop)
-                // embed the full Storybook manager at its root.
+                // In the dock (sidebarSlot), the nav drives Storybook, so the canvas shows the STORY ONLY
+                // (iframe.html) — no in-frame manager sidebar. Otherwise (desktop) embed the full manager.
+                // Same split for VortSpec's own AND a client's enterprise Storybook.
                 const storyOnly = !isApp && sidebarSlot && storyId;
                 const src = storyOnly
                   ? `${embedUrl}iframe.html?id=${encodeURIComponent(storyId)}&viewMode=${storyViewMode}`
                   : embedUrl;
-                return (
-                  <iframe
-                    key={`${src}:${reloadNonce}`}
-                    title={noun}
-                    src={src}
-                    onLoad={() => setFrameLoading(false)}
-                    className="h-full min-h-[340px] w-full border-0 bg-white"
-                  />
-                );
+                // A cross-origin HOSTED Storybook (enterprise) won't render in an <iframe> — its
+                // X-Frame-Options blocks it. A <webview> is a separate WebContents, not subject to that,
+                // so it loads the client's story the same way the dock nav loads its manager. Same-origin
+                // VortSpec Storybook stays an <iframe> (lighter).
+                return enterpriseSbUrl
+                  ? // Electron <webview> intrinsic (not in React's JSX types) — created imperatively, like
+                    // RunCanvas/StorybookSidebar. A separate WebContents, so X-Frame-Options can't block it.
+                    createElement("webview", {
+                      key: `${src}:${reloadNonce}`,
+                      src,
+                      className: "h-full min-h-[340px] w-full border-0 bg-white",
+                    })
+                  : (
+                    <iframe
+                      key={`${src}:${reloadNonce}`}
+                      title={noun}
+                      src={src}
+                      onLoad={() => setFrameLoading(false)}
+                      className="h-full min-h-[340px] w-full border-0 bg-white"
+                    />
+                  );
               })()}
-              {frameLoading && (
+              {frameLoading && !enterpriseSbUrl && (
                 <div className="absolute inset-0 grid place-items-center bg-vs-bg-primary/60 text-xs text-vs-text-secondary">
                   Loading {noun}…
                 </div>

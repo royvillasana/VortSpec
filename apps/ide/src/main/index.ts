@@ -1,4 +1,4 @@
-import { app, shell, BrowserWindow } from "electron";
+import { app, shell, BrowserWindow, session } from "electron";
 import { join } from "path";
 import { electronApp, optimizer, is } from "@electron-toolkit/utils";
 import { registerIpc, stopAllDevServers, stopAllWatchers, stopAllTerminals, stopIdeMcp, fixGuiPath, ensureManagedRuntime } from "@vortspec/core/main";
@@ -78,6 +78,27 @@ app.whenReady().then(async () => {
 
   app.on("browser-window-created", (_, window) => {
     optimizer.watchWindowShortcuts(window);
+  });
+
+  // Let the Playground/Storybook <webview> embed pages that would otherwise refuse to be framed —
+  // a client's hosted Storybook (Vercel/Chromatic/…) commonly sends `X-Frame-Options: DENY` or a CSP
+  // `frame-ancestors`, which blocks it (ERR_BLOCKED_BY_CSP). Strip those two framing guards on responses
+  // so the embedded Storybook renders. Scoped to header rewriting only; nothing else changes.
+  session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+    const headers = details.responseHeaders ?? {};
+    for (const key of Object.keys(headers)) {
+      const lower = key.toLowerCase();
+      if (lower === "x-frame-options") {
+        delete headers[key];
+      } else if (lower === "content-security-policy") {
+        // Drop only the frame-ancestors directive; keep the rest of the policy intact.
+        headers[key] = headers[key]
+          .map((v) => v.replace(/frame-ancestors[^;]*;?/gi, "").trim())
+          .filter((v) => v.length > 0);
+        if (headers[key].length === 0) delete headers[key];
+      }
+    }
+    callback({ responseHeaders: headers });
   });
 
   // Recover the user's real shell PATH before anything spawns (GUI launches get

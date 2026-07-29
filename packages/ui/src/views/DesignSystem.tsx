@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
-import { RotateCw } from "lucide-react";
+import { RotateCw, RefreshCw } from "lucide-react";
 import type { Project } from "@vortspec/core/ipc";
 import { api } from "../lib/api";
 import { Button, Spinner } from "@vortspec/ui/ui";
+import { useAgentRun } from "../lib/useAgentRun";
 
 /**
  * The lightweight "design system" view (OpenSpec change: light-design-system, task 2.4). Renders the
@@ -39,6 +40,10 @@ export function DesignSystem({
   const [html, setHtml] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  // Enterprise (Connect Enterprise Design System): re-reading the client's Storybook to refresh the
+  // tokens + stand-ins ("Update snapshot") belongs HERE, on the design system, not in the Storybook view.
+  const [isEnterprise, setIsEnterprise] = useState(false);
+  const snapshot = useAgentRun();
 
   async function load(): Promise<void> {
     setLoading(true);
@@ -52,8 +57,15 @@ export function DesignSystem({
     }
   }
 
+  async function updateSnapshot(): Promise<void> {
+    const prompt = await api.enterpriseSnapshotPrompt(project.path).catch(() => "");
+    if (!prompt) return;
+    await snapshot.start({ prompt, cwd: project.path, allowedTools: ["Read", "Write", "Edit", "Bash"], bypassPermissions: true });
+  }
+
   useEffect(() => {
     void load();
+    void api.projectConfig(project.path).then((c) => setIsEnterprise(c?.designSource === "enterprise")).catch(() => setIsEnterprise(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project.path]);
 
@@ -63,6 +75,15 @@ export function DesignSystem({
     if (reloadSignal !== undefined) void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reloadSignal]);
+
+  // When the snapshot finishes: write the design manifest (designer.md) and reload the palette so the
+  // refreshed tokens + stand-ins show immediately — no manual Refresh needed.
+  useEffect(() => {
+    if (snapshot.model.status !== "done") return;
+    void api.writeDesignerManifest(project.path).catch(() => undefined);
+    void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [snapshot.model.status]);
 
   return (
     <div className="flex h-full min-h-0 w-full flex-col bg-vs-bg-base">
@@ -76,18 +97,51 @@ export function DesignSystem({
         <span className="text-vs-text-muted">— components &amp; tokens</span>
         {headerExtra}
         <div className="ml-auto flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => void load()}
-            disabled={loading}
-            title="Refresh — re-read the palette from disk (the design system builds automatically in the background)"
-            aria-label="Refresh"
-            className="rounded p-1.5 text-vs-text-muted transition-colors hover:bg-vs-bg-hover hover:text-vs-text-primary disabled:opacity-50"
-          >
-            <RotateCw size={14} className={loading ? "animate-spin" : undefined} />
-          </button>
+          {isEnterprise && (
+            <button
+              type="button"
+              onClick={() => void updateSnapshot()}
+              disabled={snapshot.running}
+              title="Re-read your Storybook and refresh the design system — the tokens (all categories) and component stand-ins."
+              className="flex items-center gap-1.5 rounded border border-vs-border-strong px-2.5 py-1 text-[11px] text-vs-text-secondary transition-colors hover:border-vs-accent hover:text-vs-text-primary disabled:opacity-50"
+            >
+              <RefreshCw size={12} className={snapshot.running ? "animate-spin" : undefined} />
+              {snapshot.running ? "Updating…" : "Update snapshot"}
+            </button>
+          )}
+          {/* The plain Refresh (re-read from disk) is only useful when there's no Update snapshot — the
+              enterprise Update snapshot already reloads the palette on completion, so it'd be a redundant
+              second "refresh" button there. */}
+          {!isEnterprise && (
+            <button
+              type="button"
+              onClick={() => void load()}
+              disabled={loading}
+              title="Refresh — re-read the palette from disk (the design system builds automatically in the background)"
+              aria-label="Refresh"
+              className="rounded p-1.5 text-vs-text-muted transition-colors hover:bg-vs-bg-hover hover:text-vs-text-primary disabled:opacity-50"
+            >
+              <RotateCw size={14} className={loading ? "animate-spin" : undefined} />
+            </button>
+          )}
         </div>
       </header>
+
+      {/* Progress bar while the design system + tokens are updating from the client's Storybook. */}
+      {snapshot.running && (
+        <div className="flex flex-none flex-col gap-1.5 border-b border-vs-border-subtle bg-vs-bg-surface px-4 py-2.5">
+          <div className="flex items-center gap-2 text-[12px] text-vs-text-secondary">
+            <Spinner />
+            <span>Updating your design system &amp; tokens from your Storybook…</span>
+            <span className="ml-auto truncate font-mono text-[10px] text-vs-text-muted">
+              {snapshot.model.activity.at(-1)?.label ?? "working…"}
+            </span>
+          </div>
+          <div className="h-1 w-full overflow-hidden rounded-full bg-vs-border-default">
+            <div className="h-full w-2/3 animate-pulse rounded-full bg-vs-accent" />
+          </div>
+        </div>
+      )}
 
       {loading ? (
         <div className="flex flex-1 items-center justify-center">
