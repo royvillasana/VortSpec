@@ -174,6 +174,12 @@ const api: VortSpecApi = {
   canvasExportSketch: (projectPath: string, frameId: string, dataUrl: string) =>
     invoke("canvas:exportSketch", { projectPath, frameId, dataUrl }),
   drawOpen: (projectPath: string) => invoke("draw:open", projectPath),
+  drawGeneratePrompt: (
+    projectPath: string,
+    input: { frameId: string; label: string; note?: string; pngPath: string; intent?: "create-new" | "customize-existing" },
+  ) => invoke("draw:generatePrompt", { projectPath, ...input }),
+  drawRecordGeneration: (projectPath: string, input: { sketchId: string; component: string; outputRef?: string }) =>
+    invoke("draw:recordGeneration", { projectPath, ...input }),
   saveManifest: (projectPath: string, content: string) =>
     invoke("manifest:save", { projectPath, content }),
   listManifestVersions: (projectPath: string) =>

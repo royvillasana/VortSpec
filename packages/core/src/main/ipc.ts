@@ -114,6 +114,7 @@ import {
   saveScene as saveCanvasScene,
   writeSketchPng as writeCanvasSketchPng,
 } from "./canvas/canvas-store";
+import { buildDrawGeneratePromptFor, recordDrawGenerationFor } from "./canvas/draw-source";
 import type { DrawGraph } from "../shared/draw-graph";
 import {
   startDevServer,
@@ -396,6 +397,16 @@ const handlers: Record<IpcChannel, Handler> = {
   "draw:open": ((projectPath: string) => {
     drawWindowOpener?.(projectPath);
   }) as Handler,
+  "draw:generatePrompt": ((r: {
+    projectPath: string;
+    frameId: string;
+    label: string;
+    note?: string;
+    pngPath: string;
+    intent?: "create-new" | "customize-existing";
+  }) => buildDrawGeneratePromptFor(r)) as Handler,
+  "draw:recordGeneration": ((r: { projectPath: string; sketchId: string; component: string; outputRef?: string }) =>
+    recordDrawGenerationFor(r)) as Handler,
   "manifest:save": ((req: { projectPath: string; content: string }) =>
     saveManifest(req.projectPath, req.content, new Date().toISOString())) as Handler,
   "manifest:listVersions": ((projectPath: string) =>

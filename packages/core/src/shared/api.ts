@@ -157,6 +157,13 @@ export interface VortSpecApi {
   canvasExportSketch(projectPath: string, frameId: string, dataUrl: string): Promise<IpcResponse<"canvas:exportSketch">>;
   /** Open (or focus) the separate Draw window for a project. */
   drawOpen(projectPath: string): Promise<IpcResponse<"draw:open">>;
+  /** Persist a sketch + build the grounded sketch→component prompt (the Draw window runs it). */
+  drawGeneratePrompt(
+    projectPath: string,
+    input: { frameId: string; label: string; note?: string; pngPath: string; intent?: "create-new" | "customize-existing" },
+  ): Promise<IpcResponse<"draw:generatePrompt">>;
+  /** Record a completed Draw generation in the project graph; returns the version id. */
+  drawRecordGeneration(projectPath: string, input: { sketchId: string; component: string; outputRef?: string }): Promise<IpcResponse<"draw:recordGeneration">>;
 
   // manifest (DESIGN.md)
   getManifest(projectPath: string): Promise<IpcResponse<"manifest:get">>;
