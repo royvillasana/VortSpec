@@ -2654,6 +2654,7 @@ export function RunApp({
                   onFrameChange={setFrame}
                   onLiveEdit={applyLive}
                   onCommitEdit={commitStyleEdits}
+                  onOpenDraw={() => void api.drawOpen(project.path)}
                   onSendToChat={
                     onSendToChat && selection
                       ? () => onSendToChat(buildSelectionContext(selection, Object.values(pending)), selection.file)

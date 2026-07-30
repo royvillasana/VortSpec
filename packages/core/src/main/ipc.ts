@@ -138,6 +138,13 @@ import type { StageStatus } from "@vortspec/core/flow";
  */
 type Handler = (req: never, sender: WebContents) => unknown;
 
+// The Draw window is created by the app SHELL (it owns BrowserWindow); the shell registers its opener
+// here at startup so core's `draw:open` handler can relay to it without importing electron windows.
+let drawWindowOpener: ((projectPath: string) => void) | null = null;
+export function setDrawWindowOpener(opener: (projectPath: string) => void): void {
+  drawWindowOpener = opener;
+}
+
 const handlers: Record<IpcChannel, Handler> = {
   "system:isElectron": () => true,
   "system:getVersion": () => app.getVersion(),
@@ -386,6 +393,9 @@ const handlers: Record<IpcChannel, Handler> = {
   "canvas:saveScene": ((r: { projectPath: string; scene: string }) => saveCanvasScene(r.projectPath, r.scene)) as Handler,
   "canvas:exportSketch": ((r: { projectPath: string; frameId: string; dataUrl: string }) =>
     writeCanvasSketchPng(r.projectPath, r.frameId, r.dataUrl)) as Handler,
+  "draw:open": ((projectPath: string) => {
+    drawWindowOpener?.(projectPath);
+  }) as Handler,
   "manifest:save": ((req: { projectPath: string; content: string }) =>
     saveManifest(req.projectPath, req.content, new Date().toISOString())) as Handler,
   "manifest:listVersions": ((projectPath: string) =>

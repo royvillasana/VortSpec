@@ -1,7 +1,7 @@
 import { app, shell, BrowserWindow, session } from "electron";
 import { join } from "path";
 import { electronApp, optimizer, is } from "@electron-toolkit/utils";
-import { registerIpc, stopAllDevServers, stopAllWatchers, stopAllTerminals, stopIdeMcp, fixGuiPath, ensureManagedRuntime } from "@vortspec/core/main";
+import { registerIpc, setDrawWindowOpener, stopAllDevServers, stopAllWatchers, stopAllTerminals, stopIdeMcp, fixGuiPath, ensureManagedRuntime } from "@vortspec/core/main";
 import { installMenu } from "./menu";
 
 // Show "VortSpec IDE" in the menu bar / About / Quit instead of Electron's
@@ -63,6 +63,51 @@ function createWindow(): void {
   }
 }
 
+// The Draw tool opens as its OWN window (docs/draw-to-component-graph.md) — it never touches the
+// Playground. One instance per app; reopening focuses it (and re-points it at the requested project).
+let drawWindow: BrowserWindow | null = null;
+function openDrawWindow(projectPath: string): void {
+  const search = `window=draw&project=${encodeURIComponent(projectPath)}`;
+  if (drawWindow && !drawWindow.isDestroyed()) {
+    drawWindow.focus();
+    if (is.dev && process.env["ELECTRON_RENDERER_URL"]) {
+      void drawWindow.loadURL(`${process.env["ELECTRON_RENDERER_URL"]}?${search}`);
+    } else {
+      void drawWindow.loadFile(join(__dirname, "../renderer/index.html"), { search });
+    }
+    return;
+  }
+  drawWindow = new BrowserWindow({
+    width: 1280,
+    height: 860,
+    minWidth: 900,
+    minHeight: 600,
+    show: false,
+    title: "VortSpec — Draw",
+    backgroundColor: "#0B0C0E",
+    titleBarStyle: "hiddenInset",
+    webPreferences: {
+      preload: join(__dirname, "../preload/index.mjs"),
+      sandbox: false,
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  });
+  drawWindow.on("ready-to-show", () => drawWindow?.show());
+  drawWindow.on("closed", () => {
+    drawWindow = null;
+  });
+  drawWindow.webContents.setWindowOpenHandler((details) => {
+    void shell.openExternal(details.url);
+    return { action: "deny" };
+  });
+  if (is.dev && process.env["ELECTRON_RENDERER_URL"]) {
+    void drawWindow.loadURL(`${process.env["ELECTRON_RENDERER_URL"]}?${search}`);
+  } else {
+    void drawWindow.loadFile(join(__dirname, "../renderer/index.html"), { search });
+  }
+}
+
 app.whenReady().then(async () => {
   electronApp.setAppUserModelId("com.vortspec.ide");
 
@@ -109,6 +154,7 @@ app.whenReady().then(async () => {
   await ensureManagedRuntime();
 
   registerIpc();
+  setDrawWindowOpener(openDrawWindow);
   installMenu({ createWindow });
   createWindow();
 

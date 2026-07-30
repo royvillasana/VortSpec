@@ -155,6 +155,8 @@ export interface VortSpecApi {
   canvasLoadScene(projectPath: string): Promise<IpcResponse<"canvas:loadScene">>;
   canvasSaveScene(projectPath: string, scene: string): Promise<IpcResponse<"canvas:saveScene">>;
   canvasExportSketch(projectPath: string, frameId: string, dataUrl: string): Promise<IpcResponse<"canvas:exportSketch">>;
+  /** Open (or focus) the separate Draw window for a project. */
+  drawOpen(projectPath: string): Promise<IpcResponse<"draw:open">>;
 
   // manifest (DESIGN.md)
   getManifest(projectPath: string): Promise<IpcResponse<"manifest:get">>;

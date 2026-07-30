@@ -652,6 +652,9 @@ export const ipcContract = {
   "canvas:loadScene": { request: z.string(), response: z.string().nullable() },
   "canvas:saveScene": { request: z.object({ projectPath: z.string(), scene: z.string() }), response: z.void() },
   "canvas:exportSketch": { request: z.object({ projectPath: z.string(), frameId: z.string(), dataUrl: z.string() }), response: z.string() },
+  // Open (or focus) the separate Draw window for a project. The window itself is created by the app SHELL
+  // (apps/ide, apps/desktop) via a registered opener — core just relays the request. Request = projectPath.
+  "draw:open": { request: z.string(), response: z.void() },
   "manifest:save": {
     request: z.object({ projectPath: z.string(), content: z.string() }),
     response: manifestResultSchema,

@@ -173,6 +173,7 @@ const api: VortSpecApi = {
   canvasSaveScene: (projectPath: string, scene: string) => invoke("canvas:saveScene", { projectPath, scene }),
   canvasExportSketch: (projectPath: string, frameId: string, dataUrl: string) =>
     invoke("canvas:exportSketch", { projectPath, frameId, dataUrl }),
+  drawOpen: (projectPath: string) => invoke("draw:open", projectPath),
   saveManifest: (projectPath: string, content: string) =>
     invoke("manifest:save", { projectPath, content }),
   listManifestVersions: (projectPath: string) =>
