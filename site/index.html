@@ -228,6 +228,24 @@
       .band p { position: relative; color: var(--text-2); max-width: 48ch; margin: 12px auto 28px; }
       .band .cta { position: relative; }
 
+      /* changelog */
+      .log { margin-top: 44px; display: flex; flex-direction: column; gap: 16px; }
+      .rel { border: 1px solid var(--border); background: var(--surface); border-radius: 14px; padding: 24px 26px; }
+      .rel.now { border-color: rgba(124,111,240,0.34); }
+      .rel-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 15px; }
+      .ver { font-family: "Geist Mono", monospace; font-size: 12px; color: var(--accent); border: 1px solid rgba(124,111,240,0.4); background: rgba(124,111,240,0.08); border-radius: 999px; padding: 3px 10px; }
+      .rel-head .ttl { font-size: 15.5px; font-weight: 600; }
+      .now-tag { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--success); border: 1px solid rgba(48,164,108,0.4); background: rgba(48,164,108,0.1); border-radius: 999px; padding: 2px 8px; font-weight: 600; }
+      .rel-head .when { font-family: "Geist Mono", monospace; font-size: 12px; color: var(--text-3); margin-left: auto; }
+      .rel ul { list-style: none; display: flex; flex-direction: column; gap: 9px; }
+      .rel li { display: flex; gap: 10px; align-items: flex-start; font-size: 14px; color: var(--text-2); line-height: 1.55; }
+      .rel li::before { content: ""; flex: none; width: 5px; height: 5px; margin-top: 8px; border-radius: 50%; background: var(--accent); opacity: 0.8; }
+      .rel li b { color: var(--text); font-weight: 600; }
+      .log-more { margin-top: 22px; font-size: 14px; }
+      .log-more a { color: var(--accent); }
+      .log-more a:hover { text-decoration: underline; }
+      @media (max-width: 560px) { .rel-head .when { margin-left: 0; width: 100%; } }
+
       /* footer */
       footer { border-top: 1px solid var(--border); padding: 40px 0 56px; margin-top: 40px; }
       footer .row { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; color: var(--text-3); font-size: 13.5px; }
@@ -250,6 +268,7 @@
             <a href="#apps">Two apps</a>
             <a href="#ide">The IDE</a>
             <a href="#how">How it works</a>
+            <a href="#changelog">Changelog</a>
             <a href="./guide.html">Guide</a>
             <a href="./troubleshooting.html">Help</a>
             <a href="https://github.com/royvillasana/VortSpec" target="_blank" rel="noopener">GitHub</a>
@@ -508,6 +527,69 @@
             <div class="pr"><span class="chk">✓</span><span><b>Claude Code is the engine.</b> The app follows the SDD-DE methodology exactly — same steps as the CLI, never a divergent process.</span></div>
             <div class="pr"><span class="chk">✓</span><span><b>No account, no telemetry.</b> No sign-up to use it. Nothing is sent anywhere without your opt-in.</span></div>
           </div>
+        </div>
+      </section>
+
+      <!-- CHANGELOG -->
+      <section id="changelog">
+        <div class="wrap">
+          <div class="eyebrow">Changelog</div>
+          <h2>What's new</h2>
+          <p class="lead">Recent releases. Both apps share one core, so every build moves the whole SDD-DE cycle forward at once.</p>
+          <div class="log">
+            <div class="rel now">
+              <div class="rel-head">
+                <span class="ver">v0.1.32</span>
+                <span class="ttl">Enterprise design systems + light-page media</span>
+                <span class="now-tag">Latest</span>
+                <span class="when">Jul 29, 2026</span>
+              </div>
+              <ul>
+                <li><b>Connect Enterprise Design System</b> — a new intake that consumes an existing client design system (their Storybook, component library, tokens, and knowledge base) instead of rebuilding it: it embeds their Storybook, points at their real token source, and imports their real components.</li>
+                <li><b>Token-fidelity sanitation</b> — link → name → value → alias token resolution, with component-binding fidelity and an orphan push-plan.</li>
+                <li><b>Playground light pages</b> — pages you create or open now show automatically, and chat/AI edits hot-reload the canvas immediately.</li>
+                <li><b>Video &amp; media</b> — hero video/image/font assets stream with range support; dropped media is copied into the page's assets instead of inlined, with a safety net so an oversized blob can't freeze the app. Plus guidance for WebGL/shader backgrounds.</li>
+                <li><b>Bento design-system palette</b> — colors full-width on top, the rest below.</li>
+              </ul>
+            </div>
+            <div class="rel">
+              <div class="rel-head">
+                <span class="ver">v0.1.31</span>
+                <span class="ttl">Instant Playground edits (first fully-working build)</span>
+                <span class="when">Jul 28, 2026</span>
+              </div>
+              <ul>
+                <li>Manual Playground edits apply <b>instantly and persist to real source</b> — no Apply/Keep gate; the AI is reserved for language prompts.</li>
+                <li>Desktop app ships the source-stamp bundle; the IDE ships ts-morph's full dependency closure (fixes a launch crash).</li>
+                <li>Writes are confined to source files inside the project (path-traversal guard); every release is gated by a packaging smoke test.</li>
+              </ul>
+            </div>
+            <div class="rel">
+              <div class="rel-head">
+                <span class="ver">v0.1.30</span>
+                <span class="ttl">Instant deterministic edits</span>
+                <span class="when">Jul 26, 2026</span>
+              </div>
+              <ul>
+                <li>Text, style, color, tokens, variants, and delete write straight to source (no AI), with <b>Cmd/Ctrl+Z</b> undo/redo.</li>
+                <li><b>Create variable</b> — bind a design token to any field even when the project has none; VortSpec bootstraps the token file.</li>
+                <li>Local-array list edits (reorder/delete <code>.map()</code> rows) and deterministic drag-move for static elements.</li>
+              </ul>
+            </div>
+            <div class="rel">
+              <div class="rel-head">
+                <span class="ver">v0.1.29</span>
+                <span class="ttl">In-app terminal + real library components</span>
+                <span class="when">Jul 24, 2026</span>
+              </div>
+              <ul>
+                <li><b>In-app terminal</b> — open a real terminal docked at the bottom from any view; refreshed IDE top bar.</li>
+                <li>Token usage counter now sees Tailwind v3 config-mapped and CVA-variant classes.</li>
+                <li><b>/provision-library</b> pulls a library's real components (shadcn/radix, MUI/Chakra) instead of rebuilding look-alikes.</li>
+              </ul>
+            </div>
+          </div>
+          <p class="log-more"><a href="https://github.com/royvillasana/VortSpec/releases" target="_blank" rel="noopener">All releases on GitHub →</a></p>
         </div>
       </section>
 
