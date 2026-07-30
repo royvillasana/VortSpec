@@ -1,32 +1,64 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Excalidraw, serializeAsJSON } from "@excalidraw/excalidraw";
+import type { ExcalidrawImperativeAPI, ExcalidrawInitialDataState, ExcalidrawProps } from "@excalidraw/excalidraw/types";
+import "@excalidraw/excalidraw/index.css";
 import { api } from "../lib/api";
 
 /**
  * The Draw window (docs/draw-to-component-graph.md) — its OWN window, never an overlay on the
- * Playground. It hosts the project's persistent drawing canvas; sketches turn into design-system-
- * grounded components via the compose pipeline (coordinated through main).
+ * Playground. It hosts the project's PERSISTENT Excalidraw canvas: the saved scene loads on open,
+ * and edits autosave (debounced) back to `.vortspec/canvas/canvas.excalidraw` via the canvas store.
  *
- * B1 (this): the window plumbing + scene load/save scaffolding, with a placeholder in the canvas
- * region. B2 mounts the Excalidraw editor there (loading the persisted scene, autosaving on change).
+ * B2 (this): the editor + persistence. Generation ("sketch → design-system component") lands in a
+ * later increment — the excalidrawAPI ref captured here is what a Generate action will export.
  */
 export function DrawWindow({ project }: { project: string }): React.JSX.Element {
   const name = project.split("/").filter(Boolean).pop() ?? "project";
-  const [ready, setReady] = useState(false);
-  const [hasScene, setHasScene] = useState(false);
+  // undefined = still loading; null = no saved scene (fresh); else the restored scene.
+  const [initialData, setInitialData] = useState<ExcalidrawInitialDataState | null | undefined>(undefined);
+  const apiRef = useRef<ExcalidrawImperativeAPI | null>(null);
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Confirm the canvas store is reachable and restore any saved scene for this project.
+  // Load the persisted scene once for this project.
   useEffect(() => {
     let alive = true;
     void (async () => {
-      const scene = await api.canvasLoadScene(project).catch(() => null);
+      const raw = await api.canvasLoadScene(project).catch(() => null);
       if (!alive) return;
-      setHasScene(!!scene);
-      setReady(true);
+      let data: ExcalidrawInitialDataState | null = null;
+      if (raw) {
+        try {
+          const parsed = JSON.parse(raw) as ExcalidrawInitialDataState;
+          data = { elements: parsed.elements ?? [], appState: parsed.appState ?? {}, files: parsed.files ?? undefined, scrollToContent: true };
+        } catch {
+          data = null; // corrupt scene → start fresh rather than fail to open
+        }
+      }
+      setInitialData(data);
     })();
     return () => {
       alive = false;
     };
   }, [project]);
+
+  // Debounced autosave: serialize the scene and persist it to the canvas store.
+  const onChange = useCallback<NonNullable<ExcalidrawProps["onChange"]>>(
+    (elements, appState, files) => {
+      if (saveTimer.current) clearTimeout(saveTimer.current);
+      saveTimer.current = setTimeout(() => {
+        const json = serializeAsJSON(elements, appState, files, "local");
+        void api.canvasSaveScene(project, json).catch(() => undefined);
+      }, 800);
+    },
+    [project],
+  );
+
+  useEffect(
+    () => () => {
+      if (saveTimer.current) clearTimeout(saveTimer.current);
+    },
+    [],
+  );
 
   return (
     <div className="flex h-screen w-screen flex-col bg-vs-bg-base text-vs-text-primary">
@@ -37,14 +69,18 @@ export function DrawWindow({ project }: { project: string }): React.JSX.Element 
         <span className="font-medium">Draw</span>
         <span className="text-vs-text-muted">— {name}</span>
       </header>
-      <div className="flex flex-1 items-center justify-center">
-        {!ready ? (
-          <span className="text-[13px] text-vs-text-muted">Loading your canvas…</span>
+      <div className="relative min-h-0 flex-1">
+        {initialData === undefined ? (
+          <div className="flex h-full items-center justify-center text-[13px] text-vs-text-muted">Loading your canvas…</div>
         ) : (
-          <div className="flex max-w-[42ch] flex-col items-center gap-2 text-center text-[13px] text-vs-text-muted">
-            <p className="text-vs-text-secondary">Your drawing canvas mounts here.</p>
-            <p>{hasScene ? "Restored your saved canvas for this project." : "A fresh canvas for this project."}</p>
-          </div>
+          <Excalidraw
+            excalidrawAPI={(instance) => {
+              apiRef.current = instance;
+            }}
+            initialData={initialData}
+            onChange={onChange}
+            theme="dark"
+          />
         )}
       </div>
     </div>
