@@ -176,10 +176,35 @@ The graph references components/tokens by name; it never owns their definitions.
 graph consistent with the authoritative index. Sketches and versions are retained as history even
 if their component is deleted (provenance is not lost).
 
+## App integration — a separate window
+
+The drawing surface opens as its **own window**, never as an overlay on the Playground. The
+Playground screen, its `<webview>`, and its canvas are left completely untouched — no overlay, no
+coordinate mapping, no z-index or reload fights with the stable-key preview webview.
+
+- The Playground bottom-toolbar **Draw button is a launcher**, not a canvas mode — clicking it
+  opens (or focuses) the dedicated Draw window. It does **not** change the current Playground
+  view or selection.
+- The Draw window is its own Electron `BrowserWindow` hosting the Excalidraw editor. On open it
+  loads the project's persisted scene via the `canvas-store` (`loadScene`) so the user always
+  returns to **their** canvas; edits autosave back (`saveScene`) and the graph updates via
+  `saveGraph`. It is project-scoped and persistent, not a throwaway.
+- **Generation is coordinated through the main process**, not within either window. From the Draw
+  window, "Generate" exports the sketch PNG (`writeSketchPng`) and builds the grounded prompt
+  (`selectSubgraph` + `renderSubgraphForPrompt`); main runs the compose agent; the produced
+  component lands in the **Playground** (main window) through the existing compose/light-page flow.
+  So the two windows stay decoupled — the Draw window owns sketches, the Playground owns the live
+  page — and they communicate only via the main process (IPC + the `.vortspec/canvas` store).
+- Closing the Draw window never disturbs the Playground; reopening restores the canvas from disk.
+
+None of the code layer (`draw-graph`, `subgraph-prompt`, `canvas-store`) is window-specific — it is
+the shared substrate both the Draw window and the main process build on.
+
 ## Scope
 
 - **MVP:** `sketch`/`component`/`version`/`token` nodes; `GENERATED`/`OF`/`EVOLVED_TO`/
   `REFERENCES`/`USES_TOKEN` edges; `selectSubgraph` (references + composed + prior + tokens +
-  budgets). Draw button → persistent canvas → generate through the existing compose pipeline.
+  budgets). Draw button opens the **separate Draw window** (persistent canvas) → generate through
+  the existing compose pipeline, landing the component back in the Playground.
 - **Later:** `COMPOSES` import from DS metadata, `PLACED_AT`/`page`/`spot` placement tracking,
   a canvas index UI (per-frame "→ ProductCard v3" chips) and evolution history views.
