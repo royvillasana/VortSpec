@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import type { JSX, ReactNode } from "react";
+import { FLOAT_PANEL } from "../lib/layout";
 
 /**
  * The single left sidebar (change: unified-left-dock). Replaces the old two-sidebar
@@ -48,7 +49,7 @@ export function LeftDock({
   return (
     <aside
       style={{ width }}
-      className="flex shrink-0 flex-col overflow-hidden border-r border-vs-border-default bg-vs-bg-surface"
+      className={`my-2 ml-2 flex shrink-0 flex-col overflow-hidden ${FLOAT_PANEL}`}
     >
       <div className="flex flex-none items-stretch border-b border-vs-border-subtle text-[12px]">
         {hasSection && (

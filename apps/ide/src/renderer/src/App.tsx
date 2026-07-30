@@ -28,7 +28,7 @@ import { PanelGroup } from "./components/PanelGroup";
 import { Resizer } from "./components/Resizer";
 import { useWorkspaceFiles } from "./lib/useWorkspaceFiles";
 import { useLayout } from "./lib/useLayout";
-import { effectiveWidths, isSidebarView, STORYBOOK_SIDEBAR_WIDTH, type Activity } from "./lib/layout";
+import { effectiveWidths, isSidebarView, STORYBOOK_SIDEBAR_WIDTH, FLOAT_PANEL, type Activity } from "./lib/layout";
 import { IdeContext, buildSeedContext, buildLiveContext, type EditorSelection } from "./lib/ide-context";
 import { useIdeMcp, IDE_MCP_TOOL_GROUP } from "./lib/useIdeMcp";
 import { useAutoComponentBuild } from "@vortspec/ui/useAutoComponentBuild";
@@ -407,14 +407,14 @@ export default function App(): JSX.Element {
     // then lands it on the Foundation.
     if (newProject) {
       return (
-        <div className="flex h-screen w-screen flex-col overflow-hidden bg-vs-bg-primary text-vs-text-primary">
+        <div className="flex h-screen w-screen flex-col overflow-hidden bg-vs-bg-surface text-vs-text-primary">
           <header
-            className="flex h-9 shrink-0 items-center justify-center border-b border-vs-border-default bg-vs-bg-surface text-xs text-vs-text-muted"
+            className="flex h-9 shrink-0 items-center justify-center bg-vs-bg-surface text-xs text-vs-text-muted"
             style={{ WebkitAppRegion: "drag" } as unknown as CSSProperties}
           >
             <span className="font-bold text-vs-text-secondary">VortSpec</span>
           </header>
-          <div className="min-h-0 flex-1 overflow-auto">
+          <div className={`min-h-0 flex-1 overflow-auto m-2 ${FLOAT_PANEL}`}>
             <ProjectSetup
               project={newProject}
               onCreated={(p) => {
@@ -428,7 +428,7 @@ export default function App(): JSX.Element {
       );
     }
     return (
-      <div className="flex h-screen w-screen flex-col overflow-hidden bg-vs-bg-primary text-vs-text-primary">
+      <div className="flex h-screen w-screen flex-col overflow-hidden bg-vs-bg-surface text-vs-text-primary">
         <header
           className="flex h-9 shrink-0 items-center justify-center border-b border-vs-border-default bg-vs-bg-surface text-xs text-vs-text-muted"
           style={{ WebkitAppRegion: "drag" } as unknown as CSSProperties}
@@ -438,15 +438,16 @@ export default function App(): JSX.Element {
         <div className="flex min-h-0 flex-1 overflow-hidden">
           <ActivityBar
             active={welcomeView === "settings" ? "settings" : "home"}
+            seamless
             onSelect={(a) => setWelcomeView(a === "settings" ? "settings" : "start")}
           />
           {welcomeView === "start" && (
-            <aside className="flex w-60 shrink-0 flex-col border-r border-vs-border-default bg-vs-bg-surface">
+            <aside className={`my-2 ml-2 flex w-60 shrink-0 flex-col overflow-hidden ${FLOAT_PANEL}`}>
               <div className="px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-vs-text-muted">Explorer</div>
               <p className="px-3 text-[12px] leading-relaxed text-vs-text-muted">No folder open. Open or clone a workspace to see its files here.</p>
             </aside>
           )}
-          <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+          <div className={`m-2 flex min-w-0 flex-1 flex-col overflow-hidden ${FLOAT_PANEL}`}>
             {welcomeView === "settings" ? (
               <div className="min-w-0 flex-1 overflow-auto">
                 <Profile onBack={() => setWelcomeView("start")} onSaved={setProfile} />
@@ -465,7 +466,7 @@ export default function App(): JSX.Element {
             )}
           </div>
         </div>
-        <footer className="flex h-6 shrink-0 items-center gap-3 border-t border-vs-border-default bg-vs-bg-surface px-3 text-[11px] text-vs-text-muted">
+        <footer className="flex h-6 shrink-0 items-center gap-3 bg-vs-bg-surface px-3 text-[11px] text-vs-text-muted">
           <span>No folder open</span>
         </footer>
       </div>
@@ -475,6 +476,9 @@ export default function App(): JSX.Element {
   const eff = effectiveWidths(layout, winW);
   const showPrimary = isSidebarView(layout.activity) && layout.primaryOpen;
   const isExplorer = layout.activity === "explorer";
+  // Seamless shell (permanent): the chrome (titlebar, activity rail, breadcrumb, status bar) is
+  // one continuous surface; the sidebar dock and the main area float as matching rounded panels.
+  const canvasShell = `m-2 ${FLOAT_PANEL}`;
   // Forces an editor relayout whenever a region size/visibility changes.
   const relayoutKey =
     Math.round(eff.primary + eff.secondary + eff.panelSide) +
@@ -644,7 +648,7 @@ export default function App(): JSX.Element {
       ) : a === "manifest" ? (
         <DesignManifest project={p} hideRail onBack={go("explorer")} onOpenRun={go("run")} onOpenPreview={go("explorer")} onOpenInspector={go("tokens")} onOpenHistory={go("explorer")} />
       ) : a === "settings" ? (
-        <Profile onBack={go("explorer")} />
+        <Profile onBack={go("explorer")} onSaved={setProfile} />
       ) : (
         <div className="flex flex-1 items-center justify-center text-sm text-vs-text-muted">This view isn’t available in the IDE yet.</div>
       );
@@ -655,7 +659,7 @@ export default function App(): JSX.Element {
     <IdeContext.Provider value={{ activeFile: wf.activePath, previewUrl, setActiveFile: () => {}, setPreviewUrl: () => {} }}>
      <AssistantTaskProvider value={dispatchAssistantTask}>
       <CanvasSelectionProvider>
-      <div className="flex h-screen w-screen flex-col overflow-hidden bg-vs-bg-primary text-vs-text-primary">
+      <div className="flex h-screen w-screen flex-col overflow-hidden bg-vs-bg-surface text-vs-text-primary">
         {/* Automatic background component build (light-pages-on-canvas §9): a quiet running indicator +
             a completion toast, so the user knows the design-system components are building while they work. */}
         {(autoFoundation.extracting || autoBuild.building || buildNotice) && !buildIndicatorDismissed && (
@@ -692,7 +696,7 @@ export default function App(): JSX.Element {
           </div>
         )}
         <header
-          className="relative flex h-9 shrink-0 items-center justify-end border-b border-vs-border-default bg-vs-bg-surface pr-2 text-xs text-vs-text-muted"
+          className="relative flex h-9 shrink-0 items-center justify-end bg-vs-bg-surface pr-2 text-xs text-vs-text-muted"
           style={{ WebkitAppRegion: "drag" } as unknown as CSSProperties}
         >
           {/* Logo + name centered in the bar so it clears the macOS traffic lights
@@ -714,7 +718,7 @@ export default function App(): JSX.Element {
         <ToolkitUpdateBanner project={workspace} onUpdated={setWorkspace} />
 
         <div className="flex min-h-0 flex-1 overflow-hidden">
-          <ActivityBar active={layout.activity} onSelect={(a) => (a === "home" ? setWorkspace(null) : dispatch({ type: "setActivity", activity: a }))} />
+          <ActivityBar active={layout.activity} seamless onSelect={(a) => (a === "home" ? setWorkspace(null) : dispatch({ type: "setActivity", activity: a }))} />
 
           {/* The ONE left sidebar: the current view's Section sidebar + the persistent Chat.
               The right assistant sidebar is gone — the chat lives here now, mounted once so
@@ -810,7 +814,7 @@ export default function App(): JSX.Element {
             {/* Breadcrumb — close/change the project (back to Home), above the editor tabs. */}
             <nav
               aria-label="Breadcrumb"
-              className="flex flex-none items-center gap-1.5 border-b border-vs-border-subtle bg-vs-bg-surface px-3 py-1 text-[11px] text-vs-text-muted"
+              className="flex flex-none items-center gap-1.5 bg-transparent px-3 py-1 text-[11px] text-vs-text-muted"
             >
               <button
                 type="button"
@@ -858,11 +862,11 @@ export default function App(): JSX.Element {
               </button>
             </nav>
             {isExplorer ? (
-              <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">{centerForExplorer()}</div>
+              <div className={`flex min-h-0 min-w-0 flex-1 overflow-hidden ${canvasShell}`}>{centerForExplorer()}</div>
             ) : (
               // Work-panel views (Foundation, Run, Tokens, …) get the same bottom
               // terminal dock as the Explorer, so the in-app shell is everywhere.
-              <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+              <div className={`flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden ${canvasShell}`}>
                 <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">{workPanel()}</div>
                 {layout.panelOpen && layout.panelDock === "bottom" && (
                   <>
@@ -877,7 +881,7 @@ export default function App(): JSX.Element {
           </div>
         </div>
 
-        <footer className="flex h-6 shrink-0 items-center gap-2 border-t border-vs-border-default bg-vs-bg-surface px-3 text-[11px] text-vs-text-muted">
+        <footer className="flex h-6 shrink-0 items-center gap-2 bg-vs-bg-surface px-3 text-[11px] text-vs-text-muted">
           <button type="button" onClick={() => setWorkspace(null)} className="hover:text-vs-text-secondary" title="Switch workspace">
             {workspace.name}
           </button>

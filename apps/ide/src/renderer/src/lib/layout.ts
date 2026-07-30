@@ -6,6 +6,16 @@
  * computed at render time from this desired state; see `effectiveWidths`.
  */
 
+/**
+ * The seamless-shell "floating panel" treatment, shared by the sidebar dock and
+ * the main canvas so they read as identical inset surfaces: a gap from the
+ * chrome, matched rounding, a hairline border + top-highlight, and a soft lift.
+ * The chrome (titlebar, activity rail, breadcrumb, status bar) stays flat behind
+ * them. This is the app's permanent shell look — no longer behind a setting.
+ */
+export const FLOAT_PANEL =
+  "rounded-xl border border-vs-border-default bg-vs-bg-primary shadow-[0_18px_44px_-22px_rgba(0,0,0,0.1),inset_0_1px_0_rgba(255,255,255,0.045)]";
+
 export type SidebarView = "explorer";
 export type WorkPanel =
   | "source"
