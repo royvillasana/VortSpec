@@ -84,6 +84,7 @@ export function ComposeHarness({
       </div>
       <div style={{ flex: 1, position: "relative" }}>
         <ComposePanel
+          projectPath="/tmp/harness-project"
           compose={compose}
           components={roster === "empty" ? [] : ROSTER}
           onExtract={(name) => {
