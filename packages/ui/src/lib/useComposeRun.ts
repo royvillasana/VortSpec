@@ -64,6 +64,9 @@ export function useComposeRun(args: {
   ctx.current = args;
   const snapshotRef = useRef<FileSnapshot[] | null>(null);
   const runIdRef = useRef<string>("");
+  // A sketch produces ONE light-native option — auto-accept it on finish and reload (light pages have
+  // NO HMR, so the scaffold isn't hot-reloaded; without a reload the composed result never repaints).
+  const autoAcceptRef = useRef(false);
 
   const hasRoster = hasUsableRoster(args.roster);
 
@@ -91,6 +94,7 @@ export function useComposeRun(args: {
       const rect = bridge.placeholder.rect;
       const runId = `compose-${Date.now()}`;
       runIdRef.current = runId;
+      autoAcceptRef.current = !!sketchPngPath;
       setError(null);
 
       // Snapshot the whole source scope BEFORE any write, so discard/cancel restores
@@ -182,17 +186,29 @@ export function useComposeRun(args: {
         setPhase("error");
         return;
       }
-      void api.composeCheckTarget(ctx.current.project.path, file).then((check) => {
+      void api.composeCheckTarget(ctx.current.project.path, file).then(async (check) => {
         if (!check.ok) {
           setError(check.reason ?? `${file} is not a file this can safely write to. Discard and try again.`);
           setPhase("error");
           return;
         }
+        const { bridge, project } = ctx.current;
+        // Sketch → one light-native option: accept it and RELOAD to show the committed result. Light
+        // pages have no HMR, so previewing in place would just toggle a stale DOM (the composed component
+        // never appears). Accepting sweeps the scaffold and the reload repaints the real page.
+        if (autoAcceptRef.current) {
+          autoAcceptRef.current = false;
+          await api.composeAccept(project.path, file, runIdRef.current, 0);
+          bridge.dismissPlaceholder();
+          bridge.reload();
+          reset();
+          return;
+        }
         // The options are now in real source — drop the placeholder and preview the
-        // first one in place (the dev server hot-reloaded the scaffold).
-        ctx.current.bridge.dismissPlaceholder();
+        // first one in place (framework pages hot-reload the scaffold via HMR).
+        bridge.dismissPlaceholder();
         setActiveOption(0);
-        ctx.current.bridge.previewOption(0);
+        bridge.previewOption(0);
         setPhase("options");
       });
     } else if (run.model.status === "error") {
