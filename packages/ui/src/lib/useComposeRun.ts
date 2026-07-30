@@ -115,7 +115,9 @@ export function useComposeRun(args: {
         },
         sizeHint: { width: Math.round(rect.width), height: Math.round(rect.height) },
         sketchPngPath,
-        count: 3,
+        // A sketch already IS the design — build the ONE thing the user drew (fast), not 3 distinct
+        // variants. Text-described composition still explores up to 3 (variety helps there).
+        count: sketchPngPath ? 1 : 3,
       });
 
       setPhase("generating");
