@@ -10,6 +10,7 @@
  */
 import type { IpcResponse, StageStatus, SetupAnswers, FileSnapshot, Profile, PushPlan } from "./ipc";
 import type { DrawGraph } from "./draw-graph";
+import type { DrawSketchReady } from "./draw-events";
 import type { CommentThread } from "./comment";
 import type { AgentRunOptions, AgentEventEnvelope, AgentRawEnvelope } from "./run-events";
 import type { DevServerUpdate } from "./dev-server";
@@ -164,6 +165,10 @@ export interface VortSpecApi {
   ): Promise<IpcResponse<"draw:generatePrompt">>;
   /** Record a completed Draw generation in the project graph; returns the version id. */
   drawRecordGeneration(projectPath: string, input: { sketchId: string; component: string; outputRef?: string }): Promise<IpcResponse<"draw:recordGeneration">>;
+  /** From the Draw window: write the sketch PNG and broadcast it to the compose dialog; returns the path. */
+  drawReturnSketch(projectPath: string, dataUrl: string): Promise<IpcResponse<"draw:returnSketch">>;
+  /** Subscribe to a finished Draw-window sketch (compose dialog listens); returns an unsubscribe fn. */
+  onDrawSketchReady(callback: (payload: DrawSketchReady) => void): () => void;
 
   // manifest (DESIGN.md)
   getManifest(projectPath: string): Promise<IpcResponse<"manifest:get">>;

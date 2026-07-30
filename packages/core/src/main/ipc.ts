@@ -1,4 +1,4 @@
-import { ipcMain, shell, app, type WebContents } from "electron";
+import { ipcMain, shell, app, BrowserWindow, type WebContents } from "electron";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -116,6 +116,7 @@ import {
 } from "./canvas/canvas-store";
 import { buildDrawGeneratePromptFor, recordDrawGenerationFor } from "./canvas/draw-source";
 import type { DrawGraph } from "../shared/draw-graph";
+import { DRAW_SKETCH_READY_CHANNEL, type DrawSketchReady } from "../shared/draw-events";
 import {
   startDevServer,
   stopDevServer,
@@ -144,6 +145,17 @@ type Handler = (req: never, sender: WebContents) => unknown;
 let drawWindowOpener: ((projectPath: string) => void) | null = null;
 export function setDrawWindowOpener(opener: (projectPath: string) => void): void {
   drawWindowOpener = opener;
+}
+
+/**
+ * The Draw window finished: write its sketch PNG, then broadcast DRAW_SKETCH_READY to every window so
+ * the waiting compose dialog (in the main window) composes it into its slot. Returns the PNG path.
+ */
+async function returnDrawSketch(projectPath: string, dataUrl: string): Promise<string> {
+  const pngPath = await writeCanvasSketchPng(projectPath, `compose-${Date.now()}`, dataUrl);
+  const payload: DrawSketchReady = { projectPath, pngPath };
+  for (const win of BrowserWindow.getAllWindows()) win.webContents.send(DRAW_SKETCH_READY_CHANNEL, payload);
+  return pngPath;
 }
 
 const handlers: Record<IpcChannel, Handler> = {
@@ -407,6 +419,7 @@ const handlers: Record<IpcChannel, Handler> = {
   }) => buildDrawGeneratePromptFor(r)) as Handler,
   "draw:recordGeneration": ((r: { projectPath: string; sketchId: string; component: string; outputRef?: string }) =>
     recordDrawGenerationFor(r)) as Handler,
+  "draw:returnSketch": ((r: { projectPath: string; dataUrl: string }) => returnDrawSketch(r.projectPath, r.dataUrl)) as Handler,
   "manifest:save": ((req: { projectPath: string; content: string }) =>
     saveManifest(req.projectPath, req.content, new Date().toISOString())) as Handler,
   "manifest:listVersions": ((projectPath: string) =>

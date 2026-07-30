@@ -672,6 +672,9 @@ export const ipcContract = {
     request: z.object({ projectPath: z.string(), sketchId: z.string(), component: z.string(), outputRef: z.string().optional() }),
     response: z.string(),
   },
+  // The Draw window hands a finished sketch back to the compose dialog: write the PNG, then broadcast
+  // DRAW_SKETCH_READY to every window so the waiting dialog composes it into its slot. Returns the path.
+  "draw:returnSketch": { request: z.object({ projectPath: z.string(), dataUrl: z.string() }), response: z.string() },
   "manifest:save": {
     request: z.object({ projectPath: z.string(), content: z.string() }),
     response: manifestResultSchema,

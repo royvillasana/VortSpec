@@ -1,5 +1,4 @@
-import { lazy, Suspense, useState } from "react";
-import { createPortal } from "react-dom";
+import { useEffect, useRef, useState } from "react";
 import type { JSX, ComponentType } from "react";
 import { Wand2, LayoutGrid, PenLine, Minus, Plus } from "lucide-react";
 import { Spinner } from "@vortspec/ui/ui";
@@ -9,9 +8,6 @@ import { ComponentPicker } from "./ComponentPicker";
 import { useDraggable } from "../../lib/useDraggable";
 import { HoverTip } from "../HoverTip";
 import { api } from "../../lib/api";
-
-// Excalidraw is heavy — lazy so it only loads when the Draw tab is opened (never in the main bundle).
-const InlineSketch = lazy(() => import("./InlineSketch"));
 
 type Tab = "generate" | "components" | "draw";
 
@@ -55,7 +51,6 @@ export function ComposePanel({
   const [tab, setTab] = useState<Tab>("generate");
   const [rows, setRows] = useState(1);
   const [columns, setColumns] = useState(1);
-  const [drawModalOpen, setDrawModalOpen] = useState(false);
   const [selected, setSelected] = useState<InspectorComponent[]>([]);
   const { phase, result, activeOption } = compose;
 
@@ -82,12 +77,17 @@ export function ComposePanel({
     setSelected((cur) => (cur.some((x) => x.name === c.name) ? cur.filter((x) => x.name !== c.name) : [...cur, c]));
 
   const generate = (): void => void compose.generate(draft, selected.map((c) => c.name), spec);
-  const generateFromSketch = async (dataUrl: string): Promise<void> => {
-    setDrawModalOpen(false);
-    const pngPath = await api.canvasExportSketch(projectPath, `compose-${Date.now()}`, dataUrl).catch(() => "");
-    if (!pngPath) return;
-    await compose.generate(draft, selected.map((c) => c.name), spec, pngPath);
-  };
+
+  // When the separate Draw window hands back a sketch, compose it INTO this dialog's slot. The handler
+  // is registered once; a ref carries the latest draft/selected/spec so it reads current values.
+  const composeSketchRef = useRef<(pngPath: string) => void>(() => {});
+  composeSketchRef.current = (pngPath: string): void => void compose.generate(draft, selected.map((c) => c.name), spec, pngPath);
+  useEffect(() => {
+    const off = api.onDrawSketchReady((p) => {
+      if (p.projectPath === projectPath) composeSketchRef.current(p.pngPath);
+    });
+    return off;
+  }, [projectPath]);
 
   const discard = (): void => void compose.discard();
 
@@ -177,13 +177,16 @@ export function ComposePanel({
             </div>
           ) : tab === "draw" && phase === "idle" ? (
             <div className="flex flex-col gap-1.5">
-              <p className="text-[10px] text-vs-text-muted">Sketch what belongs here — it composes into this slot on the current screen.</p>
+              <p className="text-[10px] text-vs-text-muted">
+                Opens a separate, movable drawing window. Sketch there, hit <b>Use this drawing</b>, and it composes into
+                this slot on the current screen.
+              </p>
               <button
                 type="button"
-                onClick={() => setDrawModalOpen(true)}
+                onClick={() => void api.drawOpen(projectPath)}
                 className="inline-flex items-center gap-1.5 self-start rounded-md border border-vs-accent bg-vs-accent/10 px-2.5 py-1.5 text-xs font-medium text-vs-text-primary hover:bg-vs-accent/20"
               >
-                <PenLine size={13} /> Open drawing canvas →
+                <PenLine size={13} /> Open drawing window →
               </button>
             </div>
           ) : (
@@ -362,38 +365,6 @@ export function ComposePanel({
           </div>
         </div>
       )}
-
-      {/* Big drawing pop-up (portaled to body so the panel's backdrop-blur doesn't trap `fixed`).
-          "Generate from drawing" composes the sketch INTO this dialog's slot on the current screen. */}
-      {drawModalOpen &&
-        createPortal(
-          <div
-            className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-6"
-            onClick={() => setDrawModalOpen(false)}
-          >
-            <div
-              className="flex h-[82vh] w-[84vw] max-w-6xl flex-col gap-2 rounded-lg border border-vs-border-default bg-vs-bg-elevated p-3 shadow-2xl"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="flex flex-none items-center gap-2 text-[12px]">
-                <span className="font-semibold text-vs-text-primary">Draw the component</span>
-                <span className="text-vs-text-muted">— it composes into the selected slot</span>
-                <button
-                  type="button"
-                  onClick={() => setDrawModalOpen(false)}
-                  aria-label="Close"
-                  className="ml-auto rounded px-1 text-vs-text-muted hover:text-vs-text-primary"
-                >
-                  ✕
-                </button>
-              </div>
-              <Suspense fallback={<div className="flex flex-1 items-center justify-center text-[11px] text-vs-text-muted">Loading canvas…</div>}>
-                <InlineSketch onGenerate={(url) => void generateFromSketch(url)} generating={false} />
-              </Suspense>
-            </div>
-          </div>,
-          document.body,
-        )}
     </div>
   );
 }
