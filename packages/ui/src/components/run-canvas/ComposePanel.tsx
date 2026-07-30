@@ -30,6 +30,7 @@ export function ComposePanel({
   onScreenLater,
   onClose,
   getStoryUrl,
+  onSaveAsComponent,
   onInsertSpecChange,
 }: {
   compose: UseComposeRun;
@@ -41,6 +42,8 @@ export function ComposePanel({
   onScreenLater?: (file: string) => void;
   onClose: () => void;
   getStoryUrl?: (name: string) => string | null;
+  /** Promote the accepted composition into a real framework component + a Storybook story. */
+  onSaveAsComponent?: (opts: { sourceFile: string | null; suggestedName: string | null }) => void;
   /** Notify the host when rows/columns change, so the placeholder re-renders (mapped to axis+count). */
   onInsertSpecChange?: (spec: {
     placement: "into-existing" | "new-row" | "new-column";
@@ -301,10 +304,26 @@ export function ComposePanel({
               </p>
             )}
 
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <button type="button" onClick={() => void compose.accept()} className="rounded bg-vs-accent px-2 py-1 text-white hover:opacity-90">
                 Accept
               </button>
+              {onSaveAsComponent && (
+                <button
+                  type="button"
+                  title="Accept, then extract it into a reusable framework component + a Storybook story"
+                  onClick={() => {
+                    void compose.accept();
+                    onSaveAsComponent({
+                      sourceFile: result.writtenFile,
+                      suggestedName: result.options[activeOption]?.title || result.options[activeOption]?.componentsUsed[0] || null,
+                    });
+                  }}
+                  className="rounded border border-vs-accent bg-vs-accent/10 px-2 py-1 text-vs-text-primary hover:bg-vs-accent/20"
+                >
+                  Save as component
+                </button>
+              )}
               <button type="button" onClick={discard} className="rounded border border-vs-border-default px-2 py-0.5 hover:bg-vs-bg-hover">
                 Discard
               </button>

@@ -3,6 +3,7 @@ import {
   composeResultSchema,
   MAX_COMPOSE_OPTIONS,
   buildComposePrompt,
+  buildPromoteComponentPrompt,
   buildMovePrompt,
   hasUsableRoster,
   parseComposeResult,
@@ -287,5 +288,23 @@ describe("parseComposeResult", () => {
     const r = parseComposeResult(text);
     expect(r?.stopped?.reason).toContain("two <Card>");
     expect(r?.stopped?.candidates).toEqual(["Home.tsx:20", "Home.tsx:41"]);
+  });
+});
+
+describe("buildPromoteComponentPrompt", () => {
+  it("extracts to a reusable framework component + Storybook story, token-grounded", () => {
+    const p = buildPromoteComponentPrompt({ sourceFile: ".vortspec/light-pages/home.html", suggestedName: "ProductCard" });
+    expect(p).toMatch(/PROMOTE the composition/);
+    expect(p).toContain(".vortspec/light-pages/home.html");
+    expect(p).toContain("ProductCard");
+    expect(p).toMatch(/\.variants\.ts/);
+    expect(p).toMatch(/Storybook story/);
+    expect(p).toMatch(/design TOKEN/);
+    expect(p).toMatch(/data-component/);
+  });
+  it("works without a name or source file", () => {
+    const p = buildPromoteComponentPrompt({ sourceFile: null, suggestedName: null });
+    expect(p).toMatch(/current screen/);
+    expect(p).toMatch(/reusable component/i);
   });
 });

@@ -191,6 +191,31 @@ const DISTINCTNESS_CLAUSE = [
  *
  * Assumes a non-empty roster — callers gate on `hasUsableRoster` first (§6.4).
  */
+/**
+ * Prompt to PROMOTE a just-composed piece of UI into a real, reusable framework component with a
+ * Storybook story (the compose dialog's "Save as component"). Pure. The composition already lives at
+ * the insertion site (`sourceFile`); this extracts it into the component library + docs.
+ */
+export function buildPromoteComponentPrompt(opts: { sourceFile?: string | null; suggestedName?: string | null }): string {
+  const name = opts.suggestedName?.trim() || "";
+  return [
+    "PROMOTE the composition you just inserted into a REUSABLE component in the project's framework, with a Storybook story.",
+    opts.sourceFile ? `You composed the UI into: ${opts.sourceFile}.` : "You composed the UI into the current screen.",
+    "",
+    "Read `.sdd-de/project.yaml` for the framework / language / styling and follow the project's component standards.",
+    `1. Extract the inserted composition into a NEW reusable component${name ? ` named "${name}"` : ""} in the project's`,
+    "   component directory, following its standards: Class Variance Authority (CVA) variants in a separate",
+    "   `.variants.ts`, a `cn()` utility for class merging, `forwardRef`, and every color/spacing/radius/type",
+    "   value referencing a design TOKEN (never a hardcoded hex or px).",
+    "2. Replace the inline composition at the insertion site with a usage of the new component (keep its",
+    "   `data-component` marker so the inspector still recognizes it).",
+    "3. Generate a Storybook story (`<Component>.stories.*`) and a `<Component>.metadata.ts` for it, following",
+    "   the project's /storybook conventions — variants and states as stories, the a11y addon, design tokens.",
+    "",
+    "Do not touch unrelated files. End with: the component + its `.variants.ts`, the story + metadata, and the call site updated to use it.",
+  ].join("\n");
+}
+
 export function buildComposePrompt(input: ComposePromptInput): string {
   const count = Math.max(1, Math.min(MAX_COMPOSE_OPTIONS, input.count ?? MAX_COMPOSE_OPTIONS));
   const { slot } = input;
