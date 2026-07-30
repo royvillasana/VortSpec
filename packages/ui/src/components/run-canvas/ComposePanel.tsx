@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import type { JSX, ComponentType } from "react";
 import { Wand2, LayoutGrid, PenLine, Minus, Plus } from "lucide-react";
 import { Spinner } from "@vortspec/ui/ui";
@@ -52,6 +52,9 @@ export function ComposePanel({
   const [rows, setRows] = useState(1);
   const [columns, setColumns] = useState(1);
   const [selected, setSelected] = useState<InspectorComponent[]>([]);
+  // A sketch handed back from the Draw window — attached to the Generate input (not composed yet), so
+  // the user can add text context before generating.
+  const [pendingSketch, setPendingSketch] = useState<{ pngPath: string; dataUrl?: string } | null>(null);
   const { phase, result, activeOption } = compose;
 
   const clamp = (n: number): number => Math.max(1, Math.min(6, Math.round(n) || 1));
@@ -76,15 +79,18 @@ export function ComposePanel({
   const toggleComponent = (c: InspectorComponent): void =>
     setSelected((cur) => (cur.some((x) => x.name === c.name) ? cur.filter((x) => x.name !== c.name) : [...cur, c]));
 
-  const generate = (): void => void compose.generate(draft, selected.map((c) => c.name), spec);
+  const generate = (): void => {
+    void compose.generate(draft, selected.map((c) => c.name), spec, pendingSketch?.pngPath);
+    setPendingSketch(null);
+  };
 
-  // When the separate Draw window hands back a sketch, compose it INTO this dialog's slot. The handler
-  // is registered once; a ref carries the latest draft/selected/spec so it reads current values.
-  const composeSketchRef = useRef<(pngPath: string) => void>(() => {});
-  composeSketchRef.current = (pngPath: string): void => void compose.generate(draft, selected.map((c) => c.name), spec, pngPath);
+  // When the separate Draw window hands back a sketch, ATTACH it to the Generate input (don't compose
+  // yet) — the user adds any extra context, then hits Generate. Switch to the Generate tab so it shows.
   useEffect(() => {
     const off = api.onDrawSketchReady((p) => {
-      if (p.projectPath === projectPath) composeSketchRef.current(p.pngPath);
+      if (p.projectPath !== projectPath) return;
+      setPendingSketch({ pngPath: p.pngPath, dataUrl: p.dataUrl });
+      setTab("generate");
     });
     return off;
   }, [projectPath]);
@@ -192,13 +198,36 @@ export function ComposePanel({
           ) : (
             // Generate tab (and the generating state) — prompt input + action.
             <div className="flex flex-col gap-1.5">
+              {/* A sketch handed over from the Draw window, attached like a pasted image. Add context below. */}
+              {pendingSketch && phase === "idle" && (
+                <div className="flex items-center gap-2 rounded border border-vs-accent-subtle bg-vs-accent-subtle/30 px-1.5 py-1">
+                  {pendingSketch.dataUrl ? (
+                    <img src={pendingSketch.dataUrl} alt="attached sketch" className="h-10 w-10 flex-none rounded border border-vs-border-subtle object-contain" />
+                  ) : (
+                    <span className="text-[16px]">🖼</span>
+                  )}
+                  <span className="text-[11px] text-vs-text-secondary">Sketch attached — add any context, then Generate.</span>
+                  <button
+                    type="button"
+                    onClick={() => setPendingSketch(null)}
+                    aria-label="Remove sketch"
+                    className="ml-auto rounded px-1 leading-none text-vs-text-muted hover:text-vs-text-primary"
+                  >
+                    ✕
+                  </button>
+                </div>
+              )}
               <div className="relative rounded border border-vs-border-default bg-vs-bg-primary focus-within:ring-2 focus-within:ring-vs-accent-subtle">
                 <textarea
                   value={draft}
                   onChange={(e) => setDraft(e.target.value)}
                   disabled={phase === "generating"}
                   placeholder={
-                    selected.length > 0 ? `Describe what to build with ${selected.map((c) => c.name).join(", ")}…` : "Describe what belongs here…"
+                    pendingSketch
+                      ? "Add any extra context for the sketch (optional)…"
+                      : selected.length > 0
+                        ? `Describe what to build with ${selected.map((c) => c.name).join(", ")}…`
+                        : "Describe what belongs here…"
                   }
                   className="min-h-[72px] w-full resize-none bg-transparent px-2 pb-9 pt-1.5 text-vs-text-primary focus:outline-none disabled:opacity-70"
                 />
@@ -215,11 +244,11 @@ export function ComposePanel({
                   ) : (
                     <button
                       type="button"
-                      disabled={!draft.trim()}
-                      title={draft.trim() ? "Compose options for this slot" : "Describe what belongs here first"}
+                      disabled={!draft.trim() && !pendingSketch}
+                      title={draft.trim() || pendingSketch ? "Compose into this slot" : "Describe what belongs here (or attach a sketch) first"}
                       onClick={generate}
                       className={`rounded-md px-2.5 py-1 text-xs font-medium text-white ${
-                        draft.trim() ? "bg-vs-accent hover:opacity-90" : "cursor-not-allowed bg-vs-accent/40"
+                        draft.trim() || pendingSketch ? "bg-vs-accent hover:opacity-90" : "cursor-not-allowed bg-vs-accent/40"
                       }`}
                     >
                       Generate

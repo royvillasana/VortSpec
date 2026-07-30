@@ -85,7 +85,7 @@ export function DrawWindow({ project }: { project: string }): React.JSX.Element 
   return (
     <div className="flex h-screen w-screen flex-col bg-vs-bg-base text-vs-text-primary">
       <header
-        className="flex flex-none items-center gap-2 border-b border-vs-border-subtle px-4 py-2 text-[13px]"
+        className="flex flex-none items-center gap-2 border-b border-vs-border-subtle py-2 pl-20 pr-4 text-[13px]"
         style={{ WebkitAppRegion: "drag" } as React.CSSProperties}
       >
         <span className="font-medium">Draw</span>

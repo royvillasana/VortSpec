@@ -11,4 +11,6 @@ export interface DrawSketchReady {
   projectPath: string;
   /** Absolute path to the exported sketch PNG the compose dialog attaches. */
   pngPath: string;
+  /** The sketch as a data URL, for the compose dialog's attachment thumbnail. */
+  dataUrl?: string;
 }

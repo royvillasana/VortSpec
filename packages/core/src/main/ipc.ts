@@ -153,7 +153,7 @@ export function setDrawWindowOpener(opener: (projectPath: string) => void): void
  */
 async function returnDrawSketch(projectPath: string, dataUrl: string): Promise<string> {
   const pngPath = await writeCanvasSketchPng(projectPath, `compose-${Date.now()}`, dataUrl);
-  const payload: DrawSketchReady = { projectPath, pngPath };
+  const payload: DrawSketchReady = { projectPath, pngPath, dataUrl };
   for (const win of BrowserWindow.getAllWindows()) win.webContents.send(DRAW_SKETCH_READY_CHANNEL, payload);
   return pngPath;
 }
