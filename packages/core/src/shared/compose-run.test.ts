@@ -308,3 +308,19 @@ describe("buildPromoteComponentPrompt", () => {
     expect(p).toMatch(/reusable component/i);
   });
 });
+
+describe("buildComposePrompt — light-native (Playground light pages)", () => {
+  it("lightNative → framework-free HTML from the light stand-ins, not JSX/roster", () => {
+    const p = buildComposePrompt(input({ lightNative: true, sketchPngPath: "/tmp/s.png" }));
+    expect(p).toMatch(/framework-free HTML/i);
+    expect(p).toContain(".vortspec/light-html/");
+    expect(p).toMatch(/light stand-ins/i);
+    expect(p).toMatch(/MUST NOT contain `import`, JSX/);
+    expect(p).not.toMatch(/JSX, composed from roster components/);
+  });
+  it("default (framework) still emits JSX", () => {
+    const p = buildComposePrompt(input());
+    expect(p).toMatch(/JSX, composed from roster components/);
+    expect(p).not.toMatch(/framework-free HTML\/CSS, composed from the light stand-ins/);
+  });
+});

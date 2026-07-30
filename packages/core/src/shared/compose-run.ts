@@ -141,6 +141,12 @@ export interface ComposePromptInput {
   sizeHint?: { width?: number; height?: number };
   /** Absolute path to a hand-drawn sketch of what belongs here — the AI Reads it as the visual intent. */
   sketchPngPath?: string;
+  /**
+   * Light-native output: compose FRAMEWORK-FREE HTML from the light stand-ins (`.vortspec/light-html/`
+   * + `designer.md`) marked `data-component`, NOT JSX from the React roster. This is what the Playground
+   * (light pages) wants; the real framework component comes later via Convert / "Save as component".
+   */
+  lightNative?: boolean;
   /** How many AI options to attempt (1–3, default 3). A ceiling — NOT the slot count. */
   count?: number;
 }
@@ -240,9 +246,14 @@ export function buildComposePrompt(input: ComposePromptInput): string {
     rows > 1 || columns > 1
       ? `LAYOUT: arrange the composition as a GRID of ${rows} row(s) × ${columns} column(s) at this spot (use the design system's grid/flex + spacing tokens).`
       : "";
+  // Light-native (Playground light pages): compose framework-free HTML from the light stand-ins.
+  const lightNative = input.lightNative ?? false;
+  const compFrom = lightNative
+    ? "the design system's LIGHT STAND-INS (read `designer.md` + `.vortspec/light-html/`)"
+    : "the roster components below";
   // A hand-drawn sketch, when present, is the primary visual intent — compose it INTO this exact slot.
   const sketchLine = input.sketchPngPath
-    ? `A hand-drawn SKETCH of what belongs here is attached at: ${input.sketchPngPath} — READ it first (Read tool) as the primary visual intent, then build it FROM the roster components below (grounded in the tokens). It goes at THIS slot — write it INTO the current screen's EXISTING source file at this position (the same file the slot resolves to), wrapped in the option markers below. Do NOT create a new page or a new file, and do NOT guess placement.`
+    ? `A hand-drawn SKETCH of what belongs here is attached at: ${input.sketchPngPath} — READ it first (Read tool) as the primary visual intent, then build it FROM ${compFrom} (grounded in the tokens). It goes at THIS slot — write it INTO the current screen's EXISTING source file at this position (the same file the slot resolves to), wrapped in the option markers below. Do NOT create a new page or a new file, and do NOT guess placement.`
     : "";
 
   const lines: string[] = [
@@ -259,9 +270,11 @@ export function buildComposePrompt(input: ComposePromptInput): string {
     slot.file ? `The slot resolves to source file: ${slot.file}.` : "",
     sizeHint,
     "",
-    input.roster.length
-      ? "Component roster — compose ONLY from these, choosing their variants/props:"
-      : "This project has no component roster — create empty placeholder slots in the new container (do not hand-write component markup).",
+    lightNative
+      ? "Design-system components — read `designer.md` + the light stand-ins in `.vortspec/light-html/` and compose ONLY from those stand-ins (framework-free HTML). The components are:"
+      : input.roster.length
+        ? "Component roster — compose ONLY from these, choosing their variants/props:"
+        : "This project has no component roster — create empty placeholder slots in the new container (do not hand-write component markup).",
     ...input.roster.map(rosterLine),
     "",
     input.preferredComponents && input.preferredComponents.length
@@ -279,7 +292,9 @@ export function buildComposePrompt(input: ComposePromptInput): string {
     "",
     `Return at most ${count} option(s) — 1 to ${count}. Fewer, with a reason, beats a padded near-duplicate. Never exceed ${MAX_COMPOSE_OPTIONS}.`,
     "",
-    "If NO roster component fits this slot, do NOT hand-write markup. Instead return a no-component-match result naming why and a suggested component to extract.",
+    lightNative
+      ? "Reuse the light stand-ins wherever they fit; where the sketch needs something no stand-in covers, build it as framework-free HTML grounded in the tokens (it's a new light component to harvest later) — do not stop."
+      : "If NO roster component fits this slot, do NOT hand-write markup. Instead return a no-component-match result naming why and a suggested component to extract.",
     "",
     "Placing the slot in source:",
     `- Find the exact spot in ${slot.file ?? "the source"} — the anchor element identified above (use its leading text to disambiguate between similar siblings).`,
@@ -289,12 +304,19 @@ export function buildComposePrompt(input: ComposePromptInput): string {
     "",
     "Write EACH option into the source at the slot, wrapped in its own markers so the preview can be swept deterministically. For option N (0-based), wrap it exactly:",
     `  ${scaffoldBegin(input.runId, 0).replace("option=0", "option=N")}`,
-    `  …option N's JSX, composed from roster components…`,
+    lightNative
+      ? `  …option N's framework-free HTML/CSS, composed from the light stand-ins…`
+      : `  …option N's JSX, composed from roster components…`,
     `  ${scaffoldEnd(input.runId, 0).replace("option=0", "option=N")}`,
     `Every marker MUST contain the literal run id "${input.runId}". The dev server will hot-reload each option in place.`,
     "",
+    lightNative
+      ? "Output must be FRAMEWORK-FREE: plain HTML/CSS (and a small vanilla-JS island only if the sketch needs client behavior). It MUST NOT contain `import`, JSX, `.variants.ts`, `@/…` module paths, `cva(`/`cn(`, `.tsx`/`.jsx`, or a Storybook URL — the real framework component comes later via Convert / \"Save as component\"."
+      : "",
     "Also add a `data-vs-option=\"N\"` attribute to each option's root element so the canvas can preview one option at a time.",
-    "For EACH roster component you place, add a `data-component=\"<ComponentName>\"` attribute on its usage (e.g. `<Card data-component=\"Card\" … />`) so the inspector recognizes it as that component afterwards, not as hand-written markup. (Components that forward props will pass it through to the DOM.)",
+    lightNative
+      ? "For EACH stand-in you place, add a `data-component=\"<ComponentName>\"` attribute on its root element, using the exact names from `designer.md`, so the inspector recognizes it as that component."
+      : "For EACH roster component you place, add a `data-component=\"<ComponentName>\"` attribute on its usage (e.g. `<Card data-component=\"Card\" … />`) so the inspector recognizes it as that component afterwards, not as hand-written markup. (Components that forward props will pass it through to the DOM.)",
     "",
     "Finally, output a single fenced JSON block (```json) as the LAST thing you emit, matching this shape exactly:",
     '{ "options": [ { "index": 0, "title": "…", "axis": "which axis makes it distinct", "componentsUsed": ["Card", …], "note": "one line" } ], "fewerReason": null | "why fewer than requested", "noMatch": null | { "reason": "…", "suggestedName": "…" }, "stopped": null | { "reason": "why you could not place the insertion", "candidates": ["file:line", …] }, "writtenFile": "the project-relative file you wrote the options into, or null if you wrote nothing" }',

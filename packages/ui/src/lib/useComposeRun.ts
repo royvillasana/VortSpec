@@ -118,6 +118,9 @@ export function useComposeRun(args: {
         // A sketch already IS the design — build the ONE thing the user drew (fast), not 3 distinct
         // variants. Text-described composition still explores up to 3 (variety helps there).
         count: sketchPngPath ? 1 : 3,
+        // The Playground composes into LIGHT pages — emit framework-free HTML from the light stand-ins,
+        // not JSX from the React roster. The framework version comes later via Convert / Save as component.
+        lightNative: !!sketchPngPath,
       });
 
       setPhase("generating");
