@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { DrawGraph } from "./draw-graph";
 import { agentRunOptionsSchema, lastRunSchema } from "./run-events";
 import { usageResultSchema } from "./usage";
 import { profileSchema } from "./profile";
@@ -643,6 +644,14 @@ export const ipcContract = {
   "lite:page": { request: z.object({ projectPath: z.string(), name: z.string() }), response: z.string() },
   "lite:pages": { request: z.string(), response: z.array(z.string()) },
   "lite:writePage": { request: z.object({ projectPath: z.string(), name: z.string(), html: z.string() }), response: z.void() },
+  // Draw tool (docs/draw-to-component-graph.md): persist the project's drawing graph + Excalidraw scene
+  // and export a sketch to a PNG. The graph is validated by parseGraph in the canvas-store handler, so the
+  // wire schema stays loose (z.custom) here. The scene is an opaque Excalidraw JSON string.
+  "canvas:loadGraph": { request: z.string(), response: z.custom<DrawGraph>() },
+  "canvas:saveGraph": { request: z.object({ projectPath: z.string(), graph: z.custom<DrawGraph>() }), response: z.void() },
+  "canvas:loadScene": { request: z.string(), response: z.string().nullable() },
+  "canvas:saveScene": { request: z.object({ projectPath: z.string(), scene: z.string() }), response: z.void() },
+  "canvas:exportSketch": { request: z.object({ projectPath: z.string(), frameId: z.string(), dataUrl: z.string() }), response: z.string() },
   "manifest:save": {
     request: z.object({ projectPath: z.string(), content: z.string() }),
     response: manifestResultSchema,

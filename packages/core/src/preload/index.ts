@@ -17,6 +17,7 @@ import {
   type AgentRunOptions,
 } from "@vortspec/core/run-events";
 import { DEV_SERVER_UPDATE_CHANNEL, type DevServerUpdate } from "@vortspec/core/dev-server";
+import type { DrawGraph } from "@vortspec/core/draw-graph";
 import { WORKSPACE_CHANGE_CHANNEL, type WorkspaceChange } from "@vortspec/core/fs";
 import { TERMINAL_DATA_CHANNEL, type TerminalData } from "@vortspec/core/terminal";
 import { IDE_ACTION_CHANNEL, type IdeState, type IdeAction, type IdeActionResult } from "@vortspec/core/ide-mcp";
@@ -166,6 +167,12 @@ const api: VortSpecApi = {
   litePages: (projectPath: string) => invoke("lite:pages", projectPath),
   liteWritePage: (projectPath: string, name: string, html: string) =>
     invoke("lite:writePage", { projectPath, name, html }),
+  canvasLoadGraph: (projectPath: string) => invoke("canvas:loadGraph", projectPath),
+  canvasSaveGraph: (projectPath: string, graph: DrawGraph) => invoke("canvas:saveGraph", { projectPath, graph }),
+  canvasLoadScene: (projectPath: string) => invoke("canvas:loadScene", projectPath),
+  canvasSaveScene: (projectPath: string, scene: string) => invoke("canvas:saveScene", { projectPath, scene }),
+  canvasExportSketch: (projectPath: string, frameId: string, dataUrl: string) =>
+    invoke("canvas:exportSketch", { projectPath, frameId, dataUrl }),
   saveManifest: (projectPath: string, content: string) =>
     invoke("manifest:save", { projectPath, content }),
   listManifestVersions: (projectPath: string) =>

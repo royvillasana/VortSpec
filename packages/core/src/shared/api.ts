@@ -9,6 +9,7 @@
  * (`IpcResponse<channel>`), so they cannot drift from the handlers either.
  */
 import type { IpcResponse, StageStatus, SetupAnswers, FileSnapshot, Profile, PushPlan } from "./ipc";
+import type { DrawGraph } from "./draw-graph";
 import type { CommentThread } from "./comment";
 import type { AgentRunOptions, AgentEventEnvelope, AgentRawEnvelope } from "./run-events";
 import type { DevServerUpdate } from "./dev-server";
@@ -147,6 +148,13 @@ export interface VortSpecApi {
   liteReadPage(projectPath: string, name: string): Promise<IpcResponse<"lite:page">>;
   litePages(projectPath: string): Promise<IpcResponse<"lite:pages">>;
   liteWritePage(projectPath: string, name: string, html: string): Promise<IpcResponse<"lite:writePage">>;
+
+  // Draw tool — persist the drawing graph + Excalidraw scene, export a sketch PNG (docs/draw-to-component-graph.md).
+  canvasLoadGraph(projectPath: string): Promise<IpcResponse<"canvas:loadGraph">>;
+  canvasSaveGraph(projectPath: string, graph: DrawGraph): Promise<IpcResponse<"canvas:saveGraph">>;
+  canvasLoadScene(projectPath: string): Promise<IpcResponse<"canvas:loadScene">>;
+  canvasSaveScene(projectPath: string, scene: string): Promise<IpcResponse<"canvas:saveScene">>;
+  canvasExportSketch(projectPath: string, frameId: string, dataUrl: string): Promise<IpcResponse<"canvas:exportSketch">>;
 
   // manifest (DESIGN.md)
   getManifest(projectPath: string): Promise<IpcResponse<"manifest:get">>;

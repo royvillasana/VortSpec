@@ -108,6 +108,14 @@ import { getProjectPaletteHtml, writeDesignerMd, buildProjectStandInPrompt, buil
 import { resolveEnterpriseStorybookUrl, buildEnterpriseSnapshotPromptFor, buildEnterpriseGeneratePromptFor } from "./enterprise/enterprise-source";
 import { serveLightPages, lightPageUrl } from "./lite/light-serve";
 import {
+  loadGraph as loadCanvasGraph,
+  saveGraph as saveCanvasGraph,
+  loadScene as loadCanvasScene,
+  saveScene as saveCanvasScene,
+  writeSketchPng as writeCanvasSketchPng,
+} from "./canvas/canvas-store";
+import type { DrawGraph } from "../shared/draw-graph";
+import {
   startDevServer,
   stopDevServer,
   getDevServerStatus,
@@ -372,6 +380,12 @@ const handlers: Record<IpcChannel, Handler> = {
   "lite:pages": ((projectPath: string) => listLightPages(projectPath)) as Handler,
   "lite:writePage": ((r: { projectPath: string; name: string; html: string }) =>
     writeLightPage(r.projectPath, r.name, r.html)) as Handler,
+  "canvas:loadGraph": ((projectPath: string) => loadCanvasGraph(projectPath)) as Handler,
+  "canvas:saveGraph": ((r: { projectPath: string; graph: DrawGraph }) => saveCanvasGraph(r.projectPath, r.graph)) as Handler,
+  "canvas:loadScene": ((projectPath: string) => loadCanvasScene(projectPath)) as Handler,
+  "canvas:saveScene": ((r: { projectPath: string; scene: string }) => saveCanvasScene(r.projectPath, r.scene)) as Handler,
+  "canvas:exportSketch": ((r: { projectPath: string; frameId: string; dataUrl: string }) =>
+    writeCanvasSketchPng(r.projectPath, r.frameId, r.dataUrl)) as Handler,
   "manifest:save": ((req: { projectPath: string; content: string }) =>
     saveManifest(req.projectPath, req.content, new Date().toISOString())) as Handler,
   "manifest:listVersions": ((projectPath: string) =>
