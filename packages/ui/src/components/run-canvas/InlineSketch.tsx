@@ -42,8 +42,8 @@ export default function InlineSketch({
     onGenerate(await blobToDataUrl(blob));
   }
   return (
-    <div className="flex flex-col gap-1.5">
-      <div className="h-64 overflow-hidden rounded border border-vs-border-default">
+    <div className="flex h-full min-h-0 flex-col gap-2">
+      <div className="min-h-0 flex-1 overflow-hidden rounded border border-vs-border-default">
         <Excalidraw
           excalidrawAPI={(instance) => {
             apiRef.current = instance;
@@ -55,7 +55,7 @@ export default function InlineSketch({
         type="button"
         disabled={generating}
         onClick={() => void grab()}
-        className="self-end rounded-md bg-vs-accent px-2.5 py-1 text-xs font-medium text-white hover:opacity-90 disabled:opacity-50"
+        className="flex-none self-end rounded-md bg-vs-accent px-3 py-1.5 text-xs font-medium text-white hover:opacity-90 disabled:opacity-50"
       >
         {generating ? "Generating…" : "Generate from drawing"}
       </button>

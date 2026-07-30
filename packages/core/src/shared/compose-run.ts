@@ -217,7 +217,7 @@ export function buildComposePrompt(input: ComposePromptInput): string {
       : "";
   // A hand-drawn sketch, when present, is the primary visual intent — compose it INTO this exact slot.
   const sketchLine = input.sketchPngPath
-    ? `A hand-drawn SKETCH of what belongs here is attached at: ${input.sketchPngPath} — READ it first (Read tool) as the primary visual intent, then build it FROM the roster components below (grounded in the tokens), placed at THIS slot. Do not guess placement — it goes exactly here.`
+    ? `A hand-drawn SKETCH of what belongs here is attached at: ${input.sketchPngPath} — READ it first (Read tool) as the primary visual intent, then build it FROM the roster components below (grounded in the tokens). It goes at THIS slot — write it INTO the current screen's EXISTING source file at this position (the same file the slot resolves to), wrapped in the option markers below. Do NOT create a new page or a new file, and do NOT guess placement.`
     : "";
 
   const lines: string[] = [
