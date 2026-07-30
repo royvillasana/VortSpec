@@ -35,7 +35,7 @@ export interface UseComposeRun {
   error: string | null;
   /** After an accept, the screen file whose spec now owes a Screen Creation update (§6.15). */
   screenUpdateOwed: string | null;
-  generate: (prompt: string, preferredComponents?: string[], insertSpec?: InsertSpec) => Promise<void>;
+  generate: (prompt: string, preferredComponents?: string[], insertSpec?: InsertSpec, sketchPngPath?: string) => Promise<void>;
   cancel: () => Promise<void>;
   accept: () => Promise<void>;
   discard: () => Promise<void>;
@@ -77,14 +77,16 @@ export function useComposeRun(args: {
   }, [run]);
 
   const generate = useCallback(
-    async (prompt: string, preferredComponents: string[] = [], insertSpec?: InsertSpec) => {
+    async (prompt: string, preferredComponents: string[] = [], insertSpec?: InsertSpec, sketchPngPath?: string) => {
       const { project, bridge, roster, tokenNames, designMd } = ctx.current;
       // Creating a NEW row/column container is structural — it needs neither a roster
       // nor an intent (an empty band is valid). Filling an existing gap still needs
-      // both: one run in flight (§6.6), a non-empty roster (§6.4), and an intent (§6.5).
+      // both: one run in flight (§6.6), a non-empty roster (§6.4), and an intent (§6.5) —
+      // unless a SKETCH is provided, which is itself the intent.
       const newContainer = !!insertSpec && insertSpec.placement !== "into-existing";
       if (phase === "generating" || !bridge.placeholder) return;
-      if (!newContainer && (!hasUsableRoster(roster) || !prompt.trim())) return;
+      if (!newContainer && !hasUsableRoster(roster)) return;
+      if (!newContainer && !sketchPngPath && !prompt.trim()) return;
       const target = bridge.placeholder.target;
       const rect = bridge.placeholder.rect;
       const runId = `compose-${Date.now()}`;
@@ -112,6 +114,7 @@ export function useComposeRun(args: {
           file: null,
         },
         sizeHint: { width: Math.round(rect.width), height: Math.round(rect.height) },
+        sketchPngPath,
         count: 3,
       });
 

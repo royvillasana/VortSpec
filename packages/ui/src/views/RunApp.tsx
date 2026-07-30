@@ -2616,7 +2616,7 @@ export function RunApp({
                     onScreenLater={onComposeScreenLater}
                     onClose={onComposeClose}
                     getStoryUrl={storyUrlFor}
-                    defaultAxis={bridge.placeholder?.target.axis ?? "row"}
+                    projectPath={project.path}
                     onInsertSpecChange={(s) => bridge.setPlaceholderSpec(s.axis, s.slotCount)}
                   />
                 )}
@@ -2654,7 +2654,6 @@ export function RunApp({
                   onFrameChange={setFrame}
                   onLiveEdit={applyLive}
                   onCommitEdit={commitStyleEdits}
-                  onOpenDraw={() => void api.drawOpen(project.path)}
                   onSendToChat={
                     onSendToChat && selection
                       ? () => onSendToChat(buildSelectionContext(selection, Object.values(pending)), selection.file)

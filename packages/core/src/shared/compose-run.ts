@@ -112,6 +112,9 @@ export interface InsertSpec {
   placement: "into-existing" | "new-row" | "new-column";
   axis: "row" | "column";
   slotCount: number;
+  /** Grid layout at the spot: how many rows and columns to arrange the composition into (each ≥ 1). */
+  rows?: number;
+  columns?: number;
 }
 
 export interface ComposePromptInput {
@@ -136,6 +139,8 @@ export interface ComposePromptInput {
   insertSpec?: InsertSpec;
   /** The placeholder's soft size hint (px) — guidance the composition may deviate from. */
   sizeHint?: { width?: number; height?: number };
+  /** Absolute path to a hand-drawn sketch of what belongs here — the AI Reads it as the visual intent. */
+  sketchPngPath?: string;
   /** How many AI options to attempt (1–3, default 3). A ceiling — NOT the slot count. */
   count?: number;
 }
@@ -203,16 +208,29 @@ export function buildComposePrompt(input: ComposePromptInput): string {
       ? `Insert as a ${axis} (the user chose this axis explicitly).${spec.slotCount > 1 ? ` Create ${spec.slotCount} items along it.` : ""}`
       : `Create a NEW ${spec.placement === "new-row" ? "row" : "column"} container with ${spec.slotCount} slot(s) at this position, laid out along the ${axis} axis, and place the composition inside it.`
     : "";
+  // The user's explicit grid: arrange the composition into R rows × C columns at the spot.
+  const rows = spec?.rows ?? 1;
+  const columns = spec?.columns ?? 1;
+  const gridLine =
+    rows > 1 || columns > 1
+      ? `LAYOUT: arrange the composition as a GRID of ${rows} row(s) × ${columns} column(s) at this spot (use the design system's grid/flex + spacing tokens).`
+      : "";
+  // A hand-drawn sketch, when present, is the primary visual intent — compose it INTO this exact slot.
+  const sketchLine = input.sketchPngPath
+    ? `A hand-drawn SKETCH of what belongs here is attached at: ${input.sketchPngPath} — READ it first (Read tool) as the primary visual intent, then build it FROM the roster components below (grounded in the tokens), placed at THIS slot. Do not guess placement — it goes exactly here.`
+    : "";
 
   const lines: string[] = [
     `Compose new UI for an insertion slot in this project, using ONLY the project's own components.`,
     "",
     `What the user wants here: ${input.intent.trim() || "(no description given — infer something sensible for this slot)"}`,
+    sketchLine,
     "",
     `The slot: insert ${slot.position} the "${slot.anchorLabel}" element${
       slot.anchorText ? ` whose leading text is "${slot.anchorText.slice(0, 120)}"` : ""
     }, in a ${axisWord} flow.`,
     placementLine,
+    gridLine,
     slot.file ? `The slot resolves to source file: ${slot.file}.` : "",
     sizeHint,
     "",
