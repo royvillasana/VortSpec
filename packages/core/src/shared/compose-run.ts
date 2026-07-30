@@ -249,7 +249,7 @@ export function buildComposePrompt(input: ComposePromptInput): string {
   // Light-native (Playground light pages): compose framework-free HTML from the light stand-ins.
   const lightNative = input.lightNative ?? false;
   const compFrom = lightNative
-    ? "the design system's LIGHT STAND-INS (read `designer.md` + `.vortspec/light-html/`)"
+    ? "the design system described in `designer.md` (its components + tokens)"
     : "the roster components below";
   // A hand-drawn sketch, when present, is the primary visual intent — compose it INTO this exact slot.
   const sketchLine = input.sketchPngPath
@@ -271,7 +271,7 @@ export function buildComposePrompt(input: ComposePromptInput): string {
     sizeHint,
     "",
     lightNative
-      ? "Design-system components — read `designer.md` + the light stand-ins in `.vortspec/light-html/` and compose ONLY from those stand-ins (framework-free HTML). The components are:"
+      ? "Design-system components — `designer.md` (already readable at the project root) lists EVERY component with its tokens; compose ONLY from these as framework-free HTML. Read an individual light stand-in `.vortspec/light-html/<Component>.html` ONLY for a component you actually reuse and need the exact markup for — do NOT read the whole `.vortspec/light-html/` folder (it is large). The components are:"
       : input.roster.length
         ? "Component roster — compose ONLY from these, choosing their variants/props:"
         : "This project has no component roster — create empty placeholder slots in the new container (do not hand-write component markup).",
