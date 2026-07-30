@@ -23,6 +23,7 @@ export function DrawWindow({ project }: { project: string }): React.JSX.Element 
   const name = project.split("/").filter(Boolean).pop() ?? "project";
   const [initialData, setInitialData] = useState<ExcalidrawInitialDataState | null | undefined>(undefined);
   const [sent, setSent] = useState(false);
+  const [needsSelection, setNeedsSelection] = useState(false);
   const apiRef = useRef<ExcalidrawImperativeAPI | null>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -58,16 +59,24 @@ export function DrawWindow({ project }: { project: string }): React.JSX.Element 
   );
   useEffect(() => () => { if (saveTimer.current) clearTimeout(saveTimer.current); }, []);
 
-  // Hand the current sketch back to the compose dialog (which composes it into its slot).
+  // Hand ONLY the selected drawing back to the compose dialog. The canvas is a durable workspace with
+  // many drawings/iterations — the user selects the shapes (or a frame) they want to build, and only
+  // that selection becomes the component. Nothing selected → prompt them to select first.
   const useDrawing = useCallback(async () => {
     const inst = apiRef.current;
     if (!inst) return;
-    const blob = await exportToBlob({
-      elements: inst.getSceneElements(),
-      appState: inst.getAppState(),
-      files: inst.getFiles(),
-      mimeType: "image/png",
-    });
+    const appState = inst.getAppState();
+    const all = inst.getSceneElements();
+    const selectedIds = appState.selectedElementIds ?? {};
+    // A selected FRAME brings its contents; otherwise take exactly the selected shapes.
+    const selectedFrames = new Set(all.filter((e) => e.type === "frame" && selectedIds[e.id]).map((e) => e.id));
+    const chosen = all.filter((e) => selectedIds[e.id] || (e.frameId && selectedFrames.has(e.frameId)));
+    if (chosen.length === 0) {
+      setNeedsSelection(true);
+      return;
+    }
+    setNeedsSelection(false);
+    const blob = await exportToBlob({ elements: chosen, appState, files: inst.getFiles(), mimeType: "image/png" });
     await api.drawReturnSketch(project, await blobToDataUrl(blob)).catch(() => undefined);
     setSent(true);
     window.setTimeout(() => setSent(false), 2500);
@@ -82,6 +91,9 @@ export function DrawWindow({ project }: { project: string }): React.JSX.Element 
         <span className="font-medium">Draw</span>
         <span className="text-vs-text-muted">— {name}</span>
         {sent && <span className="ml-2 text-[11px] text-vs-success">Sent to the compose dialog ✓</span>}
+        {needsSelection && (
+          <span className="ml-2 text-[11px] text-vs-warning">Select the drawing you want first — only the selection is built.</span>
+        )}
         <button
           type="button"
           onClick={() => void useDrawing()}
@@ -91,6 +103,12 @@ export function DrawWindow({ project }: { project: string }): React.JSX.Element 
           Use this drawing →
         </button>
       </header>
+      {/* The canvas is a durable workspace with all your drawings/iterations — SELECT the shapes (or a
+          frame) you want to build before "Use this drawing"; only that selection becomes the component. */}
+      <div className="flex flex-none items-center gap-1.5 border-b border-vs-border-subtle bg-vs-bg-surface px-4 py-1.5 text-[11px] text-vs-text-muted">
+        <span className="text-vs-text-secondary">Tip:</span>
+        <span>draw freely — then <b className="text-vs-text-secondary">select</b> the shapes (or a frame) you want and hit <b className="text-vs-text-secondary">Use this drawing</b>. Only the selection is built.</span>
+      </div>
 
       <div className="relative min-h-0 flex-1">
         {initialData === undefined ? (
