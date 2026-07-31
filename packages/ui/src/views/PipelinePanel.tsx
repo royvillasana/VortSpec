@@ -65,7 +65,7 @@ export function PipelinePanel({
 
   return (
     <div className="flex h-full min-w-0 flex-col bg-vs-bg-primary">
-      <header className="flex flex-none flex-col gap-1 border-b border-vs-border-default px-6 pb-4 pt-5">
+      <header className="m-2 flex flex-none flex-col gap-1 rounded-xl border border-vs-border-default bg-vs-bg-surface px-6 pb-4 pt-5">
         <div className="flex items-center gap-3">
           <h1 className="text-xl font-semibold tracking-[-0.01em]">SDD-DE pipeline</h1>
           {!loading && (

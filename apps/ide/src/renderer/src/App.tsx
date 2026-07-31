@@ -17,6 +17,7 @@ import { DesignSystem } from "@vortspec/ui/DesignSystem";
 import { RunApp } from "@vortspec/ui/RunApp";
 import { Profile } from "@vortspec/ui/Profile";
 import { ProjectSetup } from "@vortspec/ui/ProjectSetup";
+import { HeaderSlotContext } from "@vortspec/ui/ViewHeader";
 import { ToolkitUpdateBanner } from "@vortspec/ui/ToolkitUpdateBanner";
 import { LeftDock } from "./components/LeftDock";
 import { createPortal } from "react-dom";
@@ -28,7 +29,7 @@ import { PanelGroup } from "./components/PanelGroup";
 import { Resizer } from "./components/Resizer";
 import { useWorkspaceFiles } from "./lib/useWorkspaceFiles";
 import { useLayout } from "./lib/useLayout";
-import { effectiveWidths, isSidebarView, STORYBOOK_SIDEBAR_WIDTH, type Activity } from "./lib/layout";
+import { effectiveWidths, isSidebarView, FLOAT_PANEL, CHROME_BG, type Activity } from "./lib/layout";
 import { IdeContext, buildSeedContext, buildLiveContext, type EditorSelection } from "./lib/ide-context";
 import { useIdeMcp, IDE_MCP_TOOL_GROUP } from "./lib/useIdeMcp";
 import { useAutoComponentBuild } from "@vortspec/ui/useAutoComponentBuild";
@@ -65,6 +66,14 @@ export default function App(): JSX.Element {
   const [sectionSlot] = useState<HTMLDivElement>(() => {
     const el = document.createElement("div");
     el.className = "flex min-h-0 flex-1 flex-col overflow-auto";
+    return el;
+  });
+  // The header region: the active section view's header portals here (via HeaderSlotContext),
+  // so every section's header renders ABOVE the main container in one consistent band, instead
+  // of inside each view's panel. A stable detached div mounted into the layout below.
+  const [headerSlot] = useState<HTMLDivElement>(() => {
+    const el = document.createElement("div");
+    el.className = "flex-none";
     return el;
   });
   const [leftTab, setLeftTab] = useState<"section" | "chat">("section");
@@ -289,6 +298,32 @@ export default function App(): JSX.Element {
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
   }, []);
+  // Glass-reflection border: nudge the panel-border gradient angle by a few degrees as the
+  // cursor moves, so every floating panel's highlight tilts together like a shared light
+  // source. Deliberately discreet (~135° ± ~15°) and rAF-throttled; off under reduced-motion.
+  useEffect(() => {
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+    let raf = 0;
+    let lx = 0;
+    let ly = 0;
+    const apply = (): void => {
+      raf = 0;
+      const nx = lx / window.innerWidth - 0.5; // -0.5 … 0.5
+      const ny = ly / window.innerHeight - 0.5;
+      const angle = 135 + nx * 30 + ny * 10; // base 45° diagonal, subtle cursor tilt
+      document.documentElement.style.setProperty("--vs-border-angle", `${angle.toFixed(1)}deg`);
+    };
+    const onMove = (e: MouseEvent): void => {
+      lx = e.clientX;
+      ly = e.clientY;
+      if (!raf) raf = window.requestAnimationFrame(apply);
+    };
+    window.addEventListener("mousemove", onMove);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      if (raf) window.cancelAnimationFrame(raf);
+    };
+  }, []);
   // Prevent Electron from navigating to a dropped OS file when it lands outside a
   // drop target (the composer/Explorer handle their own drops); only guard file drags.
   useEffect(() => {
@@ -407,14 +442,14 @@ export default function App(): JSX.Element {
     // then lands it on the Foundation.
     if (newProject) {
       return (
-        <div className="flex h-screen w-screen flex-col overflow-hidden bg-vs-bg-primary text-vs-text-primary">
+        <div className={`flex h-screen w-screen flex-col overflow-hidden text-vs-text-primary ${CHROME_BG}`}>
           <header
-            className="flex h-9 shrink-0 items-center justify-center border-b border-vs-border-default bg-vs-bg-surface text-xs text-vs-text-muted"
+            className="flex h-9 shrink-0 items-center justify-center text-xs text-vs-text-muted"
             style={{ WebkitAppRegion: "drag" } as unknown as CSSProperties}
           >
             <span className="font-bold text-vs-text-secondary">VortSpec</span>
           </header>
-          <div className="min-h-0 flex-1 overflow-auto">
+          <div className={`min-h-0 flex-1 overflow-auto m-2 vs-panel-primary ${FLOAT_PANEL}`}>
             <ProjectSetup
               project={newProject}
               onCreated={(p) => {
@@ -428,7 +463,7 @@ export default function App(): JSX.Element {
       );
     }
     return (
-      <div className="flex h-screen w-screen flex-col overflow-hidden bg-vs-bg-primary text-vs-text-primary">
+      <div className={`flex h-screen w-screen flex-col overflow-hidden text-vs-text-primary ${CHROME_BG}`}>
         <header
           className="flex h-9 shrink-0 items-center justify-center border-b border-vs-border-default bg-vs-bg-surface text-xs text-vs-text-muted"
           style={{ WebkitAppRegion: "drag" } as unknown as CSSProperties}
@@ -438,15 +473,10 @@ export default function App(): JSX.Element {
         <div className="flex min-h-0 flex-1 overflow-hidden">
           <ActivityBar
             active={welcomeView === "settings" ? "settings" : "home"}
+            seamless
             onSelect={(a) => setWelcomeView(a === "settings" ? "settings" : "start")}
           />
-          {welcomeView === "start" && (
-            <aside className="flex w-60 shrink-0 flex-col border-r border-vs-border-default bg-vs-bg-surface">
-              <div className="px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-vs-text-muted">Explorer</div>
-              <p className="px-3 text-[12px] leading-relaxed text-vs-text-muted">No folder open. Open or clone a workspace to see its files here.</p>
-            </aside>
-          )}
-          <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+          <div className={`m-2 flex min-w-0 flex-1 flex-col overflow-hidden vs-panel-primary ${FLOAT_PANEL}`}>
             {welcomeView === "settings" ? (
               <div className="min-w-0 flex-1 overflow-auto">
                 <Profile onBack={() => setWelcomeView("start")} onSaved={setProfile} />
@@ -465,7 +495,7 @@ export default function App(): JSX.Element {
             )}
           </div>
         </div>
-        <footer className="flex h-6 shrink-0 items-center gap-3 border-t border-vs-border-default bg-vs-bg-surface px-3 text-[11px] text-vs-text-muted">
+        <footer className="flex h-6 shrink-0 items-center gap-3 px-3 text-[11px] text-vs-text-muted">
           <span>No folder open</span>
         </footer>
       </div>
@@ -475,6 +505,10 @@ export default function App(): JSX.Element {
   const eff = effectiveWidths(layout, winW);
   const showPrimary = isSidebarView(layout.activity) && layout.primaryOpen;
   const isExplorer = layout.activity === "explorer";
+  // Seamless shell (permanent): the chrome (titlebar, activity rail, breadcrumb, status bar) is a
+  // single gradient surface; the sidebar dock (surface) and the main canvas (the darker primary
+  // well) float as matching rounded panels. The canvas gets the recessed `primary` fill here.
+  const canvasShell = `m-2 vs-panel-primary ${FLOAT_PANEL}`;
   // Forces an editor relayout whenever a region size/visibility changes.
   const relayoutKey =
     Math.round(eff.primary + eff.secondary + eff.panelSide) +
@@ -644,7 +678,7 @@ export default function App(): JSX.Element {
       ) : a === "manifest" ? (
         <DesignManifest project={p} hideRail onBack={go("explorer")} onOpenRun={go("run")} onOpenPreview={go("explorer")} onOpenInspector={go("tokens")} onOpenHistory={go("explorer")} />
       ) : a === "settings" ? (
-        <Profile onBack={go("explorer")} />
+        <Profile onBack={go("explorer")} onSaved={setProfile} />
       ) : (
         <div className="flex flex-1 items-center justify-center text-sm text-vs-text-muted">This view isn’t available in the IDE yet.</div>
       );
@@ -655,7 +689,7 @@ export default function App(): JSX.Element {
     <IdeContext.Provider value={{ activeFile: wf.activePath, previewUrl, setActiveFile: () => {}, setPreviewUrl: () => {} }}>
      <AssistantTaskProvider value={dispatchAssistantTask}>
       <CanvasSelectionProvider>
-      <div className="flex h-screen w-screen flex-col overflow-hidden bg-vs-bg-primary text-vs-text-primary">
+      <div className={`flex h-screen w-screen flex-col overflow-hidden text-vs-text-primary ${CHROME_BG}`}>
         {/* Automatic background component build (light-pages-on-canvas §9): a quiet running indicator +
             a completion toast, so the user knows the design-system components are building while they work. */}
         {(autoFoundation.extracting || autoBuild.building || buildNotice) && !buildIndicatorDismissed && (
@@ -692,7 +726,7 @@ export default function App(): JSX.Element {
           </div>
         )}
         <header
-          className="relative flex h-9 shrink-0 items-center justify-end border-b border-vs-border-default bg-vs-bg-surface pr-2 text-xs text-vs-text-muted"
+          className="relative flex h-9 shrink-0 items-center justify-end pr-2 text-xs text-vs-text-muted"
           style={{ WebkitAppRegion: "drag" } as unknown as CSSProperties}
         >
           {/* Logo + name centered in the bar so it clears the macOS traffic lights
@@ -714,15 +748,13 @@ export default function App(): JSX.Element {
         <ToolkitUpdateBanner project={workspace} onUpdated={setWorkspace} />
 
         <div className="flex min-h-0 flex-1 overflow-hidden">
-          <ActivityBar active={layout.activity} onSelect={(a) => (a === "home" ? setWorkspace(null) : dispatch({ type: "setActivity", activity: a }))} />
+          <ActivityBar active={layout.activity} seamless onSelect={(a) => (a === "home" ? setWorkspace(null) : dispatch({ type: "setActivity", activity: a }))} />
 
           {/* The ONE left sidebar: the current view's Section sidebar + the persistent Chat.
               The right assistant sidebar is gone — the chat lives here now, mounted once so
               the conversation persists across every section. */}
           <LeftDock
-            // Storybook frames the native SB sidebar (default nav width 300) — pin the dock
-            // to that exact width so its right edge isn't clipped; every other view resizes.
-            width={layout.activity === "play" ? STORYBOOK_SIDEBAR_WIDTH : eff.primary}
+            width={eff.primary}
             sectionLabel={
               isExplorer
                 ? "Explorer"
@@ -747,47 +779,50 @@ export default function App(): JSX.Element {
             tab={leftTab}
             onTabChange={setLeftTab}
             chat={
-              <div className="flex min-h-0 flex-1 flex-col">
-                <div
-                  data-testid="assistant-context"
-                  className="flex flex-none flex-wrap items-center gap-1.5 border-b border-vs-border-subtle bg-vs-bg-surface px-3 py-1.5 text-[11px] text-vs-text-muted"
-                >
-                  <span className="uppercase tracking-wide">Context</span>
-                  {wf.activePath ? (
-                    <span className="truncate rounded bg-vs-bg-elevated px-1.5 py-0.5 font-mono text-vs-text-secondary">
-                      {wf.activePath}
-                    </span>
-                  ) : (
-                    <span>no file open</span>
-                  )}
-                  {selection && (
-                    <span
-                      title="Selected lines are sent to the assistant as context"
-                      className="rounded bg-vs-accent-subtle px-1.5 py-0.5 font-mono text-vs-accent"
-                    >
-                      ⧉ {selection.startLine === selection.endLine
-                        ? `line ${selection.startLine}`
-                        : `${selection.endLine - selection.startLine + 1} lines`}
-                    </span>
-                  )}
-                </div>
-                <div className="min-h-0 flex-1">
-                  <ConversationTabs
-                    project={workspace}
-                    showSession
-                    allowModify
-                    userName={userName}
-                    seedContext={buildSeedContext(previewUrl)}
-                    liveContext={buildLiveContext(wf.activePath, selection)}
-                    mcpConfigPath={ideMcp.configPath}
-                    extraAllowedTools={ideMcp.configPath ? [IDE_MCP_TOOL_GROUP] : undefined}
-                    pendingRef={pendingRef}
-                    incomingTask={assistantTask}
-                    onReturnToOrigin={(returnTo) => dispatch({ type: "setActivity", activity: returnTo as Activity })}
-                    onBusyChange={setDockBusy}
-                  />
-                </div>
-              </div>
+              <ConversationTabs
+                project={workspace}
+                showSession
+                allowModify
+                userName={userName}
+                seedContext={buildSeedContext(previewUrl)}
+                liveContext={buildLiveContext(wf.activePath, selection)}
+                // The context indicator lives right above the composer input, so wherever you are
+                // in the app, the file you selected in the Explorer is visibly the chat's context.
+                contextSlot={
+                  <div
+                    data-testid="assistant-context"
+                    className="flex flex-wrap items-center gap-1.5 text-[11px] text-vs-text-muted"
+                  >
+                    <span className="uppercase tracking-wide">Context</span>
+                    {wf.activePath ? (
+                      <span
+                        title={wf.activePath}
+                        className="max-w-[220px] truncate rounded bg-vs-bg-elevated px-1.5 py-0.5 font-mono text-vs-text-secondary"
+                      >
+                        {wf.activePath}
+                      </span>
+                    ) : (
+                      <span>no file open</span>
+                    )}
+                    {selection && (
+                      <span
+                        title="Selected lines are sent to the assistant as context"
+                        className="rounded bg-vs-accent-subtle px-1.5 py-0.5 font-mono text-vs-accent"
+                      >
+                        ⧉ {selection.startLine === selection.endLine
+                          ? `line ${selection.startLine}`
+                          : `${selection.endLine - selection.startLine + 1} lines`}
+                      </span>
+                    )}
+                  </div>
+                }
+                mcpConfigPath={ideMcp.configPath}
+                extraAllowedTools={ideMcp.configPath ? [IDE_MCP_TOOL_GROUP] : undefined}
+                pendingRef={pendingRef}
+                incomingTask={assistantTask}
+                onReturnToOrigin={(returnTo) => dispatch({ type: "setActivity", activity: returnTo as Activity })}
+                onBusyChange={setDockBusy}
+              />
             }
           />
           <Resizer orientation="vertical" ariaLabel="Resize sidebar" onDelta={(d) => dispatch({ type: "nudgePrimary", delta: d })} />
@@ -810,7 +845,7 @@ export default function App(): JSX.Element {
             {/* Breadcrumb — close/change the project (back to Home), above the editor tabs. */}
             <nav
               aria-label="Breadcrumb"
-              className="flex flex-none items-center gap-1.5 border-b border-vs-border-subtle bg-vs-bg-surface px-3 py-1 text-[11px] text-vs-text-muted"
+              className="flex flex-none items-center gap-1.5 bg-transparent px-3 py-1 text-[11px] text-vs-text-muted"
             >
               <button
                 type="button"
@@ -858,26 +893,37 @@ export default function App(): JSX.Element {
               </button>
             </nav>
             {isExplorer ? (
-              <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">{centerForExplorer()}</div>
+              <div className={`flex min-h-0 min-w-0 flex-1 overflow-hidden ${canvasShell}`}>{centerForExplorer()}</div>
             ) : (
-              // Work-panel views (Foundation, Run, Tokens, …) get the same bottom
-              // terminal dock as the Explorer, so the in-app shell is everywhere.
-              <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-                <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">{workPanel()}</div>
-                {layout.panelOpen && layout.panelDock === "bottom" && (
-                  <>
-                    <Resizer orientation="horizontal" ariaLabel="Resize terminal" onDelta={(d) => dispatch({ type: "nudgePanel", delta: -d })} />
-                    <div style={{ height: layout.panelSize }} className="min-h-0 flex-none">
-                      {panelGroup}
-                    </div>
-                  </>
-                )}
-              </div>
+              // Work-panel views (Foundation, Run, Tokens, …): the view's header portals into the
+              // header region ABOVE the main container (so the panel carries no header band), and
+              // the main container floats below it. Same bottom terminal dock as the Explorer.
+              <>
+                <div
+                  ref={(node) => {
+                    if (node && headerSlot.parentElement !== node) node.appendChild(headerSlot);
+                  }}
+                  className="flex-none"
+                />
+                <HeaderSlotContext.Provider value={headerSlot}>
+                  <div className={`flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden mx-2 mb-2 vs-panel-primary ${FLOAT_PANEL}`}>
+                    <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">{workPanel()}</div>
+                    {layout.panelOpen && layout.panelDock === "bottom" && (
+                      <>
+                        <Resizer orientation="horizontal" ariaLabel="Resize terminal" onDelta={(d) => dispatch({ type: "nudgePanel", delta: -d })} />
+                        <div style={{ height: layout.panelSize }} className="min-h-0 flex-none">
+                          {panelGroup}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </HeaderSlotContext.Provider>
+              </>
             )}
           </div>
         </div>
 
-        <footer className="flex h-6 shrink-0 items-center gap-2 border-t border-vs-border-default bg-vs-bg-surface px-3 text-[11px] text-vs-text-muted">
+        <footer className="flex h-6 shrink-0 items-center gap-2 px-3 text-[11px] text-vs-text-muted">
           <button type="button" onClick={() => setWorkspace(null)} className="hover:text-vs-text-secondary" title="Switch workspace">
             {workspace.name}
           </button>

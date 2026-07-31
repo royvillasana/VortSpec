@@ -6,6 +6,27 @@
  * computed at render time from this desired state; see `effectiveWidths`.
  */
 
+/**
+ * The seamless-shell "floating panel" SHAPE, shared by the sidebar dock and the
+ * main canvas so they read as matching inset surfaces: matched rounding, a
+ * hairline border + top-highlight, and a soft (10%) lift. The chrome (titlebar,
+ * activity rail, breadcrumb, status bar) stays flat behind them. Each panel adds
+ * its OWN fill: the dock uses `bg-vs-bg-surface` (so its section sidebars, which
+ * are all `surface`, match it exactly); the canvas uses the darker `primary`
+ * recessed well. This is the app's permanent shell look — not behind a setting.
+ */
+export const FLOAT_PANEL =
+  "rounded-xl shadow-[0_18px_44px_-22px_rgba(0,0,0,0.1)]";
+
+/**
+ * The chrome background: a subtle top→bottom gradient in the dark-gray range
+ * (a touch lighter than `--vs-bg-surface` at the top, a touch darker at the
+ * bottom). The chrome regions (activity rail, titlebar, breadcrumb, status bar)
+ * are transparent so this shows through as one continuous gradient frame behind
+ * the floating panels.
+ */
+export const CHROME_BG = "bg-[linear-gradient(180deg,#1C1F25_0%,#131519_100%)]";
+
 export type SidebarView = "explorer";
 export type WorkPanel =
   | "source"

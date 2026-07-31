@@ -108,10 +108,14 @@ export function AssistantDock({
   autoStart,
   taskReturn,
   onBusyChange,
+  contextSlot,
 }: {
   project: Project;
   /** Optional one-line context the dock mentions to Claude on the first message. */
   seedContext?: string;
+  /** A host-supplied context indicator (e.g. the active file) rendered just above
+   *  the composer input, so what's being sent as grounding is visible at send-time. */
+  contextSlot?: React.ReactNode;
   /** Fresh, per-turn grounding (active file / selection) prepended to EVERY
    *  message — the Claude Code extension's active-context behaviour. Recomputed
    *  by the host as focus/selection changes; empty string means nothing to add. */
@@ -644,6 +648,8 @@ export function AssistantDock({
             onPick={pickMention}
           />
         )}
+        {/* Host context indicator (active file / selection), pinned right above the input. */}
+        {contextSlot && <div className="mb-1.5">{contextSlot}</div>}
         {/* A shadcn/ai PromptInput-style shell: attachments + textarea in one box. */}
         <div className="rounded-lg border border-vs-border-default bg-vs-bg-primary p-2 focus-within:ring-2 focus-within:ring-vs-accent-subtle">
           {activeSelection && (

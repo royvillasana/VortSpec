@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { RotateCw, RefreshCw } from "lucide-react";
 import type { Project } from "@vortspec/core/ipc";
+import { ViewHeader } from "@vortspec/ui/ViewHeader";
 import { api } from "../lib/api";
 import { Button, Spinner } from "@vortspec/ui/ui";
 import { useAgentRun } from "../lib/useAgentRun";
@@ -87,7 +88,7 @@ export function DesignSystem({
 
   return (
     <div className="flex h-full min-h-0 w-full flex-col bg-vs-bg-base">
-      <header className="flex flex-none items-center gap-2 border-b border-vs-border-subtle px-3 py-2 text-[13px]">
+      <ViewHeader className="text-[13px]">
         {!hideRail && (
           <Button variant="ghost" onClick={onBack}>
             ← Back
@@ -125,7 +126,7 @@ export function DesignSystem({
             </button>
           )}
         </div>
-      </header>
+      </ViewHeader>
 
       {/* Progress bar while the design system + tokens are updating from the client's Storybook. */}
       {snapshot.running && (

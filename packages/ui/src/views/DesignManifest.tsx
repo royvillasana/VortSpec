@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ManifestResult, ManifestVersion, Project } from "@vortspec/core/ipc";
+import { ViewHeader } from "@vortspec/ui/ViewHeader";
 import { api } from "../lib/api";
 import { useAgentRun } from "../lib/useAgentRun";
 import { Button, Spinner } from "@vortspec/ui/ui";
@@ -189,7 +190,7 @@ export function DesignManifest({
 
       <main className="flex min-w-0 flex-1 flex-col bg-vs-bg-primary">
         {/* Header */}
-        <header className="flex flex-none items-center gap-3 border-b border-vs-border-default px-8 py-4">
+        <ViewHeader>
           <button onClick={onBack} className="text-[13px] text-vs-text-muted hover:text-vs-text-primary">
             Flow
           </button>
@@ -235,7 +236,7 @@ export function DesignManifest({
               </div>
             </>
           )}
-        </header>
+        </ViewHeader>
 
         {/* Body */}
         <div className="min-h-0 flex-1 overflow-y-auto">

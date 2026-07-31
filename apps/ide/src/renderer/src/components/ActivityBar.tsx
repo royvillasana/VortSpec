@@ -179,14 +179,19 @@ function IconButton({
 export function ActivityBar({
   active,
   onSelect,
+  seamless = false,
 }: {
   active: NavKey;
   onSelect: (key: NavKey) => void;
+  /** Seamless shell: drop the right divider so the rail melts into the chrome. */
+  seamless?: boolean;
 }): JSX.Element {
   return (
     <nav
       aria-label="Activity bar"
-      className="flex w-12 shrink-0 flex-col items-center gap-1 border-r border-vs-border-default bg-vs-bg-surface py-2"
+      className={`flex w-12 shrink-0 flex-col items-center gap-1 py-2 ${
+        seamless ? "" : "border-r border-vs-border-default bg-vs-bg-surface"
+      }`}
     >
       {TOP.map((item) => (
         <IconButton key={item.key} item={item} active={active === item.key} onClick={() => onSelect(item.key)} />
