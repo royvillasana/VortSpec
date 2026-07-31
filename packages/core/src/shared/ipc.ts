@@ -733,6 +733,21 @@ export const ipcContract = {
       detail: z.string(),
     }),
   },
+  // Enumerate an installed component's real props + variants from its bundled .d.ts (AI grounding).
+  "library:enumerateComponent": {
+    request: z.object({ projectPath: z.string(), importBase: z.string(), component: z.string() }),
+    response: z.object({
+      component: z.string(),
+      props: z.array(
+        z.object({
+          name: z.string(),
+          type: z.string(),
+          optional: z.boolean(),
+          variants: z.array(z.string()).optional(),
+        }),
+      ),
+    }),
+  },
   "inspector:getTokens": {
     request: z.union([
       z.string(),

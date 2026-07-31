@@ -31,6 +31,7 @@ import type { FigmaCliMode } from "@vortspec/core/figma";
 import { readProjectConfig } from "./workspace/config-manager";
 import { getLibraryReadiness } from "./workspace/library-readiness";
 import { detectLibraryInRepo } from "./workspace/library-detect";
+import { enumeratePackageComponent } from "./inspector/library-enumerate";
 import { getEnvStatus, createEnvFromExample } from "./workspace/env-files";
 import { ensureStorybook, storybookReadiness, storyGap } from "./workspace/storybook-setup";
 import { ensureStylingPipeline } from "./workspace/styling-setup";
@@ -482,6 +483,8 @@ const handlers: Record<IpcChannel, Handler> = {
   "project:config": ((projectPath: string) => readProjectConfig(projectPath)) as Handler,
   "library:readiness": ((projectPath: string) => getLibraryReadiness(projectPath)) as Handler,
   "library:detect": ((projectPath: string) => detectLibraryInRepo(projectPath)) as Handler,
+  "library:enumerateComponent": ((a: { projectPath: string; importBase: string; component: string }) =>
+    enumeratePackageComponent(a.projectPath, a.importBase, a.component)) as Handler,
   "inspector:getTokens": ((req: string | { projectPath: string; preferredCollection?: string }) =>
     typeof req === "string"
       ? getInspectorTokens(req)

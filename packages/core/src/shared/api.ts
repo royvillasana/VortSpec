@@ -200,6 +200,12 @@ export interface VortSpecApi {
   libraryReadiness(projectPath: string): Promise<IpcResponse<"library:readiness">>;
   /** Inspect a target repo to auto-suggest its component library + consume kind at intake. */
   libraryDetect(projectPath: string): Promise<IpcResponse<"library:detect">>;
+  /** Enumerate an installed component's real props + variants from its bundled .d.ts (AI grounding). */
+  libraryEnumerateComponent(
+    projectPath: string,
+    importBase: string,
+    component: string,
+  ): Promise<IpcResponse<"library:enumerateComponent">>;
 
   // inspector (tokens / components / verification)
   inspectorTokens(

@@ -21,8 +21,8 @@
 
 ## 4. Prop / variant enumeration for grounding
 
-- [ ] 4.1 cli-registry: read variants from the copied component's CVA `variants` map + the registry index; expose them in the inventory.
-- [ ] 4.2 installed-package / headless: enumerate props/variants from bundled `.d.ts` via react-docgen-typescript (configure the TS program to capture inherited props), with a vendor-docs/MCP fallback; cache the enumerated manifest.
+- [x] 4.1 cli-registry: read variants from the copied component's CVA `variants` map + the registry index; expose them in the inventory.
+- [x] 4.2 installed-package / headless: enumerate props/variants from bundled `.d.ts` via react-docgen-typescript (configure the TS program to capture inherited props), with a vendor-docs/MCP fallback; cache the enumerated manifest.
 
 ## 5. Storybook skip & design-system display
 

@@ -278,6 +278,8 @@ const api: VortSpecApi = {
   projectConfig: (projectPath: string) => invoke("project:config", projectPath),
   libraryReadiness: (projectPath: string) => invoke("library:readiness", projectPath),
   libraryDetect: (projectPath: string) => invoke("library:detect", projectPath),
+  libraryEnumerateComponent: (projectPath: string, importBase: string, component: string) =>
+    invoke("library:enumerateComponent", { projectPath, importBase, component }),
   inspectorTokens: (projectPath: string, preferredCollection?: string) =>
     invoke(
       "inspector:getTokens",
