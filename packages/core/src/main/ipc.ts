@@ -32,6 +32,11 @@ import { readProjectConfig } from "./workspace/config-manager";
 import { getLibraryReadiness } from "./workspace/library-readiness";
 import { detectLibraryInRepo } from "./workspace/library-detect";
 import { enumeratePackageComponent } from "./inspector/library-enumerate";
+import {
+  readThemeOverrides,
+  setThemeComponentOverride,
+  setThemeTokenOverride,
+} from "./inspector/theme-override-store";
 import { getEnvStatus, createEnvFromExample } from "./workspace/env-files";
 import { ensureStorybook, storybookReadiness, storyGap } from "./workspace/storybook-setup";
 import { ensureStylingPipeline } from "./workspace/styling-setup";
@@ -485,6 +490,15 @@ const handlers: Record<IpcChannel, Handler> = {
   "library:detect": ((projectPath: string) => detectLibraryInRepo(projectPath)) as Handler,
   "library:enumerateComponent": ((a: { projectPath: string; importBase: string; component: string }) =>
     enumeratePackageComponent(a.projectPath, a.importBase, a.component)) as Handler,
+  "theme:getOverrides": ((projectPath: string) => readThemeOverrides(projectPath)) as Handler,
+  "theme:setTokenOverride": ((a: { projectPath: string; name: string; value: string; mode?: string }) =>
+    setThemeTokenOverride(a.projectPath, a.name, a.value, a.mode)) as Handler,
+  "theme:setComponentOverride": ((a: {
+    projectPath: string;
+    component: string;
+    target: { variant?: string; option?: string; slot?: string };
+    decls: Record<string, string>;
+  }) => setThemeComponentOverride(a.projectPath, a.component, a.target, a.decls)) as Handler,
   "inspector:getTokens": ((req: string | { projectPath: string; preferredCollection?: string }) =>
     typeof req === "string"
       ? getInspectorTokens(req)

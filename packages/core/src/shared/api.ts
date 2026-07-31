@@ -206,6 +206,22 @@ export interface VortSpecApi {
     importBase: string,
     component: string,
   ): Promise<IpcResponse<"library:enumerateComponent">>;
+  /** The durable design-system personalization overlay (`.vortspec/theme-overrides.json`). */
+  getThemeOverrides(projectPath: string): Promise<IpcResponse<"theme:getOverrides">>;
+  /** Set (or clear, with an empty value) a global token override; returns the updated overlay. */
+  setThemeTokenOverride(
+    projectPath: string,
+    name: string,
+    value: string,
+    mode?: string,
+  ): Promise<IpcResponse<"theme:setTokenOverride">>;
+  /** Set (or clear) a per-component override at a base/variant/slot target; returns the updated overlay. */
+  setThemeComponentOverride(
+    projectPath: string,
+    component: string,
+    target: { variant?: string; option?: string; slot?: string },
+    decls: Record<string, string>,
+  ): Promise<IpcResponse<"theme:setComponentOverride">>;
 
   // inspector (tokens / components / verification)
   inspectorTokens(

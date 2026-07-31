@@ -96,6 +96,7 @@ export type {
 } from "./figma";
 export { figmaComponentSchema } from "./figma";
 import { setupAnswersSchema, projectConfigSchema } from "./setup";
+import { themeOverridesSchema, declBagSchema } from "./theme-overrides";
 import {
   inspectorTokensResultSchema,
   inspectorComponentsResultSchema,
@@ -747,6 +748,33 @@ export const ipcContract = {
         }),
       ),
     }),
+  },
+  // The durable design-system personalization overlay (change: consume-component-libraries).
+  "theme:getOverrides": {
+    request: z.string(),
+    response: themeOverridesSchema,
+  },
+  "theme:setTokenOverride": {
+    request: z.object({
+      projectPath: z.string(),
+      name: z.string(),
+      value: z.string(),
+      mode: z.string().optional(),
+    }),
+    response: themeOverridesSchema,
+  },
+  "theme:setComponentOverride": {
+    request: z.object({
+      projectPath: z.string(),
+      component: z.string(),
+      target: z.object({
+        variant: z.string().optional(),
+        option: z.string().optional(),
+        slot: z.string().optional(),
+      }),
+      decls: declBagSchema,
+    }),
+    response: themeOverridesSchema,
   },
   "inspector:getTokens": {
     request: z.union([
