@@ -7,7 +7,7 @@ describe("libraryKind — consume classification", () => {
   });
 
   it("classifies installed-package libraries", () => {
-    for (const lib of ["mui", "antd", "chakra", "mantine"]) {
+    for (const lib of ["mui", "antd", "chakra", "mantine", "astryx"]) {
       expect(libraryKind(lib)).toBe("installed-package");
     }
   });
@@ -49,6 +49,16 @@ describe("buildProjectYaml — library consume kind + descriptor", () => {
     expect(yaml).toContain('library_install_cmd: "npm install @mui/material @emotion/react @emotion/styled"');
     expect(yaml).toContain('library_import_base: "@mui/material"');
     expect(yaml).not.toContain("library_add_cmd:"); // installed-package has no add step
+  });
+
+  it("writes Astryx (Meta) as an installed-package with its install + init command", () => {
+    const yaml = buildProjectYaml({ ...base, componentLibrary: "astryx" });
+    expect(yaml).toContain("component_library: astryx");
+    expect(yaml).toContain("component_library_kind: installed-package");
+    expect(yaml).toContain(
+      'library_install_cmd: "npm install @astryxdesign/core @astryxdesign/theme-neutral @astryxdesign/cli && npx @astryxdesign/cli init"',
+    );
+    expect(yaml).toContain('library_import_base: "@astryxdesign/core"');
   });
 
   it("normalizes a legacy answered kind for `other`", () => {

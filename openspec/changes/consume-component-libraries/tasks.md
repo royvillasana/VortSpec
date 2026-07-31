@@ -37,7 +37,7 @@
 
 ## 7. Astryx (Meta) integration
 
-- [ ] 7.1 Add Astryx to `COMPONENT_LIBRARY_OPTIONS` (`setup.ts:133-142`), classified as `installed-package`, with `library_import_base: @astryxdesign/core`.
+- [x] 7.1 Add Astryx to `COMPONENT_LIBRARY_OPTIONS` (`setup.ts:133-142`), classified as `installed-package`, with `library_import_base: @astryxdesign/core`.
 - [ ] 7.2 Resolve Astryx's concrete install/enumeration/token commands at intake via its CLI/MCP (or user confirmation) — do NOT hard-code CLI subcommands, MCP registration, counts, or versions (see design Open Questions 1–2).
 - [ ] 7.3 Wire the Astryx metadata source through the docgen/MCP enumeration path from §4 (no Storybook assumption).
 

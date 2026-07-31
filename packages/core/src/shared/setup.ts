@@ -42,6 +42,7 @@ export const componentLibrarySchema = z.enum([
   "chakra",
   "mantine",
   "headlessui",
+  "astryx",
   "other",
 ]);
 export const stylingSchema = z.enum([
@@ -146,6 +147,7 @@ export const COMPONENT_LIBRARY_OPTIONS = [
   { value: "chakra", label: "Chakra UI", hint: "Emotion-based", kind: "installed-package" },
   { value: "mantine", label: "Mantine", kind: "installed-package" },
   { value: "headlessui", label: "Headless UI", hint: "Tailwind Labs", kind: "headless" },
+  { value: "astryx", label: "Astryx", hint: "Meta · installed + CLI", kind: "installed-package" },
   { value: "other", label: "Other" },
 ] as const;
 
@@ -190,6 +192,15 @@ export const LIBRARY_RECIPES: Record<string, LibraryRecipe> = {
     kind: "installed-package",
     install: "npm install @mantine/core @mantine/hooks",
     importBase: "@mantine/core",
+  },
+  // Astryx (Meta) — installed package + a CLI that generates agent docs to learn the conventions.
+  // Commands per the user-provided docs (astryx.atmeta.com); setup verifies the packages resolve
+  // (research could not independently confirm them). (change: consume-component-libraries)
+  astryx: {
+    kind: "installed-package",
+    install:
+      "npm install @astryxdesign/core @astryxdesign/theme-neutral @astryxdesign/cli && npx @astryxdesign/cli init",
+    importBase: "@astryxdesign/core",
   },
 };
 
@@ -254,6 +265,7 @@ export function autoStyling(
       mantine: "css-modules",
       antd: "scss",
       radix: "css-modules",
+      astryx: "css", // StyleX ships pre-built CSS / CSS variables
     };
     if (map[library]) return map[library];
   }
