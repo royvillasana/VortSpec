@@ -38,8 +38,8 @@
 ## 7. Astryx (Meta) integration
 
 - [x] 7.1 Add Astryx to `COMPONENT_LIBRARY_OPTIONS` (`setup.ts:133-142`), classified as `installed-package`, with `library_import_base: @astryxdesign/core`.
-- [ ] 7.2 Resolve Astryx's concrete install/enumeration/token commands at intake via its CLI/MCP (or user confirmation) — do NOT hard-code CLI subcommands, MCP registration, counts, or versions (see design Open Questions 1–2).
-- [ ] 7.3 Wire the Astryx metadata source through the docgen/MCP enumeration path from §4 (no Storybook assumption).
+- [x] 7.2 Resolve Astryx's concrete install/enumeration/token commands at intake via its CLI/MCP (or user confirmation) — do NOT hard-code CLI subcommands, MCP registration, counts, or versions (see design Open Questions 1–2). — RESOLVED from astryx.atmeta.com/docs (2026-07-31): install + `npx @astryxdesign/cli init` CONFIRMED; tokens are CSS custom properties → `theme_apply: css-vars` (not the bespoke `astryx-defineTheme`); enumeration is the CLI `astryx component [Name]` (plain text, **no --json, no MCP** — the MCP assumption is dropped). The option hint + a `project.yaml` comment surface the constraint to whoever selects Astryx. The one residual gap — the exact `defineTheme()` schema — is documented ONLY behind the `astryx docs theme` CLI (the web page 404s), so custom-theme redefinition is explicitly flagged as CLI-resolved-at-provisioning and the user is told VortSpec cannot redefine the theme abstractly.
+- [x] 7.3 Wire the Astryx metadata source through the docgen/MCP enumeration path from §4 (no Storybook assumption). — The Astryx theming contract + `PROVISION_LIBRARY_PROMPT` step 4b route enumeration through the confirmed CLI (`astryx component` / `astryx component <Name>` / `astryx docs tokens`, invoked via `node node_modules/@astryxdesign/cli/bin/astryx.mjs`), NOT `.d.ts`/Storybook/MCP; `.d.ts` enumeration remains a silent fallback if the package ships types.
 
 ## 8. Intake detection
 

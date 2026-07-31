@@ -147,7 +147,12 @@ export const COMPONENT_LIBRARY_OPTIONS = [
   { value: "chakra", label: "Chakra UI", hint: "Emotion-based", kind: "installed-package" },
   { value: "mantine", label: "Mantine", kind: "installed-package" },
   { value: "headlessui", label: "Headless UI", hint: "Tailwind Labs", kind: "headless" },
-  { value: "astryx", label: "Astryx", hint: "Meta · installed + CLI", kind: "installed-package" },
+  {
+    value: "astryx",
+    label: "Astryx",
+    hint: "Meta · installed + CLI · CSS-var tokens; custom themes only via its `defineTheme`/`astryx docs theme`",
+    kind: "installed-package",
+  },
   { value: "other", label: "Other" },
 ] as const;
 
@@ -219,15 +224,18 @@ export const LIBRARY_RECIPES: Record<string, LibraryRecipe> = {
     importBase: "@mantine/core",
     themeApply: "theme-object:mantine",
   },
-  // Astryx (Meta) — installed package + a CLI that generates agent docs to learn the conventions.
-  // Commands per the user-provided docs (astryx.atmeta.com); setup verifies the packages resolve
-  // (research could not independently confirm them). (change: consume-component-libraries)
+  // Astryx (Meta) — installed package + a CLI. Commands CONFIRMED from astryx.atmeta.com/docs
+  // (2026-07-31): install + `cli init` verbatim; its design tokens are CSS custom properties
+  // (--color-*/--spacing-*/--radius-*/--size-*), so personalization goes through the css-vars path
+  // (our existing overlay writer + materializer) rather than a bespoke theme object. Prebuilt themes
+  // ship as CSS (`@import '@astryxdesign/theme-<name>/theme.css'`); custom-theme authoring is `defineTheme`,
+  // whose schema is documented only via the `astryx docs theme` CLI. (change: consume-component-libraries)
   astryx: {
     kind: "installed-package",
     install:
       "npm install @astryxdesign/core @astryxdesign/theme-neutral @astryxdesign/cli && npx @astryxdesign/cli init",
     importBase: "@astryxdesign/core",
-    themeApply: "astryx-defineTheme",
+    themeApply: "css-vars",
   },
 };
 
@@ -322,13 +330,15 @@ export const LIBRARY_THEME_CONTRACTS: Record<string, LibraryThemeContract> = {
     provider: "None — unstyled; the project's CSS owns theming.",
     enumerate: "Bundled .d.ts prop interfaces from @headlessui/react.",
   },
-  // 11.7 Astryx (installed-package) — API per the user-provided docs; VERIFY via the CLI/MCP, don't assume.
+  // 11.7 Astryx (installed-package) — CONFIRMED from astryx.atmeta.com/docs (2026-07-31).
   astryx: {
     theming:
-      "defineTheme({…}) in a .ts theme file compiled with `astryx theme build`, OR an injected <Theme> override CSS at runtime. Confirm the exact API via the Astryx CLI docs (`astryx --help` / its MCP) before writing — do not assume subcommands.",
-    componentLever: "defineTheme.components.",
-    provider: "Wrap the app root in the Astryx <Theme> provider per its docs.",
-    enumerate: "Astryx CLI `--json` output / MCP (no Storybook assumption).",
+      "Design tokens are CSS custom properties (--color-*, --spacing-*, --radius-*, --size-*) — override them directly (the css-vars path). Prebuilt themes ship as CSS (`@import '@astryxdesign/theme-neutral/theme.css'`). Custom-theme REDEFINITION uses `defineTheme()`, whose exact schema is documented only via the `astryx docs theme` CLI — so if a change needs bespoke theme authoring, run that command at provisioning and TELL THE USER custom-theme authoring is limited to what defineTheme supports (VortSpec cannot redefine it abstractly).",
+    componentLever: "defineTheme.components (per `astryx docs theme`); per-instance `xstyle`.",
+    provider:
+      "Import a theme CSS at the app root (`@import '@astryxdesign/theme-neutral/theme.css'`); components import from per-category subpaths (`@astryxdesign/core/Button`).",
+    enumerate:
+      "Astryx CLI (plain text, NO --json, NO MCP): `astryx component` lists all, `astryx component <Name>` gives props+usage; `astryx docs tokens` for the token reference. AI-invoke reliably via `node node_modules/@astryxdesign/cli/bin/astryx.mjs`.",
   },
 };
 
@@ -565,6 +575,13 @@ export function buildProjectYaml(a: SetupAnswers): string {
       if (recipe.add) lines.push(`library_add_cmd: "${recipe.add}"`);
       if (recipe.importBase) lines.push(`library_import_base: "${recipe.importBase}"`);
       if (recipe.registry) lines.push(`library_registry: "${recipe.registry}"`);
+    }
+    if (lib === "astryx") {
+      // Make the Astryx constraint visible to whoever picked it (confirmed from astryx.atmeta.com/docs):
+      lines.push("# Astryx: tokens are CSS custom properties — personalization uses the css-vars path.");
+      lines.push("# Enumerate components with `astryx component` / `astryx component <Name>` (no --json, no MCP).");
+      lines.push("# Custom theme authoring is limited to Astryx's `defineTheme` (see `astryx docs theme`);");
+      lines.push("# VortSpec overrides tokens but cannot redefine the theme abstractly.");
     }
   } else if (a.designSource === "github") {
     lines.push(`github_repo_url: "${a.githubRepoUrl ?? ""}"`);

@@ -88,8 +88,16 @@ describe("buildProjectYaml — library consume kind + descriptor", () => {
   it("writes theme_apply per library kind (task 12.8)", () => {
     expect(buildProjectYaml({ ...base, componentLibrary: "shadcn" })).toContain("theme_apply: css-vars");
     expect(buildProjectYaml({ ...base, componentLibrary: "mui" })).toContain("theme_apply: theme-object:mui");
-    expect(buildProjectYaml({ ...base, componentLibrary: "astryx" })).toContain("theme_apply: astryx-defineTheme");
+    // Astryx tokens are CSS custom properties (confirmed from docs) → css-vars path, not a bespoke object.
+    expect(buildProjectYaml({ ...base, componentLibrary: "astryx" })).toContain("theme_apply: css-vars");
     expect(buildProjectYaml({ ...base, componentLibrary: "radix" })).toContain("theme_apply: css-vars");
+  });
+
+  it("surfaces the Astryx constraint as a project.yaml comment when Astryx is selected (task 7.2)", () => {
+    const yaml = buildProjectYaml({ ...base, componentLibrary: "astryx" });
+    expect(yaml).toContain("astryx component"); // the confirmed CLI enumeration command
+    expect(yaml).toContain("cannot redefine the theme abstractly"); // the awareness caveat
+    expect(yaml).toContain("no --json, no MCP"); // states the correction to the earlier assumption
   });
 });
 
@@ -113,6 +121,14 @@ describe("LIBRARY_THEME_CONTRACTS — per-library consume+customize recipe (Phas
     expect(themeContractFor("shadcn")!.componentLever).toContain("CVA");
     expect(themeContractFor("radix")!.theming).toContain("No built-in token model");
   });
+
+  it("Astryx contract reflects the CONFIRMED CLI enumeration (no MCP/--json) + CSS-var tokens (tasks 7.2/7.3)", () => {
+    const c = themeContractFor("astryx")!;
+    expect(c.enumerate).toContain("astryx component"); // CLI enumeration, not Storybook/.d.ts
+    expect(c.enumerate).toContain("NO MCP"); // explicitly corrects the dropped MCP assumption
+    expect(c.theming).toContain("CSS custom properties"); // tokens are CSS vars → css-vars path
+    expect(c.theming).toContain("defineTheme"); // custom-theme authoring caveat present
+  });
 });
 
 describe("themeApplyFor — apply strategy per source (task 12.8)", () => {
@@ -120,7 +136,7 @@ describe("themeApplyFor — apply strategy per source (task 12.8)", () => {
     expect(themeApplyFor({ designSource: "enterprise" })).toBe("overlay-injected");
     expect(themeApplyFor({ designSource: "library", componentLibrary: "mui" })).toBe("theme-object:mui");
     expect(themeApplyFor({ designSource: "library", componentLibrary: "chakra" })).toBe("theme-object:chakra");
-    expect(themeApplyFor({ designSource: "library", componentLibrary: "astryx" })).toBe("astryx-defineTheme");
+    expect(themeApplyFor({ designSource: "library", componentLibrary: "astryx" })).toBe("css-vars"); // CSS-var tokens
     expect(themeApplyFor({ designSource: "library", componentLibrary: "shadcn" })).toBe("css-vars");
     expect(themeApplyFor({ designSource: "library", componentLibrary: "other" })).toBe("css-vars"); // fallback
     expect(themeApplyFor({ designSource: "figma" })).toBe("css-vars"); // extract source owns CSS tokens
