@@ -26,14 +26,14 @@
 
 ## 5. Storybook skip & design-system display
 
-- [ ] 5.1 Make `storybook/SKILL.md` and the `RunApp.tsx:393-418` backstop skip installing/serving a VortSpec Storybook when `isConsumeSource`.
-- [ ] 5.2 Generalize `resolveEnterpriseStorybookUrl` (`enterprise-source.ts:73-93`) beyond enterprise so any consume source with a vendor Storybook/docs URL embeds it as-is.
-- [ ] 5.3 Confirm the palette screen (`DesignSystem.tsx`, `lite-source.ts`) renders a consume-source project's pointer inventory + tokens as the default design-system display.
+- [x] 5.1 Make `storybook/SKILL.md` and the `RunApp.tsx:393-418` backstop skip installing/serving a VortSpec Storybook when `isConsumeSource`.
+- [x] 5.2 Generalize `resolveEnterpriseStorybookUrl` (`enterprise-source.ts:73-93`) beyond enterprise so any consume source with a vendor Storybook/docs URL embeds it as-is.
+- [x] 5.3 Confirm the palette screen (`DesignSystem.tsx`, `lite-source.ts`) renders a consume-source project's pointer inventory + tokens as the default design-system display.
 
 ## 6. DESIGN.md consume mode
 
-- [ ] 6.1 Add a consume-source branch to `GENERATE_PROMPT` (`DesignManifest.tsx:12-34`) + `design-doc/SKILL.md`: emit pointer import paths + vendor docs URLs (not `localhost:6006`), or drop the Components source/variants rows.
-- [ ] 6.2 Make `/design-doc` optional for consume sources (no longer a screen-creation prerequisite).
+- [x] 6.1 Add a consume-source branch to `GENERATE_PROMPT` (`DesignManifest.tsx:12-34`) + `design-doc/SKILL.md`: emit pointer import paths + vendor docs URLs (not `localhost:6006`), or drop the Components source/variants rows.
+- [x] 6.2 Make `/design-doc` optional for consume sources (no longer a screen-creation prerequisite).
 
 ## 7. Astryx (Meta) integration
 
