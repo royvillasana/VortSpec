@@ -114,7 +114,7 @@ import {
 import type { SnapshotReason } from "@vortspec/core/manifest";
 import { getProjectPaletteHtml, writeDesignerMd, buildProjectStandInPrompt, buildProjectTwoTrackPrompt, buildProjectLightPagePrompt, buildProjectGenerateCodePrompt, buildProjectConvertPagePrompt, liteGenerationStatus, markPageGenerated, readLightPage, listLightPages, writeLightPage, listInsertableStandIns, listComponentReadiness } from "./lite/lite-source";
 import { resolveEnterpriseStorybookUrl, buildEnterpriseSnapshotPromptFor, buildEnterpriseGeneratePromptFor } from "./enterprise/enterprise-source";
-import { serveLightPages, lightPageUrl } from "./lite/light-serve";
+import { serveLightPages, lightPageUrl, clearTokenCssCache } from "./lite/light-serve";
 import {
   loadGraph as loadCanvasGraph,
   saveGraph as saveCanvasGraph,
@@ -164,6 +164,19 @@ async function returnDrawSketch(projectPath: string, dataUrl: string): Promise<s
   const payload: DrawSketchReady = { projectPath, pngPath, dataUrl };
   for (const win of BrowserWindow.getAllWindows()) win.webContents.send(DRAW_SKETCH_READY_CHANNEL, payload);
   return pngPath;
+}
+
+/**
+ * Re-resolution trigger (change: consume-component-libraries, task 12.5). After ANY token/theme edit —
+ * in-place file write or durable overlay — re-derive the light design system so the personalization fans
+ * out everywhere without a Figma/Storybook round-trip: `designer.md` + the palette re-theme (they read the
+ * overlay-aware `getInspectorTokens`), and the served canvas re-reads its base token CSS. Best-effort:
+ * a failure here never fails the edit itself, whose result we pass straight through.
+ */
+async function afterTokenEdit<T>(projectPath: string, result: T): Promise<T> {
+  clearTokenCssCache(projectPath);
+  await writeDesignerMd(projectPath).catch(() => {});
+  return result;
 }
 
 const handlers: Record<IpcChannel, Handler> = {
@@ -492,13 +505,18 @@ const handlers: Record<IpcChannel, Handler> = {
     enumeratePackageComponent(a.projectPath, a.importBase, a.component)) as Handler,
   "theme:getOverrides": ((projectPath: string) => readThemeOverrides(projectPath)) as Handler,
   "theme:setTokenOverride": ((a: { projectPath: string; name: string; value: string; mode?: string }) =>
-    setThemeTokenOverride(a.projectPath, a.name, a.value, a.mode)) as Handler,
+    setThemeTokenOverride(a.projectPath, a.name, a.value, a.mode).then((r) =>
+      afterTokenEdit(a.projectPath, r),
+    )) as Handler,
   "theme:setComponentOverride": ((a: {
     projectPath: string;
     component: string;
     target: { variant?: string; option?: string; slot?: string };
     decls: Record<string, string>;
-  }) => setThemeComponentOverride(a.projectPath, a.component, a.target, a.decls)) as Handler,
+  }) =>
+    setThemeComponentOverride(a.projectPath, a.component, a.target, a.decls).then((r) =>
+      afterTokenEdit(a.projectPath, r),
+    )) as Handler,
   "inspector:getTokens": ((req: string | { projectPath: string; preferredCollection?: string }) =>
     typeof req === "string"
       ? getInspectorTokens(req)
@@ -512,7 +530,10 @@ const handlers: Record<IpcChannel, Handler> = {
     name: string;
     value: string;
     context?: string;
-  }) => setInspectorTokenValue(req.projectPath, req.name, req.value, req.context)) as Handler,
+  }) =>
+    setInspectorTokenValue(req.projectPath, req.name, req.value, req.context).then((r) =>
+      afterTokenEdit(req.projectPath, r),
+    )) as Handler,
   "canvas:writeEdit": ((req: {
     projectPath: string;
     file: string;

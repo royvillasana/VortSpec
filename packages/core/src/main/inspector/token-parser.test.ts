@@ -2,12 +2,15 @@ import { describe, expect, it, beforeEach, afterEach } from "vitest";
 import { mkdtemp, rm, mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { readFile } from "node:fs/promises";
 import {
   parseTokensFromCss,
   parseCssContexts,
   resolveInContext,
   deriveModeMap,
   snapshotSourceScope,
+  setInspectorTokenValue,
+  getInspectorTokens,
   DEFAULT_CONTEXT,
 } from "./token-parser";
 import type { FigmaCollection } from "@vortspec/core/inspector";
@@ -155,5 +158,45 @@ describe("snapshotSourceScope (drag-move broad snapshot, Decision 6)", () => {
     expect(paths).toContain("src/App.tsx");
     expect(paths.some((p) => p.includes("node_modules"))).toBe(false);
     expect(paths.some((p) => p.startsWith("dist/"))).toBe(false);
+  });
+});
+
+describe("setInspectorTokenValue — consume-source overlay guard (task 12.4/12.2)", () => {
+  let dir: string;
+  afterEach(async () => {
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  async function seed(designSource: string) {
+    dir = await mkdtemp(join(tmpdir(), "vs-consume-tok-"));
+    await mkdir(join(dir, ".sdd-de"), { recursive: true });
+    await writeFile(
+      join(dir, ".sdd-de", "project.yaml"),
+      `design_source: ${designSource}\ntoken_file: tokens.css\n`,
+      "utf8",
+    );
+    await writeFile(join(dir, "tokens.css"), ":root {\n  --primary: #000000;\n}\n", "utf8");
+  }
+
+  it("routes an enterprise edit to the durable overlay and NEVER mutates the client's token file", async () => {
+    await seed("enterprise");
+    const result = await setInspectorTokenValue(dir, "primary", "#635bff");
+
+    // The vendor/client source is untouched…
+    expect(await readFile(join(dir, "tokens.css"), "utf8")).toContain("--primary: #000000;");
+    // …the value lives in the durable overlay instead…
+    const overlay = JSON.parse(await readFile(join(dir, ".vortspec", "theme-overrides.json"), "utf8"));
+    expect(overlay.tokens.primary.value).toBe("#635bff");
+    // …and every reader (getInspectorTokens) sees the overlaid value.
+    expect(result.tokens.find((t) => t.name === "primary")?.resolvedValue).toBe("#635bff");
+  });
+
+  it("writes in place for an owned (extract) source", async () => {
+    await seed("figma");
+    await setInspectorTokenValue(dir, "primary", "#635bff");
+    expect(await readFile(join(dir, "tokens.css"), "utf8")).toContain("--primary: #635bff;");
+    // No overlay file is created for an in-place write.
+    const overlay = await readFile(join(dir, ".vortspec", "theme-overrides.json"), "utf8").catch(() => null);
+    expect(overlay).toBeNull();
   });
 });

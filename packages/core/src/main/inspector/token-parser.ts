@@ -11,8 +11,9 @@ import {
 import { resolveToken, readTokenLinks, type ResolveCandidate } from "./token-resolver";
 import { readTokenKeyMap, mergeTokenKeys } from "./design-map";
 import { cachedScan } from "./scan-cache";
-import { readThemeOverrides } from "./theme-override-store";
+import { readThemeOverrides, setThemeTokenOverride } from "./theme-override-store";
 import { detectTokenFormat, writeToken } from "@vortspec/core/token-writers";
+import { isConsumeSource } from "@vortspec/core/setup";
 import { inspectorTokensResultSchema } from "@vortspec/core/inspector";
 import type {
   FigmaCollection,
@@ -859,6 +860,15 @@ export async function setInspectorTokenValue(
   context?: string,
 ): Promise<InspectorTokensResult> {
   const config = await readProjectConfig(projectPath);
+  // Consume-source guard (change: consume-component-libraries, task 12.4): enterprise/library sources
+  // POINT `token_file` at the vendor's or client's REAL source (reference, not a VortSpec copy), so a
+  // personalization edit must NEVER mutate that file. Route it to the durable overlay instead — the read
+  // path (getInspectorTokens) layers it and the materializer injects it at serve/compile.
+  if (isConsumeSource(config?.designSource)) {
+    const mode = context && context !== DEFAULT_CONTEXT ? context : undefined;
+    await setThemeTokenOverride(projectPath, name, value.trim(), mode);
+    return getInspectorTokens(projectPath);
+  }
   const tokenFile = config?.tokenFile;
   if (tokenFile) {
     const path = join(projectPath, tokenFile);
