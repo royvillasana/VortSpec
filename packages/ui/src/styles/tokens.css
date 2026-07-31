@@ -23,13 +23,14 @@
   --font-mono: var(--font-geist-mono);
   --font-heading: var(--font-geist-sans);
 
-  /* VortSpec design tokens */
-  --color-vs-bg-primary: #0B0C0E;
-  --color-vs-bg-surface: #141518;
-  --color-vs-bg-elevated: #1B1D21;
-  --color-vs-bg-hover: #17181C;
-  /* code / terminal surface (design: #08090B, one step below primary) */
-  --color-vs-bg-code: #08090B;
+  /* VortSpec design tokens — dark NEUTRAL-GRAY scale (not pure black). Each step
+     is a perceptible notch lighter: code < primary < surface < hover < elevated. */
+  --color-vs-bg-primary: #101216;
+  --color-vs-bg-surface: #181A1F;
+  --color-vs-bg-elevated: #1F2228;
+  --color-vs-bg-hover: #1B1D22;
+  /* code / terminal surface — the darkest gray, one step below primary. */
+  --color-vs-bg-code: #0C0D11;
   --color-vs-border-default: #26282D;
   --color-vs-border-strong: #34373D;
   --color-vs-border-subtle: #1B1D21;
@@ -91,17 +92,17 @@
   --font-geist-sans: "Geist Variable", system-ui, -apple-system, sans-serif;
   --font-geist-mono: "Geist Mono Variable", ui-monospace, "SF Mono", monospace;
 
-  --background: #0B0C0E;
+  --background: #101216;
   --foreground: #E7E9EC;
-  --card: #141518;
+  --card: #181A1F;
   --card-foreground: #E7E9EC;
-  --popover: #1B1D21;
+  --popover: #1F2228;
   --popover-foreground: #E7E9EC;
   --primary: #7C6FF0;
   --primary-foreground: #FFFFFF;
-  --secondary: #1B1D21;
+  --secondary: #1F2228;
   --secondary-foreground: #E7E9EC;
-  --muted: #1B1D21;
+  --muted: #1F2228;
   --muted-foreground: #6B7280;
   --accent: #7C6FF0;
   --accent-foreground: #FFFFFF;
@@ -115,14 +116,39 @@
   --chart-4: #2563EB;
   --chart-5: #E5484D;
   --radius: 0.5rem;
-  --sidebar: #141518;
+  --sidebar: #181A1F;
   --sidebar-foreground: #E7E9EC;
   --sidebar-primary: #7C6FF0;
   --sidebar-primary-foreground: #FFFFFF;
-  --sidebar-accent: #1B1D21;
+  --sidebar-accent: #1F2228;
   --sidebar-accent-foreground: #E7E9EC;
   --sidebar-border: #26282D;
   --sidebar-ring: rgba(124, 111, 240, 0.25);
+}
+
+/* Gradient-border floating panels — a light top→bottom highlight along the border,
+   giving the lifted "glass" edge. The fill is clipped to padding-box and the highlight
+   gradient to border-box, so the gradient shows only through the 1px transparent border
+   (and it follows the panel's rounded corners, which border-image can't). One variant per
+   fill: `surface` (chrome/sidebar/header) and `primary` (the recessed canvas). */
+.vs-panel-surface,
+.vs-panel-primary {
+  border: 1px solid transparent;
+  background-clip: padding-box, border-box;
+  background-origin: border-box;
+}
+/* The border highlight sits on a 45° diagonal (135deg). `--vs-border-angle` is nudged a
+   few degrees by the cursor (App.tsx) for a discreet glass-reflection tilt; it falls back
+   to a static 135deg where nothing drives it (e.g. the desktop shell). Opacity kept low. */
+.vs-panel-surface {
+  background-image:
+    linear-gradient(var(--color-vs-bg-surface), var(--color-vs-bg-surface)),
+    linear-gradient(var(--vs-border-angle, 135deg), rgba(255, 255, 255, 0.09) 0%, rgba(255, 255, 255, 0.025) 48%, rgba(255, 255, 255, 0.008) 100%);
+}
+.vs-panel-primary {
+  background-image:
+    linear-gradient(var(--color-vs-bg-primary), var(--color-vs-bg-primary)),
+    linear-gradient(var(--vs-border-angle, 135deg), rgba(255, 255, 255, 0.09) 0%, rgba(255, 255, 255, 0.025) 48%, rgba(255, 255, 255, 0.008) 100%);
 }
 
 @layer base {

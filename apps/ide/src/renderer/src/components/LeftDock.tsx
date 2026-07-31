@@ -49,7 +49,7 @@ export function LeftDock({
   return (
     <aside
       style={{ width }}
-      className={`my-2 ml-2 flex shrink-0 flex-col overflow-hidden ${FLOAT_PANEL}`}
+      className={`my-2 ml-2 flex shrink-0 flex-col overflow-hidden vs-panel-surface ${FLOAT_PANEL}`}
     >
       <div className="flex flex-none items-stretch border-b border-vs-border-subtle text-[12px]">
         {hasSection && (

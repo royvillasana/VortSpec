@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { Plus } from "lucide-react";
 import type {
   FigmaComponent,
   FigmaConnection,
@@ -38,6 +39,7 @@ import { UsageWarning } from "../components/UsageWarning";
 import { useUsageWarning } from "../lib/useUsageWarning";
 import { FigmaHealthCheck } from "../components/FigmaHealthCheck";
 import { ProjectRail, projectRailItems } from "../components/ProjectRail";
+import { ViewHeader } from "../components/ViewHeader";
 
 /**
  * The Design System workspace (design: "Guided Flow.dc.html", reframed to v2).
@@ -551,11 +553,8 @@ export function GuidedFlow({
       )}
 
       <main className="flex min-w-0 flex-1 flex-col bg-vs-bg-primary">
-        <header className="flex flex-none items-center gap-3.5 border-b border-vs-border-default px-8 pb-4 pt-5">
-          <div className="flex flex-col gap-0.5">
-            <h1 className="text-xl font-semibold tracking-[-0.01em]">Components</h1>
-            <span className="text-xs text-vs-text-secondary">Build &amp; verify your design-system components, then generate the manifest. {!foundationReady ? status : ""}</span>
-          </div>
+        <ViewHeader>
+          <h1 className="text-xl font-semibold tracking-[-0.01em]">Components</h1>
           <div className="flex-1" />
           {/* Status pills — foundation state + built/verified counts (design: dashboard). */}
           {foundationReady && (
@@ -573,23 +572,14 @@ export function GuidedFlow({
             </div>
           )}
           {foundationReady && builtCount > 0 && (
-            <>
-              <button
-                onClick={onOpenVerify}
-                className="text-xs text-vs-text-secondary hover:text-vs-text-primary"
-              >
-                Verification report →
-              </button>
-              <Button
-                variant="default"
-                disabled={busy}
-                onClick={() => void verify("all", "Verifying all built components")}
-              >
-                Verify all
-              </Button>
-            </>
+            <button
+              onClick={onOpenVerify}
+              className="text-xs text-vs-text-secondary hover:text-vs-text-primary"
+            >
+              Verification report →
+            </button>
           )}
-        </header>
+        </ViewHeader>
 
         <div className="flex min-h-0 flex-1">
           {/* Dashboard rail: pipeline card + foundation + category nav
@@ -814,9 +804,6 @@ export function GuidedFlow({
                 {/* Components */}
                 <section className="flex flex-col gap-3">
                   <div className="flex items-center gap-3">
-                    <h2 className="flex items-baseline gap-2 text-[13px] font-semibold text-vs-text-primary">
-                      Components <span className="font-mono text-[11px] font-normal text-vs-text-muted">{total}</span>
-                    </h2>
                     {figmaCompSynced && (
                       <span className="text-[11px] text-vs-text-muted">
                         {components?.filter((c) => c.figmaBacked).length ?? 0} in Figma ·{" "}
@@ -828,17 +815,17 @@ export function GuidedFlow({
                       <Button
                         variant="default"
                         disabled={busy || compSyncing}
-                        title="Read the design system's components straight from Figma via figma-cli (fast, no token) and reconcile against your code roster."
+                        tip="Read the design system's components straight from Figma via figma-cli (fast, no token) and reconcile against your code roster."
                         onClick={() => void syncComponents()}
                       >
-                        {compSyncing ? "Reading…" : figmaCompSynced ? "↻ Figma components" : "Read Figma components"}
+                        {compSyncing ? "Reading…" : "Read Components"}
                       </Button>
                     )}
                     {isLibrary && (
                       <Button
                         variant={libraryProvisioned ? "default" : "primary"}
                         disabled={busy}
-                        title={
+                        tip={
                           libraryProvisioned
                             ? "Re-run library provisioning — adds any components missing from the library (its CLI or package). Existing components are left intact."
                             : `Pull ${config?.componentLibrary ?? "the library"}'s REAL components into this project (its CLI for shadcn/radix, or install + token-mapped wrappers) instead of rebuilding them from scratch.`
@@ -853,7 +840,7 @@ export function GuidedFlow({
                     <Button
                       variant="default"
                       disabled={busy}
-                      title="Re-read the design source and reconcile: refresh tokens and add any newly-detected components. Never touches built code."
+                      tip="Re-read the design source and reconcile: refresh tokens and add any newly-detected components. Never touches built code."
                       onClick={() =>
                         void op(
                           `Re-scanning ${config?.designSource === "figma" ? "Figma" : "the design source"} — reconciling tokens + components`,
@@ -862,49 +849,50 @@ export function GuidedFlow({
                         )
                       }
                     >
-                      ↻ Re-scan {config?.designSource === "figma" ? "Figma" : "source"}
+                      ↻ Re-Scan
                     </Button>
                     {remaining.length > 0 && (
-                      <>
-                        <Button
-                          variant="default"
-                          disabled={busy}
-                          title="Build the remaining components in chunks of five — each chunk on a cheaper model by complexity, followed by Storybook + manifest so the first results are usable right away."
-                          onClick={() => void buildRemaining(false)}
-                        >
-                          Build only ({remaining.length})
-                        </Button>
-                        <Button
-                          variant="default"
-                          disabled={busy}
-                          title="Build every detected component in chunks of five and verify each — the CLI's Apply → Visual-Verify → Adversarial-Review cycle, per chunk."
-                          onClick={() => void buildRemaining(true)}
-                        >
-                          Build &amp; verify the rest ({remaining.length})
-                        </Button>
-                      </>
-                    )}
-                    {figmaCli?.connected && (
                       <Button
                         variant="default"
                         disabled={busy}
-                        title="Build the component/frame currently selected in Figma Desktop — reads your selection via figma-cli and runs the same gated build."
-                        onClick={() => void buildFigmaSelection()}
+                        tip="Build the remaining components in chunks of five — each chunk on a cheaper model by complexity, followed by Storybook + manifest so the first results are usable right away."
+                        onClick={() => void buildRemaining(false)}
                       >
-                        Build Figma selection
+                        Build
+                      </Button>
+                    )}
+                    {foundationReady && builtCount > 0 && (
+                      <Button
+                        variant="default"
+                        disabled={busy}
+                        tip="Verify every built component — renders each, compares it to its Figma node, and fixes drift (Apply → Visual-Verify → Adversarial-Review)."
+                        onClick={() => void verify("all", "Verifying all built components")}
+                      >
+                        Verify all
+                      </Button>
+                    )}
+                    {remaining.length > 0 && (
+                      <Button
+                        variant="default"
+                        disabled={busy}
+                        tip="Build every detected component in chunks of five and verify each — the CLI's Apply → Visual-Verify → Adversarial-Review cycle, per chunk."
+                        onClick={() => void buildRemaining(true)}
+                      >
+                        Build and Verify
                       </Button>
                     )}
                     <Button
                       variant={isLibrary && !libraryProvisioned ? "default" : "primary"}
                       disabled={busy}
-                      title={
+                      tip={
                         isLibrary && !libraryProvisioned
                           ? "Provision the library first — it ships these components. Building one by hand before provisioning creates a look-alike that drifts from the library."
                           : undefined
                       }
                       onClick={() => setAddNew(true)}
                     >
-                      + New component
+                      <Plus size={16} strokeWidth={2.5} />
+                      New
                     </Button>
                   </div>
 

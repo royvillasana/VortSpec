@@ -88,6 +88,10 @@
       "types": "./src/components/ConversationTabs.tsx",
       "default": "./src/components/ConversationTabs.tsx"
     },
+    "./ViewHeader": {
+      "types": "./src/components/ViewHeader.tsx",
+      "default": "./src/components/ViewHeader.tsx"
+    },
     "./SourceControl": {
       "types": "./src/views/SourceControl.tsx",
       "default": "./src/views/SourceControl.tsx"

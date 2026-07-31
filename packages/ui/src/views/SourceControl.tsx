@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { GitStatus, GitBranch, GitRemote, ProviderAuth, Project } from "@vortspec/core/ipc";
+import { ViewHeader } from "@vortspec/ui/ViewHeader";
 import { api } from "../lib/api";
 import { useAgentRun } from "../lib/useAgentRun";
 import { routedModel } from "../lib/model-routing";
@@ -145,7 +146,7 @@ export function SourceControl({
       )}
 
       <main className="flex min-w-0 flex-1 flex-col overflow-y-auto bg-vs-bg-primary">
-        <header className="sticky top-0 z-20 flex flex-none items-center gap-3 border-b border-vs-border-default bg-vs-bg-primary px-8 py-4">
+        <ViewHeader className="sticky top-2 z-20">
           <h1 className="text-xl font-semibold tracking-[-0.01em]">Source Control</h1>
           {status?.isRepo && (
             <>
@@ -161,7 +162,7 @@ export function SourceControl({
           <button onClick={() => void reload()} className="text-xs text-vs-text-secondary hover:text-vs-text-primary">
             ↻ Refresh
           </button>
-        </header>
+        </ViewHeader>
 
         <div className="mx-auto flex w-full max-w-[760px] flex-col gap-5 px-8 py-6">
           {status === null ? (

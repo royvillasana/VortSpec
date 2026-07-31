@@ -291,7 +291,6 @@ function ViewportSelector({
         className="flex items-center gap-1.5 rounded px-2 py-1 text-[12px] text-vs-text-secondary hover:bg-vs-bg-hover hover:text-vs-text-primary"
       >
         <Icon size={16} strokeWidth={2} />
-        <span>{viewport.label}</span>
         {viewport.width !== null && (
           <span className="font-mono text-[10px] text-vs-text-muted">
             {viewport.width}

@@ -18,6 +18,7 @@ import type {
   MetadataPlan,
 } from "@vortspec/core/ipc";
 import { api } from "../lib/api";
+import { ViewHeader } from "../components/ViewHeader";
 import { useAgentRun } from "../lib/useAgentRun";
 import { Spinner } from "@vortspec/ui/ui";
 import { AuditBanner } from "@vortspec/ui/AuditBanner";
@@ -711,8 +712,7 @@ export function Inspector({
 
       {/* Main */}
       <main className="flex min-w-0 flex-1 flex-col bg-vs-bg-primary">
-        <header className="flex flex-none flex-col gap-3.5 border-b border-vs-border-default px-6 pb-3 pt-5">
-          <div className="flex items-center gap-3">
+        <ViewHeader>
             <h1 className="text-xl font-semibold tracking-[-0.01em]">Tokens</h1>
             <span className="font-mono text-xs text-vs-text-muted">
               {total} tokens
@@ -751,7 +751,8 @@ export function Inspector({
                 onConnect={() => figmaEnv?.fix?.url && void api.openInstall(figmaEnv.fix.url)}
               />
             )}
-          </div>
+          </ViewHeader>
+          <div className="flex flex-none flex-col gap-3.5 border-b border-vs-border-default bg-vs-bg-surface px-6 py-3">
           {figmaSynced && (total > 0) && (
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-md border border-vs-border-default bg-vs-bg-surface px-3 py-2 text-[11px]">
               <span className="font-semibold uppercase tracking-wide text-vs-text-muted">
@@ -948,7 +949,7 @@ export function Inspector({
               {codeOnly && <span className="ml-0.5 text-vs-text-secondary">×</span>}
             </button>
           </div>
-        </header>
+        </div>
 
         <AuditBanner audit={audit} />
         <MetadataStatus plan={metaPlan} running={metaRun.running} onGenerate={() => void generateMetadata()} />

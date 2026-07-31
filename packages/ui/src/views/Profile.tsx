@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { Profile as ProfileT, ProfilePreferences, UsageResult } from "@vortspec/core/ipc";
+import { ViewHeader } from "@vortspec/ui/ViewHeader";
 import { api } from "../lib/api";
 import { Button, Card, Spinner } from "@vortspec/ui/ui";
 
@@ -72,12 +73,12 @@ export function Profile({ onBack, onSaved }: { onBack: () => void; onSaved?: (p:
 
   return (
     <div className="flex h-full w-full flex-col overflow-y-auto bg-vs-bg-primary text-vs-text-primary">
-      <header className="flex flex-none items-center gap-3 border-b border-vs-border-default px-8 py-5">
+      <ViewHeader>
         <button onClick={onBack} className="text-sm text-vs-text-secondary hover:text-vs-text-primary">
           ← Back
         </button>
         <h1 className="text-xl font-semibold tracking-[-0.01em]">Profile</h1>
-      </header>
+      </ViewHeader>
 
       <div className="mx-auto flex w-full max-w-[760px] flex-col gap-6 px-8 py-8">
         {/* ── Usage ─────────────────────────────────────────── */}

@@ -59,6 +59,8 @@ export function ConversationTabs({
   onReturnToOrigin?: (returnTo: string) => void;
   seedContext?: string;
   liveContext?: string;
+  /** A context indicator (active file / selection) rendered just above the composer input. */
+  contextSlot?: React.ReactNode;
   mcpConfigPath?: string;
   extraAllowedTools?: string[];
   userName?: string;

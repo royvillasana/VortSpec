@@ -1,6 +1,7 @@
 import { createElement, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { DevServerStatus, Project, InspectorToken, InspectorComponent, FileSnapshot, StorybookEntry } from "@vortspec/core/ipc";
+import { ViewHeader } from "@vortspec/ui/ViewHeader";
 import { buildSelection, alignToCss, flowToCss, gapModeCss } from "@vortspec/core/selection-builder";
 import { sizeModeCss, SIZE_MODE_LABEL } from "@vortspec/core/sizing";
 import { api } from "../lib/api";
@@ -2285,7 +2286,7 @@ export function RunApp({
       {isApp && sidebarSlot && !canvasReady &&
         createPortal(<div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-vs-bg-surface">{sidebarBody}</div>, sidebarSlot)}
       <main className="flex min-w-0 flex-1 flex-col bg-vs-bg-primary">
-        <header className="flex flex-none items-center gap-3 border-b border-vs-border-default px-5 py-3">
+        <ViewHeader>
           <span className="text-[15px] font-semibold">{isApp ? "Playground" : "Storybook"}</span>
           {/* Enterprise: this is the CLIENT's Storybook, embedded as-is. Refreshing the design system
               ("Update snapshot") lives on the Design System page, not here. */}
@@ -2369,7 +2370,7 @@ export function RunApp({
               {dev.state === "starting" ? "Starting…" : isApp ? "Start app" : "Start Storybook"}
             </Button>
           )}
-        </header>
+        </ViewHeader>
 
         {/* Persistent unsaved-edits bar: canvas edits are LIVE preview overrides until Apply
             writes them to source, so they can be lost on a reload. Always show the count +

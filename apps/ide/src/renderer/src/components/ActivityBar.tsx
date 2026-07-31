@@ -189,8 +189,8 @@ export function ActivityBar({
   return (
     <nav
       aria-label="Activity bar"
-      className={`flex w-12 shrink-0 flex-col items-center gap-1 bg-vs-bg-surface py-2 ${
-        seamless ? "" : "border-r border-vs-border-default"
+      className={`flex w-12 shrink-0 flex-col items-center gap-1 py-2 ${
+        seamless ? "" : "border-r border-vs-border-default bg-vs-bg-surface"
       }`}
     >
       {TOP.map((item) => (

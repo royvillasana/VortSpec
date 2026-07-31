@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { IssueLinks, Project, TaskAuth, TaskProject } from "@vortspec/core/ipc";
+import { ViewHeader } from "@vortspec/ui/ViewHeader";
 import { api } from "../lib/api";
 import { Button, Card, Spinner } from "@vortspec/ui/ui";
 import { ProjectRail, projectRailItems } from "@vortspec/ui/ProjectRail";
@@ -91,12 +92,12 @@ export function Tasks({
       )}
 
       <main className="flex min-w-0 flex-1 flex-col overflow-y-auto bg-vs-bg-primary">
-        <header className="flex flex-none items-center gap-3 border-b border-vs-border-default px-8 py-4">
+        <ViewHeader>
           <h1 className="text-xl font-semibold tracking-[-0.01em]">Tasks</h1>
           <span className="rounded border border-vs-border-default px-1.5 py-px text-[10px] uppercase tracking-wide text-vs-text-muted">Jira</span>
           <div className="flex-1" />
           <button onClick={() => void loadAuth()} className="text-xs text-vs-text-secondary hover:text-vs-text-primary">↻ Refresh</button>
-        </header>
+        </ViewHeader>
 
         <div className="mx-auto flex w-full max-w-[720px] flex-col gap-5 px-8 py-6">
           {/* Connect */}
