@@ -1,16 +1,20 @@
 import { describe, expect, it } from "vitest";
 import { libraryKind, buildProjectYaml, type SetupAnswers } from "./setup";
 
-describe("libraryKind — provisioning classification", () => {
-  it("classifies copy-source libraries", () => {
-    expect(libraryKind("shadcn")).toBe("copy-source");
-    expect(libraryKind("radix")).toBe("copy-source");
+describe("libraryKind — consume classification", () => {
+  it("classifies cli-registry libraries", () => {
+    expect(libraryKind("shadcn")).toBe("cli-registry");
   });
 
-  it("classifies package libraries", () => {
-    for (const lib of ["mui", "antd", "chakra", "mantine", "headlessui"]) {
-      expect(libraryKind(lib)).toBe("package");
+  it("classifies installed-package libraries", () => {
+    for (const lib of ["mui", "antd", "chakra", "mantine"]) {
+      expect(libraryKind(lib)).toBe("installed-package");
     }
+  });
+
+  it("classifies headless libraries", () => {
+    expect(libraryKind("radix")).toBe("headless");
+    expect(libraryKind("headlessui")).toBe("headless");
   });
 
   it("returns unknown for `other` and unrecognized/empty", () => {
@@ -21,7 +25,7 @@ describe("libraryKind — provisioning classification", () => {
   });
 });
 
-describe("buildProjectYaml — library provisioning kind", () => {
+describe("buildProjectYaml — library consume kind + descriptor", () => {
   const base: SetupAnswers = {
     framework: "react",
     language: "typescript",
@@ -29,25 +33,32 @@ describe("buildProjectYaml — library provisioning kind", () => {
     designSource: "library",
   } as SetupAnswers;
 
-  it("derives and writes the kind for a known library", () => {
+  it("derives the kind + writes the consume descriptor for a cli-registry library", () => {
     const yaml = buildProjectYaml({ ...base, componentLibrary: "shadcn" });
     expect(yaml).toContain("component_library: shadcn");
-    expect(yaml).toContain("component_library_kind: copy-source");
+    expect(yaml).toContain("component_library_kind: cli-registry");
+    expect(yaml).toContain('library_install_cmd: "npx shadcn@latest init --yes --defaults"');
+    expect(yaml).toContain('library_add_cmd: "npx shadcn@latest add --yes"');
+    expect(yaml).toContain('library_import_base: "@/components/ui"');
+    expect(yaml).toContain('library_registry: "https://ui.shadcn.com/r"');
   });
 
-  it("writes the package kind for a package library", () => {
+  it("writes the installed-package kind + install/import for a package library", () => {
     const yaml = buildProjectYaml({ ...base, componentLibrary: "mui" });
-    expect(yaml).toContain("component_library_kind: package");
+    expect(yaml).toContain("component_library_kind: installed-package");
+    expect(yaml).toContain('library_install_cmd: "npm install @mui/material @emotion/react @emotion/styled"');
+    expect(yaml).toContain('library_import_base: "@mui/material"');
+    expect(yaml).not.toContain("library_add_cmd:"); // installed-package has no add step
   });
 
-  it("uses the answered kind for `other`", () => {
+  it("normalizes a legacy answered kind for `other`", () => {
     const yaml = buildProjectYaml({
       ...base,
       componentLibrary: "other",
-      componentLibraryKind: "package",
+      componentLibraryKind: "package", // legacy value
     });
     expect(yaml).toContain("component_library: other");
-    expect(yaml).toContain("component_library_kind: package");
+    expect(yaml).toContain("component_library_kind: installed-package"); // normalized
   });
 
   it("omits the kind line when `other` has no answered kind", () => {

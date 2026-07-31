@@ -93,8 +93,9 @@ export const BUILD_REMAINING_PROMPT =
 /**
  * Provision a `design_source: library` project's REAL components into the codebase
  * (change: provision-library-source). Defers to the `/provision-library` skill, which
- * runs the library's CLI for copy-source libraries (shadcn/radix) or installs + wraps for
- * package libraries (MUI/Chakra/…). Never hand-builds what the library already ships.
+ * runs the library's CLI for cli-registry libraries (shadcn), installs + thin-wraps for
+ * installed-package libraries (MUI/Chakra/Mantine/Antd), or installs primitives for headless
+ * libraries (Radix/Headless UI). Never hand-builds what the library already ships.
  */
 export const PROVISION_LIBRARY_PROMPT = [
   "Provision this project's component library so the design system is built on the library's",
@@ -103,20 +104,25 @@ export const PROVISION_LIBRARY_PROMPT = [
   "Run the **/provision-library** skill (`.sdd-de/ai-specs/skills/provision-library/SKILL.md`)",
   "and follow it exactly:",
   "1. Read `.sdd-de/project.yaml` — `component_library`, `component_library_kind`, `component_dir`,",
-  "   `token_file`, `framework`, `styling`. If `component_library_kind` is missing, derive it",
-  "   (shadcn/radix → copy-source; mui/chakra/antd/mantine/headlessui → package) or ask.",
+  "   `token_file`, `framework`, `styling`, and the consume descriptor (`library_install_cmd`,",
+  "   `library_add_cmd`, `library_import_base`, `library_registry`) when present. If",
+  "   `component_library_kind` is missing, derive it (shadcn → cli-registry; radix/headlessui →",
+  "   headless; mui/chakra/antd/mantine → installed-package) or ask.",
   "2. Idempotency scan FIRST: skip components already present in `component_dir`; never duplicate.",
-  "3. copy-source (shadcn/radix): run the library's own CLI NON-INTERACTIVELY (e.g.",
-  "   `npx shadcn@latest init --yes --defaults` then `npx shadcn@latest add --yes <components>`)",
-  "   so the REAL component source files land in `component_dir`. Do NOT reimplement a component",
-  "   the CLI can produce.",
-  "4. package (mui/chakra/antd/mantine/headlessui): install the package, then generate one thin",
-  "   token-mapped wrapper per default primitive that imports the real library component and maps",
-  "   `token_file` values onto it. Wrappers delegate behavior; never reimplement it.",
-  "5. Run CLIs through the project's local toolchain (npm/npx) — never sudo, never global. If a CLI",
+  "3. cli-registry (shadcn): run the library's own CLI NON-INTERACTIVELY (use `library_install_cmd`",
+  "   then `library_add_cmd <components>`, e.g. `npx shadcn@latest init --yes --defaults` then",
+  "   `npx shadcn@latest add --yes <components>`) so the REAL component source files land in",
+  "   `component_dir`. Do NOT reimplement a component the CLI can produce.",
+  "4. installed-package (mui/chakra/antd/mantine): install the package (`library_install_cmd`), then",
+  "   generate one thin token-mapped wrapper per default primitive that imports the real component",
+  "   from `library_import_base` and maps `token_file` values onto it. Wrappers delegate; never",
+  "   reimplement. Do NOT copy the package's source.",
+  "5. headless (radix/headlessui): install the package (`library_install_cmd`) and import primitives",
+  "   from `library_import_base`. These ship NO token model — style with the project's own tokens.",
+  "6. Run CLIs through the project's local toolchain (npm/npx) — never sudo, never global. If a CLI",
   "   genuinely needs an interactive prompt it can't get here, STOP and tell the user the exact",
   "   command to run in the in-app terminal; do not fake or partially apply it.",
-  "6. Do NOT modify unrelated files. When done, report what was added vs. skipped and point the user",
+  "7. Do NOT modify unrelated files. When done, report what was added vs. skipped and point the user",
   "   at `/extract-design-system`.",
 ].join("\n");
 

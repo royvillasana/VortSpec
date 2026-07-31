@@ -1,14 +1,14 @@
 ## 1. Config & the `isConsumeSource` predicate
 
-- [ ] 1.1 Broaden `component_library_kind` in `setup.ts` to `cli-registry | installed-package | headless` (keep `copy-source` as an alias for `cli-registry`); update `libraryKind()` (`setup.ts:148-151`) and `COMPONENT_LIBRARY_OPTIONS` (`setup.ts:133-142`) accordingly.
-- [ ] 1.2 Add the richer library descriptor to the config schema written by `buildProjectYaml` (`setup.ts:274-279`): `library_registry`, `library_install_cmd`, `library_add_cmd`, `library_import_base`, optional `library_mcp`; keep `token_file` pointing at the theme/config source (installed-package) or global CSS (cli-registry).
+- [x] 1.1 Broaden `component_library_kind` in `setup.ts` to `cli-registry | installed-package | headless` (keep `copy-source` as an alias for `cli-registry`); update `libraryKind()` (`setup.ts:148-151`) and `COMPONENT_LIBRARY_OPTIONS` (`setup.ts:133-142`) accordingly.
+- [x] 1.2 Add the richer library descriptor to the config schema written by `buildProjectYaml` (`setup.ts:274-279`): `library_registry`, `library_install_cmd`, `library_add_cmd`, `library_import_base`, optional `library_mcp`; keep `token_file` pointing at the theme/config source (installed-package) or global CSS (cli-registry).
 - [x] 1.3 Add an `isConsumeSource(config)` helper in `packages/core` (= `enterprise` OR a `library` with a consume kind) and export it for UI + prompt use.
 - [x] 1.4 Recognize CSS-in-JS (`emotion`, `styled-components`) strictly as a `styling` value; ensure it can never be recorded as a `component_library`.
 
 ## 2. Enforce consume over rebuild
 
 - [x] 2.1 Generalize the `enterprise` early-return in `useAutoComponentBuild.ts:65-71` to `isConsumeSource` so no consume-source component is swept into `buildChunkPrompt`.
-- [ ] 2.2 Add a consume-source branch to `useAutoFoundation.ts:74-82` that dispatches the library provision/index flow instead of the generic Figma-style extract template.
+- [x] 2.2 Add a consume-source branch to `useAutoFoundation.ts:74-82` that dispatches the library provision/index flow instead of the generic Figma-style extract template.
 - [ ] 2.3 Replace the count proxy `libraryProvisioned = !isLibrary || total > 0` (`GuidedFlow.tsx:486-487`) with a real readiness check analogous to `analyzeEnterpriseReadiness` (`enterprise-consume.ts:64-108`): CLI ran + files exist (cli-registry) or package resolves + pointer entries exist (installed-package/headless).
 - [ ] 2.4 Update the GuidedFlow roster affordance so consume-source projects show a consume/provision action rather than a from-scratch "build" for library-shipped components.
 

@@ -66,7 +66,9 @@ export const setupAnswersSchema = z.object({
   componentLibrary: componentLibrarySchema.optional(),
   // Resolved provisioning kind — for `other`/unknown libraries the flow asks; for known
   // libraries it derives from `componentLibrary` via `libraryKind()` (change: provision-library-source).
-  componentLibraryKind: z.enum(["copy-source", "package"]).optional(),
+  componentLibraryKind: z
+    .enum(["cli-registry", "installed-package", "headless", "copy-source", "package"])
+    .optional(),
   // GitHub
   githubRepoUrl: z.string().optional(),
   githubBranch: z.string().optional(),
@@ -120,34 +122,92 @@ export const DESIGN_SOURCE_OPTIONS = [
 ] as const;
 
 /**
- * How a component library is provisioned into a project (change: provision-library-source):
- *   - `copy-source` — the library's CLI copies component *source files* into the repo
- *     (shadcn, radix). Provision by running that CLI; the copied files ARE the design system.
- *   - `package`     — components are imported from an installed npm package (mui, chakra,
- *     antd, mantine, headlessui). Provision by installing the package + generating thin,
- *     token-mapped wrappers. You never own the library's source.
+ * How a component library is CONSUMED into a project (change: consume-component-libraries):
+ *   - `cli-registry`      — the library's CLI copies component *source files* into the repo
+ *     (shadcn). Consume by running that CLI; the copied files ARE the design system.
+ *   - `installed-package` — components are imported from an installed npm package (mui, chakra,
+ *     antd, mantine, astryx). Consume by installing the package; never own the source.
+ *   - `headless`          — installed unstyled primitives with no token model (radix, headlessui);
+ *     consume by install + pair with the project's own tokens.
  * `other` has no fixed kind — the setup flow asks.
+ *
+ * Legacy `copy-source` (→ `cli-registry`) and `package` (→ `installed-package`) values from older
+ * project.yaml still parse; use {@link normalizeLibraryKind} to map them.
  */
-export type LibraryKind = "copy-source" | "package";
+export type LibraryKind = "cli-registry" | "installed-package" | "headless";
+/** Legacy kind values accepted from older project.yaml, mapped by {@link normalizeLibraryKind}. */
+export type LegacyLibraryKind = "copy-source" | "package";
 
 export const COMPONENT_LIBRARY_OPTIONS = [
-  { value: "shadcn", label: "shadcn/ui", hint: "Radix UI + Tailwind", kind: "copy-source" },
-  { value: "radix", label: "Radix UI", hint: "unstyled primitives", kind: "copy-source" },
-  { value: "mui", label: "Material UI", hint: "Emotion-based", kind: "package" },
-  { value: "antd", label: "Ant Design", kind: "package" },
-  { value: "chakra", label: "Chakra UI", hint: "Emotion-based", kind: "package" },
-  { value: "mantine", label: "Mantine", kind: "package" },
-  { value: "headlessui", label: "Headless UI", hint: "Tailwind Labs", kind: "package" },
+  { value: "shadcn", label: "shadcn/ui", hint: "Radix UI + Tailwind", kind: "cli-registry" },
+  { value: "radix", label: "Radix UI", hint: "unstyled primitives", kind: "headless" },
+  { value: "mui", label: "Material UI", hint: "Emotion-based", kind: "installed-package" },
+  { value: "antd", label: "Ant Design", kind: "installed-package" },
+  { value: "chakra", label: "Chakra UI", hint: "Emotion-based", kind: "installed-package" },
+  { value: "mantine", label: "Mantine", kind: "installed-package" },
+  { value: "headlessui", label: "Headless UI", hint: "Tailwind Labs", kind: "headless" },
   { value: "other", label: "Other" },
 ] as const;
 
 /**
- * The provisioning kind for a component library. Returns `"unknown"` for `other` or any
+ * Per-library consume recipe: the exact toolchain commands + import base VortSpec writes into
+ * project.yaml so consuming is deterministic (change: consume-component-libraries). Commands run
+ * through the user's own local toolchain (npm/npx) — never vendored.
+ */
+export interface LibraryRecipe {
+  kind: LibraryKind;
+  /** Non-interactive install / init command. */
+  install: string;
+  /** cli-registry only: how to add a component (append names). */
+  add?: string;
+  /** Import specifier (installed) or alias-resolved dir (cli-registry). */
+  importBase?: string;
+  /** cli-registry only: the registry base URL. */
+  registry?: string;
+}
+export const LIBRARY_RECIPES: Record<string, LibraryRecipe> = {
+  shadcn: {
+    kind: "cli-registry",
+    install: "npx shadcn@latest init --yes --defaults",
+    add: "npx shadcn@latest add --yes",
+    importBase: "@/components/ui",
+    registry: "https://ui.shadcn.com/r",
+  },
+  radix: { kind: "headless", install: "npm install radix-ui", importBase: "radix-ui" },
+  headlessui: { kind: "headless", install: "npm install @headlessui/react", importBase: "@headlessui/react" },
+  mui: {
+    kind: "installed-package",
+    install: "npm install @mui/material @emotion/react @emotion/styled",
+    importBase: "@mui/material",
+  },
+  antd: { kind: "installed-package", install: "npm install antd", importBase: "antd" },
+  chakra: {
+    kind: "installed-package",
+    install: "npm install @chakra-ui/react @emotion/react",
+    importBase: "@chakra-ui/react",
+  },
+  mantine: {
+    kind: "installed-package",
+    install: "npm install @mantine/core @mantine/hooks",
+    importBase: "@mantine/core",
+  },
+};
+
+/**
+ * The consume kind for a component library. Returns `"unknown"` for `other` or any
  * unrecognized library, so the caller asks the user rather than guessing a command.
  */
 export function libraryKind(library: string | undefined | null): LibraryKind | "unknown" {
   const opt = COMPONENT_LIBRARY_OPTIONS.find((o) => o.value === library);
   return opt && "kind" in opt ? opt.kind : "unknown";
+}
+
+/** Map a legacy kind value (from older project.yaml) to the current taxonomy; pass-through otherwise. */
+export function normalizeLibraryKind(kind: string | undefined | null): LibraryKind | undefined {
+  if (kind === "copy-source") return "cli-registry";
+  if (kind === "package") return "installed-package";
+  if (kind === "cli-registry" || kind === "installed-package" || kind === "headless") return kind;
+  return undefined;
 }
 
 /**
@@ -244,6 +304,12 @@ export const projectConfigSchema = z.object({
   figmaTokenCollection: z.string().optional(),
   componentLibrary: z.string().optional(),
   componentLibraryKind: z.string().optional(),
+  // Consume descriptor (change: consume-component-libraries) — the exact toolchain commands +
+  // import base for the selected library, so consuming is deterministic.
+  libraryInstallCmd: z.string().optional(),
+  libraryAddCmd: z.string().optional(),
+  libraryImportBase: z.string().optional(),
+  libraryRegistry: z.string().optional(),
   githubRepoUrl: z.string().optional(),
   githubBranch: z.string().optional(),
   githubComponentDir: z.string().optional(),
@@ -283,11 +349,20 @@ export function buildProjectYaml(a: SetupAnswers): string {
     lines.push(`figma_file_url: "${a.figmaFileUrl ?? ""}"`);
     lines.push(`figma_token_collection: ${a.figmaTokenCollection || "Tokens"}`);
   } else if (a.designSource === "library") {
-    lines.push(`component_library: ${a.componentLibrary ?? "other"}`);
-    // Provisioning kind: derive for a known library, else use the answered kind for `other`.
+    const lib = a.componentLibrary ?? "other";
+    lines.push(`component_library: ${lib}`);
+    // Consume kind: derive for a known library, else the answered kind for `other` (normalized).
     const kind = libraryKind(a.componentLibrary);
-    const resolved = kind === "unknown" ? a.componentLibraryKind : kind;
+    const resolved = kind === "unknown" ? normalizeLibraryKind(a.componentLibraryKind) : kind;
     if (resolved) lines.push(`component_library_kind: ${resolved}`);
+    // Consume descriptor: deterministic toolchain commands + import base for a known library.
+    const recipe = LIBRARY_RECIPES[lib];
+    if (recipe) {
+      lines.push(`library_install_cmd: "${recipe.install}"`);
+      if (recipe.add) lines.push(`library_add_cmd: "${recipe.add}"`);
+      if (recipe.importBase) lines.push(`library_import_base: "${recipe.importBase}"`);
+      if (recipe.registry) lines.push(`library_registry: "${recipe.registry}"`);
+    }
   } else if (a.designSource === "github") {
     lines.push(`github_repo_url: "${a.githubRepoUrl ?? ""}"`);
     lines.push(`github_branch: ${a.githubBranch || "main"}`);
