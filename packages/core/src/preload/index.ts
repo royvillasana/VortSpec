@@ -17,6 +17,8 @@ import {
   type AgentRunOptions,
 } from "@vortspec/core/run-events";
 import { DEV_SERVER_UPDATE_CHANNEL, type DevServerUpdate } from "@vortspec/core/dev-server";
+import type { DrawGraph } from "@vortspec/core/draw-graph";
+import { DRAW_SKETCH_READY_CHANNEL, type DrawSketchReady } from "@vortspec/core/draw-events";
 import { WORKSPACE_CHANGE_CHANNEL, type WorkspaceChange } from "@vortspec/core/fs";
 import { TERMINAL_DATA_CHANNEL, type TerminalData } from "@vortspec/core/terminal";
 import { IDE_ACTION_CHANNEL, type IdeState, type IdeAction, type IdeActionResult } from "@vortspec/core/ide-mcp";
@@ -166,6 +168,21 @@ const api: VortSpecApi = {
   litePages: (projectPath: string) => invoke("lite:pages", projectPath),
   liteWritePage: (projectPath: string, name: string, html: string) =>
     invoke("lite:writePage", { projectPath, name, html }),
+  canvasLoadGraph: (projectPath: string) => invoke("canvas:loadGraph", projectPath),
+  canvasSaveGraph: (projectPath: string, graph: DrawGraph) => invoke("canvas:saveGraph", { projectPath, graph }),
+  canvasLoadScene: (projectPath: string) => invoke("canvas:loadScene", projectPath),
+  canvasSaveScene: (projectPath: string, scene: string) => invoke("canvas:saveScene", { projectPath, scene }),
+  canvasExportSketch: (projectPath: string, frameId: string, dataUrl: string) =>
+    invoke("canvas:exportSketch", { projectPath, frameId, dataUrl }),
+  drawOpen: (projectPath: string) => invoke("draw:open", projectPath),
+  drawGeneratePrompt: (
+    projectPath: string,
+    input: { frameId: string; label: string; note?: string; pngPath: string; intent?: "create-new" | "customize-existing" },
+  ) => invoke("draw:generatePrompt", { projectPath, ...input }),
+  drawRecordGeneration: (projectPath: string, input: { sketchId: string; component: string; outputRef?: string }) =>
+    invoke("draw:recordGeneration", { projectPath, ...input }),
+  drawReturnSketch: (projectPath: string, dataUrl: string) => invoke("draw:returnSketch", { projectPath, dataUrl }),
+  onDrawSketchReady: (callback: (payload: DrawSketchReady) => void) => subscribe(DRAW_SKETCH_READY_CHANNEL, callback),
   saveManifest: (projectPath: string, content: string) =>
     invoke("manifest:save", { projectPath, content }),
   listManifestVersions: (projectPath: string) =>

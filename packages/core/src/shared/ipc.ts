@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { DrawGraph } from "./draw-graph";
 import { agentRunOptionsSchema, lastRunSchema } from "./run-events";
 import { usageResultSchema } from "./usage";
 import { profileSchema } from "./profile";
@@ -643,6 +644,37 @@ export const ipcContract = {
   "lite:page": { request: z.object({ projectPath: z.string(), name: z.string() }), response: z.string() },
   "lite:pages": { request: z.string(), response: z.array(z.string()) },
   "lite:writePage": { request: z.object({ projectPath: z.string(), name: z.string(), html: z.string() }), response: z.void() },
+  // Draw tool (docs/draw-to-component-graph.md): persist the project's drawing graph + Excalidraw scene
+  // and export a sketch to a PNG. The graph is validated by parseGraph in the canvas-store handler, so the
+  // wire schema stays loose (z.custom) here. The scene is an opaque Excalidraw JSON string.
+  "canvas:loadGraph": { request: z.string(), response: z.custom<DrawGraph>() },
+  "canvas:saveGraph": { request: z.object({ projectPath: z.string(), graph: z.custom<DrawGraph>() }), response: z.void() },
+  "canvas:loadScene": { request: z.string(), response: z.string().nullable() },
+  "canvas:saveScene": { request: z.object({ projectPath: z.string(), scene: z.string() }), response: z.void() },
+  "canvas:exportSketch": { request: z.object({ projectPath: z.string(), frameId: z.string(), dataUrl: z.string() }), response: z.string() },
+  // Open (or focus) the separate Draw window for a project. The window itself is created by the app SHELL
+  // (apps/ide, apps/desktop) via a registered opener — core just relays the request. Request = projectPath.
+  "draw:open": { request: z.string(), response: z.void() },
+  // Draw generate: persist the sketch to the graph, select the grounding subgraph, and build the
+  // sketch→component prompt (the Draw window runs it with the sketch PNG attached). Then record the result.
+  "draw:generatePrompt": {
+    request: z.object({
+      projectPath: z.string(),
+      frameId: z.string(),
+      label: z.string(),
+      note: z.string().optional(),
+      pngPath: z.string(),
+      intent: z.enum(["create-new", "customize-existing"]).optional(),
+    }),
+    response: z.object({ prompt: z.string(), outputPath: z.string(), name: z.string(), sketchId: z.string() }),
+  },
+  "draw:recordGeneration": {
+    request: z.object({ projectPath: z.string(), sketchId: z.string(), component: z.string(), outputRef: z.string().optional() }),
+    response: z.string(),
+  },
+  // The Draw window hands a finished sketch back to the compose dialog: write the PNG, then broadcast
+  // DRAW_SKETCH_READY to every window so the waiting dialog composes it into its slot. Returns the path.
+  "draw:returnSketch": { request: z.object({ projectPath: z.string(), dataUrl: z.string() }), response: z.string() },
   "manifest:save": {
     request: z.object({ projectPath: z.string(), content: z.string() }),
     response: manifestResultSchema,

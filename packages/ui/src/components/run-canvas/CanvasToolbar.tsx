@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { JSX, ComponentType } from "react";
-import { MousePointer2, SquareMousePointer, MessageSquare, Plus, Monitor, Tablet, Smartphone, Check, Loader2, RefreshCw } from "lucide-react";
+import { MousePointer2, SquareMousePointer, MessageSquare, Plus, Monitor, Tablet, Smartphone, Check, Loader2, RefreshCw, PenLine } from "lucide-react";
 import { FigmaIcon } from "./FigmaIcon";
 import type { CanvasMode } from "../../lib/useInspectorBridge";
 import { NEEDS_BRIDGE, bridgeState, bridgeStatusMessage, type BridgeState } from "./bridge-status";
@@ -48,6 +48,7 @@ export function CanvasToolbar({
   figmaStatus = "idle",
   figmaConnected = false,
   figmaMapped = false,
+  onOpenDraw,
 }: {
   mode: CanvasMode;
   onModeChange: (mode: CanvasMode) => void;
@@ -71,6 +72,8 @@ export function CanvasToolbar({
   figmaConnected?: boolean;
   /** Whether the current screen already has a Figma frame — gates "Update from Figma". */
   figmaMapped?: boolean;
+  /** Open the separate Draw window (sketch → design-system component). Omit to hide the launcher. */
+  onOpenDraw?: () => void;
 }): JSX.Element {
   // Only a bridge that has actually FAILED disables a mode. A bridge that is
   // merely still attaching must not: `ready` drops to false on every guest load
@@ -115,6 +118,19 @@ export function CanvasToolbar({
         onViewportChange={onViewportChange}
         onFrameChange={onFrameChange}
       />
+
+      {onOpenDraw && (
+        <>
+          <span className="mx-0.5 h-4 w-px bg-vs-border-subtle" aria-hidden />
+          <ModeBtn
+            active={false}
+            onClick={onOpenDraw}
+            label="Draw"
+            icon={PenLine}
+            tip="Draw — sketch a component for the AI (opens a separate window)"
+          />
+        </>
+      )}
 
       {onSendToFigma && (
         <>

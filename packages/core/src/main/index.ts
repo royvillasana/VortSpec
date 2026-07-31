@@ -7,7 +7,7 @@
  * keeps the SDD-DE procedure unified across both apps — the handlers ARE the
  * procedure, and they live once, here.
  */
-export { registerIpc } from "./ipc";
+export { registerIpc, setDrawWindowOpener } from "./ipc";
 export { stopAllDevServers } from "./workspace/dev-server";
 export { stopAllWatchers } from "./workspace/fs-workspace";
 export { killAllSessions as stopAllTerminals } from "./terminal/pty-manager";

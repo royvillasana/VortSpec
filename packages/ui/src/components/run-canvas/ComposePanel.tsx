@@ -1,46 +1,46 @@
-import { useState } from "react";
-import type { JSX } from "react";
+import { useEffect, useState } from "react";
+import type { JSX, ComponentType } from "react";
+import { Wand2, LayoutGrid, PenLine, Minus, Plus } from "lucide-react";
 import { Spinner } from "@vortspec/ui/ui";
 import type { InspectorComponent } from "@vortspec/core/ipc";
 import type { UseComposeRun } from "../../lib/useComposeRun";
 import { ComponentPicker } from "./ComponentPicker";
 import { useDraggable } from "../../lib/useDraggable";
+import { HoverTip } from "../HoverTip";
+import { api } from "../../lib/api";
+
+type Tab = "generate" | "components" | "draw";
 
 /**
- * The composition panel over an insert placeholder (§6.5–6.15).
- *
- * One surface that walks the run: describe the intent → generate → watch progress
- * (with cancel) → cycle the roster-composed options in place → accept one or
- * discard. A "no component matches" result routes into extract-component; an
- * accept surfaces the owed Screen Creation update without blocking.
+ * The composition dialog over an insert placeholder — ONE surface (no separate layout step): pick the
+ * rows × columns for the spot, then compose into it three ways (Generate / Components / Draw). The Draw
+ * tab sketches inline and attaches the drawing so the AI builds it INTO this exact slot. Non-idle
+ * phases (generating / options / no-match / error) walk the run to accept or discard.
  */
 export function ComposePanel({
   compose,
   components,
+  projectPath,
   onExtract,
   onScreenUpdate,
   onScreenLater,
   onClose,
   getStoryUrl,
-  defaultAxis,
+  onSaveAsComponent,
   onInsertSpecChange,
 }: {
   compose: UseComposeRun;
-  /** The project roster, for the Components tab. */
   components: InspectorComponent[];
-  /** Route a no-match into the existing extract-component flow. */
+  /** Project path — used to persist the Draw-tab sketch PNG before composing. */
+  projectPath: string;
   onExtract: (suggestedName: string | null) => void;
-  /** Run the owed SDD-DE Screen Creation update for the accepted screen. */
   onScreenUpdate: (file: string) => void;
-  /** Defer the owed Screen Creation update — surface it as a Save-changes bar in the sidebar. */
   onScreenLater?: (file: string) => void;
-  /** Cancel the insert: dismiss the placeholder and drop out of the flow. */
   onClose: () => void;
-  /** A live Storybook iframe URL for a component's initial state, or null (hover preview). */
   getStoryUrl?: (name: string) => string | null;
-  /** The axis inferred from the container — pre-sets the Row/Column toggle. */
-  defaultAxis?: "row" | "column";
-  /** Notify the host when placement/axis/slot-count changes, so the placeholder re-renders. */
+  /** Promote the accepted composition into a real framework component + a Storybook story. */
+  onSaveAsComponent?: (opts: { sourceFile: string | null; suggestedName: string | null }) => void;
+  /** Notify the host when rows/columns change, so the placeholder re-renders (mapped to axis+count). */
   onInsertSpecChange?: (spec: {
     placement: "into-existing" | "new-row" | "new-column";
     axis: "row" | "column";
@@ -48,50 +48,54 @@ export function ComposePanel({
   }) => void;
 }): JSX.Element {
   const [draft, setDraft] = useState("");
-  const [tab, setTab] = useState<"generate" | "components">("generate");
-  const [placement, setPlacement] = useState<"into-existing" | "new-row" | "new-column">("into-existing");
-  const [axis, setAxis] = useState<"row" | "column">(defaultAxis ?? "row");
-  const [slotCount, setSlotCount] = useState(1);
-  // A new row/column container fixes the axis; only "into gap" uses the axis toggle.
-  const effectiveAxis: "row" | "column" = placement === "new-row" ? "row" : placement === "new-column" ? "column" : axis;
-  const spec = { placement, axis: effectiveAxis, slotCount };
-  const isNewContainer = placement !== "into-existing";
-  const notify = (over: Partial<typeof spec>): void =>
-    onInsertSpecChange?.({ placement, axis: effectiveAxis, slotCount, ...over });
-  const setPlacementAndNotify = (p: typeof placement): void => {
-    setPlacement(p);
-    const a = p === "new-row" ? "row" : p === "new-column" ? "column" : axis;
-    onInsertSpecChange?.({ placement: p, axis: a, slotCount });
-  };
-  const setAxisAndNotify = (a: "row" | "column"): void => {
-    setAxis(a);
-    notify({ axis: a });
-  };
-  const setSlotCountAndNotify = (n: number): void => {
-    const c = Math.max(1, Math.min(6, n));
-    setSlotCount(c);
-    notify({ slotCount: c });
-  };
-  // Components the user picked to build from — shared across both tabs, sent as the
-  // composition's preferred set. Multi-select: clicking a component toggles it.
+  const [tab, setTab] = useState<Tab>("generate");
+  const [rows, setRows] = useState(1);
+  const [columns, setColumns] = useState(1);
   const [selected, setSelected] = useState<InspectorComponent[]>([]);
-  const toggleComponent = (c: InspectorComponent): void =>
-    setSelected((cur) => (cur.some((x) => x.name === c.name) ? cur.filter((x) => x.name !== c.name) : [...cur, c]));
+  // A sketch handed back from the Draw window — attached to the Generate input (not composed yet), so
+  // the user can add text context before generating.
+  const [pendingSketch, setPendingSketch] = useState<{ pngPath: string; dataUrl?: string } | null>(null);
   const { phase, result, activeOption } = compose;
 
-  // The insert is a two-step flow: pick the layout FIRST (placement + how many
-  // rows/columns), then compose into it. Discarding a build returns to step 1.
-  const [step, setStep] = useState<"layout" | "compose">("layout");
-  const backToLayout = (): void => setStep("layout");
-  const discardAndRestep = (): void => {
-    void compose.discard();
-    setStep("layout");
+  const clamp = (n: number): number => Math.max(1, Math.min(6, Math.round(n) || 1));
+  // A single-axis grid (1×N or N×1) IS "into the gap" — placement is always into-existing now; the
+  // rows × columns become the AI's layout. The placeholder shows a hint along the dominant axis.
+  const axis: "row" | "column" = columns > 1 ? "row" : "column";
+  const slotCount = columns > 1 ? columns : rows;
+  const spec = { placement: "into-existing" as const, axis, slotCount, rows, columns };
+  const notify = (r: number, c: number): void =>
+    onInsertSpecChange?.({ placement: "into-existing", axis: c > 1 ? "row" : "column", slotCount: c > 1 ? c : r });
+  const setRowsN = (n: number): void => {
+    const v = clamp(n);
+    setRows(v);
+    notify(v, columns);
   };
-  const unit = placement === "new-column" ? "row" : placement === "new-row" ? "column" : effectiveAxis === "column" ? "row" : "item";
-  const summaryLabel =
-    placement === "into-existing"
-      ? `Into gap · ${slotCount} ${unit}${slotCount > 1 ? "s" : ""}`
-      : `New ${slotCount} ${unit}${slotCount > 1 ? "s" : ""}`;
+  const setColsN = (n: number): void => {
+    const v = clamp(n);
+    setColumns(v);
+    notify(rows, v);
+  };
+
+  const toggleComponent = (c: InspectorComponent): void =>
+    setSelected((cur) => (cur.some((x) => x.name === c.name) ? cur.filter((x) => x.name !== c.name) : [...cur, c]));
+
+  const generate = (): void => {
+    void compose.generate(draft, selected.map((c) => c.name), spec, pendingSketch?.pngPath);
+    setPendingSketch(null);
+  };
+
+  // When the separate Draw window hands back a sketch, ATTACH it to the Generate input (don't compose
+  // yet) — the user adds any extra context, then hits Generate. Switch to the Generate tab so it shows.
+  useEffect(() => {
+    const off = api.onDrawSketchReady((p) => {
+      if (p.projectPath !== projectPath) return;
+      setPendingSketch({ pngPath: p.pngPath, dataUrl: p.dataUrl });
+      setTab("generate");
+    });
+    return off;
+  }, [projectPath]);
+
+  const discard = (): void => void compose.discard();
 
   const drag = useDraggable();
   return (
@@ -99,7 +103,9 @@ export function ComposePanel({
       data-testid="compose-panel"
       data-vs-overlay
       style={drag.style}
-      className="pointer-events-auto absolute right-3 top-3 z-40 flex w-72 flex-col gap-2 rounded-lg border border-vs-border-default bg-vs-bg-elevated/95 p-3 text-[12px] text-vs-text-secondary shadow-2xl backdrop-blur"
+      className={`pointer-events-auto absolute right-3 top-3 z-40 flex flex-col gap-2 rounded-lg border border-vs-border-default bg-vs-bg-elevated/95 p-3 text-[12px] text-vs-text-secondary shadow-2xl backdrop-blur ${
+        tab === "draw" && phase === "idle" ? "w-96" : "w-72"
+      }`}
     >
       <div {...drag.handleProps} data-testid="dialog-drag-handle" className="flex items-center gap-2 select-none">
         <span className="font-semibold text-vs-text-primary">Compose here</span>
@@ -114,79 +120,17 @@ export function ComposePanel({
         </button>
       </div>
 
-      {phase === "idle" && step === "layout" ? (
-        // ── STEP 1: choose the layout first (placement + how many rows/columns) ──
-        <div data-testid="compose-layout" className="flex flex-col gap-2">
-          <span className="text-[10px] uppercase tracking-wide text-vs-text-muted">Layout</span>
-          <div role="group" aria-label="Placement" className="grid grid-cols-3 gap-1">
-            <PlacementCard active={placement === "into-existing"} onClick={() => setPlacementAndNotify("into-existing")}>
-              Into gap
-            </PlacementCard>
-            <PlacementCard active={placement === "new-row"} onClick={() => setPlacementAndNotify("new-row")}>
-              Columns
-            </PlacementCard>
-            <PlacementCard active={placement === "new-column"} onClick={() => setPlacementAndNotify("new-column")}>
-              Rows
-            </PlacementCard>
-          </div>
-          {placement === "into-existing" && (
-            <div className="flex items-center gap-2 text-[10px] text-vs-text-muted">
-              <span>Insert as</span>
-              <div role="group" aria-label="Insert axis" className="flex overflow-hidden rounded border border-vs-border-default">
-                <LayoutBtn active={axis === "row"} onClick={() => setAxisAndNotify("row")}>
-                  Row
-                </LayoutBtn>
-                <LayoutBtn active={axis === "column"} onClick={() => setAxisAndNotify("column")}>
-                  Column
-                </LayoutBtn>
-              </div>
-            </div>
-          )}
-          <div className="flex flex-col gap-1">
-            <span className="text-[10px] text-vs-text-muted">
-              {placement === "new-row"
-                ? "How many columns?"
-                : placement === "new-column"
-                  ? "How many rows?"
-                  : "How many slots?"}{" "}
-              <span data-testid="compose-slot-count" className="font-medium text-vs-text-primary">
-                {slotCount}
-              </span>
-            </span>
-            <SlotStrip
-              orientation={effectiveAxis === "row" ? "horizontal" : "vertical"}
-              count={slotCount}
-              onChange={setSlotCountAndNotify}
-            />
-          </div>
-          <button
-            type="button"
-            onClick={() => setStep("compose")}
-            className="self-end rounded-md bg-vs-accent px-2.5 py-1 text-xs font-medium text-white hover:opacity-90"
-          >
-            Continue →
-          </button>
-        </div>
-      ) : phase === "idle" || phase === "generating" ? (
+      {phase === "idle" || phase === "generating" ? (
         <>
-          {/* The chosen layout, carried as a label; edit jumps back to step 1. */}
+          {/* Layout — rows × columns for this spot (no separate step, no gap concept). */}
           {phase === "idle" && (
-            <div className="flex items-center gap-2 rounded bg-vs-bg-primary px-2 py-1 text-[10px]">
-              <span data-testid="compose-summary" className="text-vs-text-secondary">
-                {summaryLabel}
-              </span>
-              <button
-                type="button"
-                onClick={backToLayout}
-                className="ml-auto rounded px-1 text-vs-accent hover:bg-vs-bg-hover"
-              >
-                Edit
-              </button>
+            <div data-testid="compose-layout" className="flex items-center gap-4">
+              <Stepper label="Rows" value={rows} onChange={setRowsN} />
+              <Stepper label="Columns" value={columns} onChange={setColsN} />
             </div>
           )}
 
-          {/* Components the user picked to build from — context for the AI, shown in
-              both tabs, each removable. Chosen in the Components tab, used by Generate. */}
+          {/* Picked components — context shared across tabs (chosen in Components, used by Generate/Draw). */}
           {selected.length > 0 && (
             <div data-testid="compose-context-chips" className="flex flex-wrap gap-1">
               {selected.map((c) => (
@@ -210,31 +154,24 @@ export function ComposePanel({
             </div>
           )}
 
-          {/* A new container needs no roster; filling an existing gap does. */}
-          {!compose.hasRoster && placement === "into-existing" ? (
-            <p data-testid="compose-empty-roster">
-              This project has no component roster yet, so there's nothing to compose into this gap. Build or import
-              components first — or go back and create empty rows/columns.
-            </p>
-          ) : (
-            <>
-          {/* Two ways to fill the slot: describe it (AI) or pick components to build with. */}
+          {/* Icon tabs: Generate (describe) · Components (pick) · Draw (sketch). */}
           {phase === "idle" && (
-            <div role="tablist" aria-label="Insert mode" className="flex gap-1 border-b border-vs-border-subtle">
-              <TabButton active={tab === "generate"} onClick={() => setTab("generate")}>
-                Generate
-              </TabButton>
-              <TabButton active={tab === "components"} onClick={() => setTab("components")}>
-                Components{selected.length > 0 ? ` (${selected.length})` : ""}
-              </TabButton>
+            <div role="tablist" aria-label="Compose mode" className="flex gap-1 border-b border-vs-border-subtle pb-1">
+              <IconTab active={tab === "generate"} onClick={() => setTab("generate")} label="Generate — describe it" icon={Wand2} />
+              <IconTab
+                active={tab === "components"}
+                onClick={() => setTab("components")}
+                label="Components — pick what to build with"
+                icon={LayoutGrid}
+                badge={selected.length || undefined}
+              />
+              <IconTab active={tab === "draw"} onClick={() => setTab("draw")} label="Draw — sketch it" icon={PenLine} />
             </div>
           )}
 
           {tab === "components" && phase === "idle" ? (
             <div className="flex flex-col gap-1.5">
-              <p className="text-[10px] text-vs-text-muted">
-                Pick the components to build with, then describe it in <b>Generate</b>.
-              </p>
+              <p className="text-[10px] text-vs-text-muted">Pick components to build with, then describe it in Generate or Draw it.</p>
               <ComponentPicker
                 components={components}
                 actionLabel="select"
@@ -244,19 +181,53 @@ export function ComposePanel({
                 onExtract={() => onExtract(null)}
               />
             </div>
-          ) : (
-            // The prompt input with its action button inside the field; the thinking
-            // spinner lives BELOW the input (not over the prompt text).
+          ) : tab === "draw" && phase === "idle" ? (
             <div className="flex flex-col gap-1.5">
+              <p className="text-[10px] text-vs-text-muted">
+                Opens a separate, movable drawing window. Sketch there, hit <b>Use this drawing</b>, and it composes into
+                this slot on the current screen.
+              </p>
+              <button
+                type="button"
+                onClick={() => void api.drawOpen(projectPath)}
+                className="inline-flex items-center gap-1.5 self-start rounded-md border border-vs-accent bg-vs-accent/10 px-2.5 py-1.5 text-xs font-medium text-vs-text-primary hover:bg-vs-accent/20"
+              >
+                <PenLine size={13} /> Open drawing window →
+              </button>
+            </div>
+          ) : (
+            // Generate tab (and the generating state) — prompt input + action.
+            <div className="flex flex-col gap-1.5">
+              {/* A sketch handed over from the Draw window, attached like a pasted image. Add context below. */}
+              {pendingSketch && phase === "idle" && (
+                <div className="flex items-center gap-2 rounded border border-vs-accent-subtle bg-vs-accent-subtle/30 px-1.5 py-1">
+                  {pendingSketch.dataUrl ? (
+                    <img src={pendingSketch.dataUrl} alt="attached sketch" className="h-10 w-10 flex-none rounded border border-vs-border-subtle object-contain" />
+                  ) : (
+                    <span className="text-[16px]">🖼</span>
+                  )}
+                  <span className="text-[11px] text-vs-text-secondary">Sketch attached — add any context, then Generate.</span>
+                  <button
+                    type="button"
+                    onClick={() => setPendingSketch(null)}
+                    aria-label="Remove sketch"
+                    className="ml-auto rounded px-1 leading-none text-vs-text-muted hover:text-vs-text-primary"
+                  >
+                    ✕
+                  </button>
+                </div>
+              )}
               <div className="relative rounded border border-vs-border-default bg-vs-bg-primary focus-within:ring-2 focus-within:ring-vs-accent-subtle">
                 <textarea
                   value={draft}
                   onChange={(e) => setDraft(e.target.value)}
                   disabled={phase === "generating"}
                   placeholder={
-                    selected.length > 0
-                      ? `Describe what to build with ${selected.map((c) => c.name).join(", ")}…`
-                      : "Describe what belongs here…"
+                    pendingSketch
+                      ? "Add any extra context for the sketch (optional)…"
+                      : selected.length > 0
+                        ? `Describe what to build with ${selected.map((c) => c.name).join(", ")}…`
+                        : "Describe what belongs here…"
                   }
                   className="min-h-[72px] w-full resize-none bg-transparent px-2 pb-9 pt-1.5 text-vs-text-primary focus:outline-none disabled:opacity-70"
                 />
@@ -273,15 +244,11 @@ export function ComposePanel({
                   ) : (
                     <button
                       type="button"
-                      disabled={!isNewContainer && !draft.trim()}
-                      title={
-                        isNewContainer || draft.trim()
-                          ? "Compose options for this slot"
-                          : "Describe what belongs here first"
-                      }
-                      onClick={() => void compose.generate(draft, selected.map((c) => c.name), spec)}
+                      disabled={!draft.trim() && !pendingSketch}
+                      title={draft.trim() || pendingSketch ? "Compose into this slot" : "Describe what belongs here (or attach a sketch) first"}
+                      onClick={generate}
                       className={`rounded-md px-2.5 py-1 text-xs font-medium text-white ${
-                        isNewContainer || draft.trim() ? "bg-vs-accent hover:opacity-90" : "cursor-not-allowed bg-vs-accent/40"
+                        draft.trim() || pendingSketch ? "bg-vs-accent hover:opacity-90" : "cursor-not-allowed bg-vs-accent/40"
                       }`}
                     >
                       Generate
@@ -297,8 +264,6 @@ export function ComposePanel({
               )}
             </div>
           )}
-            </>
-          )}
         </>
       ) : phase === "no-match" ? (
         <>
@@ -311,11 +276,7 @@ export function ComposePanel({
             >
               Extract a new component
             </button>
-            <button
-              type="button"
-              onClick={discardAndRestep}
-              className="rounded border border-vs-border-default px-2 py-0.5 hover:bg-vs-bg-hover"
-            >
+            <button type="button" onClick={discard} className="rounded border border-vs-border-default px-2 py-0.5 hover:bg-vs-bg-hover">
               Discard
             </button>
           </div>
@@ -325,11 +286,7 @@ export function ComposePanel({
           <p data-testid="compose-error" className="text-vs-text-primary">
             {compose.error}
           </p>
-          <button
-            type="button"
-            onClick={discardAndRestep}
-            className="self-start rounded border border-vs-border-default px-2 py-0.5 hover:bg-vs-bg-hover"
-          >
+          <button type="button" onClick={discard} className="self-start rounded border border-vs-border-default px-2 py-0.5 hover:bg-vs-bg-hover">
             Discard
           </button>
         </>
@@ -365,12 +322,7 @@ export function ComposePanel({
 
             {result.options[activeOption] && (
               <div className="rounded border border-vs-border-subtle bg-vs-bg-primary px-2 py-1.5">
-                <div className="font-medium text-vs-text-primary">
-                  {result.options[activeOption].title || `Option ${activeOption + 1}`}
-                </div>
-                {result.options[activeOption].axis && (
-                  <div className="text-vs-text-muted">axis: {result.options[activeOption].axis}</div>
-                )}
+                <div className="font-medium text-vs-text-primary">{result.options[activeOption].title || `Option ${activeOption + 1}`}</div>
                 {result.options[activeOption].note && <div className="mt-0.5">{result.options[activeOption].note}</div>}
                 <div data-testid="compose-provenance" className="mt-1 text-[11px] text-vs-text-muted">
                   Uses: {result.options[activeOption].componentsUsed.join(", ") || "—"}
@@ -384,19 +336,27 @@ export function ComposePanel({
               </p>
             )}
 
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => void compose.accept()}
-                className="rounded bg-vs-accent px-2 py-1 text-white hover:opacity-90"
-              >
+            <div className="flex flex-wrap items-center gap-2">
+              <button type="button" onClick={() => void compose.accept()} className="rounded bg-vs-accent px-2 py-1 text-white hover:opacity-90">
                 Accept
               </button>
-              <button
-                type="button"
-                onClick={discardAndRestep}
-                className="rounded border border-vs-border-default px-2 py-0.5 hover:bg-vs-bg-hover"
-              >
+              {onSaveAsComponent && (
+                <button
+                  type="button"
+                  title="Accept, then extract it into a reusable framework component + a Storybook story"
+                  onClick={() => {
+                    void compose.accept();
+                    onSaveAsComponent({
+                      sourceFile: result.writtenFile,
+                      suggestedName: result.options[activeOption]?.title || result.options[activeOption]?.componentsUsed[0] || null,
+                    });
+                  }}
+                  className="rounded border border-vs-accent bg-vs-accent/10 px-2 py-1 text-vs-text-primary hover:bg-vs-accent/20"
+                >
+                  Save as component
+                </button>
+              )}
+              <button type="button" onClick={discard} className="rounded border border-vs-border-default px-2 py-0.5 hover:bg-vs-bg-hover">
                 Discard
               </button>
             </div>
@@ -407,8 +367,8 @@ export function ComposePanel({
       {compose.screenUpdateOwed && (
         <div data-testid="compose-screen-update" className="mt-1 rounded border border-vs-border-subtle bg-vs-bg-primary px-2 py-1.5">
           <p>
-            The <span className="font-mono text-vs-text-primary">{compose.screenUpdateOwed}</span> screen's spec now
-            needs a Screen Creation update to match what you inserted.
+            The <span className="font-mono text-vs-text-primary">{compose.screenUpdateOwed}</span> screen's spec now needs a Screen Creation
+            update to match what you inserted.
           </p>
           <div className="mt-1 flex items-center gap-2">
             <button
@@ -424,7 +384,6 @@ export function ComposePanel({
             <button
               type="button"
               onClick={() => {
-                // Don't drop the owed update — hand it to the sidebar Save-changes bar.
                 if (compose.screenUpdateOwed) onScreenLater?.(compose.screenUpdateOwed);
                 compose.clearScreenUpdate();
               }}
@@ -439,120 +398,63 @@ export function ComposePanel({
   );
 }
 
-function TabButton({
+/** An icon tab with a hover tooltip (the compose modes read as icons, not text). */
+function IconTab({
   active,
   onClick,
-  children,
+  label,
+  icon: Icon,
+  badge,
 }: {
   active: boolean;
   onClick: () => void;
-  children: React.ReactNode;
+  label: string;
+  icon: ComponentType<{ size?: number }>;
+  badge?: number;
 }): JSX.Element {
   return (
-    <button
-      type="button"
-      role="tab"
-      aria-selected={active}
-      onClick={onClick}
-      className={`-mb-px border-b-2 px-2 py-1 text-[11px] ${
-        active
-          ? "border-vs-accent font-medium text-vs-text-primary"
-          : "border-transparent text-vs-text-secondary hover:text-vs-text-primary"
-      }`}
-    >
-      {children}
-    </button>
+    <HoverTip label={label}>
+      <button
+        type="button"
+        role="tab"
+        aria-selected={active}
+        aria-label={label}
+        onClick={onClick}
+        className={`relative -mb-px flex items-center gap-1 rounded-t border-b-2 px-2.5 py-1.5 ${
+          active ? "border-vs-accent text-vs-text-primary" : "border-transparent text-vs-text-muted hover:text-vs-text-primary"
+        }`}
+      >
+        <Icon size={14} />
+        {badge ? <span className="rounded-full bg-vs-accent px-1 text-[9px] font-medium text-white">{badge}</span> : null}
+      </button>
+    </HoverTip>
   );
 }
 
-function LayoutBtn({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}): JSX.Element {
+/** A compact −N+ stepper for rows / columns (bounded 1–6). */
+function Stepper({ label, value, onChange }: { label: string; value: number; onChange: (n: number) => void }): JSX.Element {
   return (
-    <button
-      type="button"
-      aria-pressed={active}
-      onClick={onClick}
-      className={`px-1.5 py-0.5 text-[10px] ${
-        active ? "bg-vs-accent text-white" : "text-vs-text-secondary hover:bg-vs-bg-hover"
-      }`}
-    >
-      {children}
-    </button>
-  );
-}
-
-/** A larger placement tile for the step-1 layout picker (Into gap / Columns / Rows). */
-function PlacementCard({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}): JSX.Element {
-  return (
-    <button
-      type="button"
-      aria-pressed={active}
-      onClick={onClick}
-      className={`rounded-md border px-2 py-1.5 text-[11px] font-medium transition-colors ${
-        active
-          ? "border-vs-accent bg-vs-accent/10 text-vs-text-primary"
-          : "border-vs-border-default text-vs-text-secondary hover:bg-vs-bg-hover"
-      }`}
-    >
-      {children}
-    </button>
-  );
-}
-
-/**
- * A Figma-like cell strip for picking how many rows/columns a new container gets:
- * click the Nth cell to set the count to N. Lays the cells along the container's
- * flow axis (horizontal for columns, vertical for rows). Bounded 1–6.
- */
-function SlotStrip({
-  orientation,
-  count,
-  onChange,
-  max = 6,
-}: {
-  orientation: "horizontal" | "vertical";
-  count: number;
-  onChange: (n: number) => void;
-  max?: number;
-}): JSX.Element {
-  const cells = Array.from({ length: max }, (_, i) => i + 1);
-  return (
-    <div
-      role="group"
-      aria-label="Slot count"
-      className={`flex gap-1 ${orientation === "vertical" ? "w-16 flex-col" : "h-16"}`}
-    >
-      {cells.map((n) => (
+    <div className="flex items-center gap-1.5">
+      <span className="text-[10px] uppercase tracking-wide text-vs-text-muted">{label}</span>
+      <div className="flex items-center overflow-hidden rounded border border-vs-border-default">
         <button
-          key={n}
           type="button"
-          aria-label={`${n} slot${n > 1 ? "s" : ""}`}
-          aria-pressed={n === count}
-          onClick={() => onChange(n)}
-          className={`flex-1 rounded border text-[10px] transition-colors ${
-            n <= count
-              ? "border-vs-accent bg-vs-accent/20 text-vs-text-primary"
-              : "border-vs-border-subtle text-vs-text-muted hover:border-vs-border-default"
-          }`}
+          aria-label={`Fewer ${label.toLowerCase()}`}
+          onClick={() => onChange(value - 1)}
+          className="px-1.5 py-0.5 text-vs-text-secondary hover:bg-vs-bg-hover"
         >
-          {n === count ? n : ""}
+          <Minus size={11} />
         </button>
-      ))}
+        <span className="min-w-[18px] text-center text-[12px] font-medium text-vs-text-primary">{value}</span>
+        <button
+          type="button"
+          aria-label={`More ${label.toLowerCase()}`}
+          onClick={() => onChange(value + 1)}
+          className="px-1.5 py-0.5 text-vs-text-secondary hover:bg-vs-bg-hover"
+        >
+          <Plus size={11} />
+        </button>
+      </div>
     </div>
   );
 }

@@ -33,6 +33,7 @@ export function RunCanvas({
   onSendToChat,
   onSendToFigma,
   onUpdateFromFigma,
+  onOpenDraw,
   figmaStatus,
   figmaConnected,
   figmaMapped,
@@ -65,6 +66,8 @@ export function RunCanvas({
   onSendToFigma?: () => void;
   /** Pull this screen's Figma changes back into code ("Update from Figma"). */
   onUpdateFromFigma?: () => void;
+  /** Open the separate Draw window (sketch → design-system component). */
+  onOpenDraw?: () => void;
   /** In-place status of the Figma round-trip. */
   figmaStatus?: "idle" | "sending" | "sent" | "error";
   /** Whether Figma is connected — gates the Figma control. */
@@ -290,6 +293,7 @@ export function RunCanvas({
         figmaStatus={figmaStatus}
         figmaConnected={figmaConnected}
         figmaMapped={figmaMapped}
+        onOpenDraw={onOpenDraw}
       />
 
       {/* Notices sit ABOVE the toolbar (which owns bottom-3), stacked in one column

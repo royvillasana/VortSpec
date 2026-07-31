@@ -9,6 +9,8 @@
  * (`IpcResponse<channel>`), so they cannot drift from the handlers either.
  */
 import type { IpcResponse, StageStatus, SetupAnswers, FileSnapshot, Profile, PushPlan } from "./ipc";
+import type { DrawGraph } from "./draw-graph";
+import type { DrawSketchReady } from "./draw-events";
 import type { CommentThread } from "./comment";
 import type { AgentRunOptions, AgentEventEnvelope, AgentRawEnvelope } from "./run-events";
 import type { DevServerUpdate } from "./dev-server";
@@ -147,6 +149,26 @@ export interface VortSpecApi {
   liteReadPage(projectPath: string, name: string): Promise<IpcResponse<"lite:page">>;
   litePages(projectPath: string): Promise<IpcResponse<"lite:pages">>;
   liteWritePage(projectPath: string, name: string, html: string): Promise<IpcResponse<"lite:writePage">>;
+
+  // Draw tool — persist the drawing graph + Excalidraw scene, export a sketch PNG (docs/draw-to-component-graph.md).
+  canvasLoadGraph(projectPath: string): Promise<IpcResponse<"canvas:loadGraph">>;
+  canvasSaveGraph(projectPath: string, graph: DrawGraph): Promise<IpcResponse<"canvas:saveGraph">>;
+  canvasLoadScene(projectPath: string): Promise<IpcResponse<"canvas:loadScene">>;
+  canvasSaveScene(projectPath: string, scene: string): Promise<IpcResponse<"canvas:saveScene">>;
+  canvasExportSketch(projectPath: string, frameId: string, dataUrl: string): Promise<IpcResponse<"canvas:exportSketch">>;
+  /** Open (or focus) the separate Draw window for a project. */
+  drawOpen(projectPath: string): Promise<IpcResponse<"draw:open">>;
+  /** Persist a sketch + build the grounded sketch→component prompt (the Draw window runs it). */
+  drawGeneratePrompt(
+    projectPath: string,
+    input: { frameId: string; label: string; note?: string; pngPath: string; intent?: "create-new" | "customize-existing" },
+  ): Promise<IpcResponse<"draw:generatePrompt">>;
+  /** Record a completed Draw generation in the project graph; returns the version id. */
+  drawRecordGeneration(projectPath: string, input: { sketchId: string; component: string; outputRef?: string }): Promise<IpcResponse<"draw:recordGeneration">>;
+  /** From the Draw window: write the sketch PNG and broadcast it to the compose dialog; returns the path. */
+  drawReturnSketch(projectPath: string, dataUrl: string): Promise<IpcResponse<"draw:returnSketch">>;
+  /** Subscribe to a finished Draw-window sketch (compose dialog listens); returns an unsubscribe fn. */
+  onDrawSketchReady(callback: (payload: DrawSketchReady) => void): () => void;
 
   // manifest (DESIGN.md)
   getManifest(projectPath: string): Promise<IpcResponse<"manifest:get">>;

@@ -112,6 +112,9 @@ export interface InsertSpec {
   placement: "into-existing" | "new-row" | "new-column";
   axis: "row" | "column";
   slotCount: number;
+  /** Grid layout at the spot: how many rows and columns to arrange the composition into (each ≥ 1). */
+  rows?: number;
+  columns?: number;
 }
 
 export interface ComposePromptInput {
@@ -136,6 +139,14 @@ export interface ComposePromptInput {
   insertSpec?: InsertSpec;
   /** The placeholder's soft size hint (px) — guidance the composition may deviate from. */
   sizeHint?: { width?: number; height?: number };
+  /** Absolute path to a hand-drawn sketch of what belongs here — the AI Reads it as the visual intent. */
+  sketchPngPath?: string;
+  /**
+   * Light-native output: compose FRAMEWORK-FREE HTML from the light stand-ins (`.vortspec/light-html/`
+   * + `designer.md`) marked `data-component`, NOT JSX from the React roster. This is what the Playground
+   * (light pages) wants; the real framework component comes later via Convert / "Save as component".
+   */
+  lightNative?: boolean;
   /** How many AI options to attempt (1–3, default 3). A ceiling — NOT the slot count. */
   count?: number;
 }
@@ -186,6 +197,31 @@ const DISTINCTNESS_CLAUSE = [
  *
  * Assumes a non-empty roster — callers gate on `hasUsableRoster` first (§6.4).
  */
+/**
+ * Prompt to PROMOTE a just-composed piece of UI into a real, reusable framework component with a
+ * Storybook story (the compose dialog's "Save as component"). Pure. The composition already lives at
+ * the insertion site (`sourceFile`); this extracts it into the component library + docs.
+ */
+export function buildPromoteComponentPrompt(opts: { sourceFile?: string | null; suggestedName?: string | null }): string {
+  const name = opts.suggestedName?.trim() || "";
+  return [
+    "PROMOTE the composition you just inserted into a REUSABLE component in the project's framework, with a Storybook story.",
+    opts.sourceFile ? `You composed the UI into: ${opts.sourceFile}.` : "You composed the UI into the current screen.",
+    "",
+    "Read `.sdd-de/project.yaml` for the framework / language / styling and follow the project's component standards.",
+    `1. Extract the inserted composition into a NEW reusable component${name ? ` named "${name}"` : ""} in the project's`,
+    "   component directory, following its standards: Class Variance Authority (CVA) variants in a separate",
+    "   `.variants.ts`, a `cn()` utility for class merging, `forwardRef`, and every color/spacing/radius/type",
+    "   value referencing a design TOKEN (never a hardcoded hex or px).",
+    "2. Replace the inline composition at the insertion site with a usage of the new component (keep its",
+    "   `data-component` marker so the inspector still recognizes it).",
+    "3. Generate a Storybook story (`<Component>.stories.*`) and a `<Component>.metadata.ts` for it, following",
+    "   the project's /storybook conventions — variants and states as stories, the a11y addon, design tokens.",
+    "",
+    "Do not touch unrelated files. End with: the component + its `.variants.ts`, the story + metadata, and the call site updated to use it.",
+  ].join("\n");
+}
+
 export function buildComposePrompt(input: ComposePromptInput): string {
   const count = Math.max(1, Math.min(MAX_COMPOSE_OPTIONS, input.count ?? MAX_COMPOSE_OPTIONS));
   const { slot } = input;
@@ -203,22 +239,42 @@ export function buildComposePrompt(input: ComposePromptInput): string {
       ? `Insert as a ${axis} (the user chose this axis explicitly).${spec.slotCount > 1 ? ` Create ${spec.slotCount} items along it.` : ""}`
       : `Create a NEW ${spec.placement === "new-row" ? "row" : "column"} container with ${spec.slotCount} slot(s) at this position, laid out along the ${axis} axis, and place the composition inside it.`
     : "";
+  // The user's explicit grid: arrange the composition into R rows × C columns at the spot.
+  const rows = spec?.rows ?? 1;
+  const columns = spec?.columns ?? 1;
+  const gridLine =
+    rows > 1 || columns > 1
+      ? `LAYOUT: arrange the composition as a GRID of ${rows} row(s) × ${columns} column(s) at this spot (use the design system's grid/flex + spacing tokens).`
+      : "";
+  // Light-native (Playground light pages): compose framework-free HTML from the light stand-ins.
+  const lightNative = input.lightNative ?? false;
+  const compFrom = lightNative
+    ? "the design system described in `designer.md` (its components + tokens)"
+    : "the roster components below";
+  // A hand-drawn sketch, when present, is the primary visual intent — compose it INTO this exact slot.
+  const sketchLine = input.sketchPngPath
+    ? `A hand-drawn SKETCH of what belongs here is attached at: ${input.sketchPngPath} — READ it first (Read tool) as the primary visual intent, then build it FROM ${compFrom} (grounded in the tokens). It goes at THIS slot — write it INTO the current screen's EXISTING source file at this position (the same file the slot resolves to), wrapped in the option markers below. Do NOT create a new page or a new file, and do NOT guess placement.`
+    : "";
 
   const lines: string[] = [
     `Compose new UI for an insertion slot in this project, using ONLY the project's own components.`,
     "",
     `What the user wants here: ${input.intent.trim() || "(no description given — infer something sensible for this slot)"}`,
+    sketchLine,
     "",
     `The slot: insert ${slot.position} the "${slot.anchorLabel}" element${
       slot.anchorText ? ` whose leading text is "${slot.anchorText.slice(0, 120)}"` : ""
     }, in a ${axisWord} flow.`,
     placementLine,
+    gridLine,
     slot.file ? `The slot resolves to source file: ${slot.file}.` : "",
     sizeHint,
     "",
-    input.roster.length
-      ? "Component roster — compose ONLY from these, choosing their variants/props:"
-      : "This project has no component roster — create empty placeholder slots in the new container (do not hand-write component markup).",
+    lightNative
+      ? "Design-system components — `designer.md` (already readable at the project root) lists EVERY component with its tokens; compose ONLY from these as framework-free HTML. Read an individual light stand-in `.vortspec/light-html/<Component>.html` ONLY for a component you actually reuse and need the exact markup for — do NOT read the whole `.vortspec/light-html/` folder (it is large). The components are:"
+      : input.roster.length
+        ? "Component roster — compose ONLY from these, choosing their variants/props:"
+        : "This project has no component roster — create empty placeholder slots in the new container (do not hand-write component markup).",
     ...input.roster.map(rosterLine),
     "",
     input.preferredComponents && input.preferredComponents.length
@@ -236,7 +292,9 @@ export function buildComposePrompt(input: ComposePromptInput): string {
     "",
     `Return at most ${count} option(s) — 1 to ${count}. Fewer, with a reason, beats a padded near-duplicate. Never exceed ${MAX_COMPOSE_OPTIONS}.`,
     "",
-    "If NO roster component fits this slot, do NOT hand-write markup. Instead return a no-component-match result naming why and a suggested component to extract.",
+    lightNative
+      ? "Reuse the light stand-ins wherever they fit; where the sketch needs something no stand-in covers, build it as framework-free HTML grounded in the tokens (it's a new light component to harvest later) — do not stop."
+      : "If NO roster component fits this slot, do NOT hand-write markup. Instead return a no-component-match result naming why and a suggested component to extract.",
     "",
     "Placing the slot in source:",
     `- Find the exact spot in ${slot.file ?? "the source"} — the anchor element identified above (use its leading text to disambiguate between similar siblings).`,
@@ -246,12 +304,19 @@ export function buildComposePrompt(input: ComposePromptInput): string {
     "",
     "Write EACH option into the source at the slot, wrapped in its own markers so the preview can be swept deterministically. For option N (0-based), wrap it exactly:",
     `  ${scaffoldBegin(input.runId, 0).replace("option=0", "option=N")}`,
-    `  …option N's JSX, composed from roster components…`,
+    lightNative
+      ? `  …option N's framework-free HTML/CSS, composed from the light stand-ins…`
+      : `  …option N's JSX, composed from roster components…`,
     `  ${scaffoldEnd(input.runId, 0).replace("option=0", "option=N")}`,
     `Every marker MUST contain the literal run id "${input.runId}". The dev server will hot-reload each option in place.`,
     "",
+    lightNative
+      ? "Output must be FRAMEWORK-FREE: plain HTML/CSS (and a small vanilla-JS island only if the sketch needs client behavior). It MUST NOT contain `import`, JSX, `.variants.ts`, `@/…` module paths, `cva(`/`cn(`, `.tsx`/`.jsx`, or a Storybook URL — the real framework component comes later via Convert / \"Save as component\"."
+      : "",
     "Also add a `data-vs-option=\"N\"` attribute to each option's root element so the canvas can preview one option at a time.",
-    "For EACH roster component you place, add a `data-component=\"<ComponentName>\"` attribute on its usage (e.g. `<Card data-component=\"Card\" … />`) so the inspector recognizes it as that component afterwards, not as hand-written markup. (Components that forward props will pass it through to the DOM.)",
+    lightNative
+      ? "For EACH stand-in you place, add a `data-component=\"<ComponentName>\"` attribute on its root element, using the exact names from `designer.md`, so the inspector recognizes it as that component."
+      : "For EACH roster component you place, add a `data-component=\"<ComponentName>\"` attribute on its usage (e.g. `<Card data-component=\"Card\" … />`) so the inspector recognizes it as that component afterwards, not as hand-written markup. (Components that forward props will pass it through to the DOM.)",
     "",
     "Finally, output a single fenced JSON block (```json) as the LAST thing you emit, matching this shape exactly:",
     '{ "options": [ { "index": 0, "title": "…", "axis": "which axis makes it distinct", "componentsUsed": ["Card", …], "note": "one line" } ], "fewerReason": null | "why fewer than requested", "noMatch": null | { "reason": "…", "suggestedName": "…" }, "stopped": null | { "reason": "why you could not place the insertion", "candidates": ["file:line", …] }, "writtenFile": "the project-relative file you wrote the options into, or null if you wrote nothing" }',

@@ -232,6 +232,10 @@
     "./pending": {
       "types": "./src/components/run-canvas/pending.ts",
       "default": "./src/components/run-canvas/pending.ts"
+    },
+    "./DrawWindow": {
+      "types": "./src/views/DrawWindow.tsx",
+      "default": "./src/views/DrawWindow.tsx"
     }
   },
   "scripts": {
@@ -241,6 +245,7 @@
     "lint": "echo 'lint ok'"
   },
   "dependencies": {
+    "@excalidraw/excalidraw": "^0.18.1",
     "@vortspec/core": "workspace:*",
     "@xterm/addon-fit": "^0.10.0",
     "@xterm/addon-web-links": "^0.11.0",

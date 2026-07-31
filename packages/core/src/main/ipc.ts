@@ -1,4 +1,4 @@
-import { ipcMain, shell, app, type WebContents } from "electron";
+import { ipcMain, shell, app, BrowserWindow, type WebContents } from "electron";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -108,6 +108,16 @@ import { getProjectPaletteHtml, writeDesignerMd, buildProjectStandInPrompt, buil
 import { resolveEnterpriseStorybookUrl, buildEnterpriseSnapshotPromptFor, buildEnterpriseGeneratePromptFor } from "./enterprise/enterprise-source";
 import { serveLightPages, lightPageUrl } from "./lite/light-serve";
 import {
+  loadGraph as loadCanvasGraph,
+  saveGraph as saveCanvasGraph,
+  loadScene as loadCanvasScene,
+  saveScene as saveCanvasScene,
+  writeSketchPng as writeCanvasSketchPng,
+} from "./canvas/canvas-store";
+import { buildDrawGeneratePromptFor, recordDrawGenerationFor } from "./canvas/draw-source";
+import type { DrawGraph } from "../shared/draw-graph";
+import { DRAW_SKETCH_READY_CHANNEL, type DrawSketchReady } from "../shared/draw-events";
+import {
   startDevServer,
   stopDevServer,
   getDevServerStatus,
@@ -129,6 +139,24 @@ import type { StageStatus } from "@vortspec/core/flow";
  * agent runs to stream events back to the originating window).
  */
 type Handler = (req: never, sender: WebContents) => unknown;
+
+// The Draw window is created by the app SHELL (it owns BrowserWindow); the shell registers its opener
+// here at startup so core's `draw:open` handler can relay to it without importing electron windows.
+let drawWindowOpener: ((projectPath: string) => void) | null = null;
+export function setDrawWindowOpener(opener: (projectPath: string) => void): void {
+  drawWindowOpener = opener;
+}
+
+/**
+ * The Draw window finished: write its sketch PNG, then broadcast DRAW_SKETCH_READY to every window so
+ * the waiting compose dialog (in the main window) composes it into its slot. Returns the PNG path.
+ */
+async function returnDrawSketch(projectPath: string, dataUrl: string): Promise<string> {
+  const pngPath = await writeCanvasSketchPng(projectPath, `compose-${Date.now()}`, dataUrl);
+  const payload: DrawSketchReady = { projectPath, pngPath, dataUrl };
+  for (const win of BrowserWindow.getAllWindows()) win.webContents.send(DRAW_SKETCH_READY_CHANNEL, payload);
+  return pngPath;
+}
 
 const handlers: Record<IpcChannel, Handler> = {
   "system:isElectron": () => true,
@@ -372,6 +400,26 @@ const handlers: Record<IpcChannel, Handler> = {
   "lite:pages": ((projectPath: string) => listLightPages(projectPath)) as Handler,
   "lite:writePage": ((r: { projectPath: string; name: string; html: string }) =>
     writeLightPage(r.projectPath, r.name, r.html)) as Handler,
+  "canvas:loadGraph": ((projectPath: string) => loadCanvasGraph(projectPath)) as Handler,
+  "canvas:saveGraph": ((r: { projectPath: string; graph: DrawGraph }) => saveCanvasGraph(r.projectPath, r.graph)) as Handler,
+  "canvas:loadScene": ((projectPath: string) => loadCanvasScene(projectPath)) as Handler,
+  "canvas:saveScene": ((r: { projectPath: string; scene: string }) => saveCanvasScene(r.projectPath, r.scene)) as Handler,
+  "canvas:exportSketch": ((r: { projectPath: string; frameId: string; dataUrl: string }) =>
+    writeCanvasSketchPng(r.projectPath, r.frameId, r.dataUrl)) as Handler,
+  "draw:open": ((projectPath: string) => {
+    drawWindowOpener?.(projectPath);
+  }) as Handler,
+  "draw:generatePrompt": ((r: {
+    projectPath: string;
+    frameId: string;
+    label: string;
+    note?: string;
+    pngPath: string;
+    intent?: "create-new" | "customize-existing";
+  }) => buildDrawGeneratePromptFor(r)) as Handler,
+  "draw:recordGeneration": ((r: { projectPath: string; sketchId: string; component: string; outputRef?: string }) =>
+    recordDrawGenerationFor(r)) as Handler,
+  "draw:returnSketch": ((r: { projectPath: string; dataUrl: string }) => returnDrawSketch(r.projectPath, r.dataUrl)) as Handler,
   "manifest:save": ((req: { projectPath: string; content: string }) =>
     saveManifest(req.projectPath, req.content, new Date().toISOString())) as Handler,
   "manifest:listVersions": ((projectPath: string) =>

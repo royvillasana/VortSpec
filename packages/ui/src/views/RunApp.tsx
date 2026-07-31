@@ -51,6 +51,7 @@ import { RunDoctor, type DoctorState } from "../components/run-canvas/RunDoctor"
 import { buildDoctorPrompt, buildEnvSetupPrompt, relFileFromSource } from "../components/run-canvas/doctor";
 import { FigmaBridgePanel } from "../components/run-canvas/FigmaBridgePanel";
 import { buildSendScreenPrompt, buildPullScreenPrompt, parseSendResult } from "@vortspec/core/figma-screen-prompts";
+import { buildPromoteComponentPrompt } from "@vortspec/core/compose-run";
 
 /**
  * Run App (M5) — the live localhost runtime for the project's OWN app (its `dev`
@@ -1037,6 +1038,21 @@ export function RunApp({
   // Keep/Revert review. VortSpec never calls Figma directly — the run does the work and reports
   // back the ids we persist in `.vortspec/maps/screens.json`.
   const figmaMod = useAgentRun();
+  // "Save as component" — promote an accepted composition into a real framework component + Storybook story.
+  const promoteMod = useAgentRun();
+  const onSaveAsComponent = useCallback(
+    (opts: { sourceFile: string | null; suggestedName: string | null }) => {
+      void promoteMod.start({
+        prompt: buildPromoteComponentPrompt(opts),
+        cwd: project.path,
+        allowedTools: ["Read", "Write", "Edit", "Bash"],
+        bypassPermissions: true,
+        groundWithIndex: true,
+      });
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [project.path],
+  );
   const [figmaConnected, setFigmaConnected] = useState(false);
   const [figmaPhase, setFigmaPhase] = useState<"idle" | "sending" | "sent" | "pulling" | "review" | "error">("idle");
   const [figmaResult, setFigmaResult] = useState<{ url?: string; nodeId: string } | null>(null);
@@ -2616,7 +2632,8 @@ export function RunApp({
                     onScreenLater={onComposeScreenLater}
                     onClose={onComposeClose}
                     getStoryUrl={storyUrlFor}
-                    defaultAxis={bridge.placeholder?.target.axis ?? "row"}
+                    projectPath={project.path}
+                    onSaveAsComponent={onSaveAsComponent}
                     onInsertSpecChange={(s) => bridge.setPlaceholderSpec(s.axis, s.slotCount)}
                   />
                 )}

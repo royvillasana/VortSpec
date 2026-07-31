@@ -35,7 +35,7 @@ export interface UseComposeRun {
   error: string | null;
   /** After an accept, the screen file whose spec now owes a Screen Creation update (§6.15). */
   screenUpdateOwed: string | null;
-  generate: (prompt: string, preferredComponents?: string[], insertSpec?: InsertSpec) => Promise<void>;
+  generate: (prompt: string, preferredComponents?: string[], insertSpec?: InsertSpec, sketchPngPath?: string) => Promise<void>;
   cancel: () => Promise<void>;
   accept: () => Promise<void>;
   discard: () => Promise<void>;
@@ -64,6 +64,9 @@ export function useComposeRun(args: {
   ctx.current = args;
   const snapshotRef = useRef<FileSnapshot[] | null>(null);
   const runIdRef = useRef<string>("");
+  // A sketch produces ONE light-native option — auto-accept it on finish and reload (light pages have
+  // NO HMR, so the scaffold isn't hot-reloaded; without a reload the composed result never repaints).
+  const autoAcceptRef = useRef(false);
 
   const hasRoster = hasUsableRoster(args.roster);
 
@@ -77,18 +80,21 @@ export function useComposeRun(args: {
   }, [run]);
 
   const generate = useCallback(
-    async (prompt: string, preferredComponents: string[] = [], insertSpec?: InsertSpec) => {
+    async (prompt: string, preferredComponents: string[] = [], insertSpec?: InsertSpec, sketchPngPath?: string) => {
       const { project, bridge, roster, tokenNames, designMd } = ctx.current;
       // Creating a NEW row/column container is structural — it needs neither a roster
       // nor an intent (an empty band is valid). Filling an existing gap still needs
-      // both: one run in flight (§6.6), a non-empty roster (§6.4), and an intent (§6.5).
+      // both: one run in flight (§6.6), a non-empty roster (§6.4), and an intent (§6.5) —
+      // unless a SKETCH is provided, which is itself the intent.
       const newContainer = !!insertSpec && insertSpec.placement !== "into-existing";
       if (phase === "generating" || !bridge.placeholder) return;
-      if (!newContainer && (!hasUsableRoster(roster) || !prompt.trim())) return;
+      if (!newContainer && !hasUsableRoster(roster)) return;
+      if (!newContainer && !sketchPngPath && !prompt.trim()) return;
       const target = bridge.placeholder.target;
       const rect = bridge.placeholder.rect;
       const runId = `compose-${Date.now()}`;
       runIdRef.current = runId;
+      autoAcceptRef.current = !!sketchPngPath;
       setError(null);
 
       // Snapshot the whole source scope BEFORE any write, so discard/cancel restores
@@ -112,7 +118,13 @@ export function useComposeRun(args: {
           file: null,
         },
         sizeHint: { width: Math.round(rect.width), height: Math.round(rect.height) },
-        count: 3,
+        sketchPngPath,
+        // A sketch already IS the design — build the ONE thing the user drew (fast), not 3 distinct
+        // variants. Text-described composition still explores up to 3 (variety helps there).
+        count: sketchPngPath ? 1 : 3,
+        // The Playground composes into LIGHT pages — emit framework-free HTML from the light stand-ins,
+        // not JSX from the React roster. The framework version comes later via Convert / Save as component.
+        lightNative: !!sketchPngPath,
       });
 
       setPhase("generating");
@@ -174,17 +186,29 @@ export function useComposeRun(args: {
         setPhase("error");
         return;
       }
-      void api.composeCheckTarget(ctx.current.project.path, file).then((check) => {
+      void api.composeCheckTarget(ctx.current.project.path, file).then(async (check) => {
         if (!check.ok) {
           setError(check.reason ?? `${file} is not a file this can safely write to. Discard and try again.`);
           setPhase("error");
           return;
         }
+        const { bridge, project } = ctx.current;
+        // Sketch → one light-native option: accept it and RELOAD to show the committed result. Light
+        // pages have no HMR, so previewing in place would just toggle a stale DOM (the composed component
+        // never appears). Accepting sweeps the scaffold and the reload repaints the real page.
+        if (autoAcceptRef.current) {
+          autoAcceptRef.current = false;
+          await api.composeAccept(project.path, file, runIdRef.current, 0);
+          bridge.dismissPlaceholder();
+          bridge.reload();
+          reset();
+          return;
+        }
         // The options are now in real source — drop the placeholder and preview the
-        // first one in place (the dev server hot-reloaded the scaffold).
-        ctx.current.bridge.dismissPlaceholder();
+        // first one in place (framework pages hot-reload the scaffold via HMR).
+        bridge.dismissPlaceholder();
         setActiveOption(0);
-        ctx.current.bridge.previewOption(0);
+        bridge.previewOption(0);
         setPhase("options");
       });
     } else if (run.model.status === "error") {
