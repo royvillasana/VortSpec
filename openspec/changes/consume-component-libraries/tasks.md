@@ -14,10 +14,10 @@
 
 ## 3. Consume mechanisms & the missing skill
 
-- [ ] 3.1 Author `.sdd-de/ai-specs/skills/provision-library/SKILL.md` (referenced by `sdd-prompts.ts:103` but absent) encoding the per-type recipes: cli-registry (run the real CLI non-interactively; fallback fetch-write-rewrite from `registry-item.json`), installed-package (install + optional thin token-mapped wrapper), headless (install + require external tokens), reject CSS-in-JS.
-- [ ] 3.2 Update `PROVISION_LIBRARY_PROMPT` (`sdd-prompts.ts:99-121`) to route by the new kinds and to be self-consistent with the new skill.
-- [ ] 3.3 Write pointer-shaped `components.json` entries (`importPath`/`export`/`storyId`/`tier`, mirroring `EnterpriseComponentEntry` `enterprise-consume.ts:29-40`) for consume sources; update the rescan writer (`sdd-prompts.ts:142-166`) and the `extract-design-system` skill's non-Figma path.
-- [ ] 3.4 Add a consume-library branch to `DESIGN_REFERENCE_CLAUSE` (`sdd-prompts.ts:40-64`) making the authoritative reference the real component module/package, not a Figma node.
+- [x] 3.1 Author `.sdd-de/ai-specs/skills/provision-library/SKILL.md` (referenced by `sdd-prompts.ts:103` but absent) encoding the per-type recipes: cli-registry (run the real CLI non-interactively; fallback fetch-write-rewrite from `registry-item.json`), installed-package (install + optional thin token-mapped wrapper), headless (install + require external tokens), reject CSS-in-JS.
+- [x] 3.2 Update `PROVISION_LIBRARY_PROMPT` (`sdd-prompts.ts:99-121`) to route by the new kinds and to be self-consistent with the new skill.
+- [x] 3.3 Write pointer-shaped `components.json` entries (`importPath`/`export`/`storyId`/`tier`, mirroring `EnterpriseComponentEntry` `enterprise-consume.ts:29-40`) for consume sources; update the rescan writer (`sdd-prompts.ts:142-166`) and the `extract-design-system` skill's non-Figma path.
+- [x] 3.4 Add a consume-library branch to `DESIGN_REFERENCE_CLAUSE` (`sdd-prompts.ts:40-64`) making the authoritative reference the real component module/package, not a Figma node.
 
 ## 4. Prop / variant enumeration for grounding
 
