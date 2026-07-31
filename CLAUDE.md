@@ -87,7 +87,7 @@ with colored divider lines so the user can instantly spot it:
 - `framework` — the UI framework (react, next, vue, nuxt, svelte, sveltekit, angular, astro, vanilla)
 - `language` — typescript or javascript
 - `styling` — CSS approach (css, css-modules, scss, tailwind, styled-components, emotion)
-- `design_source` — where components come from: `figma` | `library` | `github` | `zip`
+- `design_source` — where components come from: `figma` | `github` | `zip` | `stitch` | `claude-design` (extract families) or `library` | `enterprise` (consume families — see Design source families below)
 - `token_file` — path to the design token file
 - `component_dir` — root component directory
 
@@ -238,13 +238,36 @@ Detection) — never on the whole library being built first. **No `/storybook` o
 prerequisite for this path.**
 
 **Path B — Classic framework-first (hard gate; the original flow, still fully supported).** Build
-the whole component library first, then compose screens from real components. This path requires:
+the whole component library first, then compose screens from real components. For an **extract source**
+(see the source families below) this path requires:
 
 1. **`/storybook` has been run** — all existing components have stories and are browsable
 2. **`/design-doc` has been run** — DESIGN.md exists and passes `npx @google/design.md lint`
 
-These prerequisites are mandatory **for Path B only**. Path A needs neither — it is the
-light-first soft gate that makes time-to-first-screen minutes instead of a whole library.
+These prerequisites are mandatory **for Path B on an extract source only**. Path A needs neither — it
+is the light-first soft gate that makes time-to-first-screen minutes instead of a whole library.
+
+> **Consume sources are exempt from BOTH prerequisites — even on Path B.** When
+> `design_source` is `enterprise` or `library`, `/storybook` and `/design-doc` are **NOT**
+> prerequisites: VortSpec does not build a VortSpec Storybook for a consumed library (it consumes the
+> library's real components and, when present, embeds the vendor's own Storybook/docs), and `/design-doc`
+> is **optional** — DESIGN.md points at the consumed code rather than gating screen creation. The
+> design system is browsed through the **Design System** screen (the pointer inventory + tokens), not a
+> generated Storybook. Never block a consume-source screen on `/storybook` or `/design-doc`.
+
+#### Design source families — extract vs. consume
+
+Every `design_source` falls into one of two families, and each lands its **source of truth** in a
+different place. This is why the gates and doc steps differ:
+
+| Family | `design_source` values | Components | Tokens (source of truth) | Storybook | DESIGN.md | Personalization |
+|---|---|---|---|---|---|---|
+| **Extract + rebuild** | `figma`, `github`, `zip`, `stitch`, `claude-design` | VortSpec **generates** framework components into `component_dir` | A VortSpec-**owned** `token_file` it writes/extracts | VortSpec **builds** one (`/storybook`) | VortSpec **generates** it (`/design-doc`) | Edit the owned `token_file` in place |
+| **Consume** | `enterprise`, `library` | The library's/vendor's **real** components (via CLI / installed package), referenced by a **pointer index**, never recreated | The vendor's/client's **real** source — `token_file` **points at** it (reference, never a copy) | The **vendor's** Storybook/docs is embedded as-is when available; none is built | **Optional** — points at consumed code | A **durable overlay** (`.vortspec/theme-overrides.json`) applied per `theme_apply`; the real source is never mutated |
+
+The consume family is served by `isConsumeSource(design_source)` (= `enterprise` OR `library`) across
+the app: it routes provisioning to the library, skips the VortSpec Storybook, displays the Design
+System screen instead, and routes token/theme edits to the durable overlay.
 
 #### Component Gap Detection — SOFT for Path A, MANDATORY for Path B
 

@@ -47,7 +47,7 @@
 
 ## 9. Toolkit docs & gate relaxation
 
-- [ ] 9.1 Relax CLAUDE.md's Path B hard gate so `/storybook` + `/design-doc` are explicitly NOT prerequisites for consume sources; document the extract-vs-consume source families and where each lands its source of truth.
+- [x] 9.1 Relax CLAUDE.md's Path B hard gate so `/storybook` + `/design-doc` are explicitly NOT prerequisites for consume sources; document the extract-vs-consume source families and where each lands its source of truth.
 
 ## 10. Reconcile the overlapping in-flight change
 
