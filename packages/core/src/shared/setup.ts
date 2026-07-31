@@ -338,7 +338,7 @@ export const LIBRARY_THEME_CONTRACTS: Record<string, LibraryThemeContract> = {
     provider:
       "Import a theme CSS at the app root (`@import '@astryxdesign/theme-neutral/theme.css'`); components import from per-category subpaths (`@astryxdesign/core/Button`).",
     enumerate:
-      "Astryx CLI (plain text, NO --json, NO MCP): `astryx component` lists all, `astryx component <Name>` gives props+usage; `astryx docs tokens` for the token reference. AI-invoke reliably via `node node_modules/@astryxdesign/cli/bin/astryx.mjs`.",
+      "Astryx CLI (plain text, NO --json, NO MCP): `astryx component` lists all, `astryx component <Name>` gives props+usage; `astryx docs tokens` for the token reference. AI-invoke via `node node_modules/@astryxdesign/cli/bin/astryx.mjs`. NOTE: the CLI requires Node ≥22.13 — if the project's Node is older it can't run, so fall back to the installed theme tokens + the package `.d.ts` for enumeration and tell the user.",
   },
 };
 
