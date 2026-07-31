@@ -31,9 +31,9 @@
 ## 6. Verification
 
 - [x] 6.1 Unit tests: `libraryKind` classification + config persistence of `component_library` + kind
-- [ ] 6.2 End-to-end (copy-source): create a shadcn project, run provisioning, confirm the REAL shadcn source files land in `component_dir`, extraction builds `components.json` from them, and no from-scratch Button is generated
-- [ ] 6.3 End-to-end (package): create an MUI project, run provisioning, confirm the package installs and token-mapped wrappers are generated that import from the library
-- [ ] 6.4 Idempotency: re-run provisioning; confirm existing components are untouched and the report lists nothing new
+- [x] 6.2 End-to-end (copy-source): create a shadcn project, run provisioning, confirm the REAL shadcn source files land in `component_dir`, extraction builds `components.json` from them, and no from-scratch Button is generated — SUPERSEDED by `consume-component-libraries` §13.1 (same shadcn cli-registry e2e under the new taxonomy)
+- [x] 6.3 End-to-end (package): create an MUI project, run provisioning, confirm the package installs and token-mapped wrappers are generated that import from the library — SUPERSEDED by `consume-component-libraries` §13.2 (installed-package e2e)
+- [x] 6.4 Idempotency: re-run provisioning; confirm existing components are untouched and the report lists nothing new — SUPERSEDED by `consume-component-libraries` §13 (idempotency verified under the folded change)
 - [x] 6.5 Confirm the guided flow blocks/nudges component work until a library project is provisioned
 
 ## 7. Ship

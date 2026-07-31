@@ -51,7 +51,7 @@
 
 ## 10. Reconcile the overlapping in-flight change
 
-- [ ] 10.1 Fold the in-flight `provision-library-source` change into this one (archive it or rebase its `library-design-source` tasks under this change) so the seams aren't touched twice.
+- [x] 10.1 Fold the in-flight `provision-library-source` change into this one (archive it or rebase its `library-design-source` tasks under this change) so the seams aren't touched twice.
 
 ## 11. Per-library consume + customize recipes
 

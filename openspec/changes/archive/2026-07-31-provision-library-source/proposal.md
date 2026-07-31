@@ -1,3 +1,12 @@
+> **SUPERSEDED & FOLDED (2026-07-31) → `consume-component-libraries`.** This change delivered the first
+> library-provisioning pass (the `copy-source | package` taxonomy, the provisioning skill, the guided-flow
+> trigger, the extract guard). `consume-component-libraries` folds it in and supersedes it: the taxonomy is
+> replaced by the richer `cli-registry | installed-package | headless` (with `normalizeLibraryKind` mapping
+> the legacy `copy-source`→`cli-registry` / `package`→`installed-package`), consuming-over-rebuild is
+> enforced app-wide via `isConsumeSource`, and the remaining e2e verification (tasks 6.2–6.4) moves to that
+> change's §13. Archived so the shared seams (`setup.ts` `libraryKind`/`buildProjectYaml`, the guided-flow
+> provision affordance, the extract skill) are touched by one change, not two.
+
 ## Why
 
 When a user picks a component library (shadcn/ui, MUI, Chakra, …) as the design source, VortSpec records the choice in `project.yaml` but **never provisions the real components** — no library CLI runs, nothing is installed. The `extract-design-system` skill then reads an empty `component_dir`, so the 7-step cycle rebuilds every component from scratch using the library only as a written reference. The result is generic components that merely resemble the library instead of the real ones, plus wasted work re-creating what the library's own CLI already ships. The `git` and `zip` sources both pull their real source in first (see `git-design-source`); `library` is the one source with no provisioning step.
