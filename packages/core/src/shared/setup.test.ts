@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { libraryKind, buildProjectYaml, type SetupAnswers } from "./setup";
+import { libraryKind, buildProjectYaml, detectLibrary, type SetupAnswers } from "./setup";
 
 describe("libraryKind — consume classification", () => {
   it("classifies cli-registry libraries", () => {
@@ -75,6 +75,37 @@ describe("buildProjectYaml — library consume kind + descriptor", () => {
     const yaml = buildProjectYaml({ ...base, componentLibrary: "other" });
     expect(yaml).toContain("component_library: other");
     expect(yaml).not.toContain("component_library_kind:");
+  });
+});
+
+describe("detectLibrary — intake auto-detection", () => {
+  it("detects shadcn from a root components.json (cli-registry)", () => {
+    const d = detectLibrary({ react: "19" }, true);
+    expect(d.library).toBe("shadcn");
+    expect(d.kind).toBe("cli-registry");
+  });
+
+  it("detects installed-package libraries from dependencies", () => {
+    expect(detectLibrary({ "@mui/material": "6" }, false)).toMatchObject({ library: "mui", kind: "installed-package" });
+    expect(detectLibrary({ "@chakra-ui/react": "3" }, false)).toMatchObject({ library: "chakra", kind: "installed-package" });
+    expect(detectLibrary({ "@astryxdesign/core": "1" }, false)).toMatchObject({ library: "astryx", kind: "installed-package" });
+  });
+
+  it("detects headless libraries", () => {
+    expect(detectLibrary({ "@radix-ui/react-dialog": "1" }, false)).toMatchObject({ library: "radix", kind: "headless" });
+    expect(detectLibrary({ "@headlessui/react": "2" }, false)).toMatchObject({ library: "headlessui", kind: "headless" });
+  });
+
+  it("flags a CSS-in-JS-only project as styling, not a component source", () => {
+    const d = detectLibrary({ "@emotion/react": "11" }, false);
+    expect(d.stylingOnly).toBe(true);
+    expect(d.library).toBeUndefined();
+  });
+
+  it("returns no library when nothing is detected", () => {
+    const d = detectLibrary({ react: "19", vite: "5" }, false);
+    expect(d.library).toBeUndefined();
+    expect(d.stylingOnly).toBeUndefined();
   });
 });
 

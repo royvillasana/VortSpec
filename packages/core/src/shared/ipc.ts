@@ -723,6 +723,16 @@ export const ipcContract = {
       detail: z.string(),
     }),
   },
+  // Inspect a target repo to auto-suggest the component library + consume kind at intake.
+  "library:detect": {
+    request: z.string(),
+    response: z.object({
+      library: z.string().optional(),
+      kind: z.string().optional(),
+      stylingOnly: z.boolean().optional(),
+      detail: z.string(),
+    }),
+  },
   "inspector:getTokens": {
     request: z.union([
       z.string(),

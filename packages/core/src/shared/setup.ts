@@ -221,6 +221,62 @@ export function normalizeLibraryKind(kind: string | undefined | null): LibraryKi
   return undefined;
 }
 
+/** Auto-detected library at intake — suggests which component library the target repo already uses. */
+export interface LibraryDetection {
+  /** A {@link componentLibrarySchema} value when a component library is detected. */
+  library?: string;
+  kind?: LibraryKind;
+  /** True when ONLY a CSS-in-JS styling lib is present — a styling strategy, not a component source. */
+  stylingOnly?: boolean;
+  detail: string;
+}
+
+/** Dependency → component library. Order matters: first match wins. */
+const DEP_TO_LIBRARY: Array<{ dep: string | RegExp; library: string }> = [
+  { dep: "@mui/material", library: "mui" },
+  { dep: "@chakra-ui/react", library: "chakra" },
+  { dep: "@mantine/core", library: "mantine" },
+  { dep: "antd", library: "antd" },
+  { dep: "@astryxdesign/core", library: "astryx" },
+  { dep: "@headlessui/react", library: "headlessui" },
+  { dep: /^@radix-ui\//, library: "radix" },
+  { dep: "radix-ui", library: "radix" },
+];
+
+/**
+ * Inspect a target repo's dependency names + whether it has a root `components.json` to suggest the
+ * component library and its consume kind at intake (change: consume-component-libraries). A root
+ * `components.json` implies shadcn (cli-registry); a known UI package implies installed-package/
+ * headless; only a CSS-in-JS lib implies a styling strategy with no component source. Pure.
+ */
+export function detectLibrary(
+  deps: Record<string, string> | undefined,
+  hasComponentsJson: boolean,
+): LibraryDetection {
+  const names = Object.keys(deps ?? {});
+  if (hasComponentsJson) {
+    return { library: "shadcn", kind: "cli-registry", detail: "Found a root components.json → shadcn (cli-registry)." };
+  }
+  for (const { dep, library } of DEP_TO_LIBRARY) {
+    const hit = typeof dep === "string" ? names.includes(dep) : names.some((n) => dep.test(n));
+    if (hit) {
+      const k = libraryKind(library);
+      return {
+        library,
+        kind: k === "unknown" ? undefined : k,
+        detail: `Found ${typeof dep === "string" ? dep : "a @radix-ui/* package"} in dependencies → ${library}.`,
+      };
+    }
+  }
+  if (names.some((n) => n.startsWith("@emotion/") || n === "styled-components")) {
+    return {
+      stylingOnly: true,
+      detail: "Only a CSS-in-JS styling library (Emotion/styled-components) — a styling strategy, not a component source.",
+    };
+  }
+  return { detail: "No known component library detected in dependencies." };
+}
+
 /**
  * Design sources that CONSUME an existing component system and MUST NOT rebuild its
  * components from scratch — `enterprise` (a client's coded system) and `library` (an existing

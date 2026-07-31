@@ -198,6 +198,8 @@ export interface VortSpecApi {
   projectConfig(projectPath: string): Promise<IpcResponse<"project:config">>;
   /** Real readiness of a `design_source: library` project — did the CLI copy source / does the package resolve. */
   libraryReadiness(projectPath: string): Promise<IpcResponse<"library:readiness">>;
+  /** Inspect a target repo to auto-suggest its component library + consume kind at intake. */
+  libraryDetect(projectPath: string): Promise<IpcResponse<"library:detect">>;
 
   // inspector (tokens / components / verification)
   inspectorTokens(

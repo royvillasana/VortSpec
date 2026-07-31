@@ -43,7 +43,7 @@
 
 ## 8. Intake detection
 
-- [ ] 8.1 In the `setup` skill + `setup.ts`, inspect the target repo (root `components.json` → cli-registry; known UI package in deps → installed-package/headless; only `@emotion/*`/`styled-components` → styling) to auto-suggest the kind.
+- [x] 8.1 In the `setup` skill + `setup.ts`, inspect the target repo (root `components.json` → cli-registry; known UI package in deps → installed-package/headless; only `@emotion/*`/`styled-components` → styling) to auto-suggest the kind.
 
 ## 9. Toolkit docs & gate relaxation
 
