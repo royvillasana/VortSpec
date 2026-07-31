@@ -11,6 +11,8 @@ import {
 import { resolveToken, readTokenLinks, type ResolveCandidate } from "./token-resolver";
 import { readTokenKeyMap, mergeTokenKeys } from "./design-map";
 import { cachedScan } from "./scan-cache";
+import { readThemeOverrides } from "./theme-override-store";
+import { detectTokenFormat, writeToken } from "@vortspec/core/token-writers";
 import { inspectorTokensResultSchema } from "@vortspec/core/inspector";
 import type {
   FigmaCollection,
@@ -636,6 +638,7 @@ export async function getInspectorTokens(
         ...TAILWIND_CONFIG_FILES,
         ".vortspec/figma-variables.json",
         ".vortspec/token-overrides.json",
+        ".vortspec/theme-overrides.json",
         ".vortspec/token-links.json",
         ".vortspec/token-mode-map.json",
       ],
@@ -661,7 +664,15 @@ async function computeInspectorTokens(
     return { tokenFile, ...EMPTY_RESULT };
   }
   const parse = parseCssContexts(css);
-  const parsed = parseTokensFromCss(css);
+  // Durable personalization overlay (change: consume-component-libraries): a token edited via the
+  // durable overlay (.vortspec/theme-overrides.json) shows its overridden value to EVERY reader
+  // (palette, designer.md, compile, generate) — the single layering point that makes "edit tokens →
+  // personalize any component" hold regardless of the token file's format or source.
+  const themeOverrides = await readThemeOverrides(projectPath);
+  const parsed = parseTokensFromCss(css).map((t) => {
+    const o = themeOverrides.tokens[t.name.replace(/^--/, "")] ?? themeOverrides.tokens[normName(t.name)];
+    return o ? { ...t, resolvedValue: o.value, rawValue: o.value } : t;
+  });
   const sources = config?.componentDir
     ? await collectSources(join(projectPath, config.componentDir))
     : [];
@@ -851,12 +862,19 @@ export async function setInspectorTokenValue(
   const tokenFile = config?.tokenFile;
   if (tokenFile) {
     const path = join(projectPath, tokenFile);
-    const css = await readFile(path, "utf8").catch(() => null);
-    if (css) {
+    const content = await readFile(path, "utf8").catch(() => null);
+    if (content !== null) {
+      // Format-aware in-place write (change: consume-component-libraries): a JS/TS theme object,
+      // SCSS, or JSON token file used to silently no-op under the CSS-only `--name:` regex. CSS keeps
+      // its context-scoped (per-mode) edit; the other three formats route through `writeToken`, where
+      // `name` is the format's key (SCSS `$var`, dotted JSON/TS path).
+      const format = detectTokenFormat(tokenFile);
       const next =
-        context && context !== DEFAULT_CONTEXT
-          ? replaceDeclInContext(css, name, value, context)
-          : replaceDecl(css, name, value);
+        format === "css"
+          ? context && context !== DEFAULT_CONTEXT
+            ? replaceDeclInContext(content, name, value, context)
+            : replaceDecl(content, name, value)
+          : writeToken(format, content, name, value.trim());
       if (next !== null) {
         await writeFile(path, next, "utf8");
         // Record the hand-edit so its provenance shows as "hand-edited" on reload.

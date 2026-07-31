@@ -65,8 +65,8 @@
 
 ## 12. Per-project token/theme customization (any component source)
 
-- [ ] 12.1 Multi-format token writer — extend `token-parser.ts` (`replaceDecl`/`parseTokensFromCss`, CSS-only today) with JS/TS theme-object AST writers (+ SCSS/JSON), so `setInspectorTokenValue` succeeds for non-CSS `token_file`s; surface an error instead of a silent no-op.
-- [ ] 12.2 Durable override map — add `.vortspec/theme-overrides.json` (global `{tokenName→value}` + per-component `{dataComponent→override}`); promote the ephemeral `override-store.ts` model to durable; layer it inside `getInspectorTokens` (`token-parser.ts:620`) so all readers see overlaid values.
+- [x] 12.1 Multi-format token writer — extend `token-parser.ts` (`replaceDecl`/`parseTokensFromCss`, CSS-only today) with JS/TS theme-object AST writers (+ SCSS/JSON), so `setInspectorTokenValue` succeeds for non-CSS `token_file`s; surface an error instead of a silent no-op.
+- [x] 12.2 Durable override map — add `.vortspec/theme-overrides.json` (global `{tokenName→value}` + per-component `{dataComponent→override}`); promote the ephemeral `override-store.ts` model to durable; layer it inside `getInspectorTokens` (`token-parser.ts:620`) so all readers see overlaid values.
 - [ ] 12.3 Materializer — generalize `light-serve.ts:injectTokens` into a shared applier that emits, per `theme_apply`: injected `:root{--var}` CSS (css-vars/enterprise overlay), a generated/patched theme-object file (MUI/Chakra/Mantine/Antd), or an Astryx `defineTheme`.
 - [ ] 12.4 Enterprise overlay guard — route personalization writes for enterprise (and any source whose `token_file` points at unowned code) to the overlay, never `setInspectorTokenValue` on the real file (`enterprise-consume.ts:157,196`).
 - [ ] 12.5 Re-resolution trigger — on a token edit, re-run `deriveProjectLiteManifest`/`writeDesignerManifest` (`lite-source.ts:213-224`) via the dual-key name half so baked stand-ins/palette re-theme (no Figma/Storybook round-trip).
