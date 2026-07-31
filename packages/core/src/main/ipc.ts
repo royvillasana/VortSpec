@@ -29,6 +29,7 @@ import { checkFigmaHealth } from "./figma/figma-health";
 import { getFigmaTokenStatus, setFigmaToken } from "./figma/figma-token";
 import type { FigmaCliMode } from "@vortspec/core/figma";
 import { readProjectConfig } from "./workspace/config-manager";
+import { getLibraryReadiness } from "./workspace/library-readiness";
 import { getEnvStatus, createEnvFromExample } from "./workspace/env-files";
 import { ensureStorybook, storybookReadiness, storyGap } from "./workspace/storybook-setup";
 import { ensureStylingPipeline } from "./workspace/styling-setup";
@@ -478,6 +479,7 @@ const handlers: Record<IpcChannel, Handler> = {
   "artifact:findLatest": ((req: { projectPath: string; suffix: string }) =>
     findLatestArtifact(req.projectPath, req.suffix)) as Handler,
   "project:config": ((projectPath: string) => readProjectConfig(projectPath)) as Handler,
+  "library:readiness": ((projectPath: string) => getLibraryReadiness(projectPath)) as Handler,
   "inspector:getTokens": ((req: string | { projectPath: string; preferredCollection?: string }) =>
     typeof req === "string"
       ? getInspectorTokens(req)

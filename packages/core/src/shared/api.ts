@@ -196,6 +196,8 @@ export interface VortSpecApi {
   readArtifact(projectPath: string, relPath: string): Promise<IpcResponse<"artifact:read">>;
   findLatestArtifact(projectPath: string, suffix: string): Promise<IpcResponse<"artifact:findLatest">>;
   projectConfig(projectPath: string): Promise<IpcResponse<"project:config">>;
+  /** Real readiness of a `design_source: library` project — did the CLI copy source / does the package resolve. */
+  libraryReadiness(projectPath: string): Promise<IpcResponse<"library:readiness">>;
 
   // inspector (tokens / components / verification)
   inspectorTokens(

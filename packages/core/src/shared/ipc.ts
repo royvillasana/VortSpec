@@ -712,6 +712,17 @@ export const ipcContract = {
     request: z.string(),
     response: projectConfigSchema.nullable(),
   },
+  // Real readiness for a `design_source: library` project — did the CLI copy source / does the
+  // package resolve — replacing the component-count proxy (change: consume-component-libraries).
+  "library:readiness": {
+    request: z.string(),
+    response: z.object({
+      applicable: z.boolean(),
+      ready: z.boolean(),
+      kind: z.string().optional(),
+      detail: z.string(),
+    }),
+  },
   "inspector:getTokens": {
     request: z.union([
       z.string(),

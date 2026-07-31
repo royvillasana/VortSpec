@@ -9,8 +9,8 @@
 
 - [x] 2.1 Generalize the `enterprise` early-return in `useAutoComponentBuild.ts:65-71` to `isConsumeSource` so no consume-source component is swept into `buildChunkPrompt`.
 - [x] 2.2 Add a consume-source branch to `useAutoFoundation.ts:74-82` that dispatches the library provision/index flow instead of the generic Figma-style extract template.
-- [ ] 2.3 Replace the count proxy `libraryProvisioned = !isLibrary || total > 0` (`GuidedFlow.tsx:486-487`) with a real readiness check analogous to `analyzeEnterpriseReadiness` (`enterprise-consume.ts:64-108`): CLI ran + files exist (cli-registry) or package resolves + pointer entries exist (installed-package/headless).
-- [ ] 2.4 Update the GuidedFlow roster affordance so consume-source projects show a consume/provision action rather than a from-scratch "build" for library-shipped components.
+- [x] 2.3 Replace the count proxy `libraryProvisioned = !isLibrary || total > 0` (`GuidedFlow.tsx:486-487`) with a real readiness check analogous to `analyzeEnterpriseReadiness` (`enterprise-consume.ts:64-108`): CLI ran + files exist (cli-registry) or package resolves + pointer entries exist (installed-package/headless).
+- [x] 2.4 Update the GuidedFlow roster affordance so consume-source projects show a consume/provision action rather than a from-scratch "build" for library-shipped components.
 
 ## 3. Consume mechanisms & the missing skill
 

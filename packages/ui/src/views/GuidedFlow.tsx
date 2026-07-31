@@ -141,6 +141,10 @@ export function GuidedFlow({
 }): React.JSX.Element {
   const [config, setConfig] = useState<ProjectConfig | null>(null);
   const [components, setComponents] = useState<InspectorComponent[] | null>(null);
+  // Real library readiness (change: consume-component-libraries) — did the CLI copy source / does
+  // the package resolve — replacing the old `total > 0` component-count proxy.
+  const [libraryReadiness, setLibraryReadiness] =
+    useState<{ applicable: boolean; ready: boolean; detail: string } | null>(null);
   const [tokenCount, setTokenCount] = useState<number | null>(null);
   const [manifestExists, setManifestExists] = useState(false);
   const [foundationOpen, setFoundationOpen] = useState(false);
@@ -191,6 +195,13 @@ export function GuidedFlow({
     setFigmaCompSynced(comps.figmaSynced ?? false);
     setTokenCount(toks.tokens.length);
     setManifestExists(man.exists);
+    // Real library readiness — refreshed alongside config/components so it flips once the CLI copies
+    // source / the package resolves (change: consume-component-libraries).
+    if (cfg?.designSource === "library") {
+      void api.libraryReadiness(project.path).then(setLibraryReadiness).catch(() => setLibraryReadiness(null));
+    } else {
+      setLibraryReadiness(null);
+    }
   }
 
   function flash(msg: string): void {
@@ -479,12 +490,14 @@ export function GuidedFlow({
   // Foundation is established once tokens exist or components have been detected.
   const foundationReady = (tokenCount ?? 0) > 0 || total > 0;
 
-  // Library provisioning (change: provision-library-source). A `library` source needs its
-  // REAL components pulled/installed before the cycle. We treat a library project with no
-  // detected components as un-provisioned, and surface a "Provision library" action that runs
-  // the /provision-library skill instead of letting the flow rebuild look-alikes.
+  // Library consumption (change: consume-component-libraries). A `library` source needs its REAL
+  // components pulled/installed before the cycle. Readiness is a REAL check now — the CLI copied
+  // source / the package resolves — not the old `total > 0` count proxy (any hand-added component
+  // would have falsely flipped it). We surface a "Provision library" action that consumes the real
+  // components instead of letting the flow rebuild look-alikes. Falls back to the count while the
+  // readiness probe is in flight.
   const isLibrary = config?.designSource === "library";
-  const libraryProvisioned = !isLibrary || total > 0;
+  const libraryProvisioned = !isLibrary || (libraryReadiness?.ready ?? total > 0);
   const provisionLibrary = (): void => {
     const lib = config?.componentLibrary ?? "the library";
     void op(`Provisioning ${lib} — pulling in the real components`, PROVISION_LIBRARY_PROMPT, {

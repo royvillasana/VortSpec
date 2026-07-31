@@ -276,6 +276,7 @@ const api: VortSpecApi = {
   findLatestArtifact: (projectPath: string, suffix: string) =>
     invoke("artifact:findLatest", { projectPath, suffix }),
   projectConfig: (projectPath: string) => invoke("project:config", projectPath),
+  libraryReadiness: (projectPath: string) => invoke("library:readiness", projectPath),
   inspectorTokens: (projectPath: string, preferredCollection?: string) =>
     invoke(
       "inspector:getTokens",
