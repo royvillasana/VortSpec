@@ -165,3 +165,48 @@ export async function writeTokenLink(
   await writeFile(path, `${JSON.stringify(links, null, 2)}\n`, "utf8").catch(() => undefined);
   return links;
 }
+
+// ── Library theme-key map (`.vortspec/token-theme-keys.json`) — the THIRD resolver target ──
+//
+// token-links.json fans an edit out to Figma; this fans the SAME edit out to the consumed library's
+// theming contract (change: consume-component-libraries, task 12.6). A code token's normalized name maps
+// to the library's theme-object path — e.g. `primary` → `palette.primary.main` (MUI), `brand.solid`
+// (Chakra) — so the multi-format writer keys a JS/TS theme object correctly instead of guessing the path
+// from the CSS-style name. Keyed by normalized name so it survives a token rename on either side.
+const THEME_KEYS_PATH = ".vortspec/token-theme-keys.json";
+export type ThemeKeyMap = Record<string, string>;
+
+/** Read the persisted code-token → library-theme-object-path map. Missing/malformed → {}. */
+export async function readTokenThemeKeys(projectPath: string): Promise<ThemeKeyMap> {
+  try {
+    const raw = await readFile(join(projectPath, THEME_KEYS_PATH), "utf8");
+    const obj = JSON.parse(raw);
+    if (obj && typeof obj === "object" && !Array.isArray(obj)) {
+      const out: ThemeKeyMap = {};
+      for (const [k, v] of Object.entries(obj)) if (typeof v === "string") out[k] = v;
+      return out;
+    }
+  } catch {
+    /* no theme-key map yet */
+  }
+  return {};
+}
+
+/** Persist one code-token → library-theme-object-path mapping, keyed by the token's normalized name. */
+export async function writeTokenThemeKey(
+  projectPath: string,
+  codeToken: string,
+  themeKey: string,
+): Promise<ThemeKeyMap> {
+  const map = await readTokenThemeKeys(projectPath);
+  map[normName(codeToken)] = themeKey;
+  const path = join(projectPath, THEME_KEYS_PATH);
+  await mkdir(dirname(path), { recursive: true }).catch(() => undefined);
+  await writeFile(path, `${JSON.stringify(map, null, 2)}\n`, "utf8").catch(() => undefined);
+  return map;
+}
+
+/** The consumed library's theme-object path for a code token, or undefined when unmapped. Pure. */
+export function themeKeyFor(name: string, map: ThemeKeyMap): string | undefined {
+  return map[normName(name)];
+}

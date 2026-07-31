@@ -166,7 +166,25 @@ export interface LibraryRecipe {
   importBase?: string;
   /** cli-registry only: the registry base URL. */
   registry?: string;
+  /** How a token/theme edit is applied for this library (change: consume-component-libraries, 12.8). */
+  themeApply?: ThemeApply;
 }
+
+/**
+ * The strategy a project uses to APPLY a token/theme personalization (change: consume-component-libraries,
+ * task 12.8). It tells the materializer which artifact to emit: injected CSS variables (`css-vars` for
+ * shadcn/headless/extract sources whose tokens are CSS), a generated theme object for a specific library
+ * (`theme-object:<lib>`), an Astryx `defineTheme` (`astryx-defineTheme`), or an override stylesheet layered
+ * on top of an unowned consumed source (`overlay-injected`, e.g. enterprise).
+ */
+export type ThemeApply =
+  | "css-vars"
+  | "theme-object:mui"
+  | "theme-object:chakra"
+  | "theme-object:mantine"
+  | "theme-object:antd"
+  | "astryx-defineTheme"
+  | "overlay-injected";
 export const LIBRARY_RECIPES: Record<string, LibraryRecipe> = {
   shadcn: {
     kind: "cli-registry",
@@ -175,23 +193,31 @@ export const LIBRARY_RECIPES: Record<string, LibraryRecipe> = {
     importBase: "@/components/ui",
     registry: "https://ui.shadcn.com/r",
   },
-  radix: { kind: "headless", install: "npm install radix-ui", importBase: "radix-ui" },
-  headlessui: { kind: "headless", install: "npm install @headlessui/react", importBase: "@headlessui/react" },
+  radix: { kind: "headless", install: "npm install radix-ui", importBase: "radix-ui", themeApply: "css-vars" },
+  headlessui: {
+    kind: "headless",
+    install: "npm install @headlessui/react",
+    importBase: "@headlessui/react",
+    themeApply: "css-vars",
+  },
   mui: {
     kind: "installed-package",
     install: "npm install @mui/material @emotion/react @emotion/styled",
     importBase: "@mui/material",
+    themeApply: "theme-object:mui",
   },
-  antd: { kind: "installed-package", install: "npm install antd", importBase: "antd" },
+  antd: { kind: "installed-package", install: "npm install antd", importBase: "antd", themeApply: "theme-object:antd" },
   chakra: {
     kind: "installed-package",
     install: "npm install @chakra-ui/react @emotion/react",
     importBase: "@chakra-ui/react",
+    themeApply: "theme-object:chakra",
   },
   mantine: {
     kind: "installed-package",
     install: "npm install @mantine/core @mantine/hooks",
     importBase: "@mantine/core",
+    themeApply: "theme-object:mantine",
   },
   // Astryx (Meta) — installed package + a CLI that generates agent docs to learn the conventions.
   // Commands per the user-provided docs (astryx.atmeta.com); setup verifies the packages resolve
@@ -201,8 +227,27 @@ export const LIBRARY_RECIPES: Record<string, LibraryRecipe> = {
     install:
       "npm install @astryxdesign/core @astryxdesign/theme-neutral @astryxdesign/cli && npx @astryxdesign/cli init",
     importBase: "@astryxdesign/core",
+    themeApply: "astryx-defineTheme",
   },
 };
+
+/**
+ * The apply strategy for a project (change: consume-component-libraries, task 12.8). Enterprise consumes an
+ * UNOWNED source, so its personalization is layered as an overlay; a `library` uses its recipe's strategy
+ * (shadcn/headless → css-vars, MUI/Chakra/Mantine/Antd → theme-object, Astryx → defineTheme); every
+ * extract/rebuild source owns a CSS token file, so it uses css-vars.
+ */
+export function themeApplyFor(a: {
+  designSource?: string | null;
+  componentLibrary?: string | null;
+}): ThemeApply {
+  if (a.designSource === "enterprise") return "overlay-injected";
+  if (a.designSource === "library") {
+    const recipe = a.componentLibrary ? LIBRARY_RECIPES[a.componentLibrary] : undefined;
+    return recipe?.themeApply ?? "css-vars";
+  }
+  return "css-vars";
+}
 
 /**
  * The consume kind for a component library. Returns `"unknown"` for `other` or any
@@ -395,6 +440,8 @@ export const projectConfigSchema = z.object({
   styling: z.string().optional(),
   tokenFile: z.string().optional(),
   componentDir: z.string().optional(),
+  // How a token/theme edit is applied for this project (change: consume-component-libraries, 12.8).
+  themeApply: z.string().optional(),
 });
 export type ProjectConfig = z.infer<typeof projectConfigSchema>;
 
@@ -465,6 +512,10 @@ export function buildProjectYaml(a: SetupAnswers): string {
   lines.push(`token_file: ${a.tokenFile}`);
   lines.push(`component_dir: ${a.componentDir}`);
   lines.push(`test_runner: ${a.testRunner}`);
+  // How token/theme edits are applied (change: consume-component-libraries, 12.8) — drives the materializer.
+  lines.push(
+    `theme_apply: ${themeApplyFor({ designSource: a.designSource, componentLibrary: a.componentLibrary })}`,
+  );
 
   return lines.join("\n") + "\n";
 }

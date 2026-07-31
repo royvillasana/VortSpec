@@ -35,6 +35,7 @@ const KEY_MAP: Record<string, keyof ProjectConfig> = {
   styling: "styling",
   token_file: "tokenFile",
   component_dir: "componentDir",
+  theme_apply: "themeApply",
 };
 
 /** Minimal flat `key: value` YAML parse (the file the CLI writes is flat). */

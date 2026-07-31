@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { libraryKind, buildProjectYaml, detectLibrary, type SetupAnswers } from "./setup";
+import { libraryKind, buildProjectYaml, detectLibrary, themeApplyFor, type SetupAnswers } from "./setup";
 
 describe("libraryKind — consume classification", () => {
   it("classifies cli-registry libraries", () => {
@@ -75,6 +75,25 @@ describe("buildProjectYaml — library consume kind + descriptor", () => {
     const yaml = buildProjectYaml({ ...base, componentLibrary: "other" });
     expect(yaml).toContain("component_library: other");
     expect(yaml).not.toContain("component_library_kind:");
+  });
+
+  it("writes theme_apply per library kind (task 12.8)", () => {
+    expect(buildProjectYaml({ ...base, componentLibrary: "shadcn" })).toContain("theme_apply: css-vars");
+    expect(buildProjectYaml({ ...base, componentLibrary: "mui" })).toContain("theme_apply: theme-object:mui");
+    expect(buildProjectYaml({ ...base, componentLibrary: "astryx" })).toContain("theme_apply: astryx-defineTheme");
+    expect(buildProjectYaml({ ...base, componentLibrary: "radix" })).toContain("theme_apply: css-vars");
+  });
+});
+
+describe("themeApplyFor — apply strategy per source (task 12.8)", () => {
+  it("maps consume + extract sources to their apply strategy", () => {
+    expect(themeApplyFor({ designSource: "enterprise" })).toBe("overlay-injected");
+    expect(themeApplyFor({ designSource: "library", componentLibrary: "mui" })).toBe("theme-object:mui");
+    expect(themeApplyFor({ designSource: "library", componentLibrary: "chakra" })).toBe("theme-object:chakra");
+    expect(themeApplyFor({ designSource: "library", componentLibrary: "astryx" })).toBe("astryx-defineTheme");
+    expect(themeApplyFor({ designSource: "library", componentLibrary: "shadcn" })).toBe("css-vars");
+    expect(themeApplyFor({ designSource: "library", componentLibrary: "other" })).toBe("css-vars"); // fallback
+    expect(themeApplyFor({ designSource: "figma" })).toBe("css-vars"); // extract source owns CSS tokens
   });
 });
 

@@ -8,7 +8,13 @@ import {
   normName,
   normValue,
 } from "./figma-reconcile";
-import { resolveToken, readTokenLinks, type ResolveCandidate } from "./token-resolver";
+import {
+  resolveToken,
+  readTokenLinks,
+  readTokenThemeKeys,
+  themeKeyFor,
+  type ResolveCandidate,
+} from "./token-resolver";
 import { readTokenKeyMap, mergeTokenKeys } from "./design-map";
 import { cachedScan } from "./scan-cache";
 import { readThemeOverrides, setThemeTokenOverride } from "./theme-override-store";
@@ -879,12 +885,19 @@ export async function setInspectorTokenValue(
       // its context-scoped (per-mode) edit; the other three formats route through `writeToken`, where
       // `name` is the format's key (SCSS `$var`, dotted JSON/TS path).
       const format = detectTokenFormat(tokenFile);
-      const next =
-        format === "css"
-          ? context && context !== DEFAULT_CONTEXT
+      let next: string | null;
+      if (format === "css") {
+        next =
+          context && context !== DEFAULT_CONTEXT
             ? replaceDeclInContext(content, name, value, context)
-            : replaceDecl(content, name, value)
-          : writeToken(format, content, name, value.trim());
+            : replaceDecl(content, name, value);
+      } else {
+        // JS/TS theme object or JSON tokens: the write key is the library's theme-object PATH from the
+        // token↔theme-key map (task 12.6) when one exists (e.g. `primary` → `palette.primary.main`),
+        // else the token name as-is.
+        const key = themeKeyFor(name, await readTokenThemeKeys(projectPath)) ?? name;
+        next = writeToken(format, content, key, value.trim());
+      }
       if (next !== null) {
         await writeFile(path, next, "utf8");
         // Record the hand-edit so its provenance shows as "hand-edited" on reload.

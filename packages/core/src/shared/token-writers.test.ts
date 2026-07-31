@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   detectTokenFormat,
+  materializeComponentCss,
   materializeCssOverlay,
   writeCssVar,
   writeJsonToken,
@@ -8,7 +9,7 @@ import {
   writeToken,
   writeTsThemeToken,
 } from "./token-writers";
-import { EMPTY_THEME_OVERRIDES, setTokenOverride } from "./theme-overrides";
+import { EMPTY_THEME_OVERRIDES, setComponentOverride, setTokenOverride } from "./theme-overrides";
 
 describe("detectTokenFormat", () => {
   it("maps extensions to formats", () => {
@@ -81,5 +82,21 @@ describe("materializeCssOverlay", () => {
     expect(css).toContain(".dark {");
     expect(css).toContain("--primary: #111;");
     expect(materializeCssOverlay(EMPTY_THEME_OVERRIDES)).toBe("");
+  });
+});
+
+describe("materializeComponentCss", () => {
+  it("emits data-component-scoped rules for base / variant / slot, kebab-casing props", () => {
+    let o = setComponentOverride(EMPTY_THEME_OVERRIDES, "Button", {}, { background: "var(--primary)" });
+    o = setComponentOverride(o, "Button", { variant: "variant", option: "ghost" }, { color: "#fff" });
+    o = setComponentOverride(o, "Button", { slot: "label" }, { fontWeight: "600" });
+    const css = materializeComponentCss(o);
+    expect(css).toContain('[data-component="Button"] {');
+    expect(css).toContain("background: var(--primary);");
+    expect(css).toContain('[data-component="Button"][data-variant="ghost"] {');
+    expect(css).toContain("color: #fff;");
+    expect(css).toContain('[data-component="Button"] [data-slot="label"] {');
+    expect(css).toContain("font-weight: 600;"); // camelCase prop kebab-cased
+    expect(materializeComponentCss(EMPTY_THEME_OVERRIDES)).toBe("");
   });
 });
