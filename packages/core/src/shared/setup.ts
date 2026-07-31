@@ -150,6 +150,17 @@ export function libraryKind(library: string | undefined | null): LibraryKind | "
   return opt && "kind" in opt ? opt.kind : "unknown";
 }
 
+/**
+ * Design sources that CONSUME an existing component system and MUST NOT rebuild its
+ * components from scratch — `enterprise` (a client's coded system) and `library` (an existing
+ * component library). Callers use this to exclude such projects from the from-scratch build
+ * cycle and to route foundation/readiness/design-reference through the consume path rather than
+ * the rebuild path. (change: consume-component-libraries)
+ */
+export function isConsumeSource(designSource: string | undefined | null): boolean {
+  return designSource === "enterprise" || designSource === "library";
+}
+
 export const STYLING_OPTIONS = [
   { value: "tailwind", label: "Tailwind CSS" },
   { value: "css-modules", label: "CSS Modules" },
