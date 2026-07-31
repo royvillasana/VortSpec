@@ -5,9 +5,22 @@ import {
   tierForChunk,
   buildChunkPrompt,
   buildOnePrompt,
+  buildCustomizeLibraryPrompt,
   verifyPrompt,
   RESCAN_PROMPT,
 } from "./sdd-prompts";
+import { themeContractFor } from "./setup";
+
+describe("buildCustomizeLibraryPrompt — apply the durable overlay via the library's lever (Phase 11)", () => {
+  it("embeds MUI's theming + per-component lever and reads the durable overlay, not invented values", () => {
+    const p = buildCustomizeLibraryPrompt("mui", themeContractFor("mui")!);
+    expect(p).toContain(".vortspec/theme-overrides.json");
+    expect(p).toContain(".vortspec/token-theme-keys.json");
+    expect(p).toContain("createTheme"); // global theming approach
+    expect(p).toContain("theme.components.Mui"); // per-component lever
+    expect(p).toContain("PATCH"); // patch-in-place, not always regenerate
+  });
+});
 
 describe("verifyPrompt — honest gate (no false PASS without a live render)", () => {
   it("blocks PASS and mandates BLOCKED when no preview URL is available", () => {

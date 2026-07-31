@@ -250,6 +250,94 @@ export function themeApplyFor(a: {
 }
 
 /**
+ * Per-library consume + customize CONTRACT (change: consume-component-libraries, Phase 11) — the recipe
+ * knowledge for each supported library, captured as tracked DATA (not gitignored skill prose): how the
+ * library is themed from a token edit, where per-component overrides attach (the per-component lever), how
+ * the app must be wired for the theme to take effect, and where props/variants are enumerated. VortSpec's
+ * deterministic layer owns the token PLUMBING (durable overlay + token↔theme-key map, Phase 12); the actual
+ * theme-file generation + provider wiring is done by the customize agent using this contract (consistent
+ * with how provisioning/convert already work), so no unstable/unverifiable framework API is hard-coded here.
+ */
+export interface LibraryThemeContract {
+  /** How GLOBAL token overrides are applied. */
+  theming: string;
+  /** Where PER-COMPONENT overrides attach — the per-component lever. */
+  componentLever: string;
+  /** How the app root must be wired for the theme to take effect. */
+  provider: string;
+  /** Where props/variants are enumerated for grounding. */
+  enumerate: string;
+}
+
+export const LIBRARY_THEME_CONTRACTS: Record<string, LibraryThemeContract> = {
+  // 11.1 shadcn (cli-registry)
+  shadcn: {
+    theming:
+      "Global CSS custom properties in the app's globals.css `:root` / `.dark` blocks (+ components.json). Edit those CSS vars — shadcn components read them; no theme object.",
+    componentLever: "The copied component's own CVA `variants` map in component_dir (you own the source).",
+    provider: "None — the CSS vars cascade globally; ensure globals.css is imported once at the app root.",
+    enumerate: "The copied component's CVA variants + the shadcn registry item JSON.",
+  },
+  // 11.2 MUI (installed-package)
+  mui: {
+    theming:
+      "createTheme({ palette, typography, spacing, shape }) — set each overridden token at its theme path (e.g. palette.primary.main) via the token↔theme-key map.",
+    componentLever: "theme.components.Mui<Name>.styleOverrides (per slot).",
+    provider: "Wrap the app root in <ThemeProvider theme={theme}> from @mui/material (+ <CssBaseline/>).",
+    enumerate: "Bundled .d.ts prop interfaces from @mui/material.",
+  },
+  // 11.3 Chakra v3 (installed-package + CLI snippets)
+  chakra: {
+    theming: "defineConfig({ theme: { tokens, semanticTokens } }) → createSystem(defaultConfig, config).",
+    componentLever: "recipes / slotRecipes in the config.",
+    provider: "Wrap the app root in <ChakraProvider value={system}>.",
+    enumerate: ".d.ts + `chakra typegen`.",
+  },
+  // 11.4 Mantine (installed-package)
+  mantine: {
+    theming:
+      "createTheme({ colors, primaryColor, fontFamily, radius, spacing }) — `colors` entries are 10-shade tuples, so generate the full ramp for an overridden brand color.",
+    componentLever: "Component.extend({ defaultProps, styles }) under theme.components.",
+    provider: "Wrap the app root in <MantineProvider theme={theme}> and import @mantine/core styles.",
+    enumerate: "Bundled .d.ts prop interfaces from @mantine/core.",
+  },
+  // 11.5 Ant Design v5 (installed-package)
+  antd: {
+    theming: "ConfigProvider theme={{ token, algorithm }} — set overridden tokens on theme.token.",
+    componentLever: "theme.components.<Component> (per-component token overrides).",
+    provider: "Wrap the app root in <ConfigProvider theme={…}> from antd.",
+    enumerate: "Bundled .d.ts component-token interfaces from antd.",
+  },
+  // 11.6 Radix (headless)
+  radix: {
+    theming:
+      "No built-in token model — style Radix primitives with the project's OWN token CSS (token_file vars). Radix ships behavior + data-attrs, not styles.",
+    componentLever: 'Per-part className / data-attribute selectors (e.g. [data-state="open"]).',
+    provider: "None — Radix is unstyled; the project's CSS owns theming.",
+    enumerate: "Bundled .d.ts prop interfaces from radix-ui.",
+  },
+  headlessui: {
+    theming: "No built-in token model — style Headless UI primitives with the project's OWN token CSS (token_file vars).",
+    componentLever: "Per-part className via render-prop state (e.g. `open`, `active`).",
+    provider: "None — unstyled; the project's CSS owns theming.",
+    enumerate: "Bundled .d.ts prop interfaces from @headlessui/react.",
+  },
+  // 11.7 Astryx (installed-package) — API per the user-provided docs; VERIFY via the CLI/MCP, don't assume.
+  astryx: {
+    theming:
+      "defineTheme({…}) in a .ts theme file compiled with `astryx theme build`, OR an injected <Theme> override CSS at runtime. Confirm the exact API via the Astryx CLI docs (`astryx --help` / its MCP) before writing — do not assume subcommands.",
+    componentLever: "defineTheme.components.",
+    provider: "Wrap the app root in the Astryx <Theme> provider per its docs.",
+    enumerate: "Astryx CLI `--json` output / MCP (no Storybook assumption).",
+  },
+};
+
+/** The consume+customize contract for a library, or undefined for `other`/unknown. */
+export function themeContractFor(library: string | undefined | null): LibraryThemeContract | undefined {
+  return library ? LIBRARY_THEME_CONTRACTS[library] : undefined;
+}
+
+/**
  * The consume kind for a component library. Returns `"unknown"` for `other` or any
  * unrecognized library, so the caller asks the user rather than guessing a command.
  */

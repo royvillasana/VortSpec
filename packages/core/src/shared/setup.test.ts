@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { libraryKind, buildProjectYaml, detectLibrary, themeApplyFor, type SetupAnswers } from "./setup";
+import {
+  libraryKind,
+  buildProjectYaml,
+  detectLibrary,
+  themeApplyFor,
+  themeContractFor,
+  COMPONENT_LIBRARY_OPTIONS,
+  type SetupAnswers,
+} from "./setup";
 
 describe("libraryKind — consume classification", () => {
   it("classifies cli-registry libraries", () => {
@@ -82,6 +90,28 @@ describe("buildProjectYaml — library consume kind + descriptor", () => {
     expect(buildProjectYaml({ ...base, componentLibrary: "mui" })).toContain("theme_apply: theme-object:mui");
     expect(buildProjectYaml({ ...base, componentLibrary: "astryx" })).toContain("theme_apply: astryx-defineTheme");
     expect(buildProjectYaml({ ...base, componentLibrary: "radix" })).toContain("theme_apply: css-vars");
+  });
+});
+
+describe("LIBRARY_THEME_CONTRACTS — per-library consume+customize recipe (Phase 11)", () => {
+  it("covers every supported library (all but `other`) with a complete contract", () => {
+    for (const opt of COMPONENT_LIBRARY_OPTIONS) {
+      if (opt.value === "other") continue;
+      const c = themeContractFor(opt.value);
+      expect(c, `missing contract for ${opt.value}`).toBeDefined();
+      expect(c!.theming.length).toBeGreaterThan(0);
+      expect(c!.componentLever.length).toBeGreaterThan(0);
+      expect(c!.provider.length).toBeGreaterThan(0);
+      expect(c!.enumerate.length).toBeGreaterThan(0);
+    }
+    expect(themeContractFor("other")).toBeUndefined();
+  });
+
+  it("distinguishes theme-object levers from CSS-var / headless theming", () => {
+    expect(themeContractFor("mui")!.componentLever).toContain("theme.components.Mui");
+    expect(themeContractFor("antd")!.componentLever).toContain("theme.components");
+    expect(themeContractFor("shadcn")!.componentLever).toContain("CVA");
+    expect(themeContractFor("radix")!.theming).toContain("No built-in token model");
   });
 });
 

@@ -131,6 +131,46 @@ export const PROVISION_LIBRARY_PROMPT = [
   "   at `/extract-design-system`.",
 ].join("\n");
 
+/**
+ * Customize prompt (change: consume-component-libraries, Phase 11) — dispatched when a token/theme edit
+ * targets a `theme-object:<lib>` project (MUI/Chakra/Mantine/Antd) or Astryx, where the deterministic CSS
+ * overlay can't apply. It hands the agent the library's consume+customize CONTRACT and the durable overlay,
+ * and has it materialize the overlay into the library's REAL theme artifact + provider wiring — the only
+ * step that isn't a deterministic string emit. VortSpec has already recorded the edits (durable overlay)
+ * and the token→theme-path map; this applies them through the library's own theming lever.
+ */
+export function buildCustomizeLibraryPrompt(
+  library: string,
+  contract: { theming: string; componentLever: string; provider: string; enumerate: string },
+): string {
+  return [
+    `Apply this project's pending design-system personalization to the ${library} theme.`,
+    "",
+    "SOURCE OF TRUTH — do not invent values:",
+    "- `.vortspec/theme-overrides.json` — the durable overlay: global `tokens` (name → value, optional",
+    "  `mode`) and per-component `components` (base / variants / slots). These are the ONLY edits to apply.",
+    "- `.vortspec/token-theme-keys.json` — code-token name → this library's theme-object path (e.g.",
+    "  `primary` → `palette.primary.main`). Use it to place each overridden token; if a token has no",
+    "  mapping, infer its path from the library's schema and WRITE the mapping back so it's stable next time.",
+    "- `.sdd-de/project.yaml` — `component_library`, `library_import_base`, `component_dir`, `token_file`.",
+    "",
+    `This library's theming contract:`,
+    `- GLOBAL tokens → ${contract.theming}`,
+    `- PER-COMPONENT overrides → ${contract.componentLever}`,
+    `- PROVIDER wiring → ${contract.provider}`,
+    "",
+    "STEPS:",
+    "1. Read the overlay + the theme-key map. If both are empty, report nothing to apply and STOP.",
+    "2. Generate or PATCH the library's theme file with the global token overrides at their mapped paths.",
+    "   Patch in place when a theme file already exists; create one only if none does.",
+    "3. Apply per-component overrides through the library's per-component lever above (never inline styles).",
+    "4. Ensure the provider wiring is present at the app root exactly once (add it only if missing).",
+    "5. Do NOT modify the library's own package source, and do NOT hard-code a value the overlay doesn't",
+    "   carry. If the library's API can't be confirmed (e.g. Astryx), verify via its CLI/MCP before writing.",
+    "6. Report the theme file written/patched, the components re-themed, and any token you had to map anew.",
+  ].join("\n");
+}
+
 export const RESCAN_PROMPT = [
   "Re-scan this project's design source and reconcile the design system. Do NOT implement or",
   "modify any component code — this only refreshes tokens and the component inventory.",

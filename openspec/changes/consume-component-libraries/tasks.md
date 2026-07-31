@@ -55,13 +55,13 @@
 
 ## 11. Per-library consume + customize recipes
 
-- [ ] 11.1 shadcn (cli-registry): `init` + `add`; import via `components.json` alias; theming = global CSS `:root`/`.dark` vars + `components.json`; per-component = copied CVA `variants`; enumerate via registry JSON/MCP + `.d.ts`.
-- [ ] 11.2 MUI (installed-package): install `@mui/material @emotion/react @emotion/styled`; theming = generated `createTheme({palette,typography,spacing,shape})` + `ThemeProvider`; per-component = `theme.components.Mui<Name>`; enumerate via bundled `.d.ts`.
-- [ ] 11.3 Chakra v3 (installed-package + CLI snippets): install + `cli snippet add`; theming = `defineConfig({theme.tokens,semanticTokens})` → `createSystem`; per-component = recipes/slotRecipes; enumerate via `.d.ts` + `typegen`.
-- [ ] 11.4 Mantine (installed-package): install + postcss; theming = `createTheme({colors[10],…})` (generate shade ramps); per-component = `.extend`; enumerate via `.d.ts`.
-- [ ] 11.5 Ant Design v5 (installed-package): install `antd`; theming = `ConfigProvider theme.token` + algorithm; per-component = `theme.components.<C>`; enumerate via `.d.ts` token interfaces.
-- [ ] 11.6 Radix (headless): install `radix-ui`; no built-in tokens — pair with the project's tokens; per-part `className`/data-attrs; enumerate via `.d.ts`.
-- [ ] 11.7 Astryx (installed-package): install `@astryxdesign/core @astryxdesign/theme-neutral @astryxdesign/cli` + `cli init` (verify packages resolve / run its doctor first); theming = `defineTheme` `.ts` (`astryx theme build`) or injected `<Theme>` override CSS; per-component = `defineTheme.components`; enumerate via CLI `--json`/MCP.
+- [x] 11.1 shadcn (cli-registry): `init` + `add`; import via `components.json` alias; theming = global CSS `:root`/`.dark` vars + `components.json`; per-component = copied CVA `variants`; enumerate via registry JSON/MCP + `.d.ts`.
+- [x] 11.2 MUI (installed-package): install `@mui/material @emotion/react @emotion/styled`; theming = generated `createTheme({palette,typography,spacing,shape})` + `ThemeProvider`; per-component = `theme.components.Mui<Name>`; enumerate via bundled `.d.ts`.
+- [x] 11.3 Chakra v3 (installed-package + CLI snippets): install + `cli snippet add`; theming = `defineConfig({theme.tokens,semanticTokens})` → `createSystem`; per-component = recipes/slotRecipes; enumerate via `.d.ts` + `typegen`.
+- [x] 11.4 Mantine (installed-package): install + postcss; theming = `createTheme({colors[10],…})` (generate shade ramps); per-component = `.extend`; enumerate via `.d.ts`.
+- [x] 11.5 Ant Design v5 (installed-package): install `antd`; theming = `ConfigProvider theme.token` + algorithm; per-component = `theme.components.<C>`; enumerate via `.d.ts` token interfaces.
+- [x] 11.6 Radix (headless): install `radix-ui`; no built-in tokens — pair with the project's tokens; per-part `className`/data-attrs; enumerate via `.d.ts`.
+- [x] 11.7 Astryx (installed-package): install `@astryxdesign/core @astryxdesign/theme-neutral @astryxdesign/cli` + `cli init` (verify packages resolve / run its doctor first); theming = `defineTheme` `.ts` (`astryx theme build`) or injected `<Theme>` override CSS; per-component = `defineTheme.components`; enumerate via CLI `--json`/MCP.
 
 ## 12. Per-project token/theme customization (any component source)
 
