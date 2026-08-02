@@ -53,22 +53,6 @@ A user SHALL be able to override a single component's styling/variant while keep
 - **WHEN** the user customizes a single consumed component (e.g. give Button a new brand variant) without changing others
 - **THEN** the override is stored against that component's `data-component` and applied via the library's per-component override mechanism, leaving other components and the library untouched
 
-### Requirement: Semantic-lever to token resolver
-The customization layer SHALL provide a deterministic resolver that maps a human design-system lever
-(primary/secondary/tertiary color, card radius, component stroke, shadow, button styling) to the concrete
-token name(s) and/or per-component override target(s) for a given design source and component library, plus
-each lever's current value. The resolver SHALL be data-driven (a per-source map), SHALL reuse the existing
-token↔theme-key map where a theme-object path is needed, and SHALL return no target for a lever the current
-source cannot express (so the caller can hide/disable it).
-
-#### Scenario: Resolver returns per-source targets
-- **WHEN** the resolver is asked for the "Card radius" lever on an Astryx project
-- **THEN** it returns the concrete token target (`--radius-container`) and its current value, so the editor can render and write it
-
-#### Scenario: Resolver omits an unsupported lever
-- **WHEN** a lever has no token/override target for the current source
-- **THEN** the resolver returns no target for it, and the editor hides or disables that lever rather than inventing one
-
 ### Requirement: Tokens are read through the token file's `@import` chain
 Reading a project's tokens SHALL follow the `@import` chain of its configured token file — relative
 partials and bare package specifiers alike, the latter resolved through the package's `exports` map — and
@@ -89,4 +73,32 @@ dependency's files are never modified.
 #### Scenario: A light/dark pair keeps its dark half
 - **WHEN** the user edits a token whose value is `light-dark(<light>, <dark>)`
 - **THEN** only the light half is replaced and the library's dark-mode value is preserved
+
+### Requirement: Property-indexed view of the design system
+The customization layer SHALL provide a reader that indexes a project's design system BY STYLE PROPERTY —
+color, border-radius, spacing, shadow, typography — reporting, for each property, the tokens of that type
+and, for each token, the components bound to it for that property. The index SHALL be derived from the
+project's real tokens, screens, and component stand-ins rather than from a fixed per-library list, and SHALL
+be overlay-aware so every value reported is the live one.
+
+#### Scenario: Index reports tokens and their users per property
+- **WHEN** the reader is asked for the border-radius property on a project whose screens round several components
+- **THEN** it returns that project's radius tokens with, for each, the components that use it for border-radius, and each token's live value
+
+#### Scenario: A token nothing uses is still reported
+- **WHEN** the design system defines a token no component currently binds
+- **THEN** the index reports it with an empty component list rather than omitting it
+
+#### Scenario: A binding with no component identity is not misattributed
+- **WHEN** a screen binds a token without marking the element's component
+- **THEN** the binding contributes to the token's presence but is not attributed to any component
+
+### Requirement: Re-pointing a component's property to a different token
+The customization layer SHALL support changing WHICH design-system token a single component uses for a
+given style property, keyed by `data-component`, without altering the token's own value and without
+affecting other components bound to either token. The re-point SHALL be recorded in the durable overlay.
+
+#### Scenario: One component moves to a different token
+- **WHEN** a component's border-radius is re-pointed from one radius token to another
+- **THEN** only that component renders with the new token's value; the tokens' own values are unchanged and other components using either token are unaffected
 
