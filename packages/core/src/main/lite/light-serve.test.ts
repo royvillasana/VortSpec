@@ -2,7 +2,7 @@ import { describe, it, expect, afterEach } from "vitest";
 import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { serveLightPages, lightPageUrl, stopLightServe, injectTokens, tokenCssFor } from "./light-serve";
+import { serveLightPages, lightPageUrl, stopLightServe, injectTokens, tokenCssFor, clearTokenCssCache } from "./light-serve";
 import { setThemeTokenOverride } from "../inspector/theme-override-store";
 import { LIGHT_PAGES_DIR } from "../../shared/light-page";
 
@@ -157,5 +157,31 @@ describe("a design-token edit reaches an already-created screen", () => {
     expect(overlayDecl).toBeGreaterThan(-1);
     // Later in the document == wins the cascade. This is the whole propagation guarantee.
     expect(overlayDecl).toBeGreaterThan(pageDecl);
+  });
+});
+
+describe("token CSS injection keeps a chosen font fetchable", () => {
+  it("hoists the overlay's @import above the base sheet's rules", async () => {
+    // The overlay is concatenated AFTER the base, which puts its @import after the base's rules —
+    // where CSS ignores it. A Google family would then be named in the stack but never downloaded.
+    const dir = await mkdtemp(join(tmpdir(), "vs-tokencss-"));
+    await mkdir(join(dir, ".sdd-de"), { recursive: true });
+    await writeFile(join(dir, ".sdd-de/project.yaml"), "token_file: tokens.css\ntheme_apply: css-vars\n");
+    await writeFile(join(dir, "tokens.css"), ":root { --radius-card: 20px; }\n");
+    await mkdir(join(dir, ".vortspec"), { recursive: true });
+    await writeFile(
+      join(dir, ".vortspec/theme-overrides.json"),
+      JSON.stringify({ version: 1, tokens: { "font-family-body": { value: "Inter, sans-serif" } }, googleFonts: ["Inter"] }),
+    );
+
+    clearTokenCssCache(dir);
+    const css = await tokenCssFor(dir);
+
+    const firstImport = css.indexOf("@import");
+    expect(firstImport, "an @import for the chosen family").toBeGreaterThanOrEqual(0);
+    // Nothing but whitespace/imports may precede it — otherwise the browser drops it.
+    expect(css.slice(0, firstImport).trim()).toBe("");
+    // And the overlay's declarations still land after the base's, so they win by cascade.
+    expect(css.indexOf("--font-family-body")).toBeGreaterThan(css.indexOf("--radius-card"));
   });
 });

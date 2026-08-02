@@ -554,6 +554,41 @@ export function RunApp({
     bridge.reload();
   };
 
+  /**
+   * Re-theme the open screen whenever the personalization overlay changes ON DISK, not only when this
+   * view's own Library tab reports an edit.
+   *
+   * The overlay is materialized into every served page at request time, so the canvas shows a token
+   * change the moment it re-fetches — but ONLY something asks it to. The `onEdited` callback covers the
+   * Library tab mounted right here; it cannot cover the same panel mounted in the Design-tokens sidebar,
+   * a preset applied from there, or an agent writing the overlay directly. In those cases the file
+   * changed, the sidebar's Live Preview moved, and the screen kept rendering the values it loaded with —
+   * which reads as "the edit did nothing".
+   *
+   * Watching the file makes the canvas follow the design system regardless of who wrote it. Scoped to
+   * the overlay + presets so an ordinary source edit doesn't reload the canvas out from under an
+   * in-progress instant edit. The workspace watcher is reference-counted, so sharing it with
+   * LibraryPanel is safe.
+   */
+  const refreshRef = useRef(refresh);
+  refreshRef.current = refresh;
+  useEffect(() => {
+    if (!canvas) return;
+    void api.watchWorkspace(project.path);
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const off = api.onWorkspaceChange((e) => {
+      if (e.projectPath !== project.path) return;
+      if (e.path !== null && !/^\.vortspec\/(theme-overrides|presets)\.json$/.test(e.path)) return;
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => refreshRef.current(), 250);
+    });
+    return () => {
+      off();
+      if (timer) clearTimeout(timer);
+      void api.unwatchWorkspace(project.path);
+    };
+  }, [project.path, canvas]);
+
   // The chat assistant edits files on disk, but the canvas keeps showing the DOM it already loaded —
   // so an AI change (e.g. "make the content bigger") wouldn't appear until a manual reload. Reload the
   // canvas when the assistant finishes a turn (busy → idle), so AI edits show immediately, exactly like
