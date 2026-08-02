@@ -93,6 +93,6 @@ working state.
 
 ## Phase 6 — End-to-end
 
-- [ ] 6.1 Manual on AstryxTest: open the Playground; confirm BORDERS lists all four of `--radius-container`, `--radius-card`, `--radius-pill`, `--radius-element`; change one and see the open screen re-render.
-- [ ] 6.2 Manual on AstryxTest: pick a Google font and confirm the screens render in it; apply Ocean and confirm they re-theme; select Default and confirm Astryx's own values come back.
+- [x] 6.1 Manual on AstryxTest: open the Playground; confirm BORDERS lists all four of `--radius-container`, `--radius-card`, `--radius-pill`, `--radius-element`; change one and see the open screen re-render.
+- [x] 6.2 Manual on AstryxTest: pick a Google font and confirm the screens render in it; apply Ocean and confirm they re-theme; select Default and confirm Astryx's own values come back.
 - [x] 6.3 Full typecheck + test suite across core, ui and both app shells. (1015 core + 148 ui pass; core/ui/ide-web/ide-node typecheck clean. Component tests: the 8 tests for this change all pass. Three CT files fail for reasons that PREDATE this change and were confirmed by stashing the work and re-running on a clean tree: `compose.ct` 16/16, `run-canvas.ct` — which this change actually improves, 15 failures before vs 12 after — and `workbench.ct:76` "Storybook runtime on localhost". A full-suite run that appeared to show more damage was contaminated: it overlapped a second Playwright run competing for the same ports and build cache, and a clean serial re-run of the affected files gives 13 passed / 1 failed, that one being the pre-existing `workbench.ct:76`.)

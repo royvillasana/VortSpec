@@ -206,7 +206,7 @@ test("mounts a modify-capable assistant grounded in the workspace", async ({ mou
 test("seeds the assistant context with the open file", async ({ mount }) => {
   const c = await mount(<App />, { hooksConfig: { mock: base } });
   await open(c);
-  await c.getByRole("complementary").getByRole("button", { name: "Explorer", exact: true }).click();
+  await c.getByRole("complementary").getByRole("button", { name: "Code", exact: true }).click();
   await c.getByRole("button", { name: "README.md" }).click();
   await c.getByRole("button", { name: "Chat", exact: true }).click();
   await expect(c.getByTestId("assistant-context")).toContainText("README.md");
@@ -215,7 +215,7 @@ test("seeds the assistant context with the open file", async ({ mount }) => {
 test("sends the open file as hidden grounding without echoing it in the bubble", async ({ mount }) => {
   const c = await mount(<App />, { hooksConfig: { mock: base } });
   await open(c);
-  await c.getByRole("complementary").getByRole("button", { name: "Explorer", exact: true }).click();
+  await c.getByRole("complementary").getByRole("button", { name: "Code", exact: true }).click();
   await c.getByRole("button", { name: "README.md" }).click();
   await c.getByRole("button", { name: "Chat", exact: true }).click();
   await c.getByPlaceholder(/@ a file/).fill("explain this");
