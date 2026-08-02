@@ -539,9 +539,24 @@
           <div class="log">
             <div class="rel now">
               <div class="rel-head">
+                <span class="ver">v0.1.34</span>
+                <span class="ttl">The design system, by property</span>
+                <span class="now-tag">Latest</span>
+                <span class="when">Aug 2, 2026</span>
+              </div>
+              <ul>
+                <li><b>A design system you can see</b> — the abstract &ldquo;Accent / Roundness / Shadow&rdquo; levers are gone. In their place: your project&rsquo;s own tokens, under their own names, grouped into Colors, Typography, Spacing, Borders and Shadows. Every attribute is drawn rather than spelled out — a colour is a swatch, a radius is a corner, a shadow is a lit square, a type token renders at its own size.</li>
+                <li><b>See it before you apply it</b> — a live sample card re-renders under a preset or a manual edit <i>before</i> you commit it, so you judge the result instead of the value.</li>
+                <li><b>Themes</b> — Ocean, Forest and Sunset ship as built-in presets with matched light and dark pairs; Default returns your library&rsquo;s own values without discarding your edits.</li>
+                <li><b>Fonts</b> — ~70 Google families bundled, the rest fetched as you scroll, alongside your system and Figma-library fonts.</li>
+                <li><b>Reads consumed libraries properly</b> — token files that only <code>@import</code> a vendor theme now resolve through the whole chain, so a real design system shows all of its tokens instead of none, and edits land in the file that actually declares them.</li>
+                <li><b>Shell</b> — searchable layer tree, a dock that reopens from any section, animated sidebar collapse, and the brand mark folded into the breadcrumb.</li>
+              </ul>
+            </div>
+            <div class="rel">
+              <div class="rel-head">
                 <span class="ver">v0.1.33</span>
                 <span class="ttl">Design-system UI refresh + Draw-to-component</span>
-                <span class="now-tag">Latest</span>
                 <span class="when">Jul 31, 2026</span>
               </div>
               <ul>
