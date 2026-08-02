@@ -37,6 +37,15 @@
 - [ ] 4.6 Make an overlay-scoped edit one undo step, including removing an override the edit created.
 - [ ] 4.7 Component tests: `Mixed` is never flattened (edit padding on a mixed-radius selection, assert each radius survives); fan-out writes all members; partial failure reports.
 
+## 4b. Revision — apply-to-all means "same style", and the design system marks what a selection uses
+
+- [x] 4b.1 Replace the `component` scope with `matching`: same `data-component` AND the same current value for the property being edited. An element already styled differently was styled differently on purpose and is left alone.
+- [x] 4b.2 Update `deriveScope` rule 2 and `availableScopes` for `matching`, and extend the unit tests — including the case that same-component-but-different-values must NOT default to `matching`.
+- [x] 4b.3 Count `matching` from the live tree by (component, current value) so the label states the real set.
+- [x] 4b.4 Route a `matching`-scoped commit as a fan-out over the matched elements in the page's own source, not as an overlay write.
+- [x] 4b.5 Mark the design-system rows the selection resolves through, changing nothing else — no filtering, no reordering, no hiding. Clearing the selection removes the marking.
+- [x] 4b.6 Component tests: a differently-styled sibling is left alone; the count matches the set written; the marking appears and clears with the selection and moves no rows.
+
 ## 5. Phase 3 — select all matching
 
 - [ ] 5.1 Implement matching by the three named criteria: same `data-component`, same tag, same binding to a given token.

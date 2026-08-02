@@ -8,8 +8,13 @@ A style edit SHALL be a value **and** a scope. The system SHALL support exactly 
 |---|---|---|
 | `element` | the one focused element | the page's own source |
 | `selection` | every element in the current multi-selection | the page's own source, per element |
-| `component` | every instance of one `data-component`, on every page | the durable overlay's per-component override |
+| `matching` | every element that currently **looks the same** — same `data-component` AND the same current value for the property being edited | the page's own source, per element |
 | `token` | every element resolving the property through that token | the durable overlay's token override |
+
+`matching` is deliberately NOT "every instance of this component". An element of the same component that has
+already been styled differently was styled differently on purpose; sweeping it up in a change aimed at the
+ones that look alike destroys a decision the user made earlier and did not revisit. The rule is therefore
+narrow and stated: same component, same current value for this property.
 
 The scope SHALL be visible on the edit control before the value is committed. The system SHALL NOT apply an edit at a scope the user did not see.
 
@@ -19,13 +24,18 @@ The scope SHALL be visible on the edit control before the value is committed. Th
 - **AND** the scope that will be used SHALL be indicated before any value is typed
 
 #### Scenario: The same value routes by scope
-- **WHEN** the user sets `border-radius: 12px` at `component` scope on a Button
-- **THEN** the write SHALL go to the per-component override, not to the page's source
-- **AND** the same edit at `element` scope SHALL go to the page's source instead
+- **WHEN** the user sets `border-radius: 12px` at `matching` scope on a Button
+- **THEN** every element that shares that Button's component and its current radius SHALL take the new value
+- **AND** the same edit at `element` scope SHALL change only the one element
+
+#### Scenario: A differently-styled sibling is left alone
+- **WHEN** the page has ten Buttons at `8px` and three at `16px`, and the user edits one of the `8px` ones at `matching` scope
+- **THEN** the ten SHALL change
+- **AND** the three SHALL keep `16px`, because they were styled differently on purpose
 
 #### Scenario: An unavailable scope is not offered
 - **WHEN** the selected element carries no `data-component`
-- **THEN** the `component` scope SHALL NOT be offered
+- **THEN** the `matching` scope SHALL NOT be offered
 - **AND** the remaining scopes SHALL still be available
 
 ### Requirement: Blast radius is stated before the write, never after
@@ -34,7 +44,7 @@ Each offered scope SHALL be labelled with the **count of elements it will affect
 
 #### Scenario: Counts are shown per scope
 - **WHEN** the scope options are displayed for a selected Button
-- **THEN** each SHALL carry its reach — e.g. `This element`, `5 selected`, `All 12 Buttons`, `--radius-card · 40 uses`
+- **THEN** each SHALL carry its reach — e.g. `This element`, `5 selected`, `10 Buttons like this`, `--radius-card · 40 uses`
 
 #### Scenario: A count that cannot be computed is not invented
 - **WHEN** the reach of a scope cannot be determined for the current page
@@ -49,7 +59,7 @@ Each offered scope SHALL be labelled with the **count of elements it will affect
 The system SHALL preselect a scope by a deterministic rule over the current selection and the property being edited, applied in order:
 
 1. If **every** selected element resolves that property through the **same token**, the default SHALL be `token`.
-2. Otherwise, if **every** selected element shares the **same `data-component`**, the default SHALL be `component`.
+2. Otherwise, if **every** selected element shares the **same `data-component`** and the same current value for the property, the default SHALL be `matching`.
 3. Otherwise, if more than one element is selected, the default SHALL be `selection`.
 4. Otherwise the default SHALL be `element`.
 
@@ -59,13 +69,17 @@ The rule SHALL depend only on facts the selection literally exposes. The system 
 - **WHEN** the user selects three cards whose `border-radius` all resolve to `var(--radius-card)`
 - **THEN** the default scope SHALL be `token` for `--radius-card`
 
-#### Scenario: A shared component defaults to the component
-- **WHEN** the user selects four Buttons whose radii are hardcoded and differ
-- **THEN** the default scope SHALL be `component` for Button
+#### Scenario: A shared component and a shared value default to matching
+- **WHEN** the user selects four Buttons that share a component and all currently read `8px`
+- **THEN** the default scope SHALL be `matching`
 
 #### Scenario: A mixed selection defaults to the selection
 - **WHEN** the user selects a Button and a Card with no shared token for the property
 - **THEN** the default scope SHALL be `selection`
+
+#### Scenario: Same component but different values does not default to matching
+- **WHEN** the user selects four Buttons whose radii differ from one another
+- **THEN** the default SHALL be `selection`, since there is no single "looks like this" to match
 
 #### Scenario: The default is a default, not a decision
 - **WHEN** any scope has been derived as the default
@@ -90,11 +104,11 @@ When an `element`- or `selection`-scoped edit would hardcode a value onto elemen
 
 ### Requirement: Overlay-scoped edits reach the open screen immediately
 
-An edit at `component` or `token` scope writes to the durable overlay rather than the page's source. The system SHALL make such an edit visible on the open screen without a manual reload, on the same terms as an element edit.
+An edit at `token` scope writes to the durable overlay rather than the page's source. The system SHALL make such an edit visible on the open screen without a manual reload, on the same terms as an element edit.
 
-#### Scenario: A component-scoped edit re-themes the screen
-- **WHEN** the user sets a radius at `component` scope
-- **THEN** every instance on the open screen SHALL show the new radius without the user reloading
+#### Scenario: A token-scoped edit re-themes the screen
+- **WHEN** the user sets a radius at `token` scope
+- **THEN** every element resolving through that token SHALL show the new radius without the user reloading
 
 #### Scenario: The screen follows the overlay whoever wrote it
 - **WHEN** the overlay changes from another surface — the design-system sidebar, a preset, or an agent
@@ -111,3 +125,26 @@ An edit SHALL be applied at the scope shown at the moment it was committed. A la
 #### Scenario: A scope change mid-edit re-states the reach
 - **WHEN** the user switches scope while a value is in the field
 - **THEN** the stated reach SHALL update before the value is committed at the new scope
+
+
+### Requirement: The design system shows which of its values compose the selection
+
+When an element is selected, the design-system surface SHALL indicate which of its rows that element
+actually resolves through — its background, its type, its radius — leaving every other row, and the order
+and grouping of all of them, unchanged.
+
+The design system is the same design system whatever is selected; hiding or reordering it per selection
+would make it unlearnable. The point is to answer "what is this component made of?" against a stable list,
+not to present a different list.
+
+#### Scenario: The rows in use are marked
+- **WHEN** a Button that resolves its background through `--color-accent` and its radius through `--radius-element` is selected
+- **THEN** those rows SHALL be marked as in use by the selection
+
+#### Scenario: Nothing else moves
+- **WHEN** a selection marks some rows
+- **THEN** every other row SHALL remain visible, in its existing section and its existing order
+
+#### Scenario: Deselecting removes the marking
+- **WHEN** the selection is cleared
+- **THEN** no rows SHALL be marked, and the surface SHALL read exactly as it did before anything was selected

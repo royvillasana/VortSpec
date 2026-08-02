@@ -16,11 +16,16 @@
 /**
  * Where an edit lands.
  *
- * `element` and `selection` write the page's own source, once per element. `component` and `token` write
- * the durable personalization overlay once, reaching every page — they are not "bigger versions" of an
- * element edit but a different destination entirely.
+ * `element`, `selection` and `matching` write the page's own source, once per element. `token` writes the
+ * durable personalization overlay once, reaching every page — it is not a "bigger version" of an element
+ * edit but a different destination entirely.
+ *
+ * `matching` is "every element that looks the same": the same `data-component` AND the same current value
+ * for the property being edited. Deliberately not "every instance of this component" — an element already
+ * styled differently was styled differently on purpose, and sweeping it into a change aimed at the ones
+ * that look alike destroys a decision the user made earlier and did not revisit.
  */
-export type StyleScope = "element" | "selection" | "component" | "token";
+export type StyleScope = "element" | "selection" | "matching" | "token";
 
 /** One element as far as scoping is concerned. Deliberately minimal — this is all the rules read. */
 export interface ScopeTarget {
@@ -35,6 +40,8 @@ export interface ScopeTarget {
    * Absent or undefined means the property is not governed by the design system on this element.
    */
   tokens?: Record<string, string | undefined>;
+  /** The element's CURRENT value per property — what "looks the same" is judged on. */
+  values?: Record<string, string | undefined>;
 }
 
 /**
@@ -42,8 +49,12 @@ export interface ScopeTarget {
  * such rather than guessed, because a wrong count on a wide scope is worse than no count.
  */
 export interface ScopeReach {
-  /** Instances per `data-component` on the current page. */
-  componentCounts?: Record<string, number | undefined>;
+  /**
+   * How many elements on the page share a (component, value) pair, keyed by `matchKey`. Counting by the
+   * PAIR rather than by component is what makes the label honest: "10 Buttons like this" is a different
+   * number from "13 Buttons", and the difference is the three nobody wants touched.
+   */
+  matchCounts?: Record<string, number | undefined>;
   /** Uses per token name (without `--`), as the design system already counts them. */
   tokenUses?: Record<string, number | undefined>;
 }
@@ -51,8 +62,10 @@ export interface ScopeReach {
 /** One offered scope: what it is, what it keys on, and how far it reaches (null when uncountable). */
 export interface ScopeOption {
   scope: StyleScope;
-  /** The `data-component` for `component` scope, the token name for `token` scope, else undefined. */
+  /** The `data-component` for `matching` scope, the token name for `token` scope, else undefined. */
   key?: string;
+  /** For `matching`: the current value the matched elements share. */
+  value?: string;
   /** Elements this would affect, or null when the reach cannot be computed. */
   reach: number | null;
 }
@@ -76,19 +89,34 @@ export function sharedComponent(selection: readonly ScopeTarget[]): string | nul
 /** What {@link deriveScope} decided, and what it keyed on. */
 export interface DerivedScope {
   scope: StyleScope;
-  /** The token (`token` scope) or component (`component` scope) it keyed on. */
+  /** The token (`token` scope) or component (`matching` scope) it keyed on. */
   key?: string;
+  /** For `matching`: the shared current value that defines "looks the same". */
+  value?: string;
+}
+
+/** The key a (component, value) pair is counted under. One place, so counting and lookup cannot drift. */
+export function matchKey(component: string, value: string): string {
+  return `${component}\u0000${value}`;
+}
+
+/** The value every member currently has for `property`, or null when they do not agree. */
+export function sharedValue(selection: readonly ScopeTarget[], property: string): string | null {
+  if (selection.length === 0) return null;
+  const first = selection[0].values?.[property];
+  if (first === undefined) return null;
+  return selection.every((t) => t.values?.[property] === first) ? first : null;
 }
 
 /**
  * The scope to preselect, by four ordered rules:
  *
- *   1. every member resolves the property through the same token → `token`
- *   2. else every member shares a `data-component`               → `component`
- *   3. else more than one member                                 → `selection`
- *   4. else                                                      → `element`
+ *   1. every member resolves the property through the same token        → `token`
+ *   2. else every member shares a component AND a current value for it  → `matching`
+ *   3. else more than one member                                        → `selection`
+ *   4. else                                                             → `element`
  *
- * Token above component is the opinionated step. When the design system already governs a property,
+ * Token above matching is the opinionated step. When the design system already governs a property,
  * editing the instance fights it — so the default points at the thing that actually decides the value.
  * This is what makes the feature improve the design system instead of scattering overrides.
  *
@@ -98,7 +126,10 @@ export function deriveScope(selection: readonly ScopeTarget[], property: string)
   const token = sharedToken(selection, property);
   if (token) return { scope: "token", key: token };
   const component = sharedComponent(selection);
-  if (component) return { scope: "component", key: component };
+  const value = sharedValue(selection, property);
+  // Rule 2 needs BOTH: a shared component says what kind of thing this is, the shared value says which of
+  // them look alike. Same component with differing values has no single "looks like this" to match.
+  if (component && value !== null) return { scope: "matching", key: component, value };
   if (selection.length > 1) return { scope: "selection" };
   return { scope: "element" };
 }
@@ -106,9 +137,10 @@ export function deriveScope(selection: readonly ScopeTarget[], property: string)
 /**
  * Every scope that can be offered, narrowest first.
  *
- * A scope is omitted when it has nothing to key on rather than shown-and-disabled: `component` needs a
- * shared `data-component`, `token` needs a shared token for this property, and `selection` needs more
- * than one member. Offering a scope that cannot act invites the user to pick it and be refused.
+ * A scope is omitted when it has nothing to key on rather than shown-and-disabled: `matching` needs both a
+ * shared `data-component` and a shared current value, `token` needs a shared token for this property, and
+ * `selection` needs more than one member. Offering a scope that cannot act invites the user to pick it and
+ * be refused.
  */
 export function availableScopes(
   selection: readonly ScopeTarget[],
@@ -120,8 +152,14 @@ export function availableScopes(
   if (selection.length > 1) options.push({ scope: "selection", reach: selection.length });
 
   const component = sharedComponent(selection);
-  if (component) {
-    options.push({ scope: "component", key: component, reach: reach.componentCounts?.[component] ?? null });
+  const value = sharedValue(selection, property);
+  if (component && value !== null) {
+    options.push({
+      scope: "matching",
+      key: component,
+      value,
+      reach: reach.matchCounts?.[matchKey(component, value)] ?? null,
+    });
   }
   const token = sharedToken(selection, property);
   if (token) {
@@ -133,11 +171,11 @@ export function availableScopes(
 /**
  * Whether a committed edit at this scope writes the durable overlay rather than the page's own source.
  *
- * The distinction drives more than the destination: an overlay write targets a component or token
- * IDENTITY, so it is not gated by whether the selected element's JSX is statically resolvable.
+ * The distinction drives more than the destination: an overlay write targets a token IDENTITY, so it is
+ * not gated by whether any particular element's JSX is statically resolvable.
  */
 export function writesOverlay(scope: StyleScope): boolean {
-  return scope === "component" || scope === "token";
+  return scope === "token";
 }
 
 /**

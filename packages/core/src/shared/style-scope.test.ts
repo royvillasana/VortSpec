@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   availableScopes,
   deriveScope,
+  matchKey,
   promotionTarget,
   sharedComponent,
   sharedToken,
+  sharedValue,
   writesOverlay,
   type ScopeTarget,
 } from "./style-scope";
@@ -18,11 +20,17 @@ import {
  * has stopped being predictable and the change has regressed.
  */
 
-const card = (id: string, token?: string, component: string | null = "Card"): ScopeTarget => ({
+const card = (
+  id: string,
+  token?: string,
+  component: string | null = "Card",
+  value = "8px",
+): ScopeTarget => ({
   id,
   component,
   tag: "div",
   tokens: token ? { "border-radius": token } : {},
+  values: { "border-radius": value },
 });
 
 describe("what a selection shares", () => {
@@ -38,6 +46,12 @@ describe("what a selection shares", () => {
     const sel = [card("a", "radius-card"), card("b", "radius-card")];
     expect(sharedToken(sel, "border-radius")).toBe("radius-card");
     expect(sharedToken(sel, "padding")).toBeNull();
+  });
+
+  it("reports a shared current value only when every member has it", () => {
+    expect(sharedValue([card("a", undefined, "Card", "8px"), card("b", undefined, "Card", "8px")], "border-radius")).toBe("8px");
+    expect(sharedValue([card("a", undefined, "Card", "8px"), card("b", undefined, "Card", "16px")], "border-radius")).toBeNull();
+    expect(sharedValue([], "border-radius")).toBeNull();
   });
 
   it("reports a component only when every member is an instance of the same one", () => {
@@ -64,13 +78,19 @@ describe("deriveScope applies its four rules in order", () => {
     });
   });
 
-  it("2 — a shared component wins when the token is not shared", () => {
+  it("2 — a shared component AND a shared value wins when the token is not shared", () => {
     const sel = [card("a", "radius-card"), card("b", "radius-pill")];
-    expect(deriveScope(sel, "border-radius")).toEqual({ scope: "component", key: "Card" });
+    expect(deriveScope(sel, "border-radius")).toEqual({ scope: "matching", key: "Card", value: "8px" });
+  });
+
+  it("2 — a shared component with DIFFERING values does not match", () => {
+    // The three Buttons at 16px were styled that way on purpose; there is no single "looks like this".
+    const sel = [card("a", undefined, "Card", "8px"), card("b", undefined, "Card", "16px")];
+    expect(deriveScope(sel, "border-radius")).toEqual({ scope: "selection" });
   });
 
   it("3 — several members sharing neither fall to the selection", () => {
-    const sel = [card("a", "radius-card"), card("b", "radius-pill", "Button")];
+    const sel = [card("a", "radius-card"), card("b", "radius-pill", "Button", "16px")];
     expect(deriveScope(sel, "border-radius")).toEqual({ scope: "selection" });
   });
 
@@ -86,27 +106,29 @@ describe("deriveScope applies its four rules in order", () => {
 describe("availableScopes withholds a scope that has nothing to key on", () => {
   it("offers every scope narrowest-first when everything is shared", () => {
     const sel = [card("a", "radius-card"), card("b", "radius-card")];
-    expect(availableScopes(sel, "border-radius", { componentCounts: { Card: 12 }, tokenUses: { "radius-card": 40 } })).toEqual([
+    const reach = { matchCounts: { [matchKey("Card", "8px")]: 10 }, tokenUses: { "radius-card": 40 } };
+    expect(availableScopes(sel, "border-radius", reach)).toEqual([
       { scope: "element", reach: 1 },
       { scope: "selection", reach: 2 },
-      { scope: "component", key: "Card", reach: 12 },
+      { scope: "matching", key: "Card", value: "8px", reach: 10 },
       { scope: "token", key: "radius-card", reach: 40 },
     ]);
   });
 
   it("withholds selection for a single element", () => {
     const scopes = availableScopes([card("a", "radius-card")], "border-radius");
-    expect(scopes.map((s) => s.scope)).toEqual(["element", "component", "token"]);
+    expect(scopes.map((s) => s.scope)).toEqual(["element", "matching", "token"]);
   });
 
-  it("withholds component for an unmarked element", () => {
+  it("withholds matching for an unmarked element", () => {
     const scopes = availableScopes([card("a", "radius-card", null)], "border-radius");
     expect(scopes.map((s) => s.scope)).toEqual(["element", "token"]);
   });
 
   it("withholds token for a property the design system does not govern", () => {
-    const scopes = availableScopes([card("a", "radius-card")], "padding");
-    expect(scopes.map((s) => s.scope)).toEqual(["element", "component"]);
+    // `padding` has no token AND no recorded value, so only the element scope survives.
+    const scopes = availableScopes([{ ...card("a", "radius-card"), values: { "border-radius": "8px", padding: "4px" } }], "padding");
+    expect(scopes.map((s) => s.scope)).toEqual(["element", "matching"]);
   });
 
   it("offers nothing for an empty selection", () => {
@@ -118,14 +140,16 @@ describe("reach is stated or withheld, never guessed", () => {
   it("reports null rather than a number the page cannot supply", () => {
     const sel = [card("a", "radius-card"), card("b", "radius-card")];
     const scopes = availableScopes(sel, "border-radius");
-    expect(scopes.find((s) => s.scope === "component")?.reach).toBeNull();
+    expect(scopes.find((s) => s.scope === "matching")?.reach).toBeNull();
     expect(scopes.find((s) => s.scope === "token")?.reach).toBeNull();
   });
 
   it("distinguishes a real zero from an unknown", () => {
     // A component with no instances on this page is a countable 0 — not the same as "cannot count".
-    const scopes = availableScopes([card("a")], "border-radius", { componentCounts: { Card: 0 } });
-    expect(scopes.find((s) => s.scope === "component")?.reach).toBe(0);
+    const scopes = availableScopes([card("a")], "border-radius", {
+      matchCounts: { [matchKey("Card", "8px")]: 0 },
+    });
+    expect(scopes.find((s) => s.scope === "matching")?.reach).toBe(0);
   });
 
   it("counts the narrow scopes from the selection itself", () => {
@@ -137,10 +161,10 @@ describe("reach is stated or withheld, never guessed", () => {
 });
 
 describe("scope decides the destination, and the destination decides the guard", () => {
-  it("only the two overlay scopes write the overlay", () => {
+  it("only the token scope writes the overlay — matching is N page-source writes", () => {
     expect(writesOverlay("element")).toBe(false);
     expect(writesOverlay("selection")).toBe(false);
-    expect(writesOverlay("component")).toBe(true);
+    expect(writesOverlay("matching")).toBe(false);
     expect(writesOverlay("token")).toBe(true);
   });
 });
@@ -157,9 +181,8 @@ describe("token promotion is offered only where there is something to promote to
     expect(promotionTarget("selection", sel, "border-radius")).toBeNull();
   });
 
-  it("does not offer when the edit is already at or above the token", () => {
+  it("does not offer when the edit is already the token", () => {
     const sel = [card("a", "radius-card"), card("b", "radius-card")];
     expect(promotionTarget("token", sel, "border-radius")).toBeNull();
-    expect(promotionTarget("component", sel, "border-radius")).toBeNull();
   });
 });

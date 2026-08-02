@@ -10,7 +10,8 @@ import { Button, Spinner } from "@vortspec/ui/ui";
 import { ProjectRail, projectRailItems } from "@vortspec/ui/ProjectRail";
 import { DesignPanel, ChangesBar } from "../components/run-canvas/DesignPanel";
 import { LibraryPanel } from "./LibraryPanel";
-import { writesOverlay, type StyleScope } from "@vortspec/core/style-scope";
+import { matchKey, writesOverlay, type StyleScope } from "@vortspec/core/style-scope";
+import { fanOut, unwritten } from "@vortspec/core/style-intersection";
 import { FigmaMcpBanner } from "../components/FigmaMcpBanner";
 import { StorybookSidebar } from "../components/run-canvas/StorybookSidebar";
 import { Sitemap, type PageGenState } from "../components/run-canvas/Sitemap";
@@ -1559,6 +1560,8 @@ export function RunApp({
   selectionRef.current = selection;
   const readoutRef = useRef(bridge.readout);
   readoutRef.current = bridge.readout;
+  const matchedRef = useRef(bridge.matched);
+  matchedRef.current = bridge.matched;
   // Current viewport + pending ledger as refs — read inside commitEdits / the re-scope
   // effect without stale closures or re-subscribing.
   const viewportIdRef = useRef(viewportId);
@@ -1818,10 +1821,45 @@ export function RunApp({
     [project.path],
   );
 
+  /**
+   * A `matching`-scoped edit: apply to every element that currently LOOKS THE SAME (change:
+   * scoped-style-edits, revision 4b).
+   *
+   * The set comes from the guest, which is the only place the live computed styles are, and it excludes
+   * siblings of the same component that were styled differently — those were styled differently on
+   * purpose. Each member is written independently, so one element whose JSX cannot be resolved neither
+   * blocks the others nor disappears without being named.
+   */
+  const applyToMatching = useCallback(
+    async (key: string, value: string, component?: string): Promise<void> => {
+      const current = selectionRef.current?.sections.flatMap((s) => s.fields).find((f) => f.key === key);
+      if (!component || !current) return;
+      const ids = matchedRef.current[matchKey(component, current.value)];
+      // No answer yet means we do not know the set. Writing "every instance" instead would hit exactly the
+      // elements the user asked to leave alone, so decline and let them pick a scope we can honour.
+      if (!ids?.length) return;
+      const css = cssForField(key, value);
+      if (Object.keys(css).length === 0) return;
+      const results = await fanOut(ids, async (id) => bridge.applyOverride(id, css));
+      const missed = unwritten(results);
+      if (missed.length) {
+        setWriteError(`${missed.length} matching element(s) could not be updated.`);
+      }
+      // The live overrides ARE the edit on a light page; commitEdits persists the serialized DOM once for
+      // the whole fan-out, so undoing it restores every member in a single step.
+      commitEdits([{ key, value, cssProps: Object.keys(css), css }]);
+    },
+    [bridge, commitEdits],
+  );
+
   const onFieldChange = useCallback(
     (key: string, value: string, scope: StyleScope = "element", scopeKey?: string) => {
       if (writesOverlay(scope)) {
         void applyScopedOverride(key, value, scope, scopeKey);
+        return;
+      }
+      if (scope === "matching") {
+        void applyToMatching(key, value, scopeKey);
         return;
       }
       if (key === "content") {
@@ -1920,7 +1958,7 @@ export function RunApp({
       // so a later undo of this edit is detectable as a real change.
       refreshReadout();
     },
-    [applyLive, commitEdits, setText, refreshReadout, applyScopedOverride],
+    [applyLive, commitEdits, setText, refreshReadout, applyScopedOverride, applyToMatching],
   );
 
   // An inline text edit on the canvas (double-click) — the guest already applied
@@ -1969,6 +2007,20 @@ export function RunApp({
   );
 
   const onSelectNode = useCallback((id: string, additive?: boolean) => select(id, additive), [select]);
+
+  /** The design-system tokens the selected element resolves through, for the Library tab's marking. */
+  const selectionTokens = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          (selection?.sections ?? [])
+            .flatMap((sec) => sec.fields)
+            .map((f) => f.token ?? tokenNameFromVar(f.value))
+            .filter((t): t is string => !!t),
+        ),
+      ),
+    [selection],
+  );
   const onHoverNode = useCallback((id: string | null) => hover(id), [hover]);
 
   // Delete/Backspace deletes the selected element (Figma-style), in inspect mode only and
@@ -2312,11 +2364,19 @@ export function RunApp({
           // The design system, as the Library tab beside Design Attributes. An edit re-themes the open
           // screen through the SAME reload the header Refresh uses — the overlay is injected after each
           // page's own `:root`, so no new propagation mechanism is needed (design D6).
-          libraryPanel={<LibraryPanel project={project} onEdited={refresh} />}
+          // The design system marks which of its values compose the selected element — its background, its
+          // type, its radius — so "what is this component made of?" is answerable without leaving the tab.
+          // Marked in place: nothing is filtered, reordered or hidden, because a list that rearranges per
+          // selection is a list nobody learns.
+          libraryPanel={
+            <LibraryPanel project={project} onEdited={refresh} tokensInUse={selectionTokens} />
+          }
           selection={selection}
           tree={layersTree}
           hoveredId={bridge.hoveredId}
           selectedIds={bridge.selectedIds}
+          matched={bridge.matched}
+          onMatchQuery={bridge.matchElements}
           onSelectNode={onSelectNode}
           onHoverNode={onHoverNode}
           onReorderNode={reorderNode}

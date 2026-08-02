@@ -114,3 +114,27 @@ test("a per-component override is visible and clearable, not applied invisibly",
 
   await expect(c.getByText("Component overrides")).toHaveCount(0);
 });
+
+test("the design system marks what the selection is made of, and moves nothing", async ({ mount }) => {
+  // Selecting a component should answer "what is this made of?" against the SAME list, in the same order.
+  // A design system that rearranges itself per selection is one nobody learns.
+  const plain = await mount(<LibraryPanel project={PROJECT} onEdited={() => {}} />);
+  const orderBefore = await plain.getByLabel(/^color-/).evaluateAll((els) =>
+    els.map((e) => e.getAttribute("aria-label")?.split(":")[0]),
+  );
+  await plain.unmount();
+
+  const c = await mount(
+    <LibraryPanel project={PROJECT} onEdited={() => {}} tokensInUse={["color-accent"]} />,
+  );
+
+  // The row in use says so in its accessible name; the others are untouched.
+  await expect(c.getByLabel(/^color-accent:.*in use by the selection/)).toBeVisible();
+  await expect(c.getByLabel(/^color-border:.*in use by the selection/)).toHaveCount(0);
+
+  // Same rows, same order — the marking is an annotation, not a filter.
+  const orderAfter = await c.getByLabel(/^color-/).evaluateAll((els) =>
+    els.map((e) => e.getAttribute("aria-label")?.split(":")[0]),
+  );
+  expect(orderAfter).toEqual(orderBefore);
+});

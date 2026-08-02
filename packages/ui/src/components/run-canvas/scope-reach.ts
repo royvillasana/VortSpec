@@ -1,6 +1,6 @@
-import type { BridgeTree, InspectorToken, Selection } from "@vortspec/core/ipc";
+import type { InspectorToken, Selection } from "@vortspec/core/ipc";
 import { tokenNameFromVar } from "./compose";
-import type { ScopeReach, ScopeTarget } from "@vortspec/core/style-scope";
+import { matchKey, type ScopeReach, type ScopeTarget } from "@vortspec/core/style-scope";
 
 /**
  * Turning the panel's view-model into the inputs the scope rules read (change: scoped-style-edits).
@@ -22,22 +22,33 @@ export function scopeTargets(selection: Selection | null): ScopeTarget[] {
       tokens[field.key] = field.token ?? tokenNameFromVar(field.value) ?? undefined;
     }
   }
-  return [{ id: selection.nodeId, component: selection.component, tag: undefined, tokens }];
+
+  const values: Record<string, string | undefined> = {};
+  for (const section of selection.sections) {
+    for (const field of section.fields) values[field.key] = field.value;
+  }
+  return [{ id: selection.nodeId, component: selection.component, tag: undefined, tokens, values }];
 }
 
 /**
  * How far each wide scope reaches.
  *
- * Component instances are counted from the LIVE tree, so the number matches what the user can see on the
- * page right now. Token uses come from the design system's own count, which spans the project — that is
- * the honest reach of a token edit, and it is the same number the design-system surface shows.
+ * Token uses come from the design system's own count, which spans the project — that is the honest reach
+ * of a token edit, and it is the same number the design-system surface shows. Match counts come from the
+ * guest, which is the only place the live computed styles exist.
  */
-export function scopeReach(tree: BridgeTree | null, tokens: readonly InspectorToken[]): ScopeReach {
-  const componentCounts: Record<string, number> = {};
-  for (const node of Object.values(tree?.nodes ?? {})) {
-    if (node.component) componentCounts[node.component] = (componentCounts[node.component] ?? 0) + 1;
-  }
+export function scopeReach(
+  tokens: readonly InspectorToken[],
+  matched: Record<string, string[]> = {},
+): ScopeReach {
   const tokenUses: Record<string, number> = {};
   for (const t of tokens) tokenUses[t.name] = t.uses;
-  return { componentCounts, tokenUses };
+
+  // "Looks like this" is counted from the guest's answer and from nothing else. The host's tree carries
+  // component identity but no computed style, so any number derived here would count differently-styled
+  // siblings as matches — precisely the elements the user said not to touch. Until the guest has answered,
+  // the count is absent and the label says "Buttons like this" with no number, which is true.
+  const matchCounts: Record<string, number> = {};
+  for (const [key, ids] of Object.entries(matched)) matchCounts[key] = ids.length;
+  return { matchCounts, tokenUses };
 }

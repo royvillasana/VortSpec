@@ -286,6 +286,13 @@ export const bridgeCommandSchema = z.discriminatedUnion("t", [
   z.object({ t: z.literal("selectNode"), nodeId: z.string(), additive: z.boolean().optional() }),
   /** Empty the selection (Escape). Separate from `selectionLost`, which means an element went away. */
   z.object({ t: z.literal("clearSelection") }),
+  /**
+   * Which elements currently LOOK THE SAME as the selected one: same `data-component`, and the same
+   * computed value for `cssProp`. Answered by the guest because matching is a question about the live DOM,
+   * and only the guest has it — the host's tree carries component identity but no computed style, so any
+   * count it produced would sweep up siblings that were styled differently on purpose.
+   */
+  z.object({ t: z.literal("matchElements"), key: z.string(), component: z.string(), cssProp: z.string(), value: z.string() }),
   z.object({ t: z.literal("hoverNode"), nodeId: z.string().nullable() }),
   /**
    * Toggle guest input handling: `inspect` intercepts hover/click to drive
@@ -432,6 +439,8 @@ export const bridgeEventSchema = z.discriminatedUnion("t", [
   z.object({ t: z.literal("readout"), readout: nodeReadoutSchema, additive: z.boolean().optional() }),
   /** The user emptied the selection from inside the guest (Escape on the canvas). */
   z.object({ t: z.literal("selectionCleared") }),
+  /** The elements that look the same, for the `matchElements` query with this key. */
+  z.object({ t: z.literal("matchedElements"), key: z.string(), nodeIds: z.array(z.string()) }),
   /** Geometry-only update (scroll/resize/layout) so overlays stay aligned. */
   z.object({ t: z.literal("geometry"), nodeId: z.string(), rect: rectSchema }),
   /** The element under the pointer in inspect mode (null when the pointer leaves). */

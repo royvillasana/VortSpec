@@ -48,6 +48,8 @@ export interface InspectorBridge {
    * existing single-selection behaviour is the one-member case of this rather than a separate path.
    */
   selectedIds: string[];
+  /** Answers to `matchElements`, keyed by the query key: the node ids that currently look the same. */
+  matched: Record<string, string[]>;
   hoveredId: string | null;
   /** Live rectangles keyed by node id (updated on readout/geometry) for the overlay. */
   rects: Record<string, Rect>;
@@ -76,6 +78,8 @@ export interface InspectorBridge {
   setClass: (id: string, remove: string[], add: string[]) => void;
   /** Select a node; `additive` toggles it in the selection instead of replacing it. */
   select: (id: string | null, additive?: boolean) => void;
+  /** Ask the guest which elements look the same; the answer lands in `matched[key]`. */
+  matchElements: (key: string, component: string, cssProp: string, value: string) => void;
   hover: (id: string | null) => void;
   /** Toggle guest input handling: inspect (select), interact (use the app), comment (pin). */
   setMode: (mode: CanvasMode) => void;
@@ -184,6 +188,7 @@ export function useInspectorBridge(): InspectorBridge {
   const [readout, setReadout] = useState<NodeReadout | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [matched, setMatched] = useState<Record<string, string[]>>({});
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [rects, setRects] = useState<Record<string, Rect>>({});
   const [runtimeError, setRuntimeError] = useState<InspectorBridge["runtimeError"]>(null);
@@ -250,6 +255,9 @@ export function useInspectorBridge(): InspectorBridge {
         });
         return;
       }
+      case "matchedElements":
+        setMatched((m) => ({ ...m, [event.key]: event.nodeIds }));
+        return;
       case "selectionCleared":
         setSelectedId(null);
         setSelectedIds([]);
@@ -526,6 +534,12 @@ export function useInspectorBridge(): InspectorBridge {
     [selectedId, send],
   );
   const requestTree = useCallback(() => send({ t: "requestTree" }), [send]);
+  /** Ask which elements currently look the same as `value` for `cssProp`, under `component`. */
+  const matchElements = useCallback(
+    (key: string, component: string, cssProp: string, value: string) =>
+      send({ t: "matchElements", key, component, cssProp, value }),
+    [send],
+  );
   const reload = useCallback(() => webviewRef.current?.reload(), []);
   const setLightMode = useCallback((on: boolean) => send({ t: "setLightMode", on }), [send]);
   const loadUrl = useCallback((url: string) => {
@@ -567,6 +581,8 @@ export function useInspectorBridge(): InspectorBridge {
     readout,
     selectedId,
     selectedIds,
+    matched,
+    matchElements,
     hoveredId,
     rects,
     runtimeError,

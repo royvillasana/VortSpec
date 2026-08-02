@@ -66,8 +66,8 @@ export function scopeLabel(o: ScopeOption): string {
       return "This element";
     case "selection":
       return `${o.reach ?? 0} selected`;
-    case "component":
-      return o.reach === null ? `All ${o.key}` : `All ${o.reach} ${o.key}`;
+    case "matching":
+      return o.reach === null ? `${o.key}s like this` : `${o.reach} ${o.key}s like this`;
     case "token":
       return o.reach === null ? `--${o.key}` : `--${o.key} · ${o.reach} uses`;
   }
@@ -80,8 +80,8 @@ function scopeTitle(o: ScopeOption): string {
       return "Change only this element, in this page's source";
     case "selection":
       return "Change every selected element, in this page's source";
-    case "component":
-      return `Change every ${o.key} on every page — written to the design system overlay`;
+    case "matching":
+      return `Change every ${o.key} that currently looks like this one (${o.value}). A ${o.key} styled differently is left alone.`;
     case "token":
       return `Change --${o.key} itself — everything that uses this token changes, on every page`;
   }

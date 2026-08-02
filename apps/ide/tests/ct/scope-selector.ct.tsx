@@ -88,9 +88,11 @@ test("the scope is shown before a value can be typed, with each reach stated", a
   const scopes = c.getByRole("group", { name: "Apply to" });
   await expect(scopes).toBeVisible();
 
-  // Each option carries its real reach: 3 Buttons counted from the live tree, 40 uses from the design system.
+  // The token reach is a real number the design system supplies. The "looks like this" reach has no
+  // number yet: only the guest can say which siblings actually match, and inventing one here would sweep
+  // up Buttons that were styled differently on purpose.
   await expect(scopes.getByRole("button", { name: "This element" })).toBeVisible();
-  await expect(scopes.getByRole("button", { name: "All 3 Button" })).toBeVisible();
+  await expect(scopes.getByRole("button", { name: "Buttons like this" })).toBeVisible();
   await expect(scopes.getByRole("button", { name: "--radius-card · 40 uses" })).toBeVisible();
 });
 
@@ -102,14 +104,14 @@ test("the default is the token when the design system already decides the value"
   await expect(
     c.getByRole("button", { name: "--radius-card · 40 uses" }),
   ).toHaveAttribute("aria-pressed", "true");
-  await expect(c.getByRole("button", { name: "All 3 Button" })).toHaveAttribute("aria-pressed", "false");
+  await expect(c.getByRole("button", { name: "Buttons like this" })).toHaveAttribute("aria-pressed", "false");
 });
 
-test("the default falls to the component when no token governs the property", async ({ mount }) => {
+test("the default falls to \"looks like this\" when no token governs the property", async ({ mount }) => {
   const c = await mount(panel(selection({ component: "Button", token: null })));
   await c.getByRole("textbox").first().focus();
 
-  await expect(c.getByRole("button", { name: "All 3 Button" })).toHaveAttribute("aria-pressed", "true");
+  await expect(c.getByRole("button", { name: "Buttons like this" })).toHaveAttribute("aria-pressed", "true");
   // With no token there is nothing to offer at token scope — the option is withheld, not shown disabled.
   await expect(c.getByRole("button", { name: /radius-card/ })).toHaveCount(0);
 });
@@ -142,7 +144,7 @@ test("the edit is reported at the scope that was on screen", async ({ mount }) =
   expect(scope).toBe("element");
 });
 
-test("choosing a wide scope reports that scope and what it keys on", async ({ mount }) => {
+test("choosing \"looks like this\" reports that scope and the component it keys on", async ({ mount }) => {
   const calls: unknown[][] = [];
   const c = await mount(
     panel(selection({ component: "Button", token: null }), (...a) => calls.push(a)),
@@ -150,12 +152,12 @@ test("choosing a wide scope reports that scope and what it keys on", async ({ mo
 
   const input = c.getByRole("textbox").first();
   await input.focus();
-  await c.getByRole("button", { name: "All 3 Button" }).click();
+  await c.getByRole("button", { name: "Buttons like this" }).click();
   await input.fill("0px");
   await input.press("Enter");
 
   await expect.poll(() => calls.length).toBeGreaterThan(0);
   const [, , scope, scopeKey] = calls[calls.length - 1];
-  expect(scope).toBe("component");
+  expect(scope).toBe("matching");
   expect(scopeKey).toBe("Button");
 });

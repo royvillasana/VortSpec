@@ -15,6 +15,8 @@ export function makeBridge(overrides: Partial<InspectorBridge> = {}): InspectorB
     readout: null,
     selectedId: null,
     selectedIds: [],
+    matched: {},
+    matchElements: () => {},
     hoveredId: null,
     rects: {},
     runtimeError: null,

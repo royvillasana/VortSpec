@@ -11,7 +11,7 @@ import type {
 import { Link2, Unlink2, Search } from "lucide-react";
 import { NodeTree } from "./NodeTree";
 import type { PendingEdit } from "./pending";
-import { matchTokenName, tokenNameFromVar, tokensForField } from "./compose";
+import { cssForField, matchTokenName, tokenNameFromVar, tokensForField } from "./compose";
 import { ColorTokenField, type ColorToken } from "./ColorPicker";
 import { CreateVariableRow } from "./CreateVariableRow";
 import { ScopeSelector } from "./ScopeSelector";
@@ -19,6 +19,7 @@ import { scopeReach, scopeTargets } from "./scope-reach";
 import {
   availableScopes,
   deriveScope,
+  matchKey,
   type ScopeReach,
   type ScopeTarget,
   type StyleScope,
@@ -105,6 +106,8 @@ export function DesignPanel({
   hoveredId,
   onSelectNode,
   selectedIds,
+  matched = {},
+  onMatchQuery,
   onHoverNode,
   onReorderNode,
   onFieldChange,
@@ -133,6 +136,10 @@ export function DesignPanel({
   selection: Selection | null;
   /** Every selected node, focused member included. Omitted → the focused member alone. */
   selectedIds?: string[];
+  /** Guest answers to "which elements look the same", keyed by query. */
+  matched?: Record<string, string[]>;
+  /** Ask the guest which elements look the same as the selection for a property. */
+  onMatchQuery?: (key: string, component: string, cssProp: string, value: string) => void;
   tree: BridgeTree | null;
   hoveredId?: string | null;
   onSelectNode: (id: string, additive?: boolean) => void;
@@ -265,7 +272,8 @@ export function DesignPanel({
                 colorTokens={colorTokens}
                 tokens={tokens}
                 targets={scopeTargets(selection)}
-                reach={scopeReach(tree, tokens)}
+                onMatchQuery={onMatchQuery}
+                reach={scopeReach(tokens, matched)}
               />
             ))}
           </>
@@ -801,6 +809,7 @@ const PropertySection = memo(function PropertySection({
   onCreateToken,
   targets = [],
   reach = {},
+  onMatchQuery,
 }: {
   section: DesignSection;
   onFieldChange?: (key: string, value: string, scope?: StyleScope, scopeKey?: string) => void;
@@ -809,6 +818,7 @@ const PropertySection = memo(function PropertySection({
   onCreateToken?: (name: string, value: string, tokenType?: string) => Promise<void>;
   targets?: ScopeTarget[];
   reach?: ScopeReach;
+  onMatchQuery?: (key: string, component: string, cssProp: string, value: string) => void;
 }): JSX.Element | null {
   if (section.fields.length === 0) return null;
   return (
@@ -823,6 +833,7 @@ const PropertySection = memo(function PropertySection({
             onCreateToken={onCreateToken}
             targets={targets}
             reach={reach}
+            onMatchQuery={onMatchQuery}
             onChange={(val, scope, scopeKey) => onFieldChange?.(f.key, val, scope, scopeKey)}
           />
         ))}
@@ -850,6 +861,7 @@ function ScopedField({
   onCreateToken,
   targets,
   reach,
+  onMatchQuery,
 }: {
   field: SectionField;
   colorTokens: ColorToken[];
@@ -858,12 +870,22 @@ function ScopedField({
   onCreateToken?: (name: string, value: string, tokenType?: string) => Promise<void>;
   targets: ScopeTarget[];
   reach: ScopeReach;
+  onMatchQuery?: (key: string, component: string, cssProp: string, value: string) => void;
 }): JSX.Element {
   const options = availableScopes(targets, field.key, reach);
   const derived = deriveScope(targets, field.key);
   const [open, setOpen] = useState(false);
   const [picked, setPicked] = useState<{ scope: StyleScope; key?: string } | null>(null);
   const active = picked ?? derived;
+
+  // Ask the guest what looks the same the moment the field opens, so the count on the chip is the real
+  // set by the time the user reads it. Asked per (component, value) — the same pair the label is keyed on.
+  const matchable = derived.scope === "matching" ? derived : null;
+  useEffect(() => {
+    if (!open || !matchable?.key || matchable.value === undefined) return;
+    const [cssProp] = Object.keys(cssForField(field.key, matchable.value));
+    if (cssProp) onMatchQuery?.(matchKey(matchable.key, matchable.value), matchable.key, cssProp, matchable.value);
+  }, [open, matchable?.key, matchable?.value, field.key, onMatchQuery]);
 
   return (
     <div

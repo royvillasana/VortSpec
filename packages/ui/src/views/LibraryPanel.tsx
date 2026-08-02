@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Palette } from "lucide-react";
 import type { Project } from "@vortspec/core/ipc";
 import { previewWithDrafts } from "@vortspec/core/design-library";
@@ -30,10 +30,17 @@ import { api } from "../lib/api";
 export function LibraryPanel({
   project,
   onEdited,
+  tokensInUse,
 }: {
   project: Project;
   /** Called after a committed edit, so whatever is previewed beside this panel reloads. */
   onEdited: () => void;
+  /**
+   * Token names the element currently selected on the canvas resolves through. Marked in place — the
+   * design system is the same design system whatever is selected, so nothing is filtered, reordered or
+   * hidden. The point is to answer "what is this component made of?" against a stable list.
+   */
+  tokensInUse?: readonly string[];
 }): React.JSX.Element {
   const [model, setModel] = useState<DesignSystemLibrary | null>(null);
   // Where the SCREENS differ, keyed by token so each row can offer its own adopt.
@@ -50,6 +57,8 @@ export function LibraryPanel({
   // are a different kind of thing: not a value in the design system, but a rule laid over it.
   const [componentOverrides, setComponentOverrides] = useState<[string, Record<string, string>][]>([]);
   const customize = useAgentRun();
+  // A Set so a large design system does not do a linear scan per tile.
+  const inUseSet = useMemo(() => new Set(tokensInUse ?? []), [tokensInUse]);
 
   const load = useCallback(async () => {
     try {
@@ -273,6 +282,7 @@ export function LibraryPanel({
               onWrite={writeToken}
               onChooseFont={chooseFont}
               onDraft={draft}
+              inUse={inUseSet}
             />
           ))}
           <ComponentOverrides
@@ -386,6 +396,7 @@ function Section({
   onWrite,
   onChooseFont,
   onDraft,
+  inUse,
 }: {
   section: LibrarySection;
   disabled: boolean;
@@ -394,6 +405,7 @@ function Section({
   onWrite: (token: string, value: string) => Promise<void>;
   onChooseFont: (token: string, stack: string, google?: string) => Promise<void>;
   onDraft: (token: string, value: string) => void;
+  inUse: ReadonlySet<string>;
 }): React.JSX.Element {
   const drifted = section.rows.filter((r) => drift.has(r.token)).length;
   // A big section (Astryx ships 100+ colors) opens collapsed so the panel isn't a wall on first sight —
@@ -438,6 +450,7 @@ function Section({
             onWrite={onWrite}
             onChooseFont={onChooseFont}
             onDraft={onDraft}
+            inUse={inUse}
           />
         ))}
     </section>
@@ -471,6 +484,7 @@ function shortName(token: string, section: string): string {
  * long, so its input scrolls rather than showing the whole thing at once; the full value is in the title.
  */
 function SectionBody({
+  inUse,
   section,
   drift,
   disabled,
@@ -486,6 +500,7 @@ function SectionBody({
   onWrite: (token: string, value: string) => Promise<void>;
   onChooseFont: (token: string, stack: string, google?: string) => Promise<void>;
   onDraft: (token: string, value: string) => void;
+  inUse: ReadonlySet<string>;
 }): React.JSX.Element {
   const [openToken, setOpenToken] = useState<string | null>(null);
   const opened = section.rows.find((r) => r.token === openToken) ?? null;
@@ -517,6 +532,7 @@ function SectionBody({
               section={section.section}
               drifted={drift.has(row.token)}
               selected={row.token === openToken}
+              inUse={inUse.has(row.token)}
               onSelect={() => setOpenToken((t) => (t === row.token ? null : row.token))}
             />
             {/* The editor is a grid ITEM spanning every column, placed right after its own tile. Grid
@@ -561,20 +577,23 @@ function Tile({
   section,
   drifted,
   selected,
+  inUse,
   onSelect,
 }: {
   row: LibraryRow;
   section: string;
   drifted: boolean;
   selected: boolean;
+  /** This value composes the element currently selected on the canvas. */
+  inUse: boolean;
   onSelect: () => void;
 }): React.JSX.Element {
   return (
     <button
       type="button"
       onClick={onSelect}
-      title={`--${row.token}\n${row.value}`}
-      aria-label={`${row.token}: ${row.value}`}
+      title={inUse ? `--${row.token}\n${row.value}\nUsed by the selected element` : `--${row.token}\n${row.value}`}
+      aria-label={`${row.token}: ${row.value}${inUse ? " · in use by the selection" : ""}`}
       aria-pressed={selected}
       className="flex min-w-0 flex-col gap-1 text-left"
     >
@@ -588,7 +607,14 @@ function Tile({
       >
         <TileArt section={section} row={row} />
       </span>
-      <span className="truncate text-[8px] leading-tight text-vs-text-muted">{shortName(row.token, section)}</span>
+      <span
+        className={`truncate text-[8px] leading-tight ${
+          inUse ? "font-semibold text-vs-text-primary" : "text-vs-text-muted"
+        }`}
+      >
+        {inUse && <span aria-hidden>• </span>}
+        {shortName(row.token, section)}
+      </span>
     </button>
   );
 }

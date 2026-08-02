@@ -981,6 +981,20 @@ function handleCommand(cmd: BridgeCommand): void {
       selectedId = null;
       send({ t: "selectionCleared" });
       return;
+    case "matchElements": {
+      // "Looks the same" is a question about the live DOM, so it is answered here rather than guessed
+      // host-side from the tree. Same component AND the same COMPUTED value — computed, so that an element
+      // reaching the value through a token, a class or an inline style all count as looking the same,
+      // which is what the user means when they point at two things and say they match.
+      const nodeIds: string[] = [];
+      for (const [id, el] of byId) {
+        if (el.getAttribute("data-component") !== cmd.component) continue;
+        const v = getComputedStyle(el).getPropertyValue(cmd.cssProp).trim();
+        if (v === cmd.value.trim()) nodeIds.push(id);
+      }
+      send({ t: "matchedElements", key: cmd.key, nodeIds });
+      return;
+    }
     case "hoverNode":
       if (cmd.nodeId !== null) emitGeometry(cmd.nodeId);
       return;
