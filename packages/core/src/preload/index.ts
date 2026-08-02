@@ -289,6 +289,19 @@ const api: VortSpecApi = {
     target: { variant?: string; option?: string; slot?: string },
     decls: Record<string, string>,
   ) => invoke("theme:setComponentOverride", { projectPath, component, target, decls }),
+  designSystemLibrary: (projectPath: string) => invoke("designSystem:library", projectPath),
+  designSystemTokenDrift: (projectPath: string) => invoke("designSystem:tokenDrift", projectPath),
+  designSystemFonts: (projectPath: string, full?: boolean) =>
+    invoke("designSystem:fonts", { projectPath, full }),
+  listPresets: (projectPath: string) => invoke("preset:list", projectPath),
+  previewPreset: (projectPath: string, presetId: string) => invoke("preset:preview", { projectPath, presetId }),
+  applyPreset: (projectPath: string, presetId: string) => invoke("preset:apply", { projectPath, presetId }),
+  selectDefaultPreset: (projectPath: string) => invoke("preset:selectDefault", projectPath),
+  createPresetFromCurrent: (projectPath: string, name: string) =>
+    invoke("preset:createFromCurrent", { projectPath, name }),
+  importPreset: (projectPath: string, raw: unknown) => invoke("preset:import", { projectPath, raw }),
+  setThemeFontFamily: (projectPath: string, token: string, stack: string, google?: string) =>
+    invoke("theme:setFontFamily", { projectPath, token, stack, google }),
   inspectorTokens: (projectPath: string, preferredCollection?: string) =>
     invoke(
       "inspector:getTokens",

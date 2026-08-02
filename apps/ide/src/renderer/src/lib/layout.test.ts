@@ -32,6 +32,35 @@ describe("layoutReducer", () => {
     expect(s.activity).toBe("tokens");
   });
 
+  it("re-selecting the active WORK PANEL toggles the dock too, so it is never unrecoverable", () => {
+    // The bug this pins: the toggle used to apply only to sidebar views. Collapse the dock while in the
+    // Playground and the only control that could reopen it — the activity you are already on — did
+    // nothing, so the user had to guess that Explorer was the way back.
+    const open = { ...base, activity: "run" as const, primaryOpen: true };
+    const collapsed = layoutReducer(open, { type: "setActivity", activity: "run" });
+    expect(collapsed.primaryOpen).toBe(false);
+    expect(collapsed.activity).toBe("run");
+
+    const reopened = layoutReducer(collapsed, { type: "setActivity", activity: "run" });
+    expect(reopened.primaryOpen).toBe(true);
+  });
+
+  it("holds for every activity, not just the one that was reported", () => {
+    for (const activity of ["run", "tokens", "play", "flow", "manifest", "source", "tasks"] as const) {
+      const collapsed = layoutReducer({ ...base, activity, primaryOpen: true }, { type: "setActivity", activity });
+      expect(collapsed.primaryOpen, `${activity} should collapse`).toBe(false);
+      const reopened = layoutReducer(collapsed, { type: "setActivity", activity });
+      expect(reopened.primaryOpen, `${activity} should reopen`).toBe(true);
+    }
+  });
+
+  it("switching between work panels does not force the dock back open", () => {
+    // A user who deliberately collapsed the dock should not have it reappear on every navigation.
+    const s = layoutReducer({ ...base, activity: "run", primaryOpen: false }, { type: "setActivity", activity: "tokens" });
+    expect(s.activity).toBe("tokens");
+    expect(s.primaryOpen).toBe(false);
+  });
+
   it("opens the terminal tab when the panel is first toggled on", () => {
     const s = layoutReducer({ ...base, panelOpen: false, panelTabs: [], panelSelected: null }, { type: "togglePanel" });
     expect(s.panelOpen).toBe(true);

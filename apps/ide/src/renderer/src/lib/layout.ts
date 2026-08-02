@@ -126,12 +126,16 @@ function clampN(n: number, min: number, max: number): number {
 export function layoutReducer(state: LayoutState, action: LayoutAction): LayoutState {
   switch (action.type) {
     case "setActivity": {
-      if (isSidebarView(action.activity)) {
-        // Re-clicking the active sidebar view toggles the primary sidebar.
-        if (state.activity === action.activity) return { ...state, primaryOpen: !state.primaryOpen };
-        return { ...state, activity: action.activity, primaryOpen: true };
-      }
-      // A work panel takes the center; the primary sidebar is hidden by render.
+      // Re-clicking the ACTIVE activity toggles the dock — for EVERY activity, not just Explorer.
+      //
+      // This used to apply only to sidebar views, which left the dock unrecoverable: collapse it while in
+      // a work panel (Playground, Design tokens, …) and the only control that could reopen it was the
+      // activity you were already on, where the click was a no-op. The user had to guess that Explorer
+      // was the way back.
+      if (state.activity === action.activity) return { ...state, primaryOpen: !state.primaryOpen };
+      // Switching TO a sidebar view opens the dock, since that view IS the dock's content.
+      if (isSidebarView(action.activity)) return { ...state, activity: action.activity, primaryOpen: true };
+      // Switching to a work panel keeps whatever the user chose — it does not force the dock open.
       return { ...state, activity: action.activity };
     }
     case "togglePrimary":

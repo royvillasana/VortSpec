@@ -35,8 +35,19 @@ import { enumeratePackageComponent } from "./inspector/library-enumerate";
 import {
   readThemeOverrides,
   setThemeComponentOverride,
+  setThemeFontFamily,
   setThemeTokenOverride,
 } from "./inspector/theme-override-store";
+import { getFontSources } from "./inspector/fonts";
+import {
+  listPresets,
+  previewPreset,
+  applyPreset,
+  selectDefaultPreset,
+  createPresetFromCurrent,
+  importPreset,
+} from "./inspector/preset-store";
+import { getDesignSystemLibrary, getScreenTokenDrift } from "./inspector/design-library";
 import { getEnvStatus, createEnvFromExample } from "./workspace/env-files";
 import { ensureStorybook, storybookReadiness, storyGap } from "./workspace/storybook-setup";
 import { ensureStylingPipeline } from "./workspace/styling-setup";
@@ -515,6 +526,25 @@ const handlers: Record<IpcChannel, Handler> = {
     decls: Record<string, string>;
   }) =>
     setThemeComponentOverride(a.projectPath, a.component, a.target, a.decls).then((r) =>
+      afterTokenEdit(a.projectPath, r),
+    )) as Handler,
+  "designSystem:library": ((projectPath: string) => getDesignSystemLibrary(projectPath)) as Handler,
+  "designSystem:tokenDrift": ((projectPath: string) => getScreenTokenDrift(projectPath)) as Handler,
+  "designSystem:fonts": ((a: { projectPath: string; full?: boolean }) =>
+    getFontSources(a.projectPath, a.full ?? false)) as Handler,
+  "preset:list": ((projectPath: string) => listPresets(projectPath)) as Handler,
+  "preset:preview": ((a: { projectPath: string; presetId: string }) =>
+    previewPreset(a.projectPath, a.presetId)) as Handler,
+  "preset:apply": ((a: { projectPath: string; presetId: string }) =>
+    applyPreset(a.projectPath, a.presetId).then((r) => afterTokenEdit(a.projectPath, r))) as Handler,
+  "preset:selectDefault": ((projectPath: string) =>
+    selectDefaultPreset(projectPath).then(() => afterTokenEdit(projectPath, null))) as Handler,
+  "preset:createFromCurrent": ((a: { projectPath: string; name: string }) =>
+    createPresetFromCurrent(a.projectPath, a.name)) as Handler,
+  "preset:import": ((a: { projectPath: string; raw: unknown }) =>
+    importPreset(a.projectPath, a.raw)) as Handler,
+  "theme:setFontFamily": ((a: { projectPath: string; token: string; stack: string; google?: string }) =>
+    setThemeFontFamily(a.projectPath, a.token, a.stack, a.google).then((r) =>
       afterTokenEdit(a.projectPath, r),
     )) as Handler,
   "inspector:getTokens": ((req: string | { projectPath: string; preferredCollection?: string }) =>

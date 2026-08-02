@@ -81,6 +81,14 @@ export const inspectorTokenSchema = z.object({
       }),
     )
     .optional(),
+  /**
+   * Set when this token is declared NOT in the project's own token file but in a file that file
+   * `@import`s — most often a consumed library's theme inside `node_modules` (change:
+   * design-system-token-editor). The value is that file's project-relative path. Absent → the project's
+   * own token file declares it. A token from a dependency is read-only in place: an edit to it routes to
+   * the durable overlay instead of mutating the package.
+   */
+  fromImport: z.string().optional(),
 });
 export type InspectorToken = z.infer<typeof inspectorTokenSchema>;
 

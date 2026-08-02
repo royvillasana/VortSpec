@@ -18,9 +18,9 @@ describe("parseThemeOverrides", () => {
 describe("setTokenOverride", () => {
   it("sets, mode-scopes, and clears (empty value) a token override", () => {
     let o = setTokenOverride(EMPTY_THEME_OVERRIDES, "--primary", "#635bff");
-    expect(o.tokens.primary).toEqual({ value: "#635bff" }); // leading -- stripped
+    expect(o.tokens.primary).toMatchObject({ value: "#635bff" }); // leading -- stripped
     o = setTokenOverride(o, "primary", "#111", "dark");
-    expect(o.tokens.primary).toEqual({ value: "#111", mode: "dark" });
+    expect(o.tokens.primary).toMatchObject({ value: "#111", mode: "dark" });
     o = setTokenOverride(o, "primary", "  ");
     expect(o.tokens.primary).toBeUndefined();
   });

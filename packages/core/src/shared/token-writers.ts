@@ -1,4 +1,5 @@
 import { Project, SyntaxKind, type ObjectLiteralExpression, type PropertyAssignment } from "ts-morph";
+import { googleFontUrl } from "./fonts";
 import type { ThemeOverrides } from "./theme-overrides";
 
 /**
@@ -128,6 +129,10 @@ export function writeToken(
  * mutating the real source). Per-component overrides are materialized per library elsewhere.
  */
 export function materializeCssOverlay(overrides: ThemeOverrides, rootSelector = ":root"): string {
+  // A chosen Google family has to be FETCHED, not just named. The `@import` leads the emitted CSS because
+  // CSS requires it there; without it the family silently falls back and the user is left wondering why
+  // the type never changed.
+  const fontImport = googleFontUrl(overrides.googleFonts ?? []);
   const base: string[] = [];
   const byMode = new Map<string, string[]>();
   for (const [name, o] of Object.entries(overrides.tokens)) {
@@ -143,7 +148,9 @@ export function materializeCssOverlay(overrides: ThemeOverrides, rootSelector = 
     blocks.push(`${sel} {\n${lines.join("\n")}\n}`);
   }
   const header = "/* VortSpec design-system personalization — generated from .vortspec/theme-overrides.json */";
-  return blocks.length ? `${header}\n${blocks.join("\n\n")}\n` : "";
+  const lead = fontImport ? `@import url("${fontImport}");\n` : "";
+  if (!blocks.length) return lead ? `${lead}${header}\n` : "";
+  return `${lead}${header}\n${blocks.join("\n\n")}\n`;
 }
 
 /** kebab-case a possibly-camelCase CSS property name (`fontWeight` → `font-weight`); pass-through if already kebab. */

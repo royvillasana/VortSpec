@@ -234,7 +234,12 @@ export async function trashPath(root: string, rel: string): Promise<FsWriteResul
 // Recursive fs.watch is supported on macOS (the first target); if it isn't
 // available the Explorer simply falls back to manual refresh.
 
-const watchers = new Map<string, FSWatcher>();
+/**
+ * Live watchers, REFERENCE-COUNTED by root. More than one panel can want the same project watched at once
+ * (the Explorer's file tree and the design-system editor's screen-drift check), and they mount and unmount
+ * independently — without counting, whichever unmounted first would silently kill the other's updates.
+ */
+const watchers = new Map<string, { watcher: FSWatcher; refs: number }>();
 
 /**
  * A recursive `fs.watch` on macOS is an FSEvents subtree watch. If the root is
@@ -252,7 +257,11 @@ export function isTooBroadToWatch(root: string): boolean {
 }
 
 export function startWatch(sender: WebContents, root: string): void {
-  if (watchers.has(root)) return;
+  const existing = watchers.get(root);
+  if (existing) {
+    existing.refs++;
+    return;
+  }
   if (isTooBroadToWatch(root)) return;
   try {
     const w = watch(root, { recursive: true }, (event, filename) => {
@@ -268,22 +277,28 @@ export function startWatch(sender: WebContents, root: string): void {
         kind: event === "rename" ? "add" : "change",
       });
     });
-    watchers.set(root, w);
+    watchers.set(root, { watcher: w, refs: 1 });
   } catch {
     // Recursive watching unsupported on this platform — no live updates, but
     // the Explorer's manual refresh still works.
   }
 }
 
+/** Is `root` currently watched by anyone? (Test/diagnostic seam for the reference counting.) */
+export function isWatching(root: string): boolean {
+  return watchers.has(root);
+}
+
+/** Release one interest in `root`; the watcher closes only when the last consumer lets go. */
 export function stopWatch(root: string): void {
-  const w = watchers.get(root);
-  if (w) {
-    w.close();
-    watchers.delete(root);
-  }
+  const entry = watchers.get(root);
+  if (!entry) return;
+  if (--entry.refs > 0) return;
+  entry.watcher.close();
+  watchers.delete(root);
 }
 
 export function stopAllWatchers(): void {
-  for (const w of watchers.values()) w.close();
+  for (const entry of watchers.values()) entry.watcher.close();
   watchers.clear();
 }

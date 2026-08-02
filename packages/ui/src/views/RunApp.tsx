@@ -9,6 +9,7 @@ import { api } from "../lib/api";
 import { Button, Spinner } from "@vortspec/ui/ui";
 import { ProjectRail, projectRailItems } from "@vortspec/ui/ProjectRail";
 import { DesignPanel, ChangesBar } from "../components/run-canvas/DesignPanel";
+import { LibraryPanel } from "./LibraryPanel";
 import { FigmaMcpBanner } from "../components/FigmaMcpBanner";
 import { StorybookSidebar } from "../components/run-canvas/StorybookSidebar";
 import { Sitemap, type PageGenState } from "../components/run-canvas/Sitemap";
@@ -2232,6 +2233,11 @@ export function RunApp({
         </>
       ) : (
         <DesignPanel
+          storageKey={project.path}
+          // The design system, as the Library tab beside Design Attributes. An edit re-themes the open
+          // screen through the SAME reload the header Refresh uses — the overlay is injected after each
+          // page's own `:root`, so no new propagation mechanism is needed (design D6).
+          libraryPanel={<LibraryPanel project={project} onEdited={refresh} />}
           selection={selection}
           tree={layersTree}
           hoveredId={bridge.hoveredId}

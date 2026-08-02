@@ -120,6 +120,18 @@
       "types": "./src/views/DesignSystem.tsx",
       "default": "./src/views/DesignSystem.tsx"
     },
+    "./PresetsMode": {
+      "types": "./src/components/PresetsMode.tsx",
+      "default": "./src/components/PresetsMode.tsx"
+    },
+    "./FontPicker": {
+      "types": "./src/components/FontPicker.tsx",
+      "default": "./src/components/FontPicker.tsx"
+    },
+    "./LibraryPanel": {
+      "types": "./src/views/LibraryPanel.tsx",
+      "default": "./src/views/LibraryPanel.tsx"
+    },
     "./Profile": {
       "types": "./src/views/Profile.tsx",
       "default": "./src/views/Profile.tsx"

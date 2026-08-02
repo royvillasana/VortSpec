@@ -97,6 +97,9 @@ export type {
 export { figmaComponentSchema } from "./figma";
 import { setupAnswersSchema, projectConfigSchema } from "./setup";
 import { themeOverridesSchema, declBagSchema } from "./theme-overrides";
+import { designSystemLibrarySchema, screenTokenDriftSchema } from "./design-library";
+import { fontSourcesSchema } from "./fonts";
+import { presetListSchema, presetPlanSchema, presetSchema } from "./presets";
 import {
   inspectorTokensResultSchema,
   inspectorComponentsResultSchema,
@@ -773,6 +776,52 @@ export const ipcContract = {
         slot: z.string().optional(),
       }),
       decls: declBagSchema,
+    }),
+    response: themeOverridesSchema,
+  },
+  // The design system grouped by style property — the Library tab's model.
+  "designSystem:library": {
+    request: z.string(),
+    response: designSystemLibrarySchema,
+  },
+  // Tokens whose value in the SCREENS differs from the design system's — proposed on the row, never applied.
+  "designSystem:tokenDrift": {
+    request: z.string(),
+    response: screenTokenDriftSchema,
+  },
+  // Font families this project can offer. `full` fetches the whole Google catalog (on demand only).
+  "designSystem:fonts": {
+    request: z.object({ projectPath: z.string(), full: z.boolean().optional() }),
+    response: fontSourcesSchema,
+  },
+  // Presets. `activeId: null` means Default — the project's own source design system — is in effect.
+  "preset:list": { request: z.string(), response: presetListSchema },
+  // What applying would do, computed before anything is written.
+  "preset:preview": {
+    request: z.object({ projectPath: z.string(), presetId: z.string() }),
+    response: presetPlanSchema,
+  },
+  "preset:apply": {
+    request: z.object({ projectPath: z.string(), presetId: z.string() }),
+    response: presetPlanSchema,
+  },
+  // Back to the project's own source design system: drops only what presets wrote.
+  "preset:selectDefault": { request: z.string(), response: z.null() },
+  "preset:createFromCurrent": {
+    request: z.object({ projectPath: z.string(), name: z.string() }),
+    response: presetSchema,
+  },
+  "preset:import": {
+    request: z.object({ projectPath: z.string(), raw: z.unknown() }),
+    response: presetSchema.nullable(),
+  },
+  // Choose a family for a token: writes the stack, and records a Google family so it is actually fetched.
+  "theme:setFontFamily": {
+    request: z.object({
+      projectPath: z.string(),
+      token: z.string(),
+      stack: z.string(),
+      google: z.string().optional(),
     }),
     response: themeOverridesSchema,
   },

@@ -222,6 +222,29 @@ export interface VortSpecApi {
     target: { variant?: string; option?: string; slot?: string },
     decls: Record<string, string>,
   ): Promise<IpcResponse<"theme:setComponentOverride">>;
+  /** The design system grouped by style property — the Library tab's model. */
+  designSystemLibrary(projectPath: string): Promise<IpcResponse<"designSystem:library">>;
+  /** Tokens whose value in the project's SCREENS differs from the design system's — a proposal, per token. */
+  designSystemTokenDrift(projectPath: string): Promise<IpcResponse<"designSystem:tokenDrift">>;
+  /** Font families this project can offer. `full` fetches the whole Google catalog — on demand only. */
+  designSystemFonts(projectPath: string, full?: boolean): Promise<IpcResponse<"designSystem:fonts">>;
+  /** Presets: built-ins + this project's own. `activeId: null` means Default (the source) is in effect. */
+  listPresets(projectPath: string): Promise<IpcResponse<"preset:list">>;
+  /** What applying would do, before anything is written — one click rewrites many tokens. */
+  previewPreset(projectPath: string, presetId: string): Promise<IpcResponse<"preset:preview">>;
+  /** Apply a preset; returns the plan so the caller can report what changed, was introduced, or skipped. */
+  applyPreset(projectPath: string, presetId: string): Promise<IpcResponse<"preset:apply">>;
+  /** Back to the project's own source design system — drops only what presets wrote. */
+  selectDefaultPreset(projectPath: string): Promise<IpcResponse<"preset:selectDefault">>;
+  createPresetFromCurrent(projectPath: string, name: string): Promise<IpcResponse<"preset:createFromCurrent">>;
+  importPreset(projectPath: string, raw: unknown): Promise<IpcResponse<"preset:import">>;
+  /** Choose a family for a token: writes the stack, and records a Google family so it is actually fetched. */
+  setThemeFontFamily(
+    projectPath: string,
+    token: string,
+    stack: string,
+    google?: string,
+  ): Promise<IpcResponse<"theme:setFontFamily">>;
 
   // inspector (tokens / components / verification)
   inspectorTokens(

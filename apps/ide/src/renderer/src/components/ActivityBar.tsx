@@ -150,7 +150,9 @@ function IconButton({
     <div className="group relative">
       <button
         type="button"
-        aria-label={item.label}
+        // The ACTIVE item toggles the dock, so say so — a control whose behaviour changes when it is
+        // already selected is otherwise something the user has to discover by accident.
+        aria-label={active ? `${item.label} — click to show or hide the sidebar` : item.label}
         aria-pressed={active}
         onClick={onClick}
         className={`relative flex h-10 w-10 items-center justify-center rounded-md transition-colors ${
@@ -170,7 +172,7 @@ function IconButton({
         role="tooltip"
         className="pointer-events-none absolute left-full top-1/2 z-50 ml-2 -translate-x-1 -translate-y-1/2 whitespace-nowrap rounded-md border border-vs-border-default bg-vs-bg-elevated px-2 py-1 text-[11px] font-medium text-vs-text-primary opacity-0 shadow-lg transition-all duration-100 group-hover:translate-x-0 group-hover:opacity-100"
       >
-        {item.label}
+        {active ? `${item.label} · toggle sidebar` : item.label}
       </span>
     </div>
   );
@@ -181,6 +183,7 @@ export function ActivityBar({
   onSelect,
   seamless = false,
   hideStorybook = false,
+  hideManifest = false,
 }: {
   active: NavKey;
   onSelect: (key: NavKey) => void;
@@ -189,8 +192,16 @@ export function ActivityBar({
   /** Consumed-library sources (design_source: library) don't build a VortSpec Storybook — hide the
    *  Storybook item; the Design System view (under Design tokens) is their component surface instead. */
   hideStorybook?: boolean;
+  /**
+   * Consumed-library sources don't need DESIGN.md either. Nothing generates or refreshes it for them —
+   * the auto component build, which is what would refresh it, is skipped outright for a consume source —
+   * and the one prompt that reads it is about refactoring onto a BUILT design system, which a consumed
+   * library isn't. Their design system is `designer.md` + the pointer index, both written at provisioning.
+   */
+  hideManifest?: boolean;
 }): JSX.Element {
-  const items = hideStorybook ? TOP.filter((it) => it.key !== "play") : TOP;
+  const hidden = new Set<NavKey>([...(hideStorybook ? (["play"] as NavKey[]) : []), ...(hideManifest ? (["manifest"] as NavKey[]) : [])]);
+  const items = hidden.size ? TOP.filter((it) => !hidden.has(it.key)) : TOP;
   return (
     <nav
       aria-label="Activity bar"

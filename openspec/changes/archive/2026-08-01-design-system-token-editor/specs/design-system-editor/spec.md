@@ -44,3 +44,26 @@ library's real source. Every edit SHALL trigger the existing live re-resolution 
 #### Scenario: Button styling is a per-component override
 - **WHEN** the user changes the button styling lever
 - **THEN** VortSpec records a per-component override keyed on `data-component="Button"` and only Button re-themes, not every component
+
+### Requirement: The design system can follow the screens
+VortSpec SHALL surface, in the design-system editor, every curated lever whose value in the user's SCREENS
+differs from the design system's — showing both values — and SHALL let the user adopt the screens' value so
+the design system matches the look they built. It SHALL NOT apply the change on its own. Only tokens that map to a curated lever SHALL be considered — a token a screen invented that the
+design system has no concept of is not a design-system change. Adopting SHALL write the durable overlay, so
+a consumed library's real files are still never modified.
+
+#### Scenario: A screen's brand color is offered to the design system
+- **WHEN** a screen declares a primary-color token whose value differs from the design system's
+- **THEN** the editor shows both values with an option to adopt the screen's, and the design system re-themes only once the user adopts
+
+#### Scenario: Equivalent values are not reported as a difference
+- **WHEN** a screen states a token in a different but equivalent form (e.g. `12px` where the library says `0.75rem`)
+- **THEN** no difference is reported for that token
+
+#### Scenario: Adopting a light value keeps the dark one
+- **WHEN** the user adopts a screen's value for a token the design system holds as a light/dark pair
+- **THEN** only the light half is replaced and the library's dark-mode value is preserved
+
+#### Scenario: Screens that disagree
+- **WHEN** screens declare different values for the same token
+- **THEN** the value used by the most screens is the one offered, and the screens that differ are reported rather than hidden

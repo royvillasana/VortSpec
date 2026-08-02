@@ -31,6 +31,15 @@ export type ComponentOverride = z.infer<typeof componentOverrideSchema>;
 export const tokenOverrideSchema = z.object({
   value: z.string(),
   mode: z.string().optional(),
+  /**
+   * Who put this value here (change: design-system-style-panel, Phase 4).
+   *
+   * `preset` means a preset apply wrote it; `user` (the default) means the person did. The distinction is
+   * what makes "go back to Default" precise rather than destructive: returning to the source design system
+   * removes only what a preset contributed, leaving the user's own personalization intact. Editing a
+   * preset-written token in Manual mode transfers it to `user` — they have taken it over.
+   */
+  origin: z.enum(["user", "preset"]).optional(),
 });
 export type TokenOverride = z.infer<typeof tokenOverrideSchema>;
 
@@ -40,10 +49,16 @@ export const themeOverridesSchema = z.object({
   tokens: z.record(z.string(), tokenOverrideSchema).default({}),
   /** Per-component overrides, keyed by `data-component` name. */
   components: z.record(z.string(), componentOverrideSchema).default({}),
+  /**
+   * Google Fonts families the user has CHOSEN. Recorded separately from the token values because picking a
+   * family is only half the job — the family also has to be FETCHED, and the stylesheet link is emitted
+   * from this list. A project that never picks one keeps its pages free of any network dependency.
+   */
+  googleFonts: z.array(z.string()).default([]),
 });
 export type ThemeOverrides = z.infer<typeof themeOverridesSchema>;
 
-export const EMPTY_THEME_OVERRIDES: ThemeOverrides = { version: 1, tokens: {}, components: {} };
+export const EMPTY_THEME_OVERRIDES: ThemeOverrides = { version: 1, tokens: {}, components: {}, googleFonts: [] };
 
 /** Parse raw JSON into a valid overlay, falling back to empty on any malformed input. */
 export function parseThemeOverrides(raw: unknown): ThemeOverrides {
@@ -57,11 +72,23 @@ export function setTokenOverride(
   name: string,
   value: string,
   mode?: string,
+  origin: "user" | "preset" = "user",
 ): ThemeOverrides {
   const key = name.replace(/^--/, "");
   const tokens = { ...overrides.tokens };
   if (value.trim() === "") delete tokens[key];
-  else tokens[key] = mode ? { value, mode } : { value };
+  else tokens[key] = { value, ...(mode ? { mode } : {}), origin };
+  return { ...overrides, tokens };
+}
+
+/**
+ * Drop every value a preset contributed, so the project's SOURCE design system is in effect again — what
+ * selecting "Default" means. The user's own edits survive, including edits they made to a token a preset
+ * had written (those became theirs at the moment they touched them).
+ */
+export function clearPresetTokens(overrides: ThemeOverrides): ThemeOverrides {
+  const tokens: Record<string, TokenOverride> = {};
+  for (const [k, v] of Object.entries(overrides.tokens)) if (v.origin !== "preset") tokens[k] = v;
   return { ...overrides, tokens };
 }
 
@@ -101,4 +128,11 @@ export function setComponentOverride(
   if (!cur.base && !cur.variants && !cur.slots) delete components[component];
   else components[component] = cur;
   return { ...overrides, components };
+}
+
+/** Record a chosen Google family (immutably), so its stylesheet is emitted wherever the design system renders. */
+export function addGoogleFont(overrides: ThemeOverrides, family: string): ThemeOverrides {
+  const f = family.trim();
+  if (!f || (overrides.googleFonts ?? []).some((x) => x.toLowerCase() === f.toLowerCase())) return overrides;
+  return { ...overrides, googleFonts: [...(overrides.googleFonts ?? []), f] };
 }

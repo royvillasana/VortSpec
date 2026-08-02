@@ -1,8 +1,9 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, afterEach } from "vitest";
 import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { serveLightPages, lightPageUrl, stopLightServe } from "./light-serve";
+import { serveLightPages, lightPageUrl, stopLightServe, injectTokens, tokenCssFor } from "./light-serve";
+import { setThemeTokenOverride } from "../inspector/theme-override-store";
 import { LIGHT_PAGES_DIR } from "../../shared/light-page";
 
 describe("light-serve", () => {
@@ -119,5 +120,42 @@ describe("light-serve", () => {
     expect(lightPageUrl("http://127.0.0.1:1/", "Airbnb Landing")).toBe("http://127.0.0.1:1/Airbnb%20Landing.html");
     expect(lightPageUrl("http://127.0.0.1:1/", "a/b")).toBe("http://127.0.0.1:1/a-b.html");
     expect(lightPageUrl("http://127.0.0.1:1/", "Home.html")).toBe("http://127.0.0.1:1/Home.html");
+  });
+});
+
+describe("a design-token edit reaches an already-created screen", () => {
+  let dir: string;
+  afterEach(async () => {
+    if (dir) await rm(dir, { recursive: true, force: true });
+  });
+
+  /**
+   * A composed screen declares its OWN `:root` token block, so the design system can only drive it if the
+   * injected overlay lands AFTER that block — same specificity, later wins. This pins the ordering: without
+   * it, moving a lever silently does nothing on every screen the user already built.
+   */
+  it("injects the overlay after the page's own :root so the lever wins", async () => {
+    dir = await mkdtemp(join(tmpdir(), "vs-light-serve-"));
+    await mkdir(join(dir, ".sdd-de"), { recursive: true });
+    await writeFile(
+      join(dir, ".sdd-de", "project.yaml"),
+      ["design_source: library", "component_library: astryx", "token_file: src/tokens.css"].join("\n"),
+      "utf8",
+    );
+    await mkdir(join(dir, "src"), { recursive: true });
+    await writeFile(join(dir, "src", "tokens.css"), ":root { --radius-container: 12px; }\n", "utf8");
+
+    // The user moves the Card radius lever.
+    await setThemeTokenOverride(dir, "radius-container", "28px");
+
+    const page = '<html><head><style>:root { --radius-container: 12px; }</style></head><body><div style="border-radius: var(--radius-container)"></div></body></html>';
+    const served = injectTokens(page, await tokenCssFor(dir));
+
+    const pageDecl = served.indexOf("--radius-container: 12px");
+    const overlayDecl = served.indexOf("--radius-container: 28px");
+    expect(pageDecl).toBeGreaterThan(-1);
+    expect(overlayDecl).toBeGreaterThan(-1);
+    // Later in the document == wins the cascade. This is the whole propagation guarantee.
+    expect(overlayDecl).toBeGreaterThan(pageDecl);
   });
 });

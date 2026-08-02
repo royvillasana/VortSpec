@@ -20,6 +20,35 @@ import type {
   IdeActionResult,
 } from "@vortspec/core/ipc";
 
+/** Rows the mock design system exposes; mutated by a token write so a re-read shows the new value. */
+const libraryRows: Array<{ token: string; value: string; rawValue: string; control: string; uses: number }> = [
+  { token: "color-accent", value: "#262626", rawValue: "#262626", control: "color", uses: 3 },
+  { token: "radius-card", value: "20px", rawValue: "20px", control: "length", uses: 2 },
+];
+
+function library() {
+  return {
+    designSource: "library",
+    componentLibrary: "astryx",
+    themeApply: "css-vars",
+    needsThemeAgent: false,
+    preview: {
+      primary: "#262626",
+      background: "#f1f1f1",
+      surface: "#ffffff",
+      radius: "20px",
+      tokens: { primary: "color-accent", radius: "radius-card" },
+    },
+    sections: [
+      { section: "color", label: "Colors", hint: "", rows: libraryRows.filter((r) => r.control === "color") },
+      { section: "typography", label: "Typography", hint: "", rows: [] },
+      { section: "spacing", label: "Spacing", hint: "", rows: [] },
+      { section: "radius", label: "Borders", hint: "", rows: libraryRows.filter((r) => r.control === "length") },
+      { section: "shadow", label: "Shadows", hint: "", rows: [] },
+    ],
+  };
+}
+
 export interface MockConfig {
   tokens?: InspectorTokensResult;
   components?: InspectorComponentsResult;
@@ -197,6 +226,9 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
   const rawSubs = new Set<(e: { runId: string; line: string }) => void>();
   const devSubs = new Set<(e: { projectPath: string; status: DevServerStatus }) => void>();
   const termSubs = new Set<(e: { id: string; data: string; exit?: number | null }) => void>();
+  // Workspace-change subscribers. Real ones, so a test can fire a change and assert every watcher re-reads
+  // — which is how the two-surface staleness guarantee is verified.
+  const wsSubs: Array<(e: { projectPath: string; path: string | null; kind: string }) => void> = [];
   const ideActionSubs = new Set<(a: IdeAction) => void>();
   const ideResolutions: IdeActionResult[] = [];
   // Stateful in-memory comment threads (seeded from cfg; list/upsert/resolve mutate it).
@@ -444,7 +476,34 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
     watchWorkspace: async () => undefined,
     unwatchWorkspace: async () => undefined,
     fileAtHead: async (_projectPath: string, relPath: string) => cfg.fsHead?.[relPath] ?? null,
-    onWorkspaceChange: () => () => undefined,
+    // Real subscribers, so a test can fire a change and assert that everything watching re-reads.
+    onWorkspaceChange: (cb: (e: { projectPath: string; path: string | null; kind: string }) => void) => {
+      wsSubs.push(cb);
+      return () => {
+        const i = wsSubs.indexOf(cb);
+        if (i >= 0) wsSubs.splice(i, 1);
+      };
+    },
+
+    // ── Design system (change: design-system-style-panel) ──
+    designSystemLibrary: async () => library(),
+    designSystemTokenDrift: async () => ({ screens: [], drifts: [] }),
+    designSystemFonts: async () => ({ families: [], googleComplete: true }),
+    setThemeFontFamily: async () => ({ version: 1, tokens: {}, components: {}, googleFonts: [] }),
+    setThemeTokenOverride: async (_p: string, name: string, value: string) => {
+      // Mutate the fixture so a re-read genuinely returns the new value — that is the whole point of the
+      // two-surface staleness test.
+      const row = libraryRows.find((r) => r.token === name);
+      if (row) row.value = value;
+      for (const cb of wsSubs) cb({ projectPath: "/p", path: ".vortspec/theme-overrides.json", kind: "change" });
+      return { version: 1, tokens: {}, components: {}, googleFonts: [] };
+    },
+    listPresets: async () => ({ presets: [], activeId: null }),
+    previewPreset: async () => ({ presetId: "", outcomes: [], preview: { primary: "#0A84FF", radius: "4px", tokens: { primary: "color-accent" } } }),
+    applyPreset: async () => ({ presetId: "", outcomes: [] }),
+    selectDefaultPreset: async () => null,
+    createPresetFromCurrent: async () => ({ id: "x", name: "x", summary: "", builtIn: false, values: {} }),
+    importPreset: async () => null,
 
     // Integrated terminal
     terminalCreate: async (req: { id: string }) => {
