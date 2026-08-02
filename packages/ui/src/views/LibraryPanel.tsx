@@ -46,6 +46,9 @@ export function LibraryPanel({
   // written, which is the only question the preview exists to answer.
   const [presetPreview, setPresetPreview] = useState<Record<string, unknown> | null>(null);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
+  // Per-component overrides from the durable overlay. Read separately from the token model because they
+  // are a different kind of thing: not a value in the design system, but a rule laid over it.
+  const [componentOverrides, setComponentOverrides] = useState<[string, Record<string, string>][]>([]);
   const customize = useAgentRun();
 
   const load = useCallback(async () => {
@@ -57,6 +60,18 @@ export function LibraryPanel({
       setModel(lib);
       setDrift(new Map((d?.drifts ?? []).map((x) => [x.token, x])));
       setError(null);
+      // The override list is ADDITIONAL to the design system, so it is read separately and defensively:
+      // a failure here must leave the tokens on screen rather than blanking the panel behind an error.
+      try {
+        const overrides = await api.getThemeOverrides(project.path);
+        setComponentOverrides(
+          Object.entries(overrides?.components ?? {})
+            .map(([name, o]) => [name, o.base ?? {}] as [string, Record<string, string>])
+            .filter(([, decls]) => Object.keys(decls).length > 0),
+        );
+      } catch {
+        setComponentOverrides([]);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
@@ -113,6 +128,11 @@ export function LibraryPanel({
 
   async function writeToken(token: string, value: string): Promise<void> {
     await commit(() => api.setThemeTokenOverride(project.path, token, value));
+  }
+
+  /** Remove a component's whole base override. An empty decl bag is how the store clears a target. */
+  async function clearComponentOverride(component: string): Promise<void> {
+    await commit(() => api.setThemeComponentOverride(project.path, component, {}, {}));
   }
 
   /** Choosing a family writes the stack AND records a Google family, so the font is fetched, not just named. */
@@ -255,6 +275,11 @@ export function LibraryPanel({
               onDraft={draft}
             />
           ))}
+          <ComponentOverrides
+            entries={componentOverrides}
+            disabled={pending}
+            onClear={clearComponentOverride}
+          />
         </div>
       )}
 
@@ -792,6 +817,63 @@ function Row({
           </button>
         </div>
       )}
+    </div>
+  );
+}
+
+
+/**
+ * Per-component overrides currently laid over the design system (change: scoped-style-edits).
+ *
+ * These apply to every instance on every page, and until now nothing displayed them — a project could
+ * carry `[data-component="Button"] { border-radius: 0 }` forever with no screen that showed it and no way
+ * to undo it. An effect with no visible cause is indistinguishable from a bug, so the list exists even
+ * when it is empty of anything the current session wrote.
+ *
+ * Rendered only when there is something to show: an always-present empty section would imply overrides
+ * are a normal part of a design system rather than an exception laid on top of one.
+ */
+function ComponentOverrides({
+  entries,
+  disabled,
+  onClear,
+}: {
+  entries: [string, Record<string, string>][];
+  disabled: boolean;
+  onClear: (component: string) => Promise<void>;
+}): React.JSX.Element | null {
+  if (entries.length === 0) return null;
+  return (
+    <div className="border-t border-vs-border-default px-3 py-2">
+      <div className="pb-1.5 text-[10px] uppercase tracking-[0.06em] text-vs-text-muted">
+        Component overrides
+      </div>
+      <div className="flex flex-col gap-1">
+        {entries.map(([component, decls]) => (
+          <div
+            key={component}
+            className="flex items-start justify-between gap-2 rounded border border-vs-border-default px-2 py-1.5"
+          >
+            <div className="flex min-w-0 flex-col">
+              <span className="truncate text-[11.5px] text-vs-text-primary">{component}</span>
+              <span className="truncate font-mono text-[10px] text-vs-text-muted">
+                {Object.entries(decls)
+                  .map(([prop, val]) => `${prop}: ${val}`)
+                  .join("  ·  ")}
+              </span>
+            </div>
+            <button
+              type="button"
+              disabled={disabled}
+              aria-label={`Clear the ${component} override`}
+              onClick={() => void onClear(component)}
+              className="shrink-0 rounded border border-vs-border-default px-1.5 py-0.5 text-[10px] text-vs-text-muted transition-colors hover:border-vs-border-strong hover:text-vs-text-secondary disabled:opacity-50"
+            >
+              Clear
+            </button>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

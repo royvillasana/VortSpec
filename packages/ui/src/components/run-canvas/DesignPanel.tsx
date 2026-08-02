@@ -14,6 +14,15 @@ import type { PendingEdit } from "./pending";
 import { matchTokenName, tokenNameFromVar, tokensForField } from "./compose";
 import { ColorTokenField, type ColorToken } from "./ColorPicker";
 import { CreateVariableRow } from "./CreateVariableRow";
+import { ScopeSelector } from "./ScopeSelector";
+import { scopeReach, scopeTargets } from "./scope-reach";
+import {
+  availableScopes,
+  deriveScope,
+  type ScopeReach,
+  type ScopeTarget,
+  type StyleScope,
+} from "@vortspec/core/style-scope";
 
 /**
  * The Run-section Design panel (change: run-canvas-visual-editor).
@@ -128,7 +137,7 @@ export function DesignPanel({
   /** Drag-to-reorder a layer: move `nodeId` before/after `targetId` — the page rearranges to match. */
   onReorderNode?: (nodeId: string, targetId: string, position: "before" | "after" | "inside") => void;
   /** An ephemeral property edit (section field key → new value). */
-  onFieldChange?: (key: string, value: string) => void;
+  onFieldChange?: (key: string, value: string, scope?: StyleScope, scopeKey?: string) => void;
   /** A variant switch (variant prop key → new option). */
   onVariantChange?: (key: string, value: string) => void;
   /** Delete the selected element (hidden live, removed from source on Apply). */
@@ -251,6 +260,8 @@ export function DesignPanel({
                 onFieldChange={onFieldChange}
                 colorTokens={colorTokens}
                 tokens={tokens}
+                targets={scopeTargets(selection)}
+                reach={scopeReach(tree, tokens)}
               />
             ))}
           </>
@@ -781,32 +792,105 @@ const PropertySection = memo(function PropertySection({
   colorTokens = [],
   tokens = [],
   onCreateToken,
+  targets = [],
+  reach = {},
 }: {
   section: DesignSection;
-  onFieldChange?: (key: string, value: string) => void;
+  onFieldChange?: (key: string, value: string, scope?: StyleScope, scopeKey?: string) => void;
   colorTokens?: ColorToken[];
   tokens?: InspectorToken[];
   onCreateToken?: (name: string, value: string, tokenType?: string) => Promise<void>;
+  targets?: ScopeTarget[];
+  reach?: ScopeReach;
 }): JSX.Element | null {
   if (section.fields.length === 0) return null;
   return (
     <Collapsible title={section.title} defaultOpen>
       <div className="flex flex-col gap-2 px-3 pb-3">
         {section.fields.map((f) => (
-          <Row key={f.key} label={f.label}>
-            <Field
-              field={f}
-              colorTokens={colorTokens}
-              tokens={tokens}
-              onChange={(val) => onFieldChange?.(f.key, val)}
-              onCreateToken={onCreateToken}
-            />
-          </Row>
+          <ScopedField
+            key={f.key}
+            field={f}
+            colorTokens={colorTokens}
+            tokens={tokens}
+            onCreateToken={onCreateToken}
+            targets={targets}
+            reach={reach}
+            onChange={(val, scope, scopeKey) => onFieldChange?.(f.key, val, scope, scopeKey)}
+          />
         ))}
       </div>
     </Collapsible>
   );
 });
+
+/**
+ * One field plus the scope its edit will apply at (change: scoped-style-edits).
+ *
+ * The scope row appears when the field takes focus — before a value can be typed, which is the moment the
+ * spec requires it to be visible, and not a moment earlier: rendering a scope row under every field at
+ * rest would bury the panel in chrome the user is not using.
+ *
+ * The scope resets to its derived default whenever focus returns. A scope that persisted from the last
+ * edit would be a mode, and a mode is invisible exactly when it matters — the failure this whole change
+ * exists to prevent.
+ */
+function ScopedField({
+  field,
+  colorTokens,
+  tokens,
+  onChange,
+  onCreateToken,
+  targets,
+  reach,
+}: {
+  field: SectionField;
+  colorTokens: ColorToken[];
+  tokens: InspectorToken[];
+  onChange: (value: string, scope: StyleScope, scopeKey?: string) => void;
+  onCreateToken?: (name: string, value: string, tokenType?: string) => Promise<void>;
+  targets: ScopeTarget[];
+  reach: ScopeReach;
+}): JSX.Element {
+  const options = availableScopes(targets, field.key, reach);
+  const derived = deriveScope(targets, field.key);
+  const [open, setOpen] = useState(false);
+  const [picked, setPicked] = useState<{ scope: StyleScope; key?: string } | null>(null);
+  const active = picked ?? derived;
+
+  return (
+    <div
+      onFocus={() => setOpen(true)}
+      onBlur={(e) => {
+        // Only close when focus leaves the whole row — moving from the input to a scope chip must not
+        // dismiss the control the user is reaching for.
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
+          setOpen(false);
+          setPicked(null);
+        }
+      }}
+    >
+      <Row label={field.label}>
+        <Field
+          field={field}
+          colorTokens={colorTokens}
+          tokens={tokens}
+          onChange={(val) => onChange(val, active.scope, active.key)}
+          onCreateToken={onCreateToken}
+        />
+      </Row>
+      {open && (
+        <div className="pl-[72px]">
+          <ScopeSelector
+            options={options}
+            value={active.scope}
+            onChange={(scope, key) => setPicked({ scope, key })}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
 
 function Field({
   field,

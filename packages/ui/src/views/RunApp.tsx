@@ -10,6 +10,7 @@ import { Button, Spinner } from "@vortspec/ui/ui";
 import { ProjectRail, projectRailItems } from "@vortspec/ui/ProjectRail";
 import { DesignPanel, ChangesBar } from "../components/run-canvas/DesignPanel";
 import { LibraryPanel } from "./LibraryPanel";
+import { writesOverlay, type StyleScope } from "@vortspec/core/style-scope";
 import { FigmaMcpBanner } from "../components/FigmaMcpBanner";
 import { StorybookSidebar } from "../components/run-canvas/StorybookSidebar";
 import { Sitemap, type PageGenState } from "../components/run-canvas/Sitemap";
@@ -1782,8 +1783,47 @@ export function RunApp({
   );
 
   // A Design-panel field edit → live override + a recorded pending edit.
+  /**
+   * A style edit committed at `component` or `token` scope (change: scoped-style-edits).
+   *
+   * These write the durable personalization overlay, not the page's own source, so they take none of the
+   * per-element machinery below: no live DOM override, no fingerprint, no pending edit, and — crucially —
+   * no static-resolvability guard, because the write targets a component or token IDENTITY rather than
+   * this element's JSX. An element whose JSX cannot be resolved can still have its component re-themed.
+   *
+   * Nothing here reloads the canvas: the overlay watcher does that, so the screen re-themes on the same
+   * terms whether the write came from here, the design-system sidebar, a preset, or an agent.
+   */
+  const applyScopedOverride = useCallback(
+    async (key: string, value: string, scope: StyleScope, scopeKey?: string): Promise<void> => {
+      if (!scopeKey) return;
+      try {
+        if (scope === "token") {
+          await api.setThemeTokenOverride(project.path, scopeKey, value);
+          return;
+        }
+        const css = cssForField(key, value);
+        // A composite field (padding box, align, resize) maps to no single declaration set here. Rather
+        // than write half of it, decline — the narrow scopes still handle those correctly.
+        if (Object.keys(css).length === 0) return;
+        // MERGE, don't replace: `setComponentOverride` assigns the base bag wholesale, so writing just
+        // this property would silently drop every other property already overridden on this component.
+        const existing = await api.getThemeOverrides(project.path).catch(() => null);
+        const base = existing?.components?.[scopeKey]?.base ?? {};
+        await api.setThemeComponentOverride(project.path, scopeKey, {}, { ...base, ...css });
+      } catch {
+        /* the overlay write failed; the page keeps its current values rather than showing a lie */
+      }
+    },
+    [project.path],
+  );
+
   const onFieldChange = useCallback(
-    (key: string, value: string) => {
+    (key: string, value: string, scope: StyleScope = "element", scopeKey?: string) => {
+      if (writesOverlay(scope)) {
+        void applyScopedOverride(key, value, scope, scopeKey);
+        return;
+      }
       if (key === "content") {
         const id = selectedIdRef.current;
         if (id) setText(id, value); // live text preview
@@ -1880,7 +1920,7 @@ export function RunApp({
       // so a later undo of this edit is detectable as a real change.
       refreshReadout();
     },
-    [applyLive, commitEdits, setText, refreshReadout],
+    [applyLive, commitEdits, setText, refreshReadout, applyScopedOverride],
   );
 
   // An inline text edit on the canvas (double-click) — the guest already applied

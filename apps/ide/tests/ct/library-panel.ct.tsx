@@ -99,3 +99,18 @@ test("a second mounted panel is never left stale after an edit on the first", as
   // …and so does the OTHER, which would otherwise still be offering to write back "20px".
   await expect(second).toHaveValue("40px");
 });
+
+test("a per-component override is visible and clearable, not applied invisibly", async ({ mount }) => {
+  // An override that applies to every instance on every page while appearing in no screen is
+  // indistinguishable from a bug: the user sees an effect with no cause and no way to undo it. The
+  // fixture seeds one the session did not write, which is exactly that case.
+  const c = await mount(<LibraryPanel project={PROJECT} onEdited={() => {}} />);
+
+  await expect(c.getByText("Component overrides")).toBeVisible();
+  await expect(c.getByText("Button", { exact: true })).toBeVisible();
+  await expect(c.getByText("border-radius: 0")).toBeVisible();
+
+  await c.getByRole("button", { name: "Clear the Button override" }).click();
+
+  await expect(c.getByText("Component overrides")).toHaveCount(0);
+});

@@ -21,6 +21,14 @@ import type {
 } from "@vortspec/core/ipc";
 
 /** Rows the mock design system exposes; mutated by a token write so a re-read shows the new value. */
+/**
+ * Per-component overrides in the fixture overlay. Seeded with one, because the case that matters is an
+ * override the CURRENT session did not write — the kind that used to apply forever with nothing on screen.
+ */
+const componentOverrides: Record<string, { base?: Record<string, string> }> = {
+  Button: { base: { "border-radius": "0" } },
+};
+
 const libraryRows: Array<{ token: string; value: string; rawValue: string; control: string; uses: number }> = [
   { token: "color-accent", value: "#262626", rawValue: "#262626", control: "color", uses: 3 },
   { token: "radius-card", value: "20px", rawValue: "20px", control: "length", uses: 2 },
@@ -497,6 +505,20 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
       if (row) row.value = value;
       for (const cb of wsSubs) cb({ projectPath: "/p", path: ".vortspec/theme-overrides.json", kind: "change" });
       return { version: 1, tokens: {}, components: {}, googleFonts: [] };
+    },
+    // The durable overlay, as a live fixture — so listing and clearing a per-component override is
+    // exercised against something that actually changes rather than a constant.
+    getThemeOverrides: async () => ({ version: 1, tokens: {}, components: componentOverrides, googleFonts: [] }),
+    setThemeComponentOverride: async (
+      _p: string,
+      component: string,
+      _target: Record<string, string>,
+      decls: Record<string, string>,
+    ) => {
+      if (Object.keys(decls).length === 0) delete componentOverrides[component];
+      else componentOverrides[component] = { base: decls };
+      for (const cb of wsSubs) cb({ projectPath: "/p", path: ".vortspec/theme-overrides.json", kind: "change" });
+      return { version: 1, tokens: {}, components: componentOverrides, googleFonts: [] };
     },
     listPresets: async () => ({ presets: [], activeId: null }),
     previewPreset: async () => ({ presetId: "", outcomes: [], preview: { primary: "#0A84FF", radius: "4px", tokens: { primary: "color-accent" } } }),
