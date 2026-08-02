@@ -1,4 +1,5 @@
 import type { JSX } from "react";
+import { Logo } from "@vortspec/ui/Logo";
 import type { Activity } from "../lib/layout";
 
 /** Activity-bar keys: every layout Activity plus `home`, which is an ACTION
@@ -11,12 +12,9 @@ export type NavKey = Activity | "home";
  *  `custom` renders a full (e.g. brand-colored) SVG instead of the monochrome one. */
 type Item = { key: NavKey; label: string; icon?: JSX.Element; custom?: JSX.Element };
 
-/** Home — a house mark (svgrepo), filled, in currentColor. */
-const HomeMark = (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-    <path d="M12 3.172 3 10.657V21a1 1 0 0 0 1 1h5v-6h6v6h5a1 1 0 0 0 1-1V10.657l-9-7.485Zm9.6 6.09L12.64 1.81a1 1 0 0 0-1.28 0L2.4 9.262a1 1 0 0 0 1.28 1.535L12 3.86l8.32 6.937a1 1 0 1 0 1.28-1.535Z" />
-  </svg>
-);
+/** Home — the VortSpec brand mark. Home IS the app's root, so it carries the app's
+ *  logo rather than a generic house glyph; the breadcrumb's Home crumb matches. */
+const HomeMark = <Logo size={18} alt="" />;
 
 /** The Git logo (simple-icons), in currentColor. */
 const GitMark = (
@@ -91,8 +89,16 @@ const TOP: Item[] = [
   },
   {
     key: "explorer",
-    label: "Explorer",
-    icon: <path d="M3 4.5A1.5 1.5 0 0 1 4.5 3h4l2 2.5h5A1.5 1.5 0 0 1 17 7v8.5A1.5 1.5 0 0 1 15.5 17h-11A1.5 1.5 0 0 1 3 15.5v-11Z" />,
+    // A code glyph, not a folder: this section is where you read and edit the project's
+    // source. The folder tree is how you get there, not what the section is for.
+    label: "Code Editor",
+    icon: (
+      <>
+        <path d="M7 6.5 3.5 10 7 13.5" />
+        <path d="m13 6.5 3.5 3.5L13 13.5" />
+        <path d="M11.25 4.5 8.75 15.5" />
+      </>
+    ),
   },
   {
     key: "run",
@@ -150,7 +156,9 @@ function IconButton({
     <div className="group relative">
       <button
         type="button"
-        aria-label={item.label}
+        // The ACTIVE item toggles the dock, so say so — a control whose behaviour changes when it is
+        // already selected is otherwise something the user has to discover by accident.
+        aria-label={active ? `${item.label} — click to show or hide the sidebar` : item.label}
         aria-pressed={active}
         onClick={onClick}
         className={`relative flex h-10 w-10 items-center justify-center rounded-md transition-colors ${
@@ -170,7 +178,7 @@ function IconButton({
         role="tooltip"
         className="pointer-events-none absolute left-full top-1/2 z-50 ml-2 -translate-x-1 -translate-y-1/2 whitespace-nowrap rounded-md border border-vs-border-default bg-vs-bg-elevated px-2 py-1 text-[11px] font-medium text-vs-text-primary opacity-0 shadow-lg transition-all duration-100 group-hover:translate-x-0 group-hover:opacity-100"
       >
-        {item.label}
+        {active ? `${item.label} · toggle sidebar` : item.label}
       </span>
     </div>
   );
@@ -181,6 +189,7 @@ export function ActivityBar({
   onSelect,
   seamless = false,
   hideStorybook = false,
+  hideManifest = false,
 }: {
   active: NavKey;
   onSelect: (key: NavKey) => void;
@@ -189,8 +198,16 @@ export function ActivityBar({
   /** Consumed-library sources (design_source: library) don't build a VortSpec Storybook — hide the
    *  Storybook item; the Design System view (under Design tokens) is their component surface instead. */
   hideStorybook?: boolean;
+  /**
+   * Consumed-library sources don't need DESIGN.md either. Nothing generates or refreshes it for them —
+   * the auto component build, which is what would refresh it, is skipped outright for a consume source —
+   * and the one prompt that reads it is about refactoring onto a BUILT design system, which a consumed
+   * library isn't. Their design system is `designer.md` + the pointer index, both written at provisioning.
+   */
+  hideManifest?: boolean;
 }): JSX.Element {
-  const items = hideStorybook ? TOP.filter((it) => it.key !== "play") : TOP;
+  const hidden = new Set<NavKey>([...(hideStorybook ? (["play"] as NavKey[]) : []), ...(hideManifest ? (["manifest"] as NavKey[]) : [])]);
+  const items = hidden.size ? TOP.filter((it) => !hidden.has(it.key)) : TOP;
   return (
     <nav
       aria-label="Activity bar"

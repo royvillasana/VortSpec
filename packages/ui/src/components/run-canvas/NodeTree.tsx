@@ -3,6 +3,29 @@ import type { JSX } from "react";
 import type { BridgeTree, BridgeNode } from "@vortspec/core/ipc";
 
 /**
+ * The ids a layer-search should render: every node whose name or hint matches, PLUS their ancestors so a
+ * match's place in the hierarchy stays readable. `null` means "not filtering", which is deliberately
+ * distinct from "filtering and nothing matched" (an empty set) — the caller renders a different thing.
+ *
+ * Exported so the matching rule can be tested directly rather than through a rendered tree.
+ */
+export function visibleForFilter(tree: BridgeTree | null, filter: string): Set<string> | null {
+  const q = filter.trim().toLowerCase();
+  if (!q || !tree) return null;
+  const parentOf = new Map<string, string>();
+  for (const [pid, kids] of Object.entries(tree.children)) for (const k of kids) parentOf.set(k, pid);
+  const keep = new Set<string>();
+  for (const [id, node] of Object.entries(tree.nodes)) {
+    const name = node.component ?? node.tag;
+    const hint = node.idAttr ?? node.classes[0] ?? "";
+    if (!name.toLowerCase().includes(q) && !hint.toLowerCase().includes(q)) continue;
+    keep.add(id);
+    for (let p = parentOf.get(id); p; p = parentOf.get(p)) keep.add(p);
+  }
+  return keep;
+}
+
+/**
  * The Layers region of the Run-section Design panel (change: run-canvas-visual-editor).
  *
  * Renders the rendered page's component/DOM node tree from a flat `BridgeTree`
@@ -17,6 +40,7 @@ export const NodeTree = memo(function NodeTree({
   onSelect,
   onHover,
   onReorder,
+  filter = "",
 }: {
   tree: BridgeTree | null;
   selectedId: string | null;
@@ -25,6 +49,12 @@ export const NodeTree = memo(function NodeTree({
   onHover?: (id: string | null) => void;
   /** Drag a layer: `before`/`after` reorders; `inside` nests it into the target container. */
   onReorder?: (nodeId: string, targetId: string, position: "before" | "after" | "inside") => void;
+  /**
+   * Narrow the tree to nodes whose name matches, so a layer can be reached by typing instead of by
+   * scrolling and expanding — a real screen's tree runs to dozens of nodes. Ancestors of a match stay
+   * visible so the match's place in the hierarchy is still readable.
+   */
+  filter?: string;
 }): JSX.Element {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const selectedRef = useRef<HTMLButtonElement | null>(null);
@@ -39,6 +69,8 @@ export const NodeTree = memo(function NodeTree({
     if (tree) for (const [pid, kids] of Object.entries(tree.children)) for (const k of kids) map.set(k, pid);
     return map;
   }, [tree]);
+
+  const visible = useMemo(() => visibleForFilter(tree, filter), [tree, filter]);
 
   // When the selection changes (e.g. clicking an element on the canvas), expand the
   // whole ancestor chain so the highlighted row is actually visible, then scroll to it.
@@ -77,15 +109,23 @@ export const NodeTree = memo(function NodeTree({
     );
   }
 
+  if (visible && visible.size === 0) {
+    return <p className="px-3 py-2 text-[11px] text-vs-text-muted">No layer matches “{filter.trim()}”.</p>;
+  }
+
   function renderNode(id: string, depth: number): JSX.Element[] {
     const node = tree!.nodes[id];
     if (!node) return [];
+    // Filtering renders only matches and their ancestors.
+    if (visible && !visible.has(id)) return [];
     const kids = tree!.children[id] ?? [];
     const hasKids = kids.length > 0 || node.childCount > 0;
     // Can this row accept a nested child? Anything that already has children, or a container-category
     // element (a div/section/nav/… — even an empty one you want to drop the first child into).
     const canNest = hasKids || NESTABLE_GROUPS.has(TAG_GROUP[node.tag] ?? "");
-    const isOpen = expanded.has(id);
+    // While filtering, the surviving branches are always open — a match the user must expand to
+    // see would defeat the search.
+    const isOpen = expanded.has(id) || !!visible;
     const isSelected = selectedId === id;
     const dropHere = dropAt?.id === id ? dropAt.pos : null;
     const row = (

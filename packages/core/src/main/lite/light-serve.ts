@@ -51,7 +51,7 @@ async function baseTokenCssFor(projectPath: string): Promise<string> {
  * canvas immediately, without invalidating the (large, rarely-changing) base read. Overlay is appended
  * AFTER the base so it wins by cascade.
  */
-async function tokenCssFor(projectPath: string): Promise<string> {
+export async function tokenCssFor(projectPath: string): Promise<string> {
   const base = await baseTokenCssFor(projectPath);
   const overlay = await materializeThemeCss(projectPath).catch(() => "");
   return overlay ? `${base}\n${overlay}` : base;
@@ -71,7 +71,7 @@ export function clearTokenCssCache(projectPath: string): void {
  * RESOLVE in the served page — a light page authored from stand-ins doesn't carry the token variables.
  * Marked `data-vs-style` so the guest's `serializeDom` strips it — the tokens are never saved into the page.
  */
-function injectTokens(html: string, css: string): string {
+export function injectTokens(html: string, css: string): string {
   if (!css.trim()) return html;
   const tag = `<style data-vs-style="vs-tokens">\n${css}\n</style>`;
   if (/<\/head>/i.test(html)) return html.replace(/<\/head>/i, `${tag}</head>`);

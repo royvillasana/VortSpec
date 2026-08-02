@@ -109,12 +109,12 @@ test("opening a workspace reveals the four-region shell", async ({ mount }) => {
   await open(c);
   // Activity bar (left rail) with the five activities.
   const rail = c.getByRole("navigation", { name: "Activity bar" });
-  await expect(rail.getByRole("button", { name: "Explorer" })).toBeVisible();
+  await expect(rail.getByRole("button", { name: "Code Editor" })).toBeVisible();
   await expect(rail.getByRole("button", { name: "Source Control" })).toBeVisible();
   await expect(rail.getByRole("button", { name: "Design tokens" })).toBeVisible();
   // The code activity's Explorer + editor regions (the editor's bottom preview bar
   // was removed — the localhost preview lives in the Playground now).
-  await expect(c.getByRole("complementary").getByRole("button", { name: "Explorer", exact: true })).toBeVisible();
+  await expect(c.getByRole("complementary").getByRole("button", { name: "Code", exact: true })).toBeVisible();
   await expect(c.getByText("No file open", { exact: true })).toBeVisible();
   await expect(c.getByText("Preview", { exact: true })).toHaveCount(0);
   // Top bar carries the user photo (falls back to the name's initial); breadcrumb has
@@ -155,14 +155,14 @@ test("switching to a work panel hides the Explorer; Explorer restores it", async
   const c = await mount(<App />, { hooksConfig: { mock: base } });
   await open(c);
   const rail = c.getByRole("navigation", { name: "Activity bar" });
-  await expect(c.getByRole("complementary").getByRole("button", { name: "Explorer", exact: true })).toBeVisible();
+  await expect(c.getByRole("complementary").getByRole("button", { name: "Code", exact: true })).toBeVisible();
   // Switch to a work panel — the editor and the Explorer sidebar give way to it.
   await rail.getByRole("button", { name: "Design tokens" }).click();
   await expect(c.getByText("No file open", { exact: true })).toHaveCount(0);
-  await expect(c.getByRole("complementary").getByRole("button", { name: "Explorer", exact: true })).toHaveCount(0);
+  await expect(c.getByRole("complementary").getByRole("button", { name: "Code", exact: true })).toHaveCount(0);
   // Back to Explorer restores the sidebar.
-  await rail.getByRole("button", { name: "Explorer" }).click();
-  await expect(c.getByRole("complementary").getByRole("button", { name: "Explorer", exact: true })).toBeVisible();
+  await rail.getByRole("button", { name: "Code Editor" }).click();
+  await expect(c.getByRole("complementary").getByRole("button", { name: "Code", exact: true })).toBeVisible();
 });
 
 test("the left dock's Chat tab hides the section sidebar; the section tab restores it", async ({ mount }) => {
@@ -170,14 +170,14 @@ test("the left dock's Chat tab hides the section sidebar; the section tab restor
   await open(c);
   const dock = c.getByRole("complementary");
   // Section (Explorer) tab is active by default.
-  await expect(dock.getByRole("button", { name: "Explorer", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await expect(dock.getByRole("button", { name: "Code", exact: true })).toHaveAttribute("aria-pressed", "true");
   // Switch to Chat → the section content is hidden, Chat is active.
   await dock.getByRole("button", { name: "Chat", exact: true }).click();
   await expect(dock.getByRole("button", { name: "Chat", exact: true })).toHaveAttribute("aria-pressed", "true");
-  await expect(dock.getByRole("button", { name: "Explorer", exact: true })).toHaveAttribute("aria-pressed", "false");
+  await expect(dock.getByRole("button", { name: "Code", exact: true })).toHaveAttribute("aria-pressed", "false");
   // Back to the section tab.
-  await dock.getByRole("button", { name: "Explorer", exact: true }).click();
-  await expect(dock.getByRole("button", { name: "Explorer", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await dock.getByRole("button", { name: "Code", exact: true }).click();
+  await expect(dock.getByRole("button", { name: "Code", exact: true })).toHaveAttribute("aria-pressed", "true");
 });
 
 test("the breadcrumb Home returns to the workspace picker", async ({ mount }) => {

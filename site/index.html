@@ -3,16 +3,16 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>VortSpec — Spec-driven design-to-code: a cockpit and an IDE</title>
+    <title>VortSpec — Spec-driven design-to-code, in a VS Code–style IDE</title>
     <meta
       name="description"
-      content="VortSpec is two desktop apps over your local Claude Code — a guided Cockpit and a VS Code–style IDE with an integrated terminal, live preview, and vibe-engineering. Run a professional spec-driven design-to-code workflow — extract tokens, build components, preview in Storybook, and generate a design manifest. Your own Claude. Local-first."
+      content="VortSpec is a desktop IDE over your local Claude Code — a VS Code–style workspace with an integrated terminal, live preview, and vibe-engineering. Run a professional spec-driven design-to-code workflow — extract tokens, build components, preview in Storybook, and generate a design manifest. Your own Claude. Local-first."
     />
     <link rel="icon" type="image/png" href="./favicon.png" />
     <meta property="og:title" content="VortSpec — Spec-driven design-to-code" />
     <meta
       property="og:description"
-      content="A desktop cockpit over your local Claude Code. Anyone who can use Figma can run a professional spec-driven design-to-code workflow."
+      content="A desktop IDE over your local Claude Code. Anyone who can use Figma can run a professional spec-driven design-to-code workflow."
     />
     <meta property="og:image" content="./vortspec-logo.png" />
     <meta property="og:type" content="website" />
@@ -85,9 +85,6 @@
       .btn-primary:hover { filter: brightness(1.12); }
       .btn-ghost { background: transparent; color: var(--text); border-color: var(--border-strong); }
       .btn-ghost:hover { border-color: var(--accent); }
-      /* IDE download — an outlined accent button so both apps read as first-class */
-      .btn-ide { background: rgba(124,111,240,0.1); color: var(--text); border-color: var(--accent); }
-      .btn-ide:hover { background: rgba(124,111,240,0.18); }
       .btn-sm { padding: 9px 15px; font-size: 14px; border-radius: 8px; }
       .two-apps-note { font-size: 13px; color: var(--text-3); margin-bottom: 12px; }
 
@@ -175,18 +172,6 @@
       .card p { font-size: 14px; color: var(--text-2); line-height: 1.55; }
 
       /* two-app split */
-      .two { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 44px; }
-      @media (max-width: 760px) { .two { grid-template-columns: 1fr; } }
-      .appcard { border: 1px solid var(--border); background: var(--surface); border-radius: 14px; padding: 26px; }
-      .appcard.lead-card { border-color: rgba(124,111,240,0.34); }
-      .appcard .tag { display: inline-flex; align-items: center; gap: 7px; font-family: "Geist Mono", monospace; font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-2); border: 1px solid var(--border-strong); border-radius: 999px; padding: 3px 10px; margin-bottom: 14px; }
-      .appcard.lead-card .tag { color: var(--accent); border-color: rgba(124,111,240,0.4); background: rgba(124,111,240,0.08); }
-      .appcard h3 { font-size: 18px; font-weight: 600; margin-bottom: 8px; }
-      .appcard > p { font-size: 14.5px; color: var(--text-2); line-height: 1.55; margin-bottom: 16px; }
-      .appcard ul { list-style: none; display: flex; flex-direction: column; gap: 8px; }
-      .appcard li { display: flex; gap: 10px; align-items: flex-start; font-size: 13.5px; color: var(--text-2); }
-      .appcard li::before { content: ""; flex: none; width: 5px; height: 5px; margin-top: 8px; border-radius: 50%; background: var(--accent); opacity: 0.8; }
-      .appcard .who { margin-top: 16px; font-size: 12.5px; color: var(--text-3); }
 
       /* IDE window mock — reuses .shot; a two-pane editor + terminal strip */
       .shot .ide { display: grid; grid-template-columns: 40px 138px 1fr; min-height: 300px; }
@@ -265,7 +250,6 @@
           <div class="spacer"></div>
           <div class="links">
             <a href="#features">Features</a>
-            <a href="#apps">Two apps</a>
             <a href="#ide">The IDE</a>
             <a href="#how">How it works</a>
             <a href="#changelog">Changelog</a>
@@ -287,14 +271,10 @@
           <p class="sub">
             Turn design into production-ready code — on your own <b>local Claude Code</b>.
           </p>
-          <p class="two-apps-note">Two macOS apps, one engine — download either:</p>
+          <p class="two-apps-note">A lean per-architecture macOS build — pick yours:</p>
           <div class="cta" id="download">
-            <a class="btn btn-primary" href="https://github.com/royvillasana/VortSpec/releases/latest/download/VortSpec-mac-universal.dmg">
-              <svg class="apple" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M11.18 8.46c-.02-1.6 1.31-2.37 1.37-2.41-.75-1.1-1.91-1.25-2.32-1.26-.99-.1-1.93.58-2.43.58-.5 0-1.28-.57-2.1-.55-1.08.02-2.08.63-2.63 1.6-1.12 1.95-.29 4.83.8 6.41.54.77 1.17 1.64 2 1.6.8-.03 1.11-.52 2.08-.52.97 0 1.24.52 2.09.5.86-.01 1.41-.78 1.94-1.56.61-.9.86-1.76.87-1.8-.02-.01-1.67-.64-1.68-2.55zM9.62 3.9c.44-.53.74-1.27.66-2.01-.63.03-1.4.42-1.86.95-.41.47-.77 1.22-.67 1.94.71.06 1.42-.36 1.87-.88z"/></svg>
-              Download the Cockpit
-            </a>
             <details class="dl">
-              <summary class="btn btn-ide">
+              <summary class="btn btn-primary">
                 <svg class="apple" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M11.18 8.46c-.02-1.6 1.31-2.37 1.37-2.41-.75-1.1-1.91-1.25-2.32-1.26-.99-.1-1.93.58-2.43.58-.5 0-1.28-.57-2.1-.55-1.08.02-2.08.63-2.63 1.6-1.12 1.95-.29 4.83.8 6.41.54.77 1.17 1.64 2 1.6.8-.03 1.11-.52 2.08-.52.97 0 1.24.52 2.09.5.86-.01 1.41-.78 1.94-1.56.61-.9.86-1.76.87-1.8-.02-.01-1.67-.64-1.68-2.55zM9.62 3.9c.44-.53.74-1.27.66-2.01-.63.03-1.4.42-1.86.95-.41.47-.77 1.22-.67 1.94.71.06 1.42-.36 1.87-.88z"/></svg>
                 Download the IDE
                 <svg class="chev" width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 8l5 5 5-5"/></svg>
@@ -379,42 +359,9 @@
         </div>
       </section>
 
-      <!-- TWO APPS -->
+      <!-- IDE SHOWCASE -->
       <section id="apps">
         <div class="wrap">
-          <div class="eyebrow">Two apps, one engine</div>
-          <h2>Pick the cockpit or the code — same Claude, same gates</h2>
-          <p class="lead">
-            Both apps drive your <b>local Claude Code</b> through the exact same SDD-DE cycle and share
-            one core, so the spec-first gates, the design manifest, and every file on disk stay
-            identical. Start guided, drop into the IDE when you want to stay in code — nothing to
-            re-learn, nothing to migrate.
-          </p>
-          <div class="two">
-            <div class="appcard">
-              <span class="tag">Cockpit</span>
-              <h3>The guided flow</h3>
-              <p>Every step of the methodology is a clear screen with status — connect a source, build &amp; verify components, reconcile tokens, approve the manifest. The terminal is invisible, but never hidden.</p>
-              <ul>
-                <li>Design System workspace, Storybook Playground, token Inspector</li>
-                <li>Readable, approvable briefs, specs &amp; the design manifest</li>
-                <li>Live agent runs with the raw stream one click away</li>
-              </ul>
-              <p class="who">For designers &amp; anyone who wants the terminal out of the way.</p>
-            </div>
-            <div class="appcard lead-card">
-              <span class="tag"><span class="dot" style="width:6px;height:6px;border-radius:50%;background:var(--accent);display:inline-block"></span> IDE · new</span>
-              <h3>The VS Code–style workspace</h3>
-              <p>A full code cockpit for the same project: a Monaco editor and file tree, an integrated terminal, a live preview beside the editor, and vibe-engineering — an assistant grounded in the open file and running preview that edits code through the same gates.</p>
-              <ul>
-                <li>Monaco editor + file tree + Git diffs vs HEAD</li>
-                <li>Integrated terminal (your login shell, in the workspace)</li>
-                <li>Live preview pane — the running app or Storybook, hot-reloading</li>
-                <li>The SDD-DE pipeline panel, driven by the same core</li>
-              </ul>
-              <p class="who">For engineers &amp; anyone who wants to stay in the code.</p>
-            </div>
-          </div>
 
           <!-- IDE WINDOW MOCK -->
           <div class="shot" aria-hidden="true" style="margin-top:34px;">
@@ -535,13 +482,28 @@
         <div class="wrap">
           <div class="eyebrow">Changelog</div>
           <h2>What's new</h2>
-          <p class="lead">Recent releases. Both apps share one core, so every build moves the whole SDD-DE cycle forward at once.</p>
+          <p class="lead">Recent releases.</p>
           <div class="log">
             <div class="rel now">
               <div class="rel-head">
+                <span class="ver">v0.1.34</span>
+                <span class="ttl">The design system, by property</span>
+                <span class="now-tag">Latest</span>
+                <span class="when">Aug 2, 2026</span>
+              </div>
+              <ul>
+                <li><b>A design system you can see</b> — the abstract &ldquo;Accent / Roundness / Shadow&rdquo; levers are gone. In their place: your project&rsquo;s own tokens, under their own names, grouped into Colors, Typography, Spacing, Borders and Shadows. Every attribute is drawn rather than spelled out — a colour is a swatch, a radius is a corner, a shadow is a lit square, a type token renders at its own size.</li>
+                <li><b>See it before you apply it</b> — a live sample card re-renders under a preset or a manual edit <i>before</i> you commit it, so you judge the result instead of the value.</li>
+                <li><b>Themes</b> — Ocean, Forest and Sunset ship as built-in presets with matched light and dark pairs; Default returns your library&rsquo;s own values without discarding your edits.</li>
+                <li><b>Fonts</b> — ~70 Google families bundled, the rest fetched as you scroll, alongside your system and Figma-library fonts.</li>
+                <li><b>Reads consumed libraries properly</b> — token files that only <code>@import</code> a vendor theme now resolve through the whole chain, so a real design system shows all of its tokens instead of none, and edits land in the file that actually declares them.</li>
+                <li><b>Shell</b> — searchable layer tree, a dock that reopens from any section, animated sidebar collapse, and the brand mark folded into the breadcrumb.</li>
+              </ul>
+            </div>
+            <div class="rel">
+              <div class="rel-head">
                 <span class="ver">v0.1.33</span>
                 <span class="ttl">Design-system UI refresh + Draw-to-component</span>
-                <span class="now-tag">Latest</span>
                 <span class="when">Jul 31, 2026</span>
               </div>
               <ul>
@@ -613,14 +575,10 @@
           <div class="band">
             <img class="mark" src="./vortspec-logo.png" alt="" style="width:64px;height:64px;margin:0 auto 20px;position:relative;" />
             <h2>Run spec-driven design-to-code today</h2>
-            <p>Free and open. Bring your own Claude Code. The Cockpit ships as a universal macOS app; the IDE ships as a lean per-architecture build.</p>
+            <p>Free and open. Bring your own Claude Code. The IDE ships as a lean per-architecture macOS build.</p>
             <div class="cta">
-              <a class="btn btn-primary" href="https://github.com/royvillasana/VortSpec/releases/latest/download/VortSpec-mac-universal.dmg">
-                <svg class="apple" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M11.18 8.46c-.02-1.6 1.31-2.37 1.37-2.41-.75-1.1-1.91-1.25-2.32-1.26-.99-.1-1.93.58-2.43.58-.5 0-1.28-.57-2.1-.55-1.08.02-2.08.63-2.63 1.6-1.12 1.95-.29 4.83.8 6.41.54.77 1.17 1.64 2 1.6.8-.03 1.11-.52 2.08-.52.97 0 1.24.52 2.09.5.86-.01 1.41-.78 1.94-1.56.61-.9.86-1.76.87-1.8-.02-.01-1.67-.64-1.68-2.55zM9.62 3.9c.44-.53.74-1.27.66-2.01-.63.03-1.4.42-1.86.95-.41.47-.77 1.22-.67 1.94.71.06 1.42-.36 1.87-.88z"/></svg>
-                Get the Cockpit
-              </a>
               <details class="dl">
-                <summary class="btn btn-ide">
+                <summary class="btn btn-primary">
                   <svg class="apple" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M11.18 8.46c-.02-1.6 1.31-2.37 1.37-2.41-.75-1.1-1.91-1.25-2.32-1.26-.99-.1-1.93.58-2.43.58-.5 0-1.28-.57-2.1-.55-1.08.02-2.08.63-2.63 1.6-1.12 1.95-.29 4.83.8 6.41.54.77 1.17 1.64 2 1.6.8-.03 1.11-.52 2.08-.52.97 0 1.24.52 2.09.5.86-.01 1.41-.78 1.94-1.56.61-.9.86-1.76.87-1.8-.02-.01-1.67-.64-1.68-2.55zM9.62 3.9c.44-.53.74-1.27.66-2.01-.63.03-1.4.42-1.86.95-.41.47-.77 1.22-.67 1.94.71.06 1.42-.36 1.87-.88z"/></svg>
                   Download the IDE
                   <svg class="chev" width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 8l5 5 5-5"/></svg>

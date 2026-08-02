@@ -17,6 +17,7 @@ import {
 } from "./token-resolver";
 import { readTokenKeyMap, mergeTokenKeys } from "./design-map";
 import { cachedScan } from "./scan-cache";
+import { resolveCssImports, isDependencyPath, projectOwnedFiles, type ResolvedCss } from "./css-imports";
 import { readThemeOverrides, setThemeTokenOverride } from "./theme-override-store";
 import { detectTokenFormat, writeToken } from "@vortspec/core/token-writers";
 import { isConsumeSource } from "@vortspec/core/setup";
@@ -52,6 +53,15 @@ const CSS_COLOR_KEYWORDS = new Set([
   "grey",
 ]);
 
+/** The light half of a `light-dark()` pair, else the value itself — what a single-value check should see. */
+function lightHalf(value: string): string {
+  const m = value.trim().match(/^light-dark\(\s*([^,]+),/i);
+  return (m ? m[1] : value).trim();
+}
+
+/** A bare CSS length — the unambiguous case where a value overrules a colour-sounding name. */
+const PLAIN_LENGTH = /^-?(?:\d*\.)?\d+(?:px|rem|em|%)?$/i;
+
 function looksLikeColor(value: string): boolean {
   const v = value.trim().toLowerCase();
   return HEX.test(v) || COLOR_FN.test(v) || CSS_COLOR_KEYWORDS.has(v);
@@ -61,10 +71,20 @@ function looksLikeColor(value: string): boolean {
 function classify(name: string, resolvedValue: string): TokenType {
   const n = name.toLowerCase();
   if (/(^|[-/])(radius)([-/]|$)/.test(n)) return "radius";
-  if (/(^|[-/])(shadow|elevation)([-/]|$)/.test(n)) return "shadow";
+  // `--color-shadow: light-dark(#0000001A, …)` is the COLOUR a shadow is drawn in, not a shadow. Name-first
+  // typing filed it under Shadows, where it showed a colour swatch among box-shadow values. A plain colour
+  // value overrules the name, the same way a plain length does for `--border-width` below.
+  if (/(^|[-/])(shadow|elevation)([-/]|$)/.test(n)) {
+    return looksLikeColor(lightHalf(resolvedValue)) ? "color" : "shadow";
+  }
   if (/(^|[-/])(spacing|space|gap|size-)/.test(n) && !/font/.test(n)) return "spacing";
   if (/(font|line-height|letter|weight|leading|tracking|family|type)/.test(n))
     return "typography";
+  // A name can say "border"/"stroke" while the VALUE is plainly a length — `--border-width: 1px` is a
+  // border WIDTH, not a colour. Name-first typing put it in the palette, where it rendered as an empty
+  // swatch because `1px` is not a colour. When the value settles it, the value wins.
+  if (/(^|[-/])(border|stroke|outline)([-/]|$)/.test(n) && PLAIN_LENGTH.test(resolvedValue.trim()))
+    return "radius";
   if (/(color|colour|bg|background|foreground|border|text|fill|stroke|primary|secondary|accent|status|neutral|surface|muted)/.test(n))
     return "color";
   if (looksLikeColor(resolvedValue)) return "color";
@@ -113,6 +133,9 @@ function normalizeSelector(sel: string): string {
   if (first === ":root" || first === "html" || first === "*" || first === ":where(:root)") {
     return DEFAULT_CONTEXT;
   }
+  // `:scope` only appears inside an `@scope (…)` at-rule, where it IS the scoping root — that is where a
+  // themed library (e.g. Astryx) declares its base token values, so it is this file's default context.
+  if (first === ":scope" || first === ":where(:scope)") return DEFAULT_CONTEXT;
   return first;
 }
 
@@ -609,6 +632,18 @@ function pickActiveCollection(
   return best;
 }
 
+/**
+ * token name → the project-relative file whose declaration WINS. Later segments override earlier ones,
+ * which is exactly the CSS cascade for an `@import` chain, so the importing file beats what it imports.
+ */
+export function declaringFiles(resolved: ResolvedCss): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const seg of resolved.segments) {
+    for (const name of parseCssContexts(seg.text).order) out.set(name, seg.file);
+  }
+  return out;
+}
+
 const EMPTY_RESULT: Omit<InspectorTokensResult, "tokenFile"> = {
   tokens: [],
   usage: {},
@@ -633,13 +668,20 @@ export async function getInspectorTokens(
   const config = await readProjectConfig(projectPath);
   const tokenFile = config?.tokenFile ?? null;
   if (!tokenFile) return { tokenFile: null, ...EMPTY_RESULT };
+  // Resolve the token file's `@import` chain BEFORE the cache check: the imported files are real inputs
+  // to this scan (a vendor theme bump must invalidate it), and they can only be discovered by reading.
+  // The flattened result is handed to `compute` so the chain is read exactly once on a miss.
+  const resolved = await resolveCssImports(projectPath, tokenFile);
   return cachedScan<InspectorTokensResult>(
     projectPath,
     `tokens-${preferredCollection ?? "default"}`,
     {
       files: [
         ".sdd-de/project.yaml",
+        // The entry stays listed even when it doesn't exist yet — its absence is part of the fingerprint,
+        // so creating it later is a miss.
         tokenFile,
+        ...resolved.files.filter((f) => f !== tokenFile),
         // The Tailwind config carries the v3 token→utility mapping, so a change to it
         // changes usage counts — invalidate the cached scan when any candidate moves.
         ...TAILWIND_CONFIG_FILES,
@@ -652,7 +694,7 @@ export async function getInspectorTokens(
       dirs: config?.componentDir ? [config.componentDir] : [],
       extra: preferredCollection ?? "",
     },
-    () => computeInspectorTokens(projectPath, preferredCollection),
+    () => computeInspectorTokens(projectPath, preferredCollection, resolved),
     inspectorTokensResultSchema,
   );
 }
@@ -660,16 +702,19 @@ export async function getInspectorTokens(
 async function computeInspectorTokens(
   projectPath: string,
   preferredCollection?: string,
+  pre?: ResolvedCss,
 ): Promise<InspectorTokensResult> {
   const config = await readProjectConfig(projectPath);
   const tokenFile = config?.tokenFile ?? null;
   if (!tokenFile) return { tokenFile: null, ...EMPTY_RESULT };
-  let css: string;
-  try {
-    css = await readFile(join(projectPath, tokenFile), "utf8");
-  } catch {
-    return { tokenFile, ...EMPTY_RESULT };
-  }
+  // The token file PLUS everything it `@import`s, flattened in cascade order — a consumed library's
+  // token file typically declares nothing itself and just imports the vendor theme.
+  const resolved = pre ?? (await resolveCssImports(projectPath, tokenFile));
+  if (resolved.files.length === 0) return { tokenFile, ...EMPTY_RESULT };
+  const css = resolved.css;
+  // Which file declares each token — the LAST segment that declares it wins, mirroring the cascade, so
+  // the project's own overrides beat the imported theme. Drives provenance and the in-place write target.
+  const declaredIn = declaringFiles(resolved);
   const parse = parseCssContexts(css);
   // Durable personalization overlay (change: consume-component-libraries): a token edited via the
   // durable overlay (.vortspec/theme-overrides.json) shows its overridden value to EVERY reader
@@ -809,6 +854,8 @@ async function computeInspectorTokens(
         : undefined;
     const drift = defEntry ? defEntry.drift : driftOf(t.resolvedValue, figmaValue);
 
+    // Provenance: a token the project's own token file doesn't declare came in through an `@import`.
+    const owner = declaredIn.get(t.name);
     return {
       ...t,
       source,
@@ -819,6 +866,7 @@ async function computeInspectorTokens(
       figmaPath,
       group,
       modes,
+      fromImport: owner && owner !== tokenFile ? owner : undefined,
     };
   });
 
@@ -877,14 +925,25 @@ export async function setInspectorTokenValue(
   }
   const tokenFile = config?.tokenFile;
   if (tokenFile) {
-    const path = join(projectPath, tokenFile);
+    // The token may be declared in a file the token file `@import`s (change: design-system-token-editor).
+    // Write where it actually lives — a project partial is fair game, a DEPENDENCY never is: editing
+    // node_modules would be silently undone by the next install, so that routes to the durable overlay,
+    // exactly as a consume source does.
+    const resolved = await resolveCssImports(projectPath, tokenFile);
+    const owner = declaringFiles(resolved).get(name.replace(/^--/, "")) ?? tokenFile;
+    if (isDependencyPath(owner)) {
+      const mode = context && context !== DEFAULT_CONTEXT ? context : undefined;
+      await setThemeTokenOverride(projectPath, name, value.trim(), mode);
+      return getInspectorTokens(projectPath);
+    }
+    const path = join(projectPath, owner);
     const content = await readFile(path, "utf8").catch(() => null);
     if (content !== null) {
       // Format-aware in-place write (change: consume-component-libraries): a JS/TS theme object,
       // SCSS, or JSON token file used to silently no-op under the CSS-only `--name:` regex. CSS keeps
       // its context-scoped (per-mode) edit; the other three formats route through `writeToken`, where
       // `name` is the format's key (SCSS `$var`, dotted JSON/TS path).
-      const format = detectTokenFormat(tokenFile);
+      const format = detectTokenFormat(owner);
       let next: string | null;
       if (format === "css") {
         next =
@@ -1141,7 +1200,14 @@ export async function snapshotTokenScope(projectPath: string): Promise<FileSnaps
     const content = await readFile(join(projectPath, rel), "utf8").catch(() => null);
     if (content !== null) snaps.push({ path: rel, content });
   }
-  if (config?.tokenFile) await capture(config.tokenFile);
+  if (config?.tokenFile) {
+    await capture(config.tokenFile);
+    // A token can be declared in a partial the token file `@import`s, and a rename/delete would rewrite
+    // that partial too — so it belongs in the revert snapshot. Dependencies are excluded: they are never
+    // written (an edit to an imported vendor token routes to the durable overlay instead).
+    const { files } = await resolveCssImports(projectPath, config.tokenFile);
+    for (const f of projectOwnedFiles(files)) await capture(f);
+  }
   if (config?.componentDir) {
     const root = join(projectPath, config.componentDir);
     async function walk(d: string): Promise<void> {

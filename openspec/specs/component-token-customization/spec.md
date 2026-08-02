@@ -53,3 +53,52 @@ A user SHALL be able to override a single component's styling/variant while keep
 - **WHEN** the user customizes a single consumed component (e.g. give Button a new brand variant) without changing others
 - **THEN** the override is stored against that component's `data-component` and applied via the library's per-component override mechanism, leaving other components and the library untouched
 
+### Requirement: Tokens are read through the token file's `@import` chain
+Reading a project's tokens SHALL follow the `@import` chain of its configured token file — relative
+partials and bare package specifiers alike, the latter resolved through the package's `exports` map — and
+parse the flattened result in cascade order, so the importing file's declarations override what it imports.
+This is required because a consumed library's token file typically declares nothing itself and only imports
+the vendor's theme. Each token SHALL record which file declares it. An edit SHALL be written to that file
+when the project owns it, and SHALL route to the durable overlay when it lives in a dependency — a
+dependency's files are never modified.
+
+#### Scenario: A vendor theme's real tokens are visible and editable
+- **WHEN** the project's token file only `@import`s a component library's published theme stylesheet
+- **THEN** that theme's tokens are listed with their real values, each lever shows its live value, and editing one writes the durable overlay while the installed package stays byte-identical
+
+#### Scenario: A project's own partial is edited in place
+- **WHEN** a token is declared in a partial the project's token file `@import`s, and the project owns that partial
+- **THEN** the edit is written into that partial rather than routed to the overlay, and the partial is included in the revert snapshot
+
+#### Scenario: A light/dark pair keeps its dark half
+- **WHEN** the user edits a token whose value is `light-dark(<light>, <dark>)`
+- **THEN** only the light half is replaced and the library's dark-mode value is preserved
+
+### Requirement: Property-indexed view of the design system
+The customization layer SHALL provide a reader that indexes a project's design system BY STYLE PROPERTY —
+color, border-radius, spacing, shadow, typography — reporting, for each property, the tokens of that type
+and, for each token, the components bound to it for that property. The index SHALL be derived from the
+project's real tokens, screens, and component stand-ins rather than from a fixed per-library list, and SHALL
+be overlay-aware so every value reported is the live one.
+
+#### Scenario: Index reports tokens and their users per property
+- **WHEN** the reader is asked for the border-radius property on a project whose screens round several components
+- **THEN** it returns that project's radius tokens with, for each, the components that use it for border-radius, and each token's live value
+
+#### Scenario: A token nothing uses is still reported
+- **WHEN** the design system defines a token no component currently binds
+- **THEN** the index reports it with an empty component list rather than omitting it
+
+#### Scenario: A binding with no component identity is not misattributed
+- **WHEN** a screen binds a token without marking the element's component
+- **THEN** the binding contributes to the token's presence but is not attributed to any component
+
+### Requirement: Re-pointing a component's property to a different token
+The customization layer SHALL support changing WHICH design-system token a single component uses for a
+given style property, keyed by `data-component`, without altering the token's own value and without
+affecting other components bound to either token. The re-point SHALL be recorded in the durable overlay.
+
+#### Scenario: One component moves to a different token
+- **WHEN** a component's border-radius is re-pointed from one radius token to another
+- **THEN** only that component renders with the new token's value; the tokens' own values are unchanged and other components using either token are unaffected
+

@@ -85,7 +85,7 @@ test("the Storybook activity shows the Storybook runtime on localhost", async ({
 test("activity-bar icons expose hover tooltips (accessible names)", async ({ mount }) => {
   const c = await mount(<App />, { hooksConfig: { mock: base } });
   await open(c);
-  for (const name of ["Explorer", "Source Control", "Design tokens", "Settings (profile)"]) {
+  for (const name of ["Code Editor", "Source Control", "Design tokens", "Settings (profile)"]) {
     // The button exposes the name (accessible), and a fast hover tooltip carries the same label.
     await expect(rail(c).getByRole("button", { name })).toBeVisible();
     await expect(rail(c).getByRole("tooltip", { name })).toBeAttached();

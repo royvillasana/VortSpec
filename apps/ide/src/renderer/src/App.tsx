@@ -14,6 +14,7 @@ import { GuidedFlow } from "@vortspec/ui/GuidedFlow";
 import { Tasks } from "@vortspec/ui/Tasks";
 import { DesignManifest } from "@vortspec/ui/DesignManifest";
 import { DesignSystem } from "@vortspec/ui/DesignSystem";
+import { LibraryPanel } from "@vortspec/ui/LibraryPanel";
 import { RunApp } from "@vortspec/ui/RunApp";
 import { Profile } from "@vortspec/ui/Profile";
 import { ProjectSetup } from "@vortspec/ui/ProjectSetup";
@@ -29,7 +30,7 @@ import { PanelGroup } from "./components/PanelGroup";
 import { Resizer } from "./components/Resizer";
 import { useWorkspaceFiles } from "./lib/useWorkspaceFiles";
 import { useLayout } from "./lib/useLayout";
-import { effectiveWidths, isSidebarView, FLOAT_PANEL, CHROME_BG, type Activity } from "./lib/layout";
+import { effectiveWidths, FLOAT_PANEL, CHROME_BG, type Activity } from "./lib/layout";
 import { IdeContext, buildSeedContext, buildLiveContext, type EditorSelection } from "./lib/ide-context";
 import { useIdeMcp, IDE_MCP_TOOL_GROUP } from "./lib/useIdeMcp";
 import { useAutoComponentBuild } from "@vortspec/ui/useAutoComponentBuild";
@@ -81,6 +82,9 @@ export default function App(): JSX.Element {
   // the palette; the Tokens (data) tab only appears once the project actually has tokens.
   const [tokensTab, setTokensTab] = useState<"tokens" | "designsystem">("designsystem");
   const [hasTokens, setHasTokens] = useState(false);
+  // Bumped by the design-system editor after each committed edit, so the palette in the main panel
+  // re-reads and shows the new theme (change: design-system-style-panel).
+  const [leverEdits, setLeverEdits] = useState(0);
   // The project's design source — drives consume-source affordances (e.g. hide Storybook for a
   // `library` source, whose components are consumed, not built into a VortSpec Storybook).
   const [designSource, setDesignSource] = useState<string | null>(null);
@@ -286,9 +290,14 @@ export default function App(): JSX.Element {
   }, [workspace?.path]);
 
   // A consumed-library project has no VortSpec Storybook — if the view is somehow on it, redirect to the
-  // Design tokens workspace (its Design System tab is the component surface).
+  // Design tokens workspace and land on its Design System tab, which IS that project's component surface
+  // and (change: design-system-token-editor) its curated token editor.
   useEffect(() => {
-    if (designSource === "library" && layout.activity === "play") {
+    if (designSource !== "library") return;
+    // Storybook and the Design manifest are both hidden for a consumed library — if the view is somehow
+    // on either, land on the Design tokens workspace, whose Design System tab IS that project's surface.
+    if (layout.activity === "play" || layout.activity === "manifest") {
+      setTokensTab("designsystem");
       dispatch({ type: "setActivity", activity: "tokens" });
     }
   }, [designSource, layout.activity]);
@@ -523,7 +532,10 @@ export default function App(): JSX.Element {
   }
 
   const eff = effectiveWidths(layout, winW);
-  const showPrimary = isSidebarView(layout.activity) && layout.primaryOpen;
+  // The dock is the unified left sidebar shown in EVERY activity (see `effectiveWidths`), so its
+  // visibility is `primaryOpen` alone. Gating on `isSidebarView` made the status-bar toggle read
+  // "off" in the Playground while the dock was plainly open.
+  const showPrimary = layout.primaryOpen;
   const isExplorer = layout.activity === "explorer";
   // Seamless shell (permanent): the chrome (titlebar, activity rail, breadcrumb, status bar) is a
   // single gradient surface; the sidebar dock (surface) and the main canvas (the darker primary
@@ -686,12 +698,12 @@ export default function App(): JSX.Element {
               {tokensTab === "tokens" ? (
                 <Inspector project={p} hideRail sidebarSlot={sectionSlot} onBack={go("explorer")} onOpenPreview={go("explorer")} onOpenRun={go("run")} onOpenHistory={go("explorer")} onOpenManifest={go("manifest")} onOpenFile={(path) => { void wf.openFile(path); dispatch({ type: "setActivity", activity: "explorer" }); }} />
               ) : (
-                <DesignSystem project={p} hideRail onBack={() => setTokensTab("tokens")} extracting={autoFoundation.extracting} reloadSignal={autoFoundation.justFinished + autoBuild.justFinished} />
+                <DesignSystem project={p} hideRail onBack={() => setTokensTab("tokens")} extracting={autoFoundation.extracting} reloadSignal={autoFoundation.justFinished + autoBuild.justFinished + leverEdits} />
               )}
             </div>
           </div>
         ) : (
-          <DesignSystem project={p} hideRail onBack={go("explorer")} extracting={autoFoundation.extracting} reloadSignal={autoFoundation.justFinished + autoBuild.justFinished} />
+          <DesignSystem project={p} hideRail onBack={go("explorer")} extracting={autoFoundation.extracting} reloadSignal={autoFoundation.justFinished + autoBuild.justFinished + leverEdits} />
         )
       ) : a === "tasks" ? (
         <Tasks project={p} hideRail onBack={go("explorer")} onFlow={go("flow")} onRun={go("run")} onPlayground={go("explorer")} onTokens={go("tokens")} onManifest={go("manifest")} onHistory={go("explorer")} onSource={go("source")} />
@@ -749,13 +761,8 @@ export default function App(): JSX.Element {
           className="relative flex h-9 shrink-0 items-center justify-end pr-2 text-xs text-vs-text-muted"
           style={{ WebkitAppRegion: "drag" } as unknown as CSSProperties}
         >
-          {/* Logo + name centered in the bar so it clears the macOS traffic lights
-              (top-left, titleBarStyle: hiddenInset). pointer-events-none keeps the whole
-              center a drag handle. */}
-          <div className="pointer-events-none absolute inset-x-0 flex items-center justify-center gap-2">
-            <Logo size={16} />
-            <span className="font-bold text-vs-text-secondary">VortSpec</span>
-          </div>
+          {/* No brand here: the logo + name are the breadcrumb's Home crumb, one row down.
+              This bar is the traffic-light strip and the avatar — everything else is drag. */}
           <div className="relative" style={{ WebkitAppRegion: "no-drag" } as unknown as CSSProperties}>
             <AvatarButton
               profile={profile}
@@ -768,7 +775,7 @@ export default function App(): JSX.Element {
         <ToolkitUpdateBanner project={workspace} onUpdated={setWorkspace} />
 
         <div className="flex min-h-0 flex-1 overflow-hidden">
-          <ActivityBar active={layout.activity} seamless hideStorybook={designSource === "library"} onSelect={(a) => (a === "home" ? setWorkspace(null) : dispatch({ type: "setActivity", activity: a }))} />
+          <ActivityBar active={layout.activity} seamless hideStorybook={designSource === "library"} hideManifest={designSource === "library"} onSelect={(a) => (a === "home" ? setWorkspace(null) : dispatch({ type: "setActivity", activity: a }))} />
 
           {/* The ONE left sidebar: the current view's Section sidebar + the persistent Chat.
               The right assistant sidebar is gone — the chat lives here now, mounted once so
@@ -777,7 +784,7 @@ export default function App(): JSX.Element {
             width={eff.primary}
             sectionLabel={
               isExplorer
-                ? "Explorer"
+                ? "Code"
                 : layout.activity === "run"
                   ? "Design"
                   : layout.activity === "play"
@@ -785,7 +792,10 @@ export default function App(): JSX.Element {
                     : layout.activity === "flow"
                       ? "Components"
                       : layout.activity === "tokens"
-                        ? "Variables"
+                        ? // The sidebar's contents follow the Design-tokens sub-tab, so its label does too.
+                          tokensTab === "designsystem"
+                          ? "Design system"
+                          : "Variables"
                         : "Panel"
             }
             hasSection={
@@ -845,7 +855,23 @@ export default function App(): JSX.Element {
               />
             }
           />
-          <Resizer orientation="vertical" ariaLabel="Resize sidebar" onDelta={(d) => dispatch({ type: "nudgePrimary", delta: d })} />
+          {/* No drag handle for a dock that isn't there — it would resize something invisible. */}
+          {layout.primaryOpen && (
+            <Resizer orientation="vertical" ariaLabel="Resize sidebar" onDelta={(d) => dispatch({ type: "nudgePrimary", delta: d })} />
+          )}
+          {/* The Design-tokens workspace's sidebar follows its sub-tab: the Tokens tab portals its variable
+              tree (from Inspector), the Design system tab portals the SAME Library panel the Playground
+              shows — replicated, not moved, so the design system is editable next to the palette AND next
+              to the screens. (change: design-system-style-panel) */}
+          {workspace &&
+            layout.activity === "tokens" &&
+            tokensTab === "designsystem" &&
+            sectionSlot &&
+            createPortal(
+              <LibraryPanel project={workspace} onEdited={() => setLeverEdits((n) => n + 1)} />,
+              sectionSlot,
+            )}
+
           {/* Explorer's file tree is portaled into the dock's Section tab. */}
           {isExplorer &&
             sectionSlot &&
@@ -865,15 +891,37 @@ export default function App(): JSX.Element {
             {/* Breadcrumb — close/change the project (back to Home), above the editor tabs. */}
             <nav
               aria-label="Breadcrumb"
-              className="flex flex-none items-center gap-1.5 bg-transparent px-3 py-1 text-[11px] text-vs-text-muted"
+              // Three regions: the sidebar toggle, the breadcrumb, the terminal. A grid rather than a flex
+              // row so the breadcrumb is centred against the BAR, not pushed off-centre by whatever the
+              // two sides happen to contain.
+              className="grid flex-none grid-cols-[1fr_auto_1fr] items-center gap-2 bg-transparent px-3 py-1 text-[11px] text-vs-text-muted"
             >
+              {/* Show/hide the dock — from EVERY section, not just Explorer. */}
+              <div className="flex min-w-0 items-center">
+                <button
+                  type="button"
+                  onClick={() => dispatch({ type: "togglePrimary" })}
+                  aria-pressed={layout.primaryOpen}
+                  aria-label={`${layout.primaryOpen ? "Hide" : "Show"} the sidebar`}
+                  title={`${layout.primaryOpen ? "Hide" : "Show"} the sidebar`}
+                  className="flex items-center rounded p-1 transition-colors hover:bg-vs-bg-hover hover:text-vs-text-secondary"
+                >
+                  <SidebarIcon open={layout.primaryOpen} />
+                </button>
+              </div>
+
+              <div className="flex min-w-0 items-center justify-center gap-1.5">
+              {/* The Home crumb IS the brand mark: Home is the app's root, so the logo stands in
+                  for the word "Home". No wordmark — the crumb after it already names the project,
+                  and the mark alone reads as the root. `alt=""` because the button is labelled. */}
               <button
                 type="button"
                 onClick={() => setWorkspace(null)}
                 title="Close project — back to Home"
-                className="hover:text-vs-text-primary"
+                aria-label="Home"
+                className="flex items-center opacity-80 transition-opacity hover:opacity-100"
               >
-                Home
+                <Logo size={14} alt="" />
               </button>
               <span className="text-vs-text-muted/50">/</span>
               <button
@@ -895,22 +943,25 @@ export default function App(): JSX.Element {
                   </span>
                 </>
               )}
-              <div className="flex-1" />
+              </div>
+
+              <div className="flex min-w-0 items-center justify-end">
               {/* Open an in-app terminal at the bottom — available from every view. */}
               <button
                 type="button"
                 onClick={toggleTerminal}
                 aria-pressed={terminalOpen}
+                aria-label="Terminal"
                 title="Toggle terminal (Ctrl+`)"
-                className={`flex items-center gap-1 rounded px-1.5 py-0.5 transition-colors ${
+                className={`flex items-center rounded p-1 transition-colors ${
                   terminalOpen
                     ? "bg-vs-bg-elevated text-vs-text-primary"
                     : "text-vs-text-muted hover:bg-vs-bg-hover hover:text-vs-text-secondary"
                 }`}
               >
                 <TerminalIcon />
-                Terminal
               </button>
+              </div>
             </nav>
             {isExplorer ? (
               <div className={`flex min-h-0 min-w-0 flex-1 overflow-hidden ${canvasShell}`}>{centerForExplorer()}</div>
@@ -977,7 +1028,7 @@ export default function App(): JSX.Element {
               lives in the breadcrumb (available from every view), so it's not here. */}
           {isExplorer && (
             <div className="flex items-center gap-1">
-              <FooterToggle label="Explorer" active={showPrimary} title="Toggle the Explorer sidebar" onClick={() => dispatch({ type: "togglePrimary" })} />
+              <FooterToggle label="Sidebar" active={showPrimary} title="Show or hide the sidebar" onClick={() => dispatch({ type: "togglePrimary" })} />
               <FooterToggle label="Editor" active={layout.editorOpen} title="Toggle the editor" onClick={() => dispatch({ type: "toggleEditor" })} />
             </div>
           )}
@@ -996,7 +1047,7 @@ export default function App(): JSX.Element {
  *  (e.g. `run` → "Playground", `play` → "Storybook", `flow` → "Components"). */
 function breadcrumbLabel(a: Activity): string {
   const LABELS: Partial<Record<Activity, string>> = {
-    explorer: "Explorer",
+    explorer: "Code Editor",
     run: "Playground",
     play: "Storybook",
     flow: "Components",
@@ -1060,6 +1111,17 @@ function AvatarButton({
 }
 
 /** A small terminal glyph for the breadcrumb's terminal toggle. */
+/** A panel-left glyph; the inner fill reads as "the sidebar is showing". */
+function SidebarIcon({ open }: { open: boolean }): JSX.Element {
+  return (
+    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden>
+      <rect x="1.5" y="2.5" width="13" height="11" rx="1.5" stroke="currentColor" strokeWidth="1.2" />
+      <line x1="6.5" y1="2.5" x2="6.5" y2="13.5" stroke="currentColor" strokeWidth="1.2" />
+      {open && <rect x="2.5" y="3.5" width="3" height="9" rx="0.5" fill="currentColor" opacity="0.55" />}
+    </svg>
+  );
+}
+
 function TerminalIcon(): JSX.Element {
   return (
     <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden>

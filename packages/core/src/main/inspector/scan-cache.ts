@@ -25,7 +25,7 @@ interface PayloadSchema<T> {
 
 /** Cache envelope version — bump to invalidate every cache after a format change. Also
  * makes a foreign cache file (e.g. shipped in a cloned repo) fail the check and recompute. */
-const CACHE_VERSION = 2; // bump when derivation logic changes (v2: normalized component-file match)
+const CACHE_VERSION = 4; // bump when derivation logic changes (v4: a token's VALUE overrules a misleading name — `--border-width` is a border, `--color-shadow` is a colour)
 const SKIP_DIRS = new Set(["node_modules", ".git", ".next", "dist", "build", "out", ".turbo", "coverage", ".vortspec"]);
 const SOURCE_EXTS = new Set([".ts", ".tsx", ".js", ".jsx", ".css", ".scss", ".vue", ".svelte", ".astro", ".json", ".yaml", ".yml"]);
 const MAX_WALK = 6000;

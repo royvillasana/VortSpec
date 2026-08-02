@@ -8,7 +8,7 @@ import type {
   VariantControl,
   InspectorToken,
 } from "@vortspec/core/ipc";
-import { Link2, Unlink2 } from "lucide-react";
+import { Link2, Unlink2, Search } from "lucide-react";
 import { NodeTree } from "./NodeTree";
 import type { PendingEdit } from "./pending";
 import { matchTokenName, tokenNameFromVar, tokensForField } from "./compose";
@@ -25,6 +25,71 @@ import { CreateVariableRow } from "./CreateVariableRow";
  * a `Selection` view-model; edits are reported up as ephemeral changes (the host
  * applies them as live guest overrides and gates the eventual commit).
  */
+/** The tree's default height — what the panel showed before it became resizable, so nothing jumps. */
+const DEFAULT_TREE_H = 176;
+const MIN_TREE_H = 80;
+const MAX_TREE_H = 560;
+
+/**
+ * State that survives a remount and a restart, namespaced per project. Layout choices the user makes with
+ * the mouse (how tall the tree is, which tab they were on) are worth remembering — re-making them on every
+ * visit is exactly the kind of friction that makes a panel feel unfinished.
+ */
+function usePersisted<T extends string | number>(key: string, fallback: T): [T, (v: T) => void] {
+  const [value, setValue] = useState<T>(() => {
+    try {
+      const raw = window.localStorage.getItem(`vs:${key}`);
+      if (raw === null) return fallback;
+      return (typeof fallback === "number" ? (Number(raw) as T) : (raw as T));
+    } catch {
+      return fallback; // storage unavailable (private mode, tests) — behave as if unset
+    }
+  });
+  const set = (v: T): void => {
+    setValue(v);
+    try {
+      window.localStorage.setItem(`vs:${key}`, String(v));
+    } catch {
+      /* not persisting is survivable; failing to render is not */
+    }
+  };
+  return [value, set];
+}
+
+/** The drag handle between the layer tree and the detail region below it. */
+function TreeResizer({ height, onHeight }: { height: number; onHeight: (h: number) => void }): JSX.Element {
+  const start = useRef<{ y: number; h: number } | null>(null);
+  useEffect(() => {
+    function move(e: MouseEvent): void {
+      if (!start.current) return;
+      const next = Math.min(MAX_TREE_H, Math.max(MIN_TREE_H, start.current.h + (e.clientY - start.current.y)));
+      onHeight(next);
+    }
+    function up(): void {
+      start.current = null;
+    }
+    window.addEventListener("mousemove", move);
+    window.addEventListener("mouseup", up);
+    return () => {
+      window.removeEventListener("mousemove", move);
+      window.removeEventListener("mouseup", up);
+    };
+  }, [onHeight]);
+  return (
+    <div
+      role="separator"
+      aria-label="Resize the layer tree"
+      aria-orientation="horizontal"
+      onMouseDown={(e) => {
+        start.current = { y: e.clientY, h: height };
+      }}
+      className="group flex h-2 flex-none cursor-row-resize items-center justify-center border-b border-vs-border-subtle bg-vs-bg-primary"
+    >
+      <span className="h-px w-8 rounded bg-vs-border-default transition-colors group-hover:bg-vs-accent" />
+    </div>
+  );
+}
+
 export function DesignPanel({
   selection,
   tree,
@@ -52,6 +117,8 @@ export function DesignPanel({
   onSaveScreenUpdates,
   onDismissScreenUpdate,
   move,
+  storageKey,
+  libraryPanel,
 }: {
   selection: Selection | null;
   tree: BridgeTree | null;
@@ -104,7 +171,18 @@ export function DesignPanel({
     onRevert: () => void;
     onStop: () => void;
   } | null;
+  /** Namespaces the persisted tree height + active tab (the project path). */
+  storageKey?: string;
+  /**
+   * The design-system editor, rendered as the **Library** tab beside Design Attributes. When absent there
+   * is no tab bar at all — so this panel is never left showing a tab that leads nowhere.
+   */
+  libraryPanel?: React.ReactNode;
 }): JSX.Element {
+  const [treeH, setTreeH] = usePersisted<number>(`${storageKey ?? ""}:layersHeight`, DEFAULT_TREE_H);
+  const [tab, setTab] = usePersisted<"attributes" | "library">(`${storageKey ?? ""}:designTab`, "attributes");
+  const active = libraryPanel ? tab : "attributes";
+
   return (
     <div className="flex h-full min-h-0 flex-1 flex-col bg-vs-bg-primary text-vs-text-primary">
       {/* Layers — just the node tree. The mode toggle and zoom controls moved to
@@ -118,8 +196,39 @@ export function DesignPanel({
         onSelectNode={onSelectNode}
         onHoverNode={onHoverNode}
         onReorderNode={onReorderNode}
+        height={treeH}
       />
 
+      {/* The boundary between the tree and the detail region — drag to trade one's height for the
+          other's (change: design-system-style-panel). */}
+      <TreeResizer height={treeH} onHeight={setTreeH} />
+
+      {libraryPanel && (
+        <div className="flex flex-none items-stretch gap-1 border-b border-vs-border-subtle px-2 text-[12px]">
+          {([
+            ["attributes", "Design Attributes"],
+            ["library", "Library"],
+          ] as const).map(([id, label]) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setTab(id)}
+              aria-pressed={active === id}
+              className={`border-b-2 px-2 py-1.5 font-medium transition-colors ${
+                active === id
+                  ? "border-vs-accent text-vs-text-primary"
+                  : "border-transparent text-vs-text-muted hover:text-vs-text-secondary"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {active === "library" ? (
+        <div className="min-h-0 flex-1 overflow-y-auto">{libraryPanel}</div>
+      ) : (
       <div className="min-h-0 flex-1 overflow-y-auto">
         {!selection ? (
           <p className="px-3 py-6 text-center text-[11px] text-vs-text-muted">
@@ -147,6 +256,7 @@ export function DesignPanel({
           </>
         )}
       </div>
+      )}
 
       <ChangesBar
         pending={pending}
@@ -498,7 +608,12 @@ function ReviewBar({ onKeep, onRevert }: { onKeep?: () => void; onRevert?: () =>
   );
 }
 
-/** The Layers region: collapsible header · node tree. Modes and zoom live on the canvas toolbar. */
+/**
+ * The Layers region: header (title · search) over the node tree, at a caller-controlled height.
+ *
+ * The search is what makes a real screen's tree usable — the tree runs to dozens of nodes, and hunting
+ * for one by scrolling and expanding is the slowest part of editing it. Type `footer`, get the footer.
+ */
 function LayersRegion({
   tree,
   selectedId,
@@ -506,6 +621,7 @@ function LayersRegion({
   onSelectNode,
   onHoverNode,
   onReorderNode,
+  height,
 }: {
   tree: BridgeTree | null;
   selectedId: string | null;
@@ -513,32 +629,60 @@ function LayersRegion({
   onSelectNode: (id: string) => void;
   onHoverNode?: (id: string | null) => void;
   onReorderNode?: (nodeId: string, targetId: string, position: "before" | "after" | "inside") => void;
+  /** Pixel height of the tree body — the user drags the boundary below it to change this. */
+  height: number;
 }): JSX.Element {
-  const [open, setOpen] = useState(true);
+  const [query, setQuery] = useState("");
+  const [searching, setSearching] = useState(false);
   return (
-    <section className="border-b border-vs-border-subtle">
+    <section className="flex flex-none flex-col">
       <div className="flex items-center gap-2 px-3 py-2">
-        <button
-          type="button"
-          onClick={() => setOpen((v) => !v)}
-          className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-vs-text-secondary hover:text-vs-text-primary"
-        >
-          <span className="text-[9px] text-vs-text-muted">{open ? "▾" : "▸"}</span>
-          Layers
-        </button>
-      </div>
-      {open && (
-        <div className="max-h-44 overflow-y-auto">
-          <NodeTree
-            tree={tree}
-            selectedId={selectedId}
-            hoveredId={hoveredId}
-            onSelect={onSelectNode}
-            onHover={onHoverNode}
-            onReorder={onReorderNode}
-          />
+        <span className="text-[11px] font-semibold uppercase tracking-wide text-vs-text-secondary">
+          Layers tree
+        </span>
+        <div className="ml-auto flex items-center gap-1.5">
+          {searching && (
+            <input
+              autoFocus
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Escape") {
+                  setQuery("");
+                  setSearching(false);
+                }
+              }}
+              placeholder="Find a layer…"
+              aria-label="Find a layer by name"
+              className="w-32 rounded border border-vs-border-default bg-vs-bg-elevated px-1.5 py-0.5 text-[11px] text-vs-text-primary focus:outline-none focus-visible:ring-1 focus-visible:ring-vs-accent"
+            />
+          )}
+          <button
+            type="button"
+            aria-label={searching ? "Close layer search" : "Search layers"}
+            title="Find a layer by name"
+            onClick={() => {
+              // Closing the search clears it, so the tree is never left silently filtered.
+              if (searching) setQuery("");
+              setSearching((v) => !v);
+            }}
+            className="rounded p-0.5 text-vs-text-muted transition-colors hover:bg-vs-bg-hover hover:text-vs-text-primary"
+          >
+            <Search size={12} />
+          </button>
         </div>
-      )}
+      </div>
+      <div className="overflow-y-auto" style={{ height }}>
+        <NodeTree
+          tree={tree}
+          selectedId={selectedId}
+          hoveredId={hoveredId}
+          onSelect={onSelectNode}
+          onHover={onHoverNode}
+          onReorder={onReorderNode}
+          filter={query}
+        />
+      </div>
     </section>
   );
 }
@@ -555,6 +699,11 @@ function SelectionHeader({
   return (
     <div className="flex items-center gap-2 border-b border-vs-border-subtle px-3 py-2">
       <span className="truncate text-[13px] font-semibold">{selection.label}</span>
+      {/* Size beside the name — the selection's most-asked-for fact, and free from the rect we already
+          have (change: design-system-style-panel). */}
+      <span className="shrink-0 font-mono text-[10px] text-vs-text-muted">
+        {Math.round(selection.rect.width)} × {Math.round(selection.rect.height)}
+      </span>
       {selection.component && (
         <span className="rounded border border-vs-border-default px-1 py-px text-[9px] uppercase tracking-wide text-vs-text-muted">
           component

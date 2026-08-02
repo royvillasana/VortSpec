@@ -46,10 +46,18 @@ export function LeftDock({
     if (mount && sectionEl.parentElement !== mount) mount.appendChild(sectionEl);
   }, [sectionEl]);
 
+  const collapsed = width <= 0;
   return (
     <aside
       style={{ width }}
-      className={`my-2 ml-2 flex shrink-0 flex-col overflow-hidden vs-panel-surface ${FLOAT_PANEL}`}
+      // Collapsing animates the WIDTH, so the centre panel slides over rather than snapping — and the
+      // margin and opacity go with it, or a zero-width panel would still leave an 8px gutter and a
+      // 1px border sliver behind. `overflow-hidden` clips the contents while they are being squeezed.
+      // Honours `prefers-reduced-motion`: an animation nobody asked for should not be forced on anyone.
+      aria-hidden={collapsed}
+      className={`my-2 flex shrink-0 flex-col overflow-hidden transition-[width,margin,opacity] duration-200 ease-out motion-reduce:transition-none vs-panel-surface ${FLOAT_PANEL} ${
+        collapsed ? "pointer-events-none ml-0 opacity-0" : "ml-2 opacity-100"
+      }`}
     >
       <div className="flex flex-none items-stretch border-b border-vs-border-subtle text-[12px]">
         {hasSection && (

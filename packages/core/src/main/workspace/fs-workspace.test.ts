@@ -2,7 +2,7 @@ import { describe, expect, it, beforeEach, afterEach } from "vitest";
 import { mkdtemp, rm, mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { resolveInside, isTooBroadToWatch, readFile, searchFiles, createFile, createDir, renamePath } from "./fs-workspace";
+import { resolveInside, isTooBroadToWatch, readFile, searchFiles, createFile, createDir, renamePath, startWatch, stopWatch, stopAllWatchers, isWatching } from "./fs-workspace";
 import { readFile as fsRead } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname } from "node:path";
@@ -154,5 +154,39 @@ describe("file operations (Explorer)", () => {
   it("guards the workspace root", async () => {
     const r = await createFile(dir, "../escape.txt");
     expect(r.ok).toBe(false);
+  });
+});
+
+describe("watch reference counting", () => {
+  let root: string;
+  beforeEach(async () => {
+    root = await mkdtemp(join(tmpdir(), "vs-watch-"));
+  });
+  afterEach(async () => {
+    stopAllWatchers();
+    await rm(root, { recursive: true, force: true });
+  });
+
+  /** `startWatch` only needs something to `.send()` on; the events themselves aren't under test here. */
+  const sender = { send: () => {} } as unknown as Parameters<typeof startWatch>[0];
+
+  it("keeps watching while any consumer still holds it", async () => {
+    // Two panels want the same project watched — e.g. the Explorer's file tree and the design-system
+    // editor's screen-drift check. Before refcounting, the first to unmount killed the other's updates.
+    startWatch(sender, root);
+    startWatch(sender, root);
+
+    stopWatch(root);
+    expect(isWatching(root)).toBe(true); // one consumer left — still live
+
+    stopWatch(root);
+    expect(isWatching(root)).toBe(false); // last one released — closed
+  });
+
+  it("ignores a release from someone who never watched", () => {
+    stopWatch(root);
+    expect(isWatching(root)).toBe(false);
+    startWatch(sender, root);
+    expect(isWatching(root)).toBe(true);
   });
 });
