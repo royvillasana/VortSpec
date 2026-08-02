@@ -972,9 +972,15 @@ function handleCommand(cmd: BridgeCommand): void {
     case "selectNode": {
       selectedId = cmd.nodeId;
       const el = resolve(cmd.nodeId);
-      if (el) send({ t: "readout", readout: readoutOf(el, cmd.nodeId) });
+      // Echo `additive` back so a modifier-click in the layer tree toggles the SAME selection a
+      // modifier-click on the canvas does — one selection, reachable from either surface.
+      if (el) send({ t: "readout", readout: readoutOf(el, cmd.nodeId), additive: cmd.additive });
       return;
     }
+    case "clearSelection":
+      selectedId = null;
+      send({ t: "selectionCleared" });
+      return;
     case "hoverNode":
       if (cmd.nodeId !== null) emitGeometry(cmd.nodeId);
       return;
@@ -1287,10 +1293,13 @@ function attach(): void {
       const id = withinSelection ? (selectedId as string) : (clickTarget(e.target) ?? deepId);
       const el = resolve(id);
       if (!el) return;
+      // A modifier held on the press means "add to / remove from" rather than "replace". It also
+      // suppresses the drag arm: the gesture is a selection change, not the start of a move.
+      const additive = e.shiftKey || e.metaKey || e.ctrlKey;
       // Pressing the already-selected element arms a drag (select-then-move; Decision 3).
-      if (id === selectedId) armDrag(id, el, e.clientX, e.clientY);
+      if (id === selectedId && !additive) armDrag(id, el, e.clientX, e.clientY);
       selectedId = id;
-      send({ t: "readout", readout: readoutOf(el, id) });
+      send({ t: "readout", readout: readoutOf(el, id), additive });
     },
     { capture: true },
   );
@@ -1312,9 +1321,18 @@ function attach(): void {
   window.addEventListener(
     "keydown",
     (e: KeyboardEvent) => {
-      if (e.key === "Escape" && (dragging || dragArm)) {
+      if (e.key !== "Escape") return;
+      if (dragging || dragArm) {
         e.preventDefault();
         cancelDrag(null);
+        return;
+      }
+      // Nothing in flight: Escape empties the selection. The guest owns this because a focused webview
+      // swallows the key — the host would never see it.
+      if (mode === "inspect" && selectedId) {
+        e.preventDefault();
+        selectedId = null;
+        send({ t: "selectionCleared" });
       }
     },
     { capture: true },

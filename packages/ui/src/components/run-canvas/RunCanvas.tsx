@@ -187,6 +187,13 @@ export function RunCanvas({
             Only shown in Inspect mode — Interact leaves the app untouched. */}
         <div data-vs-overlay className="pointer-events-none absolute inset-0">
           {mode === "inspect" && hovRect && <Box rect={hovRect} kind="hover" />}
+          {/* Every OTHER member of the selection. The focused member is drawn below with handles and a
+              label — a set of five where one is the panel's subject has to say which one, or the user
+              cannot tell what the attributes they are reading belong to. */}
+          {mode === "inspect" &&
+            bridge.selectedIds
+              .filter((id) => id !== bridge.selectedId)
+              .map((id) => bridge.rects[id] && <Box key={id} rect={bridge.rects[id]} kind="select" />)}
           {mode === "inspect" && showSpacing && selRect && readout && (
             <SpacingOverlay
               key={bridge.selectedId ?? ""}

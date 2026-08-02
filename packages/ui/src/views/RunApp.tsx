@@ -1968,7 +1968,7 @@ export function RunApp({
     [setClass],
   );
 
-  const onSelectNode = useCallback((id: string) => select(id), [select]);
+  const onSelectNode = useCallback((id: string, additive?: boolean) => select(id, additive), [select]);
   const onHoverNode = useCallback((id: string | null) => hover(id), [hover]);
 
   // Delete/Backspace deletes the selected element (Figma-style), in inspect mode only and
@@ -2316,6 +2316,7 @@ export function RunApp({
           selection={selection}
           tree={layersTree}
           hoveredId={bridge.hoveredId}
+          selectedIds={bridge.selectedIds}
           onSelectNode={onSelectNode}
           onHoverNode={onHoverNode}
           onReorderNode={reorderNode}

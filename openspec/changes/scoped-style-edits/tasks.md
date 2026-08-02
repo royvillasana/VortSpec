@@ -17,14 +17,14 @@
 
 ## 3. Phase 2 — selection becomes a set
 
-- [ ] 3.1 Change `useInspectorBridge` from `selectedId: string | null` to `selectedIds: string[]` plus a focused member; keep a single-member selection behaviourally identical.
-- [ ] 3.2 Migrate every consumer — `DesignPanel`, `NodeTree`, `commitEdits`, `deleteSelected`, drag-move, comments, assistant context — to read the set and act on the focused member where fan-out is not meaningful.
-- [ ] 3.3 Guest bridge: additive hit-testing so a modifier-click adds or removes, and a plain click replaces.
-- [ ] 3.4 Canvas overlay: draw a rectangle per selected element and distinguish the focused member.
+- [x] 3.1 Change `useInspectorBridge` from `selectedId: string | null` to `selectedIds: string[]` plus a focused member; keep a single-member selection behaviourally identical.
+- [x] 3.2 Migrate every consumer — `DesignPanel`, `NodeTree`, `commitEdits`, `deleteSelected`, drag-move, comments, assistant context — to read the set and act on the focused member where fan-out is not meaningful.
+- [x] 3.3 Guest bridge: additive hit-testing so a modifier-click adds or removes, and a plain click replaces.
+- [x] 3.4 Canvas overlay: draw a rectangle per selected element and distinguish the focused member.
 - [ ] 3.5 Marquee drag on empty canvas space; modifier-marquee adds to the existing selection; a drag beginning on an element remains that element's move.
-- [ ] 3.6 Modifier-click multi-select in `NodeTree`, sharing one selection with the canvas in both directions.
-- [ ] 3.7 `Escape` clears the selection.
-- [ ] 3.8 Selection restore after reload: re-acquire what can be re-acquired, drop what cannot, never substitute a different element.
+- [x] 3.6 Modifier-click multi-select in `NodeTree`, sharing one selection with the canvas in both directions.
+- [x] 3.7 `Escape` clears the selection.
+- [x] 3.8 Selection restore after reload: re-acquire what can be re-acquired, drop what cannot, never substitute a different element.
 - [ ] 3.9 Component tests: additive add/remove, plain-click replace, marquee, tree↔canvas parity, Escape, partial re-acquisition.
 
 ## 4. Phase 2 — editing a heterogeneous selection

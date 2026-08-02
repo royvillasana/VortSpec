@@ -97,3 +97,35 @@ test("the tree/detail boundary is a resize handle", async ({ mount }) => {
   const c = await mount(<DesignPanel storageKey="ct-resize" selection={null} tree={TREE} onSelectNode={() => {}} />);
   await expect(c.getByRole("separator", { name: "Resize the layer tree" })).toBeVisible();
 });
+
+test("the layer tree multi-selects with a modifier, and marks which member is focused", async ({
+  mount,
+}) => {
+  // The tree and the canvas share ONE selection, so the tree needs the same gesture the canvas has —
+  // otherwise the two surfaces disagree about what "the selection" is and every panel reading it is
+  // guessing. The tree only reports the gesture; the host owns what it means, so both converge on one rule.
+  const calls: [string, boolean | undefined][] = [];
+  const c = await mount(
+    <DesignPanel
+      storageKey="ct-multiselect"
+      selection={SELECTION}
+      // `card` is the focused member (SELECTION.nodeId); `div` is its ancestor, which the tree expands to
+      // reveal the focus — so both rows are on screen without driving a disclosure.
+      selectedIds={["div", "card"]}
+      tree={TREE}
+      onSelectNode={(id, additive) => calls.push([id, additive])}
+    />,
+  );
+
+  // A member that is NOT the panel's subject still reads as selected. Matched loosely because a row's
+  // accessible name carries its disclosure glyph ("▾ div"); the glyph's own button is named just "▾", so
+  // this cannot match it by accident.
+  const other = c.getByRole("button", { name: /div/ });
+  await expect(other).toHaveClass(/bg-vs-accent-subtle/);
+
+  await other.click();
+  expect(calls.at(-1)).toEqual(["div", false]);
+
+  await other.click({ modifiers: ["Shift"] });
+  expect(calls.at(-1)).toEqual(["div", true]);
+});

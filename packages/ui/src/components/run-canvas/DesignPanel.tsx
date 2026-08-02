@@ -104,6 +104,7 @@ export function DesignPanel({
   tree,
   hoveredId,
   onSelectNode,
+  selectedIds,
   onHoverNode,
   onReorderNode,
   onFieldChange,
@@ -130,9 +131,11 @@ export function DesignPanel({
   libraryPanel,
 }: {
   selection: Selection | null;
+  /** Every selected node, focused member included. Omitted → the focused member alone. */
+  selectedIds?: string[];
   tree: BridgeTree | null;
   hoveredId?: string | null;
-  onSelectNode: (id: string) => void;
+  onSelectNode: (id: string, additive?: boolean) => void;
   onHoverNode?: (id: string | null) => void;
   /** Drag-to-reorder a layer: move `nodeId` before/after `targetId` — the page rearranges to match. */
   onReorderNode?: (nodeId: string, targetId: string, position: "before" | "after" | "inside") => void;
@@ -201,6 +204,7 @@ export function DesignPanel({
       <LayersRegion
         tree={tree}
         selectedId={selection?.nodeId ?? null}
+        selectedIds={selectedIds}
         hoveredId={hoveredId}
         onSelectNode={onSelectNode}
         onHoverNode={onHoverNode}
@@ -628,6 +632,7 @@ function ReviewBar({ onKeep, onRevert }: { onKeep?: () => void; onRevert?: () =>
 function LayersRegion({
   tree,
   selectedId,
+  selectedIds,
   hoveredId,
   onSelectNode,
   onHoverNode,
@@ -636,8 +641,9 @@ function LayersRegion({
 }: {
   tree: BridgeTree | null;
   selectedId: string | null;
+  selectedIds?: string[];
   hoveredId?: string | null;
-  onSelectNode: (id: string) => void;
+  onSelectNode: (id: string, additive?: boolean) => void;
   onHoverNode?: (id: string | null) => void;
   onReorderNode?: (nodeId: string, targetId: string, position: "before" | "after" | "inside") => void;
   /** Pixel height of the tree body — the user drags the boundary below it to change this. */
@@ -687,6 +693,7 @@ function LayersRegion({
         <NodeTree
           tree={tree}
           selectedId={selectedId}
+          selectedIds={selectedIds}
           hoveredId={hoveredId}
           onSelect={onSelectNode}
           onHover={onHoverNode}

@@ -279,7 +279,13 @@ export type StructureSnapshotWire = z.infer<typeof structureSnapshotSchema>;
 /** Messages the host renderer sends into the guest bridge. */
 export const bridgeCommandSchema = z.discriminatedUnion("t", [
   z.object({ t: z.literal("requestTree") }),
-  z.object({ t: z.literal("selectNode"), nodeId: z.string() }),
+  /**
+   * Select a node. `additive` toggles it in the current selection instead of replacing it — the tree and
+   * the canvas share one selection, so the tree needs the same gesture the canvas has.
+   */
+  z.object({ t: z.literal("selectNode"), nodeId: z.string(), additive: z.boolean().optional() }),
+  /** Empty the selection (Escape). Separate from `selectionLost`, which means an element went away. */
+  z.object({ t: z.literal("clearSelection") }),
   z.object({ t: z.literal("hoverNode"), nodeId: z.string().nullable() }),
   /**
    * Toggle guest input handling: `inspect` intercepts hover/click to drive
@@ -416,7 +422,16 @@ export const bridgeEventSchema = z.discriminatedUnion("t", [
   /** The bridge attached (or failed to) — the host toggles editing affordances. */
   z.object({ t: z.literal("ready"), ok: z.boolean(), message: z.string().optional() }),
   z.object({ t: z.literal("tree"), tree: bridgeTreeSchema }),
-  z.object({ t: z.literal("readout"), readout: nodeReadoutSchema }),
+  /**
+   * The focused node's readout. `additive` reports that the gesture which produced it held a modifier, so
+   * the host adds to (or removes from) the selection rather than replacing it.
+   *
+   * The flag rides on the EVENT, not on the readout: it describes the gesture, not the element, and the
+   * re-lock / double-click / context-menu paths that also emit a readout are never additive.
+   */
+  z.object({ t: z.literal("readout"), readout: nodeReadoutSchema, additive: z.boolean().optional() }),
+  /** The user emptied the selection from inside the guest (Escape on the canvas). */
+  z.object({ t: z.literal("selectionCleared") }),
   /** Geometry-only update (scroll/resize/layout) so overlays stay aligned. */
   z.object({ t: z.literal("geometry"), nodeId: z.string(), rect: rectSchema }),
   /** The element under the pointer in inspect mode (null when the pointer leaves). */
