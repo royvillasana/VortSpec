@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ManifestResult, ManifestVersion, Project } from "@vortspec/core/ipc";
 import { ViewHeader } from "@vortspec/ui/ViewHeader";
+import { isConsumeSource } from "@vortspec/core/setup";
 import { api } from "../lib/api";
 import { useAgentRun } from "../lib/useAgentRun";
 import { Button, Spinner } from "@vortspec/ui/ui";
@@ -9,29 +10,50 @@ import { Markdown } from "@vortspec/ui/Markdown";
 import { ProjectRail, projectRailItems } from "@vortspec/ui/ProjectRail";
 
 const STAGE_ID = "design-manifest";
-const GENERATE_PROMPT = [
-  "Generate the AI hand-off manifest as a proper @google/design.md-format DESIGN.md. Follow these steps",
-  "exactly — the filename handling matters because macOS is case-insensitive, so `design.md` and",
-  "`DESIGN.md` are the SAME file and must not clobber each other.",
-  "",
-  "1. PRESERVE ANY DECISIONS LOG. Check the project root for an existing `DESIGN.md`/`design.md`. If its",
-  "   content is NOT the @google/design.md format (i.e. it has no YAML frontmatter with design tokens —",
-  "   e.g. it's a `/sync-tokens` 'Design Decisions & Token Mapping' log), MOVE it to",
-  "   `.sdd-de/design-decisions.md` (create the dir; `git mv` if tracked). This frees the root name for",
-  "   the Google-format file and keeps the decisions log as context.",
-  "2. GENERATE. Run the /design-doc skill to write the @google/design.md-format `DESIGN.md` at the",
-  "   project root, installing @google/design.md if missing. Cover EVERY built component (read the",
-  "   component dir + .sdd-de/components.json). Read `.sdd-de/design-decisions.md` (if present) and fold",
-  "   its deviations/decisions into the DESIGN.md 'Design Decisions' prose section. Do not overwrite the",
-  "   decisions log, and do not modify the components themselves.",
-  "3. KEEP THE FRONTMATTER LINT-CLEAN. In the YAML `components:` map, use ONLY @google/design.md-valid",
-  "   properties (backgroundColor, textColor, typography, rounded, padding, size, height, width). Put",
-  "   source paths, variant files, Storybook URLs, spec links, import snippets, and USAGE EXAMPLES in the",
-  "   `## Components` prose section instead — with a Storybook URL",
-  "   (http://localhost:6006/?path=/docs/<category>-<componentname>) and a usage example per component.",
-  "4. VALIDATE. Run `npx @google/design.md lint DESIGN.md` and resolve every error (warnings are ok).",
-  "   Confirm DESIGN.md begins with a `---` YAML frontmatter block. End with the lint summary.",
-].join("\n");
+/**
+ * The manifest-generation prompt. For a CONSUME source (library/enterprise) the `## Components`
+ * section references the CONSUMED code — pointer imports + the vendor's docs URL — not local
+ * `component_dir` source + a VortSpec `localhost:6006` Storybook that doesn't exist for it
+ * (change: consume-component-libraries).
+ */
+function generatePrompt(consume: boolean): string {
+  const step3 = consume
+    ? [
+        "3. KEEP THE FRONTMATTER LINT-CLEAN. In the YAML `components:` map, use ONLY @google/design.md-valid",
+        "   properties (backgroundColor, textColor, typography, rounded, padding, size, height, width). This",
+        "   project CONSUMES a component library, so the `## Components` prose section references the CONSUMED",
+        "   code — NOT a VortSpec-built Storybook. For each component emit its POINTER import from",
+        "   .sdd-de/components.json (`importPath`/`export`, e.g. `import { Button } from '@mui/material'`) and",
+        "   the VENDOR's own docs URL, plus a usage example. Do NOT emit a `http://localhost:6006/...` URL and",
+        "   do NOT list local `component_dir` source paths for library-shipped components.",
+      ]
+    : [
+        "3. KEEP THE FRONTMATTER LINT-CLEAN. In the YAML `components:` map, use ONLY @google/design.md-valid",
+        "   properties (backgroundColor, textColor, typography, rounded, padding, size, height, width). Put",
+        "   source paths, variant files, Storybook URLs, spec links, import snippets, and USAGE EXAMPLES in the",
+        "   `## Components` prose section instead — with a Storybook URL",
+        "   (http://localhost:6006/?path=/docs/<category>-<componentname>) and a usage example per component.",
+      ];
+  return [
+    "Generate the AI hand-off manifest as a proper @google/design.md-format DESIGN.md. Follow these steps",
+    "exactly — the filename handling matters because macOS is case-insensitive, so `design.md` and",
+    "`DESIGN.md` are the SAME file and must not clobber each other.",
+    "",
+    "1. PRESERVE ANY DECISIONS LOG. Check the project root for an existing `DESIGN.md`/`design.md`. If its",
+    "   content is NOT the @google/design.md format (i.e. it has no YAML frontmatter with design tokens —",
+    "   e.g. it's a `/sync-tokens` 'Design Decisions & Token Mapping' log), MOVE it to",
+    "   `.sdd-de/design-decisions.md` (create the dir; `git mv` if tracked). This frees the root name for",
+    "   the Google-format file and keeps the decisions log as context.",
+    "2. GENERATE. Run the /design-doc skill to write the @google/design.md-format `DESIGN.md` at the",
+    "   project root, installing @google/design.md if missing. Cover EVERY component (read the",
+    "   component dir + .sdd-de/components.json). Read `.sdd-de/design-decisions.md` (if present) and fold",
+    "   its deviations/decisions into the DESIGN.md 'Design Decisions' prose section. Do not overwrite the",
+    "   decisions log, and do not modify the components themselves.",
+    ...step3,
+    "4. VALIDATE. Run `npx @google/design.md lint DESIGN.md` and resolve every error (warnings are ok).",
+    "   Confirm DESIGN.md begins with a `---` YAML frontmatter block. End with the lint summary.",
+  ].join("\n");
+}
 
 type View = "rendered" | "markdown";
 
@@ -68,6 +90,8 @@ export function DesignManifest({
   const [versions, setVersions] = useState<ManifestVersion[] | null>(null);
   const [showVersions, setShowVersions] = useState(false);
   const [toast, setToast] = useState("");
+  // Consume source (library/enterprise) → DESIGN.md references consumed code, not a VortSpec Storybook.
+  const [consumeSource, setConsumeSource] = useState(false);
 
   const gen = useAgentRun();
 
@@ -77,12 +101,14 @@ export function DesignManifest({
   }
 
   async function reload(): Promise<void> {
-    const [m, f] = await Promise.all([
+    const [m, f, cfg] = await Promise.all([
       api.getManifest(project.path),
       api.getFlow(project.path),
+      api.projectConfig(project.path).catch(() => null),
     ]);
     setManifest(m);
     setApproved(f?.state.stages.find((s) => s.id === STAGE_ID)?.status === "approved");
+    setConsumeSource(isConsumeSource(cfg?.designSource));
   }
 
   useEffect(() => {
@@ -99,7 +125,7 @@ export function DesignManifest({
     // Snapshot the current manifest (if any) before regenerating over it.
     if (manifest?.exists) await api.snapshotManifest(project.path, "generate");
     await gen.start({
-      prompt: GENERATE_PROMPT,
+      prompt: generatePrompt(consumeSource),
       cwd: project.path,
       allowedTools: ["Read", "Write", "Edit", "Bash"],
       bypassPermissions: true,

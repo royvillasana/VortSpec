@@ -196,6 +196,32 @@ export interface VortSpecApi {
   readArtifact(projectPath: string, relPath: string): Promise<IpcResponse<"artifact:read">>;
   findLatestArtifact(projectPath: string, suffix: string): Promise<IpcResponse<"artifact:findLatest">>;
   projectConfig(projectPath: string): Promise<IpcResponse<"project:config">>;
+  /** Real readiness of a `design_source: library` project — did the CLI copy source / does the package resolve. */
+  libraryReadiness(projectPath: string): Promise<IpcResponse<"library:readiness">>;
+  /** Inspect a target repo to auto-suggest its component library + consume kind at intake. */
+  libraryDetect(projectPath: string): Promise<IpcResponse<"library:detect">>;
+  /** Enumerate an installed component's real props + variants from its bundled .d.ts (AI grounding). */
+  libraryEnumerateComponent(
+    projectPath: string,
+    importBase: string,
+    component: string,
+  ): Promise<IpcResponse<"library:enumerateComponent">>;
+  /** The durable design-system personalization overlay (`.vortspec/theme-overrides.json`). */
+  getThemeOverrides(projectPath: string): Promise<IpcResponse<"theme:getOverrides">>;
+  /** Set (or clear, with an empty value) a global token override; returns the updated overlay. */
+  setThemeTokenOverride(
+    projectPath: string,
+    name: string,
+    value: string,
+    mode?: string,
+  ): Promise<IpcResponse<"theme:setTokenOverride">>;
+  /** Set (or clear) a per-component override at a base/variant/slot target; returns the updated overlay. */
+  setThemeComponentOverride(
+    projectPath: string,
+    component: string,
+    target: { variant?: string; option?: string; slot?: string },
+    decls: Record<string, string>,
+  ): Promise<IpcResponse<"theme:setComponentOverride">>;
 
   // inspector (tokens / components / verification)
   inspectorTokens(

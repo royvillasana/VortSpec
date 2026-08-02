@@ -96,6 +96,7 @@ export type {
 } from "./figma";
 export { figmaComponentSchema } from "./figma";
 import { setupAnswersSchema, projectConfigSchema } from "./setup";
+import { themeOverridesSchema, declBagSchema } from "./theme-overrides";
 import {
   inspectorTokensResultSchema,
   inspectorComponentsResultSchema,
@@ -711,6 +712,69 @@ export const ipcContract = {
   "project:config": {
     request: z.string(),
     response: projectConfigSchema.nullable(),
+  },
+  // Real readiness for a `design_source: library` project — did the CLI copy source / does the
+  // package resolve — replacing the component-count proxy (change: consume-component-libraries).
+  "library:readiness": {
+    request: z.string(),
+    response: z.object({
+      applicable: z.boolean(),
+      ready: z.boolean(),
+      kind: z.string().optional(),
+      detail: z.string(),
+    }),
+  },
+  // Inspect a target repo to auto-suggest the component library + consume kind at intake.
+  "library:detect": {
+    request: z.string(),
+    response: z.object({
+      library: z.string().optional(),
+      kind: z.string().optional(),
+      stylingOnly: z.boolean().optional(),
+      detail: z.string(),
+    }),
+  },
+  // Enumerate an installed component's real props + variants from its bundled .d.ts (AI grounding).
+  "library:enumerateComponent": {
+    request: z.object({ projectPath: z.string(), importBase: z.string(), component: z.string() }),
+    response: z.object({
+      component: z.string(),
+      props: z.array(
+        z.object({
+          name: z.string(),
+          type: z.string(),
+          optional: z.boolean(),
+          variants: z.array(z.string()).optional(),
+        }),
+      ),
+    }),
+  },
+  // The durable design-system personalization overlay (change: consume-component-libraries).
+  "theme:getOverrides": {
+    request: z.string(),
+    response: themeOverridesSchema,
+  },
+  "theme:setTokenOverride": {
+    request: z.object({
+      projectPath: z.string(),
+      name: z.string(),
+      value: z.string(),
+      mode: z.string().optional(),
+    }),
+    response: themeOverridesSchema,
+  },
+  "theme:setComponentOverride": {
+    request: z.object({
+      projectPath: z.string(),
+      component: z.string(),
+      target: z.object({
+        variant: z.string().optional(),
+        option: z.string().optional(),
+        slot: z.string().optional(),
+      }),
+      decls: declBagSchema,
+    }),
+    response: themeOverridesSchema,
   },
   "inspector:getTokens": {
     request: z.union([

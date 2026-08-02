@@ -81,6 +81,9 @@ export default function App(): JSX.Element {
   // the palette; the Tokens (data) tab only appears once the project actually has tokens.
   const [tokensTab, setTokensTab] = useState<"tokens" | "designsystem">("designsystem");
   const [hasTokens, setHasTokens] = useState(false);
+  // The project's design source — drives consume-source affordances (e.g. hide Storybook for a
+  // `library` source, whose components are consumed, not built into a VortSpec Storybook).
+  const [designSource, setDesignSource] = useState<string | null>(null);
   const [gitCounts, setGitCounts] = useState<{ changes: number; ahead: number }>({ changes: 0, ahead: 0 });
   // The live editor selection, surfaced to the assistant as grounding context.
   const [selection, setSelection] = useState<EditorSelection | null>(null);
@@ -257,6 +260,7 @@ export default function App(): JSX.Element {
   useEffect(() => {
     if (!workspace?.path) {
       setHasTokens(false);
+      setDesignSource(null);
       return;
     }
     let alive = true;
@@ -268,10 +272,26 @@ export default function App(): JSX.Element {
       .catch(() => {
         if (alive) setHasTokens(false);
       });
+    void api
+      .projectConfig(workspace.path)
+      .then((c) => {
+        if (alive) setDesignSource(c?.designSource ?? null);
+      })
+      .catch(() => {
+        if (alive) setDesignSource(null);
+      });
     return () => {
       alive = false;
     };
   }, [workspace?.path]);
+
+  // A consumed-library project has no VortSpec Storybook — if the view is somehow on it, redirect to the
+  // Design tokens workspace (its Design System tab is the component surface).
+  useEffect(() => {
+    if (designSource === "library" && layout.activity === "play") {
+      dispatch({ type: "setActivity", activity: "tokens" });
+    }
+  }, [designSource, layout.activity]);
 
   // The editor state the assistant's IDE tools read (via the MCP bridge).
   const ideState = useMemo<IdeState>(
@@ -748,7 +768,7 @@ export default function App(): JSX.Element {
         <ToolkitUpdateBanner project={workspace} onUpdated={setWorkspace} />
 
         <div className="flex min-h-0 flex-1 overflow-hidden">
-          <ActivityBar active={layout.activity} seamless onSelect={(a) => (a === "home" ? setWorkspace(null) : dispatch({ type: "setActivity", activity: a }))} />
+          <ActivityBar active={layout.activity} seamless hideStorybook={designSource === "library"} onSelect={(a) => (a === "home" ? setWorkspace(null) : dispatch({ type: "setActivity", activity: a }))} />
 
           {/* The ONE left sidebar: the current view's Section sidebar + the persistent Chat.
               The right assistant sidebar is gone — the chat lives here now, mounted once so

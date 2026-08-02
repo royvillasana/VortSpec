@@ -180,12 +180,17 @@ export function ActivityBar({
   active,
   onSelect,
   seamless = false,
+  hideStorybook = false,
 }: {
   active: NavKey;
   onSelect: (key: NavKey) => void;
   /** Seamless shell: drop the right divider so the rail melts into the chrome. */
   seamless?: boolean;
+  /** Consumed-library sources (design_source: library) don't build a VortSpec Storybook — hide the
+   *  Storybook item; the Design System view (under Design tokens) is their component surface instead. */
+  hideStorybook?: boolean;
 }): JSX.Element {
+  const items = hideStorybook ? TOP.filter((it) => it.key !== "play") : TOP;
   return (
     <nav
       aria-label="Activity bar"
@@ -193,7 +198,7 @@ export function ActivityBar({
         seamless ? "" : "border-r border-vs-border-default bg-vs-bg-surface"
       }`}
     >
-      {TOP.map((item) => (
+      {items.map((item) => (
         <IconButton key={item.key} item={item} active={active === item.key} onClick={() => onSelect(item.key)} />
       ))}
       <div className="mt-auto" />

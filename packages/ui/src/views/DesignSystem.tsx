@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
-import { RotateCw, RefreshCw } from "lucide-react";
+import { RotateCw, RefreshCw, Palette } from "lucide-react";
 import type { Project } from "@vortspec/core/ipc";
 import { ViewHeader } from "@vortspec/ui/ViewHeader";
 import { api } from "../lib/api";
 import { Button, Spinner } from "@vortspec/ui/ui";
 import { useAgentRun } from "../lib/useAgentRun";
+import { buildCustomizeLibraryPrompt } from "@vortspec/core/sdd-prompts";
+import { themeContractFor } from "@vortspec/core/setup";
 
 /**
  * The lightweight "design system" view (OpenSpec change: light-design-system, task 2.4). Renders the
@@ -44,7 +46,14 @@ export function DesignSystem({
   // Enterprise (Connect Enterprise Design System): re-reading the client's Storybook to refresh the
   // tokens + stand-ins ("Update snapshot") belongs HERE, on the design system, not in the Storybook view.
   const [isEnterprise, setIsEnterprise] = useState(false);
+  // Theme-object libraries (MUI/Chakra/Mantine/Antd) can't take the CSS overlay — their personalization
+  // has to be materialized into the library's real theme object by an agent (change:
+  // consume-component-libraries, Phase 11). When the project is one, we surface a "Customize theme" action
+  // that applies the durable overrides through the library's own lever. `null` = no such action needed
+  // (css-vars / headless / enterprise / extract sources apply overrides automatically via the materializer).
+  const [themeObjectLib, setThemeObjectLib] = useState<string | null>(null);
   const snapshot = useAgentRun();
+  const customize = useAgentRun();
 
   async function load(): Promise<void> {
     setLoading(true);
@@ -64,9 +73,39 @@ export function DesignSystem({
     await snapshot.start({ prompt, cwd: project.path, allowedTools: ["Read", "Write", "Edit", "Bash"], bypassPermissions: true });
   }
 
+  /**
+   * Apply the durable token/component overrides to a theme-object library's REAL theme object. The agent
+   * reads `.vortspec/theme-overrides.json` + the token↔theme-key map and patches the library's theme file
+   * via its own lever (MUI `theme.components`, Chakra recipes, …) — the one apply step that isn't a
+   * deterministic emit. No-ops cleanly when there are no pending overrides.
+   */
+  async function customizeTheme(): Promise<void> {
+    if (!themeObjectLib) return;
+    const contract = themeContractFor(themeObjectLib);
+    if (!contract) return;
+    await customize.start({
+      prompt: buildCustomizeLibraryPrompt(themeObjectLib, contract),
+      cwd: project.path,
+      allowedTools: ["Read", "Write", "Edit", "Bash"],
+      bypassPermissions: true,
+    });
+  }
+
   useEffect(() => {
     void load();
-    void api.projectConfig(project.path).then((c) => setIsEnterprise(c?.designSource === "enterprise")).catch(() => setIsEnterprise(false));
+    void api
+      .projectConfig(project.path)
+      .then((c) => {
+        setIsEnterprise(c?.designSource === "enterprise");
+        // A theme-object library edit needs an agent to write it into the real theme object.
+        const needsAgent =
+          c?.designSource === "library" && (c?.themeApply ?? "").startsWith("theme-object") && !!c?.componentLibrary;
+        setThemeObjectLib(needsAgent ? c!.componentLibrary! : null);
+      })
+      .catch(() => {
+        setIsEnterprise(false);
+        setThemeObjectLib(null);
+      });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project.path]);
 
@@ -86,6 +125,13 @@ export function DesignSystem({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [snapshot.model.status]);
 
+  // When a theme customization finishes, reload the palette so the newly-applied values show.
+  useEffect(() => {
+    if (customize.model.status !== "done") return;
+    void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [customize.model.status]);
+
   return (
     <div className="flex h-full min-h-0 w-full flex-col bg-vs-bg-base">
       <ViewHeader className="text-[13px]">
@@ -104,10 +150,22 @@ export function DesignSystem({
               onClick={() => void updateSnapshot()}
               disabled={snapshot.running}
               title="Re-read your Storybook and refresh the design system — the tokens (all categories) and component stand-ins."
-              className="flex items-center gap-1.5 rounded border border-vs-border-strong px-2.5 py-1 text-[11px] text-vs-text-secondary transition-colors hover:border-vs-accent hover:text-vs-text-primary disabled:opacity-50"
+              className="flex cursor-pointer items-center gap-1.5 rounded border border-vs-border-strong px-2.5 py-1 text-[11px] text-vs-text-secondary transition-colors hover:border-vs-accent hover:text-vs-text-primary disabled:cursor-default disabled:opacity-50"
             >
               <RefreshCw size={12} className={snapshot.running ? "animate-spin" : undefined} />
               {snapshot.running ? "Updating…" : "Update snapshot"}
+            </button>
+          )}
+          {themeObjectLib && (
+            <button
+              type="button"
+              onClick={() => void customizeTheme()}
+              disabled={customize.running}
+              title={`Apply your token & component edits to the ${themeObjectLib} theme — VortSpec patches the real theme object from your saved overrides (nothing changes if there are none).`}
+              className="flex cursor-pointer items-center gap-1.5 rounded border border-vs-border-strong px-2.5 py-1 text-[11px] text-vs-text-secondary transition-colors hover:border-vs-accent hover:text-vs-text-primary disabled:cursor-default disabled:opacity-50"
+            >
+              <Palette size={12} className={customize.running ? "animate-spin" : undefined} />
+              {customize.running ? `Applying to ${themeObjectLib}…` : "Customize theme"}
             </button>
           )}
           {/* The plain Refresh (re-read from disk) is only useful when there's no Update snapshot — the
@@ -128,14 +186,18 @@ export function DesignSystem({
         </div>
       </ViewHeader>
 
-      {/* Progress bar while the design system + tokens are updating from the client's Storybook. */}
-      {snapshot.running && (
+      {/* Progress bar for the active agent run — the enterprise Storybook snapshot OR a theme customization. */}
+      {(snapshot.running || customize.running) && (
         <div className="flex flex-none flex-col gap-1.5 border-b border-vs-border-subtle bg-vs-bg-surface px-4 py-2.5">
           <div className="flex items-center gap-2 text-[12px] text-vs-text-secondary">
             <Spinner />
-            <span>Updating your design system &amp; tokens from your Storybook…</span>
+            <span>
+              {snapshot.running
+                ? "Updating your design system & tokens from your Storybook…"
+                : `Applying your token & component edits to the ${themeObjectLib} theme…`}
+            </span>
             <span className="ml-auto truncate font-mono text-[10px] text-vs-text-muted">
-              {snapshot.model.activity.at(-1)?.label ?? "working…"}
+              {(snapshot.running ? snapshot : customize).model.activity.at(-1)?.label ?? "working…"}
             </span>
           </div>
           <div className="h-1 w-full overflow-hidden rounded-full bg-vs-border-default">

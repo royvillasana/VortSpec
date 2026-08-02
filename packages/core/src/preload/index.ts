@@ -276,6 +276,19 @@ const api: VortSpecApi = {
   findLatestArtifact: (projectPath: string, suffix: string) =>
     invoke("artifact:findLatest", { projectPath, suffix }),
   projectConfig: (projectPath: string) => invoke("project:config", projectPath),
+  libraryReadiness: (projectPath: string) => invoke("library:readiness", projectPath),
+  libraryDetect: (projectPath: string) => invoke("library:detect", projectPath),
+  libraryEnumerateComponent: (projectPath: string, importBase: string, component: string) =>
+    invoke("library:enumerateComponent", { projectPath, importBase, component }),
+  getThemeOverrides: (projectPath: string) => invoke("theme:getOverrides", projectPath),
+  setThemeTokenOverride: (projectPath: string, name: string, value: string, mode?: string) =>
+    invoke("theme:setTokenOverride", { projectPath, name, value, mode }),
+  setThemeComponentOverride: (
+    projectPath: string,
+    component: string,
+    target: { variant?: string; option?: string; slot?: string },
+    decls: Record<string, string>,
+  ) => invoke("theme:setComponentOverride", { projectPath, component, target, decls }),
   inspectorTokens: (projectPath: string, preferredCollection?: string) =>
     invoke(
       "inspector:getTokens",

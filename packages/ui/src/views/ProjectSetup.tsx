@@ -12,6 +12,7 @@ import {
 } from "@vortspec/core/setup";
 import { api } from "../lib/api";
 import { Button } from "../components/ui";
+import { libraryLogo } from "./library-logos";
 
 /**
  * Unified project setup — one Intake-style stepper that merges the tech-stack
@@ -276,7 +277,7 @@ function SetupStep({
         {a.designSource === "library" && (
           <div className="mt-2">
             <p className="mb-1.5 text-[11px] text-vs-text-muted">Which component library?</p>
-            <Radios options={COMPONENT_LIBRARY_OPTIONS} value={a.componentLibrary ?? "shadcn"} onChange={(v) => setLibrary(v as SetupAnswers["componentLibrary"])} />
+            <Radios options={COMPONENT_LIBRARY_OPTIONS} value={a.componentLibrary ?? "shadcn"} onChange={(v) => setLibrary(v as SetupAnswers["componentLibrary"])} icon={libraryLogo} />
           </div>
         )}
         {a.designSource === "github" && (
@@ -620,11 +621,14 @@ function Radios({
   options,
   value,
   onChange,
+  icon,
 }: {
   label?: string;
   options: readonly { value: string; label: string; hint?: string }[];
   value: string;
   onChange: (v: string) => void;
+  /** Optional leading glyph per option (e.g. brand logos on the component-library grid). */
+  icon?: (value: string) => React.ReactNode;
 }): React.JSX.Element {
   const grid = (
     <div className="grid grid-cols-2 gap-2">
@@ -634,12 +638,15 @@ function Radios({
           <button
             key={o.value}
             onClick={() => onChange(o.value)}
-            className={`flex flex-col items-start rounded-md border px-3 py-2 text-left transition-colors ${
+            className={`flex items-start gap-2.5 rounded-md border px-3 py-2 text-left transition-colors ${
               selected ? "border-vs-accent bg-vs-accent-muted" : "border-vs-border-default hover:bg-vs-bg-hover"
             }`}
           >
-            <span className="text-[13px] text-vs-text-primary">{o.label}</span>
-            {o.hint && <span className="text-[11px] text-vs-text-muted">{o.hint}</span>}
+            {icon && <span className="mt-0.5 flex">{icon(o.value)}</span>}
+            <span className="flex min-w-0 flex-col">
+              <span className="text-[13px] text-vs-text-primary">{o.label}</span>
+              {o.hint && <span className="text-[11px] text-vs-text-muted">{o.hint}</span>}
+            </span>
           </button>
         );
       })}

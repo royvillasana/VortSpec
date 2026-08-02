@@ -4,6 +4,7 @@ import { createReadStream } from "node:fs";
 import { extname, join, resolve, sep } from "node:path";
 import { LIGHT_PAGES_DIR } from "../../shared/light-page";
 import { readProjectConfig } from "../workspace/config-manager";
+import { materializeThemeCss } from "../inspector/theme-materialize";
 
 /**
  * Static origin for light pages (OpenSpec change: light-pages-on-canvas, task 1). The framework
@@ -20,17 +21,17 @@ interface LiteServer {
 }
 
 const servers = new Map<string, LiteServer>();
-/** Cached design-tokens CSS per project, injected so `var(--token)` references resolve in the canvas. */
-const tokenCssCache = new Map<string, string>();
+/** Cached BASE design-tokens CSS per project (the token_file read); the overlay is layered fresh. */
+const baseTokenCssCache = new Map<string, string>();
 
 /** The light-pages directory served for a project (absolute). */
 function pagesDir(projectPath: string): string {
   return join(projectPath, LIGHT_PAGES_DIR);
 }
 
-/** The project's design-tokens CSS (from `project.yaml` token_file), cached; "" when there is none. */
-async function tokenCssFor(projectPath: string): Promise<string> {
-  const cached = tokenCssCache.get(projectPath);
+/** The project's BASE design-tokens CSS (from `project.yaml` token_file), cached; "" when there is none. */
+async function baseTokenCssFor(projectPath: string): Promise<string> {
+  const cached = baseTokenCssCache.get(projectPath);
   if (cached !== undefined) return cached;
   let css = "";
   try {
@@ -39,8 +40,30 @@ async function tokenCssFor(projectPath: string): Promise<string> {
   } catch {
     /* no token file / unreadable → serve without injected tokens */
   }
-  tokenCssCache.set(projectPath, css);
+  baseTokenCssCache.set(projectPath, css);
   return css;
+}
+
+/**
+ * The tokens CSS injected into a served page: the cached base token_file PLUS the durable personalization
+ * overlay (change: consume-component-libraries, task 12.3/12.5) materialized fresh on every request so a
+ * token edit — including an enterprise/consumed edit that never touches the real source — shows on the
+ * canvas immediately, without invalidating the (large, rarely-changing) base read. Overlay is appended
+ * AFTER the base so it wins by cascade.
+ */
+async function tokenCssFor(projectPath: string): Promise<string> {
+  const base = await baseTokenCssFor(projectPath);
+  const overlay = await materializeThemeCss(projectPath).catch(() => "");
+  return overlay ? `${base}\n${overlay}` : base;
+}
+
+/**
+ * Drop the cached BASE token CSS for a project so the next served page re-reads token_file. Called after a
+ * token edit that mutates the file in place (owned CSS/SCSS/JSON/TS sources). Overlay-only edits don't need
+ * this — the overlay is already read fresh per request.
+ */
+export function clearTokenCssCache(projectPath: string): void {
+  baseTokenCssCache.delete(projectPath);
 }
 
 /**

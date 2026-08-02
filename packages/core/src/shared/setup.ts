@@ -42,6 +42,7 @@ export const componentLibrarySchema = z.enum([
   "chakra",
   "mantine",
   "headlessui",
+  "astryx",
   "other",
 ]);
 export const stylingSchema = z.enum([
@@ -66,7 +67,9 @@ export const setupAnswersSchema = z.object({
   componentLibrary: componentLibrarySchema.optional(),
   // Resolved provisioning kind — for `other`/unknown libraries the flow asks; for known
   // libraries it derives from `componentLibrary` via `libraryKind()` (change: provision-library-source).
-  componentLibraryKind: z.enum(["copy-source", "package"]).optional(),
+  componentLibraryKind: z
+    .enum(["cli-registry", "installed-package", "headless", "copy-source", "package"])
+    .optional(),
   // GitHub
   githubRepoUrl: z.string().optional(),
   githubBranch: z.string().optional(),
@@ -120,34 +123,312 @@ export const DESIGN_SOURCE_OPTIONS = [
 ] as const;
 
 /**
- * How a component library is provisioned into a project (change: provision-library-source):
- *   - `copy-source` — the library's CLI copies component *source files* into the repo
- *     (shadcn, radix). Provision by running that CLI; the copied files ARE the design system.
- *   - `package`     — components are imported from an installed npm package (mui, chakra,
- *     antd, mantine, headlessui). Provision by installing the package + generating thin,
- *     token-mapped wrappers. You never own the library's source.
+ * How a component library is CONSUMED into a project (change: consume-component-libraries):
+ *   - `cli-registry`      — the library's CLI copies component *source files* into the repo
+ *     (shadcn). Consume by running that CLI; the copied files ARE the design system.
+ *   - `installed-package` — components are imported from an installed npm package (mui, chakra,
+ *     antd, mantine, astryx). Consume by installing the package; never own the source.
+ *   - `headless`          — installed unstyled primitives with no token model (radix, headlessui);
+ *     consume by install + pair with the project's own tokens.
  * `other` has no fixed kind — the setup flow asks.
+ *
+ * Legacy `copy-source` (→ `cli-registry`) and `package` (→ `installed-package`) values from older
+ * project.yaml still parse; use {@link normalizeLibraryKind} to map them.
  */
-export type LibraryKind = "copy-source" | "package";
+export type LibraryKind = "cli-registry" | "installed-package" | "headless";
+/** Legacy kind values accepted from older project.yaml, mapped by {@link normalizeLibraryKind}. */
+export type LegacyLibraryKind = "copy-source" | "package";
 
 export const COMPONENT_LIBRARY_OPTIONS = [
-  { value: "shadcn", label: "shadcn/ui", hint: "Radix UI + Tailwind", kind: "copy-source" },
-  { value: "radix", label: "Radix UI", hint: "unstyled primitives", kind: "copy-source" },
-  { value: "mui", label: "Material UI", hint: "Emotion-based", kind: "package" },
-  { value: "antd", label: "Ant Design", kind: "package" },
-  { value: "chakra", label: "Chakra UI", hint: "Emotion-based", kind: "package" },
-  { value: "mantine", label: "Mantine", kind: "package" },
-  { value: "headlessui", label: "Headless UI", hint: "Tailwind Labs", kind: "package" },
+  { value: "shadcn", label: "shadcn/ui", hint: "Radix UI + Tailwind", kind: "cli-registry" },
+  { value: "radix", label: "Radix UI", hint: "unstyled primitives", kind: "headless" },
+  { value: "mui", label: "Material UI", hint: "Emotion-based", kind: "installed-package" },
+  { value: "antd", label: "Ant Design", kind: "installed-package" },
+  { value: "chakra", label: "Chakra UI", hint: "Emotion-based", kind: "installed-package" },
+  { value: "mantine", label: "Mantine", kind: "installed-package" },
+  { value: "headlessui", label: "Headless UI", hint: "Tailwind Labs", kind: "headless" },
+  {
+    value: "astryx",
+    label: "Astryx",
+    hint: "Meta · installed + CLI · CSS-var tokens; custom themes only via its `defineTheme`/`astryx docs theme`",
+    kind: "installed-package",
+  },
   { value: "other", label: "Other" },
 ] as const;
 
 /**
- * The provisioning kind for a component library. Returns `"unknown"` for `other` or any
+ * Per-library consume recipe: the exact toolchain commands + import base VortSpec writes into
+ * project.yaml so consuming is deterministic (change: consume-component-libraries). Commands run
+ * through the user's own local toolchain (npm/npx) — never vendored.
+ */
+export interface LibraryRecipe {
+  kind: LibraryKind;
+  /** Non-interactive install / init command. */
+  install: string;
+  /** cli-registry only: how to add a component (append names). */
+  add?: string;
+  /** Import specifier (installed) or alias-resolved dir (cli-registry). */
+  importBase?: string;
+  /** cli-registry only: the registry base URL. */
+  registry?: string;
+  /** How a token/theme edit is applied for this library (change: consume-component-libraries, 12.8). */
+  themeApply?: ThemeApply;
+}
+
+/**
+ * The strategy a project uses to APPLY a token/theme personalization (change: consume-component-libraries,
+ * task 12.8). It tells the materializer which artifact to emit: injected CSS variables (`css-vars` for
+ * shadcn/headless/extract sources whose tokens are CSS), a generated theme object for a specific library
+ * (`theme-object:<lib>`), an Astryx `defineTheme` (`astryx-defineTheme`), or an override stylesheet layered
+ * on top of an unowned consumed source (`overlay-injected`, e.g. enterprise).
+ */
+export type ThemeApply =
+  | "css-vars"
+  | "theme-object:mui"
+  | "theme-object:chakra"
+  | "theme-object:mantine"
+  | "theme-object:antd"
+  | "astryx-defineTheme"
+  | "overlay-injected";
+export const LIBRARY_RECIPES: Record<string, LibraryRecipe> = {
+  shadcn: {
+    kind: "cli-registry",
+    install: "npx shadcn@latest init --yes --defaults",
+    add: "npx shadcn@latest add --yes",
+    importBase: "@/components/ui",
+    registry: "https://ui.shadcn.com/r",
+  },
+  radix: { kind: "headless", install: "npm install radix-ui", importBase: "radix-ui", themeApply: "css-vars" },
+  headlessui: {
+    kind: "headless",
+    install: "npm install @headlessui/react",
+    importBase: "@headlessui/react",
+    themeApply: "css-vars",
+  },
+  mui: {
+    kind: "installed-package",
+    install: "npm install @mui/material @emotion/react @emotion/styled",
+    importBase: "@mui/material",
+    themeApply: "theme-object:mui",
+  },
+  antd: { kind: "installed-package", install: "npm install antd", importBase: "antd", themeApply: "theme-object:antd" },
+  chakra: {
+    kind: "installed-package",
+    install: "npm install @chakra-ui/react @emotion/react",
+    importBase: "@chakra-ui/react",
+    themeApply: "theme-object:chakra",
+  },
+  mantine: {
+    kind: "installed-package",
+    install: "npm install @mantine/core @mantine/hooks",
+    importBase: "@mantine/core",
+    themeApply: "theme-object:mantine",
+  },
+  // Astryx (Meta) — installed package + a CLI. Commands CONFIRMED from astryx.atmeta.com/docs
+  // (2026-07-31): install + `cli init` verbatim; its design tokens are CSS custom properties
+  // (--color-*/--spacing-*/--radius-*/--size-*), so personalization goes through the css-vars path
+  // (our existing overlay writer + materializer) rather than a bespoke theme object. Prebuilt themes
+  // ship as CSS (`@import '@astryxdesign/theme-<name>/theme.css'`); custom-theme authoring is `defineTheme`,
+  // whose schema is documented only via the `astryx docs theme` CLI. (change: consume-component-libraries)
+  astryx: {
+    kind: "installed-package",
+    install:
+      "npm install @astryxdesign/core @astryxdesign/theme-neutral @astryxdesign/cli && npx @astryxdesign/cli init",
+    importBase: "@astryxdesign/core",
+    themeApply: "css-vars",
+  },
+};
+
+/**
+ * The apply strategy for a project (change: consume-component-libraries, task 12.8). Enterprise consumes an
+ * UNOWNED source, so its personalization is layered as an overlay; a `library` uses its recipe's strategy
+ * (shadcn/headless → css-vars, MUI/Chakra/Mantine/Antd → theme-object, Astryx → defineTheme); every
+ * extract/rebuild source owns a CSS token file, so it uses css-vars.
+ */
+export function themeApplyFor(a: {
+  designSource?: string | null;
+  componentLibrary?: string | null;
+}): ThemeApply {
+  if (a.designSource === "enterprise") return "overlay-injected";
+  if (a.designSource === "library") {
+    const recipe = a.componentLibrary ? LIBRARY_RECIPES[a.componentLibrary] : undefined;
+    return recipe?.themeApply ?? "css-vars";
+  }
+  return "css-vars";
+}
+
+/**
+ * Per-library consume + customize CONTRACT (change: consume-component-libraries, Phase 11) — the recipe
+ * knowledge for each supported library, captured as tracked DATA (not gitignored skill prose): how the
+ * library is themed from a token edit, where per-component overrides attach (the per-component lever), how
+ * the app must be wired for the theme to take effect, and where props/variants are enumerated. VortSpec's
+ * deterministic layer owns the token PLUMBING (durable overlay + token↔theme-key map, Phase 12); the actual
+ * theme-file generation + provider wiring is done by the customize agent using this contract (consistent
+ * with how provisioning/convert already work), so no unstable/unverifiable framework API is hard-coded here.
+ */
+export interface LibraryThemeContract {
+  /** How GLOBAL token overrides are applied. */
+  theming: string;
+  /** Where PER-COMPONENT overrides attach — the per-component lever. */
+  componentLever: string;
+  /** How the app root must be wired for the theme to take effect. */
+  provider: string;
+  /** Where props/variants are enumerated for grounding. */
+  enumerate: string;
+}
+
+export const LIBRARY_THEME_CONTRACTS: Record<string, LibraryThemeContract> = {
+  // 11.1 shadcn (cli-registry)
+  shadcn: {
+    theming:
+      "Global CSS custom properties in the app's globals.css `:root` / `.dark` blocks (+ components.json). Edit those CSS vars — shadcn components read them; no theme object.",
+    componentLever: "The copied component's own CVA `variants` map in component_dir (you own the source).",
+    provider: "None — the CSS vars cascade globally; ensure globals.css is imported once at the app root.",
+    enumerate: "The copied component's CVA variants + the shadcn registry item JSON.",
+  },
+  // 11.2 MUI (installed-package)
+  mui: {
+    theming:
+      "createTheme({ palette, typography, spacing, shape }) — set each overridden token at its theme path (e.g. palette.primary.main) via the token↔theme-key map.",
+    componentLever: "theme.components.Mui<Name>.styleOverrides (per slot).",
+    provider: "Wrap the app root in <ThemeProvider theme={theme}> from @mui/material (+ <CssBaseline/>).",
+    enumerate: "Bundled .d.ts prop interfaces from @mui/material.",
+  },
+  // 11.3 Chakra v3 (installed-package + CLI snippets)
+  chakra: {
+    theming: "defineConfig({ theme: { tokens, semanticTokens } }) → createSystem(defaultConfig, config).",
+    componentLever: "recipes / slotRecipes in the config.",
+    provider: "Wrap the app root in <ChakraProvider value={system}>.",
+    enumerate: ".d.ts + `chakra typegen`.",
+  },
+  // 11.4 Mantine (installed-package)
+  mantine: {
+    theming:
+      "createTheme({ colors, primaryColor, fontFamily, radius, spacing }) — `colors` entries are 10-shade tuples, so generate the full ramp for an overridden brand color.",
+    componentLever: "Component.extend({ defaultProps, styles }) under theme.components.",
+    provider: "Wrap the app root in <MantineProvider theme={theme}> and import @mantine/core styles.",
+    enumerate: "Bundled .d.ts prop interfaces from @mantine/core.",
+  },
+  // 11.5 Ant Design v5 (installed-package)
+  antd: {
+    theming: "ConfigProvider theme={{ token, algorithm }} — set overridden tokens on theme.token.",
+    componentLever: "theme.components.<Component> (per-component token overrides).",
+    provider: "Wrap the app root in <ConfigProvider theme={…}> from antd.",
+    enumerate: "Bundled .d.ts component-token interfaces from antd.",
+  },
+  // 11.6 Radix (headless)
+  radix: {
+    theming:
+      "No built-in token model — style Radix primitives with the project's OWN token CSS (token_file vars). Radix ships behavior + data-attrs, not styles.",
+    componentLever: 'Per-part className / data-attribute selectors (e.g. [data-state="open"]).',
+    provider: "None — Radix is unstyled; the project's CSS owns theming.",
+    enumerate: "Bundled .d.ts prop interfaces from radix-ui.",
+  },
+  headlessui: {
+    theming: "No built-in token model — style Headless UI primitives with the project's OWN token CSS (token_file vars).",
+    componentLever: "Per-part className via render-prop state (e.g. `open`, `active`).",
+    provider: "None — unstyled; the project's CSS owns theming.",
+    enumerate: "Bundled .d.ts prop interfaces from @headlessui/react.",
+  },
+  // 11.7 Astryx (installed-package) — CONFIRMED from astryx.atmeta.com/docs (2026-07-31).
+  astryx: {
+    theming:
+      "Design tokens are CSS custom properties (--color-*, --spacing-*, --radius-*, --size-*) — override them directly (the css-vars path). Prebuilt themes ship as CSS (`@import '@astryxdesign/theme-neutral/theme.css'`). Custom-theme REDEFINITION uses `defineTheme()`, whose exact schema is documented only via the `astryx docs theme` CLI — so if a change needs bespoke theme authoring, run that command at provisioning and TELL THE USER custom-theme authoring is limited to what defineTheme supports (VortSpec cannot redefine it abstractly).",
+    componentLever: "defineTheme.components (per `astryx docs theme`); per-instance `xstyle`.",
+    provider:
+      "Import a theme CSS at the app root (`@import '@astryxdesign/theme-neutral/theme.css'`); components import from per-category subpaths (`@astryxdesign/core/Button`).",
+    enumerate:
+      "Astryx CLI (plain text, NO --json, NO MCP): `astryx component` lists all, `astryx component <Name>` gives props+usage; `astryx docs tokens` for the token reference. AI-invoke via `node node_modules/@astryxdesign/cli/bin/astryx.mjs`. NOTE: the CLI requires Node ≥22.13 — if the project's Node is older it can't run, so fall back to the installed theme tokens + the package `.d.ts` for enumeration and tell the user.",
+  },
+};
+
+/** The consume+customize contract for a library, or undefined for `other`/unknown. */
+export function themeContractFor(library: string | undefined | null): LibraryThemeContract | undefined {
+  return library ? LIBRARY_THEME_CONTRACTS[library] : undefined;
+}
+
+/**
+ * The consume kind for a component library. Returns `"unknown"` for `other` or any
  * unrecognized library, so the caller asks the user rather than guessing a command.
  */
 export function libraryKind(library: string | undefined | null): LibraryKind | "unknown" {
   const opt = COMPONENT_LIBRARY_OPTIONS.find((o) => o.value === library);
   return opt && "kind" in opt ? opt.kind : "unknown";
+}
+
+/** Map a legacy kind value (from older project.yaml) to the current taxonomy; pass-through otherwise. */
+export function normalizeLibraryKind(kind: string | undefined | null): LibraryKind | undefined {
+  if (kind === "copy-source") return "cli-registry";
+  if (kind === "package") return "installed-package";
+  if (kind === "cli-registry" || kind === "installed-package" || kind === "headless") return kind;
+  return undefined;
+}
+
+/** Auto-detected library at intake — suggests which component library the target repo already uses. */
+export interface LibraryDetection {
+  /** A {@link componentLibrarySchema} value when a component library is detected. */
+  library?: string;
+  kind?: LibraryKind;
+  /** True when ONLY a CSS-in-JS styling lib is present — a styling strategy, not a component source. */
+  stylingOnly?: boolean;
+  detail: string;
+}
+
+/** Dependency → component library. Order matters: first match wins. */
+const DEP_TO_LIBRARY: Array<{ dep: string | RegExp; library: string }> = [
+  { dep: "@mui/material", library: "mui" },
+  { dep: "@chakra-ui/react", library: "chakra" },
+  { dep: "@mantine/core", library: "mantine" },
+  { dep: "antd", library: "antd" },
+  { dep: "@astryxdesign/core", library: "astryx" },
+  { dep: "@headlessui/react", library: "headlessui" },
+  { dep: /^@radix-ui\//, library: "radix" },
+  { dep: "radix-ui", library: "radix" },
+];
+
+/**
+ * Inspect a target repo's dependency names + whether it has a root `components.json` to suggest the
+ * component library and its consume kind at intake (change: consume-component-libraries). A root
+ * `components.json` implies shadcn (cli-registry); a known UI package implies installed-package/
+ * headless; only a CSS-in-JS lib implies a styling strategy with no component source. Pure.
+ */
+export function detectLibrary(
+  deps: Record<string, string> | undefined,
+  hasComponentsJson: boolean,
+): LibraryDetection {
+  const names = Object.keys(deps ?? {});
+  if (hasComponentsJson) {
+    return { library: "shadcn", kind: "cli-registry", detail: "Found a root components.json → shadcn (cli-registry)." };
+  }
+  for (const { dep, library } of DEP_TO_LIBRARY) {
+    const hit = typeof dep === "string" ? names.includes(dep) : names.some((n) => dep.test(n));
+    if (hit) {
+      const k = libraryKind(library);
+      return {
+        library,
+        kind: k === "unknown" ? undefined : k,
+        detail: `Found ${typeof dep === "string" ? dep : "a @radix-ui/* package"} in dependencies → ${library}.`,
+      };
+    }
+  }
+  if (names.some((n) => n.startsWith("@emotion/") || n === "styled-components")) {
+    return {
+      stylingOnly: true,
+      detail: "Only a CSS-in-JS styling library (Emotion/styled-components) — a styling strategy, not a component source.",
+    };
+  }
+  return { detail: "No known component library detected in dependencies." };
+}
+
+/**
+ * Design sources that CONSUME an existing component system and MUST NOT rebuild its
+ * components from scratch — `enterprise` (a client's coded system) and `library` (an existing
+ * component library). Callers use this to exclude such projects from the from-scratch build
+ * cycle and to route foundation/readiness/design-reference through the consume path rather than
+ * the rebuild path. (change: consume-component-libraries)
+ */
+export function isConsumeSource(designSource: string | undefined | null): boolean {
+  return designSource === "enterprise" || designSource === "library";
 }
 
 export const STYLING_OPTIONS = [
@@ -183,6 +464,7 @@ export function autoStyling(
       mantine: "css-modules",
       antd: "scss",
       radix: "css-modules",
+      astryx: "css", // StyleX ships pre-built CSS / CSS variables
     };
     if (map[library]) return map[library];
   }
@@ -233,6 +515,12 @@ export const projectConfigSchema = z.object({
   figmaTokenCollection: z.string().optional(),
   componentLibrary: z.string().optional(),
   componentLibraryKind: z.string().optional(),
+  // Consume descriptor (change: consume-component-libraries) — the exact toolchain commands +
+  // import base for the selected library, so consuming is deterministic.
+  libraryInstallCmd: z.string().optional(),
+  libraryAddCmd: z.string().optional(),
+  libraryImportBase: z.string().optional(),
+  libraryRegistry: z.string().optional(),
   githubRepoUrl: z.string().optional(),
   githubBranch: z.string().optional(),
   githubComponentDir: z.string().optional(),
@@ -250,6 +538,8 @@ export const projectConfigSchema = z.object({
   styling: z.string().optional(),
   tokenFile: z.string().optional(),
   componentDir: z.string().optional(),
+  // How a token/theme edit is applied for this project (change: consume-component-libraries, 12.8).
+  themeApply: z.string().optional(),
 });
 export type ProjectConfig = z.infer<typeof projectConfigSchema>;
 
@@ -272,11 +562,27 @@ export function buildProjectYaml(a: SetupAnswers): string {
     lines.push(`figma_file_url: "${a.figmaFileUrl ?? ""}"`);
     lines.push(`figma_token_collection: ${a.figmaTokenCollection || "Tokens"}`);
   } else if (a.designSource === "library") {
-    lines.push(`component_library: ${a.componentLibrary ?? "other"}`);
-    // Provisioning kind: derive for a known library, else use the answered kind for `other`.
+    const lib = a.componentLibrary ?? "other";
+    lines.push(`component_library: ${lib}`);
+    // Consume kind: derive for a known library, else the answered kind for `other` (normalized).
     const kind = libraryKind(a.componentLibrary);
-    const resolved = kind === "unknown" ? a.componentLibraryKind : kind;
+    const resolved = kind === "unknown" ? normalizeLibraryKind(a.componentLibraryKind) : kind;
     if (resolved) lines.push(`component_library_kind: ${resolved}`);
+    // Consume descriptor: deterministic toolchain commands + import base for a known library.
+    const recipe = LIBRARY_RECIPES[lib];
+    if (recipe) {
+      lines.push(`library_install_cmd: "${recipe.install}"`);
+      if (recipe.add) lines.push(`library_add_cmd: "${recipe.add}"`);
+      if (recipe.importBase) lines.push(`library_import_base: "${recipe.importBase}"`);
+      if (recipe.registry) lines.push(`library_registry: "${recipe.registry}"`);
+    }
+    if (lib === "astryx") {
+      // Make the Astryx constraint visible to whoever picked it (confirmed from astryx.atmeta.com/docs):
+      lines.push("# Astryx: tokens are CSS custom properties — personalization uses the css-vars path.");
+      lines.push("# Enumerate components with `astryx component` / `astryx component <Name>` (no --json, no MCP).");
+      lines.push("# Custom theme authoring is limited to Astryx's `defineTheme` (see `astryx docs theme`);");
+      lines.push("# VortSpec overrides tokens but cannot redefine the theme abstractly.");
+    }
   } else if (a.designSource === "github") {
     lines.push(`github_repo_url: "${a.githubRepoUrl ?? ""}"`);
     lines.push(`github_branch: ${a.githubBranch || "main"}`);
@@ -311,6 +617,10 @@ export function buildProjectYaml(a: SetupAnswers): string {
   lines.push(`token_file: ${a.tokenFile}`);
   lines.push(`component_dir: ${a.componentDir}`);
   lines.push(`test_runner: ${a.testRunner}`);
+  // How token/theme edits are applied (change: consume-component-libraries, 12.8) — drives the materializer.
+  lines.push(
+    `theme_apply: ${themeApplyFor({ designSource: a.designSource, componentLibrary: a.componentLibrary })}`,
+  );
 
   return lines.join("\n") + "\n";
 }

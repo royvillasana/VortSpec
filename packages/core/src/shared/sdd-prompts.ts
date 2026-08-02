@@ -38,9 +38,15 @@ const VARIANT_SET_CLAUSE =
  * like a restyled button."
  */
 const DESIGN_REFERENCE_CLAUSE = [
-  "DESIGN REFERENCE — do this BEFORE writing code, entirely yourself (never ask me for a Figma link): if",
-  "project.yaml's `design_source` is `figma`, the authoritative reference for a component is its own Figma",
-  "NODE (the component set). RESOLVE it in this order: (1) the entry's `figmaNodeId`/`componentKey` in",
+  "DESIGN REFERENCE — do this BEFORE writing code, entirely yourself (never ask me for a Figma link):",
+  "if project.yaml's `design_source` is a CONSUME source (`library` or `enterprise`), the authoritative",
+  "reference is the REAL component the library/system already ships — do NOT reproduce it from a Figma node",
+  "or infer it from the name, and do NOT reimplement it. Import it directly: from the entry's `importPath`",
+  "in .sdd-de/components.json, else from `library_import_base` (installed package) or the copied file in",
+  "`component_dir` (cli-registry). Use it as-is — compose or thin-wrap it, mapping the project's design",
+  "tokens onto its theming API — never author a look-alike. Then apply the TOKEN BINDING rules below for",
+  "any values you map. Otherwise (`design_source: figma`), the authoritative reference for a component is",
+  "its own Figma NODE (the component set). RESOLVE it in this order: (1) the entry's `figmaNodeId`/`componentKey` in",
   ".sdd-de/components.json — read that exact node via the Figma MCP (get_design_context / get_screenshot);",
   "(2) if that is missing, resolve the node yourself with `search_design_system` scoped to THIS file's own",
   "library (from `figma_file_url`) — it returns the component by name and is NOT capped like the page",
@@ -93,32 +99,103 @@ export const BUILD_REMAINING_PROMPT =
 /**
  * Provision a `design_source: library` project's REAL components into the codebase
  * (change: provision-library-source). Defers to the `/provision-library` skill, which
- * runs the library's CLI for copy-source libraries (shadcn/radix) or installs + wraps for
- * package libraries (MUI/Chakra/…). Never hand-builds what the library already ships.
+ * runs the library's CLI for cli-registry libraries (shadcn), installs + thin-wraps for
+ * installed-package libraries (MUI/Chakra/Mantine/Antd), or installs primitives for headless
+ * libraries (Radix/Headless UI). Never hand-builds what the library already ships.
  */
 export const PROVISION_LIBRARY_PROMPT = [
-  "Provision this project's component library so the design system is built on the library's",
-  "REAL components — do NOT hand-build components the library already ships.",
+  "Provision this project's component library so the design system CONSUMES the library's REAL",
+  "components — never reimplement, and never generate a wrapper file per component. The deliverable is a",
+  "lightweight LEDGER (a pointer index + light stand-ins) that lets the Playground compose and edit",
+  "screens WITHOUT loading the heavy real components; the real component is swapped back at Convert-to-code.",
   "",
-  "Run the **/provision-library** skill (`.sdd-de/ai-specs/skills/provision-library/SKILL.md`)",
-  "and follow it exactly:",
+  "Follow this recipe exactly:",
   "1. Read `.sdd-de/project.yaml` — `component_library`, `component_library_kind`, `component_dir`,",
-  "   `token_file`, `framework`, `styling`. If `component_library_kind` is missing, derive it",
-  "   (shadcn/radix → copy-source; mui/chakra/antd/mantine/headlessui → package) or ask.",
-  "2. Idempotency scan FIRST: skip components already present in `component_dir`; never duplicate.",
-  "3. copy-source (shadcn/radix): run the library's own CLI NON-INTERACTIVELY (e.g.",
-  "   `npx shadcn@latest init --yes --defaults` then `npx shadcn@latest add --yes <components>`)",
-  "   so the REAL component source files land in `component_dir`. Do NOT reimplement a component",
-  "   the CLI can produce.",
-  "4. package (mui/chakra/antd/mantine/headlessui): install the package, then generate one thin",
-  "   token-mapped wrapper per default primitive that imports the real library component and maps",
-  "   `token_file` values onto it. Wrappers delegate behavior; never reimplement it.",
-  "5. Run CLIs through the project's local toolchain (npm/npx) — never sudo, never global. If a CLI",
-  "   genuinely needs an interactive prompt it can't get here, STOP and tell the user the exact",
-  "   command to run in the in-app terminal; do not fake or partially apply it.",
-  "6. Do NOT modify unrelated files. When done, report what was added vs. skipped and point the user",
-  "   at `/extract-design-system`.",
+  "   `token_file`, `framework`, `styling`, and the consume descriptor (`library_install_cmd`,",
+  "   `library_add_cmd`, `library_import_base`, `library_registry`) when present. If",
+  "   `component_library_kind` is missing, derive it (shadcn → cli-registry; radix/headlessui →",
+  "   headless; mui/chakra/antd/mantine/astryx → installed-package) or ask.",
+  "2. Idempotency scan FIRST: skip work already present (pointer entries in `.sdd-de/components.json`,",
+  "   stand-ins in `.vortspec/light-html/`); never duplicate.",
+  "3. INSTALL / land the real components (per kind):",
+  "   • cli-registry (shadcn): run the CLI NON-INTERACTIVELY (`library_install_cmd` then",
+  "     `library_add_cmd <components>`) so the REAL source files land in `component_dir`.",
+  "   • installed-package (mui/chakra/mantine/antd/astryx): run `library_install_cmd` to install the",
+  "     package. Wire the library's ONE root provider/theme (e.g. MUI `<ThemeProvider>`, Astryx",
+  "     `<Theme>` provider) exactly once at the app root if it needs one. DO NOT generate a wrapper",
+  "     component file per primitive — the consume model is a pointer index + direct import, not N",
+  "     re-export files (that is recreation-by-another-name and clutters `component_dir`).",
+  "   • headless (radix/headlessui): install the package; primitives import from `library_import_base`",
+  "     and are styled with the project's OWN tokens (they ship no token model).",
+  "4. POINTER INDEX — write `.sdd-de/components.json` with one entry per consumed component:",
+  "   `{ name, importPath (e.g. `@astryxdesign/core/Button` for installed-package, the `component_dir`",
+  "   file for cli-registry), export, tier (atom|molecule|organism) }` — NO `figmaNodeId`. This is how a",
+  "   screen (and Convert-to-code) resolves the REAL component. Do NOT create per-component `.tsx` files.",
+  "5. LIGHT LEDGER (REQUIRED — this is the whole point) — harvest a framework-free light stand-in per",
+  "   component into `.vortspec/light-html/<Name>/default.html` so the Playground edits light HTML, never",
+  "   the real component. For EACH component author a SELF-CONTAINED stand-in: semantic HTML + inline",
+  "   styles using the RESOLVED token values (read the installed theme CSS / `token_file` for real",
+  "   `--color-*`/`--radius-*`/`--spacing-*`/`--font-*` values), mark the root `data-component=\"<Name>\"`,",
+  "   keep it FLUID (`max-width:100%`, no fixed width wider than ~240px — it renders in a bento cell). It",
+  "   MUST NOT contain: `import`, JSX, `cva(`/`cn(`, an `@/…`/package module path, `.tsx`/`.jsx`, or a",
+  "   `localhost:6006` URL. Ground each stand-in's shape + variants in the component's REAL API — from its",
+  "   bundled `.d.ts`, or the library's CLI/docs when runnable, else the installed source. Do NOT invent",
+  "   props the library doesn't have. Then write `designer.md` from the tokens + stand-ins.",
+  "6. Astryx specifics — CONFIRMED from astryx.atmeta.com/docs (2026-07-31): tokens are CSS custom",
+  "   properties (--color-*/--spacing-*/--radius-*/--size-*); point `token_file` at the imported theme",
+  "   CSS (`@astryxdesign/theme-<name>/theme.css`) and personalize via the css-vars path; components import",
+  "   from per-category subpaths (`@astryxdesign/core/Button`). Enumerate via the CLI `astryx component` /",
+  "   `astryx component <Name>` — BUT the Astryx CLI requires Node ≥22.13; if the project's Node is older",
+  "   the CLI CANNOT run, so DO NOT block on it — author the ledger from the installed theme tokens +",
+  "   the package `.d.ts` instead, and tell the user the CLI needs Node ≥22.13 for richer enumeration.",
+  "   Custom-theme redefinition is Astryx's own `defineTheme`/`astryx docs theme` — VortSpec overrides",
+  "   tokens but cannot redefine the theme abstractly; SAY SO if the user asks for bespoke theme changes.",
+  "7. Run CLIs through the project's local toolchain (npm/npx) — never sudo, never global. If a CLI",
+  "   genuinely needs an interactive prompt or a newer runtime it can't get here, note it and continue",
+  "   with the token+types fallback; do not fake or partially apply a command.",
+  "8. Do NOT modify unrelated files or the library's package source. When done, report the pointer",
+  "   entries + stand-ins written vs. skipped, and point the user at the Design System view / Playground.",
 ].join("\n");
+
+/**
+ * Customize prompt (change: consume-component-libraries, Phase 11) — dispatched when a token/theme edit
+ * targets a `theme-object:<lib>` project (MUI/Chakra/Mantine/Antd) or Astryx, where the deterministic CSS
+ * overlay can't apply. It hands the agent the library's consume+customize CONTRACT and the durable overlay,
+ * and has it materialize the overlay into the library's REAL theme artifact + provider wiring — the only
+ * step that isn't a deterministic string emit. VortSpec has already recorded the edits (durable overlay)
+ * and the token→theme-path map; this applies them through the library's own theming lever.
+ */
+export function buildCustomizeLibraryPrompt(
+  library: string,
+  contract: { theming: string; componentLever: string; provider: string; enumerate: string },
+): string {
+  return [
+    `Apply this project's pending design-system personalization to the ${library} theme.`,
+    "",
+    "SOURCE OF TRUTH — do not invent values:",
+    "- `.vortspec/theme-overrides.json` — the durable overlay: global `tokens` (name → value, optional",
+    "  `mode`) and per-component `components` (base / variants / slots). These are the ONLY edits to apply.",
+    "- `.vortspec/token-theme-keys.json` — code-token name → this library's theme-object path (e.g.",
+    "  `primary` → `palette.primary.main`). Use it to place each overridden token; if a token has no",
+    "  mapping, infer its path from the library's schema and WRITE the mapping back so it's stable next time.",
+    "- `.sdd-de/project.yaml` — `component_library`, `library_import_base`, `component_dir`, `token_file`.",
+    "",
+    `This library's theming contract:`,
+    `- GLOBAL tokens → ${contract.theming}`,
+    `- PER-COMPONENT overrides → ${contract.componentLever}`,
+    `- PROVIDER wiring → ${contract.provider}`,
+    "",
+    "STEPS:",
+    "1. Read the overlay + the theme-key map. If both are empty, report nothing to apply and STOP.",
+    "2. Generate or PATCH the library's theme file with the global token overrides at their mapped paths.",
+    "   Patch in place when a theme file already exists; create one only if none does.",
+    "3. Apply per-component overrides through the library's per-component lever above (never inline styles).",
+    "4. Ensure the provider wiring is present at the app root exactly once (add it only if missing).",
+    "5. Do NOT modify the library's own package source, and do NOT hard-code a value the overlay doesn't",
+    "   carry. If the library's API can't be confirmed (e.g. Astryx), verify via its CLI/MCP before writing.",
+    "6. Report the theme file written/patched, the components re-themed, and any token you had to map anew.",
+  ].join("\n");
+}
 
 export const RESCAN_PROMPT = [
   "Re-scan this project's design source and reconcile the design system. Do NOT implement or",
@@ -164,6 +241,11 @@ export const RESCAN_PROMPT = [
   "   - for `design_source: figma`, record each entry's Figma node id as a `figmaNodeId` field (resolve it",
   "     via `figma_get_component_details`/`figma_search_components` by name) so component docs can be enriched",
   "     later without re-resolving — add/refresh it where missing or changed,",
+  "   - for a CONSUME source (`design_source: library` or `enterprise`), record each entry as a POINTER to the",
+  "     REAL component instead of a rebuild target: `importPath` (the module/package specifier or copied file,",
+  "     derived from `library_import_base`), `export` (the exported symbol), `storyId` when a vendor Storybook",
+  "     exists, and `tier` (atom/molecule/organism). Composition then uses a real `import` + `<Component/>`,",
+  "     never a from-scratch reproduction. Do NOT add a `figmaNodeId` for these entries,",
   "   - PAGE-PER-COMPONENT REFERENCE (authoritative design anchor): the file follows the convention that each",
   "     PAGE is one component and holds that component with all its variations (a page \"accordion\" = the",
   "     accordion + its variant frames). Match each roster entry to its page by NORMALIZED name (case/separator-",

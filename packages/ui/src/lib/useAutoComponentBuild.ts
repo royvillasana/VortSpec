@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Project } from "@vortspec/core/ipc";
 import { chunkByLevel, buildChunkPrompt } from "@vortspec/core/sdd-prompts";
+import { isConsumeSource } from "@vortspec/core/setup";
 import { api } from "./api";
 import { useAgentRun } from "./useAgentRun";
 
@@ -62,9 +63,10 @@ export function useAutoComponentBuild(
         api.projectConfig(project.path).catch(() => null),
       ]);
       if (!alive || startedRef.current === project.path) return;
-      // Enterprise projects CONSUME an existing component library — never auto-BUILD their components
-      // (that would create VortSpec-owned look-alikes that drift from their source). Claim + stop.
-      if (cfg?.designSource === "enterprise") {
+      // Consume sources (enterprise + any component library) CONSUME an existing component system —
+      // never auto-BUILD their components (that would create VortSpec-owned look-alikes that drift
+      // from their source). Claim + stop. (change: consume-component-libraries)
+      if (isConsumeSource(cfg?.designSource)) {
         startedRef.current = project.path;
         if (poll) window.clearInterval(poll);
         return;

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { Project } from "@vortspec/core/ipc";
 import { DEFAULT_FLOW } from "@vortspec/core/flow";
 import { buildEnterpriseFoundationPrompt } from "@vortspec/core/enterprise-consume";
+import { PROVISION_LIBRARY_PROMPT } from "@vortspec/core/sdd-prompts";
 import { api } from "./api";
 import { useAgentRun } from "./useAgentRun";
 
@@ -66,18 +67,24 @@ export function useAutoFoundation(project: Project | null): { extracting: boolea
         if (poll) window.clearInterval(poll);
         return;
       }
-      // Nothing running and not ready → kick the foundation once. Enterprise projects CONSUME an existing
-      // design system (validate → index → snapshot); every other source extracts + detects.
+      // Nothing running and not ready → kick the foundation once. Consume sources bring in an EXISTING
+      // design system rather than extract+rebuild: enterprise validates → indexes → snapshots; a library
+      // is provisioned (CLI copies source / package installed) so its REAL components are consumed. Every
+      // other source extracts + detects. (change: consume-component-libraries)
       startedRef.current = project.path;
       wasExtractingRef.current = true;
       setExtracting(true);
       const enterprise = cfg.designSource === "enterprise";
+      const library = cfg.designSource === "library";
       await run.start({
         prompt: enterprise
           ? buildEnterpriseFoundationPrompt(cfg)
-          : (FOUNDATION_DEF.promptTemplate ?? "Extract tokens and detect components."),
+          : library
+            ? PROVISION_LIBRARY_PROMPT
+            : (FOUNDATION_DEF.promptTemplate ?? "Extract tokens and detect components."),
         cwd: project.path,
-        allowedTools: enterprise ? ["Read", "Write", "Edit", "Bash"] : FOUNDATION_DEF.allowedTools,
+        allowedTools:
+          enterprise || library ? ["Read", "Write", "Edit", "Bash"] : FOUNDATION_DEF.allowedTools,
         bypassPermissions: true,
       });
     };

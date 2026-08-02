@@ -4,6 +4,7 @@ import type { DevServerStatus, Project, InspectorToken, InspectorComponent, File
 import { ViewHeader } from "@vortspec/ui/ViewHeader";
 import { buildSelection, alignToCss, flowToCss, gapModeCss } from "@vortspec/core/selection-builder";
 import { sizeModeCss, SIZE_MODE_LABEL } from "@vortspec/core/sizing";
+import { isConsumeSource } from "@vortspec/core/setup";
 import { api } from "../lib/api";
 import { Button, Spinner } from "@vortspec/ui/ui";
 import { ProjectRail, projectRailItems } from "@vortspec/ui/ProjectRail";
@@ -269,6 +270,9 @@ export function RunApp({
   // Enterprise projects (Connect Enterprise Design System) embed the CLIENT's own Storybook as-is —
   // when it's a URL we point the Storybook view straight at it, instead of starting a VortSpec Storybook.
   const [enterpriseSbUrl, setEnterpriseSbUrl] = useState<string | null>(null);
+  // Consume sources (enterprise + library) display their design system via the palette / the vendor's
+  // own Storybook — VortSpec never builds its own Storybook for them (change: consume-component-libraries).
+  const [consumeSource, setConsumeSource] = useState(false);
   // Enterprise Storybook (kind=storybook + a client URL) is embedded as-is — its URL wins over any VortSpec
   // dev server. Every other case uses the managed dev-server URL.
   const embedUrl =
@@ -365,7 +369,16 @@ export function RunApp({
   useEffect(() => loadGenStatus(), [loadGenStatus, routes]);
   // The configured framework (project.yaml) — names it in the per-page "Generate code" tooltip.
   useEffect(() => {
-    void api.projectConfig(project.path).then((c) => setFramework(c?.framework ?? null)).catch(() => setFramework(null));
+    void api
+      .projectConfig(project.path)
+      .then((c) => {
+        setFramework(c?.framework ?? null);
+        setConsumeSource(isConsumeSource(c?.designSource));
+      })
+      .catch(() => {
+        setFramework(null);
+        setConsumeSource(false);
+      });
     // Resolve the enterprise Storybook to an embeddable URL (a client URL as-is, or a served static build).
     void api.enterpriseStorybookUrl(project.path).then(setEnterpriseSbUrl).catch(() => setEnterpriseSbUrl(null));
   }, [project.path]);
@@ -401,7 +414,7 @@ export function RunApp({
   >({ phase: "idle" });
 
   useEffect(() => {
-    if (isApp) return;
+    if (isApp || consumeSource) return; // consume sources never build a VortSpec Storybook
     let alive = true;
     setSb({ phase: "checking" });
     void (async () => {
@@ -433,7 +446,7 @@ export function RunApp({
       alive = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [project.path, isApp]);
+  }, [project.path, isApp, consumeSource]);
 
   /** Hand story generation for missing components to the sidebar assistant. */
   function generateStoriesInAssistant(): void {

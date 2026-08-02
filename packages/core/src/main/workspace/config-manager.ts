@@ -15,6 +15,10 @@ const KEY_MAP: Record<string, keyof ProjectConfig> = {
   figma_token_collection: "figmaTokenCollection",
   component_library: "componentLibrary",
   component_library_kind: "componentLibraryKind",
+  library_install_cmd: "libraryInstallCmd",
+  library_add_cmd: "libraryAddCmd",
+  library_import_base: "libraryImportBase",
+  library_registry: "libraryRegistry",
   github_repo_url: "githubRepoUrl",
   github_branch: "githubBranch",
   github_component_dir: "githubComponentDir",
@@ -31,6 +35,7 @@ const KEY_MAP: Record<string, keyof ProjectConfig> = {
   styling: "styling",
   token_file: "tokenFile",
   component_dir: "componentDir",
+  theme_apply: "themeApply",
 };
 
 /** Minimal flat `key: value` YAML parse (the file the CLI writes is flat). */
