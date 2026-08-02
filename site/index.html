@@ -3,16 +3,16 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>VortSpec — Spec-driven design-to-code: a cockpit and an IDE</title>
+    <title>VortSpec — Spec-driven design-to-code, in a VS Code–style IDE</title>
     <meta
       name="description"
-      content="VortSpec is two desktop apps over your local Claude Code — a guided Cockpit and a VS Code–style IDE with an integrated terminal, live preview, and vibe-engineering. Run a professional spec-driven design-to-code workflow — extract tokens, build components, preview in Storybook, and generate a design manifest. Your own Claude. Local-first."
+      content="VortSpec is a desktop IDE over your local Claude Code — a VS Code–style workspace with an integrated terminal, live preview, and vibe-engineering. Run a professional spec-driven design-to-code workflow — extract tokens, build components, preview in Storybook, and generate a design manifest. Your own Claude. Local-first."
     />
     <link rel="icon" type="image/png" href="./favicon.png" />
     <meta property="og:title" content="VortSpec — Spec-driven design-to-code" />
     <meta
       property="og:description"
-      content="A desktop cockpit over your local Claude Code. Anyone who can use Figma can run a professional spec-driven design-to-code workflow."
+      content="A desktop IDE over your local Claude Code. Anyone who can use Figma can run a professional spec-driven design-to-code workflow."
     />
     <meta property="og:image" content="./vortspec-logo.png" />
     <meta property="og:type" content="website" />
@@ -85,9 +85,6 @@
       .btn-primary:hover { filter: brightness(1.12); }
       .btn-ghost { background: transparent; color: var(--text); border-color: var(--border-strong); }
       .btn-ghost:hover { border-color: var(--accent); }
-      /* IDE download — an outlined accent button so both apps read as first-class */
-      .btn-ide { background: rgba(124,111,240,0.1); color: var(--text); border-color: var(--accent); }
-      .btn-ide:hover { background: rgba(124,111,240,0.18); }
       .btn-sm { padding: 9px 15px; font-size: 14px; border-radius: 8px; }
       .two-apps-note { font-size: 13px; color: var(--text-3); margin-bottom: 12px; }
 
@@ -175,18 +172,6 @@
       .card p { font-size: 14px; color: var(--text-2); line-height: 1.55; }
 
       /* two-app split */
-      .two { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 44px; }
-      @media (max-width: 760px) { .two { grid-template-columns: 1fr; } }
-      .appcard { border: 1px solid var(--border); background: var(--surface); border-radius: 14px; padding: 26px; }
-      .appcard.lead-card { border-color: rgba(124,111,240,0.34); }
-      .appcard .tag { display: inline-flex; align-items: center; gap: 7px; font-family: "Geist Mono", monospace; font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-2); border: 1px solid var(--border-strong); border-radius: 999px; padding: 3px 10px; margin-bottom: 14px; }
-      .appcard.lead-card .tag { color: var(--accent); border-color: rgba(124,111,240,0.4); background: rgba(124,111,240,0.08); }
-      .appcard h3 { font-size: 18px; font-weight: 600; margin-bottom: 8px; }
-      .appcard > p { font-size: 14.5px; color: var(--text-2); line-height: 1.55; margin-bottom: 16px; }
-      .appcard ul { list-style: none; display: flex; flex-direction: column; gap: 8px; }
-      .appcard li { display: flex; gap: 10px; align-items: flex-start; font-size: 13.5px; color: var(--text-2); }
-      .appcard li::before { content: ""; flex: none; width: 5px; height: 5px; margin-top: 8px; border-radius: 50%; background: var(--accent); opacity: 0.8; }
-      .appcard .who { margin-top: 16px; font-size: 12.5px; color: var(--text-3); }
 
       /* IDE window mock — reuses .shot; a two-pane editor + terminal strip */
       .shot .ide { display: grid; grid-template-columns: 40px 138px 1fr; min-height: 300px; }
@@ -265,7 +250,6 @@
           <div class="spacer"></div>
           <div class="links">
             <a href="#features">Features</a>
-            <a href="#apps">Two apps</a>
             <a href="#ide">The IDE</a>
             <a href="#how">How it works</a>
             <a href="#changelog">Changelog</a>
@@ -375,42 +359,9 @@
         </div>
       </section>
 
-      <!-- TWO APPS -->
+      <!-- IDE SHOWCASE -->
       <section id="apps">
         <div class="wrap">
-          <div class="eyebrow">Two apps, one engine</div>
-          <h2>Pick the cockpit or the code — same Claude, same gates</h2>
-          <p class="lead">
-            Both apps drive your <b>local Claude Code</b> through the exact same SDD-DE cycle and share
-            one core, so the spec-first gates, the design manifest, and every file on disk stay
-            identical. Start guided, drop into the IDE when you want to stay in code — nothing to
-            re-learn, nothing to migrate.
-          </p>
-          <div class="two">
-            <div class="appcard">
-              <span class="tag">Cockpit</span>
-              <h3>The guided flow</h3>
-              <p>Every step of the methodology is a clear screen with status — connect a source, build &amp; verify components, reconcile tokens, approve the manifest. The terminal is invisible, but never hidden.</p>
-              <ul>
-                <li>Design System workspace, Storybook Playground, token Inspector</li>
-                <li>Readable, approvable briefs, specs &amp; the design manifest</li>
-                <li>Live agent runs with the raw stream one click away</li>
-              </ul>
-              <p class="who">For designers &amp; anyone who wants the terminal out of the way.</p>
-            </div>
-            <div class="appcard lead-card">
-              <span class="tag"><span class="dot" style="width:6px;height:6px;border-radius:50%;background:var(--accent);display:inline-block"></span> IDE · new</span>
-              <h3>The VS Code–style workspace</h3>
-              <p>A full code cockpit for the same project: a Monaco editor and file tree, an integrated terminal, a live preview beside the editor, and vibe-engineering — an assistant grounded in the open file and running preview that edits code through the same gates.</p>
-              <ul>
-                <li>Monaco editor + file tree + Git diffs vs HEAD</li>
-                <li>Integrated terminal (your login shell, in the workspace)</li>
-                <li>Live preview pane — the running app or Storybook, hot-reloading</li>
-                <li>The SDD-DE pipeline panel, driven by the same core</li>
-              </ul>
-              <p class="who">For engineers &amp; anyone who wants to stay in the code.</p>
-            </div>
-          </div>
 
           <!-- IDE WINDOW MOCK -->
           <div class="shot" aria-hidden="true" style="margin-top:34px;">
@@ -531,7 +482,7 @@
         <div class="wrap">
           <div class="eyebrow">Changelog</div>
           <h2>What's new</h2>
-          <p class="lead">Recent releases. Both apps share one core, so every build moves the whole SDD-DE cycle forward at once.</p>
+          <p class="lead">Recent releases.</p>
           <div class="log">
             <div class="rel now">
               <div class="rel-head">
