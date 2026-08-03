@@ -354,8 +354,8 @@ export async function listLightPages(projectPath: string): Promise<string[]> {
  * visual-validate. Returns "" when there are no screens to convert (the caller disables the action).
  */
 export async function buildProjectGenerateCodePrompt(projectPath: string): Promise<string> {
-  const names = await listLightPages(projectPath);
-  return names.length ? buildGenerateCodePrompt(names) : "";
+  const [names, cfg] = await Promise.all([listLightPages(projectPath), readProjectConfig(projectPath).catch(() => null)]);
+  return names.length ? buildGenerateCodePrompt(names, cfg?.framework) : "";
 }
 
 /**
@@ -365,8 +365,8 @@ export async function buildProjectGenerateCodePrompt(projectPath: string): Promi
  * (framework from project.yaml, token discipline, validation) is identical. "" when the page is unknown.
  */
 export async function buildProjectConvertPagePrompt(projectPath: string, name: string): Promise<string> {
-  const names = await listLightPages(projectPath);
-  return names.includes(name) ? buildGenerateCodePrompt([name]) : "";
+  const [names, cfg] = await Promise.all([listLightPages(projectPath), readProjectConfig(projectPath).catch(() => null)]);
+  return names.includes(name) ? buildGenerateCodePrompt([name], cfg?.framework) : "";
 }
 
 // ── Per-page framework-generation state (Sitemap hammer/update icon) ──────────────────────────────

@@ -419,3 +419,24 @@ export function frameworkIdiomClause(framework?: string | null): string {
   lines.push(PRECEDENCE_CLAUSE);
   return lines.join("\n");
 }
+
+/** Whether VortSpec can generate for this framework — i.e. it has a profile. */
+export function isGeneratableFramework(framework?: string | null): boolean {
+  return idiomsFor(framework) !== null;
+}
+
+/**
+ * A human-readable reason generation cannot proceed, or `null` when it can.
+ *
+ * Exported so a CALLER can refuse before starting a run, rather than relying only on the
+ * prompt's STOP text. Prompt STOP is defense in depth — it is prose the model can read past —
+ * so anything that can gate earlier should use this.
+ */
+export function frameworkSupportError(framework?: string | null): string | null {
+  if (isGeneratableFramework(framework)) return null;
+  const shown = framework ? `"${framework}"` : "unset";
+  return (
+    `The project's framework is ${shown}, which VortSpec cannot generate for. ` +
+    `Run /setup and record one of: ${Object.keys(FRAMEWORK_PROFILES).join(", ")}.`
+  );
+}

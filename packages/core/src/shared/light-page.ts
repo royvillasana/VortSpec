@@ -8,7 +8,7 @@
  * Pure: builds the agent prompt + the on-disk contract. The agent (via the user's tools) composes and
  * writes the page; VortSpec never authors framework code here.
  */
-import { frameworkIdiomClause } from "./framework-profiles";
+import { frameworkIdiomClause, isGeneratableFramework } from "./framework-profiles";
 import { normSegment } from "./light-standin";
 import type { CompileResult } from "./compile";
 
@@ -124,6 +124,7 @@ export function buildConvertToFrameworkPrompt(
   compiled?: CompileResult,
   framework?: string | null,
 ): string {
+  if (!isGeneratableFramework(framework)) return frameworkIdiomClause(framework);
   return [
     `CONVERT the light page "${name}" into real framework code. The user is happy with the light preview —`,
     "now build the real thing, using the light page as the authoritative spec.",
@@ -158,15 +159,21 @@ export function buildConvertToFrameworkPrompt(
  * (AI review + visual comparison against each screen). The screens stay as the editable source of truth.
  * Framework-agnostic: the target framework/language/styling come from `.sdd-de/project.yaml`, NOT hardcoded.
  */
-export function buildGenerateCodePrompt(names: string[]): string {
+export function buildGenerateCodePrompt(names: string[], framework?: string | null): string {
+  // Structurally fail closed: an unsupported framework yields the STOP clause and NOTHING
+  // else. Appending STOP to a prompt that still carries implementation steps leaves the model
+  // instructions to follow past it; returning only STOP leaves it nothing to follow.
+  if (!isGeneratableFramework(framework)) return frameworkIdiomClause(framework);
   const list = names.map((n) => `  - \`${lightPagePath(n)}\`  (screen "${n}")`).join("\n");
   return [
     "GENERATE FRAMEWORK CODE for the screens the user built and approved in the Playground. Convert ALL of",
     "the screens below into real code in the framework the user selected during setup — this is the",
     "deliberate framework build, now that the user is ready.",
     "",
-    "FIRST, read `.sdd-de/project.yaml` for the target framework/language/styling (React, Vue, Svelte,",
-    "Angular, …) and the component/token paths. Produce code in THAT framework — do NOT default to React.",
+    "FIRST, read `.sdd-de/project.yaml` for the target framework/language/styling and the component/token",
+    "paths. Produce code in THAT framework — do NOT default to React.",
+    "",
+    frameworkIdiomClause(framework),
     "",
     "Screens to convert (each file is framework-free HTML/CSS/JS and is the AUTHORITATIVE spec — match its",
     "layout, content, and every `data-component=\"<Name>\"` usage exactly):",
@@ -177,7 +184,7 @@ export function buildGenerateCodePrompt(names: string[]): string {
     "   (entry, root, styling wired to the token file).",
     "2. For EACH `data-component` island across the screens, ensure the real component exists in the",
     "   configured framework — build any missing one from the design system (its Figma reference + tokens),",
-    "   following the project's component standards; REUSE components that already exist. (These may already",
+    "   following the FRAMEWORK CONTRACT above; REUSE components that already exist. (These may already",
     "   be built by the background component build — reuse them.)",
     "3. Compose each screen as a real framework page/route that uses those components and reproduces the",
     "   screen's layout + content. EVERY color/spacing/radius/type value MUST reference a design token.",

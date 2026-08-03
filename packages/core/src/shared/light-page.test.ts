@@ -60,7 +60,7 @@ describe("buildLightPagePrompt", () => {
 
 describe("buildConvertToFrameworkPrompt", () => {
   it("without a compile: builds the framework-first spec from the light HTML, no compile block", () => {
-    const p = buildConvertToFrameworkPrompt("Airbnb Landing");
+    const p = buildConvertToFrameworkPrompt("Airbnb Landing", undefined, "react");
     expect(p).toContain('CONVERT the light page "Airbnb Landing"');
     expect(p).toContain(lightPagePath("Airbnb Landing"));
     expect(p).not.toMatch(/DETERMINISTIC COMPILE/);
@@ -74,7 +74,7 @@ describe("buildConvertToFrameworkPrompt", () => {
   };
 
   it("with a clean compile: folds in the JSX as the authoritative structure + coverage + used components", () => {
-    const p = buildConvertToFrameworkPrompt("Airbnb Landing", compiled);
+    const p = buildConvertToFrameworkPrompt("Airbnb Landing", compiled, "react");
     expect(p).toMatch(/DETERMINISTIC COMPILE \(authoritative/);
     expect(p).toContain('var(--color-brand)');
     expect(p).toContain('<Button variant="primary" />');
@@ -89,19 +89,19 @@ describe("buildConvertToFrameworkPrompt", () => {
       lintIssues: ['padding: "16px" matches a design token but was emitted as a raw value'],
       deterministicCoverage: { ...compiled.deterministicCoverage, residual: ['unmapped token value "16px" on padding'] },
     };
-    const p = buildConvertToFrameworkPrompt("X", withResidual);
+    const p = buildConvertToFrameworkPrompt("X", withResidual, "react");
     expect(p).toMatch(/NEEDS YOUR JUDGMENT/);
     expect(p).toContain('unmapped token value "16px" on padding');
   });
 
   it("ignores an empty compile (no code) — same as no compile", () => {
     const empty: CompileResult = { code: "  ", usedComponents: [], lintIssues: [], deterministicCoverage: { tokensRestored: 0, literalsKept: 0, componentsMapped: 0, residual: [] } };
-    expect(buildConvertToFrameworkPrompt("X", empty)).not.toMatch(/DETERMINISTIC COMPILE/);
+    expect(buildConvertToFrameworkPrompt("X", empty, "react")).not.toMatch(/DETERMINISTIC COMPILE/);
   });
 });
 
 describe("buildGenerateCodePrompt", () => {
-  const p = buildGenerateCodePrompt(["Home", "Pricing"]);
+  const p = buildGenerateCodePrompt(["Home", "Pricing"], "react");
 
   it("targets the CONFIGURED framework, not hardcoded React", () => {
     expect(p).toMatch(/read `\.sdd-de\/project\.yaml` for the target framework/i);
@@ -127,5 +127,42 @@ describe("buildGenerateCodePrompt", () => {
     expect(p).toContain("data-island");
     expect(p).toMatch(/framework's idiomatic way|interactive component with the equivalent/i);
     expect(p).toMatch(/NOT a copied <script>/i);
+  });
+});
+
+describe("buildGenerateCodePrompt — the LIVE Playground 'Generate code' path", () => {
+  // This is the function `lite-source.ts` actually calls (buildProjectGenerateCodePrompt and
+  // buildProjectConvertPagePrompt). An earlier commit wired the contract into
+  // buildConvertToFrameworkPrompt, which has no production caller — so the live conversion
+  // from light pages into site/app framework code could still fall back to React habits.
+  it.each([
+    ["svelte", "$props()"],
+    ["angular", "(click)"],
+    ["vue", "defineProps"],
+  ])("carries the %s contract into the generated-code prompt", (framework, marker) => {
+    const p = buildGenerateCodePrompt(["home"], framework);
+    expect(p).toContain("FRAMEWORK CONTRACT");
+    expect(p).toContain(marker);
+    expect(p).toContain(".vortspec/light-pages/home.html");
+  });
+
+  it("refuses structurally on an unknown framework — STOP and nothing else to follow", () => {
+    // Appending STOP to a prompt that still carries implementation steps leaves the model
+    // instructions to read past. This returns ONLY the stop clause.
+    for (const f of ["brand-new-framework", undefined, null, ""] as const) {
+      const p = buildGenerateCodePrompt(["home"], f);
+      expect(p).toContain("STOP");
+      expect(p).toMatch(/Do NOT generate any component/);
+      // None of the build steps survive.
+      expect(p).not.toContain("scaffold");
+      expect(p).not.toContain("VISUAL-VALIDATE");
+      expect(p).not.toContain(".vortspec/light-pages/home.html");
+    }
+  });
+
+  it("applies the same structural refusal to the single-page convert prompt", () => {
+    const p = buildConvertToFrameworkPrompt("home", undefined, "not-a-framework");
+    expect(p).toContain("STOP");
+    expect(p).not.toContain("scaffold");
   });
 });
