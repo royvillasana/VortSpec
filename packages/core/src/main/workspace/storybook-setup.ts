@@ -3,6 +3,13 @@ import { existsSync, type Dirent } from "node:fs";
 import { readFile, writeFile, readdir } from "node:fs/promises";
 import { join, dirname, normalize } from "node:path";
 import { readProjectConfig } from "./config-manager";
+import { normComponentName } from "../inspector/figma-reconcile";
+import {
+  isNonComponentStem,
+  profileFor,
+  sourceExtsFor,
+  stripFileSuffix,
+} from "@vortspec/core/framework-profiles";
 
 /**
  * Deterministic Storybook provisioning — the cockpit's backstop so the Playground
@@ -29,11 +36,9 @@ export interface StorybookReadiness {
 }
 
 const STORY_RE = /\.stories\.(tsx|ts|jsx|js|mdx|svelte|vue)$/i;
-// Counts source files to report how much of the library still lacks stories. It omitted
-// `.astro` and `.html`, so an Astro or vanilla project reported zero components and the
-// coverage number was meaningless. Kept as a regex (this is a filename test, not a lookup)
-// but widened to the same set the shared profile table declares.
-const COMPONENT_RE = /\.(tsx|jsx|vue|svelte|astro|html)$/i;
+// Component extensions are no longer a local regex — `storyGap` derives them per framework
+// from the shared profile table, so an Angular `.html` template is never mistaken for a
+// component and a vanilla `.js` partial is never missed.
 
 /**
  * Map the project's framework to `storybook init --type`. Storybook auto-detects
@@ -107,19 +112,95 @@ export async function storybookReadiness(projectPath: string): Promise<Storybook
   return { installed: hasScript && hasConfig, hasConfig, hasScript, storyCount };
 }
 
+/** Every filename under `dir`, bounded, skipping deps and dot-dirs. */
+async function collectFilenames(dir: string, budget = { n: 8000 }, out: string[] = []): Promise<string[]> {
+  if (budget.n <= 0) return out;
+  let entries: Dirent[];
+  try {
+    entries = await readdir(dir, { withFileTypes: true });
+  } catch {
+    return out;
+  }
+  for (const e of entries) {
+    if (budget.n <= 0) break;
+    if (e.name.startsWith(".") || e.name === "node_modules") continue;
+    budget.n--;
+    if (e.isDirectory()) await collectFilenames(join(dir, e.name), budget, out);
+    else out.push(e.name);
+  }
+  return out;
+}
+
+/** Split a filename into its stem and matched extension, or null when no extension applies. */
+function splitStem(filename: string, exts: readonly string[]): string | null {
+  const ext = exts.find((e) => filename.toLowerCase().endsWith(e));
+  return ext ? filename.slice(0, -ext.length) : null;
+}
+
 /**
- * How many built components have no story yet — the reliability signal behind
- * "a component exists ⇒ Storybook shows it". Counts source components under the
- * component dir minus story files. Never negative.
+ * How many built components have no story yet — the reliability signal behind "a component
+ * exists ⇒ Storybook shows it".
+ *
+ * Counts by ROSTER IDENTITY when `.sdd-de/components.json` exists: a component counts when a
+ * file on disk resolves to its name, and it has a story when a `<name>.stories.*` resolves to
+ * it. The previous implementation subtracted story-file totals from source-file totals, which
+ * is wrong in both directions — an Angular project counted every `button.component.html`
+ * TEMPLATE as its own component while missing the `.ts` that is the actual component, and any
+ * stray HTML inflated the total. Without a roster it falls back to counting files, but still
+ * framework-scoped and still excluding stories/specs/modules.
  */
 export async function storyGap(projectPath: string): Promise<{ components: number; stories: number; missing: number }> {
   const cfg = await readProjectConfig(projectPath).catch(() => null);
   const componentDir = join(projectPath, cfg?.componentDir || "src");
-  const stories = await countFiles(componentDir, STORY_RE);
-  // Components = source files that aren't themselves stories.
-  const allSource = await countFiles(componentDir, COMPONENT_RE);
-  const components = Math.max(0, allSource - stories);
-  return { components, stories, missing: Math.max(0, components - stories) };
+  const profile = profileFor(cfg?.framework);
+  const exts = sourceExtsFor(cfg?.framework);
+
+  const filenames = await collectFilenames(componentDir);
+  const stories = filenames.filter((f) => STORY_RE.test(f)).length;
+
+  // Component candidates: right extension, and not a story/spec/module sibling.
+  const componentStems = new Map<string, true>();
+  for (const f of filenames) {
+    const stem = splitStem(f, exts);
+    if (stem === null || isNonComponentStem(stem, profile)) continue;
+    componentStems.set(normComponentName(stripFileSuffix(stem)), true);
+  }
+
+  const roster = await readRosterNames(projectPath);
+  if (roster.length === 0) {
+    const components = componentStems.size;
+    return { components, stories, missing: Math.max(0, components - stories) };
+  }
+
+  // Roster-identity counting: a story belongs to a component only when it names it.
+  const storyStems = new Set(
+    filenames
+      .filter((f) => STORY_RE.test(f))
+      .map((f) => normComponentName(f.replace(STORY_RE, ""))),
+  );
+  let built = 0;
+  let storied = 0;
+  for (const name of roster) {
+    const norm = normComponentName(name);
+    if (!componentStems.has(norm)) continue;
+    built += 1;
+    if (storyStems.has(norm)) storied += 1;
+  }
+  return { components: built, stories: storied, missing: Math.max(0, built - storied) };
+}
+
+/** Component names from `.sdd-de/components.json`, or `[]` when there is no roster. */
+async function readRosterNames(projectPath: string): Promise<string[]> {
+  try {
+    const raw = await readFile(join(projectPath, ".sdd-de", "components.json"), "utf8");
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .map((e) => (e && typeof e === "object" ? (e as { name?: unknown }).name : null))
+      .filter((n): n is string => typeof n === "string" && n.length > 0);
+  } catch {
+    return [];
+  }
 }
 
 /** Non-interactive env for `storybook init` (CI + no telemetry so it never prompts). */

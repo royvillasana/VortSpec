@@ -9,7 +9,7 @@
  * procedure here changes it in both apps at once (the binding invariant of the
  * two-app model).
  */
-import { typecheckCmdFor } from "./framework-profiles";
+import { resolveTypecheck } from "./framework-profiles";
 
 export function buildOnePrompt(name: string, level?: string): string {
   return (
@@ -374,11 +374,24 @@ export const RESUME_PROMPT =
  * A framework with no meaningful check says so rather than running a command that lies.
  */
 function typecheckClause(framework?: string | null): string {
-  const cmd = typecheckCmdFor(framework);
-  return cmd
-    ? `run the project's framework-native type-check — '${cmd}' — and, for a Storybook/`
-    : `this framework has NO type-check step, so report CODE as not-applicable and say so explicitly — ` +
-        `do NOT substitute 'npx tsc --noEmit', which would pass without reading the component. Instead, for a Storybook/`;
+  const r = resolveTypecheck(framework);
+  if (r.kind === "cmd") {
+    return `run the project's framework-native type-check — '${r.cmd}' — and, for a Storybook/`;
+  }
+  // Both remaining outcomes mean "we could not check". Neither may be reported as a pass:
+  // an unrunnable check is BLOCKED, and BLOCKED propagates to Layer 1 exactly as a failure
+  // does. Substituting `tsc` here is what made six frameworks report green on code that had
+  // never been compiled.
+  const why =
+    r.kind === "none"
+      ? `this project's framework (${r.framework}) has NO type-check step that could fail`
+      : `this project's framework is missing or unrecognized (${r.framework ?? "unset"}), so there is no ` +
+        `checker that is known to read its files`;
+  return (
+    `${why} — report 'CODE: blocked', name the reason, and do NOT substitute 'npx tsc --noEmit' or any ` +
+    `other checker: one that cannot parse the component passes without reading it, which is a FALSE pass, ` +
+    `not a green layer. A blocked CODE layer blocks Layer 1 exactly as a failing one does. Still, for a Storybook/`
+  );
 }
 
 export function verifyPrompt(

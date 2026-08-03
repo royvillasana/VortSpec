@@ -3,9 +3,11 @@ import { frameworkSchema } from "./setup";
 import {
   ALL_SOURCE_EXTS,
   FRAMEWORK_PROFILES,
+  isNonComponentStem,
   profileFor,
+  resolveTypecheck,
+  sourceExtsFor,
   stripFileSuffix,
-  typecheckCmdFor,
 } from "./framework-profiles";
 
 const FRAMEWORKS = frameworkSchema.options;
@@ -35,38 +37,103 @@ describe("FRAMEWORK_PROFILES", () => {
   });
 });
 
-describe("typecheckCmdFor", () => {
+describe("resolveTypecheck", () => {
   // The regression this whole change exists for: `tsc` cannot parse these at all, so the
   // CODE layer used to pass without reading a single line of the component.
   it.each([
     ["vue", "vue-tsc"],
-    ["nuxt", "vue-tsc"],
+    ["nuxt", "nuxi typecheck"],
     ["svelte", "svelte-check"],
     ["sveltekit", "svelte-check"],
     ["astro", "astro check"],
   ])("gives %s a checker that can actually parse its files (%s)", (framework, expected) => {
-    const cmd = typecheckCmdFor(framework);
-    expect(cmd).toContain(expected);
+    const r = resolveTypecheck(framework);
+    expect(r.kind).toBe("cmd");
+    expect(r.kind === "cmd" && r.cmd).toContain(expected);
     // Anchored on the BARE invocation: `npx vue-tsc` legitimately contains "tsc --noEmit".
-    expect(cmd).not.toContain("npx tsc");
+    expect(r.kind === "cmd" && r.cmd).not.toContain("npx tsc ");
+  });
+
+  it("does not settle for bare vue-tsc on Nuxt, whose generated types it would miss", () => {
+    const r = resolveTypecheck("nuxt");
+    expect(r.kind === "cmd" && r.cmd).not.toBe("npx vue-tsc --noEmit");
   });
 
   it("checks Angular with a build, because tsc never reads the template", () => {
-    expect(typecheckCmdFor("angular")).toContain("ng build");
+    const r = resolveTypecheck("angular");
+    expect(r.kind === "cmd" && r.cmd).toContain("ng build");
   });
 
   it("keeps plain tsc for the frameworks whose components really are .ts/.tsx", () => {
-    expect(typecheckCmdFor("react")).toBe("npx tsc --noEmit");
-    expect(typecheckCmdFor("next")).toBe("npx tsc --noEmit");
+    expect(resolveTypecheck("react")).toEqual({ kind: "cmd", cmd: "npx tsc --noEmit" });
+    expect(resolveTypecheck("next")).toEqual({ kind: "cmd", cmd: "npx tsc --noEmit" });
   });
 
-  it("returns null rather than a lying command when there is no check", () => {
-    expect(typecheckCmdFor("vanilla")).toBeNull();
+  // FAIL CLOSED. These three are the whole point: a check that cannot run must be
+  // distinguishable from a check that passed, or we rebuild the false-green class one layer up.
+  it("reports vanilla as having NO check rather than inventing one", () => {
+    expect(resolveTypecheck("vanilla")).toEqual({ kind: "none", framework: "vanilla" });
   });
 
-  it("falls back to React for an unset or unknown framework", () => {
-    expect(typecheckCmdFor(undefined)).toBe("npx tsc --noEmit");
-    expect(typecheckCmdFor("brand-new-framework")).toBe("npx tsc --noEmit");
+  it("fails closed on an unknown framework instead of quietly running React's tsc", () => {
+    const r = resolveTypecheck("brand-new-framework");
+    expect(r.kind).toBe("unknown");
+    expect(JSON.stringify(r)).not.toContain("tsc");
+  });
+
+  it("fails closed when no framework is configured at all", () => {
+    expect(resolveTypecheck(undefined)).toEqual({ kind: "unknown", framework: null });
+    expect(resolveTypecheck("")).toEqual({ kind: "unknown", framework: null });
+  });
+});
+
+describe("fail-closed vs fail-open", () => {
+  it("refuses a profile for an unknown framework", () => {
+    expect(profileFor("brand-new-framework")).toBeNull();
+    expect(profileFor(undefined)).toBeNull();
+  });
+
+  it("still SEARCHES widely for an unknown framework — a wide net cannot fake a pass", () => {
+    // Deliberate asymmetry: claims fail closed, file search falls back to the union.
+    expect(sourceExtsFor("brand-new-framework")).toEqual(ALL_SOURCE_EXTS);
+    expect(sourceExtsFor("angular")).toEqual([".ts"]);
+  });
+});
+
+describe("component vs sibling files", () => {
+  it("does not treat an Angular template as a component", () => {
+    // `.html` is a vanilla component but an Angular TEMPLATE; scoping by framework is what
+    // stops every `button.component.html` counting as its own component.
+    expect(FRAMEWORK_PROFILES.angular.sourceExts).not.toContain(".html");
+    expect(FRAMEWORK_PROFILES.vanilla.sourceExts).toContain(".html");
+  });
+
+  it.each([["button.stories"], ["button.test"], ["button.variants"]])(
+    "excludes %s from component counts in every framework",
+    (stem) => {
+      expect(isNonComponentStem(stem)).toBe(true);
+    },
+  );
+
+  it("excludes Angular's module/service siblings but keeps the component itself", () => {
+    const angular = FRAMEWORK_PROFILES.angular;
+    expect(isNonComponentStem("app.module", angular)).toBe(true);
+    expect(isNonComponentStem("data.service", angular)).toBe(true);
+    expect(isNonComponentStem("button.component", angular)).toBe(false);
+  });
+});
+
+describe("the table is immutable and exhaustive", () => {
+  it("is frozen, so one consumer cannot mutate another's profile", () => {
+    expect(Object.isFrozen(FRAMEWORK_PROFILES)).toBe(true);
+    for (const f of FRAMEWORKS) expect(Object.isFrozen(FRAMEWORK_PROFILES[f])).toBe(true);
+  });
+
+  it("gives each framework its own record, so editing one never changes another", () => {
+    // Vue and Nuxt looked identical until Nuxt needed `nuxi typecheck`; shared identity would
+    // have made that edit silently change Vue too.
+    expect(FRAMEWORK_PROFILES.vue).not.toBe(FRAMEWORK_PROFILES.nuxt);
+    expect(FRAMEWORK_PROFILES.react).not.toBe(FRAMEWORK_PROFILES.next);
   });
 });
 
@@ -90,7 +157,11 @@ describe("stripFileSuffix", () => {
 
 describe("profileFor", () => {
   it("covers Astro and vanilla component files, which the old local list dropped", () => {
-    expect(profileFor("astro").sourceExts).toContain(".astro");
-    expect(profileFor("vanilla").sourceExts).toContain(".html");
+    expect(profileFor("astro")?.sourceExts).toContain(".astro");
+    expect(profileFor("vanilla")?.sourceExts).toContain(".html");
+  });
+
+  it("is case-insensitive, so a capitalized project.yaml value still resolves", () => {
+    expect(profileFor("Svelte")?.typecheckCmd).toContain("svelte-check");
   });
 });
