@@ -140,6 +140,17 @@ d("the real toolkit docs (@royvillasana/sdd-de)", () => {
     expect(out).toMatch(/only for a component\s*\n?that actually exposes a ref|actually exposes a ref/);
   });
 
+  it("is idempotent — a second pass must not duplicate the React 18 block", () => {
+    // Thor's non-blocking note. Production recopies pristine toolkit files before transforming,
+    // so it never hits this — but `linkFrameworkRulesInClaudeMd` is already idempotent and an
+    // inconsistent contract inside one module is a trap for whoever reuses the helper next.
+    if (!has("styling-best-practices.md")) return;
+    const once = scoped("styling-best-practices.md", "react");
+    expect(scopeReactRefExamples(once, "react")).toBe(once);
+    expect(once.split("React 18 and earlier only").length - 1).toBe(1);
+    expect(once.split("React 19+ (the default)").length - 1).toBe(1);
+  });
+
   it("does not version-scope examples for the other seven", () => {
     for (const f of frameworkSchema.options) {
       if (f === "react" || f === "next") continue;

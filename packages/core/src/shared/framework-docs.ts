@@ -351,6 +351,9 @@ export function scopeReactRefMandate(markdown: string, framework?: string | null
  * fail loudly rather than passing a no-op through.
  */
 
+/** Marks an already-transformed document, so a second pass is a no-op rather than a duplicate. */
+const REACT19_MARKER = "React 19+ (the default)";
+
 /** The default (React 19+) implementation sample, plus the older form kept clearly labelled. */
 const REACT19_IMPLEMENTATION = `\`\`\`tsx
 // Button.tsx — React 19+ (the default). \`ref\` is an ordinary prop; no wrapper is needed.
@@ -395,6 +398,13 @@ export { Button };
  */
 export function scopeReactRefExamples(markdown: string, framework?: string | null): string {
   if (!REACT_FAMILY.has((framework ?? "").toLowerCase())) return markdown;
+  // Idempotence guard (Thor's maintainability note on cfcc602a). The block replacement is
+  // anchored on "### Component implementation" + the next fenced block — and after one pass
+  // that fenced block is MY React 19 sample, so a second pass would replace it with itself and
+  // duplicate the trailing React 18 section. Setup/resync recopy pristine toolkit files before
+  // transforming, so production never reaches that state; this makes the helper safe to reuse
+  // in-place anyway, and matches linkFrameworkRulesInClaudeMd(), which is already idempotent.
+  if (markdown.includes(REACT19_MARKER)) return markdown;
   let out = markdown;
 
   // 1. The `✓ GOOD` export sample. Its POINT is named-vs-default export, so the wrapper is
