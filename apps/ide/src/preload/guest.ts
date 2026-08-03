@@ -1106,7 +1106,7 @@ function handleCommand(cmd: BridgeCommand): void {
       const cs = getComputedStyle(root);
       const tokens: Record<string, string> = {};
       for (const n of names) tokens[n] = cs.getPropertyValue(`--${n}`).trim();
-      send({ t: "subtreeTokens", nodeId: cmd.nodeId, tokens });
+      send({ t: "subtreeTokens", nodeId: cmd.nodeId, tokens, elements: els.length });
       return;
     }
     case "matchElements": {

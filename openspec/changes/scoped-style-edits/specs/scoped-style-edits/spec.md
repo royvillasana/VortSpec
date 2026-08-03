@@ -355,11 +355,13 @@ SHALL write the token itself.
 - **THEN** editing a token SHALL change the design system, with no question
 
 
-### Requirement: A selected component's applied styles are shown together, under its name
+### Requirement: A selected element's applied styles are shown together, under its name
 
-The design-system surface SHALL lead with the selected component's own styles — under the component's
-name, grouped by kind, each group stating how many tokens it applies and rendering them as the same
-visual tiles the design system uses.
+The design-system surface SHALL lead with the selected element's own styles — under its name, grouped by
+kind, each group stating how many tokens it applies and rendering them as the same visual tiles the design
+system uses. This SHALL apply to ANY selected element, not only to design-system components: a page is
+mostly plain elements, and "what is this made of?" is as valid a question about a container as about a
+Card. An element carrying a component name SHALL be headed by that name; any other by its own label.
 
 Marking tokens in place answers "is this one used?" but not "what is this component made of?" — the
 answer is scattered across five sections of a list hundreds of rows long, and reading it means hunting
@@ -392,3 +394,42 @@ lead, not a filter: the design system is the same design system whatever is sele
 #### Scenario: Nothing selected, nothing led with
 - **WHEN** no component is selected
 - **THEN** no component view SHALL be shown and the surface SHALL read as it did before
+
+
+### Requirement: The applied view states its own breadth
+
+The applied view SHALL state how many tokens it is reporting and over how many elements.
+
+The reading walks the selection's descendants, so it grows less informative the higher the selection sits:
+selecting a page root reports the whole design system, which is true and useless. Stating the breadth lets
+an over-broad selection explain itself, which is better than a threshold that silently collapses the view
+— any such threshold would be wrong for someone.
+
+#### Scenario: Breadth is shown
+- **WHEN** the applied view reports tokens for a selection
+- **THEN** it SHALL state the token count and the number of elements walked
+
+#### Scenario: An over-broad selection is legible, not truncated
+- **WHEN** the user selects a container covering most of the page
+- **THEN** the view SHALL still report what that selection uses, with its breadth stated
+- **AND** it SHALL NOT silently omit tokens to stay small
+
+### Requirement: The component-scoped write needs a real component identity
+
+The choice between changing one component and changing the design system SHALL be offered only when the
+selection carries a component identity. For any other element, editing a token SHALL change the design
+system, with no middle option offered.
+
+A component-scoped override is written against `data-component`, which is durable: it exists on every
+page and survives a re-render. A plain element has no equivalent — writing against its class would bind
+the design system to one page's markup, and would then stop applying silently when that markup changed.
+Withholding the option is better than offering one that fails quietly and later.
+
+#### Scenario: A plain element is offered no middle option
+- **WHEN** the user edits a token with a plain container selected
+- **THEN** no "only this" choice SHALL be offered
+- **AND** the edit SHALL change the design system
+
+#### Scenario: A component still gets the choice
+- **WHEN** the selection carries a component name
+- **THEN** the choice between that component and the design system SHALL be offered as before

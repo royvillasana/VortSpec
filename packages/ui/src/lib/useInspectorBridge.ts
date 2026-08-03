@@ -54,8 +54,10 @@ export interface InspectorBridge {
   readouts: Record<string, NodeReadout>;
   /** The in-flight marquee rectangle, in guest coords, or null when no drag is running. */
   marquee: Rect | null;
-  /** Tokens the selected component AND its parts use, token → value on the component. */
+  /** Tokens the selection AND its parts use, token → value on the selection. */
   subtreeTokens: Record<string, string>;
+  /** How many elements the last subtree walk covered — the breadth of what `subtreeTokens` reports. */
+  subtreeElements: number;
   hoveredId: string | null;
   /** Live rectangles keyed by node id (updated on readout/geometry) for the overlay. */
   rects: Record<string, Rect>;
@@ -204,6 +206,7 @@ export function useInspectorBridge(): InspectorBridge {
   const [readouts, setReadouts] = useState<Record<string, NodeReadout>>({});
   const [marquee, setMarquee] = useState<Rect | null>(null);
   const [subtreeTokens, setSubtreeTokens] = useState<Record<string, string>>({});
+  const [subtreeElements, setSubtreeElements] = useState(0);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [rects, setRects] = useState<Record<string, Rect>>({});
   const [runtimeError, setRuntimeError] = useState<InspectorBridge["runtimeError"]>(null);
@@ -272,6 +275,7 @@ export function useInspectorBridge(): InspectorBridge {
       }
       case "subtreeTokens":
         setSubtreeTokens(event.tokens);
+        setSubtreeElements(event.elements);
         return;
       case "marquee":
         setMarquee(event.rect);
@@ -636,6 +640,7 @@ export function useInspectorBridge(): InspectorBridge {
     selectMatching,
     marquee,
     subtreeTokens,
+    subtreeElements,
     requestSubtreeTokens,
     hoveredId,
     rects,

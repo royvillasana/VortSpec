@@ -2457,6 +2457,8 @@ export function RunApp({
               onEdited={refresh}
               tokensInUse={selectionTokens}
               selectedComponent={selection?.component ?? null}
+              selectionLabel={selection?.label ?? null}
+              selectionElements={bridge.subtreeElements}
             />
           }
           selection={selection}

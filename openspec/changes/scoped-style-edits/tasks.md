@@ -113,6 +113,13 @@
 - [x] 13.5 Keep the full design system below, unchanged in content and order.
 - [x] 13.6 Tests: grouping and counts; a kind with nothing is absent; editing from the view asks how far; the design system below is untouched.
 
+## 14. Applied styles for any element
+
+- [x] 14.1 Show the applied view for ANY selected element, headed by its component name when it has one and by its own label otherwise.
+- [x] 14.2 Report the breadth — token count and elements walked — so an over-broad selection explains itself instead of being silently truncated.
+- [x] 14.3 Keep the how-far question gated on a real component identity; a plain element edits the design system with no middle option.
+- [x] 14.4 Tests: a plain element gets the view and no question; a component gets both; the breadth is stated.
+
 ## 8. Verification
 
 - [x] 8.1 Full unit and component suites green across `packages/core`, `packages/ui`, and `apps/ide`. (core 1064, ui 182, CT 138 passed. 35 CT failures are PRE-EXISTING — verified by stashing every change and re-running: baseline is 35 failed / 136 passed, with the change 35 failed / 138 passed.)

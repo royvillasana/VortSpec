@@ -32,6 +32,8 @@ export function LibraryPanel({
   onEdited,
   tokensInUse,
   selectedComponent,
+  selectionLabel,
+  selectionElements = 0,
 }: {
   project: Project;
   /** Called after a committed edit, so whatever is previewed beside this panel reloads. */
@@ -48,8 +50,17 @@ export function LibraryPanel({
    * serialized and a Map arrives empty.
    */
   tokensInUse?: Readonly<Record<string, string>>;
-  /** The selected component's name, when one is selected — what "this component only" would mean. */
+  /**
+   * The selected element's component name, when it HAS one. This is what gates the "only this component"
+   * write: it is written against `data-component`, which is durable — it exists on every page and
+   * survives a re-render. A plain element has no equivalent, and writing against its class would bind the
+   * design system to one page's markup and then stop applying silently when that markup changed.
+   */
   selectedComponent?: string | null;
+  /** What to head the applied view with when the selection carries no component name. */
+  selectionLabel?: string | null;
+  /** How many elements the applied view's reading covered — stated so a broad selection explains itself. */
+  selectionElements?: number;
 }): React.JSX.Element {
   const [model, setModel] = useState<DesignSystemLibrary | null>(null);
   // Where the SCREENS differ, keyed by token so each row can offer its own adopt.
@@ -74,12 +85,13 @@ export function LibraryPanel({
    * Same rows, same tiles — collected under the component instead of scattered across five sections of a
    * list hundreds of rows long. Marking answers "is this one used?"; this answers "what is this made of?".
    */
+  const appliedHeading = selectedComponent ?? selectionLabel ?? null;
   const componentSections = useMemo(() => {
-    if (!model || !selectedComponent) return [];
+    if (!model || !(selectedComponent || selectionLabel)) return [];
     return model.sections
       .map((sec) => ({ ...sec, rows: sec.rows.filter((r) => inUseSet.has(r.token)) }))
       .filter((sec) => sec.rows.length > 0);
-  }, [model, selectedComponent, inUseSet]);
+  }, [model, selectedComponent, selectionLabel, inUseSet]);
 
   /** The selection's tokens this design system does not define — the drift, named. */
   const unmapped = useMemo(() => {
@@ -354,16 +366,24 @@ export function LibraryPanel({
               onCancel={() => setPendingScope(null)}
             />
           )}
-          {selectedComponent && componentSections.length > 0 && (
+          {appliedHeading && componentSections.length > 0 && (
             <section
-              aria-label={`Applied styles: ${selectedComponent}`}
+              aria-label={`Applied styles: ${appliedHeading}`}
               className="border-b border-vs-border-default"
             >
               <div className="px-3 pb-1 pt-2">
                 <div className="text-[10px] uppercase tracking-[0.06em] text-vs-text-muted">
                   Applied styles
                 </div>
-                <div className="text-[13px] font-semibold text-vs-text-primary">{selectedComponent}</div>
+                <div className="text-[13px] font-semibold text-vs-text-primary">{appliedHeading}</div>
+                {/* The reading walks the selection's descendants, so it grows less informative the higher
+                    the selection sits. Stating the breadth lets an over-broad selection explain itself,
+                    which beats a threshold that silently collapses the view — any threshold would be
+                    wrong for someone. */}
+                <div className="font-mono text-[9.5px] text-vs-text-muted">
+                  {`${Object.keys(tokensInUse ?? {}).length} tokens`}
+                  {selectionElements > 0 && ` · ${selectionElements} element${selectionElements === 1 ? "" : "s"}`}
+                </div>
               </div>
               {componentSections.map((section) => (
                 <div key={`applied-${section.section}`} className="pb-1">

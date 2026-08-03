@@ -465,7 +465,13 @@ export const bridgeEventSchema = z.discriminatedUnion("t", [
   /** Readouts for a `readoutMany` query. Members that no longer resolve are simply absent. */
   z.object({ t: z.literal("readouts"), readouts: z.array(nodeReadoutSchema) }),
   /** Token names used by a subtree, with the value each resolves to on the selected node. */
-  z.object({ t: z.literal("subtreeTokens"), nodeId: z.string(), tokens: z.record(z.string(), z.string()) }),
+  z.object({
+    t: z.literal("subtreeTokens"),
+    nodeId: z.string(),
+    tokens: z.record(z.string(), z.string()),
+    /** How many elements were walked — the view states this so an over-broad selection explains itself. */
+    elements: z.number(),
+  }),
   /** The in-flight marquee rectangle in guest coords, or null when the drag ends. */
   z.object({ t: z.literal("marquee"), rect: rectSchema.nullable() }),
   /** The marquee's result: the outermost elements it enclosed. `additive` extends the current set. */

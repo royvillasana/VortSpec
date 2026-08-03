@@ -300,3 +300,66 @@ test("nothing selected, nothing led with", async ({ mount }) => {
   const c = await mount(<LibraryPanel project={PROJECT} onEdited={() => {}} />);
   await expect(c.getByText("Applied styles")).toHaveCount(0);
 });
+
+test("a plain element gets the applied view too, headed by its own label", async ({ mount }) => {
+  // A page is mostly plain elements — 16 component names against hundreds of nodes. Gating the view on
+  // `data-component` would leave it off most of the time, for no reason a user can perceive.
+  const c = await mount(
+    <LibraryPanel
+      project={PROJECT}
+      onEdited={() => {}}
+      tokensInUse={{ "color-accent": "#262626" }}
+      selectionLabel="div.wrap"
+      selectionElements={12}
+    />,
+  );
+
+  await expect(c.getByRole("region", { name: "Applied styles: div.wrap" })).toBeVisible();
+  // And it states its own breadth, so an over-broad selection explains itself rather than being truncated.
+  await expect(c.getByText("1 tokens · 12 elements")).toBeVisible();
+});
+
+test("a plain element is offered no middle option — there is nothing durable to write against", async ({
+  mount,
+}) => {
+  // A component-scoped override is written against `data-component`, which survives a re-render and
+  // exists on every page. A class is neither, so offering "only these" would fail quietly and later.
+  const c = await mount(
+    <LibraryPanel
+      project={PROJECT}
+      onEdited={() => {}}
+      tokensInUse={{ "radius-card": "20px" }}
+      selectionLabel="div.grid"
+    />,
+  );
+
+  const applied = c.getByRole("region", { name: "Applied styles: div.grid" });
+  await applied.getByLabel(/^radius-card:/).click();
+  const input = applied.getByLabel("radius-card", { exact: true });
+  await input.fill("4px");
+  await input.blur();
+
+  await expect(c.getByRole("alertdialog")).toHaveCount(0);
+  await expect(input).toHaveValue("4px");
+});
+
+test("a component still gets both the view and the question", async ({ mount }) => {
+  const c = await mount(
+    <LibraryPanel
+      project={PROJECT}
+      onEdited={() => {}}
+      tokensInUse={{ "radius-card": "20px" }}
+      selectedComponent="Card"
+      selectionLabel="div.product"
+    />,
+  );
+
+  // The component name wins the heading over the element label.
+  await expect(c.getByRole("region", { name: "Applied styles: Card" })).toBeVisible();
+
+  const applied = c.getByRole("region", { name: "Applied styles: Card" });
+  await applied.getByLabel(/^radius-card:/).click();
+  await applied.getByLabel("radius-card", { exact: true }).fill("4px");
+  await applied.getByLabel("radius-card", { exact: true }).blur();
+  await expect(c.getByRole("alertdialog", { name: /Apply --radius-card/ })).toBeVisible();
+});
