@@ -125,10 +125,29 @@ describe("idioms — the authoring half of the profile", () => {
     }
   });
 
-  it("warns Svelte off external variant modules, which the compiler strips as unused CSS", () => {
-    const v = FRAMEWORK_PROFILES.svelte.idioms.variants;
-    expect(v).toMatch(/external module/);
-    expect(v).toMatch(/unused CSS/);
+  it("does not repeat the refuted claim that Svelte strips helper-built classes", () => {
+    // I asserted three times that a class built in an external module gets stripped and the
+    // component ships unstyled, and made `class:` a requirement on that basis. Bumble compiled
+    // both shapes on svelte 5.56.8: nothing is stripped either way, and a live-pruner control
+    // proved the negative real. Pinned so the myth cannot come back.
+    // Evidence: RESEARCH/VORTSPEC_SVELTE_FIXTURE_2026-08-04.md
+    for (const f of ["svelte", "sveltekit"]) {
+      const v = FRAMEWORK_PROFILES[f].idioms.variants;
+      expect(v, `${f} still claims stripping`).not.toMatch(/is stripped as unused CSS/);
+      expect(v, `${f} still claims it renders unstyled`).not.toMatch(/renders unstyled/);
+    }
+  });
+
+  it("keeps the class: recommendation on its true benefit", () => {
+    // The recommendation is still right — it keeps the unused-CSS analysis active — but it is a
+    // preference for a safety net, not a correctness requirement.
+    for (const f of ["svelte", "sveltekit"]) {
+      const v = FRAMEWORK_PROFILES[f].idioms.variants;
+      expect(v).toMatch(/class:/);
+      expect(v).toMatch(/statically visible/);
+      expect(v).toMatch(/switches that analysis OFF|disables/i);
+      expect(v).toMatch(/not a correctness requirement/);
+    }
   });
 
   it("tells Angular its event binding is (click), not Vue's @click", () => {

@@ -314,7 +314,9 @@ describe("build prompts state the framework's conventions (change: framework-pro
     expect(p).toContain("$props()");
     expect(p).toContain("class:");
     expect(p).toContain("data-variant");
-    // The regression: CVA in an external module is what strips Svelte's scoped CSS.
+    // Not because an external module strips the CSS — that claim was refuted on svelte 5.56.8
+    // (RESEARCH/VORTSPEC_SVELTE_FIXTURE_2026-08-04.md) — but because CVA is React's idiom and
+    // the Svelte contract should name Svelte's.
     expect(p).not.toContain("class-variance-authority");
   });
 

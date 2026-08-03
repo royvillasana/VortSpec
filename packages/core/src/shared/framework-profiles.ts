@@ -116,13 +116,23 @@ const SVELTE_BASE = {
     "Svelte 5 uses plain attributes (`onclick={…}`). The `on:click` directive is Svelte 4 and is REMOVED in Svelte 5+ — " +
     "check the installed version",
   slots: "Svelte 5 snippets — `{@render children?.()}`. `<slot />` is the Svelte 4 form",
+  // CORRECTED 2026-08-04. This field previously claimed that a class name built in an external
+  // module is invisible to the compiler, so its `<style>` rules are stripped and the component
+  // ships unstyled — and made `class:` a REQUIREMENT on that basis. Bumble compiled both shapes
+  // on svelte 5.56.8 and the claim is false: nothing is stripped either way. The mechanism is the
+  // opposite of what I asserted — a dynamic `class` expression makes every selector
+  // unprovably-unused, which DISABLES pruning rather than triggering it. A control with a static
+  // class and a genuinely dead selector did warn, so the pruner was live and the negative is real.
+  // Evidence: RESEARCH/VORTSPEC_SVELTE_FIXTURE_2026-08-04.md.
+  //
+  // The recommendation survives on its true benefit, downgraded from requirement to preference.
   variants:
-    "express variants so the COMPILER can see them: `class:` directives (`class:btn--primary={variant === 'primary'}`) " +
-    "or a `data-variant={variant}` attribute styled with an attribute selector (`[data-variant='primary'] { … }`). " +
-    "Svelte decides which `<style>` rules to keep by statically analysing the markup, so a class name it cannot see " +
-    "is stripped as unused CSS and the component renders unstyled. Building the class string in an external module " +
-    "guarantees that; even a locally computed dynamic string is not guaranteed to be seen — the directive and " +
-    "attribute forms are, which is why they are the requirement here and not merely the suggestion",
+    "prefer `class:` directives (`class:btn--primary={variant === 'primary'}`) or a `data-variant={variant}` " +
+    "attribute styled with an attribute selector (`[data-variant='primary'] { … }`). Both keep the class set " +
+    "statically visible, so Svelte's unused-CSS analysis stays active and warns on a dead or misspelled selector. " +
+    "A class string built by a helper still works and nothing is stripped — but a dynamic `class` expression makes " +
+    "every selector unprovable, which switches that analysis OFF, so dead and typo'd rules ship silently. This is a " +
+    "preference for keeping a safety net, not a correctness requirement",
   styleScoping: "`<style>` in the component, auto-scoped by the compiler",
   exports: "a Svelte component is a DEFAULT export — `import Button from './Button.svelte'`",
   refs: "`bind:this={el}` for element access. There is no `forwardRef`",
@@ -201,6 +211,7 @@ export const FRAMEWORK_PROFILES: Record<string, FrameworkProfile> = {
       pitfalls: [
         "`tsc` cannot parse `.svelte` — the check is `svelte-check`.",
         "Svelte 5 has been the default since Oct 2024; do not emit Svelte 4 idioms without checking the installed version.",
+      "A helper-built class string is NOT stripped by the compiler — that is a myth; it only disables the unused-CSS warning.",
       ],
     },
   },
