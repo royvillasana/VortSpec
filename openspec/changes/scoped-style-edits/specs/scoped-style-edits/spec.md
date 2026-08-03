@@ -268,3 +268,34 @@ the page, and the design system follows.
 - **WHEN** adopting fails
 - **THEN** the failure SHALL be reported
 - **AND** the design system SHALL be left as it was
+
+
+### Requirement: A composed page binds to the design system's tokens, not to copies of their values
+
+A page composed from the design system SHALL style design-system properties with a **token reference**
+carrying the resolved value as a CSS fallback — `var(--color-accent, #5433eb)` — rather than with the
+resolved value alone.
+
+Styling with the value alone severs the page from the design system at the moment it is created. The page
+still renders, so nothing looks wrong, but every later question — what is this component made of, what
+does changing this token affect, which screens drifted — has no answer for it, and a token edit cannot
+reach it. The fallback preserves the property that motivated the value-only rule: the page still renders
+standalone, opened as a bare file with no token runtime.
+
+The page SHALL NOT declare its own name for a value the design system already names.
+
+#### Scenario: A design-system property is bound
+- **WHEN** a composed page styles a button's background from the design system's accent
+- **THEN** it SHALL emit `var(--color-accent, …)` rather than the colour alone
+
+#### Scenario: The page still renders with no tokens present
+- **WHEN** the page is opened with no design-system CSS available
+- **THEN** every bound property SHALL fall back to its resolved value and render as composed
+
+#### Scenario: An existing name is not duplicated under a new one
+- **WHEN** the design system defines a radius for fully-rounded elements
+- **THEN** the page SHALL use that token rather than declaring its own equivalent
+
+#### Scenario: A value the design system does not name may still be local
+- **WHEN** the page needs a value the design system does not define
+- **THEN** it MAY declare its own, and that token SHALL be reported as not part of the design system

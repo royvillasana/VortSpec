@@ -87,6 +87,13 @@
 - [x] 10.5 Report a failed adoption and leave the design system unchanged.
 - [x] 10.6 Tests: unmapped tokens are named; a fully-mapped selection lists nothing; adopting calls the creation path with the right name and value; adoption never fires on its own.
 
+## 11. Composed pages bind to the design system
+
+- [x] 11.1 Change the compose prompt: style with `var(--token, <resolved>)`, not the resolved value alone — the fallback keeps the page renderable standalone, which is the property the value-only rule existed to protect.
+- [x] 11.2 Forbid declaring a local name for a value the design system already names, and say what to do when it genuinely does not name one.
+- [x] 11.3 Report a composed page's binding deterministically: which design-system tokens it uses, and which of its own are off-system.
+- [x] 11.4 Tests: the prompt asks for bound references; the binding report distinguishes bound from off-system on a real page's markup.
+
 ## 8. Verification
 
 - [x] 8.1 Full unit and component suites green across `packages/core`, `packages/ui`, and `apps/ide`. (core 1064, ui 182, CT 138 passed. 35 CT failures are PRE-EXISTING — verified by stashing every change and re-running: baseline is 35 failed / 136 passed, with the change 35 failed / 138 passed.)
