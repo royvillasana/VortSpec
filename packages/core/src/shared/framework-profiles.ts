@@ -130,7 +130,12 @@ const SVELTE_BASE = {
   // A control on 5.56.8: `.never` beside `<button class={x}>` is retained unwarned, but
   // `div.never` and a child's `p.never` are both commented out and warned. The compiler still
   // reasons structurally; only the element carrying the dynamic class loses the diagnostic.
-  // Evidence: RESEARCH/VORTSPEC_SVELTE_CSS_SCOPE_CONTROL_2026-08-04.md.
+  // Evidence: RESEARCH/VORTSPEC_SVELTE_CSS_SCOPE_CONTROL_2026-08-04.md, and the boundary is now
+  // enforced by executable cases in `.scratch/svelte-fixture` (`node verify.mjs`):
+  //   P4-scope-keep   — a selector that COULD match the dynamically-classed element is retained
+  //   P4-scope-tag    — a structurally impossible selector is still pruned AND warned
+  //   P4-scope-child  — a statically-classed child is still analysed beside a dynamic parent
+  // If this prose ever drifts back to "the analysis is off", P4-scope-tag contradicts it.
   //
   // The recommendation survives on its true benefit, downgraded from requirement to preference.
   variants:
