@@ -1125,28 +1125,51 @@ function ScopeQuestion({
   onChoose: (scope: "component" | "system") => void;
   onCancel: () => void;
 }): React.JSX.Element {
+  const first = useRef<HTMLButtonElement | null>(null);
+
+  // The edit is HELD until this is answered, so the control that completes it has to be reachable without
+  // hunting. Focus moves here on open: it puts a keyboard user one keystroke from an answer, announces the
+  // group and the default choice to a screen reader, and — because the panel scrolls — brings the question
+  // into view when the edited row was far down a list of 160+ rows.
+  useEffect(() => {
+    first.current?.focus();
+  }, []);
+
   return (
     <div
-      role="alertdialog"
+      // NOT `alertdialog`: that role promises a modal contract — focus trapped inside, background inert —
+      // that this inline banner does not implement, and a promise the platform makes and breaks is worse
+      // than no promise. A labelled group plus a live region says exactly what is true.
+      role="group"
       aria-label={`Apply --${token}`}
-      className="border-b border-vs-border-default bg-vs-bg-elevated px-3 py-2"
+      onKeyDown={(e) => {
+        if (e.key === "Escape") {
+          e.stopPropagation();
+          onCancel();
+        }
+      }}
+      className="sticky top-0 z-20 border-b border-vs-border-default bg-vs-bg-elevated px-3 py-2 shadow-[0_6px_16px_-8px_rgba(0,0,0,0.6)]"
     >
-      <div className="pb-0.5 font-mono text-[10px] text-vs-text-secondary">{`--${token} → ${value}`}</div>
+      {/* Announced without stealing focus, for the case where focus was moved elsewhere before we could. */}
+      <p role="status" className="pb-0.5 font-mono text-[10px] text-vs-text-secondary">
+        {`--${token} → ${value} · not applied yet`}
+      </p>
       <p className="pb-1.5 text-[10px] leading-tight text-vs-text-muted">Apply this change to…</p>
       <div className="flex flex-wrap gap-1">
         <button
+          ref={first}
           type="button"
           disabled={disabled}
           onClick={() => onChoose("component")}
-          className="rounded border border-vs-accent bg-vs-accent-muted px-1.5 py-0.5 text-[10px] text-vs-text-primary disabled:opacity-50"
+          className="rounded border border-vs-accent bg-vs-accent-muted px-2 py-1 text-[10px] text-vs-text-primary disabled:opacity-50"
         >
-          {`Only ${component}s`}
+          {`Only ${component} components`}
         </button>
         <button
           type="button"
           disabled={disabled}
           onClick={() => onChoose("system")}
-          className="rounded border border-vs-border-default px-1.5 py-0.5 text-[10px] text-vs-text-secondary hover:border-vs-border-strong disabled:opacity-50"
+          className="rounded border border-vs-border-default px-2 py-1 text-[10px] text-vs-text-secondary hover:border-vs-border-strong disabled:opacity-50"
         >
           The whole design system
         </button>
@@ -1155,13 +1178,13 @@ function ScopeQuestion({
           disabled={disabled}
           onClick={onCancel}
           aria-label="Cancel this change"
-          className="rounded px-1.5 py-0.5 text-[10px] text-vs-text-muted hover:text-vs-text-secondary disabled:opacity-50"
+          className="rounded px-2 py-1 text-[10px] text-vs-text-muted hover:text-vs-text-secondary disabled:opacity-50"
         >
           Cancel
         </button>
       </div>
-      <p className="pt-1 text-[9.5px] leading-tight text-vs-text-muted">
-        {`Only ${component}s changes every ${component} and leaves other components reading --${token} alone.`}
+      <p className="pt-1 text-[9.5px] leading-tight text-vs-text-secondary">
+        {`Only ${component} components changes every ${component} and leaves other components reading --${token} alone. Escape cancels.`}
       </p>
     </div>
   );

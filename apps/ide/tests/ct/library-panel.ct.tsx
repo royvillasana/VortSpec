@@ -207,9 +207,9 @@ test("editing a token with a component selected asks how far it reaches", async 
   await input.fill("4px");
   await input.blur();
 
-  const ask = c.getByRole("alertdialog", { name: /Apply --radius-card/ });
+  const ask = c.getByRole("group", { name: /Apply --radius-card/ });
   await expect(ask).toBeVisible();
-  await expect(ask.getByRole("button", { name: "Only Cards" })).toBeVisible();
+  await expect(ask.getByRole("button", { name: "Only Card components" })).toBeVisible();
   await expect(ask.getByRole("button", { name: "The whole design system" })).toBeVisible();
   // It says what the narrow choice spares, so the decision is made on consequences.
   await expect(ask.getByText(/leaves other components reading --radius-card alone/i)).toBeVisible();
@@ -224,7 +224,7 @@ test("with nothing selected there is nothing to ask", async ({ mount }) => {
   await input.blur();
 
   // No selection, no ambiguity: the edit is the design system's, and it just applies.
-  await expect(c.getByRole("alertdialog")).toHaveCount(0);
+  await expect(c.getByRole("group", { name: /^Apply --/ })).toHaveCount(0);
   await expect(input).toHaveValue("4px");
 });
 
@@ -245,7 +245,7 @@ test("cancelling the question applies neither reading", async ({ mount }) => {
   await input.blur();
   await c.getByRole("button", { name: "Cancel this change" }).click();
 
-  await expect(c.getByRole("alertdialog")).toHaveCount(0);
+  await expect(c.getByRole("group", { name: /^Apply --/ })).toHaveCount(0);
   // The design system is untouched — the row still reads what it did.
   await expect(applied.getByLabel(/^radius-card: 20px/)).toBeVisible();
 });
@@ -339,7 +339,7 @@ test("a plain element is offered no middle option — there is nothing durable t
   await input.fill("4px");
   await input.blur();
 
-  await expect(c.getByRole("alertdialog")).toHaveCount(0);
+  await expect(c.getByRole("group", { name: /^Apply --/ })).toHaveCount(0);
   await expect(input).toHaveValue("4px");
 });
 
@@ -361,5 +361,33 @@ test("a component still gets both the view and the question", async ({ mount }) 
   await applied.getByLabel(/^radius-card:/).click();
   await applied.getByLabel("radius-card", { exact: true }).fill("4px");
   await applied.getByLabel("radius-card", { exact: true }).blur();
-  await expect(c.getByRole("alertdialog", { name: /Apply --radius-card/ })).toBeVisible();
+  await expect(c.getByRole("group", { name: /Apply --radius-card/ })).toBeVisible();
+});
+
+test("the held edit puts focus on the choice, and Escape abandons it", async ({ mount }) => {
+  // The edit is HELD until answered, so the control that completes it must be reachable without hunting
+  // for it — the panel scrolls past 160+ rows, and a question pinned at the top is easy to never see.
+  const c = await mount(
+    <LibraryPanel
+      project={PROJECT}
+      onEdited={() => {}}
+      tokensInUse={{ "radius-card": "20px" }}
+      selectedComponent="Card"
+    />,
+  );
+
+  const applied = c.getByRole("region", { name: "Applied styles: Card" });
+  await applied.getByLabel(/^radius-card:/).click();
+  const input = applied.getByLabel("radius-card", { exact: true });
+  await input.fill("4px");
+  await input.blur();
+
+  // Focus lands on the first choice: one keystroke from an answer, and announced on arrival.
+  await expect(c.getByRole("button", { name: "Only Card components" })).toBeFocused();
+
+  // And it says plainly that nothing has happened yet, rather than leaving the edit looking applied.
+  await expect(c.getByRole("status")).toContainText("not applied yet");
+
+  await c.getByRole("button", { name: "Only Card components" }).press("Escape");
+  await expect(c.getByRole("group", { name: /^Apply --/ })).toHaveCount(0);
 });
