@@ -45,9 +45,31 @@ describe("verifyPrompt — honest gate (no false PASS without a live render)", (
   it("keeps a compile/build check that blocks a false pass so broken code can't pass", () => {
     const p = verifyPrompt("button", "http://localhost:5173", false);
     expect(p).toMatch(/CODE \/ BUILD/);
-    expect(p).toMatch(/tsc --noEmit/);
+    expect(p).toMatch(/tsc --noEmit/); // no framework given ⇒ the React default
     expect(p).toMatch(/import type/); // names the exact class of bug that shipped before
     expect(p).toMatch(/does not compile is ISSUES/i);
+  });
+
+  // `tsc` cannot parse .vue/.svelte/.astro, so hardcoding it made Layer 3 pass without
+  // checking the component — and a vacuous CODE green is what let Layer 1 report a visual
+  // PASS on code that was never compiled.
+  it.each([
+    ["vue", /vue-tsc/],
+    ["svelte", /svelte-check/],
+    ["astro", /astro check/],
+    ["angular", /ng build/],
+  ])("gives %s a type-check that can read its files", (framework, expected) => {
+    const p = verifyPrompt("button", "http://localhost:5173", false, framework);
+    expect(p).toMatch(expected);
+    // Anchored on the BARE invocation: `npx vue-tsc` legitimately contains "tsc --noEmit".
+    expect(p).not.toMatch(/npx tsc/);
+  });
+
+  it("says so outright when a framework has no type-check, instead of running one that lies", () => {
+    const p = verifyPrompt("button", "http://localhost:5173", false, "vanilla");
+    expect(p).toMatch(/NO type-check step/);
+    expect(p).toMatch(/not-applicable/);
+    expect(p).not.toMatch(/'npx tsc --noEmit' —/); // never emitted as the command to run
   });
 
   it("orders the gate visual → token → code, with visual as the primary check", () => {

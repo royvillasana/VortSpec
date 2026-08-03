@@ -388,7 +388,7 @@ export function GuidedFlow({
     // (best) model, like the creation build. When no live preview came up (url is null)
     // the prompt reports BLOCKED rather than a false PASS.
     const runLabel = url ? label : `${label} — source-only (start the preview for a full verify)`;
-    await op(runLabel, verifyPrompt(target, url, config?.designSource === "figma"), { kind: "verify", model: "opus" });
+    await op(runLabel, verifyPrompt(target, url, config?.designSource === "figma", config?.framework), { kind: "verify", model: "opus" });
   }
 
   /**

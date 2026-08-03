@@ -9,6 +9,7 @@
  * procedure here changes it in both apps at once (the binding invariant of the
  * two-app model).
  */
+import { typecheckCmdFor } from "./framework-profiles";
 
 export function buildOnePrompt(name: string, level?: string): string {
   return (
@@ -363,7 +364,29 @@ export const RESUME_PROMPT =
   "files and skip it — do not redo finished work. Finish only the remaining steps, then stop. " +
   NO_MANUAL_STEPS;
 
-export function verifyPrompt(target: string, url: string | null, isFigma: boolean): string {
+/**
+ * The Layer-3 command clause, derived from the project's framework.
+ *
+ * `npx tsc --noEmit` used to be hardcoded here for all nine frameworks. `tsc` cannot parse
+ * `.vue`, `.svelte`, or `.astro` at all, so for six of them the CODE layer checked nothing
+ * in the component and reported pass — and because Layer 1 is only BLOCKED when CODE fails,
+ * that vacuous green cleared the path to a VISUAL pass on code nobody had compiled.
+ * A framework with no meaningful check says so rather than running a command that lies.
+ */
+function typecheckClause(framework?: string | null): string {
+  const cmd = typecheckCmdFor(framework);
+  return cmd
+    ? `run the project's framework-native type-check — '${cmd}' — and, for a Storybook/`
+    : `this framework has NO type-check step, so report CODE as not-applicable and say so explicitly — ` +
+        `do NOT substitute 'npx tsc --noEmit', which would pass without reading the component. Instead, for a Storybook/`;
+}
+
+export function verifyPrompt(
+  target: string,
+  url: string | null,
+  isFigma: boolean,
+  framework?: string | null,
+): string {
   const scope = target === "all" ? "every built component" : `the "${target}" component`;
   const resolveRef = isFigma
     ? "RESOLVE each component's authoritative Figma reference YOURSELF — never ask me for a link. Use, in " +
@@ -394,7 +417,7 @@ export function verifyPrompt(target: string, url: string | null, isFigma: boolea
       `wrong-token substitutions across the component AND its \`*.variants.*\` file, and flag each with the ` +
       `exact token that should have been used. Any hardcoded color (e.g. a raw #83bcc7 or rgba(...) focus ring) ` +
       `is a TOKEN failure, even if it looks right.`,
-    `Layer 3 — CODE / BUILD: run the project's type-check — 'npx tsc --noEmit' — and, for a Storybook/` +
+    `Layer 3 — CODE / BUILD: ${typecheckClause(framework)}` +
       `library project with no dev server, also 'npm run build-storybook' (or the project's build script). ` +
       `${scope} MUST compile/build with zero errors. Any type or build error (a broken import, an interface ` +
       `imported as a value instead of 'import type', a duplicate JSX attribute, a missing export, an ` +

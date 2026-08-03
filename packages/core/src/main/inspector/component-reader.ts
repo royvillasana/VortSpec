@@ -6,6 +6,7 @@ import { readComponentMap, mergeComponentEntries } from "./design-map";
 import { cachedScan } from "./scan-cache";
 import { inspectorComponentsResultSchema } from "@vortspec/core/inspector";
 import { detectedComponentsSchema, type DetectedComponent } from "@vortspec/core/flow";
+import { ALL_SOURCE_EXTS, stripFileSuffix } from "@vortspec/core/framework-profiles";
 import type {
   ComponentStatus,
   FileSnapshot,
@@ -21,7 +22,14 @@ import type {
  * scanned from it, and status comes from the visual-verify report. No IR store.
  */
 
-const SOURCE_EXTS = [".tsx", ".jsx", ".vue", ".svelte", ".ts"];
+/**
+ * Every extension any supported framework emits, from the shared profile table — NOT a
+ * local list. The previous local copy omitted `.astro` and `.html`, so Astro and vanilla
+ * components read as "never built" forever: the resume guard ("do NOT rebuild a component
+ * that already has a source file") could never fire, and the roster showed them unbuilt
+ * after every launch.
+ */
+const SOURCE_EXTS = ALL_SOURCE_EXTS;
 
 /** Return the body inside the first `{...}` at/after `from`, brace-balanced. */
 function balanced(src: string, from: number): { body: string; end: number } | null {
@@ -241,7 +249,10 @@ async function findSourceFile(dir: string, name: string, budget = { n: 8000 }): 
     } else {
       const ext = SOURCE_EXTS.find((e) => entry.name.endsWith(e));
       if (!ext) continue;
-      const stem = entry.name.slice(0, -ext.length);
+      // Strip a framework's filename suffix first: Angular's convention is
+      // `button.component.ts`, whose raw stem normalizes to `buttoncomponent` and so never
+      // equals the roster entry `button` — every Angular component read as unbuilt.
+      const stem = stripFileSuffix(entry.name.slice(0, -ext.length));
       // A file named for the component in any case/separator style is the match.
       if (normComponentName(stem) === target) return full;
       // Fall back to an `index.*` file, but only when THIS folder carries the component name.

@@ -29,7 +29,11 @@ export interface StorybookReadiness {
 }
 
 const STORY_RE = /\.stories\.(tsx|ts|jsx|js|mdx|svelte|vue)$/i;
-const COMPONENT_RE = /\.(tsx|jsx|vue|svelte)$/i;
+// Counts source files to report how much of the library still lacks stories. It omitted
+// `.astro` and `.html`, so an Astro or vanilla project reported zero components and the
+// coverage number was meaningless. Kept as a regex (this is a filename test, not a lookup)
+// but widened to the same set the shared profile table declares.
+const COMPONENT_RE = /\.(tsx|jsx|vue|svelte|astro|html)$/i;
 
 /**
  * Map the project's framework to `storybook init --type`. Storybook auto-detects

@@ -134,7 +134,9 @@ const FRAMEWORK_POINTER_PATTERNS: { label: string; re: RegExp }[] = [
   { label: "variants file", re: /\.variants\.[tj]s\b/ },
   { label: "module alias @/", re: /(^|[^\w])@\/[\w-]/ },
   { label: "storybook url", re: /localhost:6006/ },
-  { label: "framework source file", re: /\.(tsx|jsx|vue|svelte)\b/ },
+  // `.astro` was missing, so an Astro path leaking into designer.md passed the guard —
+  // exactly the framework coupling this list exists to catch.
+  { label: "framework source file", re: /\.(tsx|jsx|vue|svelte|astro)\b/ },
   { label: "cva()/cn() call", re: /\b(cva|cn)\s*\(/ },
 ];
 
