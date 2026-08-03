@@ -30,12 +30,11 @@ export function buildOnePrompt(name: string, level?: string, framework?: string 
  * rest to `.sdd-de/project.yaml` — so which idiom the model reached for was its own habit,
  * and the habit is React. Interpolating the profile's idioms makes the instruction concrete
  * for the eight non-React frameworks. Empty (and therefore harmless) when the framework is
- * unset or unrecognized: `frameworkIdiomClause` returns "" rather than falling back to
- * React's conventions, because asserting the wrong idiom is worse than asserting none.
+ * unset or unrecognized, the clause is an explicit STOP: silence is fail-OPEN, because the
+ * build proceeds anyway and the model falls back to its own habit, which is React.
  */
 function frameworkClause(framework?: string | null): string {
-  const clause = frameworkIdiomClause(framework);
-  return clause ? `${clause}\n` : "";
+  return `${frameworkIdiomClause(framework)}\n`;
 }
 
 /**
@@ -104,14 +103,18 @@ const RESUMABLE =
   "that already exist, and do NOT re-verify a component that already has an up-to-date " +
   "visual-verify-report.md. Only do the remaining work, then stop.";
 
-export const BUILD_REMAINING_PROMPT =
+export function buildRemainingPrompt(framework?: string | null): string {
+  return (
   RESUMABLE +
   "\n\nRead .sdd-de/components.json and .sdd-de/project.yaml. Implement EVERY component listed in " +
   "components.json that is NOT yet implemented in component_dir, in the configured framework and " +
   "language. " +
+  frameworkClause(framework) +
   DESIGN_REFERENCE_CLAUSE +
   " For each, run /generate-artifacts to produce its specs, then implement it. Build in order: " +
-  "atoms → molecules → organisms. Skip components that already have a source file.";
+  "atoms → molecules → organisms. Skip components that already have a source file."
+  );
+}
 
 /**
  * Re-scan the design source and RECONCILE — additive, never destructive. Refresh
@@ -291,9 +294,10 @@ export const RESCAN_PROMPT = [
   "   and how many stale descriptions you corrected.",
 ].join("\n");
 
-export function newComponentPrompt(name: string, intent: string): string {
+export function newComponentPrompt(name: string, intent: string, framework?: string | null): string {
   return [
     `Add a brand-new component "${name}" to this design system.`,
+    frameworkIdiomClause(framework),
     "1. Append an entry to .sdd-de/components.json: { \"name\": \"" +
       name +
       "\", \"level\": <atom|molecule|organism>, \"description\": <one line from the intent below> }.",
@@ -312,9 +316,14 @@ export function newComponentPrompt(name: string, intent: string): string {
  * grounded in one authoritative node id — the engine reads that exact node
  * through the Figma MCP so the generated code matches what the user picked.
  */
-export function newComponentFromFigmaNodePrompt(name: string, nodeId: string): string {
+export function newComponentFromFigmaNodePrompt(
+  name: string,
+  nodeId: string,
+  framework?: string | null,
+): string {
   return [
     `Build a component from the Figma node the user selected: "${name}" (node id ${nodeId}).`,
+    frameworkIdiomClause(framework),
     `1. Read that exact node via the Figma MCP — resolve node id ${nodeId} in the file`,
     "   `figma_file_url` from .sdd-de/project.yaml (e.g. figma_get_component_details / a node fetch)",
     "   to get its structure, variants, and styles. Treat that node as authoritative.",
@@ -541,7 +550,7 @@ export function buildChunkPrompt(names: string[], opts: BuildChunkOptions = {}):
     "",
     "Read .sdd-de/components.json and .sdd-de/project.yaml. Build ONLY these components, in " +
       `atoms → molecules → organisms order: ${list}. Do NOT build any other component in this run.`,
-    ...(frameworkIdiomClause(opts.framework) ? [frameworkIdiomClause(opts.framework)] : []),
+    frameworkIdiomClause(opts.framework),
     DESIGN_REFERENCE_CLAUSE,
     "For EACH of them, run /generate-artifacts to produce its specs, then implement it into " +
       "component_dir in the configured framework and language. Skip any that already have a source file.",
@@ -585,7 +594,7 @@ export function buildVerifyRestPrompt(
     "Read .sdd-de/components.json and .sdd-de/project.yaml. For EVERY component listed that is NOT " +
       "yet implemented in component_dir, in atoms → molecules → organisms order, run the full SDD-DE " +
       "cycle autonomously and in the background:",
-    ...(frameworkIdiomClause(framework) ? [frameworkIdiomClause(framework)] : []),
+    frameworkIdiomClause(framework),
     "  a. " + DESIGN_REFERENCE_CLAUSE,
     "  b. /generate-artifacts to produce its specs, then implement it.",
     `  c. Verify in three layers reported in order — VISUAL (/visual-verify: render and compare every ` +

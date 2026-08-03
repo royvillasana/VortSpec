@@ -127,7 +127,7 @@ describe("idioms — the authoring half of the profile", () => {
 
   it("warns Svelte off external variant modules, which the compiler strips as unused CSS", () => {
     const v = FRAMEWORK_PROFILES.svelte.idioms.variants;
-    expect(v).toMatch(/INSIDE the component/);
+    expect(v).toMatch(/external module/);
     expect(v).toMatch(/unused CSS/);
   });
 
@@ -161,9 +161,41 @@ describe("idiomsFor / frameworkIdiomClause — fail closed, never fall back to R
     expect(idiomsFor("brand-new-framework")).toBeNull();
   });
 
-  it("emits no clause at all rather than a wrong one", () => {
-    expect(frameworkIdiomClause("brand-new-framework")).toBe("");
-    expect(frameworkIdiomClause(undefined)).toBe("");
+  it("emits an explicit STOP for an unknown framework, not silence", () => {
+    // Silence was fail-OPEN: with no clause the build proceeds and the model falls back to
+    // its own habit, which is React — the original bug. An unknown framework must block.
+    for (const f of ["brand-new-framework", undefined, null, ""] as const) {
+      const clause = frameworkIdiomClause(f);
+      expect(clause).toContain("STOP");
+      expect(clause).toMatch(/Do NOT generate any component/);
+      expect(clause).toMatch(/do NOT default to\s+React/);
+      expect(clause).toContain("/setup");
+    }
+  });
+
+  it("states that the contract overrides the toolkit's React-only standards", () => {
+    // component-standards.md still mandates CVA/cn()/forwardRef for all nine and
+    // /generate-artifacts loads it; without a precedence rule the agent gets two
+    // contradictory instructions and picks one at random.
+    const clause = frameworkIdiomClause("svelte");
+    expect(clause).toContain("OVERRIDES");
+    expect(clause).toContain("component-standards.md");
+  });
+
+  it("requires compiler-visible variant forms in Svelte, not just a local string", () => {
+    // A dynamically built class string is not guaranteed to be seen by the compiler even
+    // when it is built inside the component; the directive/attribute forms are.
+    const v = FRAMEWORK_PROFILES.svelte.idioms.variants;
+    expect(v).toContain("class:");
+    expect(v).toContain("data-variant");
+  });
+
+  it("does not claim Astro lacks a runtime for frontmatter code", () => {
+    // Astro frontmatter runs at BUILD time, so cva/clsx there ship no client JS. The old
+    // wording gave a wrong reason for a defensible preference.
+    const v = FRAMEWORK_PROFILES.astro.idioms.variants;
+    expect(v).toContain("BUILD time");
+    expect(FRAMEWORK_PROFILES.astro.idioms.pitfalls.join(" ")).not.toMatch(/no client runtime/);
   });
 
   it("names the framework and its conventions when it is known", () => {

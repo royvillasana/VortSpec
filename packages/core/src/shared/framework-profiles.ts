@@ -117,9 +117,12 @@ const SVELTE_BASE = {
     "check the installed version",
   slots: "Svelte 5 snippets — `{@render children?.()}`. `<slot />` is the Svelte 4 form",
   variants:
-    "compute the class string INSIDE the component (`$derived` or a local function). Do NOT define variant classes in " +
-    "an external module: the Svelte compiler decides which `<style>` rules to keep by statically analysing class usage " +
-    "in the markup, so class names it cannot see are stripped as unused CSS and the component renders unstyled",
+    "express variants so the COMPILER can see them: `class:` directives (`class:btn--primary={variant === 'primary'}`) " +
+    "or a `data-variant={variant}` attribute styled with an attribute selector (`[data-variant='primary'] { … }`). " +
+    "Svelte decides which `<style>` rules to keep by statically analysing the markup, so a class name it cannot see " +
+    "is stripped as unused CSS and the component renders unstyled. Building the class string in an external module " +
+    "guarantees that; even a locally computed dynamic string is not guaranteed to be seen — the directive and " +
+    "attribute forms are, which is why they are the requirement here and not merely the suggestion",
   styleScoping: "`<style>` in the component, auto-scoped by the compiler",
   exports: "a Svelte component is a DEFAULT export — `import Button from './Button.svelte'`",
   refs: "`bind:this={el}` for element access. There is no `forwardRef`",
@@ -260,14 +263,14 @@ export const FRAMEWORK_PROFILES: Record<string, FrameworkProfile> = {
         "`.astro` components render to static HTML with NO client JS. Interactivity needs a framework island " +
         "(`<Counter client:load />`) or a plain `<script>` tag — do not write handler props on an `.astro` component",
       slots: '`<slot />` (named slots via `<slot name="…" />`)',
-      variants: "compute the class string in the frontmatter and bind it with `class={…}`",
+      variants:
+        "compute the class string in the frontmatter and bind it with `class={…}`. Frontmatter runs at " +
+        "BUILD time, so a variant library (cva/clsx) works here and ships no client JS — it is simply " +
+        "usually unnecessary, since a plain template literal or lookup does the same job without a dependency",
       styleScoping: "`<style>` in the component, auto-scoped by Astro via a `data-astro-cid-*` attribute",
       exports: "`.astro` files export nothing and are imported as a default — `import Button from './Button.astro'`",
       refs: "not applicable — there is no component instance at runtime",
-      pitfalls: [
-        "`tsc` cannot parse `.astro` — the check is `astro check`.",
-        "No CVA/clsx: `.astro` has no client runtime, so a variant library adds nothing.",
-      ],
+      pitfalls: ["`tsc` cannot parse `.astro` — the check is `astro check`."],
     },
   },
   vanilla: {
@@ -360,13 +363,46 @@ export function idiomsFor(framework?: string | null): FrameworkIdioms | null {
 }
 
 /**
+ * What a build is told when the configured framework is unset or unrecognized.
+ *
+ * An earlier version returned "" here, on the reasoning that saying nothing beats saying
+ * something false. That was fail-OPEN: with no clause the build proceeds anyway and the
+ * model falls back to its own habit, which is React — the original bug. Silence is not
+ * neutral when the default is wrong. So an unknown framework now gets an explicit STOP.
+ */
+const UNKNOWN_FRAMEWORK_CLAUSE = [
+  "FRAMEWORK CONTRACT — STOP. The project's `framework` is unset or is not one of the frameworks VortSpec",
+  `supports (${Object.keys(FRAMEWORK_PROFILES).join(", ")}).`,
+  "Do NOT generate any component. Do NOT infer the framework from the files you find, and do NOT default to",
+  "React — defaulting is the exact failure this contract exists to prevent. Read `.sdd-de/project.yaml`; if",
+  "`framework` is missing or unrecognized, write no code and report that the project needs `/setup` to record",
+  "a supported framework.",
+].join("\n");
+
+/**
+ * The precedence rule (change: framework-profile-idioms).
+ *
+ * The toolkit's own `component-standards.md` and `styling-best-practices.md` still mandate
+ * CVA + `cn()` + `.variants.ts` + `forwardRef` for ALL nine frameworks, and `/generate-artifacts`
+ * loads them. Without a stated precedence the agent gets two contradictory instructions and
+ * picks one at random — which is the inconsistency this whole change is unwinding. This says
+ * which one wins.
+ */
+const PRECEDENCE_CLAUSE =
+  "This contract OVERRIDES any conflicting instruction in the toolkit's standards docs " +
+  "(`component-standards.md`, `styling-best-practices.md`, `framework-config.md`) and in any skill they load. " +
+  "Those documents state React's architecture — CVA, `cn()`, `.variants.ts`, `forwardRef` — as if it were " +
+  "framework-agnostic; it is not. Where they disagree with the contract above, the contract above wins.";
+
+/**
  * The framework's conventions as a prompt block, so a build states what to emit instead of
- * deferring to "the configured framework" and leaving the model to infer it. Returns an
- * empty string for an unknown framework — the caller then simply omits the clause.
+ * deferring to "the configured framework" and leaving the model to infer it. An unknown or
+ * unset framework yields an explicit STOP rather than an empty string — see
+ * `UNKNOWN_FRAMEWORK_CLAUSE`.
  */
 export function frameworkIdiomClause(framework?: string | null): string {
   const i = idiomsFor(framework);
-  if (!i) return "";
+  if (!i) return UNKNOWN_FRAMEWORK_CLAUSE;
   const lines = [
     `FRAMEWORK CONTRACT — this project is ${i.label} (\`framework: ${(framework ?? "").toLowerCase()}\`). ` +
       `Emit idiomatic ${i.label} code, not React-shaped code translated into it:`,
@@ -380,5 +416,6 @@ export function frameworkIdiomClause(framework?: string | null): string {
     `- Refs: ${i.refs}`,
   ];
   if (i.pitfalls.length) lines.push(`- Do NOT get these wrong: ${i.pitfalls.join(" ")}`);
+  lines.push(PRECEDENCE_CLAUSE);
   return lines.join("\n");
 }

@@ -246,7 +246,7 @@ export function GuidedFlow({
     const node = sel.nodes[0]!;
     await op(
       `Building "${node.name}" from the Figma selection`,
-      newComponentFromFigmaNodePrompt(node.name, node.id),
+      newComponentFromFigmaNodePrompt(node.name, node.id, config?.framework),
       { kind: "build" },
     );
   }
@@ -924,7 +924,7 @@ export function GuidedFlow({
                       onCancel={() => setAddNew(false)}
                       onCreate={(name, intent) => {
                         setAddNew(false);
-                        void op(`Creating the "${name}" component`, newComponentPrompt(name, intent), { kind: "build" });
+                        void op(`Creating the "${name}" component`, newComponentPrompt(name, intent, config?.framework), { kind: "build" });
                       }}
                     />
                   )}

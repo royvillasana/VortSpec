@@ -7,6 +7,9 @@ import {
   buildOnePrompt,
   buildCustomizeLibraryPrompt,
   verifyPrompt,
+  newComponentPrompt,
+  newComponentFromFigmaNodePrompt,
+  buildRemainingPrompt,
   RESCAN_PROMPT,
 } from "./sdd-prompts";
 import { themeContractFor } from "./setup";
@@ -309,7 +312,8 @@ describe("build prompts state the framework's conventions (change: framework-pro
     const p = buildChunkPrompt(["button"], { framework: "svelte" });
     expect(p).toContain("Svelte");
     expect(p).toContain("$props()");
-    expect(p).toMatch(/INSIDE the component/);
+    expect(p).toContain("class:");
+    expect(p).toContain("data-variant");
     // The regression: CVA in an external module is what strips Svelte's scoped CSS.
     expect(p).not.toContain("class-variance-authority");
   });
@@ -332,9 +336,16 @@ describe("build prompts state the framework's conventions (change: framework-pro
     expect(p).not.toMatch(/e\.g\. CVA/);
   });
 
-  it("omits the clause entirely when the framework is unknown, rather than asserting React's", () => {
+  it("blocks the build when the framework is unknown, rather than letting it default to React", () => {
     const p = buildChunkPrompt(["button"], {});
-    expect(p).not.toContain("FRAMEWORK CONTRACT");
+    expect(p).toContain("STOP");
+    expect(p).toMatch(/Do NOT generate any component/);
     expect(p).not.toContain("forwardRef");
+  });
+
+  it("carries the contract into the new-component paths too", () => {
+    expect(newComponentPrompt("card", "a card", "angular")).toContain("(click)");
+    expect(newComponentFromFigmaNodePrompt("card", "1:2", "svelte")).toContain("$props()");
+    expect(buildRemainingPrompt("vue")).toContain("defineProps");
   });
 });

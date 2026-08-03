@@ -28,6 +28,7 @@ import {
 import { buildPalette, renderPaletteHtml } from "../../shared/palette";
 import { LIGHT_HTML_DIR, normSegment, buildLightStandInPrompt, type StandInTarget } from "../../shared/light-standin";
 import { buildTwoTrackBuildPrompt } from "../../shared/two-track";
+import { readProjectConfig } from "../workspace/config-manager";
 import { LIGHT_PAGES_DIR, buildLightPagePrompt, buildGenerateCodePrompt } from "../../shared/light-page";
 import { detectedComponentsSchema } from "../../shared/flow";
 
@@ -288,11 +289,18 @@ export async function buildProjectStandInPrompt(projectPath: string): Promise<st
  * the code roster (figma-only components have no tier yet → built last) so the framework track is ordered.
  */
 export async function buildProjectTwoTrackPrompt(projectPath: string): Promise<string> {
-  const [targets, componentsResult] = await Promise.all([buildStandInTargets(projectPath), getInspectorComponents(projectPath)]);
+  const [targets, componentsResult, cfg] = await Promise.all([
+    buildStandInTargets(projectPath),
+    getInspectorComponents(projectPath),
+    readProjectConfig(projectPath).catch(() => null),
+  ]);
   const tierByName = new Map(componentsResult.components.map((c) => [c.name, mapTier(c.level)]));
   const withRefs = targets.filter((t) => t.figmaNodeId || t.componentKey);
   const chosen = withRefs.length > 0 ? withRefs : targets;
-  return buildTwoTrackBuildPrompt(chosen.map((t) => ({ ...t, tier: tierByName.get(t.name) })));
+  return buildTwoTrackBuildPrompt(
+    chosen.map((t) => ({ ...t, tier: tierByName.get(t.name) })),
+    cfg?.framework,
+  );
 }
 
 /**

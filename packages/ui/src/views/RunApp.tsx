@@ -1058,7 +1058,7 @@ export function RunApp({
   const onSaveAsComponent = useCallback(
     (opts: { sourceFile: string | null; suggestedName: string | null }) => {
       void promoteMod.start({
-        prompt: buildPromoteComponentPrompt(opts),
+        prompt: buildPromoteComponentPrompt({ ...opts, framework }),
         cwd: project.path,
         allowedTools: ["Read", "Write", "Edit", "Bash"],
         bypassPermissions: true,

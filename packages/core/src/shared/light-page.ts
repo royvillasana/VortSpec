@@ -8,6 +8,7 @@
  * Pure: builds the agent prompt + the on-disk contract. The agent (via the user's tools) composes and
  * writes the page; VortSpec never authors framework code here.
  */
+import { frameworkIdiomClause } from "./framework-profiles";
 import { normSegment } from "./light-standin";
 import type { CompileResult } from "./compile";
 
@@ -118,7 +119,11 @@ function convertCompileSection(compiled?: CompileResult): string[] {
  * with the LIGHT page — now do the real framework build in the background, using the light page as the
  * spec. THIS is where the framework-first work (scaffold + components + page) legitimately happens.
  */
-export function buildConvertToFrameworkPrompt(name: string, compiled?: CompileResult): string {
+export function buildConvertToFrameworkPrompt(
+  name: string,
+  compiled?: CompileResult,
+  framework?: string | null,
+): string {
   return [
     `CONVERT the light page "${name}" into real framework code. The user is happy with the light preview —`,
     "now build the real thing, using the light page as the authoritative spec.",
@@ -129,12 +134,13 @@ export function buildConvertToFrameworkPrompt(name: string, compiled?: CompileRe
     "",
     ...convertCompileSection(compiled),
     "Read `.sdd-de/project.yaml` for the target framework/language/styling and follow the project's standards.",
+    frameworkIdiomClause(framework),
     "Then do the full build FOR THIS PAGE (this is the framework-first work, now that it's wanted):",
     "1. If the app isn't scaffolded yet, scaffold it for the configured framework (package.json, entry,",
     "   index/App, Tailwind wired to the token file) — minimal but runnable.",
     "2. For EACH `data-component` island, ensure the real framework component exists — build any missing one",
-    "   from the design system (its Figma reference + the tokens), following the project's component",
-    "   standards (e.g. CVA + `cn()` + token-referenced classes). REUSE components that already exist.",
+    "   from the design system (its Figma reference + the tokens), following the FRAMEWORK CONTRACT above",
+    "   and referencing design tokens for every value. REUSE components that already exist.",
     "3. Compose the page as a real framework page/route that uses those components and reproduces the light",
     "   page's layout + content. EVERY color/spacing/radius/type value MUST reference a design token.",
     "4. Wire the page into the app's routing so it's reachable (and, for a router-less app, the",

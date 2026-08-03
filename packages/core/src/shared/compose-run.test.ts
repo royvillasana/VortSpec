@@ -293,17 +293,24 @@ describe("parseComposeResult", () => {
 
 describe("buildPromoteComponentPrompt", () => {
   it("extracts to a reusable framework component + Storybook story, token-grounded", () => {
-    const p = buildPromoteComponentPrompt({ sourceFile: ".vortspec/light-pages/home.html", suggestedName: "ProductCard" });
+    const p = buildPromoteComponentPrompt({
+      sourceFile: ".vortspec/light-pages/home.html",
+      suggestedName: "ProductCard",
+      framework: "react",
+    });
     expect(p).toMatch(/PROMOTE the composition/);
     expect(p).toContain(".vortspec/light-pages/home.html");
     expect(p).toContain("ProductCard");
-    expect(p).toMatch(/\.variants\.ts/);
+    // The variant mechanism now comes from the framework contract rather than being
+    // hardcoded to React's `.variants.ts` for all nine frameworks.
+    expect(p).toMatch(/\.variants\.ts/); // react's contract still names it
+    expect(p).toContain("FRAMEWORK CONTRACT");
     expect(p).toMatch(/Storybook story/);
     expect(p).toMatch(/design TOKEN/);
     expect(p).toMatch(/data-component/);
   });
   it("works without a name or source file", () => {
-    const p = buildPromoteComponentPrompt({ sourceFile: null, suggestedName: null });
+    const p = buildPromoteComponentPrompt({ sourceFile: null, suggestedName: null, framework: "react" });
     expect(p).toMatch(/current screen/);
     expect(p).toMatch(/reusable component/i);
   });
