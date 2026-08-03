@@ -125,5 +125,95 @@ export function pruneFrameworkConfigDoc(markdown: string, framework?: string | n
     .replace(/\n{3,}/g, "\n\n");
 }
 
+
+/**
+ * The `##` sections in the shared standards that state REACT's component architecture as
+ * though it were framework-agnostic — CVA, `cn()`, a colocated `.variants.ts`, `forwardRef`,
+ * and the "never a default export" rule that `.vue`/`.svelte`/`.astro` cannot satisfy.
+ *
+ * These are the strongest mandates in the toolkit and they are indexed by `CLAUDE.md`, so a
+ * Vue project reads them on every `/generate-artifacts`. A precedence sentence elsewhere only
+ * adjudicates them; removing the section is what stops them being read.
+ *
+ * `##`-level only — the `###` subsections (`Required architecture`, `Component implementation
+ * rules`, `Exports — one convention: NAMED exports`, the `cn()` utility, the CVA example) live
+ * underneath and are carried out with their parent.
+ */
+const REACT_ARCHITECTURE_SECTIONS = [
+  /^##\s+Style Encapsulation\b/i,
+  /^##\s+Component Variant Architecture\b/i,
+  /^##\s+Universal Principle\s+—\s+Style Encapsulation\b/i,
+];
+
+/** Frameworks whose real architecture IS the one those sections describe. */
+const REACT_FAMILY = new Set(["react", "next"]);
+
+/**
+ * Strip the React-architecture sections from a shared standards doc for a non-React project,
+ * leaving a pointer to the generated rules in their place.
+ *
+ * Returns the document unchanged for React/Next (the sections are correct there) and for an
+ * unknown framework (generation is already STOPped; removing guidance would only degrade a
+ * project we have decided not to build for).
+ */
+export function pruneReactArchitecture(markdown: string, framework?: string | null): string {
+  const key = (framework ?? "").toLowerCase();
+  if (!key || REACT_FAMILY.has(key) || !idiomsFor(key)) return markdown;
+
+  const lines = markdown.split("\n");
+  const out: string[] = [];
+  let dropping = false;
+  let fenced = false;
+  let removed = false;
+  for (const line of lines) {
+    if (/^\s*```/.test(line)) fenced = !fenced;
+    // Only a `##` ends a `##` section — `###` children belong to it.
+    if (!fenced && /^##(?!#)\s/.test(line)) {
+      dropping = REACT_ARCHITECTURE_SECTIONS.some((re) => re.test(line));
+      if (dropping) {
+        removed = true;
+        out.push(
+          `## Component architecture — see \`framework-rules.md\``,
+          "",
+          "> REMOVED by VortSpec. This section described React's architecture (CVA, `cn()`, a",
+          "> colocated `.variants.ts`, `forwardRef`, named-export-only) as if it applied to every",
+          "> framework. It does not, and this project is not React. The architecture that DOES apply",
+          "> here is in [`framework-rules.md`](./framework-rules.md) — read that instead.",
+          "",
+        );
+        continue;
+      }
+    }
+    if (!dropping) out.push(line);
+  }
+  if (!removed) return markdown;
+  return out.join("\n").replace(/\n{3,}/g, "\n\n");
+}
+
+/**
+ * The line injected into the project's `CLAUDE.md` standards index so the generated rules are
+ * actually LOADED. A file sitting in `.sdd-de/docs/` that nothing links is never read — the
+ * doc-driven skills follow this index, not the filesystem.
+ */
+export const FRAMEWORK_RULES_INDEX_LINE =
+  "- [Framework Rules](.sdd-de/docs/framework-rules.md) — **READ FIRST.** This project's framework " +
+  "conventions, generated from its `framework` setting. Where any other standards document conflicts " +
+  "with it, this one wins.";
+
+/**
+ * Insert the rules link at the TOP of `CLAUDE.md`'s standards list, so it is read before the
+ * documents it overrides. Idempotent: re-running setup or a toolkit update will not duplicate it.
+ * Falls back to appending a Standards section when the expected list is absent, so a toolkit
+ * that reorganizes its own CLAUDE.md still ends up linking the rules.
+ */
+export function linkFrameworkRulesInClaudeMd(markdown: string): string {
+  if (markdown.includes(".sdd-de/docs/framework-rules.md")) return markdown;
+  const anchor = markdown.indexOf("- [Component Standards]");
+  if (anchor !== -1) {
+    return markdown.slice(0, anchor) + FRAMEWORK_RULES_INDEX_LINE + "\n" + markdown.slice(anchor);
+  }
+  return `${markdown.trimEnd()}\n\n## Standards\n\n${FRAMEWORK_RULES_INDEX_LINE}\n`;
+}
+
 /** The frameworks this module can scope docs for — the ones with a profile. */
 export const SCOPABLE_FRAMEWORKS = Object.keys(FRAMEWORK_PROFILES);
