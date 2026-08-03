@@ -18,6 +18,7 @@ import {
   pruneFrameworkConfigDoc,
   pruneReactArchitecture,
   scopeReactRefMandate,
+  scopeReactRefExamples,
   linkFrameworkRulesInClaudeMd,
 } from "@vortspec/core/framework-docs";
 import { readProjectConfig } from "./config-manager";
@@ -142,7 +143,7 @@ async function scopeDocsToFramework(
   // would contradict the version-aware rule in framework-rules.md.
   for (const name of ["component-standards.md", "styling-best-practices.md"]) {
     await transformIfPresent(join(docsDir, name), (t) =>
-      scopeReactRefMandate(pruneReactArchitecture(t, framework), framework),
+      scopeReactRefExamples(scopeReactRefMandate(pruneReactArchitecture(t, framework), framework), framework),
     );
   }
 }

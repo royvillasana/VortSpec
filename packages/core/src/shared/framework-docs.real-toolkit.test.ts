@@ -9,11 +9,15 @@ import {
   pruneFrameworkConfigDoc,
   pruneReactArchitecture,
   scopeReactRefMandate,
+  scopeReactRefExamples,
 } from "./framework-docs";
 
 /** What setup actually writes for a framework — both transformations, in order. */
 const scoped = (name: string, framework: string): string =>
-  scopeReactRefMandate(pruneReactArchitecture(read(name), framework), framework);
+  scopeReactRefExamples(
+    scopeReactRefMandate(pruneReactArchitecture(read(name), framework), framework),
+    framework,
+  );
 
 /**
  * Transformations run against the REAL pinned `@royvillasana/sdd-de` docs.
@@ -105,10 +109,43 @@ d("the real toolkit docs (@royvillasana/sdd-de)", () => {
     expect(out).toContain("framework-rules.md");
   });
 
-  it("does not rewrite code samples — an example is not an instruction", () => {
-    // Regex-rewriting fenced code is how you ship a snippet that no longer compiles.
-    const out = scoped("component-standards.md", "react");
-    expect(out).toMatch(/export const Button = forwardRef/);
+  it("leaves no positively-labeled forwardRef example for React 19", () => {
+    // I argued an example is an illustration and left these. Thor was right that a `✓ GOOD`
+    // label and a canonical implementation are copyable instructions — stale ones, against
+    // the generated rule that React 19 passes `ref` as a prop.
+    for (const f of ["react", "next"]) {
+      const cs = scoped("component-standards.md", f);
+      expect(cs, `${f}: forwardRef still labelled GOOD`).not.toMatch(/✓ GOOD:.*forwardRef/);
+      expect(cs).toMatch(/✓ GOOD:\s+export const Button = \(\{ ref, \.\.\.props \}\)/);
+    }
+  });
+
+  it("makes the canonical implementation sample the React 19 form", () => {
+    if (!has("styling-best-practices.md")) return;
+    const out = scoped("styling-best-practices.md", "react");
+    const anchor = out.indexOf("### Component implementation");
+    expect(anchor).toBeGreaterThan(-1);
+    const firstBlock = out.slice(anchor, out.indexOf("### Key rules", anchor));
+    // The DEFAULT sample must not wrap; the older form must survive only under its own label.
+    expect(firstBlock).toMatch(/React 19\+ \(the default\)/);
+    expect(firstBlock.indexOf("React 18 and earlier")).toBeLessThan(
+      firstBlock.indexOf("React.forwardRef"),
+    );
+  });
+
+  it("keeps the React 18 path available rather than deleting it", () => {
+    if (!has("styling-best-practices.md")) return;
+    const out = scoped("styling-best-practices.md", "react");
+    expect(out).toMatch(/React 18 and earlier only/);
+    expect(out).toMatch(/only for a component\s*\n?that actually exposes a ref|actually exposes a ref/);
+  });
+
+  it("does not version-scope examples for the other seven", () => {
+    for (const f of frameworkSchema.options) {
+      if (f === "react" || f === "next") continue;
+      const base = scopeReactRefMandate(pruneReactArchitecture(read("component-standards.md"), f), f);
+      expect(scopeReactRefExamples(base, f)).toBe(base);
+    }
   });
 
   it("keeps React's architecture intact apart from the ref mandate", () => {

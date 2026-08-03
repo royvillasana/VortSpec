@@ -334,5 +334,90 @@ export function scopeReactRefMandate(markdown: string, framework?: string | null
   return out;
 }
 
+
+/**
+ * The React `forwardRef` EXAMPLES — normative guidance, not inert illustration.
+ *
+ * I argued that an example is an illustration and left these alone. Thor was right that it is
+ * not: `component-standards.md` labels its `forwardRef` sample `✓ GOOD`, and
+ * `styling-best-practices.md` presents one as THE canonical component implementation. Both are
+ * copyable, and both contradict the generated rule that React 19 passes `ref` as an ordinary
+ * prop. A stale sample a reader is asked to discount is the adjudication problem in executable
+ * form.
+ *
+ * Replaced STRUCTURALLY — by anchor and whole fenced block — rather than by regex inside code,
+ * so nothing is half-rewritten into something that cannot compile. If the toolkit changes these
+ * blocks the anchors stop matching, the samples stay stale, and the outcome assertions below
+ * fail loudly rather than passing a no-op through.
+ */
+
+/** The default (React 19+) implementation sample, plus the older form kept clearly labelled. */
+const REACT19_IMPLEMENTATION = `\`\`\`tsx
+// Button.tsx — React 19+ (the default). \`ref\` is an ordinary prop; no wrapper is needed.
+import * as React from 'react';
+import { cn } from '@/lib/utils';
+import { buttonVariants, type ButtonVariants } from './button.variants';
+
+export interface ButtonProps
+  extends React.ButtonHTMLAttributes<HTMLButtonElement>,
+    ButtonVariants {
+  ref?: React.Ref<HTMLButtonElement>;
+}
+
+export const Button = ({ className, variant, size, disabled, children, ref, ...props }: ButtonProps) => (
+  <button
+    className={cn(buttonVariants({ variant, size }), className)}
+    ref={ref}
+    disabled={disabled}
+    aria-disabled={disabled || undefined}
+    {...props}
+  >
+    {children}
+  </button>
+);
+\`\`\`
+
+**React 18 and earlier only.** If \`package.json\` pins react below 19, and only for a component
+that actually exposes a ref, wrap it instead:
+
+\`\`\`tsx
+// React 18 and earlier
+const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(({ className, ...props }, ref) => (
+  <button className={cn(buttonVariants(), className)} ref={ref} {...props} />
+));
+Button.displayName = 'Button';
+export { Button };
+\`\`\``;
+
+/**
+ * Version-scope the React example blocks in a React/Next project copy. No-op elsewhere — the
+ * other seven lose the whole architecture section already.
+ */
+export function scopeReactRefExamples(markdown: string, framework?: string | null): string {
+  if (!REACT_FAMILY.has((framework ?? "").toLowerCase())) return markdown;
+  let out = markdown;
+
+  // 1. The `✓ GOOD` export sample. Its POINT is named-vs-default export, so the wrapper is
+  //    incidental — swapping it keeps the lesson and drops the stale normative form.
+  out = out.replace(
+    /^(✓ GOOD:\s+export const Button = )forwardRef\(…\)(\s*\/\/.*)$/m,
+    "$1({ ref, ...props }) => …$2",
+  );
+
+  // 2. The canonical implementation block: replace the whole fenced sample that follows the
+  //    heading, so the default is React 19 and the wrapper survives only under its own label.
+  const anchor = out.indexOf("### Component implementation");
+  if (anchor !== -1) {
+    const start = out.indexOf("```tsx", anchor);
+    if (start !== -1) {
+      const end = out.indexOf("```", start + "```tsx".length);
+      if (end !== -1) {
+        out = out.slice(0, start) + REACT19_IMPLEMENTATION + out.slice(end + 3);
+      }
+    }
+  }
+  return out;
+}
+
 /** The frameworks this module can scope docs for — the ones with a profile. */
 export const SCOPABLE_FRAMEWORKS = Object.keys(FRAMEWORK_PROFILES);
