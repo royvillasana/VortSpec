@@ -78,10 +78,19 @@ function enumerationClause(bridgeConnected: boolean): string {
         "through `figma.root.children` and gives a complete component + variable dump on any Figma plan. " +
         "Use `figma_audit_design_system`, `figma_lint_design`, and `figma_analyze_component_set` rather " +
         "than hand-walking the tree."
-    : "The Desktop Bridge is NOT connected. CRITICAL: the remote Figma MCP's page listing CAPS AT 3 " +
-        "PAGES — never treat that first-3 listing as the file's page set (that is the exact bug that made " +
-        "a 14-page library detect as ~8 entries). Cover EVERY page: use `search_design_system` and the " +
-        "full-document read, which are NOT capped, and say so in your report if any page could not be read.";
+    : "The Desktop Bridge is NOT connected. Two traps, both confirmed against a real file:\n" +
+        "  (a) The remote Figma MCP's page listing CAPS AT 3 PAGES. Never treat that first-3 listing as the " +
+        "file's page set. On a real design system it returned only `Colors & Shadow`, `Typography`, `Icons` — " +
+        "three FOUNDATION pages and not one component — while a `Screens` page sat unlisted. A scan trusting " +
+        "it concludes the system has no components at all. Cover every page via `search_design_system` and " +
+        "direct node reads, which are NOT capped, and report any page you could not reach.\n" +
+        "  (b) `search_design_system` is NOT scoped to this file by its `fileKey` — that argument is context, " +
+        "not a filter. Searching `button` returned 20 component sets from 20 UNRELATED libraries (Bootstrap, " +
+        "Radix, Joy UI, several client systems), three of which shared an identical description. Resolving by " +
+        "name against that set is not a fallback, it is a coin flip across other people's design systems. " +
+        "FIRST identify THIS file's own library key from an initial search result, then pass it in " +
+        "`includeLibraryKeys` on every subsequent search. A node resolved from any other library is WRONG, " +
+        "however well its name matches — report it as unresolved rather than using it.";
 }
 
 /**
