@@ -55,17 +55,17 @@
 
 ## 6. Phase 3 — token promotion
 
-- [ ] 6.1 Detect the promotion case: an `element`/`selection` edit that would hardcode a value onto members that all share a token for that property.
-- [ ] 6.2 Offer the promotion, naming the token and its use count.
-- [ ] 6.3 Accepting writes the token override instead of the per-element values; declining completes the original edit at the original scope, unchanged.
-- [ ] 6.4 Component tests: offered when shared, not offered when not shared, declining leaves the element edit intact and the token untouched.
+- [x] 6.1 Detect the promotion case: an `element`/`selection` edit that would hardcode a value onto members that all share a token for that property.
+- [x] 6.2 Offer the promotion, naming the token and its use count.
+- [x] 6.3 Accepting writes the token override instead of the per-element values; declining completes the original edit at the original scope, unchanged.
+- [x] 6.4 Component tests: offered when shared, not offered when not shared, declining leaves the element edit intact and the token untouched.
 
 ## 7. Assistant context
 
-- [ ] 7.1 Carry a multi-selection as one context entry rather than one per element.
-- [ ] 7.2 State the count in the chip, and what the members share when they share a component or a token binding.
-- [ ] 7.3 Reflect partial re-acquisition honestly after a reload rather than claiming the original count.
-- [ ] 7.4 Component test: five selected renders exactly one chip naming five.
+- [x] 7.1 Carry a multi-selection as one context entry rather than one per element.
+- [x] 7.2 State the count in the chip, and what the members share when they share a component or a token binding.
+- [x] 7.3 Reflect partial re-acquisition honestly after a reload rather than claiming the original count.
+- [x] 7.4 Component test: five selected renders exactly one chip naming five.
 
 ## 8. Verification
 

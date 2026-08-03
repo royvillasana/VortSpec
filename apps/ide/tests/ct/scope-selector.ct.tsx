@@ -161,3 +161,64 @@ test("choosing \"looks like this\" reports that scope and the component it keys 
   expect(scope).toBe("matching");
   expect(scopeKey).toBe("Button");
 });
+
+test("hardcoding over a token offers to change the token instead", async ({ mount }) => {
+  // The edit the user asked for is already applied when the offer appears. It is an offer precisely
+  // because the narrow edit is legitimate — but next time anything re-reads the design system, the token
+  // wins, so the system is usually what they meant to change.
+  const calls: unknown[][] = [];
+  const c = await mount(
+    panel(selection({ component: "Button", token: "radius-card" }), (...a) => calls.push(a)),
+  );
+
+  const input = c.getByRole("textbox").first();
+  await input.focus();
+  await c.getByRole("button", { name: "This element" }).click();
+  await input.fill("4px");
+  await input.press("Enter");
+
+  // The element edit landed first, unconditionally.
+  expect(calls.at(-1)?.[2]).toBe("element");
+
+  // Then the offer, naming the token and how far accepting would reach.
+  await expect(c.getByText(/--radius-card decides this/)).toBeVisible();
+  await expect(c.getByText(/40 uses/)).toBeVisible();
+
+  await c.getByRole("button", { name: "Change the token" }).click();
+  const [, value, scope, scopeKey] = calls.at(-1) as unknown[];
+  expect(value).toBe("4px");
+  expect(scope).toBe("token");
+  expect(scopeKey).toBe("radius-card");
+});
+
+test("declining the promotion leaves the element edit exactly as made", async ({ mount }) => {
+  const calls: unknown[][] = [];
+  const c = await mount(
+    panel(selection({ component: "Button", token: "radius-card" }), (...a) => calls.push(a)),
+  );
+
+  const input = c.getByRole("textbox").first();
+  await input.focus();
+  await c.getByRole("button", { name: "This element" }).click();
+  await input.fill("4px");
+  await input.press("Enter");
+
+  const before = calls.length;
+  await c.getByRole("button", { name: "Keep the change on this element" }).click();
+
+  // Dismissing writes nothing at all — the token is untouched and the element edit stands.
+  await expect(c.getByText(/decides this/)).toHaveCount(0);
+  expect(calls.length).toBe(before);
+  expect(calls.at(-1)?.[2]).toBe("element");
+});
+
+test("no promotion is offered when the members share no token", async ({ mount }) => {
+  const c = await mount(panel(selection({ component: "Button", token: null })));
+  const input = c.getByRole("textbox").first();
+  await input.focus();
+  await c.getByRole("button", { name: "This element" }).click();
+  await input.fill("4px");
+  await input.press("Enter");
+
+  await expect(c.getByText(/decides this/)).toHaveCount(0);
+});

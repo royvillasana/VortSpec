@@ -17,6 +17,8 @@ import { FigmaMcpBanner } from "../components/FigmaMcpBanner";
 import { StorybookSidebar } from "../components/run-canvas/StorybookSidebar";
 import { Sitemap, type PageGenState } from "../components/run-canvas/Sitemap";
 import type { RouteDiscovery, RouteNode, Rect } from "@vortspec/core/ipc";
+// Aliased: bare `Selection` in this file resolves to the DOM's, not the panel view-model's.
+import type { Selection as CanvasNodeSelection, BridgeTree } from "@vortspec/core/ipc";
 import { RunCanvas } from "../components/run-canvas/RunCanvas";
 import { Logo } from "../components/Logo";
 import { viewportsFromTokens, appliesInViewport, type ViewportId, type DeviceFrameKind } from "../components/run-canvas/viewports";
@@ -959,18 +961,26 @@ export function RunApp({
   // it appears as a persistent, detachable chip on the composer, grounds every
   // turn while the selection holds, and never triggers a run. Withdrawn when the
   // selection clears, the element is lost after a reload, or the canvas unmounts.
+  //
+  // A multi-selection is carried as ONE context, not one per member: five chips would say five things
+  // were selected separately, when the user selected one set. The chip states the count, and what the
+  // members have in common when they have anything, so the assistant and the user agree on what "the
+  // selection" refers to before a prompt is written against it.
   const publishSelection = usePublishCanvasSelection();
   useEffect(() => {
+    const ids = bridge.selectedIds;
     publishSelection(
       selection
         ? {
-            key: selection.nodeId,
-            label: selection.component ?? selection.label,
+            // Keyed on the whole set, so adding or removing a member replaces the chip rather than
+            // leaving one that describes a selection that no longer exists.
+            key: ids.length > 1 ? ids.join(",") : selection.nodeId,
+            label: multiSelectionLabel(selection, ids, bridge.tree),
             payload: buildSelectionContext(selection, Object.values(pending)),
           }
         : null,
     );
-  }, [selection, pending, publishSelection]);
+  }, [selection, pending, publishSelection, bridge.selectedIds, bridge.tree]);
   useEffect(() => () => publishSelection(null), [publishSelection]);
 
   // Storybook-backed component previews: the picker shows each component's story in
@@ -3085,3 +3095,26 @@ function ExternalLinkIcon(): React.JSX.Element {
 /** Shared style for the Playground header's icon-only actions (Open in browser, Refresh). */
 const HEADER_ICON_BTN =
   "rounded p-1.5 text-vs-text-muted transition-colors hover:bg-vs-bg-hover hover:text-vs-text-primary disabled:cursor-not-allowed disabled:opacity-50";
+
+
+/**
+ * What the assistant's chip calls the current selection (change: scoped-style-edits, Phase 2).
+ *
+ * One element keeps today's label. Several say how many, and name what they share when they share a
+ * component — "5 Buttons" is a thing a prompt can be written against; "Button" alongside four unnamed
+ * others is not. When they share nothing, the count alone is the honest answer.
+ *
+ * The count is of members actually still selected, so a partial re-acquisition after a reload reports
+ * what survived rather than what was originally chosen.
+ */
+export function multiSelectionLabel(
+  selection: CanvasNodeSelection,
+  ids: readonly string[],
+  tree: BridgeTree | null,
+): string {
+  if (ids.length <= 1) return selection.component ?? selection.label;
+  const components = ids.map((id) => tree?.nodes[id]?.component).filter(Boolean);
+  const shared =
+    components.length === ids.length && components.every((c) => c === components[0]) ? components[0] : null;
+  return shared ? `${ids.length} ${shared}s` : `${ids.length} elements`;
+}

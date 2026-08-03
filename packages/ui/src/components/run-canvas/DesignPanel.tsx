@@ -20,6 +20,7 @@ import {
   availableScopes,
   deriveScope,
   matchKey,
+  promotionTarget,
   type ScopeReach,
   type ScopeTarget,
   type StyleScope,
@@ -887,6 +888,9 @@ function ScopedField({
   const [open, setOpen] = useState(false);
   const [picked, setPicked] = useState<{ scope: StyleScope; key?: string } | null>(null);
   const active = picked ?? derived;
+  // A narrow edit that just hardcoded a value the design system already decides. Held so the offer can be
+  // made AFTER the edit lands — the edit is never blocked on answering, and declining costs one click.
+  const [promote, setPromote] = useState<{ token: string; value: string } | null>(null);
 
   // Ask the guest what looks the same the moment the field opens, so the count on the chip is the real
   // set by the time the user reads it. Asked per (component, value) — the same pair the label is keyed on.
@@ -917,11 +921,29 @@ function ScopedField({
           field={isMixed ? { ...field, value: "" } : field}
           colorTokens={colorTokens}
           tokens={tokens}
-          onChange={(val) => onChange(val, active.scope, active.key)}
+          onChange={(val) => {
+            onChange(val, active.scope, active.key);
+            // Offered only when every member reaches this property THROUGH one token: the edit has just
+            // written a literal over a value the design system decides, and next time the system will
+            // win. Never speculative — `promotionTarget` returns null when there is nothing to promote to.
+            const token = promotionTarget(active.scope, targets, field.key);
+            setPromote(token ? { token, value: val } : null);
+          }}
           onCreateToken={onCreateToken}
           placeholder={isMixed ? "Mixed" : undefined}
         />
       </Row>
+      {promote && (
+        <PromoteOffer
+          token={promote.token}
+          uses={reach.tokenUses?.[promote.token] ?? null}
+          onAccept={() => {
+            onChange(promote.value, "token", promote.token);
+            setPromote(null);
+          }}
+          onDismiss={() => setPromote(null)}
+        />
+      )}
       {open && (
         <div className="pl-[72px]">
           <ScopeSelector
@@ -1790,4 +1812,52 @@ function Collapsible({
 
 function cap(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+
+/**
+ * The offer to move an edit up into the design system (change: scoped-style-edits).
+ *
+ * Shown after a narrow edit hardcoded a value that a token already decides. It is an OFFER: the edit the
+ * user asked for has already been applied, so dismissing costs nothing and changes nothing. Accepting
+ * writes the token instead — which is the edit they probably meant, since the next time anything re-reads
+ * the design system the token wins anyway.
+ *
+ * The use count is stated because that is the difference between the two choices, and it is the number
+ * that makes accepting feel either obvious or alarming.
+ */
+function PromoteOffer({
+  token,
+  uses,
+  onAccept,
+  onDismiss,
+}: {
+  token: string;
+  uses: number | null;
+  onAccept: () => void;
+  onDismiss: () => void;
+}): JSX.Element {
+  return (
+    <div className="mt-1 flex items-center gap-1.5 rounded border border-vs-border-strong bg-vs-bg-elevated px-1.5 py-1 pl-[72px]">
+      <span className="min-w-0 flex-1 truncate text-[10px] text-vs-text-muted">
+        {`--${token} decides this`}
+        {uses !== null && ` · ${uses} uses`}
+      </span>
+      <button
+        type="button"
+        onClick={onAccept}
+        className="shrink-0 rounded border border-vs-accent bg-vs-accent-muted px-1.5 py-0.5 text-[10px] text-vs-text-primary"
+      >
+        Change the token
+      </button>
+      <button
+        type="button"
+        onClick={onDismiss}
+        aria-label="Keep the change on this element"
+        className="shrink-0 rounded border border-vs-border-default px-1.5 py-0.5 text-[10px] text-vs-text-muted hover:text-vs-text-secondary"
+      >
+        Keep
+      </button>
+    </div>
+  );
 }
