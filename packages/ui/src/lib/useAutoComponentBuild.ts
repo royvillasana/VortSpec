@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { Project } from "@vortspec/core/ipc";
 import { chunkByLevel, buildChunkPrompt } from "@vortspec/core/sdd-prompts";
 import { isConsumeSource } from "@vortspec/core/setup";
+import { frameworkSupportError } from "@vortspec/core/framework-profiles";
 import { api } from "./api";
 import { useAgentRun } from "./useAgentRun";
 
@@ -15,7 +16,7 @@ import { useAgentRun } from "./useAgentRun";
  */
 export function useAutoComponentBuild(
   project: Project | null,
-): { building: boolean; remaining: number; justFinished: number } {
+): { building: boolean; remaining: number; justFinished: number; setupRequired: string | null } {
   const run = useAgentRun();
   const startedRef = useRef<string | null>(null);
   const queueRef = useRef<{ chunks: string[][]; index: number } | null>(null);
@@ -25,6 +26,9 @@ export function useAutoComponentBuild(
   const [building, setBuilding] = useState(false);
   const [remaining, setRemaining] = useState(0);
   const [justFinished, setJustFinished] = useState(0);
+  // Non-null when the project's framework is unset or unrecognized. The auto-builder then
+  // does NOT run, and the shell can say why instead of silently doing nothing.
+  const [setupRequired, setSetupRequired] = useState<string | null>(null);
 
   const runNextChunk = useCallback(async () => {
     const q = queueRef.current;
@@ -79,6 +83,17 @@ export function useAutoComponentBuild(
         if (poll) window.clearInterval(poll);
         return;
       }
+      // TYPED PRE-RUN GATE. Generating without a known framework means generating React into
+      // whatever this project actually is — the defect this whole change exists to remove. The
+      // prompt's STOP clause is defense in depth; refusing to start the run is the real gate.
+      // Surfaced as `setupRequired` rather than swallowed, so the shell can prompt for /setup.
+      const unsupported = frameworkSupportError(cfg?.framework);
+      if (unsupported) {
+        setSetupRequired(unsupported);
+        startedRef.current = project.path;
+        if (poll) window.clearInterval(poll);
+        return;
+      }
       if (!comps || active) return; // no data yet, or a run is in flight — re-check next tick
       const unbuilt = comps.components.filter((c) => c.status === "unknown");
       if (unbuilt.length === 0) return; // design system not created yet — keep polling
@@ -106,5 +121,5 @@ export function useAutoComponentBuild(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [run.model.status]);
 
-  return { building, remaining, justFinished };
+  return { building, remaining, justFinished, setupRequired };
 }

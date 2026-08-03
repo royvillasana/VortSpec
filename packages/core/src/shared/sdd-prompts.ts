@@ -54,11 +54,38 @@ const VARIANT_SET_CLAUSE =
  * from its name. The reference is the component's own Figma NODE (its component set),
  * resolved AUTONOMOUSLY — never by asking the user for a link. Detection records each
  * entry's `figmaNodeId`/`componentKey`; the build reads that exact node. When the id is
- * missing, the build resolves it itself via `search_design_system` (scoped to this
- * file's own library) — which is NOT subject to the 3-page listing cap. Tokens supply
+ * missing, the build resolves it itself via `search_design_system` — which is NOT subject
+ * to the 3-page listing cap, but which MUST be scoped via `includeLibraryKeys` (see
+ * SCOPED_SEARCH_CLAUSE; the file key alone does not scope it). Tokens supply
  * VALUES only; the reference supplies STRUCTURE. This is what stops "the alert looks
  * like a restyled button."
  */
+/**
+ * How to scope `search_design_system` — and why saying "scoped" was not enough
+ * (found by running the audit against a real file, 2026-08-04).
+ *
+ * This clause used to instruct "`search_design_system` scoped to THIS file's own library
+ * (from `figma_file_url`)". It is NOT scoped by passing the file key: `fileKey` is context,
+ * not a filter. Searching `button` against one real project file returned 20 component sets
+ * from 20 DIFFERENT libraries — Bootstrap, Radix, Joy UI, and other orgs' systems — three of
+ * them carrying byte-identical descriptions.
+ *
+ * That matters more than it looks: across the projects on disk, 0 of 242 roster entries carry
+ * a `figmaNodeId`, so step (2) is not a fallback — it is the ONLY resolution path any build
+ * uses today. A build asking for "button" has been choosing from twenty strangers' buttons.
+ *
+ * `includeLibraryKeys` is the actual filter. And because a wrong-library match is worse than
+ * no match (it silently reproduces someone else's component), a match found ONLY outside this
+ * file's own library must count as unresolved.
+ */
+const SCOPED_SEARCH_CLAUSE =
+  "`search_design_system` is NOT scoped by the file key alone — `fileKey` is context, not a filter, and an " +
+  "unscoped search returns same-named components from every library in the org. You MUST pass this file's " +
+  "OWN library key in `includeLibraryKeys` (resolve it from `figma_file_url` / the file's library). If a " +
+  "name matches ONLY in another library, treat the component as UNRESOLVED — do NOT use a cross-library " +
+  "match, and never pick between same-named candidates by description: several libraries ship byte-identical " +
+  "component descriptions.";
+
 const DESIGN_REFERENCE_CLAUSE = [
   "DESIGN REFERENCE — do this BEFORE writing code, entirely yourself (never ask me for a Figma link):",
   "if project.yaml's `design_source` is a CONSUME source (`library` or `enterprise`), the authoritative",
@@ -70,9 +97,9 @@ const DESIGN_REFERENCE_CLAUSE = [
   "any values you map. Otherwise (`design_source: figma`), the authoritative reference for a component is",
   "its own Figma NODE (the component set). RESOLVE it in this order: (1) the entry's `figmaNodeId`/`componentKey` in",
   ".sdd-de/components.json — read that exact node via the Figma MCP (get_design_context / get_screenshot);",
-  "(2) if that is missing, resolve the node yourself with `search_design_system` scoped to THIS file's own",
-  "library (from `figma_file_url`) — it returns the component by name and is NOT capped like the page",
-  "listing; (3) the Desktop Bridge (figma-console) if connected. Do NOT rely on the remote page listing to",
+  "(2) if that is missing, resolve the node yourself with `search_design_system` — it returns the component",
+  "by name and is NOT capped like the page listing. " + SCOPED_SEARCH_CLAUSE + " (3) the Desktop Bridge",
+  "(figma-console) if connected. Do NOT rely on the remote page listing to",
   "locate it — that CAPS AT 3 pages. Read the resolved node's frames/variants and view its screenshot, and",
   "REPRODUCE that design — structure, parts, and every variant. Use the extracted design tokens ONLY for",
   "VALUES (color/spacing/radius/typography) and use the component's OWN design tokens (e.g. the",
@@ -422,9 +449,9 @@ export function verifyPrompt(
   const resolveRef = isFigma
     ? "RESOLVE each component's authoritative Figma reference YOURSELF — never ask me for a link. Use, in " +
       "order: (1) the entry's `figmaNodeId`/`componentKey` in .sdd-de/components.json, read via the Figma MCP " +
-      "(get_design_context / get_screenshot on that node); (2) if missing, `search_design_system` scoped to " +
-      "THIS file's own library (from `figma_file_url`) to resolve the node by name — it is NOT capped like the " +
-      "page listing; (3) the Desktop Bridge if connected. Do NOT use the remote page listing (caps at 3)."
+      "(get_design_context / get_screenshot on that node); (2) if missing, `search_design_system` to resolve " +
+      "the node by name — it is NOT capped like the page listing. " + SCOPED_SEARCH_CLAUSE + " (3) the " +
+      "Desktop Bridge if connected. Do NOT use the remote page listing (caps at 3)."
     : "Compare against the component's spec and design source (design_source is not Figma).";
   const compareTo = isFigma
     ? "the component's authoritative Figma node (resolved as above), screenshot included"

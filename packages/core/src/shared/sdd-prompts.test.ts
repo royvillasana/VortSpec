@@ -349,3 +349,39 @@ describe("build prompts state the framework's conventions (change: framework-pro
     expect(buildRemainingPrompt("vue")).toContain("defineProps");
   });
 });
+
+describe("search_design_system must be scoped by includeLibraryKeys (found on a real file)", () => {
+  // The clause used to say "scoped to THIS file's own library (from `figma_file_url`)".
+  // It is not: fileKey is context, not a filter. A real search for `button` returned 20
+  // component sets from 20 different libraries, three with byte-identical descriptions.
+  // With 0 of 242 roster entries carrying a figmaNodeId, this is the ONLY resolution path
+  // any build uses today.
+  it("tells the build to pass includeLibraryKeys, not just the file key", () => {
+    const p = buildChunkPrompt(["button"], { framework: "react" });
+    expect(p).toContain("includeLibraryKeys");
+    expect(p).toMatch(/NOT scoped by the file key alone/);
+  });
+
+  it("treats a cross-library-only match as unresolved rather than using it", () => {
+    const p = buildChunkPrompt(["button"], { framework: "react" });
+    expect(p).toMatch(/ONLY in another library, treat the component as UNRESOLVED/);
+  });
+
+  it("forbids picking between same-named candidates by description", () => {
+    // Three of the twenty real matches carried identical description text.
+    expect(buildChunkPrompt(["button"], { framework: "react" })).toMatch(
+      /never pick between same-named candidates by description/,
+    );
+  });
+
+  it("applies the same scoping to verify, which resolves the reference the same way", () => {
+    const p = verifyPrompt("button", "http://localhost:6006", true, "react");
+    expect(p).toContain("includeLibraryKeys");
+    expect(p).toMatch(/UNRESOLVED/);
+  });
+
+  it("no longer claims the file key alone scopes the search", () => {
+    const p = buildChunkPrompt(["button"], { framework: "react" });
+    expect(p).not.toMatch(/`search_design_system` scoped to THIS file's own/);
+  });
+});

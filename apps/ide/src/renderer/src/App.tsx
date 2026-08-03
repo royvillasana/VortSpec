@@ -724,10 +724,18 @@ export default function App(): JSX.Element {
       <div className={`flex h-screen w-screen flex-col overflow-hidden text-vs-text-primary ${CHROME_BG}`}>
         {/* Automatic background component build (light-pages-on-canvas §9): a quiet running indicator +
             a completion toast, so the user knows the design-system components are building while they work. */}
-        {(autoFoundation.extracting || autoBuild.building || buildNotice) && !buildIndicatorDismissed && (
+        {(autoFoundation.extracting || autoBuild.building || buildNotice || autoBuild.setupRequired) && !buildIndicatorDismissed && (
           <div className="pointer-events-none fixed bottom-4 left-1/2 z-[60] -translate-x-1/2">
             <div className="pointer-events-auto flex items-center gap-2 rounded-lg border border-vs-border-default bg-vs-bg-elevated/95 px-3 py-2 text-[12px] text-vs-text-secondary shadow-lg backdrop-blur">
-              {buildNotice ? (
+              {autoBuild.setupRequired ? (
+                /* The framework is unset or unrecognized, so the background build refused to start.
+                   Say so — a silently absent build reads as "nothing to do", which is how a project
+                   sat generating React into a non-React app. */
+                <>
+                  <span className="text-vs-warning" aria-hidden>!</span>
+                  <span className="text-vs-text-primary">{autoBuild.setupRequired}</span>
+                </>
+              ) : buildNotice ? (
                 <>
                   <span className="text-vs-success">✓</span>
                   <span className="text-vs-text-primary">{buildNotice}</span>

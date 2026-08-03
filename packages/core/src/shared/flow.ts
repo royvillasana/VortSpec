@@ -184,7 +184,9 @@ export const DEFAULT_FLOW: StageDef[] = [
       "Figma MCP's page listing CAPS AT 3 PAGES, so a 14-page page-per-component library would wrongly detect " +
       "as ~8 documentation/foundation entries (icon/text/paragraph/callout/table/header) and MISS the real " +
       "components (Alerts, Buttons, Card, Carousel, Dropdowns, Navbar, Tooltips, Input, Form). If the Desktop " +
-      "Bridge is unavailable, still cover EVERY component: use the remote MCP's `search_design_system` scoped " +
+      "Bridge is unavailable, still cover EVERY component: use the remote MCP's `search_design_system` — pass " +
+      "this file's OWN library key in `includeLibraryKeys`, because the file key alone does NOT scope it and an " +
+      "unscoped search returns same-named components from every library in the org — scoped " +
       "to THIS file's own library (from `figma_file_url`) to enumerate all component sets — never stop at the " +
       "capped page listing. Read the FULL variable collection (`figma_token_collection`) AND the text/color " +
       "STYLES. Fetch VARIABLES + STYLES (not code generation). Extract the COMPLETE token set and NEVER guess " +
