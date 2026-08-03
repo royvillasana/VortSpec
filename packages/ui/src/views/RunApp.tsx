@@ -2425,6 +2425,10 @@ export function RunApp({
           tree={layersTree}
           hoveredId={bridge.hoveredId}
           selectedIds={bridge.selectedIds}
+          onSelectMatching={(by) => {
+            const id = selectedIdRef.current;
+            if (id) bridge.selectMatching(id, by);
+          }}
           matched={bridge.matched}
           mixed={mixedFields}
           onMatchQuery={bridge.matchElements}

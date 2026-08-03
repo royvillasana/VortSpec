@@ -186,7 +186,21 @@ export function RunCanvas({
         {/* Overlay lives inside the stage → boxes use guest coords directly.
             Only shown in Inspect mode — Interact leaves the app untouched. */}
         <div data-vs-overlay className="pointer-events-none absolute inset-0">
-          {mode === "inspect" && hovRect && <Box rect={hovRect} kind="hover" />}
+          {mode === "inspect" && hovRect && !bridge.marquee && <Box rect={hovRect} kind="hover" />}
+          {/* The marquee, drawn host-side like every other overlay so it shares their coordinate space
+              and cannot be captured into the page's own DOM. */}
+          {mode === "inspect" && bridge.marquee && (
+            <div
+              data-vs-marquee
+              className="pointer-events-none absolute border border-vs-accent bg-vs-accent/10"
+              style={{
+                left: bridge.marquee.x,
+                top: bridge.marquee.y,
+                width: bridge.marquee.width,
+                height: bridge.marquee.height,
+              }}
+            />
+          )}
           {/* Every OTHER member of the selection. The focused member is drawn below with handles and a
               label — a set of five where one is the panel's subject has to say which one, or the user
               cannot tell what the attributes they are reading belong to. */}

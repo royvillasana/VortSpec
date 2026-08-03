@@ -606,6 +606,52 @@ const DRAG_THRESHOLD = 4;
 /** Light-page mode: the DOM IS the source, so drop targets don't require a `data-source` dev-stamp. */
 let lightMode = false;
 /** A press on the selected element, armed but not yet past the movement threshold. */
+
+/**
+ * An in-flight marquee (change: scoped-style-edits, Phase 2). Begun on EMPTY canvas space only — a drag
+ * that starts on an element stays that element's move, which is the existing behaviour and the one the
+ * hand expects.
+ */
+let marquee: { x0: number; y0: number; x1: number; y1: number; additive: boolean } | null = null;
+
+/** The marquee's current rectangle, normalized so dragging up/left works like dragging down/right. */
+function marqueeRect(m: NonNullable<typeof marquee>): { x: number; y: number; width: number; height: number } {
+  return {
+    x: Math.min(m.x0, m.x1),
+    y: Math.min(m.y0, m.y1),
+    width: Math.abs(m.x1 - m.x0),
+    height: Math.abs(m.y1 - m.y0),
+  };
+}
+
+/**
+ * The OUTERMOST elements a rectangle fully encloses.
+ *
+ * Fully encloses, not merely touches: a marquee that grabs everything it brushes past selects things the
+ * user did not mean to include, and a selection you have to prune is worse than one you have to extend.
+ *
+ * Outermost, because enclosing a card also encloses everything inside it. Selecting the card AND its
+ * children would apply an edit twice over and make the count meaningless — so a candidate whose ancestor
+ * is also enclosed is dropped in favour of the ancestor.
+ */
+function enclosedIds(r: { x: number; y: number; width: number; height: number }): string[] {
+  const inside = new Map<string, Element>();
+  for (const [id, el] of byId) {
+    const b = el.getBoundingClientRect();
+    if (b.width === 0 || b.height === 0) continue;
+    if (b.left >= r.x && b.top >= r.y && b.right <= r.x + r.width && b.bottom <= r.y + r.height) {
+      inside.set(id, el);
+    }
+  }
+  const els = new Set(inside.values());
+  return [...inside]
+    .filter(([, el]) => {
+      for (let p = el.parentElement; p; p = p.parentElement) if (els.has(p)) return false;
+      return true;
+    })
+    .map(([id]) => id);
+}
+
 let dragArm: { id: string; el: Element; startX: number; startY: number; grabX: number; grabY: number } | null = null;
 /** The live drag: the dragged element, its fingerprint, the cached structural model, and the grab offset. */
 let dragging: {
@@ -994,6 +1040,32 @@ function handleCommand(cmd: BridgeCommand): void {
       send({ t: "readouts", readouts });
       return;
     }
+    case "selectMatching": {
+      // Answered in the guest for the same reason `matchElements` is: matching is a question about the
+      // live DOM. The result is SELECTED rather than edited, so the user sees the set highlighted and can
+      // remove members before anything is written — a bulk edit you can review beats one you must undo.
+      const src = resolve(cmd.nodeId);
+      if (!src) return;
+      const nodeIds: string[] = [];
+      for (const [id, el] of byId) {
+        let hit = false;
+        if (cmd.by === "component") {
+          const c = src.getAttribute("data-component");
+          hit = !!c && el.getAttribute("data-component") === c;
+        } else if (cmd.by === "tag") {
+          hit = el.tagName === src.tagName;
+        } else if (cmd.by === "token" && cmd.cssProp) {
+          // Same binding, not merely the same value: two elements can land on 8px by different routes,
+          // and only one of those routes follows the design system.
+          const want = getComputedStyle(src).getPropertyValue(cmd.cssProp).trim();
+          hit = getComputedStyle(el).getPropertyValue(cmd.cssProp).trim() === want;
+        }
+        if (hit) nodeIds.push(id);
+      }
+      send({ t: "selectedMany", nodeIds, additive: false });
+      if (nodeIds.length) selectedId = nodeIds[nodeIds.length - 1];
+      return;
+    }
     case "matchElements": {
       // "Looks the same" is a question about the live DOM, so it is answered here rather than guessed
       // host-side from the tree. Same component AND the same COMPUTED value — computed, so that an element
@@ -1243,6 +1315,14 @@ function attach(): void {
   window.addEventListener(
     "pointermove",
     (e: PointerEvent) => {
+      // A marquee in flight owns the pointer: stream its rectangle so the host can draw it, and take no
+      // hover feedback, which would fight the rectangle for the user's attention.
+      if (marquee) {
+        marquee.x1 = e.clientX;
+        marquee.y1 = e.clientY;
+        send({ t: "marquee", rect: marqueeRect(marquee) });
+        return;
+      }
       // Hover feedback in inspect/comment (the target element) and insert (the slot).
       if (mode !== "inspect" && mode !== "comment" && mode !== "insert") return;
       if (rafPending) return;
@@ -1294,6 +1374,19 @@ function attach(): void {
       }
       if (mode !== "inspect" && mode !== "comment") return;
       const deepId = idUnder(e.target);
+      // Empty space in inspect mode begins a marquee. Only here: a press ON an element is that element's
+      // select-then-move, and stealing it for a marquee would break the gesture the hand already knows.
+      if (mode === "inspect" && deepId === null) {
+        marquee = {
+          x0: e.clientX,
+          y0: e.clientY,
+          x1: e.clientX,
+          y1: e.clientY,
+          additive: e.shiftKey || e.metaKey || e.ctrlKey,
+        };
+        e.preventDefault();
+        return;
+      }
       if (deepId === null) return;
       e.preventDefault();
       e.stopPropagation();
@@ -1335,6 +1428,19 @@ function attach(): void {
   window.addEventListener(
     "pointerup",
     (e: PointerEvent) => {
+      if (marquee) {
+        const r = marqueeRect(marquee);
+        const additive = marquee.additive;
+        marquee = null;
+        send({ t: "marquee", rect: null });
+        // A marquee that never moved is a click on empty space — which clears, rather than selecting the
+        // zero elements a degenerate rectangle encloses.
+        const ids = r.width < 3 && r.height < 3 ? [] : enclosedIds(r);
+        send({ t: "selectedMany", nodeIds: ids, additive });
+        if (ids.length) selectedId = ids[ids.length - 1];
+        else if (!additive) selectedId = null;
+        return;
+      }
       if (dragging) {
         e.preventDefault();
         e.stopPropagation();

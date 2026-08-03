@@ -129,3 +129,42 @@ test("the layer tree multi-selects with a modifier, and marks which member is fo
   await other.click({ modifiers: ["Shift"] });
   expect(calls.at(-1)).toEqual(["div", true]);
 });
+
+test("select-all-matching names its criterion instead of guessing at one", async ({ mount }) => {
+  // "Select things like this" means several different things. Naming the criterion is what lets the user
+  // know which set they are about to edit — and the result is SELECTED, not edited, so it can be pruned
+  // first. A bulk edit you can review beats one you have to undo.
+  const calls: string[] = [];
+  const c = await mount(
+    <DesignPanel
+      storageKey="ct-selectmatching"
+      selection={SELECTION}
+      tree={TREE}
+      onSelectNode={() => {}}
+      onSelectMatching={(by) => calls.push(by)}
+    />,
+  );
+
+  // The component criterion is named after the actual component, not a generic "similar".
+  await c.getByRole("button", { name: "All Cards" }).click();
+  expect(calls.at(-1)).toBe("component");
+
+  await c.getByRole("button", { name: "Same tag" }).click();
+  expect(calls.at(-1)).toBe("tag");
+});
+
+test("no component means no component criterion to offer", async ({ mount }) => {
+  const plain = { ...SELECTION, component: null } as typeof SELECTION;
+  const c = await mount(
+    <DesignPanel
+      storageKey="ct-selectmatching-plain"
+      selection={plain}
+      tree={TREE}
+      onSelectNode={() => {}}
+      onSelectMatching={() => {}}
+    />,
+  );
+
+  await expect(c.getByRole("button", { name: /^All / })).toHaveCount(0);
+  await expect(c.getByRole("button", { name: "Same tag" })).toBeVisible();
+});

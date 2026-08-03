@@ -106,6 +106,7 @@ export function DesignPanel({
   tree,
   hoveredId,
   onSelectNode,
+  onSelectMatching,
   selectedIds,
   matched = {},
   mixed = {},
@@ -177,6 +178,8 @@ export function DesignPanel({
   /** Create a new design token from a field's current value, then bind the field to it. Bootstraps
    *  the token file if the project has none yet. Throws with a human message on a bad name/dupe. */
   onCreateToken?: (name: string, value: string, tokenType?: string) => Promise<void>;
+  /** Select every element matching the current one by a named criterion. */
+  onSelectMatching?: (by: "component" | "tag") => void;
   /** Open the assign/replace-component dialog for the current selection (on demand). */
   onAssign?: () => void;
   /** Screen files whose spec owes a Screen Creation update (deferred from an insert). */
@@ -261,6 +264,27 @@ export function DesignPanel({
         ) : (
           <>
             <SelectionHeader selection={selection} onAssign={onAssign} onDelete={onDelete} />
+            {onSelectMatching && (
+              <div className="flex flex-wrap items-center gap-1 px-3 pb-1">
+                <span className="text-[9.5px] uppercase tracking-[0.06em] text-vs-text-muted">Select</span>
+                {selection.component && (
+                  <button
+                    type="button"
+                    onClick={() => onSelectMatching("component")}
+                    className="rounded border border-vs-border-default px-1.5 py-0.5 text-[10px] text-vs-text-muted transition-colors hover:border-vs-border-strong hover:text-vs-text-secondary"
+                  >
+                    {`All ${selection.component}s`}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => onSelectMatching("tag")}
+                  className="rounded border border-vs-border-default px-1.5 py-0.5 text-[10px] text-vs-text-muted transition-colors hover:border-vs-border-strong hover:text-vs-text-secondary"
+                >
+                  Same tag
+                </button>
+              </div>
+            )}
             {/* Assigning / reusing / extracting a component moved to the inspect
                 AssignDialog (change: canvas-compose-and-preview-bar) — this panel is
                 now just identity + editable properties. */}

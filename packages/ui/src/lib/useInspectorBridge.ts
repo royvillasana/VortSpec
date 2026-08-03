@@ -52,6 +52,8 @@ export interface InspectorBridge {
   matched: Record<string, string[]>;
   /** Computed readouts for every member of a multi-selection, keyed by node id. */
   readouts: Record<string, NodeReadout>;
+  /** The in-flight marquee rectangle, in guest coords, or null when no drag is running. */
+  marquee: Rect | null;
   hoveredId: string | null;
   /** Live rectangles keyed by node id (updated on readout/geometry) for the overlay. */
   rects: Record<string, Rect>;
@@ -84,6 +86,8 @@ export interface InspectorBridge {
   matchElements: (key: string, component: string, cssProp: string, value: string) => void;
   /** Ask the guest for several nodes' readouts; they land in `readouts`. Does not move the focus. */
   requestReadouts: (nodeIds: string[]) => void;
+  /** Extend the selection to everything matching one named criterion. */
+  selectMatching: (nodeId: string, by: "component" | "tag" | "token", cssProp?: string) => void;
   hover: (id: string | null) => void;
   /** Toggle guest input handling: inspect (select), interact (use the app), comment (pin). */
   setMode: (mode: CanvasMode) => void;
@@ -194,6 +198,7 @@ export function useInspectorBridge(): InspectorBridge {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [matched, setMatched] = useState<Record<string, string[]>>({});
   const [readouts, setReadouts] = useState<Record<string, NodeReadout>>({});
+  const [marquee, setMarquee] = useState<Rect | null>(null);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [rects, setRects] = useState<Record<string, Rect>>({});
   const [runtimeError, setRuntimeError] = useState<InspectorBridge["runtimeError"]>(null);
@@ -260,6 +265,18 @@ export function useInspectorBridge(): InspectorBridge {
         });
         return;
       }
+      case "marquee":
+        setMarquee(event.rect);
+        return;
+      case "selectedMany":
+        // The marquee's result replaces the selection, or extends it when the drag held a modifier.
+        setSelectedIds((prev) => {
+          const next = event.additive ? [...new Set([...prev, ...event.nodeIds])] : event.nodeIds;
+          setSelectedId(next[next.length - 1] ?? null);
+          return next;
+        });
+        if (event.nodeIds.length === 0 && !event.additive) setReadout(null);
+        return;
       case "readouts":
         setReadouts(Object.fromEntries(event.readouts.map((r) => [r.nodeId, r])));
         return;
@@ -547,6 +564,11 @@ export function useInspectorBridge(): InspectorBridge {
     (nodeIds: string[]) => send({ t: "readoutMany", nodeIds }),
     [send],
   );
+  const selectMatching = useCallback(
+    (nodeId: string, by: "component" | "tag" | "token", cssProp?: string) =>
+      send({ t: "selectMatching", nodeId, by, cssProp }),
+    [send],
+  );
   /** Ask which elements currently look the same as `value` for `cssProp`, under `component`. */
   const matchElements = useCallback(
     (key: string, component: string, cssProp: string, value: string) =>
@@ -598,6 +620,8 @@ export function useInspectorBridge(): InspectorBridge {
     matchElements,
     readouts,
     requestReadouts,
+    selectMatching,
+    marquee,
     hoveredId,
     rects,
     runtimeError,

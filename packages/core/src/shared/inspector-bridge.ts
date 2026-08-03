@@ -300,6 +300,18 @@ export const bridgeCommandSchema = z.discriminatedUnion("t", [
    * them; `selectNode` cannot serve that, because asking would move the focus the panel is describing.
    */
   z.object({ t: z.literal("readoutMany"), nodeIds: z.array(z.string()) }),
+  /**
+   * Extend the selection to every element matching one NAMED criterion. The criterion is explicit rather
+   * than inferred, because "select things like this one" means several different things and the user has
+   * to know which one they asked for before a bulk edit follows it.
+   */
+  z.object({
+    t: z.literal("selectMatching"),
+    nodeId: z.string(),
+    by: z.enum(["component", "tag", "token"]),
+    /** For `by: "token"`: the CSS property whose token binding must match. */
+    cssProp: z.string().optional(),
+  }),
   z.object({ t: z.literal("hoverNode"), nodeId: z.string().nullable() }),
   /**
    * Toggle guest input handling: `inspect` intercepts hover/click to drive
@@ -450,6 +462,10 @@ export const bridgeEventSchema = z.discriminatedUnion("t", [
   z.object({ t: z.literal("matchedElements"), key: z.string(), nodeIds: z.array(z.string()) }),
   /** Readouts for a `readoutMany` query. Members that no longer resolve are simply absent. */
   z.object({ t: z.literal("readouts"), readouts: z.array(nodeReadoutSchema) }),
+  /** The in-flight marquee rectangle in guest coords, or null when the drag ends. */
+  z.object({ t: z.literal("marquee"), rect: rectSchema.nullable() }),
+  /** The marquee's result: the outermost elements it enclosed. `additive` extends the current set. */
+  z.object({ t: z.literal("selectedMany"), nodeIds: z.array(z.string()), additive: z.boolean() }),
   /** Geometry-only update (scroll/resize/layout) so overlays stay aligned. */
   z.object({ t: z.literal("geometry"), nodeId: z.string(), rect: rectSchema }),
   /** The element under the pointer in inspect mode (null when the pointer leaves). */
