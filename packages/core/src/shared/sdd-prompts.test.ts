@@ -67,14 +67,14 @@ describe("verifyPrompt — honest gate (no false PASS without a live render)", (
     expect(p).not.toMatch(/npx tsc/);
   });
 
-  // An unrunnable check must read as BLOCKED, never as a pass — the whole defect class.
-  it("blocks CODE when the framework has no type-check, instead of running one that lies", () => {
+  // Vanilla now has a real gate (`node --check`), but one that cannot cover HTML — so the
+  // prompt must run it AND say what it did not cover, rather than implying full coverage.
+  it("runs vanilla's real check and marks its coverage partial", () => {
     const p = verifyPrompt("button", "http://localhost:5173", false, "vanilla");
-    expect(p).toMatch(/NO type-check step/);
-    expect(p).toMatch(/CODE: blocked/);
-    // The clause names `npx tsc` only to FORBID it, so assert no command is prescribed.
-    expect(p).not.toMatch(/framework-native type-check — '/);
-    expect(p).toMatch(/do NOT substitute/);
+    expect(p).toMatch(/node --check/);
+    expect(p).toMatch(/PARTIAL/);
+    expect(p).toMatch(/JS syntax only/);
+    expect(p).not.toMatch(/npx tsc/);
   });
 
   it("blocks CODE on an unknown framework rather than silently falling back to tsc", () => {

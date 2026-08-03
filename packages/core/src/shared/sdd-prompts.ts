@@ -376,7 +376,14 @@ export const RESUME_PROMPT =
 function typecheckClause(framework?: string | null): string {
   const r = resolveTypecheck(framework);
   if (r.kind === "cmd") {
-    return `run the project's framework-native type-check — '${r.cmd}' — and, for a Storybook/`;
+    // An `experimental` framework has a real check that can fail, but one that does not cover
+    // everything the framework can get wrong. Say so, so a pass is never read as broader
+    // than it is.
+    const partial = r.partial
+      ? ` That check is PARTIAL (${r.partial}) — report what it did and did not cover, and do ` +
+        `not treat its pass as full CODE coverage.`
+      : "";
+    return `run the project's framework-native type-check — '${r.cmd}' —${partial} and, for a Storybook/`;
   }
   // Both remaining outcomes mean "we could not check". Neither may be reported as a pass:
   // an unrunnable check is BLOCKED, and BLOCKED propagates to Layer 1 exactly as a failure

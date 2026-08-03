@@ -47,6 +47,14 @@ export interface FrameworkProfile {
    * Angular's `.spec`/`.module`/`.service` siblings, and every framework's stories.
    */
   readonly nonComponentSuffixes: readonly string[];
+  /** `storybook init --type` hint, or `null` to let Storybook auto-detect. */
+  readonly storybookType: string | null;
+  /**
+   * How completely VortSpec can verify this framework. `experimental` means a real check
+   * exists but does not cover everything the framework can get wrong — the verify prompt
+   * says so, so a pass is never read as broader than it is.
+   */
+  readonly supportLevel: "supported" | "experimental";
 }
 
 /** Stories are never components, in any framework. */
@@ -57,18 +65,22 @@ const NEVER_A_COMPONENT = [".stories", ".variants", ".test", ".spec"] as const;
  * future edit to one framework can never silently change another (Nuxt already needs a
  * different type-check from Vue for exactly this reason).
  */
-export const FRAMEWORK_PROFILES: Readonly<Record<Framework, FrameworkProfile>> = Object.freeze({
+const RAW_PROFILES = {
   react: Object.freeze({
     sourceExts: [".tsx", ".jsx", ".ts", ".js"],
     typecheckCmd: "npx tsc --noEmit",
     fileSuffixes: [],
     nonComponentSuffixes: [...NEVER_A_COMPONENT],
+    storybookType: "react",
+    supportLevel: "supported",
   }),
   next: Object.freeze({
     sourceExts: [".tsx", ".jsx", ".ts", ".js"],
     typecheckCmd: "npx tsc --noEmit",
     fileSuffixes: [],
     nonComponentSuffixes: [...NEVER_A_COMPONENT],
+    storybookType: "nextjs",
+    supportLevel: "supported",
   }),
   vue: Object.freeze({
     sourceExts: [".vue"],
@@ -76,6 +88,8 @@ export const FRAMEWORK_PROFILES: Readonly<Record<Framework, FrameworkProfile>> =
     typecheckCmd: "npx vue-tsc --noEmit",
     fileSuffixes: [],
     nonComponentSuffixes: [...NEVER_A_COMPONENT],
+    storybookType: "vue3",
+    supportLevel: "supported",
   }),
   nuxt: Object.freeze({
     sourceExts: [".vue"],
@@ -85,6 +99,8 @@ export const FRAMEWORK_PROFILES: Readonly<Record<Framework, FrameworkProfile>> =
     typecheckCmd: "npx nuxi typecheck",
     fileSuffixes: [],
     nonComponentSuffixes: [...NEVER_A_COMPONENT],
+    storybookType: "vue3",
+    supportLevel: "supported",
   }),
   svelte: Object.freeze({
     sourceExts: [".svelte"],
@@ -93,12 +109,16 @@ export const FRAMEWORK_PROFILES: Readonly<Record<Framework, FrameworkProfile>> =
     typecheckCmd: "npx svelte-check --threshold error",
     fileSuffixes: [],
     nonComponentSuffixes: [...NEVER_A_COMPONENT],
+    storybookType: "svelte",
+    supportLevel: "supported",
   }),
   sveltekit: Object.freeze({
     sourceExts: [".svelte"],
     typecheckCmd: "npx svelte-check --threshold error",
     fileSuffixes: [],
     nonComponentSuffixes: [...NEVER_A_COMPONENT],
+    storybookType: "sveltekit",
+    supportLevel: "supported",
   }),
   angular: Object.freeze({
     // The component IS the `.ts` class; the sibling `.html` is its template, not a second
@@ -109,24 +129,50 @@ export const FRAMEWORK_PROFILES: Readonly<Record<Framework, FrameworkProfile>> =
     typecheckCmd: "npx ng build --configuration development",
     fileSuffixes: [".component"],
     nonComponentSuffixes: [...NEVER_A_COMPONENT, ".module", ".service", ".routes", ".config", ".guard"],
+    storybookType: "angular",
+    supportLevel: "supported",
   }),
   astro: Object.freeze({
     sourceExts: [".astro"],
     typecheckCmd: "npx astro check",
     fileSuffixes: [],
     nonComponentSuffixes: [...NEVER_A_COMPONENT],
+    storybookType: "html",
+    supportLevel: "supported",
   }),
   vanilla: Object.freeze({
     // A vanilla component is an HTML partial plus its own CSS (see the toolkit's
     // `docs/framework-config.md` → Vanilla); the partial is the component file.
     sourceExts: [".html", ".js"],
-    // No build step exists to check, so there is nothing that could fail — callers MUST
-    // report BLOCKED rather than treating the absence of a check as a pass.
-    typecheckCmd: null,
+    // `node --check` ships with Node, needs no install, respects package.json `type`, and
+    // exits non-zero on a syntax error — a real gate that can fail, not an absent one.
+    // It covers JS only: nothing bundled validates HTML, which is why vanilla is
+    // `experimental` rather than fully supported.
+    typecheckCmd: "find . -name '*.js' -not -path './node_modules/*' -exec node --check {} +",
     fileSuffixes: [],
     nonComponentSuffixes: [...NEVER_A_COMPONENT],
+    storybookType: "html",
+    supportLevel: "experimental",
   }),
-});
+} satisfies Record<Framework, FrameworkProfile>;
+
+/**
+ * Deep-frozen: the nested extension/suffix arrays are frozen too, so a consumer cannot
+ * mutate another consumer's view by pushing onto an array it was handed.
+ */
+export const FRAMEWORK_PROFILES: Readonly<Record<Framework, FrameworkProfile>> = Object.freeze(
+  Object.fromEntries(
+    Object.entries(RAW_PROFILES).map(([name, p]) => [
+      name,
+      Object.freeze({
+        ...p,
+        sourceExts: Object.freeze([...p.sourceExts]),
+        fileSuffixes: Object.freeze([...p.fileSuffixes]),
+        nonComponentSuffixes: Object.freeze([...p.nonComponentSuffixes]),
+      }),
+    ]),
+  ) as Record<Framework, FrameworkProfile>,
+);
 
 /**
  * The profile for a configured framework, or `null` when the value is absent or not one we
@@ -195,7 +241,8 @@ export function isNonComponentStem(stem: string, profile?: FrameworkProfile | nu
 
 /** How the CODE verify layer can be run for a framework. */
 export type TypecheckResolution =
-  | { kind: "cmd"; cmd: string }
+  /** `partial` is set when the command runs but does not cover everything the framework can get wrong. */
+  | { kind: "cmd"; cmd: string; partial?: string }
   /** The framework is supported but has no check to run — the layer is BLOCKED, not passed. */
   | { kind: "none"; framework: string }
   /** The framework is absent or unrecognized — nothing can be claimed about it. */
@@ -210,5 +257,11 @@ export function resolveTypecheck(framework?: string | null): TypecheckResolution
   // Normalize "" to null: an empty `framework:` key in project.yaml is "unset", not a name.
   if (!profile) return { kind: "unknown", framework: framework || null };
   if (!profile.typecheckCmd) return { kind: "none", framework: framework as string };
-  return { kind: "cmd", cmd: profile.typecheckCmd };
+  return profile.supportLevel === "experimental"
+    ? {
+        kind: "cmd",
+        cmd: profile.typecheckCmd,
+        partial: "JS syntax only — nothing bundled validates the HTML partials",
+      }
+    : { kind: "cmd", cmd: profile.typecheckCmd };
 }

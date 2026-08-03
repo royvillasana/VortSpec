@@ -6,7 +6,7 @@ import { readComponentMap, mergeComponentEntries } from "./design-map";
 import { cachedScan } from "./scan-cache";
 import { inspectorComponentsResultSchema } from "@vortspec/core/inspector";
 import { detectedComponentsSchema, type DetectedComponent } from "@vortspec/core/flow";
-import { ALL_SOURCE_EXTS, stripFileSuffix } from "@vortspec/core/framework-profiles";
+import { ALL_SOURCE_EXTS, profileFor, stripFileSuffix } from "@vortspec/core/framework-profiles";
 import type {
   ComponentStatus,
   FileSnapshot,
@@ -316,10 +316,22 @@ export function reportUnresolved(report: string): { unresolved: boolean; issues:
   return { unresolved: true, issues: issues.length ? issues : ["open discrepancies"] };
 }
 
+/**
+ * `frameworkKnown` is what stops a found file becoming a false CLAIM.
+ *
+ * When the configured framework is unrecognized, the search falls back to every known
+ * extension — a wide net, which is right for FINDING things. But "built" is a claim, and an
+ * unknown framework may use a convention none of these extensions describe, so an unrelated
+ * `Button.js` utility under the component dir would satisfy the roster entry `Button` and
+ * silence the rebuild. Such a match is reported `unknown` (a candidate): the file path is
+ * still surfaced for the UI, but nothing claims the component is built, so rebuilding is
+ * never suppressed on an unsupported configuration.
+ */
 async function componentStatus(
   projectPath: string,
   name: string,
   hasFile: boolean,
+  frameworkKnown: boolean,
 ): Promise<{ status: ComponentStatus; issues: string[]; specPath: string | null; reportPath: string | null }> {
   const slug = name.toLowerCase();
   const specPath = await firstExisting(projectPath, [
@@ -331,6 +343,8 @@ async function componentStatus(
     join("specs", slug, "visual-verify-report.md"),
   ]);
   if (!hasFile) return { status: "unknown", issues: [], specPath, reportPath };
+  // A match under an unrecognized framework is a candidate, never a confirmed build.
+  if (!frameworkKnown) return { status: "unknown", issues: [], specPath, reportPath };
   let report: string;
   try {
     report = reportPath ? await readFile(join(projectPath, reportPath), "utf8") : "";
@@ -404,6 +418,16 @@ async function computeInspectorComponents(
     /* no manifest → empty inventory */
   }
 
+  // A framework that is CONFIGURED but unrecognized can still be searched (the union), but
+  // nothing it matches may be claimed as built — see `componentStatus`.
+  //
+  // An ABSENT `framework:` key is treated as known on purpose. `buildProjectYaml` always
+  // writes one, so absence means a legacy or hand-written project.yaml — and `status:
+  // "unknown"` is what feeds the auto-builder (`useAutoComponentBuild`), so failing closed
+  // there would put every such project into a permanent full-roster rebuild on opus. That is
+  // the same defect class, moved rather than fixed. Closing this remaining hole needs the
+  // auto-builder to skip unsupported configurations, which is tracked separately.
+  const frameworkKnown = config?.framework ? profileFor(config.framework) !== null : true;
   const root = componentDir ? join(projectPath, componentDir) : projectPath;
   const rosterNames = manifest.map((m) => m.name);
   const srcByName = new Map<string, string>();
@@ -426,6 +450,7 @@ async function computeInspectorComponents(
       projectPath,
       entry.name,
       Boolean(abs),
+      frameworkKnown,
     );
     components.push({
       name: entry.name,

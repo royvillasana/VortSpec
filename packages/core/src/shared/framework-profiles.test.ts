@@ -71,8 +71,24 @@ describe("resolveTypecheck", () => {
 
   // FAIL CLOSED. These three are the whole point: a check that cannot run must be
   // distinguishable from a check that passed, or we rebuild the false-green class one layer up.
-  it("reports vanilla as having NO check rather than inventing one", () => {
-    expect(resolveTypecheck("vanilla")).toEqual({ kind: "none", framework: "vanilla" });
+  // Vanilla used to have no runnable check at all, which made it permanently BLOCKED — honest,
+  // but unable to ever pass. `node --check` ships with Node and exits non-zero on a syntax
+  // error, so it is a gate that can actually fail.
+  it("gives vanilla a real, bundled, failable check instead of no gate at all", () => {
+    const r = resolveTypecheck("vanilla");
+    expect(r.kind).toBe("cmd");
+    expect(r.kind === "cmd" && r.cmd).toContain("node --check");
+    expect(r.kind === "cmd" && r.cmd).not.toContain("npx tsc");
+  });
+
+  it("marks vanilla's check PARTIAL, so its pass is never read as full coverage", () => {
+    const r = resolveTypecheck("vanilla");
+    expect(r.kind === "cmd" && r.partial).toMatch(/JS syntax only/);
+  });
+
+  it("leaves supported frameworks' checks unqualified", () => {
+    const r = resolveTypecheck("react");
+    expect(r.kind === "cmd" && r.partial).toBeUndefined();
   });
 
   it("fails closed on an unknown framework instead of quietly running React's tsc", () => {
@@ -123,10 +139,38 @@ describe("component vs sibling files", () => {
   });
 });
 
+describe("storybookInitType is table-driven", () => {
+  it("carries a Storybook type for every framework, so no consumer keeps its own switch", () => {
+    for (const f of FRAMEWORKS) {
+      expect(FRAMEWORK_PROFILES[f].storybookType, `no storybookType for ${f}`).toBeTruthy();
+    }
+  });
+});
+
+describe("support level", () => {
+  it("labels vanilla experimental — its check cannot cover HTML", () => {
+    expect(FRAMEWORK_PROFILES.vanilla.supportLevel).toBe("experimental");
+  });
+
+  it("labels the frameworks with a complete native checker as supported", () => {
+    for (const f of ["react", "vue", "svelte", "angular", "astro"] as const) {
+      expect(FRAMEWORK_PROFILES[f].supportLevel).toBe("supported");
+    }
+  });
+});
+
 describe("the table is immutable and exhaustive", () => {
-  it("is frozen, so one consumer cannot mutate another's profile", () => {
+  it("is frozen DEEPLY — the nested arrays too, not just the records", () => {
     expect(Object.isFrozen(FRAMEWORK_PROFILES)).toBe(true);
-    for (const f of FRAMEWORKS) expect(Object.isFrozen(FRAMEWORK_PROFILES[f])).toBe(true);
+    for (const f of FRAMEWORKS) {
+      expect(Object.isFrozen(FRAMEWORK_PROFILES[f]), `${f} record`).toBe(true);
+      expect(Object.isFrozen(FRAMEWORK_PROFILES[f].sourceExts), `${f}.sourceExts`).toBe(true);
+      expect(Object.isFrozen(FRAMEWORK_PROFILES[f].fileSuffixes), `${f}.fileSuffixes`).toBe(true);
+      expect(
+        Object.isFrozen(FRAMEWORK_PROFILES[f].nonComponentSuffixes),
+        `${f}.nonComponentSuffixes`,
+      ).toBe(true);
+    }
   });
 
   it("gives each framework its own record, so editing one never changes another", () => {

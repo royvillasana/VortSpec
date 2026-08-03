@@ -41,31 +41,13 @@ const STORY_RE = /\.stories\.(tsx|ts|jsx|js|mdx|svelte|vue)$/i;
 // component and a vanilla `.js` partial is never missed.
 
 /**
- * Map the project's framework to `storybook init --type`. Storybook auto-detects
- * the builder, but a correct `--type` hint avoids a misdetect on ambiguous
- * scaffolds. Returns null to let Storybook auto-detect (safer than a wrong hint).
+ * Map the project's framework to `storybook init --type`. Reads the shared profile table
+ * rather than keeping a ninth-case switch of its own — this was the last place framework
+ * facts were duplicated. Returns null to let Storybook auto-detect (safer than a wrong hint),
+ * which is also what an unrecognized framework gets.
  */
 export function storybookInitType(framework: string | undefined): string | null {
-  switch (framework) {
-    case "react":
-      return "react";
-    case "next":
-      return "nextjs";
-    case "vue":
-    case "nuxt":
-      return "vue3";
-    case "svelte":
-      return "svelte";
-    case "sveltekit":
-      return "sveltekit";
-    case "angular":
-      return "angular";
-    case "astro":
-    case "vanilla":
-      return "html";
-    default:
-      return null;
-  }
+  return profileFor(framework)?.storybookType ?? null;
 }
 
 async function readScripts(projectPath: string): Promise<Record<string, string>> {
