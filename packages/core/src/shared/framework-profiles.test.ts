@@ -1,8 +1,14 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { spawnSync } from "node:child_process";
 import { frameworkSchema } from "./setup";
 import {
   ALL_SOURCE_EXTS,
   FRAMEWORK_PROFILES,
+  GENERATED_DIRS,
+  vanillaCheckCmd,
   isNonComponentStem,
   profileFor,
   resolveTypecheck,
@@ -207,5 +213,79 @@ describe("profileFor", () => {
 
   it("is case-insensitive, so a capitalized project.yaml value still resolves", () => {
     expect(profileFor("Svelte")?.typecheckCmd).toContain("svelte-check");
+  });
+});
+
+/**
+ * The vanilla gate is a real shell command, so it is proved by RUNNING it, not by asserting
+ * on its string. An unscoped sweep failed on generated JS nobody authored — a broken
+ * `dist/bundle.js` or `.vortspec` cache would block component source that is perfectly fine.
+ */
+describe("vanillaCheckCmd — scoped to source, executed for real", () => {
+  let dir: string;
+
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), "vs-vanilla-check-"));
+    await mkdir(join(dir, "src", "components"), { recursive: true });
+    // Generated / tool output that must never gate a component build.
+    for (const d of ["dist", "build", ".vortspec", ".sdd-de", "storybook-static", "node_modules"]) {
+      await mkdir(join(dir, d), { recursive: true });
+      await writeFile(join(dir, d, "generated.js"), "this is ) not { valid js\n", "utf8");
+    }
+  });
+
+  afterEach(async () => {
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  const run = (cmd: string): number => {
+    const r = spawnSync("sh", ["-c", cmd], { cwd: dir, encoding: "utf8" });
+    return r.status ?? -1;
+  };
+
+  it("passes on valid source even when every generated tree contains broken JS", async () => {
+    await writeFile(join(dir, "src", "components", "button.js"), "export const ok = 1;\n", "utf8");
+    expect(run(vanillaCheckCmd("src/components"))).toBe(0);
+  });
+
+  it("still FAILS on a real syntax error in the component source itself", async () => {
+    // The gate has to be able to fail, or scoping it would just be a nicer false green.
+    // Note the sample: Node tolerates some malformed-looking ESM in a `.js` file with no
+    // `"type": "module"`, so this uses an unclosed brace — unambiguously invalid in any mode.
+    await writeFile(join(dir, "src", "components", "broken.js"), "if (true) {\n", "utf8");
+    expect(run(vanillaCheckCmd("src/components"))).not.toBe(0);
+  });
+
+  it("prunes every directory the shared generated list names", () => {
+    const cmd = vanillaCheckCmd("src");
+    for (const d of GENERATED_DIRS) expect(cmd).toContain(`-name ${d}`);
+  });
+
+  it("scopes to the configured component dir, not the repo root", () => {
+    const r = resolveTypecheck("vanilla", { componentDir: "app/ui" });
+    expect(r.kind === "cmd" && r.cmd).toContain("find app/ui ");
+    expect(r.kind === "cmd" && r.cmd).not.toContain("find . ");
+  });
+
+  it("falls back to src when no component dir is configured", () => {
+    const r = resolveTypecheck("vanilla");
+    expect(r.kind === "cmd" && r.cmd).toContain("find src ");
+  });
+});
+
+describe("typecheckScope is explicit, not inferred", () => {
+  it("declares a scope for every framework", () => {
+    for (const f of FRAMEWORKS) {
+      expect(["project", "component-dir"]).toContain(FRAMEWORK_PROFILES[f].typecheckScope);
+    }
+  });
+
+  it("only source-scopes the framework whose check is a file sweep", () => {
+    // Keyed off the scope, not off supportLevel — otherwise a future experimental framework
+    // with its own real checker would silently inherit vanilla's `find … node --check`.
+    expect(FRAMEWORK_PROFILES.vanilla.typecheckScope).toBe("component-dir");
+    for (const f of FRAMEWORKS.filter((x) => x !== "vanilla")) {
+      expect(FRAMEWORK_PROFILES[f].typecheckScope, f).toBe("project");
+    }
   });
 });

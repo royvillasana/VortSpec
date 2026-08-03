@@ -55,7 +55,34 @@ export interface FrameworkProfile {
    * says so, so a pass is never read as broader than it is.
    */
   readonly supportLevel: "supported" | "experimental";
+  /**
+   * Where the check runs. `component-dir` means the command must be BUILT against the
+   * project's own source directory rather than swept across the repo — an unscoped run
+   * fails on generated or vendored files nobody authored. Explicit rather than inferred
+   * from `supportLevel`, so a future experimental framework does not silently inherit
+   * vanilla's JS sweep.
+   */
+  readonly typecheckScope: "project" | "component-dir";
 }
+
+/**
+ * Directories that hold generated, vendored, or tool output rather than source. One list,
+ * because "what is not source" is a framework fact like any other and was previously copied
+ * into every walker that needed it.
+ */
+export const GENERATED_DIRS: readonly string[] = Object.freeze([
+  "node_modules",
+  ".git",
+  ".next",
+  "dist",
+  "build",
+  "out",
+  ".turbo",
+  "coverage",
+  ".vortspec",
+  ".sdd-de",
+  "storybook-static",
+]);
 
 /** Stories are never components, in any framework. */
 const NEVER_A_COMPONENT = [".stories", ".variants", ".test", ".spec"] as const;
@@ -73,6 +100,7 @@ const RAW_PROFILES = {
     nonComponentSuffixes: [...NEVER_A_COMPONENT],
     storybookType: "react",
     supportLevel: "supported",
+    typecheckScope: "project",
   }),
   next: Object.freeze({
     sourceExts: [".tsx", ".jsx", ".ts", ".js"],
@@ -81,6 +109,7 @@ const RAW_PROFILES = {
     nonComponentSuffixes: [...NEVER_A_COMPONENT],
     storybookType: "nextjs",
     supportLevel: "supported",
+    typecheckScope: "project",
   }),
   vue: Object.freeze({
     sourceExts: [".vue"],
@@ -90,6 +119,7 @@ const RAW_PROFILES = {
     nonComponentSuffixes: [...NEVER_A_COMPONENT],
     storybookType: "vue3",
     supportLevel: "supported",
+    typecheckScope: "project",
   }),
   nuxt: Object.freeze({
     sourceExts: [".vue"],
@@ -101,6 +131,7 @@ const RAW_PROFILES = {
     nonComponentSuffixes: [...NEVER_A_COMPONENT],
     storybookType: "vue3",
     supportLevel: "supported",
+    typecheckScope: "project",
   }),
   svelte: Object.freeze({
     sourceExts: [".svelte"],
@@ -111,6 +142,7 @@ const RAW_PROFILES = {
     nonComponentSuffixes: [...NEVER_A_COMPONENT],
     storybookType: "svelte",
     supportLevel: "supported",
+    typecheckScope: "project",
   }),
   sveltekit: Object.freeze({
     sourceExts: [".svelte"],
@@ -119,6 +151,7 @@ const RAW_PROFILES = {
     nonComponentSuffixes: [...NEVER_A_COMPONENT],
     storybookType: "sveltekit",
     supportLevel: "supported",
+    typecheckScope: "project",
   }),
   angular: Object.freeze({
     // The component IS the `.ts` class; the sibling `.html` is its template, not a second
@@ -131,6 +164,7 @@ const RAW_PROFILES = {
     nonComponentSuffixes: [...NEVER_A_COMPONENT, ".module", ".service", ".routes", ".config", ".guard"],
     storybookType: "angular",
     supportLevel: "supported",
+    typecheckScope: "project",
   }),
   astro: Object.freeze({
     sourceExts: [".astro"],
@@ -139,20 +173,22 @@ const RAW_PROFILES = {
     nonComponentSuffixes: [...NEVER_A_COMPONENT],
     storybookType: "html",
     supportLevel: "supported",
+    typecheckScope: "project",
   }),
   vanilla: Object.freeze({
     // A vanilla component is an HTML partial plus its own CSS (see the toolkit's
     // `docs/framework-config.md` → Vanilla); the partial is the component file.
     sourceExts: [".html", ".js"],
-    // `node --check` ships with Node, needs no install, respects package.json `type`, and
-    // exits non-zero on a syntax error — a real gate that can fail, not an absent one.
-    // It covers JS only: nothing bundled validates HTML, which is why vanilla is
-    // `experimental` rather than fully supported.
-    typecheckCmd: "find . -name '*.js' -not -path './node_modules/*' -exec node --check {} +",
+    // Built by `vanillaCheckCmd()` at resolve time so it can be SCOPED to the project's own
+    // component directory. An unscoped sweep of the repo fails on generated or vendored JS
+    // that no component author wrote — a broken `dist/bundle.js` would block a component
+    // whose source is fine.
+    typecheckCmd: null,
     fileSuffixes: [],
     nonComponentSuffixes: [...NEVER_A_COMPONENT],
     storybookType: "html",
     supportLevel: "experimental",
+    typecheckScope: "component-dir",
   }),
 } satisfies Record<Framework, FrameworkProfile>;
 
@@ -249,19 +285,42 @@ export type TypecheckResolution =
   | { kind: "unknown"; framework: string | null };
 
 /**
+ * Vanilla's syntax gate, scoped to `dir` and pruning every generated/output tree.
+ *
+ * `node --check` ships with Node, needs no install, respects package.json `type`, and exits
+ * non-zero on a syntax error — a real gate that can fail. Scoping matters as much as the
+ * command: sweeping the whole repo would fail on a minified bundle or a tool cache, blocking
+ * component source that is perfectly valid.
+ */
+export function vanillaCheckCmd(dir: string): string {
+  const prune = GENERATED_DIRS.map((d) => `-name ${d}`).join(" -o ");
+  return `find ${dir} \\( ${prune} \\) -prune -o -name '*.js' -exec node --check {} +`;
+}
+
+/** Where a project's own source lives, for checks that must not sweep generated output. */
+export interface TypecheckContext {
+  /** `component_dir` from project.yaml. Defaults to `src` when absent. */
+  componentDir?: string | null;
+}
+
+/**
  * Resolve the CODE layer's command. Every outcome is explicit so no caller can mistake
  * "we could not check" for "the check passed".
  */
-export function resolveTypecheck(framework?: string | null): TypecheckResolution {
+export function resolveTypecheck(
+  framework?: string | null,
+  ctx: TypecheckContext = {},
+): TypecheckResolution {
   const profile = profileFor(framework);
   // Normalize "" to null: an empty `framework:` key in project.yaml is "unset", not a name.
   if (!profile) return { kind: "unknown", framework: framework || null };
+  if (profile.typecheckScope === "component-dir") {
+    return {
+      kind: "cmd",
+      cmd: vanillaCheckCmd(ctx.componentDir || "src"),
+      partial: "JS syntax only, scoped to the component directory — nothing bundled validates the HTML partials",
+    };
+  }
   if (!profile.typecheckCmd) return { kind: "none", framework: framework as string };
-  return profile.supportLevel === "experimental"
-    ? {
-        kind: "cmd",
-        cmd: profile.typecheckCmd,
-        partial: "JS syntax only — nothing bundled validates the HTML partials",
-      }
-    : { kind: "cmd", cmd: profile.typecheckCmd };
+  return { kind: "cmd", cmd: profile.typecheckCmd };
 }

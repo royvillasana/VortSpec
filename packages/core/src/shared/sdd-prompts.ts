@@ -373,8 +373,8 @@ export const RESUME_PROMPT =
  * that vacuous green cleared the path to a VISUAL pass on code nobody had compiled.
  * A framework with no meaningful check says so rather than running a command that lies.
  */
-function typecheckClause(framework?: string | null): string {
-  const r = resolveTypecheck(framework);
+function typecheckClause(framework?: string | null, componentDir?: string | null): string {
+  const r = resolveTypecheck(framework, { componentDir });
   if (r.kind === "cmd") {
     // An `experimental` framework has a real check that can fail, but one that does not cover
     // everything the framework can get wrong. Say so, so a pass is never read as broader
@@ -406,6 +406,7 @@ export function verifyPrompt(
   url: string | null,
   isFigma: boolean,
   framework?: string | null,
+  componentDir?: string | null,
 ): string {
   const scope = target === "all" ? "every built component" : `the "${target}" component`;
   const resolveRef = isFigma
@@ -437,7 +438,7 @@ export function verifyPrompt(
       `wrong-token substitutions across the component AND its \`*.variants.*\` file, and flag each with the ` +
       `exact token that should have been used. Any hardcoded color (e.g. a raw #83bcc7 or rgba(...) focus ring) ` +
       `is a TOKEN failure, even if it looks right.`,
-    `Layer 3 — CODE / BUILD: ${typecheckClause(framework)}` +
+    `Layer 3 — CODE / BUILD: ${typecheckClause(framework, componentDir)}` +
       `library project with no dev server, also 'npm run build-storybook' (or the project's build script). ` +
       `${scope} MUST compile/build with zero errors. Any type or build error (a broken import, an interface ` +
       `imported as a value instead of 'import type', a duplicate JSX attribute, a missing export, an ` +

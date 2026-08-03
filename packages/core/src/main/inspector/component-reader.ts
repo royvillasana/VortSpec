@@ -6,7 +6,7 @@ import { readComponentMap, mergeComponentEntries } from "./design-map";
 import { cachedScan } from "./scan-cache";
 import { inspectorComponentsResultSchema } from "@vortspec/core/inspector";
 import { detectedComponentsSchema, type DetectedComponent } from "@vortspec/core/flow";
-import { ALL_SOURCE_EXTS, profileFor, stripFileSuffix } from "@vortspec/core/framework-profiles";
+import { ALL_SOURCE_EXTS, GENERATED_DIRS, profileFor, stripFileSuffix } from "@vortspec/core/framework-profiles";
 import type {
   ComponentStatus,
   FileSnapshot,
@@ -219,8 +219,12 @@ async function variantsSibling(projectPath: string, file: string): Promise<strin
   return hit ? join(dir, hit) : null;
 }
 
-/** Dirs a component-file search never descends into (deps/build output). */
-const FIND_SKIP_DIRS = new Set(["node_modules", ".git", ".next", "dist", "build", "out", ".turbo", "coverage", ".vortspec", ".sdd-de"]);
+/**
+ * Dirs a component-file search never descends into (deps/build output). Derived from the
+ * shared list rather than kept locally — "what is not source" is the same fact the vanilla
+ * syntax gate prunes on, and two copies of it drift.
+ */
+const FIND_SKIP_DIRS = new Set(GENERATED_DIRS);
 
 async function findSourceFile(dir: string, name: string, budget = { n: 8000 }): Promise<string | null> {
   if (budget.n <= 0) return null;
