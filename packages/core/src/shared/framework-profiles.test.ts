@@ -139,14 +139,29 @@ describe("idioms — the authoring half of the profile", () => {
   });
 
   it("keeps the class: recommendation on its true benefit", () => {
-    // The recommendation is still right — it keeps the unused-CSS analysis active — but it is a
-    // preference for a safety net, not a correctness requirement.
     for (const f of ["svelte", "sveltekit"]) {
       const v = FRAMEWORK_PROFILES[f].idioms.variants;
       expect(v).toMatch(/class:/);
       expect(v).toMatch(/statically visible/);
-      expect(v).toMatch(/switches that analysis OFF|disables/i);
       expect(v).toMatch(/not a correctness requirement/);
+    }
+  });
+
+  it("scopes the diagnostic loss to the element carrying the dynamic class", () => {
+    // My replacement claim overreached the other way: "every selector becomes unprovable" and
+    // "the analysis is switched off". A control on svelte 5.56.8 shows `div.never` and a child's
+    // `p.never` are BOTH still commented out and warned beside `<button class={x}>` — the
+    // compiler still reasons structurally. Only the element carrying the dynamic class loses it.
+    // Evidence: RESEARCH/VORTSPEC_SVELTE_CSS_SCOPE_CONTROL_2026-08-04.md
+    for (const f of ["svelte", "sveltekit"]) {
+      const { variants, pitfalls } = FRAMEWORK_PROFILES[f].idioms;
+      const both = `${variants} ${pitfalls.join(" ")}`;
+      // Must not claim global disablement.
+      expect(both, `${f} claims every selector is unprovable`).not.toMatch(/every selector/i);
+      expect(both, `${f} claims the analysis is switched off`).not.toMatch(/analysis OFF|wholly disabled|disables the unused/i);
+      // Must scope to the element carrying it, and preserve the structural exclusion.
+      expect(variants).toMatch(/element CARRYING the dynamic|could match it/);
+      expect(variants).toMatch(/exclude structurally|different tag/);
     }
   });
 

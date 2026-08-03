@@ -125,14 +125,22 @@ const SVELTE_BASE = {
   // class and a genuinely dead selector did warn, so the pruner was live and the negative is real.
   // Evidence: RESEARCH/VORTSPEC_SVELTE_FIXTURE_2026-08-04.md.
   //
+  // CORRECTED AGAIN, same day. The first replacement overreached the other way — it said a
+  // dynamic class makes EVERY selector unprovable and switches the analysis off. Also false.
+  // A control on 5.56.8: `.never` beside `<button class={x}>` is retained unwarned, but
+  // `div.never` and a child's `p.never` are both commented out and warned. The compiler still
+  // reasons structurally; only the element carrying the dynamic class loses the diagnostic.
+  // Evidence: RESEARCH/VORTSPEC_SVELTE_CSS_SCOPE_CONTROL_2026-08-04.md.
+  //
   // The recommendation survives on its true benefit, downgraded from requirement to preference.
   variants:
     "prefer `class:` directives (`class:btn--primary={variant === 'primary'}`) or a `data-variant={variant}` " +
-    "attribute styled with an attribute selector (`[data-variant='primary'] { … }`). Both keep the class set " +
-    "statically visible, so Svelte's unused-CSS analysis stays active and warns on a dead or misspelled selector. " +
-    "A class string built by a helper still works and nothing is stripped — but a dynamic `class` expression makes " +
-    "every selector unprovable, which switches that analysis OFF, so dead and typo'd rules ship silently. This is a " +
-    "preference for keeping a safety net, not a correctness requirement",
+    "attribute styled with an attribute selector (`[data-variant='primary'] { … }`). Both keep that element's " +
+    "class set statically visible, so Svelte's unused-selector diagnostic still applies to it. A class string " +
+    "built by a helper works and nothing is stripped — the cost is narrower: for the element CARRYING the dynamic " +
+    "class, the compiler cannot rule out any selector that could match it, so a dead or misspelled rule on that " +
+    "element ships undiagnosed. Selectors it can still exclude structurally — a different tag, a different element " +
+    "— are reported either way. A preference for keeping that diagnostic, not a correctness requirement",
   styleScoping: "`<style>` in the component, auto-scoped by the compiler",
   exports: "a Svelte component is a DEFAULT export — `import Button from './Button.svelte'`",
   refs: "`bind:this={el}` for element access. There is no `forwardRef`",
@@ -211,7 +219,7 @@ export const FRAMEWORK_PROFILES: Record<string, FrameworkProfile> = {
       pitfalls: [
         "`tsc` cannot parse `.svelte` — the check is `svelte-check`.",
         "Svelte 5 has been the default since Oct 2024; do not emit Svelte 4 idioms without checking the installed version.",
-      "A helper-built class string is NOT stripped by the compiler — that is a myth; it only disables the unused-CSS warning.",
+      "A helper-built class string is NOT stripped by the compiler — that is a myth. It only suppresses the unused-selector warning for selectors that could match that element; ones ruled out structurally are still reported.",
       ],
     },
   },
