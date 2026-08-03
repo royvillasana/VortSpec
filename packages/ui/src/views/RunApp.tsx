@@ -1811,11 +1811,24 @@ export function RunApp({
    * terms whether the write came from here, the design-system sidebar, a preset, or an agent.
    */
   const applyScopedOverride = useCallback(
-    async (key: string, value: string, scope: StyleScope, scopeKey?: string): Promise<void> => {
+    async (key: string, value: string, scope: StyleScope, scopeKey?: string, scopeToken?: string): Promise<void> => {
       if (!scopeKey) return;
       try {
         if (scope === "token") {
           await api.setThemeTokenOverride(project.path, scopeKey, value);
+          return;
+        }
+        if (scope === "component-token") {
+          // The SAME token, redefined inside this component only. Cards reading `--radius-element` keep
+          // the design system's value; Buttons take this one — and the value stays a token, so it still
+          // follows a later theme. `scopeToken` is the token name; `scopeKey` is the component.
+          if (!scopeToken) return;
+          const prior = await api.getThemeOverrides(project.path).catch(() => null);
+          const priorBase = prior?.components?.[scopeKey]?.base ?? {};
+          await api.setThemeComponentOverride(project.path, scopeKey, {}, {
+            ...priorBase,
+            [`--${scopeToken}`]: value,
+          });
           return;
         }
         const css = cssForField(key, value);
@@ -1886,9 +1899,9 @@ export function RunApp({
   );
 
   const onFieldChange = useCallback(
-    (key: string, value: string, scope: StyleScope = "element", scopeKey?: string) => {
+    (key: string, value: string, scope: StyleScope = "element", scopeKey?: string, scopeToken?: string) => {
       if (writesOverlay(scope)) {
-        void applyScopedOverride(key, value, scope, scopeKey);
+        void applyScopedOverride(key, value, scope, scopeKey, scopeToken);
         return;
       }
       if (scope === "matching") {

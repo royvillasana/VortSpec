@@ -24,8 +24,18 @@
  * for the property being edited. Deliberately not "every instance of this component" — an element already
  * styled differently was styled differently on purpose, and sweeping it into a change aimed at the ones
  * that look alike destroys a decision the user made earlier and did not revisit.
+ *
+ * `component-token` exists because a token is SHARED. `--radius-element` may be read by Button and Card
+ * alike, so "change every Button" cannot be done by writing the token — that would change Cards too. It is
+ * written instead as a redefinition of the same token scoped to the component,
+ * `[data-component="Button"] { --radius-element: 4px }`, which spares the siblings and keeps the value a
+ * token rather than a literal, so it still follows a later theme or preset. It also needs no edit to the
+ * component's source, which is the only reason it is available at all on a consumed library.
+ *
+ * `matching` and `component-token` are both offered because they are different questions: the ones that
+ * look alike TODAY, on this page, versus every instance BY IDENTITY, on every page.
  */
-export type StyleScope = "element" | "selection" | "matching" | "token";
+export type StyleScope = "element" | "selection" | "matching" | "component-token" | "token";
 
 /** One element as far as scoping is concerned. Deliberately minimal — this is all the rules read. */
 export interface ScopeTarget {
@@ -55,6 +65,8 @@ export interface ScopeReach {
    * number from "13 Buttons", and the difference is the three nobody wants touched.
    */
   matchCounts?: Record<string, number | undefined>;
+  /** Instances per `data-component` on the current page — honestly countable from the tree. */
+  componentCounts?: Record<string, number | undefined>;
   /** Uses per token name (without `--`), as the design system already counts them. */
   tokenUses?: Record<string, number | undefined>;
 }
@@ -66,6 +78,8 @@ export interface ScopeOption {
   key?: string;
   /** For `matching`: the current value the matched elements share. */
   value?: string;
+  /** For `component-token`: the token being redefined inside the component named by `key`. */
+  token?: string;
   /** Elements this would affect, or null when the reach cannot be computed. */
   reach: number | null;
 }
@@ -93,6 +107,8 @@ export interface DerivedScope {
   key?: string;
   /** For `matching`: the shared current value that defines "looks the same". */
   value?: string;
+  /** For `component-token`: the token being redefined inside the component named by `key`. */
+  token?: string;
 }
 
 /** The key a (component, value) pair is counted under. One place, so counting and lookup cannot drift. */
@@ -111,19 +127,26 @@ export function sharedValue(selection: readonly ScopeTarget[], property: string)
 /**
  * The scope to preselect, by four ordered rules:
  *
- *   1. every member resolves the property through the same token        → `token`
- *   2. else every member shares a component AND a current value for it  → `matching`
- *   3. else more than one member                                        → `selection`
- *   4. else                                                             → `element`
+ *   1. same token AND same component                                    → `component-token`
+ *   2. else same token                                                  → `token`
+ *   3. else same component AND same current value                       → `matching`
+ *   4. else more than one member                                        → `selection`
+ *   5. else                                                             → `element`
  *
- * Token above matching is the opinionated step. When the design system already governs a property,
+ * Pointing at the token is the opinionated step. When the design system already governs a property,
  * editing the instance fights it — so the default points at the thing that actually decides the value.
  * This is what makes the feature improve the design system instead of scattering overrides.
+ *
+ * Rule 1 sits above rule 2 because it satisfies that principle WITHOUT the spill: still the token, but
+ * confined to the component the user was looking at. Changing it everywhere stays one click away, wearing
+ * its use count.
  *
  * An empty selection has nothing to derive from and yields `element`, which offers nothing to write.
  */
 export function deriveScope(selection: readonly ScopeTarget[], property: string): DerivedScope {
   const token = sharedToken(selection, property);
+  const shared = sharedComponent(selection);
+  if (token && shared) return { scope: "component-token", key: shared, token };
   if (token) return { scope: "token", key: token };
   const component = sharedComponent(selection);
   const value = sharedValue(selection, property);
@@ -162,6 +185,16 @@ export function availableScopes(
     });
   }
   const token = sharedToken(selection, property);
+  // Offered only when there is BOTH a component to scope to and a token to scope — without either there
+  // is nothing to redefine, or nowhere to confine it.
+  if (component && token) {
+    options.push({
+      scope: "component-token",
+      key: component,
+      token,
+      reach: reach.componentCounts?.[component] ?? null,
+    });
+  }
   if (token) {
     options.push({ scope: "token", key: token, reach: reach.tokenUses?.[token] ?? null });
   }
@@ -175,7 +208,7 @@ export function availableScopes(
  * not gated by whether any particular element's JSX is statically resolvable.
  */
 export function writesOverlay(scope: StyleScope): boolean {
-  return scope === "token";
+  return scope === "token" || scope === "component-token";
 }
 
 /**

@@ -21,7 +21,7 @@ export function ScopeSelector({
 }: {
   options: readonly ScopeOption[];
   value: StyleScope;
-  onChange: (scope: StyleScope, key?: string) => void;
+  onChange: (scope: StyleScope, key?: string, token?: string) => void;
   disabled?: boolean;
 }): JSX.Element | null {
   if (options.length < 2) return null;
@@ -38,7 +38,7 @@ export function ScopeSelector({
             aria-pressed={active}
             aria-label={scopeLabel(o)}
             title={scopeTitle(o)}
-            onClick={() => onChange(o.scope, o.key)}
+            onClick={() => onChange(o.scope, o.key, o.token)}
             className={`rounded border px-1.5 py-0.5 text-[10px] transition-colors disabled:opacity-50 ${
               active
                 ? "border-vs-accent bg-vs-accent-muted text-vs-text-primary"
@@ -68,8 +68,10 @@ export function scopeLabel(o: ScopeOption): string {
       return `${o.reach ?? 0} selected`;
     case "matching":
       return o.reach === null ? `${o.key}s like this` : `${o.reach} ${o.key}s like this`;
+    case "component-token":
+      return o.reach === null ? `All ${o.key}s` : `All ${o.reach} ${o.key}s`;
     case "token":
-      return o.reach === null ? `--${o.key}` : `--${o.key} · ${o.reach} uses`;
+      return o.reach === null ? `--${o.key} everywhere` : `--${o.key} · ${o.reach} uses`;
   }
 }
 
@@ -82,7 +84,9 @@ function scopeTitle(o: ScopeOption): string {
       return "Change every selected element, in this page's source";
     case "matching":
       return `Change every ${o.key} that currently looks like this one (${o.value}). A ${o.key} styled differently is left alone.`;
+    case "component-token":
+      return `Change --${o.token} for every ${o.key}, on every page — and for its parts. Other components using --${o.token} keep their value.`;
     case "token":
-      return `Change --${o.key} itself — everything that uses this token changes, on every page`;
+      return `Change --${o.key} itself — EVERY component that uses this token changes, on every page`;
   }
 }

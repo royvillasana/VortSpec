@@ -63,16 +63,35 @@ describe("what a selection shares", () => {
   });
 });
 
-describe("deriveScope applies its four rules in order", () => {
-  it("1 — a shared token wins, even when the members also share a component", () => {
+describe("deriveScope applies its rules in order", () => {
+  it("1 — a shared token AND component scopes the token to the component", () => {
+    // Still points at the token — the thing that decides the value — but confined to the component the
+    // user was looking at, so a Button reading the same token is spared.
     const sel = [card("a", "radius-card"), card("b", "radius-card")];
-    // Both rules match; token is checked first BECAUSE the design system already decides this value.
-    expect(sharedComponent(sel)).toBe("Card");
+    expect(deriveScope(sel, "border-radius")).toEqual({
+      scope: "component-token",
+      key: "Card",
+      token: "radius-card",
+    });
+  });
+
+  it("1 — the same holds for a single element", () => {
+    expect(deriveScope([card("a", "radius-card")], "border-radius")).toEqual({
+      scope: "component-token",
+      key: "Card",
+      token: "radius-card",
+    });
+  });
+
+  it("2 — a shared token across DIFFERENT components falls to the token itself", () => {
+    // Nothing to scope to: there is no one component the change could be confined to.
+    const sel = [card("a", "radius-card"), card("b", "radius-card", "Button")];
+    expect(sharedComponent(sel)).toBeNull();
     expect(deriveScope(sel, "border-radius")).toEqual({ scope: "token", key: "radius-card" });
   });
 
-  it("1 — a shared token wins for a single element too", () => {
-    expect(deriveScope([card("a", "radius-card")], "border-radius")).toEqual({
+  it("2 — an unmarked element with a token falls to the token itself", () => {
+    expect(deriveScope([card("a", "radius-card", null)], "border-radius")).toEqual({
       scope: "token",
       key: "radius-card",
     });
@@ -106,18 +125,25 @@ describe("deriveScope applies its four rules in order", () => {
 describe("availableScopes withholds a scope that has nothing to key on", () => {
   it("offers every scope narrowest-first when everything is shared", () => {
     const sel = [card("a", "radius-card"), card("b", "radius-card")];
-    const reach = { matchCounts: { [matchKey("Card", "8px")]: 10 }, tokenUses: { "radius-card": 40 } };
+    const reach = {
+      matchCounts: { [matchKey("Card", "8px")]: 10 },
+      componentCounts: { Card: 12 },
+      tokenUses: { "radius-card": 40 },
+    };
+    // Narrowest first, and the two wide-but-different scopes sit side by side: the ones that look alike
+    // today (10) and every instance by identity (12), before the token itself (40).
     expect(availableScopes(sel, "border-radius", reach)).toEqual([
       { scope: "element", reach: 1 },
       { scope: "selection", reach: 2 },
       { scope: "matching", key: "Card", value: "8px", reach: 10 },
+      { scope: "component-token", key: "Card", token: "radius-card", reach: 12 },
       { scope: "token", key: "radius-card", reach: 40 },
     ]);
   });
 
   it("withholds selection for a single element", () => {
     const scopes = availableScopes([card("a", "radius-card")], "border-radius");
-    expect(scopes.map((s) => s.scope)).toEqual(["element", "matching", "token"]);
+    expect(scopes.map((s) => s.scope)).toEqual(["element", "matching", "component-token", "token"]);
   });
 
   it("withholds matching for an unmarked element", () => {
@@ -161,11 +187,36 @@ describe("reach is stated or withheld, never guessed", () => {
 });
 
 describe("scope decides the destination, and the destination decides the guard", () => {
-  it("only the token scope writes the overlay — matching is N page-source writes", () => {
+  it("the two token scopes write the overlay; matching is N page-source writes", () => {
     expect(writesOverlay("element")).toBe(false);
     expect(writesOverlay("selection")).toBe(false);
     expect(writesOverlay("matching")).toBe(false);
+    expect(writesOverlay("component-token")).toBe(true);
     expect(writesOverlay("token")).toBe(true);
+  });
+});
+
+describe("component-token needs both a component and a token", () => {
+  it("is withheld when the element carries no component", () => {
+    const scopes = availableScopes([card("a", "radius-card", null)], "border-radius");
+    expect(scopes.map((s) => s.scope)).toEqual(["element", "token"]);
+  });
+
+  it("is withheld when the property is not token-backed", () => {
+    const scopes = availableScopes([card("a")], "border-radius");
+    expect(scopes.map((s) => s.scope)).not.toContain("component-token");
+  });
+
+  it("reports its reach as the component's instances, or nothing when uncounted", () => {
+    const sel = [card("a", "radius-card")];
+    expect(
+      availableScopes(sel, "border-radius", { componentCounts: { Card: 12 } }).find(
+        (s) => s.scope === "component-token",
+      )?.reach,
+    ).toBe(12);
+    expect(
+      availableScopes(sel, "border-radius").find((s) => s.scope === "component-token")?.reach,
+    ).toBeNull();
   });
 });
 

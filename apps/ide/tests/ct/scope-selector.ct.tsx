@@ -96,14 +96,15 @@ test("the scope is shown before a value can be typed, with each reach stated", a
   await expect(scopes.getByRole("button", { name: "--radius-card · 40 uses" })).toBeVisible();
 });
 
-test("the default is the token when the design system already decides the value", async ({ mount }) => {
+test("the default points at the token, but confined to the component", async ({ mount }) => {
   const c = await mount(panel(selection({ component: "Button", token: "radius-card" })));
   await c.getByRole("textbox").first().focus();
 
-  // Both component and token scopes apply; token wins, because editing the instance would fight the system.
-  await expect(
-    c.getByRole("button", { name: "--radius-card · 40 uses" }),
-  ).toHaveAttribute("aria-pressed", "true");
+  // Editing the instance would fight the design system, so the default points at the token. But writing
+  // the token outright would also change every OTHER component reading it — so the default is the token
+  // scoped to this component, which satisfies the principle without the spill.
+  await expect(c.getByRole("button", { name: "All 3 Buttons" })).toHaveAttribute("aria-pressed", "true");
+  await expect(c.getByRole("button", { name: "--radius-card · 40 uses" })).toHaveAttribute("aria-pressed", "false");
   await expect(c.getByRole("button", { name: "Buttons like this" })).toHaveAttribute("aria-pressed", "false");
 });
 
@@ -221,4 +222,53 @@ test("no promotion is offered when the members share no token", async ({ mount }
   await input.press("Enter");
 
   await expect(c.getByText(/decides this/)).toHaveCount(0);
+});
+
+test("a shared token AND component scopes the token to the component, sparing its siblings", async ({
+  mount,
+}) => {
+  // The whole point: `--radius-card` may also be read by a Button. Writing the token would change the
+  // Button too, so "every Button" is expressed as the SAME token redefined inside the component.
+  const calls: unknown[][] = [];
+  const c = await mount(
+    panel(selection({ component: "Button", token: "radius-card" }), (...a) => calls.push(a)),
+  );
+  const input = c.getByRole("textbox").first();
+  await input.focus();
+
+  // Both wide scopes are offered side by side, and they are different questions: the ones that look alike
+  // today, and every instance by identity.
+  const scopes = c.getByRole("group", { name: "Apply to" });
+  await expect(scopes.getByRole("button", { name: "Buttons like this" })).toBeVisible();
+  await expect(scopes.getByRole("button", { name: "All 3 Buttons" })).toBeVisible();
+  await expect(scopes.getByRole("button", { name: /radius-card/ })).toBeVisible();
+
+  // And the component-scoped one is the default: it points at the token without the spill.
+  await expect(scopes.getByRole("button", { name: "All 3 Buttons" })).toHaveAttribute("aria-pressed", "true");
+
+  await input.fill("4px");
+  await input.press("Enter");
+  const [, value, scope, scopeKey, scopeToken] = calls.at(-1) as unknown[];
+  expect(value).toBe("4px");
+  expect(scope).toBe("component-token");
+  expect(scopeKey).toBe("Button");
+  expect(scopeToken).toBe("radius-card");
+});
+
+test("the token scope still reaches everything, and says so", async ({ mount }) => {
+  const calls: unknown[][] = [];
+  const c = await mount(
+    panel(selection({ component: "Button", token: "radius-card" }), (...a) => calls.push(a)),
+  );
+  const input = c.getByRole("textbox").first();
+  await input.focus();
+
+  // Choosing the token deliberately is still one click, wearing its use count so the reach is legible.
+  await c.getByRole("button", { name: "--radius-card · 40 uses" }).click();
+  await input.fill("4px");
+  await input.press("Enter");
+
+  const [, , scope, scopeKey] = calls.at(-1) as unknown[];
+  expect(scope).toBe("token");
+  expect(scopeKey).toBe("radius-card");
 });

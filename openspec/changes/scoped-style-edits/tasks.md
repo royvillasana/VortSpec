@@ -67,6 +67,17 @@
 - [x] 7.3 Reflect partial re-acquisition honestly after a reload rather than claiming the original count.
 - [x] 7.4 Component test: five selected renders exactly one chip naming five.
 
+## 9. Component-scoped token values (both wide scopes, side by side)
+
+- [x] 9.1 Add a `component-token` scope: same token, redefined only within one component, written to the durable overlay as `[data-component="X"] { --token: value }`.
+- [x] 9.2 Put it above `token` in the default rule — it satisfies the same principle without spilling onto components that share the token — and extend the unit tests for the new ordering.
+- [x] 9.3 Offer it only when the selection shares BOTH a component and a token for the property; count its reach as that component's instances.
+- [x] 9.4 Route a `component-token` commit through `setThemeComponentOverride`, merging with any existing base so it never drops another property.
+- [x] 9.5 Verify the materializer emits the scoped redefinition and that it spares sibling components — a real test, not a hand-check.
+- [x] 9.6 List component-scoped token overrides in the design-system surface, clearable like any other.
+- [x] 9.7 State in the UI that the scoped value reaches the component's parts, so inheritance is read rather than discovered.
+- [x] 9.8 Component tests: the scope is offered and defaulted correctly, routes to the overlay, and sits alongside `matching` without either being mistaken for the other.
+
 ## 8. Verification
 
 - [x] 8.1 Full unit and component suites green across `packages/core`, `packages/ui`, and `apps/ide`. (core 1064, ui 182, CT 138 passed. 35 CT failures are PRE-EXISTING — verified by stashing every change and re-running: baseline is 35 failed / 136 passed, with the change 35 failed / 138 passed.)

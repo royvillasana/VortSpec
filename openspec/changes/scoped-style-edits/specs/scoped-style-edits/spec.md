@@ -9,7 +9,24 @@ A style edit SHALL be a value **and** a scope. The system SHALL support exactly 
 | `element` | the one focused element | the page's own source |
 | `selection` | every element in the current multi-selection | the page's own source, per element |
 | `matching` | every element that currently **looks the same** — same `data-component` AND the same current value for the property being edited | the page's own source, per element |
+| `component-token` | every instance of one component, on every page — **without** touching other components that share the token | the durable overlay, as a component-scoped redefinition of the token |
 | `token` | every element resolving the property through that token | the durable overlay's token override |
+
+`component-token` exists because a token is shared. `--radius-element` may be read by Button AND Card, so
+"change every Button" cannot be done by writing the token — that would change Cards too. It is instead
+written as a redefinition of the SAME token, scoped to the component:
+
+```
+[data-component="Button"] { --radius-element: 4px; }
+```
+
+Buttons take the new value, Cards keep the old one, and the value stays a token rather than becoming a
+hardcoded literal — so it still follows a later theme or preset. The scoped value INHERITS to the
+component's descendants, which is intended (a button and its parts) but SHALL be stated, not discovered.
+
+`matching` and `component-token` both answer "apply to the other buttons" and are both offered. They are
+not the same question: `matching` takes the ones that look alike *today* and writes this page's source;
+`component-token` takes every instance by identity, on every page, and writes the design system.
 
 `matching` is deliberately NOT "every instance of this component". An element of the same component that has
 already been styled differently was styled differently on purpose; sweeping it up in a change aimed at the
@@ -58,16 +75,26 @@ Each offered scope SHALL be labelled with the **count of elements it will affect
 
 The system SHALL preselect a scope by a deterministic rule over the current selection and the property being edited, applied in order:
 
-1. If **every** selected element resolves that property through the **same token**, the default SHALL be `token`.
-2. Otherwise, if **every** selected element shares the **same `data-component`** and the same current value for the property, the default SHALL be `matching`.
-3. Otherwise, if more than one element is selected, the default SHALL be `selection`.
-4. Otherwise the default SHALL be `element`.
+1. If **every** selected element resolves that property through the **same token** AND shares the **same `data-component`**, the default SHALL be `component-token`.
+2. Otherwise, if **every** selected element resolves that property through the **same token**, the default SHALL be `token`.
+3. Otherwise, if **every** selected element shares the **same `data-component`** and the same current value for the property, the default SHALL be `matching`.
+4. Otherwise, if more than one element is selected, the default SHALL be `selection`.
+5. Otherwise the default SHALL be `element`.
+
+Rule 1 sits above rule 2 because it satisfies the same principle without the spill: it still points at the
+token — the thing that actually decides the value — but confines the change to the component the user was
+looking at. Changing the token globally stays one click away, labelled with its use count.
 
 The rule SHALL depend only on facts the selection literally exposes. The system SHALL NOT infer intent from edit history, frequency, or heuristics beyond the above, and the derived default SHALL always be overridable.
 
-#### Scenario: A shared token binding defaults to the token
-- **WHEN** the user selects three cards whose `border-radius` all resolve to `var(--radius-card)`
-- **THEN** the default scope SHALL be `token` for `--radius-card`
+#### Scenario: A shared token AND a shared component default to the component-scoped token
+- **WHEN** the user selects three Cards whose `border-radius` all resolve to `var(--radius-card)`
+- **THEN** the default scope SHALL be `component-token` for Card / `--radius-card`
+- **AND** changing it SHALL NOT change a Button that also reads `--radius-card`
+
+#### Scenario: A shared token across different components defaults to the token
+- **WHEN** the selected elements share `--radius-card` but are not all the same component
+- **THEN** the default scope SHALL be `token`, since there is no single component to scope to
 
 #### Scenario: A shared component and a shared value default to matching
 - **WHEN** the user selects four Buttons that share a component and all currently read `8px`
@@ -148,3 +175,46 @@ not to present a different list.
 #### Scenario: Deselecting removes the marking
 - **WHEN** the selection is cleared
 - **THEN** no rows SHALL be marked, and the surface SHALL read exactly as it did before anything was selected
+
+
+### Requirement: A component-scoped token change spares the components that share the token
+
+An edit at `component-token` scope SHALL change the token's value only within the chosen component. Every
+other component resolving through the same token SHALL keep its value.
+
+The value SHALL remain a token reference rather than being replaced by a literal, so the component still
+follows later changes to the design system that do not concern this property.
+
+#### Scenario: Siblings that share the token are untouched
+- **WHEN** Button and Card both read `--radius-element`, and the user sets it to `4px` at `component-token` scope on a Button
+- **THEN** every Button SHALL render `4px`
+- **AND** every Card SHALL keep the design system's value
+
+#### Scenario: The scoped value reaches the component's parts
+- **WHEN** an element inside a Button also reads `--radius-element`
+- **THEN** it SHALL take the Button's scoped value
+- **AND** the same element outside a Button SHALL keep the design system's value
+
+#### Scenario: The relationship to the token survives
+- **WHEN** an edit is made at `component-token` scope
+- **THEN** the component SHALL still resolve the property through that token, not through a hardcoded value
+
+#### Scenario: A consumed library is never edited to achieve this
+- **WHEN** the project consumes its components from a library
+- **THEN** the scoped redefinition SHALL be written to the durable overlay
+- **AND** the library's own source SHALL NOT be modified
+
+### Requirement: Component-scoped token overrides are visible and clearable
+
+A component-scoped token redefinition SHALL be listed in the design-system surface alongside the other
+per-component overrides, showing the component, the token, and the value, and SHALL be individually
+clearable — for the same reason any other override must be: an effect with no visible cause cannot be
+told apart from a bug.
+
+#### Scenario: The override is listed
+- **WHEN** a component-scoped token redefinition exists
+- **THEN** the design-system surface SHALL show the component, the token and its scoped value
+
+#### Scenario: Clearing restores the design system's value
+- **WHEN** the user clears it
+- **THEN** that component SHALL return to the token's own value

@@ -884,7 +884,9 @@ function ComponentOverrides({
               <span className="truncate text-[11.5px] text-vs-text-primary">{component}</span>
               <span className="truncate font-mono text-[10px] text-vs-text-muted">
                 {Object.entries(decls)
-                  .map(([prop, val]) => `${prop}: ${val}`)
+                  // A token redefined for this component reads as the token, because that is what it is —
+                  // the same name the design system uses, given a different value inside this component.
+                  .map(([prop, val]) => (prop.startsWith("--") ? `${prop} = ${val}` : `${prop}: ${val}`))
                   .join("  ·  ")}
               </span>
             </div>

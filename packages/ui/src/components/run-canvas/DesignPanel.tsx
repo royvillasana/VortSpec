@@ -152,7 +152,7 @@ export function DesignPanel({
   /** Drag-to-reorder a layer: move `nodeId` before/after `targetId` — the page rearranges to match. */
   onReorderNode?: (nodeId: string, targetId: string, position: "before" | "after" | "inside") => void;
   /** An ephemeral property edit (section field key → new value). */
-  onFieldChange?: (key: string, value: string, scope?: StyleScope, scopeKey?: string) => void;
+  onFieldChange?: (key: string, value: string, scope?: StyleScope, scopeKey?: string, scopeToken?: string) => void;
   /** A variant switch (variant prop key → new option). */
   onVariantChange?: (key: string, value: string) => void;
   /** Delete the selected element (hidden live, removed from source on Apply). */
@@ -302,7 +302,7 @@ export function DesignPanel({
                 targets={scopeTargets(selection)}
                 onMatchQuery={onMatchQuery}
                 mixed={mixed}
-                reach={scopeReach(tokens, matched)}
+                reach={scopeReach(tokens, matched, tree)}
               />
             ))}
           </>
@@ -842,7 +842,7 @@ const PropertySection = memo(function PropertySection({
   mixed = {},
 }: {
   section: DesignSection;
-  onFieldChange?: (key: string, value: string, scope?: StyleScope, scopeKey?: string) => void;
+  onFieldChange?: (key: string, value: string, scope?: StyleScope, scopeKey?: string, scopeToken?: string) => void;
   colorTokens?: ColorToken[];
   tokens?: InspectorToken[];
   onCreateToken?: (name: string, value: string, tokenType?: string) => Promise<void>;
@@ -866,7 +866,9 @@ const PropertySection = memo(function PropertySection({
             reach={reach}
             onMatchQuery={onMatchQuery}
             isMixed={f.key in mixed}
-            onChange={(val, scope, scopeKey) => onFieldChange?.(f.key, val, scope, scopeKey)}
+            onChange={(val, scope, scopeKey, scopeToken) =>
+              onFieldChange?.(f.key, val, scope, scopeKey, scopeToken)
+            }
           />
         ))}
       </div>
@@ -899,7 +901,7 @@ function ScopedField({
   field: SectionField;
   colorTokens: ColorToken[];
   tokens: InspectorToken[];
-  onChange: (value: string, scope: StyleScope, scopeKey?: string) => void;
+  onChange: (value: string, scope: StyleScope, scopeKey?: string, scopeToken?: string) => void;
   onCreateToken?: (name: string, value: string, tokenType?: string) => Promise<void>;
   targets: ScopeTarget[];
   reach: ScopeReach;
@@ -910,7 +912,7 @@ function ScopedField({
   const options = availableScopes(targets, field.key, reach);
   const derived = deriveScope(targets, field.key);
   const [open, setOpen] = useState(false);
-  const [picked, setPicked] = useState<{ scope: StyleScope; key?: string } | null>(null);
+  const [picked, setPicked] = useState<{ scope: StyleScope; key?: string; token?: string } | null>(null);
   const active = picked ?? derived;
   // A narrow edit that just hardcoded a value the design system already decides. Held so the offer can be
   // made AFTER the edit lands — the edit is never blocked on answering, and declining costs one click.
@@ -946,7 +948,7 @@ function ScopedField({
           colorTokens={colorTokens}
           tokens={tokens}
           onChange={(val) => {
-            onChange(val, active.scope, active.key);
+            onChange(val, active.scope, active.key, active.token);
             // Offered only when every member reaches this property THROUGH one token: the edit has just
             // written a literal over a value the design system decides, and next time the system will
             // win. Never speculative — `promotionTarget` returns null when there is nothing to promote to.
@@ -973,7 +975,7 @@ function ScopedField({
           <ScopeSelector
             options={options}
             value={active.scope}
-            onChange={(scope, key) => setPicked({ scope, key })}
+            onChange={(scope, key, token) => setPicked({ scope, key, token })}
           />
         </div>
       )}

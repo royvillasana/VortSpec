@@ -1,4 +1,4 @@
-import type { InspectorToken, Selection } from "@vortspec/core/ipc";
+import type { BridgeTree, InspectorToken, Selection } from "@vortspec/core/ipc";
 import { tokenNameFromVar } from "./compose";
 import { matchKey, type ScopeReach, type ScopeTarget } from "@vortspec/core/style-scope";
 import { MIXED, type IntersectionValue } from "@vortspec/core/style-intersection";
@@ -42,6 +42,7 @@ export function scopeTargets(selection: Selection | null): ScopeTarget[] {
 export function scopeReach(
   tokens: readonly InspectorToken[],
   matched: Record<string, string[]> = {},
+  tree: BridgeTree | null = null,
 ): ScopeReach {
   const tokenUses: Record<string, number> = {};
   for (const t of tokens) tokenUses[t.name] = t.uses;
@@ -52,7 +53,15 @@ export function scopeReach(
   // the count is absent and the label says "Buttons like this" with no number, which is true.
   const matchCounts: Record<string, number> = {};
   for (const [key, ids] of Object.entries(matched)) matchCounts[key] = ids.length;
-  return { matchCounts, tokenUses };
+
+  // Component instances ARE honestly countable from the tree — component identity is in it, unlike the
+  // computed style `matching` needs. This is the reach of a component-scoped token change on this page;
+  // the override itself reaches every page, which the tooltip says.
+  const componentCounts: Record<string, number> = {};
+  for (const node of Object.values(tree?.nodes ?? {})) {
+    if (node.component) componentCounts[node.component] = (componentCounts[node.component] ?? 0) + 1;
+  }
+  return { matchCounts, componentCounts, tokenUses };
 }
 
 
