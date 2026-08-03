@@ -60,7 +60,12 @@ export function buildFrameworkRulesDoc(framework: string): string {
       : []),
     "## Still applies",
     "",
-    "Everything in the shared standards that is genuinely framework-neutral still holds — atomic",
+    "**Style encapsulation.** A component owns its visual presentation. Consumers interact through",
+    "props and variants, never by passing raw style overrides; a layout-only override (margin,",
+    "positioning) is the exception. This principle is framework-neutral — only the MECHANISM above",
+    "is framework-specific.",
+    "",
+    "Everything else in the shared standards that is genuinely framework-neutral still holds — atomic",
     "design levels, token discipline (no hardcoded hex/px), the accessibility baseline, and one",
     "component per variant set. Only the ARCHITECTURE above is framework-specific.",
     "",
@@ -143,7 +148,30 @@ const REACT_ARCHITECTURE_SECTIONS = [
   /^##\s+Style Encapsulation\b/i,
   /^##\s+Component Variant Architecture\b/i,
   /^##\s+Universal Principle\s+—\s+Style Encapsulation\b/i,
+  // "All approaches use CVA for variant definitions in a colocated `.variants.ts` file",
+  // with explicit rows for Vue, Svelte and Angular. The single most direct contradiction.
+  /^##\s+Summary\s+—\s+Decision Table\b/i,
 ];
+
+/**
+ * Per-framework component-style sections. Only the active framework's is kept: Vue's scoped
+ * styles are noise in an Angular project and another pattern to mistake for guidance.
+ */
+const FRAMEWORK_STYLE_SECTIONS: Record<string, RegExp> = {
+  vue: /^##\s+Vue\b/i,
+  nuxt: /^##\s+Vue\b/i,
+  svelte: /^##\s+Svelte\b/i,
+  sveltekit: /^##\s+Svelte\b/i,
+  angular: /^##\s+Angular\b/i,
+};
+const ALL_FRAMEWORK_STYLE_SECTIONS = [...new Set(Object.values(FRAMEWORK_STYLE_SECTIONS))];
+
+/**
+ * Residual React mandates that survive section removal — numbered/bulleted rules inside
+ * otherwise-useful sections (the Tailwind rules, a styling section's "use `cva`, `clsx`, or
+ * `cn()`" bullet). Dropping the individual list item is safe where rewriting prose is not.
+ */
+const MANDATE_LINE = /^\s*(?:[-*]|\d+\.)\s.*(?:\bcva\b|\bCVA\b|`cn\(\)`|forwardRef|\.variants\.ts)/;
 
 /** Frameworks whose real architecture IS the one those sections describe. */
 const REACT_FAMILY = new Set(["react", "next"]);
@@ -160,6 +188,7 @@ export function pruneReactArchitecture(markdown: string, framework?: string | nu
   const key = (framework ?? "").toLowerCase();
   if (!key || REACT_FAMILY.has(key) || !idiomsFor(key)) return markdown;
 
+  const keepStyle = FRAMEWORK_STYLE_SECTIONS[key];
   const lines = markdown.split("\n");
   const out: string[] = [];
   let dropping = false;
@@ -169,22 +198,34 @@ export function pruneReactArchitecture(markdown: string, framework?: string | nu
     if (/^\s*```/.test(line)) fenced = !fenced;
     // Only a `##` ends a `##` section — `###` children belong to it.
     if (!fenced && /^##(?!#)\s/.test(line)) {
+      const isOtherFrameworkStyle =
+        ALL_FRAMEWORK_STYLE_SECTIONS.some((re) => re.test(line)) && !(keepStyle && keepStyle.test(line));
       dropping = REACT_ARCHITECTURE_SECTIONS.some((re) => re.test(line));
+      if (isOtherFrameworkStyle) {
+        dropping = true;
+        removed = true;
+        continue;
+      }
       if (dropping) {
         removed = true;
         out.push(
           `## Component architecture — see \`framework-rules.md\``,
           "",
-          "> REMOVED by VortSpec. This section described React's architecture (CVA, `cn()`, a",
-          "> colocated `.variants.ts`, `forwardRef`, named-export-only) as if it applied to every",
-          "> framework. It does not, and this project is not React. The architecture that DOES apply",
-          "> here is in [`framework-rules.md`](./framework-rules.md) — read that instead.",
+          "> REMOVED by VortSpec. This section prescribed React's component architecture as though it",
+          "> applied to every framework. It does not, and this project is not React. The architecture",
+          "> that DOES apply here is in [`framework-rules.md`](./framework-rules.md) — read that.",
           "",
         );
         continue;
       }
     }
-    if (!dropping) out.push(line);
+    if (dropping) continue;
+    // A retained section can still carry a React mandate as a single list item.
+    if (!fenced && MANDATE_LINE.test(line)) {
+      removed = true;
+      continue;
+    }
+    out.push(line);
   }
   if (!removed) return markdown;
   return out.join("\n").replace(/\n{3,}/g, "\n\n");

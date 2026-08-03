@@ -124,8 +124,12 @@ async function scopeDocsToFramework(
 
   await writeFile(join(docsDir, "framework-rules.md"), rules, "utf8");
 
-  // Link it from the mandatory entry point. Idempotent, so resync cannot duplicate the line.
-  await transformIfPresent(join(projectPath, "CLAUDE.md"), linkFrameworkRulesInClaudeMd);
+  // Link it from EVERY agent runtime's entry point, not just Claude's. VortSpec copies the same
+  // instructions to AGENTS.md / GEMINI.md / codex.md, and authority should not depend on which
+  // runtime opens the project. Idempotent, so resync cannot duplicate the line.
+  for (const entry of ["CLAUDE.md", "AGENTS.md", "GEMINI.md", "codex.md"]) {
+    await transformIfPresent(join(projectPath, entry), linkFrameworkRulesInClaudeMd);
+  }
 
   // Drop the eight framework sections that do not apply.
   await transformIfPresent(join(docsDir, "framework-config.md"), (t) =>

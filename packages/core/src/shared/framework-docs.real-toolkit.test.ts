@@ -98,6 +98,44 @@ d("the real toolkit docs (@royvillasana/sdd-de)", () => {
     expect(once.split(".sdd-de/docs/framework-rules.md").length - 1).toBe(1);
   });
 
+  it("leaves NO unconditional React mandate anywhere in the transformed files", () => {
+    // Thor's point: removing two headings is not the same as removing the architecture.
+    // This scans the COMPLETE transformed text, not just which headings went — the Decision
+    // Table ("All approaches use CVA", with Vue/Svelte/Angular rows), the Tailwind rules, and
+    // the stray "use `cva`, `clsx`, or `cn()`" bullet all survived the heading-only version.
+    const MANDATES = [/\bCVA\b/, /\bcva\(/, /`cn\(\)`/, /forwardRef/, /\.variants\.ts/];
+    for (const f of frameworkSchema.options) {
+      if (f === "react" || f === "next") continue;
+      for (const name of ["component-standards.md", "styling-best-practices.md"]) {
+        if (!has(name)) continue;
+        const pruned = pruneReactArchitecture(read(name), f);
+        for (const m of MANDATES) {
+          expect(pruned, `${f}/${name} still carries ${m}`).not.toMatch(m);
+        }
+      }
+    }
+  });
+
+  it("keeps the active framework's style section and drops the other frameworks'", () => {
+    if (!has("styling-best-practices.md")) return;
+    const doc = read("styling-best-practices.md");
+    const vue = pruneReactArchitecture(doc, "vue");
+    expect(vue).toMatch(/^##\s+Vue/m);
+    expect(vue).not.toMatch(/^##\s+Angular/m);
+    expect(vue).not.toMatch(/^##\s+Svelte/m);
+    const ng = pruneReactArchitecture(doc, "angular");
+    expect(ng).toMatch(/^##\s+Angular/m);
+    expect(ng).not.toMatch(/^##\s+Vue/m);
+  });
+
+  it("keeps the styling-approach sections, which are keyed to `styling` not framework", () => {
+    if (!has("styling-best-practices.md")) return;
+    const pruned = pruneReactArchitecture(read("styling-best-practices.md"), "svelte");
+    expect(pruned).toMatch(/^##\s+CSS Modules/m);
+    expect(pruned).toMatch(/^##\s+SCSS/m);
+    expect(pruned).toMatch(/^##\s+Tailwind/m);
+  });
+
   it("produces reachable, non-contradictory rules for every framework", () => {
     for (const f of frameworkSchema.options) {
       const rules = buildFrameworkRulesDoc(f);
