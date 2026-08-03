@@ -68,6 +68,19 @@ export function LibraryPanel({
   const customize = useAgentRun();
   // A Set so a large design system does not do a linear scan per tile.
   const inUseSet = useMemo(() => new Set(Object.keys(tokensInUse ?? {})), [tokensInUse]);
+  /**
+   * The selected component's own styles, grouped by the design system's sections.
+   *
+   * Same rows, same tiles — collected under the component instead of scattered across five sections of a
+   * list hundreds of rows long. Marking answers "is this one used?"; this answers "what is this made of?".
+   */
+  const componentSections = useMemo(() => {
+    if (!model || !selectedComponent) return [];
+    return model.sections
+      .map((sec) => ({ ...sec, rows: sec.rows.filter((r) => inUseSet.has(r.token)) }))
+      .filter((sec) => sec.rows.length > 0);
+  }, [model, selectedComponent, inUseSet]);
+
   /** The selection's tokens this design system does not define — the drift, named. */
   const unmapped = useMemo(() => {
     if (!model) return [];
@@ -340,6 +353,39 @@ export function LibraryPanel({
               onChoose={(scope) => void resolveScope(scope)}
               onCancel={() => setPendingScope(null)}
             />
+          )}
+          {selectedComponent && componentSections.length > 0 && (
+            <section
+              aria-label={`Applied styles: ${selectedComponent}`}
+              className="border-b border-vs-border-default"
+            >
+              <div className="px-3 pb-1 pt-2">
+                <div className="text-[10px] uppercase tracking-[0.06em] text-vs-text-muted">
+                  Applied styles
+                </div>
+                <div className="text-[13px] font-semibold text-vs-text-primary">{selectedComponent}</div>
+              </div>
+              {componentSections.map((section) => (
+                <div key={`applied-${section.section}`} className="pb-1">
+                  <div className="flex items-baseline gap-1.5 px-3 pb-0.5">
+                    <span className="text-[10px] uppercase tracking-[0.06em] text-vs-text-secondary">
+                      {section.label}
+                    </span>
+                    <span className="font-mono text-[9.5px] text-vs-text-muted">{section.rows.length}</span>
+                  </div>
+                  <SectionBody
+                    section={section}
+                    drift={drift}
+                    disabled={pending}
+                    projectPath={project.path}
+                    onWrite={writeToken}
+                    onChooseFont={chooseFont}
+                    onDraft={draft}
+                    inUse={inUseSet}
+                  />
+                </div>
+              ))}
+            </section>
           )}
           {model.sections.map((section) => (
             <Section

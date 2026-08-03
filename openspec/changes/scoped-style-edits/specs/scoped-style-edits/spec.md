@@ -353,3 +353,42 @@ SHALL write the token itself.
 #### Scenario: With nothing selected there is nothing to ask
 - **WHEN** no component is selected
 - **THEN** editing a token SHALL change the design system, with no question
+
+
+### Requirement: A selected component's applied styles are shown together, under its name
+
+The design-system surface SHALL lead with the selected component's own styles — under the component's
+name, grouped by kind, each group stating how many tokens it applies and rendering them as the same
+visual tiles the design system uses.
+
+Marking tokens in place answers "is this one used?" but not "what is this component made of?" — the
+answer is scattered across five sections of a list hundreds of rows long, and reading it means hunting
+for highlights. Collecting them under the component's name turns the same information into one legible
+answer.
+
+The full design system SHALL remain below it, unchanged in content and order. The component view is a
+lead, not a filter: the design system is the same design system whatever is selected.
+
+#### Scenario: The component's styles lead the surface
+- **WHEN** a Card is selected
+- **THEN** its applied styles SHALL be shown first, under the name `Card`, grouped by kind
+
+#### Scenario: Each group states how much it applies
+- **WHEN** the Card applies three colours and one radius
+- **THEN** the colour group SHALL say three and the border group SHALL say one
+
+#### Scenario: A kind the component does not use is not shown
+- **WHEN** the Card applies no shadow token
+- **THEN** no shadow group SHALL appear for it
+
+#### Scenario: The tiles are the same tiles, and editable
+- **WHEN** the user opens one of the component's tokens from this view
+- **THEN** it SHALL edit exactly as it does in the design system below, including asking how far the change reaches
+
+#### Scenario: The design system is unchanged below
+- **WHEN** the component view is shown
+- **THEN** every design-system section SHALL still be present, in its existing order, with every row
+
+#### Scenario: Nothing selected, nothing led with
+- **WHEN** no component is selected
+- **THEN** no component view SHALL be shown and the surface SHALL read as it did before

@@ -200,8 +200,10 @@ test("editing a token with a component selected asks how far it reaches", async 
     />,
   );
 
-  await c.getByLabel(/^radius-card:/).click();
-  const input = c.getByLabel("radius-card", { exact: true });
+  // Edited from the component's own applied view — where a user looking at a Card would reach for it.
+  const applied = c.getByRole("region", { name: "Applied styles: Card" });
+  await applied.getByLabel(/^radius-card:/).click();
+  const input = applied.getByLabel("radius-card", { exact: true });
   await input.fill("4px");
   await input.blur();
 
@@ -236,13 +238,65 @@ test("cancelling the question applies neither reading", async ({ mount }) => {
     />,
   );
 
-  await c.getByLabel(/^radius-card:/).click();
-  const input = c.getByLabel("radius-card", { exact: true });
+  const applied = c.getByRole("region", { name: "Applied styles: Card" });
+  await applied.getByLabel(/^radius-card:/).click();
+  const input = applied.getByLabel("radius-card", { exact: true });
   await input.fill("4px");
   await input.blur();
   await c.getByRole("button", { name: "Cancel this change" }).click();
 
   await expect(c.getByRole("alertdialog")).toHaveCount(0);
   // The design system is untouched — the row still reads what it did.
-  await expect(c.getByLabel(/^radius-card: 20px/)).toBeVisible();
+  await expect(applied.getByLabel(/^radius-card: 20px/)).toBeVisible();
+});
+
+test("a selected component's styles are collected under its name, grouped and counted", async ({
+  mount,
+}) => {
+  // Marking answers "is this one used?". It does not answer "what is this Card made of?" — that answer
+  // was scattered across five sections of a list hundreds of rows long, found by hunting for highlights.
+  const c = await mount(
+    <LibraryPanel
+      project={PROJECT}
+      onEdited={() => {}}
+      tokensInUse={{ "color-accent": "#262626", "radius-card": "20px" }}
+      selectedComponent="Card"
+    />,
+  );
+
+  const applied = c.getByText("Applied styles");
+  await expect(applied).toBeVisible();
+  await expect(c.getByText("Card", { exact: true })).toBeVisible();
+
+  // One group per kind the component actually uses, each stating how much.
+  await expect(c.getByText("Colors")).toHaveCount(2); // the applied view + the design system below
+  await expect(c.getByText("Borders")).toHaveCount(2);
+
+  // A kind it uses nothing from is not invented: the fixture has no typography/spacing/shadow in use.
+  await expect(c.getByText("Typography")).toHaveCount(1); // the design system's own section only
+});
+
+test("the applied view leads, and leaves the design system below untouched", async ({ mount }) => {
+  const plain = await mount(<LibraryPanel project={PROJECT} onEdited={() => {}} />);
+  const before = await plain.getByLabel(/^color-/).evaluateAll((els) => els.length);
+  await plain.unmount();
+
+  const c = await mount(
+    <LibraryPanel
+      project={PROJECT}
+      onEdited={() => {}}
+      tokensInUse={{ "color-accent": "#262626" }}
+      selectedComponent="Card"
+    />,
+  );
+
+  // The design system is the same design system whatever is selected — the component view is a lead,
+  // not a filter. The accent now appears twice: once in the applied view, once in its own section.
+  const after = await c.getByLabel(/^color-/).evaluateAll((els) => els.length);
+  expect(after).toBe(before + 1);
+});
+
+test("nothing selected, nothing led with", async ({ mount }) => {
+  const c = await mount(<LibraryPanel project={PROJECT} onEdited={() => {}} />);
+  await expect(c.getByText("Applied styles")).toHaveCount(0);
 });

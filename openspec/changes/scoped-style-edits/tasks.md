@@ -104,6 +104,15 @@
 - [x] 12.6 With nothing selected, editing a token changes the design system with no question.
 - [x] 12.7 Tests: a part's token marks as the component's; nothing outside it marks; the question appears only with a selection; each answer routes to the right write.
 
+## 13. The selected component's styles, together
+
+- [x] 13.1 Group the selection's in-use tokens by the design system's own sections.
+- [x] 13.2 Lead the surface with a view headed by the component's name, one group per kind, each stating its count.
+- [x] 13.3 Render the same tiles the design system uses, and make them edit through the same path — including the how-far question.
+- [x] 13.4 Omit a kind the component does not use; omit the whole view when nothing is selected.
+- [x] 13.5 Keep the full design system below, unchanged in content and order.
+- [x] 13.6 Tests: grouping and counts; a kind with nothing is absent; editing from the view asks how far; the design system below is untouched.
+
 ## 8. Verification
 
 - [x] 8.1 Full unit and component suites green across `packages/core`, `packages/ui`, and `apps/ide`. (core 1064, ui 182, CT 138 passed. 35 CT failures are PRE-EXISTING — verified by stashing every change and re-running: baseline is 35 failed / 136 passed, with the change 35 failed / 138 passed.)
