@@ -278,5 +278,61 @@ export function linkFrameworkRulesInClaudeMd(markdown: string): string {
   return `${markdown.trimEnd()}\n\n## Standards\n\n${FRAMEWORK_RULES_INDEX_LINE}\n`;
 }
 
+
+/**
+ * The unconditional `forwardRef` mandates in the shared standards, and what React actually
+ * requires now.
+ *
+ * `pruneReactArchitecture()` deliberately KEEPS those standards for react/next because they
+ * describe the right architecture — but "forwardRef is required on all components" is not
+ * React 19 guidance (ref arrives as an ordinary prop) and is overbroad even on React 18 for a
+ * component that exposes no ref. The generated rules say the version-aware thing, so leaving
+ * the blanket mandate in place would put two instructions in context and rely on precedence to
+ * pick — the exact failure this slice exists to remove.
+ *
+ * Phrase-level rather than line-deleting: these sit inside numbered lists whose surrounding
+ * text stays correct. Fenced code samples are deliberately untouched — an example is not a
+ * mandate, and rewriting code by regex is how you produce something that no longer compiles.
+ */
+const REACT_REF_MANDATES: [RegExp, string][] = [
+  [
+    /`forwardRef` is required on all components/g,
+    "`ref` handling follows the React version — see `framework-rules.md` (React 19+ passes `ref` as an " +
+      "ordinary prop; `forwardRef` is for React 18 and below), and only for components that expose a ref",
+  ],
+  [
+    /\*\*`forwardRef` is required\*\* — all components must forward refs for composition/g,
+    "**`ref` handling is version-dependent** — see `framework-rules.md`; forward a ref only where a " +
+      "component actually exposes one",
+  ],
+  [/supports `forwardRef`/g, "forwards `ref` as `framework-rules.md` describes"],
+];
+
+/**
+ * Remove the unconditional `forwardRef` mandate from a React/Next project's copy of the shared
+ * standards, replacing it with version-aware wording. A no-op for every other framework, whose
+ * copies have the whole architecture section removed by `pruneReactArchitecture()` already.
+ */
+export function scopeReactRefMandate(markdown: string, framework?: string | null): string {
+  const key = (framework ?? "").toLowerCase();
+  if (!REACT_FAMILY.has(key)) return markdown;
+  let out = markdown;
+  let fenced = false;
+  out = out
+    .split("\n")
+    .map((line) => {
+      if (/^\s*```/.test(line)) {
+        fenced = !fenced;
+        return line;
+      }
+      if (fenced) return line; // examples are illustrations, not instructions
+      let next = line;
+      for (const [re, replacement] of REACT_REF_MANDATES) next = next.replace(re, replacement);
+      return next;
+    })
+    .join("\n");
+  return out;
+}
+
 /** The frameworks this module can scope docs for — the ones with a profile. */
 export const SCOPABLE_FRAMEWORKS = Object.keys(FRAMEWORK_PROFILES);

@@ -8,7 +8,12 @@ import {
   linkFrameworkRulesInClaudeMd,
   pruneFrameworkConfigDoc,
   pruneReactArchitecture,
+  scopeReactRefMandate,
 } from "./framework-docs";
+
+/** What setup actually writes for a framework — both transformations, in order. */
+const scoped = (name: string, framework: string): string =>
+  scopeReactRefMandate(pruneReactArchitecture(read(name), framework), framework);
 
 /**
  * Transformations run against the REAL pinned `@royvillasana/sdd-de` docs.
@@ -66,10 +71,60 @@ d("the real toolkit docs (@royvillasana/sdd-de)", () => {
     expect(pruned).toMatch(/## Variant Rules/);
   });
 
-  it("leaves React and Next untouched — the sections are correct for them", () => {
+  it("keeps the React architecture SECTIONS for React and Next", () => {
     const cs = read("component-standards.md");
     expect(pruneReactArchitecture(cs, "react")).toBe(cs);
     expect(pruneReactArchitecture(cs, "next")).toBe(cs);
+  });
+
+  it("removes the unconditional forwardRef mandate from what React/Next actually receive", () => {
+    // The retained standard blanket-required `forwardRef` on ALL components, while the
+    // generated rules say React 19+ takes `ref` as an ordinary prop. Both were "in force" —
+    // a contradiction that precedence could only adjudicate, not remove.
+    for (const f of ["react", "next"]) {
+      for (const name of ["component-standards.md", "styling-best-practices.md"]) {
+        if (!has(name)) continue;
+        const out = scoped(name, f);
+        expect(out, `${f}/${name} still mandates forwardRef unconditionally`).not.toMatch(
+          /`forwardRef` is required on all components/,
+        );
+        expect(out, `${f}/${name} still mandates forwardRef unconditionally`).not.toMatch(
+          /\*\*`forwardRef` is required\*\*/,
+        );
+        expect(out, `${f}/${name} still asserts every component supports forwardRef`).not.toMatch(
+          /supports `forwardRef`/,
+        );
+      }
+    }
+  });
+
+  it("points React/Next at the version-aware rule instead", () => {
+    const out = scoped("component-standards.md", "react");
+    expect(out).toMatch(/React 19\+ passes `ref` as an ordinary prop/);
+    expect(out).toMatch(/only for components that expose a ref/);
+    expect(out).toContain("framework-rules.md");
+  });
+
+  it("does not rewrite code samples — an example is not an instruction", () => {
+    // Regex-rewriting fenced code is how you ship a snippet that no longer compiles.
+    const out = scoped("component-standards.md", "react");
+    expect(out).toMatch(/export const Button = forwardRef/);
+  });
+
+  it("keeps React's architecture intact apart from the ref mandate", () => {
+    const out = scoped("component-standards.md", "react");
+    expect(out).toMatch(/## Style Encapsulation/);
+    expect(out).toMatch(/CVA/);
+    expect(out).toMatch(/## Atomic Design Hierarchy/);
+  });
+
+  it("is a no-op for the seven non-React frameworks", () => {
+    // Their copies already have the whole architecture section removed.
+    for (const f of frameworkSchema.options) {
+      if (f === "react" || f === "next") continue;
+      const pruned = pruneReactArchitecture(read("component-standards.md"), f);
+      expect(scopeReactRefMandate(pruned, f)).toBe(pruned);
+    }
   });
 
   it("prunes the real framework-config.md to one framework's section", () => {

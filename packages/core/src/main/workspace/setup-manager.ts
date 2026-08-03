@@ -17,6 +17,7 @@ import {
   buildFrameworkRulesDoc,
   pruneFrameworkConfigDoc,
   pruneReactArchitecture,
+  scopeReactRefMandate,
   linkFrameworkRulesInClaudeMd,
 } from "@vortspec/core/framework-docs";
 import { readProjectConfig } from "./config-manager";
@@ -136,9 +137,13 @@ async function scopeDocsToFramework(
     pruneFrameworkConfigDoc(t, framework),
   );
 
-  // Drop the React-architecture sections from the shared standards for non-React projects.
+  // Shared standards: non-React projects lose the React architecture entirely; React/Next keep
+  // it but lose the unconditional `forwardRef` mandate, which is not React 19 guidance and
+  // would contradict the version-aware rule in framework-rules.md.
   for (const name of ["component-standards.md", "styling-best-practices.md"]) {
-    await transformIfPresent(join(docsDir, name), (t) => pruneReactArchitecture(t, framework));
+    await transformIfPresent(join(docsDir, name), (t) =>
+      scopeReactRefMandate(pruneReactArchitecture(t, framework), framework),
+    );
   }
 }
 
