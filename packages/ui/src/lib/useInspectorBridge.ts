@@ -54,6 +54,8 @@ export interface InspectorBridge {
   readouts: Record<string, NodeReadout>;
   /** The in-flight marquee rectangle, in guest coords, or null when no drag is running. */
   marquee: Rect | null;
+  /** Tokens the selected component AND its parts use, token → value on the component. */
+  subtreeTokens: Record<string, string>;
   hoveredId: string | null;
   /** Live rectangles keyed by node id (updated on readout/geometry) for the overlay. */
   rects: Record<string, Rect>;
@@ -88,6 +90,8 @@ export interface InspectorBridge {
   requestReadouts: (nodeIds: string[]) => void;
   /** Extend the selection to everything matching one named criterion. */
   selectMatching: (nodeId: string, by: "component" | "tag" | "token", cssProp?: string) => void;
+  /** Ask which tokens the selected component and its parts use; the answer lands in `subtreeTokens`. */
+  requestSubtreeTokens: (nodeId: string) => void;
   hover: (id: string | null) => void;
   /** Toggle guest input handling: inspect (select), interact (use the app), comment (pin). */
   setMode: (mode: CanvasMode) => void;
@@ -199,6 +203,7 @@ export function useInspectorBridge(): InspectorBridge {
   const [matched, setMatched] = useState<Record<string, string[]>>({});
   const [readouts, setReadouts] = useState<Record<string, NodeReadout>>({});
   const [marquee, setMarquee] = useState<Rect | null>(null);
+  const [subtreeTokens, setSubtreeTokens] = useState<Record<string, string>>({});
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [rects, setRects] = useState<Record<string, Rect>>({});
   const [runtimeError, setRuntimeError] = useState<InspectorBridge["runtimeError"]>(null);
@@ -265,6 +270,9 @@ export function useInspectorBridge(): InspectorBridge {
         });
         return;
       }
+      case "subtreeTokens":
+        setSubtreeTokens(event.tokens);
+        return;
       case "marquee":
         setMarquee(event.rect);
         return;
@@ -564,6 +572,11 @@ export function useInspectorBridge(): InspectorBridge {
     (nodeIds: string[]) => send({ t: "readoutMany", nodeIds }),
     [send],
   );
+  /** Ask what the selected component and its parts are made of. */
+  const requestSubtreeTokens = useCallback(
+    (nodeId: string) => send({ t: "subtreeTokens", nodeId }),
+    [send],
+  );
   const selectMatching = useCallback(
     (nodeId: string, by: "component" | "tag" | "token", cssProp?: string) =>
       send({ t: "selectMatching", nodeId, by, cssProp }),
@@ -622,6 +635,8 @@ export function useInspectorBridge(): InspectorBridge {
     requestReadouts,
     selectMatching,
     marquee,
+    subtreeTokens,
+    requestSubtreeTokens,
     hoveredId,
     rects,
     runtimeError,

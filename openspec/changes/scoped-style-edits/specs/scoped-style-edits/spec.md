@@ -299,3 +299,57 @@ The page SHALL NOT declare its own name for a value the design system already na
 #### Scenario: A value the design system does not name may still be local
 - **WHEN** the page needs a value the design system does not define
 - **THEN** it MAY declare its own, and that token SHALL be reported as not part of the design system
+
+
+### Requirement: A component's marking covers the component and its parts
+
+The marking SHALL cover every token used by the selected element **and by its descendants**, not the
+selected element alone.
+
+A component is what the user points at, not the one DOM node carrying the click. A Card sets its own
+radius and background while its padding, type and shadow live on the elements inside it — so marking only
+the outer node answers "what is this Card made of?" with two of its five sections empty, and the emptiness
+looks like a broken panel rather than an accurate report about one node.
+
+#### Scenario: A part's token is marked as the component's
+- **WHEN** a Card is selected and the padding of an element inside it resolves through a spacing token
+- **THEN** that spacing token SHALL be marked as in use by the selection
+
+#### Scenario: The component's own tokens are still marked
+- **WHEN** the Card sets its own background through a colour token
+- **THEN** that token SHALL be marked, exactly as before
+
+#### Scenario: Nothing outside the component is marked
+- **WHEN** a sibling of the Card uses a token the Card and its parts do not
+- **THEN** that token SHALL NOT be marked
+
+### Requirement: The design system is editable from the selection, and asks how far the change reaches
+
+A marked token SHALL be editable directly in the design-system surface while a component is selected, and
+committing that edit SHALL ask whether it applies to **this component only** or to **the whole design
+system**, stating what each choice affects.
+
+Editing a token from a selection is ambiguous by construction: the user is looking at one Card, and the
+token belongs to every component that reads it. Applying either reading silently is wrong half the time,
+so the question is asked rather than assumed.
+
+Choosing this component only SHALL write the component-scoped redefinition; choosing the design system
+SHALL write the token itself.
+
+#### Scenario: The choice is offered on commit
+- **WHEN** the user edits a marked token with a Card selected
+- **THEN** the system SHALL ask whether it applies to this Card only or to the design system
+- **AND** neither SHALL be applied until the user chooses
+
+#### Scenario: This component only spares the others
+- **WHEN** the user chooses this component only
+- **THEN** the change SHALL apply to every Card
+- **AND** a Button reading the same token SHALL be unaffected
+
+#### Scenario: The design system applies everywhere
+- **WHEN** the user chooses the design system
+- **THEN** the token itself SHALL change, and every component reading it SHALL follow
+
+#### Scenario: With nothing selected there is nothing to ask
+- **WHEN** no component is selected
+- **THEN** editing a token SHALL change the design system, with no question

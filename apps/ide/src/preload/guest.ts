@@ -1066,6 +1066,49 @@ function handleCommand(cmd: BridgeCommand): void {
       if (nodeIds.length) selectedId = nodeIds[nodeIds.length - 1];
       return;
     }
+    case "subtreeTokens": {
+      // "What is this component made of?" is a question about the component, not about the single DOM
+      // node that carried the click. A Card sets its own radius and background while its padding, type
+      // and shadow live on the elements inside it — so the subtree is the honest scope.
+      //
+      // Read from the CSS RULES that match, not from computed style: computed values are already
+      // resolved, so `var(--radius-card)` is indistinguishable there from a hardcoded 20px. The rules
+      // still carry the reference, which is the thing being asked about.
+      const root = resolve(cmd.nodeId);
+      if (!root) return;
+      const els = [root, ...root.querySelectorAll("*")];
+      const names = new Set<string>();
+      const collect = (text: string): void => {
+        for (const m of text.matchAll(/var\(\s*--([\w-]+)/g)) names.add(m[1]);
+      };
+      for (const el of els) collect(el.getAttribute("style") ?? "");
+      for (const sheet of Array.from(document.styleSheets)) {
+        let rules: CSSRuleList;
+        try {
+          rules = sheet.cssRules; // a cross-origin sheet throws; skip it rather than fail the query
+        } catch {
+          continue;
+        }
+        for (const rule of Array.from(rules)) {
+          const sel = (rule as CSSStyleRule).selectorText;
+          if (!sel) continue;
+          let hit = false;
+          try {
+            hit = els.some((el) => el.matches(sel));
+          } catch {
+            continue; // an unsupported selector matches nothing here
+          }
+          if (hit) collect(rule.cssText);
+        }
+      }
+      // Pair each with the value it resolves to ON the component, so the panel can show what it is worth
+      // here even when the design system gives it another value elsewhere.
+      const cs = getComputedStyle(root);
+      const tokens: Record<string, string> = {};
+      for (const n of names) tokens[n] = cs.getPropertyValue(`--${n}`).trim();
+      send({ t: "subtreeTokens", nodeId: cmd.nodeId, tokens });
+      return;
+    }
     case "matchElements": {
       // "Looks the same" is a question about the live DOM, so it is answered here rather than guessed
       // host-side from the tree. Same component AND the same COMPUTED value — computed, so that an element

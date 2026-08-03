@@ -2058,6 +2058,14 @@ export function RunApp({
 
   const onSelectNode = useCallback((id: string, additive?: boolean) => select(id, additive), [select]);
 
+  // Ask what the selected component and its parts are made of, whenever the selection changes.
+  const subtreeTokens = bridge.subtreeTokens;
+  useEffect(() => {
+    const id = bridge.selectedId;
+    if (id) bridge.requestSubtreeTokens(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bridge.selectedId]);
+
   // Ask for every member's computed style whenever the selection grows past one, so the panel can say
   // what they agree on. Only for a real multi-selection: one element already has its readout.
   useEffect(() => {
@@ -2081,14 +2089,21 @@ export function RunApp({
    */
   const selectionTokens = useMemo(() => {
     const out: Record<string, string> = {};
+    // The component's own fields first — the panel already resolved these, values included.
     for (const sec of selection?.sections ?? []) {
       for (const f of sec.fields) {
         const name = f.token ?? tokenNameFromVar(f.value);
         if (name && !(name in out)) out[name] = f.value;
       }
     }
+    // Then its PARTS. A Card sets its own radius and background while its padding, type and shadow live
+    // on the elements inside it — without these, three of the five sections read empty for a component
+    // that plainly uses spacing and shadow, and the emptiness looks like a broken panel.
+    for (const [name, value] of Object.entries(subtreeTokens)) {
+      if (!(name in out)) out[name] = value;
+    }
     return out;
-  }, [selection]);
+  }, [selection, subtreeTokens]);
   const onHoverNode = useCallback((id: string | null) => hover(id), [hover]);
 
   // Delete/Backspace deletes the selected element (Figma-style), in inspect mode only and
@@ -2437,7 +2452,12 @@ export function RunApp({
           // Marked in place: nothing is filtered, reordered or hidden, because a list that rearranges per
           // selection is a list nobody learns.
           libraryPanel={
-            <LibraryPanel project={project} onEdited={refresh} tokensInUse={selectionTokens} />
+            <LibraryPanel
+              project={project}
+              onEdited={refresh}
+              tokensInUse={selectionTokens}
+              selectedComponent={selection?.component ?? null}
+            />
           }
           selection={selection}
           tree={layersTree}

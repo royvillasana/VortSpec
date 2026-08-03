@@ -300,6 +300,8 @@ export const bridgeCommandSchema = z.discriminatedUnion("t", [
    * them; `selectNode` cannot serve that, because asking would move the focus the panel is describing.
    */
   z.object({ t: z.literal("readoutMany"), nodeIds: z.array(z.string()) }),
+  /** Which design tokens a node AND its descendants use — "what is this component made of?". */
+  z.object({ t: z.literal("subtreeTokens"), nodeId: z.string() }),
   /**
    * Extend the selection to every element matching one NAMED criterion. The criterion is explicit rather
    * than inferred, because "select things like this one" means several different things and the user has
@@ -462,6 +464,8 @@ export const bridgeEventSchema = z.discriminatedUnion("t", [
   z.object({ t: z.literal("matchedElements"), key: z.string(), nodeIds: z.array(z.string()) }),
   /** Readouts for a `readoutMany` query. Members that no longer resolve are simply absent. */
   z.object({ t: z.literal("readouts"), readouts: z.array(nodeReadoutSchema) }),
+  /** Token names used by a subtree, with the value each resolves to on the selected node. */
+  z.object({ t: z.literal("subtreeTokens"), nodeId: z.string(), tokens: z.record(z.string(), z.string()) }),
   /** The in-flight marquee rectangle in guest coords, or null when the drag ends. */
   z.object({ t: z.literal("marquee"), rect: rectSchema.nullable() }),
   /** The marquee's result: the outermost elements it enclosed. `additive` extends the current set. */

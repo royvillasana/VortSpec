@@ -94,6 +94,16 @@
 - [x] 11.3 Report a composed page's binding deterministically: which design-system tokens it uses, and which of its own are off-system.
 - [x] 11.4 Tests: the prompt asks for bound references; the binding report distinguishes bound from off-system on a real page's markup.
 
+## 12. Editing the design system from a selected component
+
+- [x] 12.1 Collect the tokens used by a selected element AND its descendants, from the CSS rules that actually match them plus their inline styles — a component is what the user pointed at, not the one node carrying the click.
+- [x] 12.2 Mark those across every section, so Borders/Spacing/Shadows report the component's parts instead of reading empty.
+- [x] 12.3 Make a marked token editable in the design-system surface while a component is selected.
+- [x] 12.4 On commit, ask "this component only" or "the whole design system", stating what each affects; apply neither until chosen.
+- [x] 12.5 Route the answer: this-component-only writes the component-scoped token redefinition, the design system writes the token.
+- [x] 12.6 With nothing selected, editing a token changes the design system with no question.
+- [x] 12.7 Tests: a part's token marks as the component's; nothing outside it marks; the question appears only with a selection; each answer routes to the right write.
+
 ## 8. Verification
 
 - [x] 8.1 Full unit and component suites green across `packages/core`, `packages/ui`, and `apps/ide`. (core 1064, ui 182, CT 138 passed. 35 CT failures are PRE-EXISTING — verified by stashing every change and re-running: baseline is 35 failed / 136 passed, with the change 35 failed / 138 passed.)

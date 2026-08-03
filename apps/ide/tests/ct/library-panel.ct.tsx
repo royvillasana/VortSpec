@@ -186,3 +186,63 @@ test("adopting adds the token to the design system, and only on request", async 
   await expect(c.getByLabel(/^radius-pill:/)).toBeVisible();
   await expect(c.getByRole("region", { name: /not in your design system/i })).toHaveCount(0);
 });
+
+test("editing a token with a component selected asks how far it reaches", async ({ mount }) => {
+  // Ambiguous by construction: the user is looking at one Card, and the token belongs to every component
+  // that reads it. Guessing is wrong half the time — and invisibly so, because the Card changes either
+  // way and only the components they were NOT looking at reveal which reading was taken.
+  const c = await mount(
+    <LibraryPanel
+      project={PROJECT}
+      onEdited={() => {}}
+      tokensInUse={{ "radius-card": "20px" }}
+      selectedComponent="Card"
+    />,
+  );
+
+  await c.getByLabel(/^radius-card:/).click();
+  const input = c.getByLabel("radius-card", { exact: true });
+  await input.fill("4px");
+  await input.blur();
+
+  const ask = c.getByRole("alertdialog", { name: /Apply --radius-card/ });
+  await expect(ask).toBeVisible();
+  await expect(ask.getByRole("button", { name: "Only Cards" })).toBeVisible();
+  await expect(ask.getByRole("button", { name: "The whole design system" })).toBeVisible();
+  // It says what the narrow choice spares, so the decision is made on consequences.
+  await expect(ask.getByText(/leaves other components reading --radius-card alone/i)).toBeVisible();
+});
+
+test("with nothing selected there is nothing to ask", async ({ mount }) => {
+  const c = await mount(<LibraryPanel project={PROJECT} onEdited={() => {}} />);
+
+  await c.getByLabel(/^radius-card:/).click();
+  const input = c.getByLabel("radius-card", { exact: true });
+  await input.fill("4px");
+  await input.blur();
+
+  // No selection, no ambiguity: the edit is the design system's, and it just applies.
+  await expect(c.getByRole("alertdialog")).toHaveCount(0);
+  await expect(input).toHaveValue("4px");
+});
+
+test("cancelling the question applies neither reading", async ({ mount }) => {
+  const c = await mount(
+    <LibraryPanel
+      project={PROJECT}
+      onEdited={() => {}}
+      tokensInUse={{ "radius-card": "20px" }}
+      selectedComponent="Card"
+    />,
+  );
+
+  await c.getByLabel(/^radius-card:/).click();
+  const input = c.getByLabel("radius-card", { exact: true });
+  await input.fill("4px");
+  await input.blur();
+  await c.getByRole("button", { name: "Cancel this change" }).click();
+
+  await expect(c.getByRole("alertdialog")).toHaveCount(0);
+  // The design system is untouched — the row still reads what it did.
+  await expect(c.getByLabel(/^radius-card: 20px/)).toBeVisible();
+});

@@ -31,6 +31,7 @@ export function LibraryPanel({
   project,
   onEdited,
   tokensInUse,
+  selectedComponent,
 }: {
   project: Project;
   /** Called after a committed edit, so whatever is previewed beside this panel reloads. */
@@ -47,6 +48,8 @@ export function LibraryPanel({
    * serialized and a Map arrives empty.
    */
   tokensInUse?: Readonly<Record<string, string>>;
+  /** The selected component's name, when one is selected — what "this component only" would mean. */
+  selectedComponent?: string | null;
 }): React.JSX.Element {
   const [model, setModel] = useState<DesignSystemLibrary | null>(null);
   // Where the SCREENS differ, keyed by token so each row can offer its own adopt.
@@ -147,8 +150,41 @@ export function LibraryPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [customize.model.status]);
 
+  /**
+   * A token edit while a component is selected is ambiguous by construction: the user is looking at one
+   * Card, and the token belongs to every component that reads it. Applying either reading silently is
+   * wrong half the time, so the edit is HELD and the question asked. With nothing selected there is no
+   * ambiguity and the write goes straight through.
+   */
+  const [pendingScope, setPendingScope] = useState<{ token: string; value: string } | null>(null);
+
   async function writeToken(token: string, value: string): Promise<void> {
+    if (selectedComponent && (tokensInUse ?? {})[token] !== undefined) {
+      setPendingScope({ token, value });
+      return;
+    }
     await commit(() => api.setThemeTokenOverride(project.path, token, value));
+  }
+
+  /** Apply the held edit once the user has said how far it reaches. */
+  async function resolveScope(scope: "component" | "system"): Promise<void> {
+    const p = pendingScope;
+    setPendingScope(null);
+    if (!p) return;
+    if (scope === "system") {
+      await commit(() => api.setThemeTokenOverride(project.path, p.token, p.value));
+      return;
+    }
+    // The same token, redefined inside this component only — so every Card follows and a Button reading
+    // it does not. Merged with any existing base so this never drops another property.
+    await commit(async () => {
+      const prior = await api.getThemeOverrides(project.path).catch(() => null);
+      const base = prior?.components?.[selectedComponent as string]?.base ?? {};
+      return api.setThemeComponentOverride(project.path, selectedComponent as string, {}, {
+        ...base,
+        [`--${p.token}`]: p.value,
+      });
+    });
   }
 
   /**
@@ -295,6 +331,16 @@ export function LibraryPanel({
         </p>
       ) : (
         <div className="flex flex-col">
+          {pendingScope && selectedComponent && (
+            <ScopeQuestion
+              token={pendingScope.token}
+              value={pendingScope.value}
+              component={selectedComponent}
+              disabled={pending}
+              onChoose={(scope) => void resolveScope(scope)}
+              onCancel={() => setPendingScope(null)}
+            />
+          )}
           {model.sections.map((section) => (
             <Section
               key={section.section}
@@ -985,5 +1031,72 @@ function UnmappedTokens({
         ))}
       </div>
     </section>
+  );
+}
+
+
+/**
+ * How far a token edit made from a selected component should reach (change: scoped-style-edits).
+ *
+ * Asked rather than assumed. The user is looking at one Card; the token belongs to every component that
+ * reads it. Guessing is wrong half the time, and the wrong guess is invisible — the Card changes either
+ * way, and only the components the user was not looking at reveal which reading was taken.
+ *
+ * Both options say what they affect, so the choice is made on consequences rather than on wording.
+ */
+function ScopeQuestion({
+  token,
+  value,
+  component,
+  disabled,
+  onChoose,
+  onCancel,
+}: {
+  token: string;
+  value: string;
+  component: string;
+  disabled: boolean;
+  onChoose: (scope: "component" | "system") => void;
+  onCancel: () => void;
+}): React.JSX.Element {
+  return (
+    <div
+      role="alertdialog"
+      aria-label={`Apply --${token}`}
+      className="border-b border-vs-border-default bg-vs-bg-elevated px-3 py-2"
+    >
+      <div className="pb-0.5 font-mono text-[10px] text-vs-text-secondary">{`--${token} → ${value}`}</div>
+      <p className="pb-1.5 text-[10px] leading-tight text-vs-text-muted">Apply this change to…</p>
+      <div className="flex flex-wrap gap-1">
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={() => onChoose("component")}
+          className="rounded border border-vs-accent bg-vs-accent-muted px-1.5 py-0.5 text-[10px] text-vs-text-primary disabled:opacity-50"
+        >
+          {`Only ${component}s`}
+        </button>
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={() => onChoose("system")}
+          className="rounded border border-vs-border-default px-1.5 py-0.5 text-[10px] text-vs-text-secondary hover:border-vs-border-strong disabled:opacity-50"
+        >
+          The whole design system
+        </button>
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={onCancel}
+          aria-label="Cancel this change"
+          className="rounded px-1.5 py-0.5 text-[10px] text-vs-text-muted hover:text-vs-text-secondary disabled:opacity-50"
+        >
+          Cancel
+        </button>
+      </div>
+      <p className="pt-1 text-[9.5px] leading-tight text-vs-text-muted">
+        {`Only ${component}s changes every ${component} and leaves other components reading --${token} alone.`}
+      </p>
+    </div>
   );
 }
