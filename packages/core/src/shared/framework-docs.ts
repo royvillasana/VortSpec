@@ -37,10 +37,7 @@ export function buildFrameworkRulesDoc(framework: string): string {
     `This project is **${i.label}** (\`framework: ${key}\`). These rules are AUTHORITATIVE for every`,
     "component and page built here.",
     "",
-    "**Precedence.** Where any other document — including `component-standards.md`,",
-    "`styling-best-practices.md`, or a skill that loads them — states an architecture that",
-    "conflicts with this file, THIS FILE WINS. Those documents describe React's conventions;",
-    `they are not framework-agnostic, and ${i.label} is not React.`,
+    ...precedenceParagraph(key, i.label),
     "",
     "## Conventions",
     "",
@@ -70,6 +67,31 @@ export function buildFrameworkRulesDoc(framework: string): string {
     "component per variant set. Only the ARCHITECTURE above is framework-specific.",
     "",
   ].join("\n");
+}
+
+/**
+ * The precedence paragraph, which differs by framework family because the underlying policy
+ * does. `pruneReactArchitecture()` KEEPS the shared React architecture for react/next and
+ * REMOVES it everywhere else, so a single unconditional paragraph could only be right for one
+ * of them — and the version that shipped told a React project "React (Vite) is not React".
+ */
+function precedenceParagraph(key: string, label: string): string[] {
+  if (REACT_FAMILY.has(key)) {
+    return [
+      "**Precedence.** The shared standards (`component-standards.md`, `styling-best-practices.md`)",
+      `describe React's architecture, which IS this project's architecture — they are kept intact for`,
+      `${label} and still apply. This file restates the conventions in one place and is authoritative`,
+      "where the two ever disagree; it does not replace them.",
+    ];
+  }
+  return [
+    "**Precedence.** Where any other document — including `component-standards.md`,",
+    "`styling-best-practices.md`, or a skill that loads them — states an architecture that",
+    "conflicts with this file, THIS FILE WINS. Those documents describe React's conventions;",
+    `they are not framework-agnostic, and ${label} is not React. VortSpec removes the React-only`,
+    "architecture from this project's copies at setup, so they should not conflict — if you find",
+    "such a rule still present, this file governs.",
+  ];
 }
 
 /** Keep a rule on one Markdown table row. */

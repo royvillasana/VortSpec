@@ -86,6 +86,37 @@ describe("buildFrameworkRulesDoc", () => {
     }
   });
 
+  it("never tells a React-family project that it is not React", () => {
+    // The shipped version emitted one unconditional paragraph, so React's own rules read
+    // "React (Vite) is not React" and Next's read "Next.js (App Router) is not React".
+    // For the other seven the same sentence is true and useful, so this is scoped to the
+    // family where it is false — asserting it everywhere was my own bad assertion.
+    for (const f of ["react", "next"]) {
+      const doc = buildFrameworkRulesDoc(f);
+      expect(doc, `${f} claims it is not React`).not.toMatch(/is not React/);
+    }
+  });
+
+  it("tells React and Next the shared standards still APPLY, not that they are overridden", () => {
+    // pruneReactArchitecture() deliberately keeps those docs intact for the React family, so
+    // claiming to override them would contradict the transformation the same module performs.
+    for (const f of ["react", "next"]) {
+      const doc = buildFrameworkRulesDoc(f);
+      expect(doc).toMatch(/IS this project's architecture/);
+      expect(doc).toMatch(/still apply/);
+      expect(doc, `${f} claims to override standards it keeps`).not.toContain("THIS FILE WINS");
+    }
+  });
+
+  it("tells the other seven the shared standards are overridden and removed", () => {
+    for (const f of FRAMEWORKS.filter((x) => x !== "react" && x !== "next")) {
+      const doc = buildFrameworkRulesDoc(f);
+      expect(doc).toContain("THIS FILE WINS");
+      expect(doc).toMatch(/is not React/);
+      expect(doc).toMatch(/removes the React-only/);
+    }
+  });
+
   it("returns empty for an unknown framework rather than inventing rules", () => {
     expect(buildFrameworkRulesDoc("brand-new-framework")).toBe("");
     expect(buildFrameworkRulesDoc("")).toBe("");
