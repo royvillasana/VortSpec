@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Project } from "@vortspec/core/ipc";
 import { chunkByLevel, buildChunkPrompt } from "@vortspec/core/sdd-prompts";
-import { isConsumeSource } from "@vortspec/core/setup";
-import { frameworkSupportError } from "@vortspec/core/framework-profiles";
+import { autoBuildGate } from "./auto-build-gate";
 import { api } from "./api";
 import { useAgentRun } from "./useAgentRun";
 
@@ -14,6 +13,7 @@ import { useAgentRun } from "./useAgentRun";
  * navigation), starts at most once per project, and only when nothing is already building. `justFinished`
  * bumps when the whole roster is done so the shell can notify the user.
  */
+
 export function useAutoComponentBuild(
   project: Project | null,
 ): { building: boolean; remaining: number; justFinished: number; setupRequired: string | null } {
@@ -65,6 +65,9 @@ export function useAutoComponentBuild(
   // Once per project (startedRef); best-effort styling + Storybook setup first, like the Flow.
   useEffect(() => {
     if (!project) return;
+    // A warning belongs to the project that produced it — clear it when the project changes,
+    // so an old "run /setup" notice cannot sit over a different, valid project's build.
+    setSetupRequired(null);
     let alive = true;
     let poll: number | undefined;
     const check = async (): Promise<void> => {
@@ -78,22 +81,19 @@ export function useAutoComponentBuild(
       // Consume sources (enterprise + any component library) CONSUME an existing component system —
       // never auto-BUILD their components (that would create VortSpec-owned look-alikes that drift
       // from their source). Claim + stop. (change: consume-component-libraries)
-      if (isConsumeSource(cfg?.designSource)) {
+      // TYPED PRE-RUN GATE. The prompt's STOP clause is prose the model can read past;
+      // refusing to start the run is the real gate.
+      const gate = autoBuildGate(cfg);
+      // Set on EVERY tick, so correcting the config clears a stale warning without a reload.
+      setSetupRequired(gate.kind === "setup-required" ? gate.reason : null);
+      if (gate.claimProject) {
         startedRef.current = project.path;
         if (poll) window.clearInterval(poll);
         return;
       }
-      // TYPED PRE-RUN GATE. Generating without a known framework means generating React into
-      // whatever this project actually is — the defect this whole change exists to remove. The
-      // prompt's STOP clause is defense in depth; refusing to start the run is the real gate.
-      // Surfaced as `setupRequired` rather than swallowed, so the shell can prompt for /setup.
-      const unsupported = frameworkSupportError(cfg?.framework);
-      if (unsupported) {
-        setSetupRequired(unsupported);
-        startedRef.current = project.path;
-        if (poll) window.clearInterval(poll);
-        return;
-      }
+      // `setup-required` deliberately does NOT claim and does NOT stop the poll: the user was
+      // just told to run /setup, so the next tick must be able to see that they did.
+      if (gate.kind === "setup-required") return;
       if (!comps || active) return; // no data yet, or a run is in flight — re-check next tick
       const unbuilt = comps.components.filter((c) => c.status === "unknown");
       if (unbuilt.length === 0) return; // design system not created yet — keep polling

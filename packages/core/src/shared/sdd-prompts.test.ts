@@ -384,4 +384,14 @@ describe("search_design_system must be scoped by includeLibraryKeys (found on a 
     const p = buildChunkPrompt(["button"], { framework: "react" });
     expect(p).not.toMatch(/`search_design_system` scoped to THIS file's own/);
   });
+
+  it("says the library key is an lk-… key the URL does not carry", () => {
+    // A Figma URL gives the FILE key; `includeLibraryKeys` wants the LIBRARY key, which has to
+    // come from result metadata. Telling the agent to "use the key from figma_file_url" would
+    // have produced a scoped-looking search that still filtered on the wrong identifier.
+    const p = buildChunkPrompt(["button"], { framework: "react" });
+    expect(p).toContain("lk-");
+    expect(p).toMatch(/URL does NOT/);
+    expect(p).toMatch(/metadata of a first, unscoped result/);
+  });
 });

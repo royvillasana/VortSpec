@@ -81,7 +81,9 @@ const VARIANT_SET_CLAUSE =
 const SCOPED_SEARCH_CLAUSE =
   "`search_design_system` is NOT scoped by the file key alone — `fileKey` is context, not a filter, and an " +
   "unscoped search returns same-named components from every library in the org. You MUST pass this file's " +
-  "OWN library key in `includeLibraryKeys` (resolve it from `figma_file_url` / the file's library). If a " +
+  "OWN library key in `includeLibraryKeys`. That key is an `lk-…` LIBRARY key, which a Figma URL does NOT " +
+  "give you — a URL carries the FILE key. Get it from the metadata of a first, unscoped result that belongs " +
+  "to this file, then scope every subsequent search with it. If a " +
   "name matches ONLY in another library, treat the component as UNRESOLVED — do NOT use a cross-library " +
   "match, and never pick between same-named candidates by description: several libraries ship byte-identical " +
   "component descriptions.";
