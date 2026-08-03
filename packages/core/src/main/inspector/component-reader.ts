@@ -422,15 +422,19 @@ async function computeInspectorComponents(
     /* no manifest → empty inventory */
   }
 
-  // A framework we cannot resolve — absent OR unrecognized — can still be SEARCHED (the
-  // union), but nothing it matches may be claimed as built. See `componentStatus`.
+  // A framework that is CONFIGURED but unrecognized can still be SEARCHED (the union), but
+  // nothing it matches may be claimed as built — see `componentStatus`.
   //
-  // The absent case was previously treated as known, because `status: "unknown"` feeds the
-  // auto-builder and failing closed would have put every legacy `project.yaml` into a
-  // permanent full-roster rebuild. The auto-builder now refuses to start on an unresolvable
-  // framework and asks for `/setup` instead, so there is no loop left to inflict and the
-  // roster no longer has to claim `built` for a project whose framework nobody knows.
-  const frameworkKnown = profileFor(config?.framework) !== null;
+  // An ABSENT `framework:` key is deliberately still treated as known, and this is a
+  // MERGE-ORDER exception rather than a judgement about what is correct. Failing closed here
+  // is right, but `status: "unknown"` is what feeds the auto-builder, so it is only safe once
+  // the auto-builder refuses to start on an unresolvable framework. That gate lives on the
+  // stacked branch, not this one — and a branch that has not merged is not runtime
+  // protection here. Shipping this alone would restore the permanent full-roster rebuild on
+  // opus for every legacy `project.yaml`.
+  //
+  // Remove this exception when the two land together, or immediately after the gate does.
+  const frameworkKnown = config?.framework ? profileFor(config.framework) !== null : true;
   const root = componentDir ? join(projectPath, componentDir) : projectPath;
   const rosterNames = manifest.map((m) => m.name);
   const srcByName = new Map<string, string>();

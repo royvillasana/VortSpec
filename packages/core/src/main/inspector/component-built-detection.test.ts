@@ -128,12 +128,17 @@ describe("getInspectorComponents — an absent framework key cannot claim 'built
     await rm(dir, { recursive: true, force: true });
   });
 
-  it("reports unknown when project.yaml declares no framework", async () => {
+  // MERGE-ORDER EXCEPTION, pinned so it cannot be lost. Failing closed on an absent key is
+  // correct, but `status: "unknown"` drives the auto-builder, so it is only safe once the
+  // builder refuses to start on an unresolvable framework — a gate on the stacked branch that
+  // has not merged. Until then this must stay `built`, or every legacy project.yaml goes back
+  // into a permanent full-roster rebuild. Flip this expectation when the gate lands.
+  it("still reports built when project.yaml declares no framework (pending the auto-build gate)", async () => {
     await writeFile(join(dir, ".sdd-de/project.yaml"), "component_dir: src/components\n", "utf8");
     const r = await getInspectorComponents(dir);
     const btn = r.components.find((c) => c.name === "Button");
-    expect(btn?.file).toBe("src/components/Button.tsx"); // path still surfaced
-    expect(btn?.status).toBe("unknown"); // but no claim
+    expect(btn?.file).toBe("src/components/Button.tsx");
+    expect(btn?.status).toBe("built");
   });
 
   it("reports built once the framework is declared", async () => {

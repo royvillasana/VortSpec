@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdtemp, mkdir, writeFile, rm, stat } from "node:fs/promises";
+import { mkdtemp, mkdir, writeFile, rm, stat, chmod } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -410,6 +410,43 @@ describe("vanillaCheckCmd — the gate actually checks every file", () => {
   });
 
   it("passes when there is no JS at all rather than erroring on empty input", async () => {
+    await writeFile(join(dir, "src", "button.html"), "<button></button>\n", "utf8");
+    expect(run(vanillaCheckCmd("src")!)).toBe(0);
+  });
+});
+
+/**
+ * Discovery failure must not read as success. The previous `find … | xargs …` form returned
+ * only the pipeline's LAST status, so a `find` that failed outright fed `xargs` nothing and
+ * reported a pass having checked zero files. Distinct from the legitimate empty case: no JS
+ * to check is a pass; being unable to look is not.
+ */
+describe("vanillaCheckCmd — a check that could not run is not a pass", () => {
+  let dir: string;
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), "vs-discovery-"));
+  });
+  afterEach(async () => {
+    // Restore any permissions removed by a test so cleanup can recurse.
+    await chmod(join(dir, "src", "locked"), 0o755).catch(() => undefined);
+    await rm(dir, { recursive: true, force: true });
+  });
+  const run = (cmd: string): number => spawnSync("sh", ["-c", cmd], { cwd: dir }).status ?? -1;
+
+  it("FAILS when the component directory does not exist", async () => {
+    expect(run(vanillaCheckCmd("missing-components")!)).not.toBe(0);
+  });
+
+  it("FAILS when a subdirectory cannot be read", async () => {
+    await mkdir(join(dir, "src", "locked"), { recursive: true });
+    await writeFile(join(dir, "src", "ok.js"), "export const ok = 1;\n", "utf8");
+    await chmod(join(dir, "src", "locked"), 0o000);
+    expect(run(vanillaCheckCmd("src")!)).not.toBe(0);
+  });
+
+  it("PASSES for a real directory that simply holds no JS", async () => {
+    // The legitimate empty case must stay green, or the gate is just noise.
+    await mkdir(join(dir, "src"), { recursive: true });
     await writeFile(join(dir, "src", "button.html"), "<button></button>\n", "utf8");
     expect(run(vanillaCheckCmd("src")!)).toBe(0);
   });

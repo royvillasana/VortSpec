@@ -335,18 +335,21 @@ export function vanillaCheckCmd(dir?: string | null): string | null {
   const safe = sanitizeComponentDir(dir);
   if (!safe) return null;
   const prune = GENERATED_DIRS.map((d) => `-name ${shellQuote(d)}`).join(" -o ");
-  // `xargs -0 -n1`, and neither of the two obvious alternatives:
-  //   `-exec node --check {} +`  batches files, and `node --check` reads only its FIRST
-  //                              argument — every other file in the batch goes unchecked.
-  //   `-exec node --check {} \;` runs per file, but `find` discards the exit status, so the
-  //                              command always reports success.
-  // Both are gates that pass without checking, which is the exact defect this branch exists
-  // to remove. `-n1` forces one file per invocation and `xargs` propagates any failure.
-  // `-print0`/`-0` keeps paths with spaces intact.
-  return (
-    `find ${shellQuote(`./${safe}`)} \\( ${prune} \\) -prune -o -name '*.js' -print0` +
-    ` | xargs -0 -n1 node --check`
-  );
+  // One `find`, no pipe. Every other shape tried here was a gate that could pass without
+  // checking — the exact defect this module exists to remove:
+  //   `-exec node --check {} +`      batches, and `node --check` reads only its FIRST
+  //                                  argument; the rest of each batch goes unchecked.
+  //   `-exec node --check {} \;`     runs per file, but `find` discards the child's status,
+  //                                  so it always reports success.
+  //   `… -print0 | xargs -0 -n1 …`   checks every file, but a pipeline returns only the LAST
+  //                                  command's status — so a `find` that failed outright
+  //                                  (missing or unreadable directory) fed `xargs` nothing
+  //                                  and reported success having checked nothing.
+  // The `sh -c` loop checks each file individually and exits on the first failure, and
+  // `-exec … +` propagates that non-zero status through `find` — which also fails on its own
+  // traversal errors, so a missing or unreadable directory is a failure rather than a pass.
+  const perFile = `sh -c 'for f do node --check "$f" || exit 1; done' sh {} +`;
+  return `find ${shellQuote(`./${safe}`)} \\( ${prune} \\) -prune -o -name '*.js' -exec ${perFile}`;
 }
 
 /** Where a project's own source lives, for checks that must not sweep generated output. */
