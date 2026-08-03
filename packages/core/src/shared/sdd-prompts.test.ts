@@ -303,3 +303,38 @@ describe("detection — collapse variant sets + drop internal nodes", () => {
     expect(p).toMatch(/CAPS AT 3/);
   });
 });
+
+describe("build prompts state the framework's conventions (change: framework-profile-idioms)", () => {
+  it("tells a Svelte build to keep variant classes inside the component", () => {
+    const p = buildChunkPrompt(["button"], { framework: "svelte" });
+    expect(p).toContain("Svelte");
+    expect(p).toContain("$props()");
+    expect(p).toMatch(/INSIDE the component/);
+    // The regression: CVA in an external module is what strips Svelte's scoped CSS.
+    expect(p).not.toContain("class-variance-authority");
+  });
+
+  it("tells an Angular build the event syntax and what CVA means there", () => {
+    const p = buildChunkPrompt(["button"], { framework: "angular" });
+    expect(p).toContain("(click)");
+    expect(p).toContain("ControlValueAccessor");
+  });
+
+  it("carries the framework through buildOnePrompt too", () => {
+    expect(buildOnePrompt("button", "atom", "vue")).toContain("defineProps");
+  });
+
+  it("no longer names CVA in the shared variant-set reminder", () => {
+    // It used to read "via variant props (e.g. CVA)" for every framework — the one
+    // framework-flavoured line in a file that is otherwise framework-agnostic.
+    const p = buildChunkPrompt(["button"], { framework: "vanilla" });
+    expect(p).toMatch(/using this framework's variant mechanism/);
+    expect(p).not.toMatch(/e\.g\. CVA/);
+  });
+
+  it("omits the clause entirely when the framework is unknown, rather than asserting React's", () => {
+    const p = buildChunkPrompt(["button"], {});
+    expect(p).not.toContain("FRAMEWORK CONTRACT");
+    expect(p).not.toContain("forwardRef");
+  });
+});

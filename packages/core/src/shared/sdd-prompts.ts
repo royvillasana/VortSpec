@@ -9,23 +9,45 @@
  * procedure here changes it in both apps at once (the binding invariant of the
  * two-app model).
  */
-import { typecheckCmdFor } from "./framework-profiles";
+import { frameworkIdiomClause, typecheckCmdFor } from "./framework-profiles";
 
-export function buildOnePrompt(name: string, level?: string): string {
+export function buildOnePrompt(name: string, level?: string, framework?: string | null): string {
   return (
     `Read .sdd-de/project.yaml. Implement the "${name}" component` +
     (level ? ` (${level})` : "") +
     " into component_dir in the configured framework and language. " +
+    frameworkClause(framework) +
     DESIGN_REFERENCE_CLAUSE +
     " Run /generate-artifacts for it to produce its specs, then implement it. " +
     VARIANT_SET_CLAUSE
   );
 }
 
-/** Shared reminder so a collapsed variant set is ONE component, not many. */
+/**
+ * The project's framework conventions, stated outright (change: framework-profile-idioms).
+ *
+ * Every builder used to say only "in the configured framework and language" and leave the
+ * rest to `.sdd-de/project.yaml` — so which idiom the model reached for was its own habit,
+ * and the habit is React. Interpolating the profile's idioms makes the instruction concrete
+ * for the eight non-React frameworks. Empty (and therefore harmless) when the framework is
+ * unset or unrecognized: `frameworkIdiomClause` returns "" rather than falling back to
+ * React's conventions, because asserting the wrong idiom is worse than asserting none.
+ */
+function frameworkClause(framework?: string | null): string {
+  const clause = frameworkIdiomClause(framework);
+  return clause ? `${clause}\n` : "";
+}
+
+/**
+ * Shared reminder so a collapsed variant set is ONE component, not many. The MECHANISM is
+ * deliberately left to the framework clause above: naming CVA here pushed every framework
+ * toward the React idiom, and in Angular `CVA` is `ControlValueAccessor` — a different thing
+ * entirely.
+ */
 const VARIANT_SET_CLAUSE =
   "If its .sdd-de/components.json entry has a `variants` array (variant axes), implement a SINGLE " +
-  "component that covers ALL those variants via variant props (e.g. CVA), not a separate component per variant.";
+  "component that covers ALL those variants via variant props, using this framework's variant " +
+  "mechanism as stated above — not a separate component per variant.";
 
 /**
  * The design anchor (change: figma-visual-validation, hardened in figma-node-reference).
@@ -498,6 +520,12 @@ export interface BuildChunkOptions {
   storybook?: boolean;
   /** Refresh the design manifest (DESIGN.md) after building this chunk. */
   manifest?: boolean;
+  /**
+   * The project's framework (`project.yaml` → `framework`), so the prompt can state that
+   * framework's real conventions instead of leaving the model to infer them. Omitting it
+   * costs the idiom clause, not correctness of anything else.
+   */
+  framework?: string | null;
 }
 
 /**
@@ -513,6 +541,7 @@ export function buildChunkPrompt(names: string[], opts: BuildChunkOptions = {}):
     "",
     "Read .sdd-de/components.json and .sdd-de/project.yaml. Build ONLY these components, in " +
       `atoms → molecules → organisms order: ${list}. Do NOT build any other component in this run.`,
+    ...(frameworkIdiomClause(opts.framework) ? [frameworkIdiomClause(opts.framework)] : []),
     DESIGN_REFERENCE_CLAUSE,
     "For EACH of them, run /generate-artifacts to produce its specs, then implement it into " +
       "component_dir in the configured framework and language. Skip any that already have a source file.",
@@ -546,12 +575,17 @@ export function buildChunkPrompt(names: string[], opts: BuildChunkOptions = {}):
 }
 
 /** Build every not-yet-built component AND verify it — the CLI's Apply → Verify chain. */
-export function buildVerifyRestPrompt(url: string | null, isFigma: boolean): string {
+export function buildVerifyRestPrompt(
+  url: string | null,
+  isFigma: boolean,
+  framework?: string | null,
+): string {
   return [
     RESUMABLE,
     "Read .sdd-de/components.json and .sdd-de/project.yaml. For EVERY component listed that is NOT " +
       "yet implemented in component_dir, in atoms → molecules → organisms order, run the full SDD-DE " +
       "cycle autonomously and in the background:",
+    ...(frameworkIdiomClause(framework) ? [frameworkIdiomClause(framework)] : []),
     "  a. " + DESIGN_REFERENCE_CLAUSE,
     "  b. /generate-artifacts to produce its specs, then implement it.",
     `  c. Verify in three layers reported in order — VISUAL (/visual-verify: render and compare every ` +

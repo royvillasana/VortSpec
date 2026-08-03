@@ -4,6 +4,8 @@ import {
   ALL_SOURCE_EXTS,
   FRAMEWORK_PROFILES,
   profileFor,
+  frameworkIdiomClause,
+  idiomsFor,
   stripFileSuffix,
   typecheckCmdFor,
 } from "./framework-profiles";
@@ -92,5 +94,83 @@ describe("profileFor", () => {
   it("covers Astro and vanilla component files, which the old local list dropped", () => {
     expect(profileFor("astro").sourceExts).toContain(".astro");
     expect(profileFor("vanilla").sourceExts).toContain(".html");
+  });
+});
+
+describe("idioms — the authoring half of the profile", () => {
+  it("gives every offered framework a complete idiom set", () => {
+    // A blank field would silently drop a line from the prompt, which is how the React
+    // default crept back in the first place.
+    for (const f of FRAMEWORKS) {
+      const i = FRAMEWORK_PROFILES[f].idioms;
+      for (const key of ["label", "fileConvention", "props", "events", "slots", "variants", "styleScoping", "exports", "refs"] as const) {
+        expect(i[key], `${f}.idioms.${key} is empty`).toBeTruthy();
+      }
+    }
+  });
+
+  it("does not prescribe CVA or forwardRef outside React", () => {
+    // `component-standards.md` mandated both for all nine. `forwardRef` does not exist in
+    // Vue/Svelte/Angular/Astro/vanilla, and in Angular `CVA` is `ControlValueAccessor`.
+    for (const f of FRAMEWORKS.filter((x) => x !== "react" && x !== "next")) {
+      const { variants, refs } = FRAMEWORK_PROFILES[f].idioms;
+      // Naming CVA is fine — several rows name it precisely to warn it off. What must never
+      // happen is PRESCRIBING it, so any mention has to sit next to a prohibition.
+      if (/class-variance-authority|\bCVA\b/.test(variants)) {
+        expect(variants, `${f} mentions CVA without warning against it`).toMatch(/Do NOT/);
+      }
+      expect(refs, `${f} still implies React ref forwarding`).toMatch(
+        /no `forwardRef`|not applicable|querySelector|NOT React's ref forwarding/,
+      );
+    }
+  });
+
+  it("warns Svelte off external variant modules, which the compiler strips as unused CSS", () => {
+    const v = FRAMEWORK_PROFILES.svelte.idioms.variants;
+    expect(v).toMatch(/INSIDE the component/);
+    expect(v).toMatch(/unused CSS/);
+  });
+
+  it("tells Angular its event binding is (click), not Vue's @click", () => {
+    expect(FRAMEWORK_PROFILES.angular.idioms.events).toContain("(click)");
+    expect(FRAMEWORK_PROFILES.angular.idioms.pitfalls.join(" ")).toMatch(/ControlValueAccessor/);
+  });
+
+  it("does not claim a named export where the framework cannot have one", () => {
+    // `.vue`, `.svelte` and `.astro` compile to default exports; the old blanket
+    // "never a default export" rule was unsatisfiable for them.
+    for (const f of ["vue", "nuxt", "svelte", "sveltekit", "astro"]) {
+      expect(FRAMEWORK_PROFILES[f].idioms.exports).toMatch(/DEFAULT|export nothing/);
+    }
+  });
+});
+
+describe("idiomsFor / frameworkIdiomClause — fail closed, never fall back to React", () => {
+  it("returns the framework's own idioms", () => {
+    expect(idiomsFor("svelte")?.label).toBe("Svelte");
+    expect(idiomsFor("ANGULAR")?.label).toBe("Angular");
+  });
+
+  it("returns null for an unset or unknown framework instead of React's", () => {
+    // `profileFor` deliberately falls back to React for DETECTION (over-inclusive is safe).
+    // Idioms must not: asserting React's conventions about an unknown framework is the exact
+    // leak this table exists to stop.
+    expect(idiomsFor(undefined)).toBeNull();
+    expect(idiomsFor(null)).toBeNull();
+    expect(idiomsFor("")).toBeNull();
+    expect(idiomsFor("brand-new-framework")).toBeNull();
+  });
+
+  it("emits no clause at all rather than a wrong one", () => {
+    expect(frameworkIdiomClause("brand-new-framework")).toBe("");
+    expect(frameworkIdiomClause(undefined)).toBe("");
+  });
+
+  it("names the framework and its conventions when it is known", () => {
+    const clause = frameworkIdiomClause("vue");
+    expect(clause).toContain("Vue 3");
+    expect(clause).toContain("defineProps");
+    expect(clause).toContain("<style scoped>");
+    expect(clause).not.toContain("class-variance-authority");
   });
 });

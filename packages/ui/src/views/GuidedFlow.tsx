@@ -470,6 +470,7 @@ export function GuidedFlow({
         verify: q.verify,
         storybook: true,
         manifest: true,
+        framework: config?.framework,
       }),
       { kind: "pipeline", total: chunk.length, model: tierForChunk(chunk), ground: true },
     );
@@ -974,7 +975,7 @@ export function GuidedFlow({
                                 // Styling foundation first, then Storybook (both idempotent), then build.
                                 void ensureStyling().finally(() => {
                                   void api.ensureStorybook(project.path).catch(() => undefined);
-                                  void op(`Building "${c.name}"`, buildOnePrompt(c.name, c.level), {
+                                  void op(`Building "${c.name}"`, buildOnePrompt(c.name, c.level, config?.framework), {
                                     kind: "build",
                                     model: tierForChunk([c]),
                                     ground: true,

@@ -19,6 +19,9 @@ export function useAutoComponentBuild(
   const run = useAgentRun();
   const startedRef = useRef<string | null>(null);
   const queueRef = useRef<{ chunks: string[][]; index: number } | null>(null);
+  // The project's framework, captured when the queue is claimed, so every chunk prompt in the
+  // run states that framework's real conventions instead of leaving the agent to infer them.
+  const frameworkRef = useRef<string | null>(null);
   const [building, setBuilding] = useState(false);
   const [remaining, setRemaining] = useState(0);
   const [justFinished, setJustFinished] = useState(0);
@@ -39,7 +42,12 @@ export function useAutoComponentBuild(
     // Build + verify this chunk in the configured framework (the agent reads project.yaml). Storybook +
     // manifest refresh per chunk so partial results are usable before the whole roster finishes.
     await run.start({
-      prompt: buildChunkPrompt(names, { verify: true, storybook: true, manifest: true }),
+      prompt: buildChunkPrompt(names, {
+        verify: true,
+        storybook: true,
+        manifest: true,
+        framework: frameworkRef.current,
+      }),
       cwd: project.path,
       allowedTools: ["Read", "Write", "Edit", "Bash"],
       bypassPermissions: true,
@@ -75,6 +83,7 @@ export function useAutoComponentBuild(
       const unbuilt = comps.components.filter((c) => c.status === "unknown");
       if (unbuilt.length === 0) return; // design system not created yet — keep polling
       startedRef.current = project.path; // claim this project so we don't double-start
+      frameworkRef.current = cfg?.framework ?? null; // captured here; every chunk prompt reads it
       if (poll) window.clearInterval(poll);
       await api.ensureStylingPipeline(project.path).catch(() => {});
       void api.ensureStorybook(project.path).catch(() => {});
