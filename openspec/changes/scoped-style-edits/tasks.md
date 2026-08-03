@@ -29,11 +29,11 @@
 
 ## 4. Phase 2 — editing a heterogeneous selection
 
-- [ ] 4.1 Compute the intersection readout: shared values shown, differing values as `Mixed`.
-- [ ] 4.2 Track which fields the user actually edited this interaction and write only those — a `Mixed` field left untouched is never written.
-- [ ] 4.3 Fan `selection`-scoped writes out per element, each independent: one member failing its resolvability guard does not block the others.
-- [ ] 4.4 Report the members that could not be written, by name, rather than skipping them silently.
-- [ ] 4.5 Make a fan-out one undo step: undoing once restores every member.
+- [x] 4.1 Compute the intersection readout: shared values shown, differing values as `Mixed`.
+- [x] 4.2 Track which fields the user actually edited this interaction and write only those — a `Mixed` field left untouched is never written.
+- [x] 4.3 Fan `selection`-scoped writes out per element, each independent: one member failing its resolvability guard does not block the others.
+- [x] 4.4 Report the members that could not be written, by name, rather than skipping them silently.
+- [x] 4.5 Make a fan-out one undo step: undoing once restores every member.
 - [ ] 4.6 Make an overlay-scoped edit one undo step, including removing an override the edit created.
 - [ ] 4.7 Component tests: `Mixed` is never flattened (edit padding on a mixed-radius selection, assert each radius survives); fan-out writes all members; partial failure reports.
 

@@ -981,6 +981,19 @@ function handleCommand(cmd: BridgeCommand): void {
       selectedId = null;
       send({ t: "selectionCleared" });
       return;
+    case "readoutMany": {
+      // Deliberately does NOT touch `selectedId`: the panel needs every member's computed style to decide
+      // what agrees, and asking must not move the focus it is describing. A member that no longer resolves
+      // is left out rather than reported as empty — absent and "has no value" are different facts.
+      const readouts = cmd.nodeIds
+        .map((id) => {
+          const el = resolve(id);
+          return el ? readoutOf(el, id) : null;
+        })
+        .filter((r): r is NonNullable<typeof r> => r !== null);
+      send({ t: "readouts", readouts });
+      return;
+    }
     case "matchElements": {
       // "Looks the same" is a question about the live DOM, so it is answered here rather than guessed
       // host-side from the tree. Same component AND the same COMPUTED value — computed, so that an element

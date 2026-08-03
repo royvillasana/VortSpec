@@ -12,6 +12,7 @@ import { DesignPanel, ChangesBar } from "../components/run-canvas/DesignPanel";
 import { LibraryPanel } from "./LibraryPanel";
 import { matchKey, writesOverlay, type StyleScope } from "@vortspec/core/style-scope";
 import { fanOut, unwritten } from "@vortspec/core/style-intersection";
+import { fieldIntersection } from "../components/run-canvas/scope-reach";
 import { FigmaMcpBanner } from "../components/FigmaMcpBanner";
 import { StorybookSidebar } from "../components/run-canvas/StorybookSidebar";
 import { Sitemap, type PageGenState } from "../components/run-canvas/Sitemap";
@@ -1562,6 +1563,8 @@ export function RunApp({
   readoutRef.current = bridge.readout;
   const matchedRef = useRef(bridge.matched);
   matchedRef.current = bridge.matched;
+  const selectedIdsRef = useRef(bridge.selectedIds);
+  selectedIdsRef.current = bridge.selectedIds;
   // Current viewport + pending ledger as refs — read inside commitEdits / the re-scope
   // effect without stale closures or re-subscribing.
   const viewportIdRef = useRef(viewportId);
@@ -1852,6 +1855,26 @@ export function RunApp({
     [bridge, commitEdits],
   );
 
+  /**
+   * A `selection`-scoped edit: apply to every selected element (change: scoped-style-edits, Phase 2).
+   *
+   * Only the property the user edited is written. Every OTHER property each member has — including ones
+   * the panel is showing as `Mixed` — is left exactly as it was, which is the difference between a bulk
+   * edit and a bulk overwrite. Members are written independently so one failure neither blocks the rest
+   * nor disappears without being named.
+   */
+  const applyToSelection = useCallback(
+    async (key: string, value: string): Promise<void> => {
+      const css = cssForField(key, value);
+      if (Object.keys(css).length === 0) return;
+      const results = await fanOut(selectedIdsRef.current, async (id) => bridge.applyOverride(id, css));
+      const missed = unwritten(results);
+      if (missed.length) setWriteError(`${missed.length} selected element(s) could not be updated.`);
+      commitEdits([{ key, value, cssProps: Object.keys(css), css }]);
+    },
+    [bridge, commitEdits],
+  );
+
   const onFieldChange = useCallback(
     (key: string, value: string, scope: StyleScope = "element", scopeKey?: string) => {
       if (writesOverlay(scope)) {
@@ -1860,6 +1883,10 @@ export function RunApp({
       }
       if (scope === "matching") {
         void applyToMatching(key, value, scopeKey);
+        return;
+      }
+      if (scope === "selection" && selectedIdsRef.current.length > 1) {
+        void applyToSelection(key, value);
         return;
       }
       if (key === "content") {
@@ -1958,7 +1985,7 @@ export function RunApp({
       // so a later undo of this edit is detectable as a real change.
       refreshReadout();
     },
-    [applyLive, commitEdits, setText, refreshReadout, applyScopedOverride, applyToMatching],
+    [applyLive, commitEdits, setText, refreshReadout, applyScopedOverride, applyToMatching, applyToSelection],
   );
 
   // An inline text edit on the canvas (double-click) — the guest already applied
@@ -2007,6 +2034,19 @@ export function RunApp({
   );
 
   const onSelectNode = useCallback((id: string, additive?: boolean) => select(id, additive), [select]);
+
+  // Ask for every member's computed style whenever the selection grows past one, so the panel can say
+  // what they agree on. Only for a real multi-selection: one element already has its readout.
+  useEffect(() => {
+    if (bridge.selectedIds.length > 1) bridge.requestReadouts(bridge.selectedIds);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bridge.selectedIds.join(",")]);
+
+  /** Which fields the selection does NOT agree on — rendered as `Mixed`, never as one member's value. */
+  const mixedFields = useMemo(
+    () => fieldIntersection(selection, bridge.selectedIds, bridge.readouts),
+    [selection, bridge.selectedIds, bridge.readouts],
+  );
 
   /** The design-system tokens the selected element resolves through, for the Library tab's marking. */
   const selectionTokens = useMemo(
@@ -2376,6 +2416,7 @@ export function RunApp({
           hoveredId={bridge.hoveredId}
           selectedIds={bridge.selectedIds}
           matched={bridge.matched}
+          mixed={mixedFields}
           onMatchQuery={bridge.matchElements}
           onSelectNode={onSelectNode}
           onHoverNode={onHoverNode}

@@ -50,6 +50,8 @@ export interface InspectorBridge {
   selectedIds: string[];
   /** Answers to `matchElements`, keyed by the query key: the node ids that currently look the same. */
   matched: Record<string, string[]>;
+  /** Computed readouts for every member of a multi-selection, keyed by node id. */
+  readouts: Record<string, NodeReadout>;
   hoveredId: string | null;
   /** Live rectangles keyed by node id (updated on readout/geometry) for the overlay. */
   rects: Record<string, Rect>;
@@ -80,6 +82,8 @@ export interface InspectorBridge {
   select: (id: string | null, additive?: boolean) => void;
   /** Ask the guest which elements look the same; the answer lands in `matched[key]`. */
   matchElements: (key: string, component: string, cssProp: string, value: string) => void;
+  /** Ask the guest for several nodes' readouts; they land in `readouts`. Does not move the focus. */
+  requestReadouts: (nodeIds: string[]) => void;
   hover: (id: string | null) => void;
   /** Toggle guest input handling: inspect (select), interact (use the app), comment (pin). */
   setMode: (mode: CanvasMode) => void;
@@ -189,6 +193,7 @@ export function useInspectorBridge(): InspectorBridge {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [matched, setMatched] = useState<Record<string, string[]>>({});
+  const [readouts, setReadouts] = useState<Record<string, NodeReadout>>({});
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [rects, setRects] = useState<Record<string, Rect>>({});
   const [runtimeError, setRuntimeError] = useState<InspectorBridge["runtimeError"]>(null);
@@ -255,6 +260,9 @@ export function useInspectorBridge(): InspectorBridge {
         });
         return;
       }
+      case "readouts":
+        setReadouts(Object.fromEntries(event.readouts.map((r) => [r.nodeId, r])));
+        return;
       case "matchedElements":
         setMatched((m) => ({ ...m, [event.key]: event.nodeIds }));
         return;
@@ -534,6 +542,11 @@ export function useInspectorBridge(): InspectorBridge {
     [selectedId, send],
   );
   const requestTree = useCallback(() => send({ t: "requestTree" }), [send]);
+  /** Read out several nodes without moving the focus, so a multi-selection can be intersected. */
+  const requestReadouts = useCallback(
+    (nodeIds: string[]) => send({ t: "readoutMany", nodeIds }),
+    [send],
+  );
   /** Ask which elements currently look the same as `value` for `cssProp`, under `component`. */
   const matchElements = useCallback(
     (key: string, component: string, cssProp: string, value: string) =>
@@ -583,6 +596,8 @@ export function useInspectorBridge(): InspectorBridge {
     selectedIds,
     matched,
     matchElements,
+    readouts,
+    requestReadouts,
     hoveredId,
     rects,
     runtimeError,

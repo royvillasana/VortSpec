@@ -107,6 +107,7 @@ export function DesignPanel({
   onSelectNode,
   selectedIds,
   matched = {},
+  mixed = {},
   onMatchQuery,
   onHoverNode,
   onReorderNode,
@@ -138,6 +139,8 @@ export function DesignPanel({
   selectedIds?: string[];
   /** Guest answers to "which elements look the same", keyed by query. */
   matched?: Record<string, string[]>;
+  /** Fields whose value the selection does NOT agree on — shown as `Mixed`, never as one member's value. */
+  mixed?: Record<string, unknown>;
   /** Ask the guest which elements look the same as the selection for a property. */
   onMatchQuery?: (key: string, component: string, cssProp: string, value: string) => void;
   tree: BridgeTree | null;
@@ -273,6 +276,7 @@ export function DesignPanel({
                 tokens={tokens}
                 targets={scopeTargets(selection)}
                 onMatchQuery={onMatchQuery}
+                mixed={mixed}
                 reach={scopeReach(tokens, matched)}
               />
             ))}
@@ -810,6 +814,7 @@ const PropertySection = memo(function PropertySection({
   targets = [],
   reach = {},
   onMatchQuery,
+  mixed = {},
 }: {
   section: DesignSection;
   onFieldChange?: (key: string, value: string, scope?: StyleScope, scopeKey?: string) => void;
@@ -819,6 +824,7 @@ const PropertySection = memo(function PropertySection({
   targets?: ScopeTarget[];
   reach?: ScopeReach;
   onMatchQuery?: (key: string, component: string, cssProp: string, value: string) => void;
+  mixed?: Record<string, unknown>;
 }): JSX.Element | null {
   if (section.fields.length === 0) return null;
   return (
@@ -834,6 +840,7 @@ const PropertySection = memo(function PropertySection({
             targets={targets}
             reach={reach}
             onMatchQuery={onMatchQuery}
+            isMixed={f.key in mixed}
             onChange={(val, scope, scopeKey) => onFieldChange?.(f.key, val, scope, scopeKey)}
           />
         ))}
@@ -862,6 +869,7 @@ function ScopedField({
   targets,
   reach,
   onMatchQuery,
+  isMixed = false,
 }: {
   field: SectionField;
   colorTokens: ColorToken[];
@@ -871,6 +879,8 @@ function ScopedField({
   targets: ScopeTarget[];
   reach: ScopeReach;
   onMatchQuery?: (key: string, component: string, cssProp: string, value: string) => void;
+  /** The selection does not agree on this property — show it as Mixed until the user sets one. */
+  isMixed?: boolean;
 }): JSX.Element {
   const options = availableScopes(targets, field.key, reach);
   const derived = deriveScope(targets, field.key);
@@ -901,11 +911,15 @@ function ScopedField({
     >
       <Row label={field.label}>
         <Field
-          field={field}
+          // A Mixed field shows NO member's value. Showing one would be a lie the user then acts on, and
+          // the blank is what makes "I did not touch this" and "I set this" distinguishable — which is the
+          // whole guarantee that an untouched property is never written.
+          field={isMixed ? { ...field, value: "" } : field}
           colorTokens={colorTokens}
           tokens={tokens}
           onChange={(val) => onChange(val, active.scope, active.key)}
           onCreateToken={onCreateToken}
+          placeholder={isMixed ? "Mixed" : undefined}
         />
       </Row>
       {open && (
@@ -927,11 +941,14 @@ function Field({
   tokens,
   onChange,
   onCreateToken,
+  placeholder,
 }: {
   field: SectionField;
   colorTokens: ColorToken[];
   tokens: InspectorToken[];
   onChange: (value: string) => void;
+  /** Shown when the field has no value to display — a multi-selection that does not agree. */
+  placeholder?: string;
   onCreateToken?: (name: string, value: string, tokenType?: string) => Promise<void>;
 }): JSX.Element {
   const control =
@@ -966,7 +983,7 @@ function Field({
     ) : field.key === "content" ? (
       <ContentTextarea value={field.value} onChange={onChange} />
     ) : (
-      <TextField value={field.value} onChange={onChange} mono />
+      <TextField value={field.value} onChange={onChange} mono placeholder={placeholder} />
     );
   // Color + length fields carry their own token indicator; other token-backed
   // fields get a badge underneath.
@@ -1722,14 +1739,17 @@ function TextField({
   value,
   onChange,
   mono = false,
+  placeholder,
 }: {
   value: string;
   onChange: (v: string) => void;
   mono?: boolean;
+  placeholder?: string;
 }): JSX.Element {
   const [draft, setDraft] = useState(value);
   return (
     <input
+      placeholder={placeholder}
       value={draft}
       onChange={(e) => setDraft(e.target.value)}
       onBlur={() => draft !== value && onChange(draft)}

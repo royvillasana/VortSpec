@@ -293,6 +293,13 @@ export const bridgeCommandSchema = z.discriminatedUnion("t", [
    * count it produced would sweep up siblings that were styled differently on purpose.
    */
   z.object({ t: z.literal("matchElements"), key: z.string(), component: z.string(), cssProp: z.string(), value: z.string() }),
+  /**
+   * Read out several nodes at once, WITHOUT changing what is focused.
+   *
+   * Editing a multi-selection needs each member's computed style to know whether a property agrees across
+   * them; `selectNode` cannot serve that, because asking would move the focus the panel is describing.
+   */
+  z.object({ t: z.literal("readoutMany"), nodeIds: z.array(z.string()) }),
   z.object({ t: z.literal("hoverNode"), nodeId: z.string().nullable() }),
   /**
    * Toggle guest input handling: `inspect` intercepts hover/click to drive
@@ -441,6 +448,8 @@ export const bridgeEventSchema = z.discriminatedUnion("t", [
   z.object({ t: z.literal("selectionCleared") }),
   /** The elements that look the same, for the `matchElements` query with this key. */
   z.object({ t: z.literal("matchedElements"), key: z.string(), nodeIds: z.array(z.string()) }),
+  /** Readouts for a `readoutMany` query. Members that no longer resolve are simply absent. */
+  z.object({ t: z.literal("readouts"), readouts: z.array(nodeReadoutSchema) }),
   /** Geometry-only update (scroll/resize/layout) so overlays stay aligned. */
   z.object({ t: z.literal("geometry"), nodeId: z.string(), rect: rectSchema }),
   /** The element under the pointer in inspect mode (null when the pointer leaves). */
