@@ -78,6 +78,15 @@
 - [x] 9.7 State in the UI that the scoped value reaches the component's parts, so inheritance is read rather than discovered.
 - [x] 9.8 Component tests: the scope is offered and defaulted correctly, routes to the overlay, and sits alongside `matching` without either being mistaken for the other.
 
+## 10. Tokens the design system does not define
+
+- [x] 10.1 Compute the selection's tokens that are NOT rows in the design system, with the value each resolves to.
+- [x] 10.2 List them in the design-system surface, named and marked as not part of the design system — separate from the in-place marking, so neither is mistaken for the other.
+- [x] 10.3 Show nothing when there is nothing unmapped, and withdraw the list when the selection clears.
+- [x] 10.4 Offer per-token adoption through the existing `createToken` path; never automatic.
+- [x] 10.5 Report a failed adoption and leave the design system unchanged.
+- [x] 10.6 Tests: unmapped tokens are named; a fully-mapped selection lists nothing; adopting calls the creation path with the right name and value; adoption never fires on its own.
+
 ## 8. Verification
 
 - [x] 8.1 Full unit and component suites green across `packages/core`, `packages/ui`, and `apps/ide`. (core 1064, ui 182, CT 138 passed. 35 CT failures are PRE-EXISTING — verified by stashing every change and re-running: baseline is 35 failed / 136 passed, with the change 35 failed / 138 passed.)

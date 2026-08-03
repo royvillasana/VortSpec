@@ -125,7 +125,7 @@ test("the design system marks what the selection is made of, and moves nothing",
   await plain.unmount();
 
   const c = await mount(
-    <LibraryPanel project={PROJECT} onEdited={() => {}} tokensInUse={["color-accent"]} />,
+    <LibraryPanel project={PROJECT} onEdited={() => {}} tokensInUse={{ "color-accent": "#262626" }} />,
   );
 
   // The row in use says so in its accessible name; the others are untouched.
@@ -137,4 +137,52 @@ test("the design system marks what the selection is made of, and moves nothing",
     els.map((e) => e.getAttribute("aria-label")?.split(":")[0]),
   );
   expect(orderAfter).toEqual(orderBefore);
+});
+
+test("a token the design system lacks is named, not silently absent", async ({ mount }) => {
+  // A light page routinely declares its own `:root`, so a component built on a token the design system
+  // never defined is the common case. Showing nothing for that property answers "what is this made of?"
+  // with silence, which reads as a broken panel rather than as the drift it actually is.
+  const c = await mount(
+    <LibraryPanel
+      project={PROJECT}
+      onEdited={() => {}}
+      tokensInUse={{
+        "color-accent": "#262626", // the design system HAS this one
+        "radius-pill": "999px", // …and not this one
+      }}
+    />,
+  );
+
+  const missing = c.getByRole("region", { name: /not in your design system/i });
+  await expect(missing).toBeVisible();
+  await expect(missing.getByText("--radius-pill")).toBeVisible();
+  await expect(missing.getByText(/999px/)).toBeVisible();
+
+  // The one it HAS is marked in place among its own rows, and is NOT listed as missing. Scoped to the
+  // region: the Live Preview also names the tokens it drew with, so an unscoped match would find it there.
+  await expect(c.getByLabel(/^color-accent:.*in use by the selection/)).toBeVisible();
+  await expect(missing.getByText("--color-accent")).toHaveCount(0);
+});
+
+test("nothing is claimed when the selection is fully mapped", async ({ mount }) => {
+  const c = await mount(
+    <LibraryPanel project={PROJECT} onEdited={() => {}} tokensInUse={{ "color-accent": "#262626" }} />,
+  );
+  await expect(c.getByRole("region", { name: /not in your design system/i })).toHaveCount(0);
+});
+
+test("adopting adds the token to the design system, and only on request", async ({ mount }) => {
+  const c = await mount(
+    <LibraryPanel project={PROJECT} onEdited={() => {}} tokensInUse={{ "radius-pill": "999px" }} />,
+  );
+
+  // Selecting something must never modify the design system on its own.
+  await expect(c.getByLabel(/^radius-pill:/)).toHaveCount(0);
+
+  await c.getByRole("button", { name: "Add --radius-pill to the design system" }).click();
+
+  // Now it IS the design system: a row of its own, and no longer listed as missing.
+  await expect(c.getByLabel(/^radius-pill:/)).toBeVisible();
+  await expect(c.getByRole("region", { name: /not in your design system/i })).toHaveCount(0);
 });

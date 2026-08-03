@@ -36,11 +36,17 @@ export function LibraryPanel({
   /** Called after a committed edit, so whatever is previewed beside this panel reloads. */
   onEdited: () => void;
   /**
-   * Token names the element currently selected on the canvas resolves through. Marked in place — the
-   * design system is the same design system whatever is selected, so nothing is filtered, reordered or
-   * hidden. The point is to answer "what is this component made of?" against a stable list.
+   * Token → resolved value for every token the selected element uses.
+   *
+   * The ones this design system HAS are marked in place — the design system is the same design system
+   * whatever is selected, so nothing is filtered, reordered or hidden. The ones it does NOT have are
+   * listed separately, because a component built on a token the design system never defined would
+   * otherwise show nothing, and silence is the one answer that is never true.
+   *
+   * A plain object, not a Map: this prop crosses the component-test boundary, where props are
+   * serialized and a Map arrives empty.
    */
-  tokensInUse?: readonly string[];
+  tokensInUse?: Readonly<Record<string, string>>;
 }): React.JSX.Element {
   const [model, setModel] = useState<DesignSystemLibrary | null>(null);
   // Where the SCREENS differ, keyed by token so each row can offer its own adopt.
@@ -58,7 +64,13 @@ export function LibraryPanel({
   const [componentOverrides, setComponentOverrides] = useState<[string, Record<string, string>][]>([]);
   const customize = useAgentRun();
   // A Set so a large design system does not do a linear scan per tile.
-  const inUseSet = useMemo(() => new Set(tokensInUse ?? []), [tokensInUse]);
+  const inUseSet = useMemo(() => new Set(Object.keys(tokensInUse ?? {})), [tokensInUse]);
+  /** The selection's tokens this design system does not define — the drift, named. */
+  const unmapped = useMemo(() => {
+    if (!model) return [];
+    const known = new Set(model.sections.flatMap((sec) => sec.rows.map((r) => r.token)));
+    return Object.entries(tokensInUse ?? {}).filter(([name]) => !known.has(name));
+  }, [tokensInUse, model]);
 
   const load = useCallback(async () => {
     try {
@@ -137,6 +149,17 @@ export function LibraryPanel({
 
   async function writeToken(token: string, value: string): Promise<void> {
     await commit(() => api.setThemeTokenOverride(project.path, token, value));
+  }
+
+  /**
+   * Add a token the selection uses but the design system lacks, at the value the page already gives it.
+   *
+   * Explicit and per-token: the design system is not modified because something was SELECTED. This closes
+   * the drift in the direction the user actually works — they chose a value on the page, and the system
+   * follows it — through the same creation path any other new token uses.
+   */
+  async function adoptToken(name: string, value: string): Promise<void> {
+    await commit(() => api.createToken(project.path, name, value));
   }
 
   /** Remove a component's whole base override. An empty decl bag is how the store clears a target. */
@@ -285,6 +308,7 @@ export function LibraryPanel({
               inUse={inUseSet}
             />
           ))}
+          <UnmappedTokens entries={unmapped} disabled={pending} onAdopt={adoptToken} />
           <ComponentOverrides
             entries={componentOverrides}
             disabled={pending}
@@ -903,5 +927,63 @@ function ComponentOverrides({
         ))}
       </div>
     </div>
+  );
+}
+
+
+/**
+ * Tokens the selection uses that this design system does not define (change: scoped-style-edits).
+ *
+ * Without this the panel answers "what is this component made of?" with silence for every property built
+ * on a token the page invented — and silence reads as a broken panel rather than as the drift it is. A
+ * light page routinely declares its own `:root`, so this is the common case, not the exotic one.
+ *
+ * Listed apart from the marked rows so the two are never confused: those ARE the design system, these are
+ * values living outside it.
+ */
+function UnmappedTokens({
+  entries,
+  disabled,
+  onAdopt,
+}: {
+  entries: [string, string][];
+  disabled: boolean;
+  onAdopt: (name: string, value: string) => Promise<void>;
+}): React.JSX.Element | null {
+  if (entries.length === 0) return null;
+  return (
+    <section
+      aria-label="Used here, not in your design system"
+      className="border-t border-vs-border-default px-3 py-2"
+    >
+      <div className="pb-1 text-[10px] uppercase tracking-[0.06em] text-vs-text-muted">
+        Used here · not in your design system
+      </div>
+      <p className="pb-1.5 text-[9.5px] leading-tight text-vs-text-muted">
+        This screen resolves these through values your design system does not define.
+      </p>
+      <div className="flex flex-col gap-1">
+        {entries.map(([name, value]) => (
+          <div
+            key={name}
+            className="flex items-center justify-between gap-2 rounded border border-dashed border-vs-border-strong px-2 py-1.5"
+          >
+            <span className="min-w-0 truncate font-mono text-[10px] text-vs-text-secondary">
+              {`--${name}`}
+              <span className="text-vs-text-muted">{`  ·  ${value}`}</span>
+            </span>
+            <button
+              type="button"
+              disabled={disabled}
+              aria-label={`Add --${name} to the design system`}
+              onClick={() => void onAdopt(name, value)}
+              className="shrink-0 rounded border border-vs-border-default px-1.5 py-0.5 text-[10px] text-vs-text-muted transition-colors hover:border-vs-accent hover:text-vs-text-secondary disabled:opacity-50"
+            >
+              Add
+            </button>
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }

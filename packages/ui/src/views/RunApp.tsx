@@ -2071,19 +2071,24 @@ export function RunApp({
     [selection, bridge.selectedIds, bridge.readouts],
   );
 
-  /** The design-system tokens the selected element resolves through, for the Library tab's marking. */
-  const selectionTokens = useMemo(
-    () =>
-      Array.from(
-        new Set(
-          (selection?.sections ?? [])
-            .flatMap((sec) => sec.fields)
-            .map((f) => f.token ?? tokenNameFromVar(f.value))
-            .filter((t): t is string => !!t),
-        ),
-      ),
-    [selection],
-  );
+  /**
+   * Every token the selected element resolves through, with the value it resolves to.
+   *
+   * Both halves of the Library tab's answer come from this: the ones the design system HAS are marked in
+   * place among its rows, and the ones it does not have are listed separately. A page can invent tokens —
+   * a light page routinely declares its own `:root` — and a component built on one would otherwise show
+   * nothing at all for that property, which reads as a broken panel rather than as the drift it is.
+   */
+  const selectionTokens = useMemo(() => {
+    const out: Record<string, string> = {};
+    for (const sec of selection?.sections ?? []) {
+      for (const f of sec.fields) {
+        const name = f.token ?? tokenNameFromVar(f.value);
+        if (name && !(name in out)) out[name] = f.value;
+      }
+    }
+    return out;
+  }, [selection]);
   const onHoverNode = useCallback((id: string | null) => hover(id), [hover]);
 
   // Delete/Backspace deletes the selected element (Figma-style), in inspect mode only and

@@ -218,3 +218,53 @@ told apart from a bug.
 #### Scenario: Clearing restores the design system's value
 - **WHEN** the user clears it
 - **THEN** that component SHALL return to the token's own value
+
+
+### Requirement: A value the design system does not define is named, never silently absent
+
+The design-system surface SHALL name a token it does not contain when the selection resolves a property
+through one, showing the token and its value rather than showing nothing.
+
+Showing nothing answers "what is this component made of?" with silence, which reads as a broken panel. It
+is also the more important answer: a screen running on tokens the design system never defined has drifted
+from it, and that is a fact worth surfacing at the moment the user is looking straight at it.
+
+#### Scenario: An unmapped token is named
+- **WHEN** a selected Button's radius resolves through `--radius-pill`, which the design system does not define
+- **THEN** the surface SHALL show `--radius-pill` and its value, marked as not part of the design system
+
+#### Scenario: The marked rows and the unmapped ones are told apart
+- **WHEN** a selection uses both design-system tokens and tokens the design system lacks
+- **THEN** the former SHALL be marked in place among the design system's own rows
+- **AND** the latter SHALL be listed separately, so neither is mistaken for the other
+
+#### Scenario: Nothing is claimed when nothing is unmapped
+- **WHEN** every token the selection uses exists in the design system
+- **THEN** no unmapped list SHALL be shown
+
+#### Scenario: Deselecting withdraws the list
+- **WHEN** the selection is cleared
+- **THEN** the unmapped list SHALL be withdrawn along with the marking
+
+### Requirement: An unmapped token can be adopted into the design system
+
+Each unmapped token SHALL offer to be added to the design system, with its current value, through the same
+token-creation path any other new token uses. Adoption SHALL be an explicit per-token action — never
+automatic, and never a side effect of selecting something.
+
+Adopting is how a screen's drift is closed in the direction the user actually works: they chose a value on
+the page, and the design system follows.
+
+#### Scenario: Adopting adds the token
+- **WHEN** the user adopts `--radius-pill` at `999px`
+- **THEN** the design system SHALL contain `--radius-pill` with that value
+- **AND** it SHALL appear among the design system's rows, marked as used by the selection
+
+#### Scenario: Adoption is never automatic
+- **WHEN** a selection exposes unmapped tokens
+- **THEN** the design system SHALL NOT be modified until the user adopts one
+
+#### Scenario: A failed adoption says so and changes nothing
+- **WHEN** adopting fails
+- **THEN** the failure SHALL be reported
+- **AND** the design system SHALL be left as it was

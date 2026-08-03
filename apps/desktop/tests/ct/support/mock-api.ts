@@ -657,7 +657,16 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
     designAudit: async () => cfg.designAudit ?? { findings: [], summary: { components: 0, findings: 0, drifted: 0 } },
     metadataPlan: async () => cfg.metadataPlan ?? { total: 0, withMetadata: 0, missing: [], prompt: "" },
     collapseToken: async () => cfg.tokens ?? EMPTY_TOKENS,
-    createToken: async () => cfg.tokens ?? EMPTY_TOKENS,
+    createToken: async (_p: string, name: string, value: string) => {
+      // Really adds the row, so a test can assert the OUTCOME (the token is now part of the design
+      // system) rather than that a call was made. `control` follows the value, matching how the real
+      // library classifies a row.
+      const control = /^#|^rgb|^hsl|^light-dark/i.test(value) ? "color" : "length";
+      if (!libraryRows.some((r) => r.token === name)) {
+        libraryRows.push({ token: name, value, rawValue: value, control, uses: 1 });
+      }
+      return cfg.tokens ?? EMPTY_TOKENS;
+    },
     setTokenModeMap: async () => cfg.tokens ?? EMPTY_TOKENS,
     figmaComputePushPlan: async () => cfg.pushPlan ?? { collection: "VortSpec", entries: [] },
     figmaPushVariables: async () =>
