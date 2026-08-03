@@ -351,11 +351,20 @@ export function scopeReactRefMandate(markdown: string, framework?: string | null
  * fail loudly rather than passing a no-op through.
  */
 
-/** Marks an already-transformed document, so a second pass is a no-op rather than a duplicate. */
-const REACT19_MARKER = "React 19+ (the default)";
+/**
+ * Marks an already-transformed document so a second pass is a no-op rather than a duplicate.
+ *
+ * An HTML comment rather than prose: the first version keyed on "React 19+ (the default)",
+ * which a future toolkit could plausibly write itself — and a false positive here is silent,
+ * skipping the transformation and leaving the stale normative examples in place. A sentinel
+ * only this function emits cannot collide, and renders invisible in Markdown.
+ */
+const REACT19_MARKER = "<!-- vortspec:react-ref-examples-scoped -->";
 
 /** The default (React 19+) implementation sample, plus the older form kept clearly labelled. */
-const REACT19_IMPLEMENTATION = `\`\`\`tsx
+const REACT19_IMPLEMENTATION = `${REACT19_MARKER}
+
+\`\`\`tsx
 // Button.tsx — React 19+ (the default). \`ref\` is an ordinary prop; no wrapper is needed.
 import * as React from 'react';
 import { cn } from '@/lib/utils';

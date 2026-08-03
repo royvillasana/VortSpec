@@ -149,6 +149,20 @@ d("the real toolkit docs (@royvillasana/sdd-de)", () => {
     expect(scopeReactRefExamples(once, "react")).toBe(once);
     expect(once.split("React 18 and earlier only").length - 1).toBe(1);
     expect(once.split("React 19+ (the default)").length - 1).toBe(1);
+    // The guard keys on a sentinel this function emits, not on prose the toolkit might write.
+    expect(once.split("<!-- vortspec:react-ref-examples-scoped -->").length - 1).toBe(1);
+  });
+
+  it("does not no-op on toolkit prose that merely mentions the React 19 default", () => {
+    // The first guard keyed on "React 19+ (the default)". If upstream ever wrote that phrase,
+    // the transformation would skip silently and leave the stale normative examples in place.
+    const doc = read("styling-best-practices.md").replace(
+      "### Component implementation",
+      "Note: React 19+ (the default) changes ref handling.\n\n### Component implementation",
+    );
+    const out = scopeReactRefExamples(scopeReactRefMandate(doc, "react"), "react");
+    expect(out).toContain("<!-- vortspec:react-ref-examples-scoped -->");
+    expect(out).toMatch(/React 18 and earlier only/);
   });
 
   it("does not version-scope examples for the other seven", () => {
