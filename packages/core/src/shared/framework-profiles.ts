@@ -392,7 +392,9 @@ const PRECEDENCE_CLAUSE =
   "This contract OVERRIDES any conflicting instruction in the toolkit's standards docs " +
   "(`component-standards.md`, `styling-best-practices.md`, `framework-config.md`) and in any skill they load. " +
   "Those documents state React's architecture — CVA, `cn()`, `.variants.ts`, `forwardRef` — as if it were " +
-  "framework-agnostic; it is not. Where they disagree with the contract above, the contract above wins.";
+  "framework-agnostic; it is not. Where they disagree with the contract above, the contract above wins. " +
+  "`.sdd-de/docs/framework-rules.md` carries these same rules on disk for the skills that read docs " +
+  "rather than this prompt; it is generated from the same source and says the same thing.";
 
 /**
  * The framework's conventions as a prompt block, so a build states what to emit instead of

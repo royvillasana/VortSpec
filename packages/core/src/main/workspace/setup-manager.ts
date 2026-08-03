@@ -13,6 +13,8 @@ import {
   access,
 } from "node:fs/promises";
 import { buildProjectYaml, type SetupAnswers } from "@vortspec/core/setup";
+import { buildFrameworkRulesDoc, pruneFrameworkConfigDoc } from "@vortspec/core/framework-docs";
+import { readProjectConfig } from "./config-manager";
 import { refreshProject } from "./workspace-manager";
 import type { Project } from "@vortspec/core/ipc";
 
@@ -85,6 +87,40 @@ async function createSkillSymlinks(sourceDir: string, targetDir: string): Promis
   }
 }
 
+
+/**
+ * Scope the copied toolkit docs to THIS project's framework (change: framework-scoped rules).
+ *
+ * The toolkit ships one `framework-config.md` carrying all nine frameworks, and standards docs
+ * that state React's architecture as if it were framework-agnostic. `/generate-artifacts` loads
+ * them, so a Vue project has been reading React's CVA rules and eight other frameworks' file
+ * conventions alongside its own. The build prompt says its contract wins, but that only
+ * adjudicates a conflict still sitting in the context window.
+ *
+ * So: write the active framework's rules as their own document, and prune the multi-framework
+ * doc to the section that applies. Best-effort — a failure here must not fail setup, since the
+ * prompts' own contract and STOP clause still hold without it.
+ */
+async function scopeDocsToFramework(sddeDir: string, framework?: string | null): Promise<void> {
+  if (!framework) return;
+  const rules = buildFrameworkRulesDoc(framework);
+  if (!rules) return; // unknown framework — generation is STOPped anyway; invent nothing
+  const docsDir = join(sddeDir, "docs");
+  try {
+    await writeFile(join(docsDir, "framework-rules.md"), rules, "utf8");
+  } catch {
+    /* docs dir may not exist in an older toolkit — the prompt contract still applies */
+  }
+  const configPath = join(docsDir, "framework-config.md");
+  try {
+    const original = await readFile(configPath, "utf8");
+    const pruned = pruneFrameworkConfigDoc(original, framework);
+    if (pruned !== original) await writeFile(configPath, pruned, "utf8");
+  } catch {
+    /* framework-config.md may not ship in older toolkit versions */
+  }
+}
+
 export async function createProject(
   projectPath: string,
   answers: SetupAnswers,
@@ -101,6 +137,9 @@ export async function createProject(
 
   // project.yaml
   await writeFile(join(sddeDir, "project.yaml"), buildProjectYaml(answers), "utf8");
+
+  // Scope the docs just copied in to this project's framework.
+  await scopeDocsToFramework(sddeDir, answers.framework);
 
   // CLAUDE.md + multi-agent companions (only if absent)
   const claudeSrc = join(pkgDir, "CLAUDE.md");
@@ -161,6 +200,11 @@ export async function resyncToolkit(projectPath: string): Promise<Project> {
   const docsDst = join(sddeDir, "docs");
   await rm(docsDst, { recursive: true, force: true });
   await cp(join(pkgDir, "docs"), docsDst, { recursive: true });
+
+  // The wholesale re-copy restores all nine frameworks' sections, so re-scope. `project.yaml`
+  // is preserved across an update, so the framework is read back from it rather than answers.
+  const cfg = await readProjectConfig(projectPath).catch(() => null);
+  await scopeDocsToFramework(sddeDir, cfg?.framework);
 
   // CLAUDE.md + companions — always overwrite on update (unlike setup, which skips if present).
   const claudeSrc = join(pkgDir, "CLAUDE.md");
