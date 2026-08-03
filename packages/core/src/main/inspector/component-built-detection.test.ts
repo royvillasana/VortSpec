@@ -105,3 +105,44 @@ describe("getInspectorComponents — an unrecognized framework cannot claim 'bui
     expect(r.components.find((c) => c.name === "Button")?.status).toBe("built");
   });
 });
+
+/**
+ * The absent-`framework:` case, now that the auto-builder refuses to start on an unresolvable
+ * framework rather than looping. A legacy `project.yaml` with no framework key can no longer
+ * display `built` for a component nobody can verify.
+ */
+describe("getInspectorComponents — an absent framework key cannot claim 'built' either", () => {
+  let dir: string;
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), "vs-no-fw-"));
+    await mkdir(join(dir, "src/components"), { recursive: true });
+    await mkdir(join(dir, ".sdd-de"), { recursive: true });
+    await writeFile(
+      join(dir, ".sdd-de/components.json"),
+      JSON.stringify([{ name: "Button" }]),
+      "utf8",
+    );
+    await writeFile(join(dir, "src/components/Button.tsx"), "export const Button = () => null;\n", "utf8");
+  });
+  afterEach(async () => {
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  it("reports unknown when project.yaml declares no framework", async () => {
+    await writeFile(join(dir, ".sdd-de/project.yaml"), "component_dir: src/components\n", "utf8");
+    const r = await getInspectorComponents(dir);
+    const btn = r.components.find((c) => c.name === "Button");
+    expect(btn?.file).toBe("src/components/Button.tsx"); // path still surfaced
+    expect(btn?.status).toBe("unknown"); // but no claim
+  });
+
+  it("reports built once the framework is declared", async () => {
+    await writeFile(
+      join(dir, ".sdd-de/project.yaml"),
+      "framework: react\ncomponent_dir: src/components\n",
+      "utf8",
+    );
+    const r = await getInspectorComponents(dir);
+    expect(r.components.find((c) => c.name === "Button")?.status).toBe("built");
+  });
+});

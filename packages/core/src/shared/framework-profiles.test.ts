@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
+import { mkdtemp, mkdir, writeFile, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -8,6 +8,7 @@ import {
   ALL_SOURCE_EXTS,
   FRAMEWORK_PROFILES,
   GENERATED_DIRS,
+  sanitizeComponentDir,
   vanillaCheckCmd,
   isNonComponentStem,
   profileFor,
@@ -245,7 +246,7 @@ describe("vanillaCheckCmd — scoped to source, executed for real", () => {
 
   it("passes on valid source even when every generated tree contains broken JS", async () => {
     await writeFile(join(dir, "src", "components", "button.js"), "export const ok = 1;\n", "utf8");
-    expect(run(vanillaCheckCmd("src/components"))).toBe(0);
+    expect(run(vanillaCheckCmd("src/components")!)).toBe(0);
   });
 
   it("still FAILS on a real syntax error in the component source itself", async () => {
@@ -253,23 +254,24 @@ describe("vanillaCheckCmd — scoped to source, executed for real", () => {
     // Note the sample: Node tolerates some malformed-looking ESM in a `.js` file with no
     // `"type": "module"`, so this uses an unclosed brace — unambiguously invalid in any mode.
     await writeFile(join(dir, "src", "components", "broken.js"), "if (true) {\n", "utf8");
-    expect(run(vanillaCheckCmd("src/components"))).not.toBe(0);
+    expect(run(vanillaCheckCmd("src/components")!)).not.toBe(0);
   });
 
   it("prunes every directory the shared generated list names", () => {
-    const cmd = vanillaCheckCmd("src");
-    for (const d of GENERATED_DIRS) expect(cmd).toContain(`-name ${d}`);
+    const cmd = vanillaCheckCmd("src")!;
+    for (const d of GENERATED_DIRS) expect(cmd).toContain(`-name '${d}'`);
   });
 
   it("scopes to the configured component dir, not the repo root", () => {
     const r = resolveTypecheck("vanilla", { componentDir: "app/ui" });
-    expect(r.kind === "cmd" && r.cmd).toContain("find app/ui ");
-    expect(r.kind === "cmd" && r.cmd).not.toContain("find . ");
+    // Quoted and `./`-prefixed: the quoting is the safety property, so assert on it.
+    expect(r.kind === "cmd" && r.cmd).toContain("find './app/ui'");
+    expect(r.kind === "cmd" && r.cmd).not.toContain("find '.'");
   });
 
   it("falls back to src when no component dir is configured", () => {
     const r = resolveTypecheck("vanilla");
-    expect(r.kind === "cmd" && r.cmd).toContain("find src ");
+    expect(r.kind === "cmd" && r.cmd).toContain("find './src'");
   });
 });
 
@@ -287,5 +289,128 @@ describe("typecheckScope is explicit, not inferred", () => {
     for (const f of FRAMEWORKS.filter((x) => x !== "vanilla")) {
       expect(FRAMEWORK_PROFILES[f].typecheckScope, f).toBe("project");
     }
+  });
+});
+
+/**
+ * `component_dir` comes from `project.yaml` — which an agent writes — and ends up inside a
+ * shell command the verify run executes. These tests EXECUTE the command and assert on real
+ * side effects, because the only convincing proof that injection is impossible is that the
+ * payload did not run.
+ */
+describe("vanillaCheckCmd — the shell boundary holds", () => {
+  let dir: string;
+
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), "vs-shell-"));
+  });
+  afterEach(async () => {
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  const run = (cmd: string): number => spawnSync("sh", ["-c", cmd], { cwd: dir }).status ?? -1;
+  const exists = async (rel: string): Promise<boolean> =>
+    await stat(join(dir, rel)).then(() => true).catch(() => false);
+
+  it("does NOT execute a command-substitution payload smuggled through component_dir", async () => {
+    // The exact shape that created a marker file before quoting was added.
+    const cmd = vanillaCheckCmd("src; touch INJECTED");
+    // Validation may reject it outright; if a command IS produced it must be inert.
+    if (cmd) run(cmd);
+    expect(await exists("INJECTED"), "component_dir executed as shell code").toBe(false);
+  });
+
+  it.each([
+    ["backtick substitution", "src`touch BACKTICK`"],
+    ["dollar substitution", "src$(touch DOLLAR)"],
+    ["redirect", "src > REDIRECT"],
+    ["pipe to a writer", "src | tee PIPED"],
+    ["quote break-out", "src' ; touch QUOTED ; '"],
+  ])("neutralizes %s", async (_label, payload) => {
+    const cmd = vanillaCheckCmd(payload);
+    if (cmd) run(cmd);
+    for (const marker of ["BACKTICK", "DOLLAR", "REDIRECT", "PIPED", "QUOTED"]) {
+      expect(await exists(marker), `${marker} created by ${payload}`).toBe(false);
+    }
+  });
+
+  it("still checks source in a directory whose name contains spaces and a quote", async () => {
+    const odd = "my components' dir";
+    await mkdir(join(dir, "src", odd), { recursive: true });
+    await writeFile(join(dir, "src", odd, "ok.js"), "export const ok = 1;\n", "utf8");
+    const cmd = vanillaCheckCmd(`src/${odd}`);
+    expect(cmd).not.toBeNull();
+    expect(run(cmd!)).toBe(0);
+
+    await writeFile(join(dir, "src", odd, "bad.js"), "if (true) {\n", "utf8");
+    expect(run(cmd!)).not.toBe(0); // and it can still FAIL — quoting did not defang the gate
+  });
+
+  it("treats a leading-dash directory as a path, not a find option", async () => {
+    await mkdir(join(dir, "-dashdir"), { recursive: true });
+    await writeFile(join(dir, "-dashdir", "ok.js"), "export const ok = 1;\n", "utf8");
+    const cmd = vanillaCheckCmd("-dashdir");
+    expect(cmd).not.toBeNull();
+    expect(run(cmd!)).toBe(0);
+  });
+
+  it.each([
+    ["absolute posix", "/etc"],
+    ["absolute windows", "C:\\Windows"],
+    ["traversal", "../../outside"],
+    ["traversal mid-path", "src/../../etc"],
+    ["empty", ""],
+    ["dot only", "."],
+    ["newline", "src\ncomponents"],
+  ])("refuses %s rather than building a command", (_label, bad) => {
+    expect(sanitizeComponentDir(bad), bad).toBeNull();
+    expect(vanillaCheckCmd(bad), bad).toBeNull();
+  });
+
+  it("blocks the CODE layer when component_dir is unusable, instead of checking nothing", () => {
+    const r = resolveTypecheck("vanilla", { componentDir: "../../escape" });
+    expect(r.kind).toBe("invalid-config");
+    expect(r.kind === "invalid-config" && r.reason).toMatch(/not a usable project-relative path/);
+  });
+
+  it("normalizes a redundant but legitimate path", () => {
+    expect(sanitizeComponentDir("./src//components/")).toBe("src/components");
+  });
+});
+
+/**
+ * The batching trap, kept as a regression because I shipped it: `node --check` reads only its
+ * FIRST argument, so `-exec node --check {} +` checked one file per batch and silently
+ * skipped the rest. `-exec … \;` is no better — `find` discards the child's exit status, so
+ * it always reports success. Both are gates that pass without checking.
+ */
+describe("vanillaCheckCmd — the gate actually checks every file", () => {
+  let dir: string;
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), "vs-batch-"));
+    await mkdir(join(dir, "src"), { recursive: true });
+  });
+  afterEach(async () => {
+    await rm(dir, { recursive: true, force: true });
+  });
+  const run = (cmd: string): number => spawnSync("sh", ["-c", cmd], { cwd: dir }).status ?? -1;
+
+  it("fails when the broken file is not the first one found", async () => {
+    // `a.js` sorts first and is valid; a batching gate reports success and never reads b.js.
+    await writeFile(join(dir, "src", "a.js"), "export const ok = 1;\n", "utf8");
+    await writeFile(join(dir, "src", "b.js"), "if (true) {\n", "utf8");
+    expect(run(vanillaCheckCmd("src")!)).not.toBe(0);
+  });
+
+  it("passes when every file in a multi-file directory is valid", async () => {
+    for (const n of ["a", "b", "c"]) {
+      await writeFile(join(dir, "src", `${n}.js`), "export const ok = 1;\n", "utf8");
+    }
+    expect(run(vanillaCheckCmd("src")!)).toBe(0);
+  });
+
+  it("passes when there is no JS at all rather than erroring on empty input", async () => {
+    await writeFile(join(dir, "src", "button.html"), "<button></button>\n", "utf8");
+    expect(run(vanillaCheckCmd("src")!)).toBe(0);
   });
 });

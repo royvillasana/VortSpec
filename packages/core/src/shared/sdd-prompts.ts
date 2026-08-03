@@ -390,7 +390,9 @@ function typecheckClause(framework?: string | null, componentDir?: string | null
   // does. Substituting `tsc` here is what made six frameworks report green on code that had
   // never been compiled.
   const why =
-    r.kind === "none"
+    r.kind === "invalid-config"
+      ? `this project's configuration is unusable (${r.reason}), so no check can be built for it`
+      : r.kind === "none"
       ? `this project's framework (${r.framework}) has NO type-check step that could fail`
       : `this project's framework is missing or unrecognized (${r.framework ?? "unset"}), so there is no ` +
         `checker that is known to read its files`;

@@ -282,19 +282,71 @@ export type TypecheckResolution =
   /** The framework is supported but has no check to run — the layer is BLOCKED, not passed. */
   | { kind: "none"; framework: string }
   /** The framework is absent or unrecognized — nothing can be claimed about it. */
-  | { kind: "unknown"; framework: string | null };
+  | { kind: "unknown"; framework: string | null }
+  /** The framework is known, but its configured paths are unusable — still not a pass. */
+  | { kind: "invalid-config"; reason: string };
 
 /**
- * Vanilla's syntax gate, scoped to `dir` and pruning every generated/output tree.
+ * POSIX single-quoting: wrap in `'…'` and close/escape/reopen around any embedded quote.
+ * Inside single quotes the shell expands nothing, so this — not a metacharacter blocklist —
+ * is what makes an arbitrary path safe to interpolate.
+ */
+function shellQuote(value: string): string {
+  return `'${value.replace(/'/g, `'\\''`)}'`;
+}
+
+/** Control characters and newlines: never legitimate here, and they break the command apart. */
+const CONTROL_CHARS = /[\u0000-\u001f\u007f]/;
+
+/**
+ * Validate `component_dir` as a project-RELATIVE path, or return null.
+ *
+ * `component_dir` comes from `project.yaml`, which an agent writes — so it is untrusted input
+ * that ends up inside a shell command the verify run executes. Containment (no absolute path,
+ * no `..` escape) is enforced here; safety against metacharacters is enforced by
+ * {@link shellQuote}. A blocklist of dangerous characters would be the wrong mechanism: it
+ * fails open on whatever it forgot, and it would reject legitimate directory names.
+ */
+export function sanitizeComponentDir(dir?: string | null): string | null {
+  const raw = (dir ?? "").trim();
+  if (!raw) return null;
+  if (CONTROL_CHARS.test(raw)) return null;
+  if (raw.startsWith("/")) return null; // absolute — must stay inside the project
+  if (/^[A-Za-z]:[\\/]/.test(raw)) return null; // Windows absolute
+  const segments = raw.split(/[\\/]+/).filter((seg) => seg !== "" && seg !== ".");
+  if (segments.length === 0) return null;
+  if (segments.includes("..")) return null; // traversal out of the project
+  return segments.join("/");
+}
+
+/**
+ * Vanilla's syntax gate, scoped to `dir`, or `null` when `dir` is not a usable
+ * project-relative path.
  *
  * `node --check` ships with Node, needs no install, respects package.json `type`, and exits
  * non-zero on a syntax error — a real gate that can fail. Scoping matters as much as the
  * command: sweeping the whole repo would fail on a minified bundle or a tool cache, blocking
  * component source that is perfectly valid.
+ *
+ * The path is validated and shell-quoted, and prefixed `./` so a directory whose name starts
+ * with `-` is never read by `find` as an option.
  */
-export function vanillaCheckCmd(dir: string): string {
-  const prune = GENERATED_DIRS.map((d) => `-name ${d}`).join(" -o ");
-  return `find ${dir} \\( ${prune} \\) -prune -o -name '*.js' -exec node --check {} +`;
+export function vanillaCheckCmd(dir?: string | null): string | null {
+  const safe = sanitizeComponentDir(dir);
+  if (!safe) return null;
+  const prune = GENERATED_DIRS.map((d) => `-name ${shellQuote(d)}`).join(" -o ");
+  // `xargs -0 -n1`, and neither of the two obvious alternatives:
+  //   `-exec node --check {} +`  batches files, and `node --check` reads only its FIRST
+  //                              argument — every other file in the batch goes unchecked.
+  //   `-exec node --check {} \;` runs per file, but `find` discards the exit status, so the
+  //                              command always reports success.
+  // Both are gates that pass without checking, which is the exact defect this branch exists
+  // to remove. `-n1` forces one file per invocation and `xargs` propagates any failure.
+  // `-print0`/`-0` keeps paths with spaces intact.
+  return (
+    `find ${shellQuote(`./${safe}`)} \\( ${prune} \\) -prune -o -name '*.js' -print0` +
+    ` | xargs -0 -n1 node --check`
+  );
 }
 
 /** Where a project's own source lives, for checks that must not sweep generated output. */
@@ -315,9 +367,18 @@ export function resolveTypecheck(
   // Normalize "" to null: an empty `framework:` key in project.yaml is "unset", not a name.
   if (!profile) return { kind: "unknown", framework: framework || null };
   if (profile.typecheckScope === "component-dir") {
+    const cmd = vanillaCheckCmd(ctx.componentDir || "src");
+    // Fail closed: an unusable `component_dir` means no command can be built safely, and a
+    // check that cannot run is BLOCKED — never a pass.
+    if (!cmd) {
+      return {
+        kind: "invalid-config",
+        reason: `component_dir (${ctx.componentDir ?? "unset"}) is not a usable project-relative path`,
+      };
+    }
     return {
       kind: "cmd",
-      cmd: vanillaCheckCmd(ctx.componentDir || "src"),
+      cmd,
       partial: "JS syntax only, scoped to the component directory — nothing bundled validates the HTML partials",
     };
   }

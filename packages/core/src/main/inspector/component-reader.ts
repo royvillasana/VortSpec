@@ -422,16 +422,15 @@ async function computeInspectorComponents(
     /* no manifest → empty inventory */
   }
 
-  // A framework that is CONFIGURED but unrecognized can still be searched (the union), but
-  // nothing it matches may be claimed as built — see `componentStatus`.
+  // A framework we cannot resolve — absent OR unrecognized — can still be SEARCHED (the
+  // union), but nothing it matches may be claimed as built. See `componentStatus`.
   //
-  // An ABSENT `framework:` key is treated as known on purpose. `buildProjectYaml` always
-  // writes one, so absence means a legacy or hand-written project.yaml — and `status:
-  // "unknown"` is what feeds the auto-builder (`useAutoComponentBuild`), so failing closed
-  // there would put every such project into a permanent full-roster rebuild on opus. That is
-  // the same defect class, moved rather than fixed. Closing this remaining hole needs the
-  // auto-builder to skip unsupported configurations, which is tracked separately.
-  const frameworkKnown = config?.framework ? profileFor(config.framework) !== null : true;
+  // The absent case was previously treated as known, because `status: "unknown"` feeds the
+  // auto-builder and failing closed would have put every legacy `project.yaml` into a
+  // permanent full-roster rebuild. The auto-builder now refuses to start on an unresolvable
+  // framework and asks for `/setup` instead, so there is no loop left to inflict and the
+  // roster no longer has to claim `built` for a project whose framework nobody knows.
+  const frameworkKnown = profileFor(config?.framework) !== null;
   const root = componentDir ? join(projectPath, componentDir) : projectPath;
   const rosterNames = manifest.map((m) => m.name);
   const srcByName = new Map<string, string>();
