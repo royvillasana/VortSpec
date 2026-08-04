@@ -684,8 +684,10 @@ export function resolveTypecheck(
  *   I2  leaf `extends` a base that sets it, and
  *       OMITS the flag itself                    → exit 1, TS2322  (absent ≠ false)
  *   I3  leaf extends that base, overrides false  → exit 0, clean   (the leaf wins)
- * I3 is the discriminating one: without it, I2 failing would be consistent with the check simply
- * always failing, and the inheritance conclusion would be unearned.
+ *   I4  an unrelated failure (missing module)    → TS2307, and NOT TS2322
+ * I3 and I4 discriminate different things. Without I3, I2 failing is consistent with the check
+ * simply always failing, and the inheritance conclusion is unearned. Without I4, the MEASUREMENT
+ * can decay to "exited non-zero" and every other case still passes.
  */
 export function typecheckCoverageClause(framework?: string | null): string {
   const gate = profileFor(framework)?.typecheckCoverageGate;
@@ -701,12 +703,18 @@ export function typecheckCoverageClause(framework?: string | null): string {
 /**
  * The authoring idioms for a framework, or `null` when the framework is unset or unknown.
  *
- * Deliberately does NOT share `profileFor`'s React fallback. Falling back is right for
- * detection — accepting a few extra extensions costs nothing, while missing one marks real
+ * The fallback this must not share is `sourceExtsFor`'s, which returns the UNION of every
+ * framework's extensions when the framework is unknown. Being over-inclusive is right for
+ * DETECTION — accepting a few extra extensions costs nothing, while missing one marks real
  * components as never-built. It is wrong for idioms: handing an unknown framework React's
  * conventions is precisely the leak this table exists to stop, and it would assert
  * `forwardRef`/CVA/named-export rules about a framework that has none of them. A null here
  * means the prompt says nothing about idioms rather than something false.
+ *
+ * (`profileFor` itself is already fail-closed and returns null — it has no React fallback.
+ * An earlier version of this comment said it did; that described the pre-#73 contract and
+ * was carried into the merge unchanged, which is exactly the stale-prose failure this file
+ * keeps finding in everyone else's work.)
  */
 export function idiomsFor(framework?: string | null): FrameworkIdioms | null {
   // Reuses #73's fail-closed profileFor rather than re-implementing the lookup: one resolver,

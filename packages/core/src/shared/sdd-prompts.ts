@@ -118,6 +118,17 @@ const DESIGN_REFERENCE_CLAUSE = [
   "to NO existing project token, add it to the token file FIRST — but only after checking it isn't a",
   "duplicate of a token that already has that value (reuse that one instead) — then reference the new token;",
   "never inline the literal.",
+  "A NEAR TOKEN IS NOT A MATCH, and substituting one is the failure this rule most needs to stop. Observed",
+  "on a real build: Figma bound the accordion's active header to `Components/Accordion/Active Item Header",
+  "Background` (#CEE4E9); no `--component-accordion-*` token had been extracted; the build emitted",
+  "`var(--color-neutral-100)`, which resolves to #F8F9FA. It did not hardcode and it did not dangle — it",
+  "bound a DIFFERENT token, so it satisfied every rule above while rendering the wrong colour, and the",
+  "comment it wrote directly above the binding named the correct token in prose. A token whose RESOLVED",
+  "VALUE differs from the bound variable's value is not a match, however similar its name reads or however",
+  "close the colour looks. When the four match rules (link → exact name → resolved value → alias) all fail:",
+  "add the token, and if you cannot add it, STOP and report that component as TOKEN-BLOCKED naming the",
+  "unresolved variable. Do NOT proceed by picking the nearest existing token — a wrong binding looks clean,",
+  "passes a `var(--…)` check, and survives review, which makes it worse than a hardcoded literal, not better.",
 ].join(" ");
 
 /**

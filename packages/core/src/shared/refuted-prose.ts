@@ -29,7 +29,12 @@ import { fileURLToPath } from "node:url";
  */
 export const REFUTED: readonly { id: string; re: RegExp }[] = [
   // Svelte v1 — helper-built classes are stripped and the component ships unstyled.
-  { id: "svelte-v1-stripped", re: /(?<!nothing )(?<!not )(?:is|are) stripped/i },
+  // Narrowed after a false positive Bumble hit: "ANSI is stripped" matched a pattern about CSS
+  // RULES being stripped — same verb, unrelated subject. The refuted claim is specifically that
+  // a component's style rules are removed, so the style noun is now required. Deliberately not
+  // loosened further: a lint that over-fires is the right failure direction, but a false positive
+  // invites labelling it `WRONG:`, which would put a fake refutation into the file.
+  { id: "svelte-v1-stripped", re: /(?:rules|styles?|css|selectors?)\b[^\n]{0,40}?(?<!nothing )(?<!not )(?:is|are) stripped/i },
   { id: "svelte-v1-unstyled", re: /ships? unstyled/i },
   // Svelte v2 — a dynamic class makes every selector unprovable and turns the analysis off.
   { id: "svelte-v2-every-selector", re: /every selector/i },

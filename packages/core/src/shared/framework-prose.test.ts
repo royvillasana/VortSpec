@@ -125,6 +125,21 @@ describe("refuted claims may only appear under a WRONG label", () => {
     expect(unlabelledRefutedClaims(note, "NOTE.md").map((f) => f.line)).toEqual([5]);
   });
 
+  it("does not fire on 'stripped' with an unrelated subject", () => {
+    // Bumble hit this: "ANSI is stripped" matched the pattern for CSS RULES being stripped —
+    // same verb, unrelated subject. It matters more than an ordinary false positive, because the
+    // obvious fix under time pressure is to label it `WRONG:` — which would put a fake refutation
+    // into a file whose whole purpose is recording real ones.
+    const unrelated = [
+      "// ANSI is stripped HERE rather than at the call site",
+      "// escape bytes are stripped before matching",
+    ].join("\n");
+    expect(unlabelledRefutedClaims(unrelated, "x.ts")).toEqual([]);
+    // The real claim still fires — narrowing must not have disarmed it.
+    const real = "// its `<style>` rules are stripped and the component ships unstyled";
+    expect(unlabelledRefutedClaims(real, "x.ts").map((f) => f.claim)).toContain("svelte-v1-stripped");
+  });
+
   it("has a live pattern for every refuted claim", () => {
     // A pattern that matches nothing is a silent hole; this is the same both-polarity property
     // applied per pattern rather than to the predicate as a whole.

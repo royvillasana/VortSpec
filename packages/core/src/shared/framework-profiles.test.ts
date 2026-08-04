@@ -557,9 +557,10 @@ describe("idiomsFor / frameworkIdiomClause — fail closed, never fall back to R
   });
 
   it("returns null for an unset or unknown framework instead of React's", () => {
-    // `profileFor` deliberately falls back to React for DETECTION (over-inclusive is safe).
-    // Idioms must not: asserting React's conventions about an unknown framework is the exact
-    // leak this table exists to stop.
+    // `sourceExtsFor` deliberately falls back to the UNION of every framework's extensions for
+    // DETECTION (over-inclusive is safe there). Idioms must not: asserting React's conventions
+    // about an unknown framework is the exact leak this table exists to stop. `profileFor` is
+    // itself fail-closed and returns null — it is not the fallback being contrasted here.
     expect(idiomsFor(undefined)).toBeNull();
     expect(idiomsFor(null)).toBeNull();
     expect(idiomsFor("")).toBeNull();
