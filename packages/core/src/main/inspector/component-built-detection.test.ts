@@ -57,3 +57,97 @@ describe("getInspectorComponents — built detection (normalized name / index)",
     expect(table?.file).toBeNull();
   });
 });
+
+/**
+ * "Built" is a CLAIM. An unrecognized framework may use a convention none of the known
+ * extensions describe, so a file that merely normalizes to a roster entry's name is not
+ * evidence the component was built — and claiming it is silences the rebuild that would
+ * have produced the real one.
+ */
+describe("getInspectorComponents — an unrecognized framework cannot claim 'built'", () => {
+  let dir: string;
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), "vs-unknown-fw-"));
+    await mkdir(join(dir, "src/components"), { recursive: true });
+    await mkdir(join(dir, ".sdd-de"), { recursive: true });
+    await writeFile(
+      join(dir, ".sdd-de/components.json"),
+      JSON.stringify([{ name: "Button" }]),
+      "utf8",
+    );
+    // An unrelated utility that happens to share the component's name.
+    await writeFile(join(dir, "src/components/Button.js"), "export const noop = () => {};\n", "utf8");
+  });
+  afterEach(async () => {
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  it("reports a name-collision match as a candidate, so rebuilding is not suppressed", async () => {
+    await writeFile(
+      join(dir, ".sdd-de/project.yaml"),
+      "framework: brand-new-framework\ncomponent_dir: src/components\n",
+      "utf8",
+    );
+    const r = await getInspectorComponents(dir);
+    const btn = r.components.find((c) => c.name === "Button");
+    // The path is still surfaced for the UI — only the CLAIM is withheld.
+    expect(btn?.file).toBe("src/components/Button.js");
+    expect(btn?.status).toBe("unknown");
+  });
+
+  it("still claims built for a recognized framework, so the resume guard keeps working", async () => {
+    await writeFile(
+      join(dir, ".sdd-de/project.yaml"),
+      "framework: react\ncomponent_dir: src/components\n",
+      "utf8",
+    );
+    const r = await getInspectorComponents(dir);
+    expect(r.components.find((c) => c.name === "Button")?.status).toBe("built");
+  });
+});
+
+/**
+ * The absent-`framework:` case, now that the auto-builder refuses to start on an unresolvable
+ * framework rather than looping. A legacy `project.yaml` with no framework key can no longer
+ * display `built` for a component nobody can verify.
+ */
+describe("getInspectorComponents — an absent framework key cannot claim 'built' either", () => {
+  let dir: string;
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), "vs-no-fw-"));
+    await mkdir(join(dir, "src/components"), { recursive: true });
+    await mkdir(join(dir, ".sdd-de"), { recursive: true });
+    await writeFile(
+      join(dir, ".sdd-de/components.json"),
+      JSON.stringify([{ name: "Button" }]),
+      "utf8",
+    );
+    await writeFile(join(dir, "src/components/Button.tsx"), "export const Button = () => null;\n", "utf8");
+  });
+  afterEach(async () => {
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  // MERGE-ORDER EXCEPTION, pinned so it cannot be lost. Failing closed on an absent key is
+  // correct, but `status: "unknown"` drives the auto-builder, so it is only safe once the
+  // builder refuses to start on an unresolvable framework — a gate on the stacked branch that
+  // has not merged. Until then this must stay `built`, or every legacy project.yaml goes back
+  // into a permanent full-roster rebuild. Flip this expectation when the gate lands.
+  it("still reports built when project.yaml declares no framework (pending the auto-build gate)", async () => {
+    await writeFile(join(dir, ".sdd-de/project.yaml"), "component_dir: src/components\n", "utf8");
+    const r = await getInspectorComponents(dir);
+    const btn = r.components.find((c) => c.name === "Button");
+    expect(btn?.file).toBe("src/components/Button.tsx");
+    expect(btn?.status).toBe("built");
+  });
+
+  it("reports built once the framework is declared", async () => {
+    await writeFile(
+      join(dir, ".sdd-de/project.yaml"),
+      "framework: react\ncomponent_dir: src/components\n",
+      "utf8",
+    );
+    const r = await getInspectorComponents(dir);
+    expect(r.components.find((c) => c.name === "Button")?.status).toBe("built");
+  });
+});

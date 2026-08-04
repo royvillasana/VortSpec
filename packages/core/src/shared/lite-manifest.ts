@@ -14,6 +14,22 @@
  * feeds the parsed shapes in here; `deriveLiteManifest` builds the object and `serializeLiteManifest`
  * emits the `designer.md` text.
  */
+import { FRAMEWORK_PROFILES } from "./framework-profiles";
+
+/**
+ * The framework-exclusive source extensions, as an alternation. Built from the profile table
+ * so a framework added there is guarded here automatically. `.ts`/`.js`/`.html` are filtered
+ * out deliberately — they are shared with plain web content, so their presence in a light
+ * stand-in is not by itself evidence of framework coupling.
+ */
+const SHARED_WITH_PLAIN_WEB = new Set([".ts", ".js", ".html"]);
+function frameworkSourceFileRe(): RegExp {
+  const exts = [...new Set(Object.values(FRAMEWORK_PROFILES).flatMap((p) => p.sourceExts))]
+    .filter((e) => !SHARED_WITH_PLAIN_WEB.has(e))
+    .map((e) => e.slice(1))
+    .sort();
+  return new RegExp(`\\.(${exts.join("|")})\\b`);
+}
 
 /** Token groups shown in the manifest + the visual-reference "design system" section. */
 export type TokenGroup = "colors" | "typography" | "spacing" | "shadows" | "radius";
@@ -134,7 +150,11 @@ const FRAMEWORK_POINTER_PATTERNS: { label: string; re: RegExp }[] = [
   { label: "variants file", re: /\.variants\.[tj]s\b/ },
   { label: "module alias @/", re: /(^|[^\w])@\/[\w-]/ },
   { label: "storybook url", re: /localhost:6006/ },
-  { label: "framework source file", re: /\.(tsx|jsx|vue|svelte)\b/ },
+  // Derived from the shared profile table rather than a hand-kept list: `.astro` was missing,
+  // so an Astro path leaking into designer.md passed the guard — exactly the framework
+  // coupling this list exists to catch. `.ts`/`.js`/`.html` are excluded on purpose: a light
+  // stand-in may legitimately mention them, so they are not evidence of framework coupling.
+  { label: "framework source file", re: frameworkSourceFileRe() },
   { label: "cva()/cn() call", re: /\b(cva|cn)\s*\(/ },
 ];
 

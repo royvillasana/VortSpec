@@ -8,7 +8,9 @@ import { getInspectorComponents } from "./component-reader";
 async function scaffold(dir: string, opts: { report?: string; spec?: boolean }): Promise<void> {
   await mkdir(join(dir, ".sdd-de"), { recursive: true });
   await mkdir(join(dir, "src"), { recursive: true });
-  await writeFile(join(dir, ".sdd-de/project.yaml"), "component_dir: src\n", "utf8");
+  // `framework:` is declared because `buildProjectYaml` always writes it — and a project whose
+  // framework cannot be resolved now reports `unknown` rather than claiming `built`.
+  await writeFile(join(dir, ".sdd-de/project.yaml"), "framework: react\ncomponent_dir: src\n", "utf8");
   await writeFile(
     join(dir, ".sdd-de/components.json"),
     JSON.stringify([{ name: "Button", level: "atom" }]),

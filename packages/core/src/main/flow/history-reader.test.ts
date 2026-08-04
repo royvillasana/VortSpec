@@ -29,7 +29,9 @@ describe("history-reader", () => {
     await mkdir(join(dir, "src", "components"), { recursive: true });
     await writeFile(
       join(dir, ".sdd-de/project.yaml"),
-      "token_file: src/tokens.css\ncomponent_dir: src/components\n",
+      // `framework:` is declared because `buildProjectYaml` always writes it — and a project
+      // whose framework cannot be resolved now reports `unknown` rather than claiming `built`.
+      "framework: react\ntoken_file: src/tokens.css\ncomponent_dir: src/components\n",
       "utf8",
     );
     await writeFile(join(dir, "src/tokens.css"), ":root {\n  --color-primary: #7C6FF0;\n}\n", "utf8");
