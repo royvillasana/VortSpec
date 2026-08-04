@@ -486,9 +486,24 @@
           <div class="log">
             <div class="rel now">
               <div class="rel-head">
+                <span class="ver">v0.1.35</span>
+                <span class="ttl">Scoped style edits, and evidence that runs</span>
+                <span class="now-tag">Latest</span>
+                <span class="when">Aug 5, 2026</span>
+              </div>
+              <ul>
+                <li><b>Every style edit carries a blast radius</b> — change a value and choose, on the same control, whether it applies to this element, everything that looks like it, every instance of the component, or the token itself. Each option states how many elements it will affect <i>before</i> you commit, so a wide change is never a surprise.</li>
+                <li><b>Change one component without disturbing the others</b> — a token is shared, so &ldquo;restyle every Button&rdquo; used to mean restyling every Card that read the same token. It is now written as that token redefined <i>inside</i> the component: Buttons follow, Cards keep their value, and the value stays a token rather than a hardcoded literal.</li>
+                <li><b>Multi-select on the canvas</b> — shift-click, marquee-drag, or select every element matching a named criterion. Edit them together: shared values are editable, differing ones read <i>Mixed</i>, and a property you never touched is never written.</li>
+                <li><b>The Library answers &ldquo;what is this made of?&rdquo;</b> — select anything and its applied styles are collected under its name, grouped by kind. Values your design system does not define are named rather than silently absent, with one click to adopt them.</li>
+                <li><b>Screens bind to the design system again</b> — composed pages were being styled with copies of token <i>values</i>, which looked right and followed nothing. They now reference the token with the value as a fallback, so a token edit reaches the page and the page still opens standalone.</li>
+                <li><b>Framework support you can check</b> — Vue, Astro, SvelteKit, Nuxt and vanilla each gained an executable fixture that compiles a real project and proves the check catches what it claims. They run in CI on every change, including a mutation sweep that proves each fixture can actually fail.</li>
+              </ul>
+            </div>
+            <div class="rel">
+              <div class="rel-head">
                 <span class="ver">v0.1.34</span>
                 <span class="ttl">The design system, by property</span>
-                <span class="now-tag">Latest</span>
                 <span class="when">Aug 2, 2026</span>
               </div>
               <ul>
