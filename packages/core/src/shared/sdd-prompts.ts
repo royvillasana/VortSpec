@@ -79,6 +79,44 @@ const VARIANT_SET_CLAUSE =
  * no match (it silently reproduces someone else's component), a match found ONLY outside this
  * file's own library must count as unresolved.
  */
+/**
+ * The exception that the four-rule ladder above MUST NOT swallow: a COMPONENT-SCOPED variable.
+ *
+ * This is where the Accordion defect came from. The build was not careless — it was FOLLOWING
+ * these instructions. The ladder says match by "resolved VALUE", and the dedup rule says in as
+ * many words to reuse a token that already carries that value. Applied to a missing
+ * `Components/Accordion/Active Item Header Background`, that authorizes binding an unrelated
+ * global, which is exactly what shipped: `var(--color-neutral-100)`.
+ *
+ * Two independent measurements say value equality is not identity:
+ *
+ *   PR #85  `--color-neutral-100` is overridden in the dark theme, so the substituted global
+ *           carries the component along a palette ramp it was never meant to follow — correct
+ *           in light, wrong in dark. Two tokens equal today are not equal under every mode.
+ *   PR #82  `var(--never-defined)` is VALID CSS. The property falls back to its initial value
+ *           and paints transparent with no error anywhere, so there is no signal for any
+ *           downstream check to find. A missing component token cannot be caught later.
+ *
+ * Together those are why this blocks at BIND time rather than deferring to the verify layer.
+ * `verifyPrompt`'s Layer 2 catches the binding after the fact; this stops it being written.
+ */
+function componentScopedBindingClause(): string {
+  const example = componentTokenName("Components/Accordion/Active Item Header Background");
+  return (
+    "SCOPE EXCEPTION — the value/dedup rules above apply to GLOBAL variables only. When the node " +
+    "binds a COMPONENT-SCOPED variable (`Components/<Name>/…`), match by IDENTITY only: a durable " +
+    "link, the canonical token name, or an explicit alias declared in the token file. The canonical " +
+    `name is derived, e.g. \`Components/Accordion/Active Item Header Background\` → \`${example?.name}\`. ` +
+    "A resolved-VALUE match may NOMINATE a candidate and must NEVER authorize binding a " +
+    "differently-scoped token, and a component token is NOT a duplicate of a global that happens to " +
+    "share its value — they are equal in one theme and diverge in another, so reusing the global " +
+    "silently re-themes the component. If the component-scoped variable has no token, CREATE the " +
+    "canonical one; do not reuse the nearest global and do not leave a dangling `var(--…)`. If you " +
+    "cannot create it, report TOKEN-BLOCKED and build nothing for that value — an undefined custom " +
+    "property paints the property's initial value and reports nothing, so no later check can catch it."
+  );
+}
+
 const SCOPED_SEARCH_CLAUSE =
   "`search_design_system` is NOT scoped by the file key alone — `fileKey` is context, not a filter, and an " +
   "unscoped search returns same-named components from every library in the org. You MUST pass this file's " +
@@ -119,6 +157,7 @@ const DESIGN_REFERENCE_CLAUSE = [
   "to NO existing project token, add it to the token file FIRST — but only after checking it isn't a",
   "duplicate of a token that already has that value (reuse that one instead) — then reference the new token;",
   "never inline the literal.",
+  componentScopedBindingClause(),
 ].join(" ");
 
 /**
