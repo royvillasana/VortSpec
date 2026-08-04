@@ -138,7 +138,8 @@ const SVELTE_BASE = {
   //   P4-scope-keep   — a selector that COULD match the dynamically-classed element is retained
   //   P4-scope-tag    — a structurally impossible selector is still pruned AND warned
   //   P4-scope-child  — a statically-classed child is still analysed beside a dynamic parent
-  // If this prose ever drifts back to "the analysis is off", P4-scope-tag contradicts it.
+  // If this prose ever drifts back to WRONG v2, P4-scope-tag is the case that contradicts it, and
+  // `framework-prose.test.ts` fails on the restatement.
   //
   // The recommendation survives on its true benefit, downgraded from requirement to preference.
   variants:
