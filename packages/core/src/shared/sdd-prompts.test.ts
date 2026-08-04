@@ -14,6 +14,7 @@ import {
 } from "./sdd-prompts";
 import { componentTokenExtractionClause, componentTokenName } from "./component-tokens";
 import { themeContractFor } from "./setup";
+import { componentTokenName } from "./component-tokens";
 
 describe("buildCustomizeLibraryPrompt — apply the durable overlay via the library's lever (Phase 11)", () => {
   it("embeds MUI's theming + per-component lever and reads the durable overlay, not invented values", () => {
@@ -578,5 +579,66 @@ describe("search_design_system must be scoped by includeLibraryKeys (found on a 
     expect(p).toContain("lk-");
     expect(p).toMatch(/URL does NOT/);
     expect(p).toMatch(/metadata of a first, unscoped result/);
+  });
+});
+
+/**
+ * Layer 2 compares token IDENTITY — the re-land of the slice Thor blocked.
+ *
+ * The blocked version let resolved-VALUE equality authorize a substitution, so a missing
+ * component token whose value coincided with an unrelated global was waved through. That
+ * objection was theoretical when made and is now measured: Honey rendered the real component
+ * through the project's own Tailwind build (PR #85) and `--color-neutral-100` is overridden in
+ * the dark theme, so the substituted global carries the component along a palette ramp it was
+ * never meant to follow — correct in light, wrong in dark.
+ */
+describe("verifyPrompt — Layer 2 compares token identity, not syntax or value", () => {
+  const p = () => verifyPrompt("accordion", "http://localhost:6006", true);
+
+  it("requires identity — link, canonical name, or explicit alias", () => {
+    expect(p()).toMatch(/TOKEN IDENTITY, not token syntax/);
+    expect(p()).toMatch(/a durable link, the canonical name, or an explicit alias/);
+  });
+
+  it("lets a value match NOMINATE but never AUTHORIZE — Thor's blocker, closed", () => {
+    // The exact defect that got the earlier slice reverted. Without this the four match rules
+    // still permit a same-value wrong-scope binding.
+    expect(p()).toMatch(/may NOMINATE a candidate; it must NEVER authorize binding a[\s\S]{0,40}differently-scoped token/);
+    expect(p()).toMatch(/Report a same-value wrong-scope binding as a TOKEN failure, not a pass/);
+  });
+
+  it("gives the measured reason, not an argument from principle", () => {
+    // The opposite-polarity case Thor required, stated as the rendered fact that makes it true:
+    // equal-in-one-theme is not equal-in-every-theme.
+    expect(p()).toMatch(/Two tokens equal in one theme are not equal in every theme/);
+    expect(p()).toMatch(/correct in light mode and wrong in\s+dark/);
+  });
+
+  it("TOKEN-BLOCKS a missing component token and names what to add", () => {
+    expect(p()).toMatch(/that\s+is TOKEN-BLOCKED: name the canonical token to add/);
+    expect(p()).toMatch(/Do NOT substitute the nearest global/);
+  });
+
+  it("says WHY a dangling var() cannot be caught later — it paints and reports nothing", () => {
+    // PR #82 case B3, rendered. This is the argument for blocking at bind time rather than
+    // trusting any downstream check.
+    expect(p()).toMatch(/valid CSS that paints the\s+property's initial value and reports nothing/);
+  });
+
+  it("emits the canonical name the mapping currently produces", () => {
+    const canonical = componentTokenName("Components/Accordion/Active Item Header Background");
+    expect(canonical?.name).toBeTruthy();
+    expect(p()).toContain(canonical.name);
+    // NOTE: this asserts AGREEMENT, not derivation. A hardcoded string that happens to be
+    // correct passes it — proven by mutation: replacing the interpolation with the literal left
+    // all 66 tests green. The derivation itself is pinned by the mocked test below, which is the
+    // only thing that can tell "computed" from "currently correct".
+  });
+
+  it("keeps the identity rule inside Layer 2, not somewhere its verdict does not govern", () => {
+    const text = p();
+    const idx = text.indexOf("TOKEN IDENTITY, not token syntax");
+    expect(idx).toBeGreaterThan(text.indexOf("Layer 2 — TOKEN"));
+    expect(idx).toBeLessThan(text.indexOf("Layer 3 — CODE"));
   });
 });

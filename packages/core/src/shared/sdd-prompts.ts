@@ -10,7 +10,7 @@
  * two-app model).
  */
 import { frameworkIdiomClause, resolveTypecheck, typecheckCoverageClause } from "./framework-profiles";
-import { componentTokenExtractionClause } from "./component-tokens";
+import { componentTokenExtractionClause, componentTokenName } from "./component-tokens";
 
 export function buildOnePrompt(name: string, level?: string, framework?: string | null): string {
   return (
@@ -430,6 +430,51 @@ function variantRosterClause(isFigma: boolean): string {
     "BLOCKED — never PASS a variant checklist you could not derive from the design."
   );
 }
+/**
+ * Layer 2 compares token IDENTITY, not token SYNTAX — and not resolved VALUE either.
+ *
+ * The layer used to ask "is every colour a `var()`?", which the Accordion passes while rendering
+ * a colour Figma does not specify. An earlier attempt of mine to fix this was correctly blocked:
+ * it still let resolved-VALUE equality authorize a substitution, so a missing component token
+ * whose value coincided with an unrelated global was waved through.
+ *
+ * That objection was theoretical when it was made. It is now measured. Honey rendered the real
+ * component through the project's own Tailwind build (PR #85):
+ *
+ *   light   as-built rgb(248,249,250)   as-designed rgb(206,228,233)
+ *   dark    as-built rgb(26,30,33)
+ *
+ * `--color-neutral-100` is overridden in the dark theme, so the substituted global carries the
+ * component along a palette ramp it was never meant to follow. Two tokens that are equal today
+ * are not equal under every mode — value equality is not merely unsafe in principle, it is
+ * measurably unsafe in the theme the project already ships.
+ *
+ * And a MISSING token is invisible rather than loud: `var(--never-defined)` is valid CSS, so the
+ * property falls back to its initial value and paints transparent with no error anywhere (PR #82,
+ * case B3). Nothing downstream can catch it, which is why this must block at bind time.
+ *
+ * The canonical name comes from `componentTokenName` rather than being restated here — one copy
+ * of the naming contract, in the code that enforces it.
+ */
+function tokenIdentityClause(): string {
+  const example = componentTokenName("Components/Accordion/Active Item Header Background");
+  return (
+    "TOKEN IDENTITY, not token syntax: for every value the reference binds to a COMPONENT-SCOPED " +
+    "Figma variable (`Components/<Name>/…`), the component must bind to that variable's own token " +
+    "by IDENTITY — a durable link, the canonical name, or an explicit alias declared in the token " +
+    `file. The canonical name is derived, e.g. \`Components/Accordion/Active Item Header Background\` ` +
+    `→ \`${example?.name}\`. ` +
+    "A resolved-VALUE match may NOMINATE a candidate; it must NEVER authorize binding a " +
+    "differently-scoped token. Two tokens equal in one theme are not equal in every theme — a " +
+    "global palette token substituted for a component token carries the component along a ramp it " +
+    "was never meant to follow, so the substitution renders correct in light mode and wrong in " +
+    "dark. Report a same-value wrong-scope binding as a TOKEN failure, not a pass. " +
+    "If the reference binds a component-scoped variable that the token file does not define, that " +
+    "is TOKEN-BLOCKED: name the canonical token to add. Do NOT substitute the nearest global and " +
+    "do NOT leave a dangling `var()` — an undefined custom property is valid CSS that paints the " +
+    "property's initial value and reports nothing, so nothing downstream will ever catch it."
+  );
+}
 const NO_MANUAL_STEPS =
   "Do this entirely yourself, in the background — never tell me to open a browser, open Figma Dev " +
   "Mode, start a server, or run a command. You have the tools; use them.";
@@ -549,7 +594,7 @@ export function verifyPrompt(
       `\`--component-<name>-*\`) where the design system defines them. Grep for hardcoded hex/rgb/rgba/px and ` +
       `wrong-token substitutions across the component AND its \`*.variants.*\` file, and flag each with the ` +
       `exact token that should have been used. Any hardcoded color (e.g. a raw #83bcc7 or rgba(...) focus ring) ` +
-      `is a TOKEN failure, even if it looks right.`,
+      `is a TOKEN failure, even if it looks right. ${tokenIdentityClause()}`,
     `Layer 3 — CODE / BUILD: ${typecheckClause(framework, componentDir)}` +
       `library project with no dev server, also 'npm run build-storybook' (or the project's build script). ` +
       `${scope} MUST compile/build with zero errors. Any type or build error (a broken import, an interface ` +
