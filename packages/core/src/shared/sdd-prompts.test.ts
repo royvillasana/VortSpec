@@ -46,9 +46,10 @@ describe("verifyPrompt — honest gate (no false PASS without a live render)", (
   });
 
   it("keeps a compile/build check that blocks a false pass so broken code can't pass", () => {
-    const p = verifyPrompt("button", "http://localhost:5173", false);
+    // Framework is explicit: an unset framework now BLOCKS rather than defaulting to tsc.
+    const p = verifyPrompt("button", "http://localhost:5173", false, "react");
     expect(p).toMatch(/CODE \/ BUILD/);
-    expect(p).toMatch(/tsc --noEmit/); // no framework given ⇒ the React default
+    expect(p).toMatch(/tsc --noEmit/);
     expect(p).toMatch(/import type/); // names the exact class of bug that shipped before
     expect(p).toMatch(/does not compile is ISSUES/i);
   });
@@ -58,6 +59,7 @@ describe("verifyPrompt — honest gate (no false PASS without a live render)", (
   // PASS on code that was never compiled.
   it.each([
     ["vue", /vue-tsc/],
+    ["nuxt", /nuxi typecheck/],
     ["svelte", /svelte-check/],
     ["astro", /astro check/],
     ["angular", /ng build/],
@@ -129,11 +131,27 @@ describe("verifyPrompt — honest gate (no false PASS without a live render)", (
     }
   });
 
-  it("says so outright when a framework has no type-check, instead of running one that lies", () => {
+  // Vanilla now has a real gate (`node --check`), but one that cannot cover HTML — so the
+  // prompt must run it AND say what it did not cover, rather than implying full coverage.
+  it("runs vanilla's real check and marks its coverage partial", () => {
     const p = verifyPrompt("button", "http://localhost:5173", false, "vanilla");
-    expect(p).toMatch(/NO type-check step/);
-    expect(p).toMatch(/not-applicable/);
-    expect(p).not.toMatch(/'npx tsc --noEmit' —/); // never emitted as the command to run
+    expect(p).toMatch(/node --check/);
+    expect(p).toMatch(/PARTIAL/);
+    expect(p).toMatch(/JS syntax only/);
+    expect(p).not.toMatch(/npx tsc/);
+  });
+
+  it("blocks CODE on an unknown framework rather than silently falling back to tsc", () => {
+    const p = verifyPrompt("button", "http://localhost:5173", false, "brand-new-framework");
+    expect(p).toMatch(/missing or unrecognized/);
+    expect(p).toMatch(/CODE: blocked/);
+    expect(p).not.toMatch(/framework-native type-check — '/);
+  });
+
+  it("blocks CODE when no framework is configured at all", () => {
+    const p = verifyPrompt("button", "http://localhost:5173", false, undefined);
+    expect(p).toMatch(/CODE: blocked/);
+    expect(p).not.toMatch(/framework-native type-check — '/);
   });
 
   it("orders the gate visual → token → code, with visual as the primary check", () => {

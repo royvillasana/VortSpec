@@ -9,7 +9,7 @@
  * procedure here changes it in both apps at once (the binding invariant of the
  * two-app model).
  */
-import { frameworkIdiomClause, typecheckCmdFor, typecheckCoverageClause } from "./framework-profiles";
+import { frameworkIdiomClause, resolveTypecheck, typecheckCoverageClause } from "./framework-profiles";
 
 export function buildOnePrompt(name: string, level?: string, framework?: string | null): string {
   return (
@@ -438,12 +438,37 @@ export const RESUME_PROMPT =
  * under the wrong config produces the same vacuous green by a different route — see
  * `typecheckCoverageClause()`.
  */
-function typecheckClause(framework?: string | null): string {
-  const cmd = typecheckCmdFor(framework);
-  return cmd
-    ? `run the project's framework-native type-check — '${cmd}' —${typecheckCoverageClause(framework)} and, for a Storybook/`
-    : `this framework has NO type-check step, so report CODE as not-applicable and say so explicitly — ` +
-        `do NOT substitute 'npx tsc --noEmit', which would pass without reading the component. Instead, for a Storybook/`;
+function typecheckClause(framework?: string | null, componentDir?: string | null): string {
+  const r = resolveTypecheck(framework, { componentDir });
+  if (r.kind === "cmd") {
+    // An `experimental` framework has a real check that can fail, but one that does not cover
+    // everything the framework can get wrong. Say so, so a pass is never read as broader
+    // than it is.
+    const partial = r.partial
+      ? ` That check is PARTIAL (${r.partial}) — report what it did and did not cover, and do ` +
+        `not treat its pass as full CODE coverage.`
+      : "";
+    // Their `partial` is an UNCONDITIONAL shortfall; my coverage gate is CONDITIONAL on a project
+    // setting and must be resolved before it can be claimed. Composed, not collapsed — merging them
+    // would mark a correctly-configured Angular project PARTIAL.
+    return `run the project's framework-native type-check — '${r.cmd}' —${partial}${typecheckCoverageClause(framework)} and, for a Storybook/`;
+  }
+  // Both remaining outcomes mean "we could not check". Neither may be reported as a pass:
+  // an unrunnable check is BLOCKED, and BLOCKED propagates to Layer 1 exactly as a failure
+  // does. Substituting `tsc` here is what made six frameworks report green on code that had
+  // never been compiled.
+  const why =
+    r.kind === "invalid-config"
+      ? `this project's configuration is unusable (${r.reason}), so no check can be built for it`
+      : r.kind === "none"
+      ? `this project's framework (${r.framework}) has NO type-check step that could fail`
+      : `this project's framework is missing or unrecognized (${r.framework ?? "unset"}), so there is no ` +
+        `checker that is known to read its files`;
+  return (
+    `${why} — report 'CODE: blocked', name the reason, and do NOT substitute 'npx tsc --noEmit' or any ` +
+    `other checker: one that cannot parse the component passes without reading it, which is a FALSE pass, ` +
+    `not a green layer. A blocked CODE layer blocks Layer 1 exactly as a failing one does. Still, for a Storybook/`
+  );
 }
 
 export function verifyPrompt(
@@ -451,6 +476,7 @@ export function verifyPrompt(
   url: string | null,
   isFigma: boolean,
   framework?: string | null,
+  componentDir?: string | null,
 ): string {
   const scope = target === "all" ? "every built component" : `the "${target}" component`;
   const resolveRef = isFigma
@@ -482,7 +508,7 @@ export function verifyPrompt(
       `wrong-token substitutions across the component AND its \`*.variants.*\` file, and flag each with the ` +
       `exact token that should have been used. Any hardcoded color (e.g. a raw #83bcc7 or rgba(...) focus ring) ` +
       `is a TOKEN failure, even if it looks right.`,
-    `Layer 3 — CODE / BUILD: ${typecheckClause(framework)}` +
+    `Layer 3 — CODE / BUILD: ${typecheckClause(framework, componentDir)}` +
       `library project with no dev server, also 'npm run build-storybook' (or the project's build script). ` +
       `${scope} MUST compile/build with zero errors. Any type or build error (a broken import, an interface ` +
       `imported as a value instead of 'import type', a duplicate JSX attribute, a missing export, an ` +

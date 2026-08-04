@@ -1,6 +1,7 @@
 import { join, dirname } from "node:path";
 import { readFile, writeFile, mkdir, stat, readdir } from "node:fs/promises";
 import { createHash } from "node:crypto";
+import { ALL_SOURCE_EXTS } from "@vortspec/core/framework-profiles";
 
 /**
  * A schema that can validate a cached payload — structurally just `safeParse`, so any
@@ -25,9 +26,14 @@ interface PayloadSchema<T> {
 
 /** Cache envelope version — bump to invalidate every cache after a format change. Also
  * makes a foreign cache file (e.g. shipped in a cloned repo) fail the check and recompute. */
-const CACHE_VERSION = 4; // bump when derivation logic changes (v4: a token's VALUE overrules a misleading name — `--border-width` is a border, `--color-shadow` is a colour)
+const CACHE_VERSION = 5; // bump when derivation logic changes (v5: component extensions derive from FRAMEWORK_PROFILES, adding `.html` so a vanilla component's content invalidates the scan)
 const SKIP_DIRS = new Set(["node_modules", ".git", ".next", "dist", "build", "out", ".turbo", "coverage", ".vortspec"]);
-const SOURCE_EXTS = new Set([".ts", ".tsx", ".js", ".jsx", ".css", ".scss", ".vue", ".svelte", ".astro", ".json", ".yaml", ".yml"]);
+/**
+ * Files whose CONTENT determines a scan result. The component half derives from the shared
+ * profile table so this can never again disagree with `component-reader` about what a
+ * component file is; the rest are the styling/config assets a scan also reads.
+ */
+const SOURCE_EXTS = new Set([...ALL_SOURCE_EXTS, ".css", ".scss", ".json", ".yaml", ".yml"]);
 const MAX_WALK = 6000;
 
 /** The inputs whose content determines a scan's result (project-relative paths). */

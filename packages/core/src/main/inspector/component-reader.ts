@@ -6,7 +6,7 @@ import { readComponentMap, mergeComponentEntries } from "./design-map";
 import { cachedScan } from "./scan-cache";
 import { inspectorComponentsResultSchema } from "@vortspec/core/inspector";
 import { detectedComponentsSchema, type DetectedComponent } from "@vortspec/core/flow";
-import { ALL_SOURCE_EXTS, stripFileSuffix } from "@vortspec/core/framework-profiles";
+import { ALL_SOURCE_EXTS, GENERATED_DIRS, profileFor, stripFileSuffix } from "@vortspec/core/framework-profiles";
 import type {
   ComponentStatus,
   FileSnapshot,
@@ -219,8 +219,12 @@ async function variantsSibling(projectPath: string, file: string): Promise<strin
   return hit ? join(dir, hit) : null;
 }
 
-/** Dirs a component-file search never descends into (deps/build output). */
-const FIND_SKIP_DIRS = new Set(["node_modules", ".git", ".next", "dist", "build", "out", ".turbo", "coverage", ".vortspec", ".sdd-de"]);
+/**
+ * Dirs a component-file search never descends into (deps/build output). Derived from the
+ * shared list rather than kept locally — "what is not source" is the same fact the vanilla
+ * syntax gate prunes on, and two copies of it drift.
+ */
+const FIND_SKIP_DIRS = new Set(GENERATED_DIRS);
 
 async function findSourceFile(dir: string, name: string, budget = { n: 8000 }): Promise<string | null> {
   if (budget.n <= 0) return null;
@@ -316,10 +320,22 @@ export function reportUnresolved(report: string): { unresolved: boolean; issues:
   return { unresolved: true, issues: issues.length ? issues : ["open discrepancies"] };
 }
 
+/**
+ * `frameworkKnown` is what stops a found file becoming a false CLAIM.
+ *
+ * When the configured framework is unrecognized, the search falls back to every known
+ * extension — a wide net, which is right for FINDING things. But "built" is a claim, and an
+ * unknown framework may use a convention none of these extensions describe, so an unrelated
+ * `Button.js` utility under the component dir would satisfy the roster entry `Button` and
+ * silence the rebuild. Such a match is reported `unknown` (a candidate): the file path is
+ * still surfaced for the UI, but nothing claims the component is built, so rebuilding is
+ * never suppressed on an unsupported configuration.
+ */
 async function componentStatus(
   projectPath: string,
   name: string,
   hasFile: boolean,
+  frameworkKnown: boolean,
 ): Promise<{ status: ComponentStatus; issues: string[]; specPath: string | null; reportPath: string | null }> {
   const slug = name.toLowerCase();
   const specPath = await firstExisting(projectPath, [
@@ -331,6 +347,8 @@ async function componentStatus(
     join("specs", slug, "visual-verify-report.md"),
   ]);
   if (!hasFile) return { status: "unknown", issues: [], specPath, reportPath };
+  // A match under an unrecognized framework is a candidate, never a confirmed build.
+  if (!frameworkKnown) return { status: "unknown", issues: [], specPath, reportPath };
   let report: string;
   try {
     report = reportPath ? await readFile(join(projectPath, reportPath), "utf8") : "";
@@ -404,6 +422,19 @@ async function computeInspectorComponents(
     /* no manifest → empty inventory */
   }
 
+  // A framework that is CONFIGURED but unrecognized can still be SEARCHED (the union), but
+  // nothing it matches may be claimed as built — see `componentStatus`.
+  //
+  // An ABSENT `framework:` key is deliberately still treated as known, and this is a
+  // MERGE-ORDER exception rather than a judgement about what is correct. Failing closed here
+  // is right, but `status: "unknown"` is what feeds the auto-builder, so it is only safe once
+  // the auto-builder refuses to start on an unresolvable framework. That gate lives on the
+  // stacked branch, not this one — and a branch that has not merged is not runtime
+  // protection here. Shipping this alone would restore the permanent full-roster rebuild on
+  // opus for every legacy `project.yaml`.
+  //
+  // Remove this exception when the two land together, or immediately after the gate does.
+  const frameworkKnown = config?.framework ? profileFor(config.framework) !== null : true;
   const root = componentDir ? join(projectPath, componentDir) : projectPath;
   const rosterNames = manifest.map((m) => m.name);
   const srcByName = new Map<string, string>();
@@ -426,6 +457,7 @@ async function computeInspectorComponents(
       projectPath,
       entry.name,
       Boolean(abs),
+      frameworkKnown,
     );
     components.push({
       name: entry.name,

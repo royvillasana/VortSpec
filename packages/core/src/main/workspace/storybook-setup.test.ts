@@ -118,4 +118,58 @@ describe("storyGap", () => {
     expect(g.stories).toBe(1);
     expect(g.missing).toBe(2);
   });
+
+  // The regression this rewrite fixes: counting raw files by extension made an Angular
+  // TEMPLATE (`button.component.html`) count as its own component, so a 2-component roster
+  // read as 4 — and the `.ts` that is the real component was excluded entirely.
+  it("counts an Angular component once, not once per template", async () => {
+    await writeFile(
+      join(dir, ".sdd-de", "project.yaml"),
+      "framework: angular\ncomponent_dir: src/components\n",
+    );
+    const ui = join(dir, "src", "components", "ui");
+    for (const n of ["button", "card"]) {
+      await writeFile(join(ui, `${n}.component.ts`), "export class C {}");
+      await writeFile(join(ui, `${n}.component.html`), "<button></button>");
+      await writeFile(join(ui, `${n}.component.scss`), ".btn{}");
+    }
+    // Siblings that are not components and must not inflate the count.
+    await writeFile(join(ui, "button.component.spec.ts"), "");
+    await writeFile(join(ui, "app.module.ts"), "");
+    await writeFile(join(ui, "data.service.ts"), "");
+
+    const g = await storyGap(dir);
+    expect(g.components).toBe(2);
+    expect(g.stories).toBe(0);
+    expect(g.missing).toBe(2);
+  });
+
+  it("counts by roster identity, so an unlisted stray file is not a component", async () => {
+    await writeFile(
+      join(dir, ".sdd-de", "components.json"),
+      JSON.stringify([{ name: "Button" }, { name: "Input" }]),
+    );
+    const ui = join(dir, "src", "components", "ui");
+    for (const n of ["Button", "Input", "ScratchPad"]) {
+      await writeFile(join(ui, `${n}.tsx`), "export default () => null;");
+    }
+    await writeFile(join(ui, "Button.stories.tsx"), "export default {};");
+    // A story for something the roster does not list must not count as coverage.
+    await writeFile(join(ui, "ScratchPad.stories.tsx"), "export default {};");
+
+    const g = await storyGap(dir);
+    expect(g.components).toBe(2); // ScratchPad is on disk but not on the roster
+    expect(g.stories).toBe(1); // only Button's story counts
+    expect(g.missing).toBe(1); // Input
+  });
+
+  it("finds a vanilla component's .html partial, which the old list dropped", async () => {
+    await writeFile(
+      join(dir, ".sdd-de", "project.yaml"),
+      "framework: vanilla\ncomponent_dir: src/components\n",
+    );
+    await writeFile(join(dir, "src", "components", "ui", "button.html"), "<button></button>");
+    const g = await storyGap(dir);
+    expect(g.components).toBe(1);
+  });
 });
