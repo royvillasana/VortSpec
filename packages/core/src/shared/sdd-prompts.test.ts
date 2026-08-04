@@ -68,6 +68,35 @@ describe("verifyPrompt — honest gate (no false PASS without a live render)", (
     expect(p).not.toMatch(/npx tsc/);
   });
 
+  it("makes Angular READ strictTemplates and downgrade to PARTIAL when it is off", () => {
+    // Bumble compiled the case: the same wrong binding compiles at exit 0 without the flag and
+    // fails TS2322 with it. `ng build` runs and reports success, so this is a command that LIES
+    // rather than one that cannot read the file — the vanilla branch below does not cover it.
+    // Thor's requirement was behavior, not a caveat: a full pass on an unchecked binding is the
+    // vacuous green this whole clause exists to remove.
+    const p = verifyPrompt("button", "http://localhost:5173", false, "angular");
+    expect(p).toMatch(/strictTemplates/);
+    expect(p).toMatch(/PARTIAL/);
+    expect(p).toMatch(/never a full pass/);
+    // Both directions, because Bumble ran both: A4-* for the input half, A6-out-* for the output.
+    expect(p).toMatch(/BOUND ACROSS a component boundary, in both directions/);
+    expect(p).toMatch(/EventEmitter/);
+    // Scoped to what A5-scope demonstrated — expressions ARE checked either way, so claiming
+    // templates go unchecked would be the same over-reading the Svelte round cost us. The
+    // profile must not even QUOTE that phrasing: this clause is read by a model, not a human.
+    expect(p).not.toMatch(/templates are unchecked/);
+  });
+
+  it("adds no coverage caveat to a framework whose check does not depend on config", () => {
+    // The other polarity. Without this, a clause that fired for everything would still pass the
+    // assertions above while making every framework's report read as degraded.
+    for (const framework of ["react", "next", "vue", "svelte", "sveltekit", "nuxt", "astro"]) {
+      const p = verifyPrompt("button", "http://localhost:5173", false, framework);
+      expect(p, `${framework} inherited Angular's gate`).not.toMatch(/strictTemplates/);
+      expect(p, `${framework} was told to report PARTIAL`).not.toMatch(/PARTIAL/);
+    }
+  });
+
   it("says so outright when a framework has no type-check, instead of running one that lies", () => {
     const p = verifyPrompt("button", "http://localhost:5173", false, "vanilla");
     expect(p).toMatch(/NO type-check step/);

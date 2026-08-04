@@ -9,7 +9,7 @@
  * procedure here changes it in both apps at once (the binding invariant of the
  * two-app model).
  */
-import { frameworkIdiomClause, typecheckCmdFor } from "./framework-profiles";
+import { frameworkIdiomClause, typecheckCmdFor, typecheckCoverageClause } from "./framework-profiles";
 
 export function buildOnePrompt(name: string, level?: string, framework?: string | null): string {
   return (
@@ -432,11 +432,16 @@ export const RESUME_PROMPT =
  * in the component and reported pass — and because Layer 1 is only BLOCKED when CODE fails,
  * that vacuous green cleared the path to a VISUAL pass on code nobody had compiled.
  * A framework with no meaningful check says so rather than running a command that lies.
+ *
+ * A command that RUNS can lie too, which is the second branch here. Angular's build reports exit 0
+ * on a wrong input binding unless the project enables `strictTemplates`, so the right command
+ * under the wrong config produces the same vacuous green by a different route — see
+ * `typecheckCoverageClause()`.
  */
 function typecheckClause(framework?: string | null): string {
   const cmd = typecheckCmdFor(framework);
   return cmd
-    ? `run the project's framework-native type-check — '${cmd}' — and, for a Storybook/`
+    ? `run the project's framework-native type-check — '${cmd}' —${typecheckCoverageClause(framework)} and, for a Storybook/`
     : `this framework has NO type-check step, so report CODE as not-applicable and say so explicitly — ` +
         `do NOT substitute 'npx tsc --noEmit', which would pass without reading the component. Instead, for a Storybook/`;
 }

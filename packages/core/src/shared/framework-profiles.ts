@@ -29,6 +29,24 @@ export interface FrameworkProfile {
    */
   typecheckCmd: string | null;
   /**
+   * A project setting `typecheckCmd` DEPENDS ON to mean what we claim, or undefined when the
+   * command's coverage does not vary with project config.
+   *
+   * The vanilla case taught us that a check which reads nothing must say so rather than report
+   * pass. Angular is the harder version of the same failure: the command is right, runs, and
+   * reports exit 0 — while silently not checking the thing we most need checked. Coverage that
+   * depends on config has to be READ, not assumed, or the CODE layer reports a pass it did not
+   * earn. See `typecheckCoverageClause()`.
+   */
+  typecheckCoverageGate?: {
+    /** The setting, named exactly as it appears in the project's config. */
+    setting: string;
+    /** Where to read it. */
+    location: string;
+    /** What goes unchecked while it is off — stated narrowly, to what was demonstrated. */
+    unchecked: string;
+  };
+  /**
    * Filename suffixes that sit between the component name and the extension, stripped
    * before matching a file to a roster entry. Angular's convention is
    * `button.component.ts`, whose stem would otherwise never equal `button`.
@@ -246,10 +264,30 @@ export const FRAMEWORK_PROFILES: Record<string, FrameworkProfile> = {
   },
   angular: {
     sourceExts: [".ts"],
-    // Angular class files are plain `.ts`, so `tsc` type-checks them — but the TEMPLATE
-    // lives in a sibling `.html` that only the AOT compiler reads. A build is the only
-    // check that covers both.
+    // Angular class files are plain `.ts`, so `tsc` type-checks them — but the TEMPLATE lives in
+    // a sibling `.html` that only the AOT compiler reads, so the build is the only check that
+    // reaches it at all.
+    //
+    //   WRONG v1: "a build is the only check that COVERS BOTH". Refuted by Bumble on
+    //             @angular/compiler-cli 19.x — necessary, not sufficient. The same binding
+    //             (`[count]="'not a number'"` into `@Input() count: number`) compiles CLEAN at
+    //             exit 0 without `strictTemplates` and fails TS2322 with it. What the flag
+    //             governs is narrow: expressions inside a template are checked either way, but
+    //             BINDINGS BETWEEN COMPONENTS are not. Evidence:
+    //             RESEARCH/VORTSPEC_ANGULAR_FIXTURE_2026-08-04.md, case A5-scope.
+    //
+    // That gap is precisely VortSpec's hand-off — we generate components carrying inputs and then
+    // generate pages that bind to them — so the pitfall below states it rather than the comment.
     typecheckCmd: "npx ng build --configuration development",
+    typecheckCoverageGate: {
+      setting: "strictTemplates",
+      location: "`angularCompilerOptions` in the project's `tsconfig.json` (or `tsconfig.app.json`)",
+      unchecked:
+        "the assignability of values BOUND ACROSS a component boundary, in both directions — " +
+        "`[count]=\"'text'\"` against `@Input() count: number`, and an `(changed)` handler taking the wrong " +
+        "type off an `EventEmitter<number>` — each compiles clean at exit 0. Expressions inside a template " +
+        "are still checked either way, so the gap is narrower than the template as a whole",
+    },
     fileSuffixes: [".component"],
     idioms: {
       label: "Angular",
@@ -274,6 +312,7 @@ export const FRAMEWORK_PROFILES: Record<string, FrameworkProfile> = {
         "references — it is NOT React's ref forwarding, do not use it for that",
       pitfalls: [
         "`tsc --noEmit` checks the class but NOT the template — a broken template still passes, so the gate is a build.",
+        "A passing build does NOT mean the bindings are checked. Without `strictTemplates` in `tsconfig`'s `angularCompilerOptions`, Angular type-checks expressions inside a template but NOT bindings between components, so `[count]=\"'text'\"` into an `@Input() count: number` compiles clean. Turn it on, or treat binding errors as uncaught.",
         "`CVA` in Angular is `ControlValueAccessor`, not `class-variance-authority`.",
         "Template events are `(click)`, not `@click`.",
       ],
@@ -371,6 +410,37 @@ export function stripFileSuffix(stem: string): string {
  */
 export function typecheckCmdFor(framework?: string | null): string | null {
   return profileFor(framework).typecheckCmd;
+}
+
+/**
+ * The instruction that turns a config-dependent check into an honest report, or "" when the
+ * framework's coverage does not vary with config.
+ *
+ * Bumble compiled the case this exists for: on Angular, the same wrong binding compiles at exit 0
+ * without `strictTemplates` and fails TS2322 with it. `ng build` is the right command and the
+ * wrong stopping point — VortSpec generates components carrying inputs and then generates pages
+ * that bind to them, so an unchecked binding is the failure mode of our own hand-off.
+ *
+ * Documenting that as a caveat while still reporting a full pass would be the vacuous green this
+ * whole clause exists to remove, so the setting must be READ and a shortfall must DOWNGRADE the
+ * verdict — the same shape as the not-applicable branch a no-build project already gets.
+ *
+ * Evidence: RESEARCH/VORTSPEC_ANGULAR_FIXTURE_2026-08-04.md, @angular/compiler-cli 19.2.25 /
+ * TypeScript 5.6.3 — pinned exactly because this is version-sensitive compiler behaviour.
+ *   A4-*      — an `@Input()` binding: clean at exit 0 without the flag, TS2322 with it
+ *   A6-out-*  — the `@Output()` half, same result, so "both directions" is run rather than assumed
+ *   A5-scope  — expressions inside a template fail in BOTH modes, which is why this is scoped to
+ *               bindings across a component boundary and not to templates at large
+ */
+export function typecheckCoverageClause(framework?: string | null): string {
+  const gate = profileFor(framework).typecheckCoverageGate;
+  if (!gate) return "";
+  return (
+    ` Before reporting CODE, READ ${gate.location} and check \`${gate.setting}\`: a pass means nothing ` +
+    `for ${gate.unchecked} unless it is \`true\`. If it is absent or false, report CODE as PARTIAL — never a ` +
+    `full pass — name \`${gate.setting}\` as the reason, and say that turning it on is what makes the check ` +
+    `meaningful. Do NOT silently accept the exit code.`
+  );
 }
 
 /**
