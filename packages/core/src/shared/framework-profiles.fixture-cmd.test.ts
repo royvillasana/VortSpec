@@ -39,6 +39,26 @@ interface FixtureCmd {
    * against exactly that. These are the semantic half.
    */
   mustContain: string[];
+  /**
+   * The argv literals as the fixture ACTUALLY invokes them, when they are literals.
+   *
+   * `sourceTokens` is a whole-file substring search, so it matches the words wherever they appear
+   * — including in the header comment and in `console.log` labels. Measured, not assumed: swapping
+   * nuxt's `run('npx', ['nuxi', 'typecheck'])` for `run('npx', ['vue-tsc', '--noEmit'])` left all
+   * 15 assertions green, because "nuxi" and "typecheck" still appeared in prose two lines up. That
+   * is a matcher that cannot fire on the one change it exists to catch.
+   *
+   * Only nuxt carries this. vue and astro pass their binary through a VARIABLE
+   * (`spawnSync('npx', [bin, …])`), so there are no adjacent argv literals to anchor to and this
+   * stronger tie cannot be written for them — their weaker whole-file form is unchanged, and
+   * already labelled as weaker above. Stating which fixtures this does NOT cover rather than
+   * letting one strengthened case read as if it covered the set.
+   *
+   * What it still does NOT catch, measured rather than guessed: nuxt invokes `nuxi typecheck`
+   * twice (clean, then error), and swapping only the SECOND call left all 15 green. This proves
+   * the fixture invokes the command somewhere, not that every check in it does.
+   */
+  invocation?: RegExp;
 }
 
 const CASES: FixtureCmd[] = [
@@ -51,6 +71,12 @@ const CASES: FixtureCmd[] = [
   // astro MUST use astro check: it self-prepares `.astro/`, and tsc cannot parse `.astro`.
   { dir: "astro", framework: "astro", readsFileAtRuntime: false, sourceTokens: ["astro", "check"],
     mustContain: ["astro check"] },
+  // nuxt MUST use nuxi typecheck, NOT bare vue-tsc: `nuxi` regenerates `.nuxt/` (auto-imports,
+  // routes, composables) first, and bare `vue-tsc` fails with TS5083 when that directory is
+  // absent. This is #79's whole finding, and the pitfall that contradicted it is what #79 fixes.
+  { dir: "nuxt", framework: "nuxt", readsFileAtRuntime: false, sourceTokens: ["nuxi", "typecheck"],
+    mustContain: ["nuxi typecheck"],
+    invocation: /\[\s*['"]nuxi['"]\s*,\s*['"]typecheck['"]\s*\]/ },
 ];
 
 describe.each(CASES)("$dir fixture command", (c) => {
@@ -82,6 +108,15 @@ describe.each(CASES)("$dir fixture command", (c) => {
       // Weaker form, and labelled as such: the command is assembled inline, so this proves the
       // fixture invokes the right tool rather than the exact string.
       for (const token of c.sourceTokens) expect(src, `${c.dir} lost ${token}`).toContain(token);
+      if (c.invocation) {
+        // The strong half where the argv is literal: the words must appear IN the invocation, not
+        // merely somewhere in the file. Nuxt also invokes `vue-tsc` and `tsc` on purpose — those
+        // are its contrast cases — so "must not mention a competitor" would be wrong here.
+        expect(
+          c.invocation.test(src),
+          `${c.dir}: no invocation matching ${c.invocation} — the fixture names the command in prose but does not run it`,
+        ).toBe(true);
+      }
     }
   });
 });

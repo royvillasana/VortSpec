@@ -731,7 +731,9 @@ describe("nuxt — the emitted pitfall names the command the gate actually runs"
   it("does not contradict its own typecheckCmd", () => {
     // The defect in one assertion: the emitted guidance must not name a DIFFERENT checker than
     // the command the CODE gate resolves for the same framework.
-    const r = resolveTypecheck("nuxt", null);
+    // No context: `ctx` defaults to `{}` on main since #74 tightened the signature, so the
+    // second argument is omitted rather than passed as `null` — which this branch predates.
+    const r = resolveTypecheck("nuxt");
     expect(r.kind).toBe("cmd");
     if (r.kind !== "cmd") return;
     expect(r.cmd).toMatch(/nuxi typecheck/);
