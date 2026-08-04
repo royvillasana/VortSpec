@@ -107,3 +107,49 @@ jobs:
         working-directory: scripts/framework-fixtures/${{ matrix.fixture }}
         # Exits non-zero if any mutant SURVIVES, so "the fixture cannot go red" fails here.
         run: node mutate.mjs
+
+  browser:
+    # The browser fixture, which until now was committed and never run — the exact failure this
+    # file's header warns about, sitting one directory over from the fixtures it does run.
+    #
+    # Its own job rather than a row in the `verify` matrix, because it differs in two ways that a
+    # matrix cannot express: it needs a real browser provisioned (`playwright install chromium`),
+    # and its entry point is `npm run verify` (web-test-runner) rather than `node verify.mjs`.
+    # Bending the matrix around one member would cost more clarity than a second job does.
+    #
+    # Measured on this checkout before wiring — the numbers are why verify and mutate sit together
+    # here instead of the mutate sweep being deferred to the nightly schedule like vue/astro:
+    #   verify   3.3s   (4 tests, chromium)
+    #   mutate   11s    (4 mutants + canonical, 0 survivors)
+    # Both run on every push that touches a fixture. At 15s total there is nothing to ration.
+    name: browser (render + mutate)
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: scripts/framework-fixtures/browser/package-lock.json
+
+      - name: install pinned toolchain
+        working-directory: scripts/framework-fixtures/browser
+        run: npm ci --no-audit --no-fund
+
+      - name: provision chromium
+        working-directory: scripts/framework-fixtures/browser
+        # Only chromium: the fixture reads what one engine paints, and pulling three browsers
+        # would triple the provisioning cost for evidence nothing asserts against.
+        run: npx playwright install chromium --with-deps
+
+      - name: verify
+        working-directory: scripts/framework-fixtures/browser
+        run: npm run verify
+
+      - name: mutation sweep
+        working-directory: scripts/framework-fixtures/browser
+        # Exits non-zero if any mutant SURVIVES, so "the fixture cannot go red" fails here.
+        run: node mutate.mjs
