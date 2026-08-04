@@ -641,3 +641,47 @@ describe("verifyPrompt — Layer 2 compares token identity, not syntax or value"
     expect(idx).toBeLessThan(text.indexOf("Layer 3 — CODE"));
   });
 });
+
+/**
+ * Fix 2 — the build must not bind a global in place of a missing component token.
+ *
+ * This is where the Accordion defect originated: the build followed the ladder's "resolved VALUE"
+ * rule and the dedup rule's "reuse a token that already has that value", and bound
+ * `var(--color-neutral-100)` for a `Components/Accordion/…` variable the token file never had.
+ * The instructions authorized it.
+ */
+describe("buildOnePrompt — component-scoped variables bind by identity, not value", () => {
+  const p = () => buildOnePrompt("accordion");
+
+  it("scopes the value/dedup ladder to GLOBAL variables only", () => {
+    expect(p()).toMatch(/SCOPE EXCEPTION — the value\/dedup rules above apply to GLOBAL variables only/);
+  });
+
+  it("lets a value match nominate but never authorize a differently-scoped token", () => {
+    expect(p()).toMatch(/may NOMINATE a candidate and must NEVER authorize binding a[\s\S]{0,30}differently-scoped token/);
+  });
+
+  it("says a component token is not a duplicate of a same-value global, and why", () => {
+    // The dedup rule is the half that actually produced the defect — "reuse that one instead".
+    // PR #85 measured why that is wrong: equal in light, divergent in dark.
+    expect(p()).toMatch(/NOT a duplicate of a global that happens to[\s\S]{0,20}share its value/);
+    expect(p()).toMatch(/equal in one theme and diverge in another/);
+  });
+
+  it("CREATES the canonical token rather than reusing the nearest global", () => {
+    expect(p()).toMatch(/CREATE the[\s\S]{0,20}canonical one; do not reuse the nearest global/);
+    expect(p()).toMatch(/report TOKEN-BLOCKED and build nothing for that value/);
+  });
+
+  it("gives the rendered reason no later check can catch it", () => {
+    // PR #82 case B3 — the argument for blocking at bind time rather than deferring.
+    expect(p()).toMatch(/paints the property's initial value and reports nothing, so no later check can catch it/);
+  });
+
+  it("leaves the global ladder intact — this is an exception, not a replacement", () => {
+    // Discriminating control: deleting the original rules would also satisfy the assertions above.
+    const t = p();
+    expect(t).toMatch(/match by link → exact name → resolved[\s\S]{0,20}VALUE → alias/);
+    expect(t).toMatch(/never inline the literal/);
+  });
+});
