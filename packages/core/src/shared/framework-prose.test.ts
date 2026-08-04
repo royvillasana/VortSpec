@@ -1,88 +1,20 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
+import { REFUTED, unlabelledRefutedClaims } from "./refuted-prose";
 
 /**
- * A source-text check over PROSE — the thing the other suites structurally cannot reach.
+ * The prose lint, applied to this package's own sources.
  *
- * Every other assertion in this package reads a value: `idioms.variants`, a built doc, a prompt.
- * That protects what ships and leaves comments and JSDoc to human review — which is exactly where
- * both of Thor's catches on 2026-08-04 landed (my `FrameworkIdioms.variants` JSDoc, and Bumble's
- * `P4-mechanism` block comment in the Svelte fixture). Two reviewers, one round, same blind spot.
+ * The parser lives in `refuted-prose.ts` so the same implementation the tests pin is the one a
+ * teammate runs over their own files — `node packages/core/src/shared/refuted-prose.ts <path>`.
+ * A second copy for the CLI would be a parser that drifts from the one under test, which is the
+ * defect class this whole check exists for.
  *
- * A comment is not emitted, but it IS text on disk, so it can be read. This asserts the weaker
- * property that is still worth having: a claim we have refuted may appear only where it is
- * explicitly labelled WRONG. Restating one as if it were current fails the suite.
- *
- * SCOPE — deliberately these two production modules only. The test files state the refuted wording
- * on purpose (negative assertions that forbid it from the emitted profile), and the RESEARCH notes
- * record it as history; scanning either would flag correct prose.
+ * SCOPE — deliberately these two production modules only. The test files state the refuted
+ * wording on purpose (negative assertions that forbid it from the emitted profile), so scanning
+ * them would flag correct prose.
  */
 const SOURCES = ["./framework-profiles.ts", "./framework-docs.ts"] as const;
-
-/**
- * The two mechanisms this package asserted about Svelte 5 and got wrong. Refuted by
- * RESEARCH/VORTSPEC_SVELTE_FIXTURE_2026-08-04.md (v1) and
- * RESEARCH/VORTSPEC_SVELTE_CSS_SCOPE_CONTROL_2026-08-04.md (v2), and pinned by the executable
- * `P4-scope-*` cases in `.scratch/svelte-fixture`.
- */
-const REFUTED: readonly { id: string; re: RegExp }[] = [
-  // v1 — helper-built classes are stripped and the component ships unstyled.
-  { id: "v1-stripped", re: /(?<!nothing )(?<!not )(?:is|are) stripped/i },
-  { id: "v1-unstyled", re: /ships? unstyled/i },
-  // v2 — a dynamic class makes every selector unprovable and turns the analysis off.
-  { id: "v2-every-selector", re: /every selector/i },
-  { id: "v2-analysis-off", re: /analysis (?:is )?off/i },
-  { id: "v2-pruning-disabled", re: /disabl\w*\s+(?:the\s+)?prun|prun\w*\s+is\s+disabled/i },
-];
-
-type Occurrence = { file: string; line: number; claim: string; text: string };
-
-/** A comment line's content with its markers removed, or null when the line is not a comment. */
-function commentContent(line: string): string | null {
-  const m = /^\s*(?:\/\/+|\/\*+|\*+)(.*)$/.exec(line);
-  if (!m) return null;
-  return m[1].replace(/\*+\/\s*$/, "").trim();
-}
-
-/**
- * Opens a labelled region: the comment's content must BEGIN with an explicit `WRONG …:` label.
- *
- * Thor's first false negative was that any line merely containing the word opened the exemption,
- * so `const WRONG = false;` above a comment hid the claim in it. A label is a syntax, not a
- * substring — anything else fails closed and gets reported.
- */
-const OPENS_LABEL = /^WRONG\b[^:]*:/;
-
-/**
- * Occurrences of a refuted claim that are NOT inside an explicit `WRONG` label.
- *
- * A `WRONG …:` label opens a region that runs to the end of that comment paragraph — so a wrapped
- * bullet stays covered — and closes at `ACTUAL`, at a blank comment line, at `*​/`, or at the first
- * line that is not a comment. `*​/` closes AFTER the line is judged, so a one-line block comment is
- * itself exempt while the next comment is not.
- *
- * ONE predicate, asserted in both polarities below. Bumble's mutant found that an always-true
- * detector survived a 10-case matrix where every case expected the same answer; per-case detectors
- * or one-sided expectations do not catch that.
- */
-function unlabelledRefutedClaims(source: string, file: string): Occurrence[] {
-  const found: Occurrence[] = [];
-  let labelled = false;
-  source.split("\n").forEach((text, i) => {
-    const content = commentContent(text);
-    if (content !== null && OPENS_LABEL.test(content)) labelled = true;
-    else if (content === null || content === "" || /\bACTUAL\b/.test(content)) labelled = false;
-
-    if (!labelled) {
-      for (const { id, re } of REFUTED) {
-        if (re.test(text)) found.push({ file, line: i + 1, claim: id, text: text.trim() });
-      }
-    }
-    // A block comment ends here, so the label cannot reach whatever follows.
-    if (text.includes("*/")) labelled = false;
-  });
-  return found;
-}
 
 const readSource = (rel: string): string => readFileSync(new URL(rel, import.meta.url), "utf8");
 
@@ -106,8 +38,8 @@ describe("refuted claims may only appear under a WRONG label", () => {
       "};",
     ].join("\n");
     const found = unlabelledRefutedClaims(drifted, "drifted.ts");
-    expect(found.map((f) => f.claim)).toContain("v2-every-selector");
-    expect(found.map((f) => f.claim)).toContain("v2-analysis-off");
+    expect(found.map((f) => f.claim)).toContain("svelte-v2-every-selector");
+    expect(found.map((f) => f.claim)).toContain("svelte-v2-analysis-off");
     expect(found[0]?.line).toBe(2);
   });
 
@@ -133,7 +65,7 @@ describe("refuted claims may only appear under a WRONG label", () => {
       "  //   the analysis is off for that element.",
     ].join("\n");
     expect(unlabelledRefutedClaims(restated, "restated.ts").map((f) => f.claim)).toEqual([
-      "v2-analysis-off",
+      "svelte-v2-analysis-off",
     ]);
   });
 
@@ -145,7 +77,7 @@ describe("refuted claims may only appear under a WRONG label", () => {
       {
         file: "identifier.ts",
         line: 2,
-        claim: "v2-every-selector",
+        claim: "svelte-v2-every-selector",
         text: "// A dynamic class makes every selector unprovable.",
       },
     ]);
@@ -160,18 +92,49 @@ describe("refuted claims may only appear under a WRONG label", () => {
     ].join("\n");
     const found = unlabelledRefutedClaims(source, "block.ts");
     expect(found.map((f) => f.line)).toEqual([2]);
-    expect(found[0]?.claim).toBe("v2-every-selector");
+    expect(found[0]?.claim).toBe("svelte-v2-every-selector");
+  });
+
+  it("reads markdown as prose, where there are no comment markers to find", () => {
+    // Bumble asked to run this over the fixture reports. In `.md` every line carries prose, so
+    // the label has to survive list and quote markers — otherwise a RESEARCH note recording
+    // history correctly would be a wall of false positives and the tool would get ignored.
+    const note = [
+      "## Corrections",
+      "",
+      "- **WRONG v2:** a dynamic class makes every selector unprovable.",
+      "  ACTUAL: the compiler still proves structural impossibility.",
+      "",
+      "The analysis is off for that element.",
+    ].join("\n");
+    const found = unlabelledRefutedClaims(note, "NOTE.md");
+    expect(found.map((f) => f.line)).toEqual([6]);
+    expect(found[0]?.claim).toBe("svelte-v2-analysis-off");
+  });
+
+  it("closes a markdown label at a fenced block rather than reaching past it", () => {
+    // A fence is usually captured tool output; letting a label span it would exempt more than
+    // the paragraph it was written for. Fail-closed, so this reports rather than skips.
+    const note = [
+      "**WRONG:** the old claim.",
+      "```",
+      "some captured output",
+      "```",
+      "A dynamic class makes every selector unprovable.",
+    ].join("\n");
+    expect(unlabelledRefutedClaims(note, "NOTE.md").map((f) => f.line)).toEqual([5]);
   });
 
   it("has a live pattern for every refuted claim", () => {
     // A pattern that matches nothing is a silent hole; this is the same both-polarity property
     // applied per pattern rather than to the predicate as a whole.
     const samples: Record<string, string> = {
-      "v1-stripped": "its style rules are stripped by the compiler",
-      "v1-unstyled": "the component ships unstyled",
-      "v2-every-selector": "makes every selector unprovable",
-      "v2-analysis-off": "switches the unused-selector analysis off",
-      "v2-pruning-disabled": "a dynamic class disables pruning",
+      "svelte-v1-stripped": "its style rules are stripped by the compiler",
+      "svelte-v1-unstyled": "the component ships unstyled",
+      "svelte-v2-every-selector": "makes every selector unprovable",
+      "svelte-v2-analysis-off": "switches the unused-selector analysis off",
+      "svelte-v2-pruning-disabled": "a dynamic class disables pruning",
+      "angular-build-covers-both": "a build covers both the class and the template",
     };
     for (const { id } of REFUTED) {
       const sample = samples[id];
