@@ -1,5 +1,7 @@
 /**
- * Figma file hygiene — the intake gate that runs BEFORE any component is built.
+ * Figma file hygiene — the intake gate INTENDED to run before any component is built, once
+ * something wires it in. Nothing does yet; the paragraph below says so, and this line used to
+ * contradict it in the present tense.
  *
  * Why this exists. `DESIGN_REFERENCE_CLAUSE` (sdd-prompts.ts) anchors every build to a
  * component's own Figma NODE, preferring the `figmaNodeId`/`componentKey` recorded on its
