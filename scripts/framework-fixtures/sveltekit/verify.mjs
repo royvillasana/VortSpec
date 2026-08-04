@@ -17,7 +17,10 @@
  *  - a real `.ts` in the project so plain `tsc` cannot exit TS18003 and be read as evidence
  */
 import { execSync } from "node:child_process";
-import { writeFileSync, renameSync, copyFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+const HERE = new URL(".", import.meta.url).pathname;
+import { writeFileSync, renameSync, copyFileSync, existsSync, rmSync } from "node:fs";
 
 const ESC = String.fromCharCode(27);
 const ANSI = new RegExp(`${ESC}\\[[0-9;]*m`, "g");
@@ -45,7 +48,22 @@ const clean = (r) => r.status === 0;
 const failedWith = (r, pattern) => r.status !== 0 && pattern.test(r.out) && /\(ts\)/.test(r.out);
 const TYPE_MISMATCH = /Type 'number' is not assignable to type 'string'/;
 
-const PROFILE_CMD = "npx svelte-check --threshold error"; // verbatim from framework-profiles.ts
+/**
+ * The profile's command, READ rather than transcribed.
+ *
+ * This line used to be a string literal with the comment "verbatim from framework-profiles.ts".
+ * #81 then changed the profile to prepend `svelte-kit sync` — the fix this fixture's own evidence
+ * motivated — and the literal silently became false, in merged code, still claiming to be verbatim.
+ * A transcription that says it is a copy is worse than one that does not, because it tells the
+ * reader not to check.
+ *
+ * `.profile-cmd.txt` is asserted against `profileFor("sveltekit").typecheckCmd` by
+ * `framework-profiles.sveltekit-fixture.test.ts`, which runs in the normal suite. So a future
+ * profile change fails there rather than rotting here.
+ */
+const PROFILE_CMD = readFileSync(join(HERE, ".profile-cmd.txt"), "utf8").trim();
+/** What the profile said BEFORE #81 — kept as the regression witness, see SK3a. */
+const BARE_CHECK = "npx svelte-check --threshold error";
 const BAD_PAGE = `<script lang="ts">
   import CleanBadge from '$lib/components/CleanBadge.svelte';
 </script>
@@ -98,19 +116,33 @@ const record = (id, pass, note) => {
   copyFileSync("/tmp/sk-page.bak", "src/routes/+page.svelte");
 }
 
-// SK3 — THE DECISIVE CASE. The same CORRECT project with the generated types absent.
-// If the profile's command fails here, it is insufficient for SvelteKit in exactly the way bare
-// `vue-tsc` is insufficient for Nuxt. Recorded as an observation, not a pass/fail assertion,
-// because which outcome is "correct" is the thing being decided.
+// SK3a — the DEFECT, asserted rather than logged. Thor was right that the decisive case was only
+// console.log'd: the one thing here that could regress silently was the one thing not checked.
+// This is the bare command the profile carried before #81, kept as the regression witness — it is
+// what made the change necessary, and without it the repair below proves nothing.
+{
+  renameSync(".svelte-kit", ".svelte-kit-hidden");
+  const r = run(BARE_CHECK);
+  record(
+    "SK3a-bare-check-fails-without-sync",
+    r.status !== 0 && /\$types/.test(r.out),
+    `bare svelte-check without .svelte-kit -> exit ${r.status}, mentions $types ${/\$types/.test(r.out)}`,
+  );
+  renameSync(".svelte-kit-hidden", ".svelte-kit");
+}
+
+// SK3b — the REPAIR. The current profile command self-prepares, so the same removal is survivable.
+// Both polarities on the same condition: the old command fails where the new one succeeds.
 {
   renameSync(".svelte-kit", ".svelte-kit-hidden");
   const r = run(PROFILE_CMD);
-  console.log(
-    `OBSERVED  SK3-nosync  profile cmd WITHOUT .svelte-kit -> exit ${r.status}` +
-      `, mentions $types ${/\$types/.test(r.out)}, TS2307 ${/\bTS2307\b/.test(r.out)}`,
+  record(
+    "SK3b-profile-cmd-survives-no-sync",
+    clean(r),
+    `profile cmd without .svelte-kit -> exit ${r.status} (it runs svelte-kit sync itself)`,
   );
-  console.log(r.out.split("\n").filter((l) => l.trim()).slice(-6).join("\n"));
-  renameSync(".svelte-kit-hidden", ".svelte-kit");
+  if (!existsSync(".svelte-kit")) renameSync(".svelte-kit-hidden", ".svelte-kit");
+  else rmSync(".svelte-kit-hidden", { recursive: true, force: true });
 }
 
 // SK4 — and restoring makes it clean again, proving SK3 was the generated types and not damage.
