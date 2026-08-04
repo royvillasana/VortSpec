@@ -24,16 +24,31 @@ Synthetic CSS reproducing two measured values. It proves the MECHANISM — a syn
 nothing while reporting nothing. It does **not** prove anything about the live Accordion; that is
 a separate artifact.
 
-## Mutation results (run by hand, from this directory)
+## Mutation results — `node mutate.mjs`, reproducible
 
-    point as-built at the correct token       2 of 4 fail   B1 B2
-    bg() always returns the Figma spec        3 of 4 fail   B1 B2 B3
-    bg() always returns the wrong global      3 of 4 fail   B0 B2 B3
-    emit one console.error during B3          1 of 4 fail   B3        <- proves the silence assertion fires
-    restored                                  4 pass
+    Mutant                                     exit  caught
+    point as-built at the correct token        1     [B1 B2]
+    bg() always returns the Figma spec         1     [B1 B2 B3]
+    bg() always returns the wrong global       1     [B0 B2 B3]
+    emit one console.error during B3           1     [B3]      <- the silence assertion fires
+    CANONICAL (unmutated)                      0     []
+
+Exit 0 overall; identical output across two consecutive runs.
 
 B2 is the load-bearing case, catching every mutant. B0 catches one that B2 and B3 also catch —
 recorded because the PR originally predicted the opposite and the mutants refuted it.
 
-There is no committed mutation driver; the rows above were applied by hand. That is a real gap
-compared with the Vue fixture's `mutate.mjs`, and it is named rather than left to be assumed.
+The four rows above were previously applied BY HAND and this file said so. Thor blocked on that
+twice and was right both times: a disclosed unreproducible claim is still unreproducible. The
+driver reproduces the hand-run table exactly, which is the first evidence that the hand run was
+accurate rather than merely confident.
+
+Two kinds of mutant on purpose. **Subject** mutants change the CSS — would the harness notice if
+the bug were repaired? **Instrument** mutants replace `bg()` with a constant — is it reading the
+browser at all? A fixture that only mutates its subject cannot catch a measurement that stopped
+measuring.
+
+WRONG v1: the driver's `caught` column anchored the case id at line start. @web/test-runner prints
+`❌ <suite> > B1: <case>`, so it matched nothing and every row printed `caught: []` while the exit
+codes were correct — a column that could never populate, inside the driver written to prove that
+matchers fire. ACTUAL: the anchor is `> B1:`, taken from captured output rather than guessed twice.
