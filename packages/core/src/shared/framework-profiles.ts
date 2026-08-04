@@ -117,22 +117,24 @@ const SVELTE_BASE = {
     "Svelte 5 uses plain attributes (`onclick={…}`). The `on:click` directive is Svelte 4 and is REMOVED in Svelte 5+ — " +
     "check the installed version",
   slots: "Svelte 5 snippets — `{@render children?.()}`. `<slot />` is the Svelte 4 form",
-  // CORRECTED 2026-08-04. This field previously claimed that a class name built in an external
-  // module is invisible to the compiler, so its `<style>` rules are stripped and the component
-  // ships unstyled — and made `class:` a REQUIREMENT on that basis. Bumble compiled both shapes
-  // on svelte 5.56.8 and the claim is false: nothing is stripped either way. The mechanism is the
-  // opposite of what I asserted — a dynamic `class` expression makes every selector
-  // unprovably-unused, which DISABLES pruning rather than triggering it. A control with a static
-  // class and a genuinely dead selector did warn, so the pruner was live and the negative is real.
-  // Evidence: RESEARCH/VORTSPEC_SVELTE_FIXTURE_2026-08-04.md.
+  // CORRECTED TWICE on 2026-08-04. Both wrong versions are recorded as WRONG, in order, because
+  // an earlier draft of this comment stated the second one as if it were the fix — leaving the
+  // refuted rule in the artifact as the thing a maintainer would read first.
   //
-  // CORRECTED AGAIN, same day. The first replacement overreached the other way — it said a
-  // dynamic class makes EVERY selector unprovable and switches the analysis off. Also false.
-  // A control on 5.56.8: `.never` beside `<button class={x}>` is retained unwarned, but
-  // `div.never` and a child's `p.never` are both commented out and warned. The compiler still
-  // reasons structurally; only the element carrying the dynamic class loses the diagnostic.
-  // Evidence: RESEARCH/VORTSPEC_SVELTE_CSS_SCOPE_CONTROL_2026-08-04.md, and the boundary is now
-  // enforced by executable cases in `.scratch/svelte-fixture` (`node verify.mjs`):
+  //   WRONG v1: a class name built in an external module is invisible to the compiler, so its
+  //             `<style>` rules are stripped and the component ships unstyled. `class:` was made
+  //             a REQUIREMENT on that basis. Refuted: nothing is stripped in either shape.
+  //   WRONG v2: a dynamic `class` makes EVERY selector unprovable and switches unused-selector
+  //             analysis off. Refuted: it is far narrower than that.
+  //
+  //   ACTUAL (svelte 5.56.8): the compiler still does structural reachability. A dynamic class
+  //   defeats only the CLASS-NAME part of the proof, and only for the element carrying it. So
+  //   `.never` beside `<button class={x}>` is retained unwarned, while `div.never` and a child's
+  //   `p.never` are both commented out AND warned.
+  //
+  // Evidence: RESEARCH/VORTSPEC_SVELTE_FIXTURE_2026-08-04.md (Bumble, the v1 refutation) and
+  // RESEARCH/VORTSPEC_SVELTE_CSS_SCOPE_CONTROL_2026-08-04.md (the v2 refutation, rerun here).
+  // The boundary is enforced by executable cases in `.scratch/svelte-fixture` (`node verify.mjs`):
   //   P4-scope-keep   — a selector that COULD match the dynamically-classed element is retained
   //   P4-scope-tag    — a structurally impossible selector is still pruned AND warned
   //   P4-scope-child  — a statically-classed child is still analysed beside a dynamic parent
