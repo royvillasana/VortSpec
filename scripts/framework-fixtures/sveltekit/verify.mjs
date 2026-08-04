@@ -70,6 +70,21 @@ const BAD_PAGE = `<script lang="ts">
 <CleanBadge label={42} />
 `;
 
+// ── Precondition, self-satisfied rather than assumed. ────────────────────────────────────────
+// Bumble found this on a fresh checkout: the fixture only passed when `.svelte-kit` already
+// existed from a prior manual run. Fresh clone -> SK0 fails and the SK3 rename ENOENT-crashes
+// before the decisive cases run. That is my own #85 sentence in my own fixture — broken only in
+// the state a reviewer arrives in — and it is why Thor could reproduce SK3 by hand and CI could
+// not. Generated state is the fixture's job to establish, not the reader's to remember.
+if (!existsSync(".svelte-kit")) {
+  const sync = run("npx svelte-kit sync");
+  if (!clean(sync)) {
+    console.error(`REFUSING TO RUN: svelte-kit sync failed (exit ${sync.status}).\n${sync.out}`);
+    process.exit(2);
+  }
+  console.log("prepared .svelte-kit (was absent)");
+}
+
 const results = [];
 const record = (id, pass, note) => {
   results.push({ id, pass, note });
@@ -121,20 +136,20 @@ const record = (id, pass, note) => {
 // This is the bare command the profile carried before #81, kept as the regression witness — it is
 // what made the change necessary, and without it the repair below proves nothing.
 {
-  renameSync(".svelte-kit", ".svelte-kit-hidden");
+  if (existsSync(".svelte-kit")) renameSync(".svelte-kit", ".svelte-kit-hidden");
   const r = run(BARE_CHECK);
   record(
     "SK3a-bare-check-fails-without-sync",
     r.status !== 0 && /\$types/.test(r.out),
     `bare svelte-check without .svelte-kit -> exit ${r.status}, mentions $types ${/\$types/.test(r.out)}`,
   );
-  renameSync(".svelte-kit-hidden", ".svelte-kit");
+  if (existsSync(".svelte-kit-hidden")) renameSync(".svelte-kit-hidden", ".svelte-kit");
 }
 
 // SK3b — the REPAIR. The current profile command self-prepares, so the same removal is survivable.
 // Both polarities on the same condition: the old command fails where the new one succeeds.
 {
-  renameSync(".svelte-kit", ".svelte-kit-hidden");
+  if (existsSync(".svelte-kit")) renameSync(".svelte-kit", ".svelte-kit-hidden");
   const r = run(PROFILE_CMD);
   record(
     "SK3b-profile-cmd-survives-no-sync",
