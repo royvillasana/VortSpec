@@ -12,7 +12,7 @@ import {
 } from "@vortspec/core/setup";
 import { api } from "../lib/api";
 import { Button } from "../components/ui";
-import { libraryLogo } from "./library-logos";
+import { libraryLogo, designSourceLogo, techLogo } from "./brand-logos";
 
 /**
  * Unified project setup — one Intake-style stepper that merges the tech-stack
@@ -267,7 +267,7 @@ function SetupStep({
   return (
     <div className="flex flex-col gap-5">
       <Field label="Where do your components and design specs come from?">
-        <Radios options={DESIGN_SOURCE_OPTIONS} value={a.designSource} onChange={(v) => setSource(v as SetupAnswers["designSource"])} />
+        <Radios options={DESIGN_SOURCE_OPTIONS} value={a.designSource} onChange={(v) => setSource(v as SetupAnswers["designSource"])} icon={designSourceLogo} />
         {a.designSource === "figma" && (
           <div className="mt-2 grid grid-cols-1 gap-2">
             <Text label="Figma file URL" value={a.figmaFileUrl ?? ""} placeholder="https://www.figma.com/design/…" onChange={(v) => set("figmaFileUrl", v)} />
@@ -374,7 +374,7 @@ function SetupStep({
       </Field>
 
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-        <Pills label="Framework" options={FRAMEWORK_OPTIONS} value={a.framework} onChange={(v) => setFramework(v as SetupAnswers["framework"])} />
+        <Pills label="Framework" options={FRAMEWORK_OPTIONS} value={a.framework} onChange={(v) => setFramework(v as SetupAnswers["framework"])} icon={techLogo} />
         <Pills
           label="Language"
           options={[
@@ -383,9 +383,10 @@ function SetupStep({
           ]}
           value={a.language}
           onChange={(v) => set("language", v as SetupAnswers["language"])}
+          icon={techLogo}
         />
       </div>
-      <Pills label={`Styling (${a.styling} suggested)`} options={STYLING_OPTIONS} value={a.styling} onChange={(v) => set("styling", v as SetupAnswers["styling"])} />
+      <Pills label={`Styling (${a.styling} suggested)`} options={STYLING_OPTIONS} value={a.styling} onChange={(v) => set("styling", v as SetupAnswers["styling"])} icon={techLogo} />
     </div>
   );
 }
@@ -577,6 +578,7 @@ function Pills({
   value,
   optional,
   onChange,
+  icon,
 }: {
   label?: string;
   hint?: string;
@@ -584,22 +586,26 @@ function Pills({
   value: string;
   optional?: boolean;
   onChange: (v: string) => void;
+  /** Optional leading mark per option. Returning null leaves that pill text-only. */
+  icon?: (value: string) => React.ReactNode;
 }): React.JSX.Element {
   const row = (
     <div className="flex flex-wrap gap-[7px]">
       {options.map((o) => {
         const active = o.value === value;
+        const glyph = icon?.(o.value);
         return (
           <button
             key={o.value}
             onClick={() => onChange(o.value)}
-            className="h-8 rounded-md border px-[13px] text-[12.5px] transition-colors hover:border-vs-border-strong"
+            className="inline-flex h-8 items-center gap-[7px] rounded-md border px-[13px] text-[12.5px] transition-colors hover:border-vs-border-strong"
             style={{
               borderColor: active ? "#34305C" : "var(--color-vs-border-default)",
               background: active ? "rgba(124,111,240,0.10)" : "transparent",
               color: active ? "#C4BBFF" : "var(--color-vs-text-secondary)",
             }}
           >
+            {glyph}
             {o.label}
           </button>
         );
