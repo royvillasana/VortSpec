@@ -96,12 +96,19 @@ export function componentTokenName(figmaPath: string): ComponentTokenId | null {
  * way, NOT that it is absent.
  */
 export function isCanonicalComponentTokenName(cssVar: string): boolean {
-  const trimmed = cssVar.trim();
-  if (!trimmed.startsWith(COMPONENT_TOKEN_PREFIX)) return false;
-  const rest = trimmed.slice(COMPONENT_TOKEN_PREFIX.length);
-  const dash = rest.indexOf("-");
-  return dash > 0 && dash < rest.length - 1;
+  return CANONICAL_NAME.test(cssVar.trim());
 }
+
+/**
+ * The grammar the contract actually claims: the prefix, then two or more segments of lowercase
+ * alphanumerics joined by single hyphens (component, then at least one slot segment).
+ *
+ * An earlier version tested only "has the prefix and contains a dash", which blessed
+ * `--component-Accordion-Background`, `--component-a_b-c` and `--component-a--b` as canonical —
+ * so the TOKEN layer would have accepted names `componentTokenName` can never emit. A predicate
+ * that admits more than the emitter produces is not a check, it is a rubber stamp.
+ */
+const CANONICAL_NAME = /^--component-[a-z0-9]+(?:-[a-z0-9]+)+$/;
 
 /** Every custom property declared in a stylesheet, in source order, deduped. */
 export function declaredCustomProperties(css: string): string[] {
@@ -149,6 +156,42 @@ export function componentTokenExtractionClause(): string {
     "component-scoped variables and how many you emitted. If those two numbers differ, say so and name",
     "the components you could not read — never let a partial extraction read as a complete one.",
   ].join("\n");
+}
+
+/**
+ * The `project.yaml` block carrying the naming rule, as lines.
+ *
+ * `project.yaml` is the ONLY file the extraction skill is guaranteed to open — measured against
+ * the pinned toolkit, `extract-design-system` references no `.sdd-de/docs` path, no standards
+ * index and no entry file, and its first instruction is to read this file. So this block is the
+ * contract's real delivery vehicle; the owned doc is for the skills that do read `docs/`.
+ *
+ * Shared by `buildProjectYaml` (new projects) and {@link ensureComponentTokenRule} (existing
+ * ones, whose `project.yaml` resync deliberately preserves) so the two cannot drift.
+ */
+export function componentTokenYamlLines(): string[] {
+  const ex = componentTokenName("Components/Accordion/Active Item Header Background")!;
+  return [
+    "# Component-scoped design tokens: a `Components/<Component>/<Slot>` variable in the",
+    `# design source becomes \`${COMPONENT_TOKEN_PREFIX}<component>-<slot>\` (lowercase, segments`,
+    "# slugified, nested slot groups flattened). Extraction MUST emit this namespace and",
+    "# verification resolves by this name — a per-component scheme is invisible to both.",
+    `# e.g. Components/Accordion/Active Item Header Background → ${ex.name}`,
+    `component_token_prefix: "${COMPONENT_TOKEN_PREFIX}"`,
+  ];
+}
+
+/**
+ * Add the rule to an EXISTING `project.yaml` without disturbing anything else.
+ *
+ * Resync preserves the user's config by design, so an installer that only writes the doc and the
+ * entry links leaves the extraction boundary exactly as it was on every project that already
+ * exists — wired in appearance, unchanged in effect. Idempotent on the key, so repeated resyncs
+ * neither duplicate nor rewrite it.
+ */
+export function ensureComponentTokenRule(yaml: string): string {
+  if (/^component_token_prefix\s*:/m.test(yaml)) return yaml;
+  return `${yaml.replace(/\s*$/, "")}\n\n${componentTokenYamlLines().join("\n")}\n`;
 }
 
 /** Where the owned naming contract is written inside a project. */

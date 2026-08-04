@@ -265,3 +265,33 @@ d("the real toolkit docs (@royvillasana/sdd-de)", () => {
     }
   });
 });
+
+/**
+ * The reach premise, pinned against the REAL packaged skill.
+ *
+ * The whole installation strategy rests on a measurement: `extract-design-system` reads
+ * `project.yaml` and does NOT read our owned doc, the standards index, or any entry file. That
+ * is why the rule ships in `project.yaml` rather than only in `.sdd-de/docs`. If a toolkit bump
+ * changes either half, the strategy silently becomes wrong — so it fails here instead.
+ */
+describe("extract-design-system reach premise (real pinned toolkit)", () => {
+  const skill = (): string | null => {
+    if (!docsDir) return null;
+    const p = join(dirname(docsDir), "ai-specs", "skills", "extract-design-system", "SKILL.md");
+    return existsSync(p) ? readFileSync(p, "utf8") : null;
+  };
+
+  it("reads project.yaml — the route the token rule actually ships on", () => {
+    const t = skill();
+    if (!t) return; // toolkit not resolvable here; the other suite covers absence
+    expect(t).toMatch(/\.sdd-de\/project\.yaml/);
+  });
+
+  it("does NOT read our docs or entry files — why a doc alone would not reach it", () => {
+    const t = skill();
+    if (!t) return;
+    expect(t).not.toMatch(/\.sdd-de\/docs/);
+    expect(t).not.toMatch(/component-token-naming\.md/);
+    expect(t).not.toMatch(/CLAUDE\.md/);
+  });
+});

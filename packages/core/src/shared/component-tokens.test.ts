@@ -6,6 +6,8 @@ import {
   buildComponentTokenNamingDoc,
   componentTokenExtractionClause,
   isCanonicalComponentTokenName,
+  componentTokenYamlLines,
+  ensureComponentTokenRule,
   linkComponentTokenNamingInEntryDoc,
   componentTokenName,
   declaredCustomProperties,
@@ -112,6 +114,34 @@ describe("isCanonicalComponentTokenName", () => {
     expect(isCanonicalComponentTokenName("--component-accordion")).toBe(false);
     expect(isCanonicalComponentTokenName("--component-accordion-")).toBe(false);
     expect(isCanonicalComponentTokenName("--component--slot")).toBe(false);
+  });
+
+  // Thor: the predicate admitted names the emitter can never produce, so the TOKEN layer would
+  // have blessed off-convention properties as canonical. Both polarities pinned.
+  it("rejects names that violate the lowercase-slug grammar it claims", () => {
+    for (const p of [
+      "--component-Accordion-Background", // uppercase
+      "--component-a_b-c", // underscore
+      "--component-a--b", // empty segment
+      "--component-accordion-", // trailing dash
+      "--component--accordion-bg", // leading empty segment
+      "--component-accordion", // no slot segment
+    ]) {
+      expect(isCanonicalComponentTokenName(p), p).toBe(false);
+    }
+  });
+
+  it("accepts exactly what componentTokenName emits, for every forward case tested above", () => {
+    for (const path of [
+      "Components/Accordion/Active Item Header Background",
+      "Components/Avatar Group/Overlap XS",
+      "Components/List_Group/font size sm",
+      "Components/Progress/height (sm)",
+      "Components/Switch/thumb — diameter",
+      "Components/Button/Border/Hover",
+    ]) {
+      expect(isCanonicalComponentTokenName(componentTokenName(path)!.name), path).toBe(true);
+    }
   });
 
   it("is true for canonical names, including multi-word components", () => {
@@ -333,5 +363,37 @@ describe("linkComponentTokenNamingInEntryDoc", () => {
     const out = linkComponentTokenNamingInEntryDoc("# Some Toolkit Readme\n");
     expect(out).toContain("## Standards");
     expect(out).toContain(COMPONENT_TOKEN_DOC_PATH);
+  });
+});
+
+
+describe("ensureComponentTokenRule — the legacy-resync path", () => {
+  const legacy = "framework: react\nlanguage: typescript\ntoken_file: src/styles/tokens.css\n";
+
+  it("adds the rule to an existing project.yaml that never had it", () => {
+    const out = ensureComponentTokenRule(legacy);
+    expect(out).toContain("component_token_prefix:");
+    expect(out).toContain(COMPONENT_TOKEN_PREFIX);
+  });
+
+  it("preserves every existing line — resync must not rewrite the user's config", () => {
+    const out = ensureComponentTokenRule(legacy);
+    for (const line of legacy.trim().split("\n")) expect(out).toContain(line);
+  });
+
+  it("is idempotent — repeated resyncs neither duplicate nor rewrite it", () => {
+    const once = ensureComponentTokenRule(legacy);
+    expect(ensureComponentTokenRule(once)).toBe(once);
+    expect(once.split("component_token_prefix:")).toHaveLength(2);
+  });
+
+  it("leaves a yaml that already carries the key untouched, byte for byte", () => {
+    const already = `${legacy}\ncomponent_token_prefix: "--component-"\n`;
+    expect(ensureComponentTokenRule(already)).toBe(already);
+  });
+
+  it("emits the same block buildProjectYaml uses — one copy, no drift", () => {
+    const out = ensureComponentTokenRule(legacy);
+    for (const line of componentTokenYamlLines()) expect(out).toContain(line);
   });
 });

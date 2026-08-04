@@ -25,6 +25,7 @@ import {
   buildComponentTokenNamingDoc,
   linkComponentTokenNamingInEntryDoc,
   COMPONENT_TOKEN_DOC_PATH,
+  ensureComponentTokenRule,
 } from "@vortspec/core/component-tokens";
 import { readProjectConfig } from "./config-manager";
 import { refreshProject } from "./workspace-manager";
@@ -148,6 +149,12 @@ async function installComponentTokenContract(
   for (const entry of ["CLAUDE.md", "AGENTS.md", "GEMINI.md", "codex.md"]) {
     await transformIfPresent(join(projectPath, entry), linkComponentTokenNamingInEntryDoc);
   }
+
+  // The doc and the links do NOT reach extraction — that skill reads project.yaml and nothing
+  // else of ours. New projects get the rule from buildProjectYaml; EXISTING ones never would,
+  // because resync preserves their config on purpose. Without this the installer is wired in
+  // appearance and inert in effect for every project that already exists.
+  await transformIfPresent(join(sddeDir, "project.yaml"), ensureComponentTokenRule);
 }
 
 async function scopeDocsToFramework(
