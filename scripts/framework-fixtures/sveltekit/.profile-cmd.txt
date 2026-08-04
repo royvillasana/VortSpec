@@ -1,0 +1,1 @@
+npx svelte-kit sync && npx svelte-check --threshold error
