@@ -37,12 +37,29 @@ const REFUTED: readonly { id: string; re: RegExp }[] = [
 
 type Occurrence = { file: string; line: number; claim: string; text: string };
 
+/** A comment line's content with its markers removed, or null when the line is not a comment. */
+function commentContent(line: string): string | null {
+  const m = /^\s*(?:\/\/+|\/\*+|\*+)(.*)$/.exec(line);
+  if (!m) return null;
+  return m[1].replace(/\*+\/\s*$/, "").trim();
+}
+
+/**
+ * Opens a labelled region: the comment's content must BEGIN with an explicit `WRONG …:` label.
+ *
+ * Thor's first false negative was that any line merely containing the word opened the exemption,
+ * so `const WRONG = false;` above a comment hid the claim in it. A label is a syntax, not a
+ * substring — anything else fails closed and gets reported.
+ */
+const OPENS_LABEL = /^WRONG\b[^:]*:/;
+
 /**
  * Occurrences of a refuted claim that are NOT inside an explicit `WRONG` label.
  *
- * A `WRONG` on a line opens a labelled region that runs to the end of that comment paragraph —
- * so a wrapped bullet stays covered — and closes at `ACTUAL`, at a blank comment line, or at the
- * first line that is not a comment.
+ * A `WRONG …:` label opens a region that runs to the end of that comment paragraph — so a wrapped
+ * bullet stays covered — and closes at `ACTUAL`, at a blank comment line, at `*​/`, or at the first
+ * line that is not a comment. `*​/` closes AFTER the line is judged, so a one-line block comment is
+ * itself exempt while the next comment is not.
  *
  * ONE predicate, asserted in both polarities below. Bumble's mutant found that an always-true
  * detector survived a 10-case matrix where every case expected the same answer; per-case detectors
@@ -52,18 +69,17 @@ function unlabelledRefutedClaims(source: string, file: string): Occurrence[] {
   const found: Occurrence[] = [];
   let labelled = false;
   source.split("\n").forEach((text, i) => {
-    if (/\bWRONG\b/.test(text)) labelled = true;
-    else if (
-      /\bACTUAL\b/.test(text) ||
-      /^\s*(?:\/\/|\*)\s*$/.test(text) ||
-      !/^\s*(?:\/\/|\/\*|\*)/.test(text)
-    ) {
-      labelled = false;
+    const content = commentContent(text);
+    if (content !== null && OPENS_LABEL.test(content)) labelled = true;
+    else if (content === null || content === "" || /\bACTUAL\b/.test(content)) labelled = false;
+
+    if (!labelled) {
+      for (const { id, re } of REFUTED) {
+        if (re.test(text)) found.push({ file, line: i + 1, claim: id, text: text.trim() });
+      }
     }
-    if (labelled) return;
-    for (const { id, re } of REFUTED) {
-      if (re.test(text)) found.push({ file, line: i + 1, claim: id, text: text.trim() });
-    }
+    // A block comment ends here, so the label cannot reach whatever follows.
+    if (text.includes("*/")) labelled = false;
   });
   return found;
 }
@@ -119,6 +135,32 @@ describe("refuted claims may only appear under a WRONG label", () => {
     expect(unlabelledRefutedClaims(restated, "restated.ts").map((f) => f.claim)).toEqual([
       "v2-analysis-off",
     ]);
+  });
+
+  it("does not let an unrelated line containing the word WRONG open the exemption", () => {
+    // Thor's first false negative on 888ab35f. `\bWRONG\b` matched an identifier, so the claim in
+    // the comment below it was skipped. A label is comment syntax, not a substring.
+    const source = ["const WRONG = false;", "// A dynamic class makes every selector unprovable."].join("\n");
+    expect(unlabelledRefutedClaims(source, "identifier.ts")).toEqual([
+      {
+        file: "identifier.ts",
+        line: 2,
+        claim: "v2-every-selector",
+        text: "// A dynamic class makes every selector unprovable.",
+      },
+    ]);
+  });
+
+  it("closes a labelled block comment at its terminator", () => {
+    // Thor's second false negative: the closing line still looked like a comment, so the label
+    // leaked into the NEXT comment. The one-line block stays exempt; what follows does not.
+    const source = [
+      "/** WRONG v2: historical claim about every selector. */",
+      "// A dynamic class makes every selector unprovable.",
+    ].join("\n");
+    const found = unlabelledRefutedClaims(source, "block.ts");
+    expect(found.map((f) => f.line)).toEqual([2]);
+    expect(found[0]?.claim).toBe("v2-every-selector");
   });
 
   it("has a live pattern for every refuted claim", () => {
