@@ -2,11 +2,14 @@ import { describe, expect, it } from "vitest";
 import {
   COMPONENT_TOKEN_PREFIX,
   auditComponentTokenCoverage,
+  COMPONENT_TOKEN_DOC_PATH,
+  buildComponentTokenNamingDoc,
   componentTokenExtractionClause,
+  isCanonicalComponentTokenName,
+  linkComponentTokenNamingInEntryDoc,
   componentTokenName,
   declaredCustomProperties,
   isComponentScopedPath,
-  parseComponentTokenName,
 } from "./component-tokens";
 
 describe("isComponentScopedPath", () => {
@@ -70,18 +73,28 @@ describe("componentTokenName", () => {
     expect(componentTokenName("Components/???/!!!")).toBeNull();
   });
 
-  it("round-trips through parseComponentTokenName", () => {
-    const id = componentTokenName("Components/Accordion/Active Item Header Background")!;
-    expect(parseComponentTokenName(id.name)).toEqual({
-      component: id.component,
-      slot: id.slot,
-    });
+  // Thor asked for Avatar Group / List Group round-trips. They CANNOT round-trip, and this
+  // records why so nobody reintroduces an inverse: the join uses the same `-` that appears
+  // inside each half, so the boundary is destroyed at emit time and two different Figma paths
+  // produce one identical property. Any splitting rule is wrong for some input.
+  it("is NOT injective — two distinct Figma paths emit the same property", () => {
+    const a = componentTokenName("Components/Avatar Group/Overlap XS")!;
+    const b = componentTokenName("Components/Avatar/Group Overlap XS")!;
+    expect(a.name).toBe(b.name);
+    // The forward mapping still reports the TRUE component for each path; only the emitted
+    // string is lossy. That is why forward is safe to depend on and reverse is not.
+    expect(a.component).toBe("avatar-group");
+    expect(b.component).toBe("avatar");
+  });
+
+  it("multi-word components map forward correctly", () => {
+    expect(componentTokenName("Components/Avatar Group/Overlap XS")!.component).toBe("avatar-group");
+    expect(componentTokenName("Components/List Group/Font Size SM")!.component).toBe("list-group");
   });
 });
 
-describe("parseComponentTokenName", () => {
-  it("rejects properties that do not follow the convention", () => {
-    // Every one of these is a REAL property from TokenUpdate/src/styles/tokens.css.
+describe("isCanonicalComponentTokenName", () => {
+  it("is false for the real off-convention properties in that token file", () => {
     for (const p of [
       "--switch-width",
       "--progress-height-sm",
@@ -91,21 +104,19 @@ describe("parseComponentTokenName", () => {
       "--shimmer-animation-offset",
       "--color-neutral-100",
     ]) {
-      expect(parseComponentTokenName(p)).toBeNull();
+      expect(isCanonicalComponentTokenName(p)).toBe(false);
     }
   });
 
-  it("rejects a prefix with no slot", () => {
-    expect(parseComponentTokenName("--component-accordion")).toBeNull();
-    expect(parseComponentTokenName("--component-accordion-")).toBeNull();
-    expect(parseComponentTokenName("--component--slot")).toBeNull();
+  it("is false for a prefix with no slot", () => {
+    expect(isCanonicalComponentTokenName("--component-accordion")).toBe(false);
+    expect(isCanonicalComponentTokenName("--component-accordion-")).toBe(false);
+    expect(isCanonicalComponentTokenName("--component--slot")).toBe(false);
   });
 
-  it("accepts the one convention that is followed today", () => {
-    expect(parseComponentTokenName("--component-button-primary-background-hover")).toEqual({
-      component: "button",
-      slot: "primary-background-hover",
-    });
+  it("is true for canonical names, including multi-word components", () => {
+    expect(isCanonicalComponentTokenName("--component-button-primary-background-hover")).toBe(true);
+    expect(isCanonicalComponentTokenName(componentTokenName("Components/Avatar Group/Overlap XS")!.name)).toBe(true);
   });
 });
 
@@ -183,7 +194,7 @@ describe("auditComponentTokenCoverage — measured against the real TokenUpdate 
     const r = auditComponentTokenCoverage(FIGMA_PATHS, complete);
     expect(r.missing).toEqual([]);
     expect(r.covered).toHaveLength(4);
-    expect(r.offConvention).toEqual([]);
+    expect(r.offConventionCandidates).toEqual([]);
   });
 
   it("dedupes a Figma path that appears on several nodes", () => {
@@ -194,23 +205,51 @@ describe("auditComponentTokenCoverage — measured against the real TokenUpdate 
     expect(auditComponentTokenCoverage(dupes, CSS).missing).toHaveLength(1);
   });
 
-  it("flags an off-convention scheme for a component Figma knows about", () => {
+  it("surfaces a real off-convention scheme as a CANDIDATE", () => {
     const paths = ["Components/Switch/width"];
     const r = auditComponentTokenCoverage(paths, CSS);
     expect(r.missing.map((m) => m.name)).toEqual(["--component-switch-width"]);
-    expect(r.offConvention).toEqual([{ component: "switch", properties: ["--switch-width"] }]);
+    expect(r.offConventionCandidates).toEqual([
+      { component: "switch", properties: ["--switch-width"] },
+    ]);
+  });
+
+  // Thor's finding 2, both directions. The field is a LEAD, not evidence, and the tests must
+  // say so in both polarities rather than only disclosing the false negatives.
+  it("false POSITIVE direction: an unrelated property sharing the slug is still returned", () => {
+    const css = `:root { --transition-switch-duration: 200ms; }`;
+    const r = auditComponentTokenCoverage(["Components/Switch/width"], css);
+    // Bounded matching does not make this a finding — it is a candidate, and the test records
+    // that a caller must not treat it as proof Switch declares tokens another way.
+    expect(r.offConventionCandidates).toEqual([
+      { component: "switch", properties: ["--transition-switch-duration"] },
+    ]);
+  });
+
+  it("bounded matching keeps a merely-prefixed word out", () => {
+    const css = `:root { --progressive-disclosure-gap: 4px; }`;
+    const r = auditComponentTokenCoverage(["Components/Progress/height sm"], css);
+    expect(r.offConventionCandidates).toEqual([]);
+  });
+
+  it("false NEGATIVE direction: a scheme naming no component is invisible", () => {
+    // Avatar Group's real tokens are `--spacing-overlap-*` — no slug, so nothing can find them.
+    const css = `:root { --spacing-overlap-xs: 2px; }`;
+    const r = auditComponentTokenCoverage(["Components/Avatar Group/Overlap XS"], css);
+    expect(r.offConventionCandidates).toEqual([]);
+    expect(r.missing.map((m) => m.name)).toEqual(["--component-avatar-group-overlap-xs"]);
   });
 
   it("does not flag off-convention when the canonical name is the only one present", () => {
     const r = auditComponentTokenCoverage(["Components/Button/primary background hover"], CSS);
-    expect(r.offConvention).toEqual([]);
+    expect(r.offConventionCandidates).toEqual([]);
   });
 
   it("empty inputs produce an empty report, not a crash", () => {
     expect(auditComponentTokenCoverage([], "")).toEqual({
       missing: [],
       covered: [],
-      offConvention: [],
+      offConventionCandidates: [],
     });
   });
 });
@@ -255,5 +294,44 @@ describe("componentTokenExtractionClause", () => {
     // Composition, not duplication: two copies of one rule is how they drift.
     expect(clause).not.toContain("TOKEN-BLOCKED");
     expect(clause).not.toContain("four match rules");
+  });
+});
+
+describe("buildComponentTokenNamingDoc", () => {
+  const doc = buildComponentTokenNamingDoc();
+
+  it("renders its examples from the mapping, not from a copy", () => {
+    expect(doc).toContain(componentTokenName("Components/Accordion/Active Item Header Background")!.name);
+    expect(doc).toContain(componentTokenName("Components/Button/Border/Hover")!.name);
+  });
+
+  it("marks itself generated so a hand edit is not mistaken for the contract", () => {
+    expect(doc).toContain("GENERATED by VortSpec");
+  });
+
+  it("says to add the canonical name alongside rather than rename in place", () => {
+    expect(doc).toContain("ADD the canonical name alongside");
+  });
+});
+
+describe("linkComponentTokenNamingInEntryDoc", () => {
+  it("inserts the link above Component Standards so it is read first", () => {
+    const md = "## Standards\n\n- [Component Standards](.sdd-de/docs/component-standards.md)\n";
+    const out = linkComponentTokenNamingInEntryDoc(md);
+    expect(out).toContain(COMPONENT_TOKEN_DOC_PATH);
+    expect(out.indexOf(COMPONENT_TOKEN_DOC_PATH)).toBeLessThan(out.indexOf("- [Component Standards]"));
+  });
+
+  it("is idempotent — resync must not duplicate the line", () => {
+    const md = "## Standards\n\n- [Component Standards](x)\n";
+    const once = linkComponentTokenNamingInEntryDoc(md);
+    expect(linkComponentTokenNamingInEntryDoc(once)).toBe(once);
+    expect(once.split(COMPONENT_TOKEN_DOC_PATH)).toHaveLength(2);
+  });
+
+  it("falls back to appending a Standards section when the list is absent", () => {
+    const out = linkComponentTokenNamingInEntryDoc("# Some Toolkit Readme\n");
+    expect(out).toContain("## Standards");
+    expect(out).toContain(COMPONENT_TOKEN_DOC_PATH);
   });
 });

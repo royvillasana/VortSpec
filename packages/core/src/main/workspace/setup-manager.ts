@@ -21,6 +21,11 @@ import {
   scopeReactRefExamples,
   linkFrameworkRulesInClaudeMd,
 } from "@vortspec/core/framework-docs";
+import {
+  buildComponentTokenNamingDoc,
+  linkComponentTokenNamingInEntryDoc,
+  COMPONENT_TOKEN_DOC_PATH,
+} from "@vortspec/core/component-tokens";
 import { readProjectConfig } from "./config-manager";
 import { refreshProject } from "./workspace-manager";
 import type { Project } from "@vortspec/core/ipc";
@@ -114,6 +119,37 @@ async function createSkillSymlinks(sourceDir: string, targetDir: string): Promis
  * setup as successful while leaving contradictory React mandates in place is the exact silent
  * wrongness this change exists to remove.
  */
+/**
+ * Install the component-token naming contract into a project.
+ *
+ * Deliberately NOT part of `scopeDocsToFramework`, for two reasons.
+ *
+ * It is framework-NEUTRAL. A `Components/<Component>/<Slot>` design variable maps to the same
+ * code token whatever the target framework — that neutrality is the whole point, since one clean
+ * design file feeds all nine. `scopeDocsToFramework` returns early when the framework is unset,
+ * which would silently leave a project with no token contract at all.
+ *
+ * And the doc alone does not reach extraction. Measured against the pinned toolkit,
+ * `extract-design-system` references no `.sdd-de/docs` path, no standards index and no entry
+ * file; its first instruction is to read `.sdd-de/project.yaml`. So the rule that extraction
+ * actually sees is emitted by `buildProjectYaml`, and this doc serves the skills that DO read
+ * `docs/` (`sync-tokens`, `storybook`, `setup`, `commit`) plus the humans. Writing it only where
+ * extraction never looks would repeat "a file nothing indexes is never read" one level up.
+ */
+async function installComponentTokenContract(
+  projectPath: string,
+  sddeDir: string,
+): Promise<void> {
+  await writeFile(
+    join(projectPath, COMPONENT_TOKEN_DOC_PATH),
+    buildComponentTokenNamingDoc(),
+    "utf8",
+  );
+  for (const entry of ["CLAUDE.md", "AGENTS.md", "GEMINI.md", "codex.md"]) {
+    await transformIfPresent(join(projectPath, entry), linkComponentTokenNamingInEntryDoc);
+  }
+}
+
 async function scopeDocsToFramework(
   projectPath: string,
   sddeDir: string,
@@ -198,6 +234,7 @@ export async function createProject(
   // Scope the copied docs to this project's framework. AFTER the CLAUDE.md copy, because it
   // links the generated rules from that file's standards index.
   await scopeDocsToFramework(projectPath, sddeDir, answers.framework);
+  await installComponentTokenContract(projectPath, sddeDir);
 
   // .claude/skills symlinks
   await createSkillSymlinks(
@@ -261,6 +298,7 @@ export async function resyncToolkit(projectPath: string): Promise<Project> {
   // a toolkit update silently un-scopes every project.
   const cfg = await readProjectConfig(projectPath).catch(() => null);
   await scopeDocsToFramework(projectPath, sddeDir, cfg?.framework);
+  await installComponentTokenContract(projectPath, sddeDir);
 
   // Refresh `.claude/skills` symlinks — drop stale ones, recreate all from the new skills.
   const claudeSkills = join(projectPath, ".claude", "skills");

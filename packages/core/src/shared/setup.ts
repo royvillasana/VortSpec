@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { COMPONENT_TOKEN_PREFIX, componentTokenName } from "./component-tokens";
 
 /**
  * The SDD-DE project setup questionnaire — a faithful GUI port of the
@@ -621,6 +622,19 @@ export function buildProjectYaml(a: SetupAnswers): string {
   lines.push(
     `theme_apply: ${themeApplyFor({ designSource: a.designSource, componentLibrary: a.componentLibrary })}`,
   );
+
+  // The component-token naming contract lives HERE, not only in a doc, because `project.yaml` is
+  // the one file the extraction skill is guaranteed to open: measured against the pinned toolkit,
+  // `extract-design-system` references no `.sdd-de/docs` path, no standards index and no entry
+  // file, and its first instruction is to read this file. A rule written only where extraction
+  // never looks is the same "a file nothing indexes is never read" failure, one level up.
+  lines.push("");
+  lines.push("# Component-scoped design tokens: a `Components/<Component>/<Slot>` variable in the");
+  lines.push(`# design source becomes \`${COMPONENT_TOKEN_PREFIX}<component>-<slot>\` (lowercase, segments`);
+  lines.push("# slugified, nested slot groups flattened). Extraction MUST emit this namespace and");
+  lines.push("# verification resolves by this name — a per-component scheme is invisible to both.");
+  lines.push(`# e.g. Components/Accordion/Active Item Header Background → ${componentTokenName("Components/Accordion/Active Item Header Background")!.name}`);
+  lines.push(`component_token_prefix: "${COMPONENT_TOKEN_PREFIX}"`);
 
   return lines.join("\n") + "\n";
 }
