@@ -709,3 +709,40 @@ describe("vanilla — the module-mode gate on its JS check", () => {
     expect(profileFor("angular")?.typecheckCoverageGate?.setting).toBe("strictTemplates");
   });
 });
+
+/**
+ * Nuxt's emitted pitfall must not name `vue-tsc` as the check.
+ *
+ * #74 copied Vue's pitfall into the Nuxt record verbatim. `frameworkIdiomClause` EMITS pitfalls,
+ * so every Nuxt build prompt carried "the check is `vue-tsc`" while this record's own
+ * `typecheckCmd` is `npx nuxi typecheck` — the record contradicted itself, out loud, on every build.
+ *
+ * Compiled before correcting (scripts/framework-fixtures/nuxt, nuxt 3.21.10 / vue-tsc 2.2.12):
+ * bare `vue-tsc` is CLEAN when `.nuxt/` exists and fails with TS5083 when it does not, while
+ * `nuxi typecheck` regenerates `.nuxt/` and passes from either state.
+ */
+describe("nuxt — the emitted pitfall names the command the gate actually runs", () => {
+  it("tells the build to use nuxi typecheck and not bare vue-tsc", () => {
+    const clause = frameworkIdiomClause("nuxt");
+    expect(clause).toMatch(/nuxi typecheck/);
+    expect(clause).toMatch(/NOT bare `vue-tsc`/);
+  });
+
+  it("does not contradict its own typecheckCmd", () => {
+    // The defect in one assertion: the emitted guidance must not name a DIFFERENT checker than
+    // the command the CODE gate resolves for the same framework.
+    // No context: `ctx` defaults to `{}` on main since #74 tightened the signature, so the
+    // second argument is omitted rather than passed as `null` — which this branch predates.
+    const r = resolveTypecheck("nuxt");
+    expect(r.kind).toBe("cmd");
+    if (r.kind !== "cmd") return;
+    expect(r.cmd).toMatch(/nuxi typecheck/);
+    expect(frameworkIdiomClause("nuxt")).not.toMatch(/the check is `vue-tsc`/);
+  });
+
+  it("keeps Vue's own pitfall intact — the fix must not have been applied to the wrong record", () => {
+    // The discriminating control. Narrowing Nuxt by editing VUE_BASE would pass the two tests
+    // above and silently strip Vue's correct guidance, so pin that Vue still says vue-tsc.
+    expect(frameworkIdiomClause("vue")).toMatch(/the check is `vue-tsc`/);
+  });
+});

@@ -1,0 +1,7 @@
+{
+  "name": "nuxt-framework-fixture",
+  "private": true,
+  "type": "module",
+  "scripts": { "verify": "node verify.mjs" },
+  "devDependencies": { "nuxt": "3.21.10", "typescript": "5.9.3", "vue-tsc": "2.2.12" }
+}

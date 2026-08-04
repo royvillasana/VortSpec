@@ -276,9 +276,22 @@ const RAW_PROFILES = {
   }),
   nuxt: Object.freeze({
     sourceExts: [".vue"],
-    // NOT plain `vue-tsc`: Nuxt generates `.nuxt/` types for auto-imports, routes and
-    // composables, so a bare vue-tsc run reports errors on code that is actually fine and
-    // misses the generated surface entirely. `nuxi typecheck` prepares those types first.
+    // NOT plain `vue-tsc` — `nuxi typecheck` runs `nuxt prepare` first, and that is the whole
+    // difference. Compiled, scripts/framework-fixtures/nuxt (nuxt 3.21.10 / vue-tsc 2.2.12):
+    //
+    //   .nuxt/ present   bare `vue-tsc --noEmit`   exit 0, clean   (case A)
+    //   .nuxt/ absent    bare `vue-tsc --noEmit`   exit 2, TS5083 "Cannot read file
+    //                    .nuxt/tsconfig.json" cascading into TS2468/TS2583 missing-lib  (case B)
+    //   .nuxt/ absent    `npx nuxi typecheck`      exit 0 - it REGENERATES .nuxt/ itself (case C)
+    //
+    //   WRONG v1: "a bare vue-tsc run reports errors on code that is actually fine". Refuted by
+    //   case B: what it reports is a CONFIG load failure, not spurious diagnostics on components,
+    //   and by case A, where the same command on the same sources is clean once `.nuxt/` exists.
+    //
+    // ACTUAL: the command is right for the reason that it self-prepares. On a fresh checkout -
+    // CI, or any clone that has never run dev/build - `.nuxt/` does not exist, so bare `vue-tsc`
+    // cannot even load its tsconfig. Exit codes observed: 2 on a real type error, 1 when no root
+    // `tsconfig.json` exists at all (a config failure, NOT a type failure - do not report it as one).
     typecheckCmd: "npx nuxi typecheck",
     fileSuffixes: [],
     nonComponentSuffixes: [...NEVER_A_COMPONENT],
@@ -291,7 +304,13 @@ const RAW_PROFILES = {
       ...VUE_BASE,
       pitfalls: [
         "Components under `components/` are auto-imported; an explicit import is redundant and often wrong.",
-        "`tsc` cannot parse `.vue` — the check is `vue-tsc`.",
+        // Was Vue's pitfall verbatim, naming `vue-tsc` as the check - which contradicted this same
+        // record's `typecheckCmd` two fields above, and was EMITTED to every Nuxt build by
+        // `frameworkIdiomClause`. Compiled and corrected; see the typecheckCmd comment for the cases.
+        "`tsc` cannot parse `.vue`, and for Nuxt the check is `nuxi typecheck` - NOT bare `vue-tsc`. " +
+          "`nuxi typecheck` runs `nuxt prepare`, which generates the `.nuxt/` types the auto-imports " +
+          "and routes depend on; on a checkout where `.nuxt/` does not exist yet, bare `vue-tsc` cannot " +
+          "even read its tsconfig and fails with TS5083 before it type-checks anything.",
       ],
     },
   }),
