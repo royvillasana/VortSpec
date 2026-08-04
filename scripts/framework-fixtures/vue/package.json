@@ -1,0 +1,15 @@
+{
+  "name": "vue-framework-fixture",
+  "private": true,
+  "type": "module",
+  "description": "Executable evidence for the `vue` entry in FRAMEWORK_PROFILES. Versions are pinned EXACTLY rather than caret-ranged: every claim here is version-sensitive compiler behaviour, and a caret would let a future install reproduce different evidence under the same commit.",
+  "scripts": {
+    "verify": "node verify.mjs",
+    "mutate": "node mutate.mjs"
+  },
+  "devDependencies": {
+    "vue": "3.5.40",
+    "vue-tsc": "2.2.12",
+    "typescript": "5.6.3"
+  }
+}
