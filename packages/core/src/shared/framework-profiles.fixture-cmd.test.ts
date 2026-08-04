@@ -99,6 +99,14 @@ const NO_PROFILE_CMD: { dir: string; because: string }[] = [
       "framework typecheck, so there is no profile command for it to drift from. Verified by " +
       "reading its verify.mjs — no tsc, no svelte-check, no astro check, no profileFor.",
   },
+  {
+    dir: "browser",
+    because:
+      "browser render harness: it serves the compiled CSS to a real browser via web-test-runner " +
+      "and asserts getComputedStyle, and runs no framework typecheck, so there is no profile " +
+      "command for it to drift from. Same carve-out as accordion-render, and its verify.mjs is " +
+      "checked below for the same typecheck binaries.",
+  },
 ];
 
 describe("the guard covers every fixture", () => {
