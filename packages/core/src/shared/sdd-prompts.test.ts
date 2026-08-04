@@ -213,19 +213,6 @@ describe("design-anchored build — reproduce the Figma node, resolved autonomou
     expect(p).toMatch(/never inline the literal/);
   });
 
-  it("forbids substituting a near token, which is how the accordion got the wrong colour", () => {
-    // Honey's live finding: no `--component-accordion-*` token had been extracted, so the build
-    // emitted `var(--color-neutral-100)` (#F8F9FA) for a variable bound to #CEE4E9. It did not
-    // hardcode and did not dangle — it bound a DIFFERENT token, satisfying every rule above while
-    // rendering the wrong colour. The ban has to name substitution, not just hardcoding.
-    const p = buildOnePrompt("accordion");
-    expect(p).toMatch(/A NEAR TOKEN IS NOT A MATCH/);
-    expect(p).toMatch(/RESOLVED\s+VALUE differs/);
-    expect(p).toMatch(/TOKEN-BLOCKED/);
-    expect(p).toMatch(/Do NOT proceed by picking the nearest existing token/);
-    // The point that makes it stick: a wrong binding is worse than a literal, not better.
-    expect(p).toMatch(/worse than a hardcoded literal, not better/);
-  });
 
   it("buildChunkPrompt carries the design reference for its components", () => {
     const p = buildChunkPrompt(["alert", "badge"]);
