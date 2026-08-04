@@ -165,6 +165,20 @@ describe("idioms — the authoring half of the profile", () => {
     }
   });
 
+  it("warns the BUILDER about Vue prop misspelling, since the checker will not", () => {
+    // The reverted gate's job, relocated to where it belongs. `strictTemplates` is off by default
+    // and enabling it rejects legitimate aria-*/data-* fallthrough, so this is not a CODE-verdict
+    // downgrade — it is guidance to whoever writes the binding. Rendered on vue 3.5.40:
+    // `<Button :cout="7" />` emits `<button cout="7">42</button>` — forwarded to the root, NOT
+    // dropped, with the real prop left at its default.
+    const clause = frameworkIdiomClause("vue");
+    expect(clause).toMatch(/Spell every prop exactly as the component declares it/);
+    expect(clause).toMatch(/forwards it to the root element/);
+    // The refuted mechanism must not come back in the emitted guidance.
+    expect(clause).not.toMatch(/dropped at render/);
+    expect(clause).not.toMatch(/silently dropped/);
+  });
+
   it("tells Angular its event binding is (click), not Vue's @click", () => {
     expect(FRAMEWORK_PROFILES.angular.idioms.events).toContain("(click)");
     expect(FRAMEWORK_PROFILES.angular.idioms.pitfalls.join(" ")).toMatch(/ControlValueAccessor/);

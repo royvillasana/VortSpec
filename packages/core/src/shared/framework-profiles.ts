@@ -191,27 +191,24 @@ const VUE_LIKE = {
   // TS18003 "no inputs were found", which looks like a check and is the absence of one.)
   // `vue-tsc` is the compiler-aware wrapper. Evidence: Bumble, RESEARCH/VORTSPEC_VUE_FIXTURE_2026-08-04.md.
   typecheckCmd: "npx vue-tsc --noEmit",
-  // Narrower than Angular's gap and the same false-green SHAPE. Declared prop TYPES are checked
-  // either way (V4), so this is NOT "Vue templates go unchecked". What the flag governs is UNKNOWN
-  // props: `<Button :count="1" label="hi" />` against a component declaring only `count` compiles
-  // clean without it. That is what a generated page does wrong when binding to a generated
-  // component — a typo'd or renamed prop is silently dropped, the component renders with its
-  // default, and it reaches the browser looking like a styling bug.
-  // vue 3.5.40 / vue-tsc 2.2.12 / TypeScript 5.6.3. Inheritance verified here rather than assumed
-  // from Angular: leaf true -> TS2353, leaf omits it while a base sets it -> TS2353, leaf overrides
-  // to false -> clean. `vue-tsc` signals errors with exit 2, not 1.
-  typecheckCoverageGate: {
-    setting: "strictTemplates",
-    resolution:
-      "read `vueCompilerOptions.strictTemplates` in the project's `tsconfig.json`, following its `extends` " +
-      "chain — it INHERITS, base first and the leaf overriding, so judge the EFFECTIVE value. A leaf that " +
-      "omits the setting while a base sets it is still `true` — absent in the leaf is NOT false. If you " +
-      "cannot resolve the effective value, say so and treat coverage as unproven rather than guessing",
-    unchecked:
-      "props that the component does not declare at all — a typo'd or renamed prop is accepted silently, " +
-      "dropped at render, and the component falls back to its default. Declared prop TYPES are checked " +
-      "either way, so the gap is unknown props specifically",
-  },
+  // Deliberately NO `typecheckCoverageGate`, unlike angular. Two claims were wrong when one was
+  // added, both refuted by Bumble's fixture on vue 3.5.40 / vue-tsc 2.2.12 (VORTSPEC_VUE_FIXTURE):
+  //
+  //   WRONG v1: an undeclared prop is "dropped at render". Rendered, `<Button :cout="7" />`
+  //             produces `<button cout="7">42</button>` — the default IS retained, and the
+  //             misspelling is FORWARDED onto the root as a junk attribute, not dropped. Vue calls
+  //             this fallthrough: https://vuejs.org/guide/components/attrs.html
+  //   WRONG v2: it is "the same false-green shape as Angular". It is not. Angular's gap accepts a
+  //             PROVABLY wrong binding (`[count]="'a string'"` has no correct reading) and the
+  //             remedy is free. `strictTemplates` cannot read intent: `:cout` (TS2561, "did you
+  //             mean 'count'?"), `aria-label` and `data-testid` (both TS2353) are one mechanism and
+  //             it rejects all three; only `class`/`style` are exempt. Gating on it would mark a
+  //             project PARTIAL for declining a flag that rejects its own accessibility attributes.
+  //
+  // ACTUAL: `vue-tsc` checks declared prop TYPES with the flag off, so the command is sufficient
+  // for the hand-off `ng build` was not. The residue is the TYPO class — vue distinguishes
+  // "misspelled a declared prop" (TS2561) from "undeclared attribute" (TS2353) — which is a real
+  // seam and a product-policy call, not a coverage defect to downgrade unilaterally.
   fileSuffixes: [],
 } satisfies Omit<FrameworkProfile, "idioms">;
 
@@ -251,7 +248,10 @@ export const FRAMEWORK_PROFILES: Record<string, FrameworkProfile> = {
       label: "Vue 3",
       fileConvention: "`<component_dir>/<category>/<ComponentName>.vue` (single-file component)",
       ...VUE_BASE,
-      pitfalls: ["`tsc` cannot parse `.vue` — the check is `vue-tsc`, and a bare `tsc` pass proves nothing."],
+      pitfalls: [
+        "`tsc` cannot parse `.vue` — the check is `vue-tsc`. A bare `tsc` pass proves nothing: on a project that also has a `.ts` file it exits 0 without ever mentioning the `.vue` error.",
+        "Spell every prop exactly as the component declares it. Unless the project sets `vueCompilerOptions.strictTemplates`, a misspelled prop is NOT a compile error — Vue forwards it to the root element as a stray DOM attribute (`:cout` renders `cout=\"7\"`) while the real prop silently keeps its default.",
+      ],
     },
   },
   nuxt: {
