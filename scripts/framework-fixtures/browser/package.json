@@ -1,0 +1,12 @@
+{
+  "name": "vortspec-browser-fixture",
+  "private": true,
+  "type": "module",
+  "scripts": { "verify": "web-test-runner --config web-test-runner.config.mjs" },
+  "devDependencies": {
+    "@esm-bundle/chai": "4.3.4-fix.0",
+    "@web/test-runner": "0.18.3",
+    "@web/test-runner-playwright": "0.11.0",
+    "playwright": "1.48.2"
+  }
+}
