@@ -58,6 +58,9 @@ A project whose type errors live in `.ts` files gets a green CODE gate that chec
 `A6` is the false polarity for `failedWith`. Without a case requiring the failure matcher to
 return **false**, an always-true matcher passes every failure case above.
 
+The executed run — 9/9 verify, the full 10-row mutation sweep with **no survivors**, and what
+each mutant is actually worth: [`EVIDENCE.md`](./EVIDENCE.md).
+
 ## Scope, stated rather than implied
 
 Exercises `astro check`. It does **not** cover Storybook, browser rendering, island hydration at
