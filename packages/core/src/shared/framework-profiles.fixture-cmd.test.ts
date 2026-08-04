@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync, existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { profileFor } from "./framework-profiles";
 
 /**
@@ -21,7 +22,12 @@ import { profileFor } from "./framework-profiles";
  *    is weaker — it proves the fixture mentions the right tool, not that it invokes exactly this
  *    string — and it is why `readsFileAtRuntime` is recorded per fixture instead of implied.
  */
-const FIXTURES = join(new URL(".", import.meta.url).pathname, "../../../../scripts/framework-fixtures");
+// `fileURLToPath`, not `.pathname`: a file URL percent-encodes its path, so a checkout under a
+// directory with a space in it ("Roy Villasana") resolved to `Roy%20Villasana` and every fixture
+// read here failed ENOENT — 15 tests reporting the fixtures were missing while they sat on disk.
+// It passed wherever the path happened to have no characters needing encoding, which is why the
+// suite looked green on CI runners and red on the machine the fixtures were authored on.
+const FIXTURES = join(fileURLToPath(new URL(".", import.meta.url)), "../../../../scripts/framework-fixtures");
 
 interface FixtureCmd {
   dir: string;
