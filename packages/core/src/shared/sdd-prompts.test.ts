@@ -100,10 +100,31 @@ describe("verifyPrompt — honest gate (no false PASS without a live render)", (
     expect(p).not.toMatch(/templates are unchecked/);
   });
 
+  it("makes Vue resolve strictTemplates too, scoped to UNKNOWN props rather than prop types", () => {
+    // Bumble's V4/V5: Vue's `vue-tsc` already catches a wrong prop TYPE with or without the flag,
+    // so this is not Angular's gap repeated. What the flag governs is props the component never
+    // declared — silently dropped, rendered as the default, CODE reports pass. Same false-green
+    // shape, narrower cause. Inheritance was verified on vue-tsc 2.2.12 rather than assumed from
+    // Angular: leaf-omits inherits true (TS2353), leaf-overrides-false compiles clean.
+    for (const framework of ["vue", "nuxt"]) {
+      const p = verifyPrompt("button", "http://localhost:5173", false, framework);
+      expect(p).toMatch(/vueCompilerOptions\.strictTemplates/);
+      expect(p).toMatch(/PARTIAL/);
+      expect(p).toMatch(/INHERITS/);
+      expect(p).toMatch(/absent in the leaf is NOT false/);
+      // The scope is the claim. Saying Vue templates go unchecked would be the over-read.
+      expect(p).toMatch(/does not declare at all/);
+      expect(p).toMatch(/Declared prop TYPES are checked either way/);
+      // Angular's resolution must not leak into Vue's — different config key, different file.
+      expect(p, `${framework} inherited Angular's resolution`).not.toMatch(/angular\.json/);
+    }
+  });
+
   it("adds no coverage caveat to a framework whose check does not depend on config", () => {
     // The other polarity. Without this, a clause that fired for everything would still pass the
-    // assertions above while making every framework's report read as degraded.
-    for (const framework of ["react", "next", "vue", "svelte", "sveltekit", "nuxt", "astro"]) {
+    // assertions above while making every framework's report read as degraded. Vue and nuxt left
+    // out deliberately — they earned a gate on evidence, not by inheriting Angular's.
+    for (const framework of ["react", "next", "svelte", "sveltekit", "astro"]) {
       const p = verifyPrompt("button", "http://localhost:5173", false, framework);
       expect(p, `${framework} inherited Angular's gate`).not.toMatch(/strictTemplates/);
       expect(p, `${framework} was told to report PARTIAL`).not.toMatch(/PARTIAL/);

@@ -186,8 +186,32 @@ const REACT_LIKE = {
 
 const VUE_LIKE = {
   sourceExts: [".vue"],
-  // `tsc` skips `.vue` entirely; `vue-tsc` is the compiler-aware wrapper.
+  // `tsc` does not merely skip `.vue` — on a project that also contains a real `.ts` file it exits
+  // 0 and never mentions the `.vue` error at all. (With no `.ts` at all it exits non-zero, but as
+  // TS18003 "no inputs were found", which looks like a check and is the absence of one.)
+  // `vue-tsc` is the compiler-aware wrapper. Evidence: Bumble, RESEARCH/VORTSPEC_VUE_FIXTURE_2026-08-04.md.
   typecheckCmd: "npx vue-tsc --noEmit",
+  // Narrower than Angular's gap and the same false-green SHAPE. Declared prop TYPES are checked
+  // either way (V4), so this is NOT "Vue templates go unchecked". What the flag governs is UNKNOWN
+  // props: `<Button :count="1" label="hi" />` against a component declaring only `count` compiles
+  // clean without it. That is what a generated page does wrong when binding to a generated
+  // component — a typo'd or renamed prop is silently dropped, the component renders with its
+  // default, and it reaches the browser looking like a styling bug.
+  // vue 3.5.40 / vue-tsc 2.2.12 / TypeScript 5.6.3. Inheritance verified here rather than assumed
+  // from Angular: leaf true -> TS2353, leaf omits it while a base sets it -> TS2353, leaf overrides
+  // to false -> clean. `vue-tsc` signals errors with exit 2, not 1.
+  typecheckCoverageGate: {
+    setting: "strictTemplates",
+    resolution:
+      "read `vueCompilerOptions.strictTemplates` in the project's `tsconfig.json`, following its `extends` " +
+      "chain — it INHERITS, base first and the leaf overriding, so judge the EFFECTIVE value. A leaf that " +
+      "omits the setting while a base sets it is still `true` — absent in the leaf is NOT false. If you " +
+      "cannot resolve the effective value, say so and treat coverage as unproven rather than guessing",
+    unchecked:
+      "props that the component does not declare at all — a typo'd or renamed prop is accepted silently, " +
+      "dropped at render, and the component falls back to its default. Declared prop TYPES are checked " +
+      "either way, so the gap is unknown props specifically",
+  },
   fileSuffixes: [],
 } satisfies Omit<FrameworkProfile, "idioms">;
 
