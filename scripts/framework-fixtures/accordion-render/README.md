@@ -66,6 +66,13 @@ immediately, because editing the copied config's `content` field broke byte-iden
 now passed on the CLI (`--content ./page.html`) so the config stays identical to the source. When
 the source project is absent the tie reports **SKIPPED**, never passes.
 
+`G2b` ties the **class string** — added after the fact, because G2's list of what-to-hash was
+hand-maintained and the class string was not on it. That was the fixture's own subject going
+unchecked: every finding here is a claim about what that string paints, so if the Accordion were
+repaired the fixture would keep rendering the old string and keep reporting the old result — a
+defect reported as still present after it had been fixed. It is a substring check rather than a
+file hash, because the file records one variant's classes and not the whole variants file.
+
 ## Mutations
 
 ```

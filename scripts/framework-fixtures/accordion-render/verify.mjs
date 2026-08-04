@@ -31,7 +31,20 @@ const HERE = new URL(".", import.meta.url).pathname;
 const FIGMA_BG = "rgb(206, 228, 233)"; // Components/Accordion/Active Item Header Background #CEE4E9
 const FIGMA_FG = "rgb(7, 109, 130)"; //  Components/Accordion/Active Item Header Text Color  #076D82
 
-/** The class string this fixture measured, recorded so a drift in the source is visible. */
+/**
+ * The class string this fixture measured, recorded and TIED to its source by G2b below.
+ *
+ * This comment used to end "recorded so a drift in the source is visible" — and nothing made it
+ * visible. G2 tied `tokens.css` and `tailwind.config.cjs` to the source project from a
+ * hand-maintained pair list, and the class string, which is the fixture's actual SUBJECT, was not
+ * in that list. Fizz predicted exactly this when he asked whether G2's what-to-hash was
+ * hand-maintained; it was, and this was what it missed.
+ *
+ * It matters more than the other two ties. Every finding this fixture publishes is a claim about
+ * what THIS STRING paints. If the Accordion is fixed — which is the entire point of the finding —
+ * the fixture keeps rendering the old string and keeps reporting the old result. It would report a
+ * defect as still present after it had been repaired, which is worse than not measuring it.
+ */
 const REAL_CLASSES = readFileSync(join(HERE, ".real-open-classes.txt"), "utf8").trim();
 
 const results = [];
@@ -63,6 +76,18 @@ for (const [mine, theirs] of [["tokens.css", "src/styles/tokens.css"], ["tailwin
   }
   const same = sha(join(HERE, mine)) === sha(src);
   record(`G2-source-tie-${mine}`, same, `${sha(join(HERE, mine))} vs ${sha(src)}`);
+}
+
+// G2b — the class string, tied to the component it was transcribed from. Not a file hash: the
+// fixture records one variant's classes, not the whole variants file, so byte-identity is the
+// wrong instrument. It must still appear VERBATIM in the source, which is what makes it a copy
+// rather than a transcription that stopped being true.
+const VARIANTS = join(SRC, "src/components/accordion/accordion.variants.ts");
+if (!existsSync(VARIANTS)) {
+  console.log("SKIPPED  source-tie class-string  (source project not present here — cannot verify)");
+} else {
+  const inSource = readFileSync(VARIANTS, "utf8").includes(REAL_CLASSES);
+  record("G2b-source-tie-class-string", inSource, inSource ? "present verbatim" : `NOT FOUND: ${REAL_CLASSES}`);
 }
 
 const browser = await chromium.launch();
