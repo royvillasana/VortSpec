@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer, webUtils, type IpcRendererEvent } from "electron";
+import { createMultiplexer } from "../shared/channel-multiplexer";
 import type {
   IpcChannel,
   IpcRequest,
@@ -40,13 +41,19 @@ function invoke<C extends IpcChannel>(
   return ipcRenderer.invoke(channel, request) as Promise<IpcResponse<C>>;
 }
 
-function subscribe<T>(
-  channel: string,
-  callback: (payload: T) => void,
-): () => void {
-  const listener = (_event: IpcRendererEvent, payload: T): void => callback(payload);
-  ipcRenderer.on(channel, listener);
-  return () => ipcRenderer.removeListener(channel, listener);
+/**
+ * One `ipcRenderer` listener per channel, fanned out to however many subscribers.
+ *
+ * See `channel-multiplexer` for why: subscriber-per-listener is correct but scales with component
+ * count, and 21 `useAgentRun` call sites crossed Node's default ceiling. The logic lives there so it
+ * can be tested without Electron.
+ */
+const multiplexer = createMultiplexer((channel, listener) => {
+  ipcRenderer.on(channel, (_event: IpcRendererEvent, payload: unknown) => listener(payload));
+});
+
+function subscribe<T>(channel: string, callback: (payload: T) => void): () => void {
+  return multiplexer.subscribe(channel, callback);
 }
 
 const api: VortSpecApi = {
