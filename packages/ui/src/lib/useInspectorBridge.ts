@@ -1,4 +1,5 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { readoutForFocus } from "./focus-readout";
 import {
   INSPECTOR_BRIDGE_CHANNEL,
   bridgeEventSchema,
@@ -399,6 +400,16 @@ export function useInspectorBridge(): InspectorBridge {
         return;
     }
   }, []);
+
+  // The panel may only ever show the FOCUSED node's fields. `selectedMany` (marquee, select-all-
+  // matching) moves the focus without carrying a readout with it, and an additive toggle that
+  // removes the focused member moves it too — in both cases `readout` would otherwise keep pointing
+  // at a node the user is no longer editing, while single-target commands act on the new focus.
+  // Reconciled here rather than in each handler so no future event can reintroduce the split: the
+  // rule is "readout follows focus", stated once. See `readoutForFocus` for why null is an answer.
+  useEffect(() => {
+    setReadout((current) => readoutForFocus(current, selectedId, readouts));
+  }, [selectedId, readouts]);
 
   const attach = useCallback(
     (el: WebviewEl | null) => {
