@@ -1,0 +1,7 @@
+{
+  "name": "vortspec-fixture-accordion-render",
+  "private": true,
+  "type": "module",
+  "scripts": { "verify": "node verify.mjs" },
+  "devDependencies": { "playwright": "1.49.1" }
+}

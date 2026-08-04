@@ -1,0 +1,15 @@
+<!doctype html><html><head><link rel="stylesheet" href="./built.css"></head><body>
+<!-- as-built: the class string copied verbatim from TokenUpdate's accordion.variants.ts -->
+<button id="as-built" class="flex items-center justify-between w-full gap-[var(--spacing-8)] px-[var(--spacing-16)] py-[var(--spacing-12)] text-left font-medium cursor-pointer transition-colors duration-[var(--transition-duration-base)] ease-[var(--transition-timing-ease-in-out)] focus:outline-none focus:ring-2 focus:ring-inset focus:ring-[var(--color-focus)] bg-[var(--color-neutral-100)] text-[var(--color-brand-primary)]">Section</button>
+<!-- as-designed: the SAME markup bound to the canonical component token Figma specifies -->
+<button id="as-designed" class="flex items-center justify-between w-full gap-[var(--spacing-8)] px-[var(--spacing-16)] py-[var(--spacing-12)] text-left font-medium cursor-pointer transition-colors duration-[var(--transition-duration-base)] ease-[var(--transition-timing-ease-in-out)] focus:outline-none focus:ring-2 focus:ring-inset focus:ring-[var(--color-focus)]" style="background-color: var(--component-accordion-active-item-header-background); color: var(--component-accordion-active-item-header-text-color);">Section</button>
+<div id="dark" data-theme="dark"><button id="as-built-dark" class="flex items-center justify-between w-full gap-[var(--spacing-8)] px-[var(--spacing-16)] py-[var(--spacing-12)] text-left font-medium cursor-pointer transition-colors duration-[var(--transition-duration-base)] ease-[var(--transition-timing-ease-in-out)] focus:outline-none focus:ring-2 focus:ring-inset focus:ring-[var(--color-focus)] bg-[var(--color-neutral-100)] text-[var(--color-brand-primary)]">Section</button></div>
+<!-- Probes. These make the mechanism assertable instead of narrated.
+     canary   : a compiled arbitrary class. If the stylesheet did not load this stays default,
+                which is how the harness refuses to run rather than passing vacuously.
+     neutral-*: the substituted token bound DIRECTLY, per theme. If as-built matches these, it is
+                demonstrably following THAT token's ramp rather than merely being a different colour. -->
+<button id="canary" class="bg-[var(--color-neutral-100)]">canary</button>
+<button id="probe-neutral-light" style="background-color: var(--color-neutral-100);">probe</button>
+<div data-theme="dark"><button id="probe-neutral-dark" style="background-color: var(--color-neutral-100);">probe</button></div>
+</body></html>

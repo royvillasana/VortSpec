@@ -1,0 +1,10 @@
+@import "./tokens.css";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+/* Figma's canonical accordion tokens, which the project's token file does NOT define.
+   Declared here so the as-designed element has something real to bind to. */
+:root {
+  --component-accordion-active-item-header-background: #CEE4E9;
+  --component-accordion-active-item-header-text-color: #076D82;
+}
