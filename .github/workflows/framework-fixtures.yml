@@ -3,15 +3,25 @@
 # Until this file existed, every "verified" in the framework work meant *someone ran it once on
 # their own machine*. The fixtures were committed and still nobody would have noticed them break.
 #
-# WHY THE SPLIT IS SHAPED THIS WAY — from measured runtimes, not estimates:
+# WHY THIS IS SHAPED THIS WAY — from runtimes measured ON A RUNNER, which is not where I first
+# measured them:
 #
-#   vue      verify  255s     mutate  >600s (13 mutants x a vue-tsc project)
-#   astro    verify  146s     mutate  ~300s
-#   sveltekit verify  14s     (no mutation driver committed)
+#                      my laptop      ubuntu-latest (run 30908007369 / 30908192669)
+#   vue      verify      255s           20s   (whole job 29s, npm ci 2s)
+#   vue      mutate     >600s          261s   (13 mutants + canonical, 0 survivors)
+#   astro    verify      146s           48s   (whole job)
+#   astro    mutate      ~300s         329s   (9 mutants + canonical, 0 survivors)
+#   sveltekit verify      14s           27s   (whole job)
 #
-# So: verify runs per-push but only for the fixture whose files changed, and the mutation sweeps
-# run on a schedule. A sweep that reliably exceeds a per-push budget is not a gate, it is a
-# timeout — and a job that times out gets ignored, which is worse than not having it.
+# The first column is wrong for this purpose and it is what the original version of this file was
+# built on. It was taken on a developer machine with four agents contending for it and cold npm
+# installs over a VPN — a plausible number for a person waiting at a terminal, and not a
+# measurement of what CI costs. A CI budget measured somewhere that is not CI is not a budget.
+#
+# On the real numbers the sweeps are cheap, so they run on the SAME path filter as verify: when a
+# fixture changes, the thing that proves that fixture can still go red runs with it. The nightly
+# schedule stays, because it catches drift the path filter cannot see — a new runner image, a new
+# Node minor — on a tree nobody touched.
 #
 # WHAT THIS DELIBERATELY DOES NOT GATE:
 #
@@ -32,7 +42,7 @@ on:
       - 'scripts/framework-fixtures/**'
       - '.github/workflows/framework-fixtures.yml'
   schedule:
-    # Sweeps only. Nothing here is fast enough to sit in front of a push.
+    # Catches drift on a tree nobody pushed to — runner image, Node minor. Not a cost dodge.
     - cron: '0 3 * * *'
   workflow_dispatch:
 
@@ -69,10 +79,11 @@ jobs:
         run: node verify.mjs
 
   mutate:
-    # The sweep is what proves the fixture can go red at all. It is the slowest thing here and
-    # the least urgent, so it runs nightly rather than blocking anyone.
+    # The sweep is what proves the fixture can go red at all — the one check that would catch a
+    # matcher that cannot fire. On the runner it costs 261s (vue) and 329s (astro), so it runs on
+    # every push that touches a fixture, not only nightly. An earlier version of this file ran it
+    # nightly-only on the strength of a >600s figure measured on a laptop; see the header.
     name: mutate (${{ matrix.fixture }})
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     strategy:

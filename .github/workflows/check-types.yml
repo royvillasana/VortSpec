@@ -4,9 +4,12 @@
 # reports rolled past it, because vitest does not typecheck: 1278 tests passed over code that
 # does not compile. The gate was not weak, it was ABSENT.
 #
-# This is deliberately separate from `framework-fixtures.yml`. That one is path-filtered and
-# minutes long; this is repo-wide and deterministic, so it is the one that can reasonably be a
-# required check.
+# This is deliberately separate from `framework-fixtures.yml`. That one is path-filtered; this is
+# repo-wide and deterministic, so it is the one that can reasonably be a required check.
+#
+# Cost, measured on the runner rather than on a laptop: 63-69s end to end, over three runs
+# (30907062539 red, 30907514674 green, 30908008484 green). An earlier version of this comment said
+# 120s, which was my local number and about 2x the real one.
 #
 # NOT INCLUDED, deliberately: the core vitest suite. It is intermittently red on main with no
 # changes — different files each run, all timeouts in the 5-8s band. A flaky required check
