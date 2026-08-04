@@ -70,8 +70,43 @@ the source project is absent the tie reports **SKIPPED**, never passes.
 hand-maintained and the class string was not on it. That was the fixture's own subject going
 unchecked: every finding here is a claim about what that string paints, so if the Accordion were
 repaired the fixture would keep rendering the old string and keep reporting the old result — a
-defect reported as still present after it had been fixed. It is a substring check rather than a
-file hash, because the file records one variant's classes and not the whole variants file.
+defect reported as still present after it had been fixed. It is not a file hash, because the file
+records one variant's classes and not the whole variants file.
+
+It is not a whole-file substring search either — that was the first version, and Thor refuted it
+with the mutant nobody had tried: set the recorded string to the value the header would carry once
+**repaired** (`bg-[var(--color-surface)] text-[var(--color-text-default)]`) and it still passed,
+because that exact text also occurs in the `isOpen:false` branch. Matching the wrong POSITION and
+calling it verbatim is the same class of defect one level down.
+
+`G2b` now extracts `accordionHeaderVariants`' `isOpen.true` value specifically and compares by
+equality. Scoping to the named export matters: three exports in that file have an
+`isOpen:{true:…}` (header, body `'block'`, chevron `'rotate-180'`), so an anchor on the first match
+would be a coin flip against source order. A lost anchor — the export renamed or restructured —
+reports **FAIL**, not SKIP: the source is present, the fixture just no longer knows what it is
+measuring. SKIPPED is reserved for the source project being absent from the machine.
+
+### G2b mutations — both directions
+
+Honey shipped G2b disclosing that its mutants moved the recorded file and never the source, and
+that "the untested direction is the one that will actually happen". `mutate-g2b.mjs` closes that
+without editing Roy's live tree: `extractOpenHeaderClasses` takes CONTENT, so the source side runs
+against an in-memory copy. Run `node mutate-g2b.mjs`.
+
+```
+CANONICAL — recorded matches the live source              PASS   <- the other polarity
+SOURCE: the Accordion is repaired to component tokens     FAIL   <- the untested direction
+SOURCE: one token swapped in the open state               FAIL
+RECORDED: set to the isOpen:false value (Thor's mutant)    FAIL   <- survived the old check
+RECORDED: the BODY variant's open value ('block')         FAIL
+RECORDED: the CHEVRON variant's open value ('rotate-180') FAIL
+SOURCE: subject export renamed — anchor lost              FAIL
+SOURCE: a different export changes — must still PASS      PASS   <- control: scope does not leak
+```
+
+The driver was itself checked by regressing `extractOpenHeaderClasses` to the old whole-file
+`.includes()`: four of the eight rows become survivors and it exits 1. A mutation table nobody has
+seen fail is a table, not a measurement.
 
 ## Mutations
 

@@ -26,6 +26,7 @@ import { readFileSync, existsSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { pathToFileURL } from "node:url";
 import { join } from "node:path";
+import { extractOpenHeaderClasses, SUBJECT_EXPORT } from "./extract-open-classes.mjs";
 
 const HERE = new URL(".", import.meta.url).pathname;
 const FIGMA_BG = "rgb(206, 228, 233)"; // Components/Accordion/Active Item Header Background #CEE4E9
@@ -80,14 +81,35 @@ for (const [mine, theirs] of [["tokens.css", "src/styles/tokens.css"], ["tailwin
 
 // G2b — the class string, tied to the component it was transcribed from. Not a file hash: the
 // fixture records one variant's classes, not the whole variants file, so byte-identity is the
-// wrong instrument. It must still appear VERBATIM in the source, which is what makes it a copy
-// rather than a transcription that stopped being true.
+// wrong instrument.
+//
+// It is not a whole-file substring search either, and that is Thor's finding rather than a
+// preference. `.includes()` over the file body passed on the plausible REPAIR — set the recorded
+// string to `bg-[var(--color-surface)] text-[var(--color-text-default)]` and it still matched,
+// because that text also lives in the `isOpen:false` branch. A check that matches the wrong
+// POSITION and calls it verbatim is the same class of defect one level down.
+//
+// So: extract the open-state value of `accordionHeaderVariants` specifically, and compare by
+// EQUALITY. Three exports in that file have an `isOpen:{true:…}`; the scope is the named export,
+// not the first anchor that matches. See extract-open-classes.mjs, and mutate-g2b.mjs for the
+// source-side direction Honey correctly flagged as unexercised.
 const VARIANTS = join(SRC, "src/components/accordion/accordion.variants.ts");
 if (!existsSync(VARIANTS)) {
   console.log("SKIPPED  source-tie class-string  (source project not present here — cannot verify)");
 } else {
-  const inSource = readFileSync(VARIANTS, "utf8").includes(REAL_CLASSES);
-  record("G2b-source-tie-class-string", inSource, inSource ? "present verbatim" : `NOT FOUND: ${REAL_CLASSES}`);
+  const got = extractOpenHeaderClasses(readFileSync(VARIANTS, "utf8"));
+  if (got.error) {
+    // A lost anchor is a FAILURE, not a skip. The source is present; the fixture just cannot tell
+    // what it is measuring any more, which is exactly when it must stop claiming.
+    record("G2b-source-tie-class-string", false, `ANCHOR LOST: ${got.error}`);
+  } else {
+    const same = got.classes === REAL_CLASSES;
+    record(
+      "G2b-source-tie-class-string",
+      same,
+      same ? `${SUBJECT_EXPORT}.isOpen.true matches verbatim` : `DRIFTED\n    recorded: ${REAL_CLASSES}\n    source:   ${got.classes}`,
+    );
+  }
 }
 
 const browser = await chromium.launch();
