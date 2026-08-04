@@ -78,6 +78,19 @@ describe("verifyPrompt — honest gate (no false PASS without a live render)", (
     expect(p).toMatch(/strictTemplates/);
     expect(p).toMatch(/PARTIAL/);
     expect(p).toMatch(/never a full pass/);
+    // The words alone are not the contract — the FIRST version of this clause named a tsconfig
+    // and treated a locally-absent flag as false, which downgrades a project whose coverage is
+    // fine. Verified on @angular/compiler-cli 19.2.25 (inherit-control): a leaf that omits the
+    // setting while its base sets it still fails the bad binding, and a leaf that overrides to
+    // false still compiles clean. So the resolution has to be asserted, not the vocabulary.
+    expect(p).toMatch(/angular\.json/);
+    expect(p).toMatch(/architect\.build\.options\.tsConfig/);
+    expect(p).toMatch(/extends/);
+    expect(p).toMatch(/INHERIT/);
+    expect(p).toMatch(/effective value/);
+    expect(p).toMatch(/absent in the leaf is NOT false/);
+    // Unresolvable must not read as coverage. Fail-closed, the same way the vanilla branch does.
+    expect(p).toMatch(/cannot\s+resolve it, report CODE as PARTIAL/);
     // Both directions, because Bumble ran both: A4-* for the input half, A6-out-* for the output.
     expect(p).toMatch(/BOUND ACROSS a component boundary, in both directions/);
     expect(p).toMatch(/EventEmitter/);

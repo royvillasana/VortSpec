@@ -41,8 +41,13 @@ export interface FrameworkProfile {
   typecheckCoverageGate?: {
     /** The setting, named exactly as it appears in the project's config. */
     setting: string;
-    /** Where to read it. */
-    location: string;
+    /**
+     * How to resolve the value that actually APPLIES — not merely where a copy of it may sit.
+     *
+     * Naming a file is not enough when the setting inherits: "absent here" and "false" are
+     * different answers, and treating them alike downgrades a project whose coverage is fine.
+     */
+    resolution: string;
     /** What goes unchecked while it is off — stated narrowly, to what was demonstrated. */
     unchecked: string;
   };
@@ -281,7 +286,13 @@ export const FRAMEWORK_PROFILES: Record<string, FrameworkProfile> = {
     typecheckCmd: "npx ng build --configuration development",
     typecheckCoverageGate: {
       setting: "strictTemplates",
-      location: "`angularCompilerOptions` in the project's `tsconfig.json` (or `tsconfig.app.json`)",
+      resolution:
+        "read `angular.json` for the tsconfig the build target you are checking actually uses " +
+        "(`projects.<project>.architect.build.options.tsConfig`, plus any override under the selected " +
+        "`configurations` entry), then follow that file's `extends` chain. `angularCompilerOptions` INHERIT: " +
+        "the base applies and the leaf overrides it, so judge the EFFECTIVE value. A leaf that omits the " +
+        "setting while a base sets it is still `true` — absent in the leaf is NOT false. If you cannot " +
+        "resolve the effective value, say so and treat coverage as unproven rather than guessing either way",
       unchecked:
         "the assignability of values BOUND ACROSS a component boundary, in both directions — " +
         "`[count]=\"'text'\"` against `@Input() count: number`, and an `(changed)` handler taking the wrong " +
@@ -431,15 +442,26 @@ export function typecheckCmdFor(framework?: string | null): string | null {
  *   A6-out-*  — the `@Output()` half, same result, so "both directions" is run rather than assumed
  *   A5-scope  — expressions inside a template fail in BOTH modes, which is why this is scoped to
  *               bindings across a component boundary and not to templates at large
+ *
+ * The inheritance half is why this resolves a value rather than reading a file. Thor caught that
+ * naming a tsconfig turns a project with correct coverage into a false PARTIAL; I ran it on the
+ * same compiler rather than taking it (`.scratch/angular-fixture/inherit-control`, same bad
+ * binding in all three):
+ *   I1  leaf sets strictTemplates: true          → exit 1, TS2322
+ *   I2  leaf `extends` a base that sets it, and
+ *       OMITS the flag itself                    → exit 1, TS2322  (absent ≠ false)
+ *   I3  leaf extends that base, overrides false  → exit 0, clean   (the leaf wins)
+ * I3 is the discriminating one: without it, I2 failing would be consistent with the check simply
+ * always failing, and the inheritance conclusion would be unearned.
  */
 export function typecheckCoverageClause(framework?: string | null): string {
   const gate = profileFor(framework).typecheckCoverageGate;
   if (!gate) return "";
   return (
-    ` Before reporting CODE, READ ${gate.location} and check \`${gate.setting}\`: a pass means nothing ` +
-    `for ${gate.unchecked} unless it is \`true\`. If it is absent or false, report CODE as PARTIAL — never a ` +
-    `full pass — name \`${gate.setting}\` as the reason, and say that turning it on is what makes the check ` +
-    `meaningful. Do NOT silently accept the exit code.`
+    ` Before reporting CODE, resolve \`${gate.setting}\`: ${gate.resolution}. A pass means nothing for ` +
+    `${gate.unchecked} unless the effective value is \`true\`. If it resolves to false, or you cannot ` +
+    `resolve it, report CODE as PARTIAL — never a full pass — name \`${gate.setting}\` as the reason, and ` +
+    `say that turning it on is what makes the check meaningful. Do NOT silently accept the exit code.`
   );
 }
 
