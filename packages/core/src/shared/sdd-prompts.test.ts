@@ -12,6 +12,7 @@ import {
   buildRemainingPrompt,
   RESCAN_PROMPT,
 } from "./sdd-prompts";
+import { componentTokenExtractionClause, componentTokenName } from "./component-tokens";
 import { themeContractFor } from "./setup";
 
 describe("buildCustomizeLibraryPrompt — apply the durable overlay via the library's lever (Phase 11)", () => {
@@ -411,6 +412,25 @@ describe("buildChunkPrompt — scoped to the named components", () => {
 });
 
 describe("detection — collapse variant sets + drop internal nodes", () => {
+  it("RESCAN_PROMPT carries the component-token extraction contract, rendered from the mapping", () => {
+    // Wiring, not wording: the clause must reach the extraction step, and it must carry the
+    // mapping function's real output rather than a copy that can drift from the audit.
+    expect(RESCAN_PROMPT).toContain(componentTokenExtractionClause());
+    expect(RESCAN_PROMPT).toContain(
+      componentTokenName("Components/Accordion/Active Item Header Background")!.name,
+    );
+  });
+
+  it("RESCAN_PROMPT states the extraction rule WITHOUT restating the build-side match rules", () => {
+    // The near-colour ban belongs to the build step; two copies of one rule is how they drift.
+    const clause = componentTokenExtractionClause();
+    expect(clause).not.toContain("four match rules");
+    // ...but the build-side rule is still present elsewhere in the prompt family.
+    expect(RESCAN_PROMPT.indexOf(clause)).toBeGreaterThan(
+      RESCAN_PROMPT.indexOf("Re-extract design tokens"),
+    );
+  });
+
   it("RESCAN_PROMPT collapses COMPONENT_SETs and slash-named variant families", () => {
     expect(RESCAN_PROMPT).toMatch(/COLLAPSE VARIANTS/);
     expect(RESCAN_PROMPT).toMatch(/COMPONENT_SET is ONE component/);

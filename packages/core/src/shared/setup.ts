@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { componentTokenYamlLines } from "./component-tokens";
 
 /**
  * The SDD-DE project setup questionnaire — a faithful GUI port of the
@@ -621,6 +622,11 @@ export function buildProjectYaml(a: SetupAnswers): string {
   lines.push(
     `theme_apply: ${themeApplyFor({ designSource: a.designSource, componentLibrary: a.componentLibrary })}`,
   );
+
+  // The naming rule extraction actually reads. Shared with the resync transform so the two
+  // cannot drift; see componentTokenYamlLines for why project.yaml is the delivery vehicle.
+  lines.push("");
+  lines.push(...componentTokenYamlLines());
 
   return lines.join("\n") + "\n";
 }
