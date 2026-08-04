@@ -16,7 +16,7 @@ export function Button({
   tipSide?: "left" | "right" | "top" | "bottom";
 }): React.JSX.Element {
   const base =
-    "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-medium transition-all duration-150 disabled:cursor-not-allowed disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-vs-accent-subtle active:brightness-95";
+    "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-medium transition-[background-color,border-color,box-shadow,opacity,filter] duration-150 disabled:cursor-not-allowed disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-vs-accent-subtle active:brightness-95";
   const variants: Record<string, string> = {
     // Accent action — a faint top highlight + a soft accent glow lift it off the surface.
     primary:

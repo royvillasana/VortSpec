@@ -59,7 +59,7 @@ export function Sitemap({
         onClick={() => setOpen((v) => !v)}
         className="flex w-full items-center gap-1.5 px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-vs-text-secondary hover:text-vs-text-primary"
       >
-        <span className="text-[9px] text-vs-text-muted">{open ? "▾" : "▸"}</span>
+        <span className="text-[10px] text-vs-text-muted">{open ? "▾" : "▸"}</span>
         Pages{count > 0 ? ` · ${count}` : ""}
       </button>
       {open && (
@@ -162,7 +162,7 @@ function RouteRow({
   return (
     <div>
       <div
-        className={`group flex items-center gap-1 pr-2 text-[12px] ${
+        className={`group flex items-center gap-1 pe-2 text-[12px] ${
           active ? "bg-vs-accent-subtle text-vs-accent" : "text-vs-text-secondary hover:bg-vs-bg-hover"
         }`}
         style={{ paddingLeft: 8 + depth * 12 }}
@@ -196,9 +196,9 @@ function RouteRow({
         >
           {isHome ? <House size={13} className="flex-none" /> : <FileCode size={13} className="flex-none opacity-70" />}
           <span className="truncate">{node.label}</span>
-          {node.dynamic && <span className="flex-none rounded bg-vs-bg-hover px-1 text-[9px] text-vs-text-muted">dynamic</span>}
+          {node.dynamic && <span className="flex-none rounded bg-vs-bg-hover px-1 text-[10px] text-vs-text-muted">dynamic</span>}
           {isScreen && (
-            <span className="flex-none rounded bg-vs-bg-hover px-1 text-[9px] text-vs-text-muted">screen</span>
+            <span className="flex-none rounded bg-vs-bg-hover px-1 text-[10px] text-vs-text-muted">screen</span>
           )}
         </button>
         {/* Per-page "Generate code": convert THIS screen into real framework code. Icon-only with the

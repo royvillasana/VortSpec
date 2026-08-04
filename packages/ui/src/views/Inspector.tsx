@@ -853,7 +853,7 @@ export function Inspector({
                               <span>→ var(--{canonical})</span>
                               <button
                                 onClick={() => void collapseDuplicate(dup, canonical)}
-                                className="ml-1 rounded-full border border-vs-border-strong px-2 py-0.5 text-[10px] text-vs-text-secondary hover:border-vs-accent hover:text-vs-text-primary"
+                                className="ms-1 rounded-full border border-vs-border-strong px-2 py-0.5 text-[10px] text-vs-text-secondary hover:border-vs-accent hover:text-vs-text-primary"
                               >
                                 → alias
                               </button>
@@ -879,7 +879,7 @@ export function Inspector({
                 <select
                   value={activeCollectionObj?.name ?? ""}
                   onChange={(e) => void selectCollection(e.target.value)}
-                  className="rounded-md border border-vs-border-default bg-vs-bg-surface px-2 py-1.5 text-xs text-vs-text-primary focus:outline-none"
+                  className="rounded-md border border-vs-border-default bg-vs-bg-surface px-2 py-1.5 text-xs text-vs-text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-vs-accent-subtle"
                   title="Figma variable collection"
                 >
                   {collections.map((c) => (
@@ -903,7 +903,7 @@ export function Inspector({
                     >
                       <span title={mapped ? `→ ${mapped}` : "No mapped code context (read-only)"}>
                         {m.name}
-                        {!mapped && <span className="ml-1 text-vs-text-muted">·ro</span>}
+                        {!mapped && <span className="ms-1 text-vs-text-muted">·ro</span>}
                       </span>
                     </Segment>
                   );
@@ -946,7 +946,7 @@ export function Inspector({
             >
               <span className="inline-block h-1.5 w-1.5 rounded-full bg-vs-warning" />
               From code only
-              {codeOnly && <span className="ml-0.5 text-vs-text-secondary">×</span>}
+              {codeOnly && <span className="ms-0.5 text-vs-text-secondary">×</span>}
             </button>
           </div>
         </div>
@@ -991,7 +991,7 @@ export function Inspector({
                     })
                   }
                   style={{ paddingLeft: 22 + r.depth * 16 }}
-                  className="flex w-full items-center gap-2 border-b border-vs-border-default bg-vs-bg-surface/40 py-1.5 pr-5 text-left hover:bg-vs-bg-hover"
+                  className="flex w-full items-center gap-2 border-b border-vs-border-default bg-vs-bg-surface/40 py-1.5 pe-5 text-left hover:bg-vs-bg-hover"
                 >
                   <span className="w-3 text-[10px] text-vs-text-muted">
                     {collapsed.has(r.key) ? "▸" : "▾"}
@@ -1274,7 +1274,7 @@ export function Inspector({
                   value={newTok.name}
                   onChange={(e) => setNewTok((s) => ({ ...s, name: e.target.value }))}
                   placeholder="color-brand"
-                  className="flex-1 bg-transparent py-1.5 pl-1 font-mono text-xs text-vs-text-primary placeholder:text-vs-text-muted focus:outline-none"
+                  className="flex-1 bg-transparent py-1.5 ps-1 font-mono text-xs text-vs-text-primary placeholder:text-vs-text-muted focus:outline-none"
                 />
               </div>
             </label>
@@ -1423,7 +1423,7 @@ function ModeMapModal({
               <select
                 value={draft[m.name] ?? ""}
                 onChange={(e) => setDraft((d) => ({ ...d, [m.name]: e.target.value }))}
-                className="flex-1 rounded-md border border-vs-border-default bg-vs-bg-surface px-2 py-1.5 text-xs text-vs-text-primary focus:outline-none"
+                className="flex-1 rounded-md border border-vs-border-default bg-vs-bg-surface px-2 py-1.5 text-xs text-vs-text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-vs-accent-subtle"
               >
                 <option value="">— unmapped (read-only) —</option>
                 {contexts.map((c) => (
@@ -1516,7 +1516,7 @@ function TokenRow({
         ...(selected ? { boxShadow: "inset 2px 0 0 #7C6FF0" } : undefined),
         paddingLeft: 22 + depth * 16,
       }}
-      className={`relative flex h-11 cursor-pointer items-center gap-3 border-b border-vs-border-default pr-5 ${
+      className={`relative flex h-11 cursor-pointer items-center gap-3 border-b border-vs-border-default pe-5 ${
         selected ? "bg-vs-bg-elevated" : "hover:bg-vs-bg-hover"
       }`}
     >
@@ -1714,7 +1714,7 @@ function TokenDrawer({
           {view.readOnly ? (
             <div className="rounded-md border border-vs-border-default bg-vs-bg-elevated px-2.5 py-2 font-mono text-xs text-vs-text-muted">
               {view.resolvedValue}
-              <span className="ml-2 not-italic text-[10px] text-vs-text-muted">
+              <span className="ms-2 not-italic text-[10px] text-vs-text-muted">
                 read-only — no code context mapped to this mode
               </span>
             </div>

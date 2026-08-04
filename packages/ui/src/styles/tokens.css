@@ -242,3 +242,20 @@
   0% { background-position: 200% 0; }
   100% { background-position: -200% 0; }
 }
+
+/*
+ * Continuous motion is opt-in (change: interface review, finding 4).
+ *
+ * Spinners and pulses appear on every long operation, and a rotation that never stops is exactly what
+ * `prefers-reduced-motion` exists for. Applied globally rather than per component: nine surfaces were
+ * animating unguarded, and the next one added would have been the tenth. Transitions are left alone —
+ * they are short, interruptible state changes, not sustained motion.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .animate-spin,
+  .animate-pulse,
+  .animate-bounce,
+  .animate-ping {
+    animation: none;
+  }
+}

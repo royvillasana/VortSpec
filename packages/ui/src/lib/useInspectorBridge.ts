@@ -1,4 +1,5 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { readoutForFocus } from "./focus-readout";
 import {
   INSPECTOR_BRIDGE_CHANNEL,
   bridgeEventSchema,
@@ -38,7 +39,26 @@ export interface InspectorBridge {
   tree: BridgeTree | null;
   /** The most recent selected-node readout (raw computed style + custom props). */
   readout: NodeReadout | null;
+  /**
+   * The FOCUSED member of the selection. Single-target operations that cannot fan out — reparent,
+   * insert-into, inline text — act on this, so none of them needed redesigning for multi-select.
+   */
   selectedId: string | null;
+  /**
+   * The whole selection, focused member included. A selection of one is `[selectedId]`, so every
+   * existing single-selection behaviour is the one-member case of this rather than a separate path.
+   */
+  selectedIds: string[];
+  /** Answers to `matchElements`, keyed by the query key: the node ids that currently look the same. */
+  matched: Record<string, string[]>;
+  /** Computed readouts for every member of a multi-selection, keyed by node id. */
+  readouts: Record<string, NodeReadout>;
+  /** The in-flight marquee rectangle, in guest coords, or null when no drag is running. */
+  marquee: Rect | null;
+  /** Tokens the selection AND its parts use, token → value on the selection. */
+  subtreeTokens: Record<string, string>;
+  /** How many elements the last subtree walk covered — the breadth of what `subtreeTokens` reports. */
+  subtreeElements: number;
   hoveredId: string | null;
   /** Live rectangles keyed by node id (updated on readout/geometry) for the overlay. */
   rects: Record<string, Rect>;
@@ -65,7 +85,16 @@ export interface InspectorBridge {
   moveNode: (id: string, targetId: string, position: "before" | "after" | "inside") => void;
   /** Swap classes on an element for a live variant preview. */
   setClass: (id: string, remove: string[], add: string[]) => void;
-  select: (id: string | null) => void;
+  /** Select a node; `additive` toggles it in the selection instead of replacing it. */
+  select: (id: string | null, additive?: boolean) => void;
+  /** Ask the guest which elements look the same; the answer lands in `matched[key]`. */
+  matchElements: (key: string, component: string, cssProp: string, value: string) => void;
+  /** Ask the guest for several nodes' readouts; they land in `readouts`. Does not move the focus. */
+  requestReadouts: (nodeIds: string[]) => void;
+  /** Extend the selection to everything matching one named criterion. */
+  selectMatching: (nodeId: string, by: "component" | "tag" | "token", cssProp?: string) => void;
+  /** Ask which tokens the selected component and its parts use; the answer lands in `subtreeTokens`. */
+  requestSubtreeTokens: (nodeId: string) => void;
   hover: (id: string | null) => void;
   /** Toggle guest input handling: inspect (select), interact (use the app), comment (pin). */
   setMode: (mode: CanvasMode) => void;
@@ -173,6 +202,12 @@ export function useInspectorBridge(): InspectorBridge {
   const [tree, setTree] = useState<BridgeTree | null>(null);
   const [readout, setReadout] = useState<NodeReadout | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [matched, setMatched] = useState<Record<string, string[]>>({});
+  const [readouts, setReadouts] = useState<Record<string, NodeReadout>>({});
+  const [marquee, setMarquee] = useState<Rect | null>(null);
+  const [subtreeTokens, setSubtreeTokens] = useState<Record<string, string>>({});
+  const [subtreeElements, setSubtreeElements] = useState(0);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [rects, setRects] = useState<Record<string, Rect>>({});
   const [runtimeError, setRuntimeError] = useState<InspectorBridge["runtimeError"]>(null);
@@ -216,11 +251,55 @@ export function useInspectorBridge(): InspectorBridge {
       case "tree":
         setTree(event.tree);
         return;
-      case "readout":
+      case "readout": {
+        const id = event.readout.nodeId;
         setReadout(event.readout);
-        setSelectedId(event.readout.nodeId);
         setSelectionLost(false); // a fresh readout means the node is alive again
-        setRects((r) => ({ ...r, [event.readout.nodeId]: event.readout.rect }));
+        setRects((r) => ({ ...r, [id]: event.readout.rect }));
+        if (!event.additive) {
+          setSelectedId(id);
+          setSelectedIds([id]);
+          return;
+        }
+        // Additive: toggle. Removing the focused member hands focus to whatever is left rather than
+        // leaving the panel pointed at something no longer selected.
+        setSelectedIds((prev) => {
+          if (!prev.includes(id)) {
+            setSelectedId(id);
+            return [...prev, id];
+          }
+          const next = prev.filter((x) => x !== id);
+          setSelectedId(next[next.length - 1] ?? null);
+          return next;
+        });
+        return;
+      }
+      case "subtreeTokens":
+        setSubtreeTokens(event.tokens);
+        setSubtreeElements(event.elements);
+        return;
+      case "marquee":
+        setMarquee(event.rect);
+        return;
+      case "selectedMany":
+        // The marquee's result replaces the selection, or extends it when the drag held a modifier.
+        setSelectedIds((prev) => {
+          const next = event.additive ? [...new Set([...prev, ...event.nodeIds])] : event.nodeIds;
+          setSelectedId(next[next.length - 1] ?? null);
+          return next;
+        });
+        if (event.nodeIds.length === 0 && !event.additive) setReadout(null);
+        return;
+      case "readouts":
+        setReadouts(Object.fromEntries(event.readouts.map((r) => [r.nodeId, r])));
+        return;
+      case "matchedElements":
+        setMatched((m) => ({ ...m, [event.key]: event.nodeIds }));
+        return;
+      case "selectionCleared":
+        setSelectedId(null);
+        setSelectedIds([]);
+        setReadout(null);
         return;
       case "geometry":
         setRects((r) => ({ ...r, [event.nodeId]: event.rect }));
@@ -247,6 +326,9 @@ export function useInspectorBridge(): InspectorBridge {
       case "selectionLost":
         // The selected node's element is gone after a re-render — drop the stale
         // selection so overlays/panels don't point at nothing.
+        // Drop only the member that went away, and never substitute another element for it — a
+        // selection that silently retargets is worse than one that shrinks.
+        setSelectedIds((prev) => prev.filter((x) => x !== event.nodeId));
         setSelectedId((cur) => (cur === event.nodeId ? null : cur));
         setReadout((r) => (r?.nodeId === event.nodeId ? null : r));
         setSelectionLost(true);
@@ -319,6 +401,16 @@ export function useInspectorBridge(): InspectorBridge {
     }
   }, []);
 
+  // The panel may only ever show the FOCUSED node's fields. `selectedMany` (marquee, select-all-
+  // matching) moves the focus without carrying a readout with it, and an additive toggle that
+  // removes the focused member moves it too — in both cases `readout` would otherwise keep pointing
+  // at a node the user is no longer editing, while single-target commands act on the new focus.
+  // Reconciled here rather than in each handler so no future event can reintroduce the split: the
+  // rule is "readout follows focus", stated once. See `readoutForFocus` for why null is an answer.
+  useEffect(() => {
+    setReadout((current) => readoutForFocus(current, selectedId, readouts));
+  }, [selectedId, readouts]);
+
   const attach = useCallback(
     (el: WebviewEl | null) => {
       webviewRef.current = el;
@@ -357,15 +449,18 @@ export function useInspectorBridge(): InspectorBridge {
   );
 
   const select = useCallback(
-    (id: string | null) => {
-      setSelectedId(id);
+    (id: string | null, additive = false) => {
       setSelectionLost(false);
       if (id === null) {
+        setSelectedId(null);
+        setSelectedIds([]);
         setReadout(null);
         send({ t: "clearOverride" });
-      } else {
-        send({ t: "selectNode", nodeId: id });
+        return;
       }
+      // The guest echoes the readout (with `additive`), and THAT is what updates the set — so a
+      // selection made from the tree and one made on the canvas converge through one code path.
+      send({ t: "selectNode", nodeId: id, additive });
     },
     [send],
   );
@@ -487,6 +582,27 @@ export function useInspectorBridge(): InspectorBridge {
     [selectedId, send],
   );
   const requestTree = useCallback(() => send({ t: "requestTree" }), [send]);
+  /** Read out several nodes without moving the focus, so a multi-selection can be intersected. */
+  const requestReadouts = useCallback(
+    (nodeIds: string[]) => send({ t: "readoutMany", nodeIds }),
+    [send],
+  );
+  /** Ask what the selected component and its parts are made of. */
+  const requestSubtreeTokens = useCallback(
+    (nodeId: string) => send({ t: "subtreeTokens", nodeId }),
+    [send],
+  );
+  const selectMatching = useCallback(
+    (nodeId: string, by: "component" | "tag" | "token", cssProp?: string) =>
+      send({ t: "selectMatching", nodeId, by, cssProp }),
+    [send],
+  );
+  /** Ask which elements currently look the same as `value` for `cssProp`, under `component`. */
+  const matchElements = useCallback(
+    (key: string, component: string, cssProp: string, value: string) =>
+      send({ t: "matchElements", key, component, cssProp, value }),
+    [send],
+  );
   const reload = useCallback(() => webviewRef.current?.reload(), []);
   const setLightMode = useCallback((on: boolean) => send({ t: "setLightMode", on }), [send]);
   const loadUrl = useCallback((url: string) => {
@@ -527,6 +643,16 @@ export function useInspectorBridge(): InspectorBridge {
     tree,
     readout,
     selectedId,
+    selectedIds,
+    matched,
+    matchElements,
+    readouts,
+    requestReadouts,
+    selectMatching,
+    marquee,
+    subtreeTokens,
+    subtreeElements,
+    requestSubtreeTokens,
     hoveredId,
     rects,
     runtimeError,

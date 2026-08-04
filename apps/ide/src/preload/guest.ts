@@ -606,6 +606,52 @@ const DRAG_THRESHOLD = 4;
 /** Light-page mode: the DOM IS the source, so drop targets don't require a `data-source` dev-stamp. */
 let lightMode = false;
 /** A press on the selected element, armed but not yet past the movement threshold. */
+
+/**
+ * An in-flight marquee (change: scoped-style-edits, Phase 2). Begun on EMPTY canvas space only — a drag
+ * that starts on an element stays that element's move, which is the existing behaviour and the one the
+ * hand expects.
+ */
+let marquee: { x0: number; y0: number; x1: number; y1: number; additive: boolean } | null = null;
+
+/** The marquee's current rectangle, normalized so dragging up/left works like dragging down/right. */
+function marqueeRect(m: NonNullable<typeof marquee>): { x: number; y: number; width: number; height: number } {
+  return {
+    x: Math.min(m.x0, m.x1),
+    y: Math.min(m.y0, m.y1),
+    width: Math.abs(m.x1 - m.x0),
+    height: Math.abs(m.y1 - m.y0),
+  };
+}
+
+/**
+ * The OUTERMOST elements a rectangle fully encloses.
+ *
+ * Fully encloses, not merely touches: a marquee that grabs everything it brushes past selects things the
+ * user did not mean to include, and a selection you have to prune is worse than one you have to extend.
+ *
+ * Outermost, because enclosing a card also encloses everything inside it. Selecting the card AND its
+ * children would apply an edit twice over and make the count meaningless — so a candidate whose ancestor
+ * is also enclosed is dropped in favour of the ancestor.
+ */
+function enclosedIds(r: { x: number; y: number; width: number; height: number }): string[] {
+  const inside = new Map<string, Element>();
+  for (const [id, el] of byId) {
+    const b = el.getBoundingClientRect();
+    if (b.width === 0 || b.height === 0) continue;
+    if (b.left >= r.x && b.top >= r.y && b.right <= r.x + r.width && b.bottom <= r.y + r.height) {
+      inside.set(id, el);
+    }
+  }
+  const els = new Set(inside.values());
+  return [...inside]
+    .filter(([, el]) => {
+      for (let p = el.parentElement; p; p = p.parentElement) if (els.has(p)) return false;
+      return true;
+    })
+    .map(([id]) => id);
+}
+
 let dragArm: { id: string; el: Element; startX: number; startY: number; grabX: number; grabY: number } | null = null;
 /** The live drag: the dragged element, its fingerprint, the cached structural model, and the grab offset. */
 let dragging: {
@@ -972,7 +1018,109 @@ function handleCommand(cmd: BridgeCommand): void {
     case "selectNode": {
       selectedId = cmd.nodeId;
       const el = resolve(cmd.nodeId);
-      if (el) send({ t: "readout", readout: readoutOf(el, cmd.nodeId) });
+      // Echo `additive` back so a modifier-click in the layer tree toggles the SAME selection a
+      // modifier-click on the canvas does — one selection, reachable from either surface.
+      if (el) send({ t: "readout", readout: readoutOf(el, cmd.nodeId), additive: cmd.additive });
+      return;
+    }
+    case "clearSelection":
+      selectedId = null;
+      send({ t: "selectionCleared" });
+      return;
+    case "readoutMany": {
+      // Deliberately does NOT touch `selectedId`: the panel needs every member's computed style to decide
+      // what agrees, and asking must not move the focus it is describing. A member that no longer resolves
+      // is left out rather than reported as empty — absent and "has no value" are different facts.
+      const readouts = cmd.nodeIds
+        .map((id) => {
+          const el = resolve(id);
+          return el ? readoutOf(el, id) : null;
+        })
+        .filter((r): r is NonNullable<typeof r> => r !== null);
+      send({ t: "readouts", readouts });
+      return;
+    }
+    case "selectMatching": {
+      // Answered in the guest for the same reason `matchElements` is: matching is a question about the
+      // live DOM. The result is SELECTED rather than edited, so the user sees the set highlighted and can
+      // remove members before anything is written — a bulk edit you can review beats one you must undo.
+      const src = resolve(cmd.nodeId);
+      if (!src) return;
+      const nodeIds: string[] = [];
+      for (const [id, el] of byId) {
+        let hit = false;
+        if (cmd.by === "component") {
+          const c = src.getAttribute("data-component");
+          hit = !!c && el.getAttribute("data-component") === c;
+        } else if (cmd.by === "tag") {
+          hit = el.tagName === src.tagName;
+        } else if (cmd.by === "token" && cmd.cssProp) {
+          // Same binding, not merely the same value: two elements can land on 8px by different routes,
+          // and only one of those routes follows the design system.
+          const want = getComputedStyle(src).getPropertyValue(cmd.cssProp).trim();
+          hit = getComputedStyle(el).getPropertyValue(cmd.cssProp).trim() === want;
+        }
+        if (hit) nodeIds.push(id);
+      }
+      send({ t: "selectedMany", nodeIds, additive: false });
+      if (nodeIds.length) selectedId = nodeIds[nodeIds.length - 1];
+      return;
+    }
+    case "subtreeTokens": {
+      // "What is this component made of?" is a question about the component, not about the single DOM
+      // node that carried the click. A Card sets its own radius and background while its padding, type
+      // and shadow live on the elements inside it — so the subtree is the honest scope.
+      //
+      // Read from the CSS RULES that match, not from computed style: computed values are already
+      // resolved, so `var(--radius-card)` is indistinguishable there from a hardcoded 20px. The rules
+      // still carry the reference, which is the thing being asked about.
+      const root = resolve(cmd.nodeId);
+      if (!root) return;
+      const els = [root, ...root.querySelectorAll("*")];
+      const names = new Set<string>();
+      const collect = (text: string): void => {
+        for (const m of text.matchAll(/var\(\s*--([\w-]+)/g)) names.add(m[1]);
+      };
+      for (const el of els) collect(el.getAttribute("style") ?? "");
+      for (const sheet of Array.from(document.styleSheets)) {
+        let rules: CSSRuleList;
+        try {
+          rules = sheet.cssRules; // a cross-origin sheet throws; skip it rather than fail the query
+        } catch {
+          continue;
+        }
+        for (const rule of Array.from(rules)) {
+          const sel = (rule as CSSStyleRule).selectorText;
+          if (!sel) continue;
+          let hit = false;
+          try {
+            hit = els.some((el) => el.matches(sel));
+          } catch {
+            continue; // an unsupported selector matches nothing here
+          }
+          if (hit) collect(rule.cssText);
+        }
+      }
+      // Pair each with the value it resolves to ON the component, so the panel can show what it is worth
+      // here even when the design system gives it another value elsewhere.
+      const cs = getComputedStyle(root);
+      const tokens: Record<string, string> = {};
+      for (const n of names) tokens[n] = cs.getPropertyValue(`--${n}`).trim();
+      send({ t: "subtreeTokens", nodeId: cmd.nodeId, tokens, elements: els.length });
+      return;
+    }
+    case "matchElements": {
+      // "Looks the same" is a question about the live DOM, so it is answered here rather than guessed
+      // host-side from the tree. Same component AND the same COMPUTED value — computed, so that an element
+      // reaching the value through a token, a class or an inline style all count as looking the same,
+      // which is what the user means when they point at two things and say they match.
+      const nodeIds: string[] = [];
+      for (const [id, el] of byId) {
+        if (el.getAttribute("data-component") !== cmd.component) continue;
+        const v = getComputedStyle(el).getPropertyValue(cmd.cssProp).trim();
+        if (v === cmd.value.trim()) nodeIds.push(id);
+      }
+      send({ t: "matchedElements", key: cmd.key, nodeIds });
       return;
     }
     case "hoverNode":
@@ -1210,6 +1358,14 @@ function attach(): void {
   window.addEventListener(
     "pointermove",
     (e: PointerEvent) => {
+      // A marquee in flight owns the pointer: stream its rectangle so the host can draw it, and take no
+      // hover feedback, which would fight the rectangle for the user's attention.
+      if (marquee) {
+        marquee.x1 = e.clientX;
+        marquee.y1 = e.clientY;
+        send({ t: "marquee", rect: marqueeRect(marquee) });
+        return;
+      }
       // Hover feedback in inspect/comment (the target element) and insert (the slot).
       if (mode !== "inspect" && mode !== "comment" && mode !== "insert") return;
       if (rafPending) return;
@@ -1261,6 +1417,19 @@ function attach(): void {
       }
       if (mode !== "inspect" && mode !== "comment") return;
       const deepId = idUnder(e.target);
+      // Empty space in inspect mode begins a marquee. Only here: a press ON an element is that element's
+      // select-then-move, and stealing it for a marquee would break the gesture the hand already knows.
+      if (mode === "inspect" && deepId === null) {
+        marquee = {
+          x0: e.clientX,
+          y0: e.clientY,
+          x1: e.clientX,
+          y1: e.clientY,
+          additive: e.shiftKey || e.metaKey || e.ctrlKey,
+        };
+        e.preventDefault();
+        return;
+      }
       if (deepId === null) return;
       e.preventDefault();
       e.stopPropagation();
@@ -1287,10 +1456,13 @@ function attach(): void {
       const id = withinSelection ? (selectedId as string) : (clickTarget(e.target) ?? deepId);
       const el = resolve(id);
       if (!el) return;
+      // A modifier held on the press means "add to / remove from" rather than "replace". It also
+      // suppresses the drag arm: the gesture is a selection change, not the start of a move.
+      const additive = e.shiftKey || e.metaKey || e.ctrlKey;
       // Pressing the already-selected element arms a drag (select-then-move; Decision 3).
-      if (id === selectedId) armDrag(id, el, e.clientX, e.clientY);
+      if (id === selectedId && !additive) armDrag(id, el, e.clientX, e.clientY);
       selectedId = id;
-      send({ t: "readout", readout: readoutOf(el, id) });
+      send({ t: "readout", readout: readoutOf(el, id), additive });
     },
     { capture: true },
   );
@@ -1299,6 +1471,19 @@ function attach(): void {
   window.addEventListener(
     "pointerup",
     (e: PointerEvent) => {
+      if (marquee) {
+        const r = marqueeRect(marquee);
+        const additive = marquee.additive;
+        marquee = null;
+        send({ t: "marquee", rect: null });
+        // A marquee that never moved is a click on empty space — which clears, rather than selecting the
+        // zero elements a degenerate rectangle encloses.
+        const ids = r.width < 3 && r.height < 3 ? [] : enclosedIds(r);
+        send({ t: "selectedMany", nodeIds: ids, additive });
+        if (ids.length) selectedId = ids[ids.length - 1];
+        else if (!additive) selectedId = null;
+        return;
+      }
       if (dragging) {
         e.preventDefault();
         e.stopPropagation();
@@ -1312,9 +1497,18 @@ function attach(): void {
   window.addEventListener(
     "keydown",
     (e: KeyboardEvent) => {
-      if (e.key === "Escape" && (dragging || dragArm)) {
+      if (e.key !== "Escape") return;
+      if (dragging || dragArm) {
         e.preventDefault();
         cancelDrag(null);
+        return;
+      }
+      // Nothing in flight: Escape empties the selection. The guest owns this because a focused webview
+      // swallows the key — the host would never see it.
+      if (mode === "inspect" && selectedId) {
+        e.preventDefault();
+        selectedId = null;
+        send({ t: "selectionCleared" });
       }
     },
     { capture: true },

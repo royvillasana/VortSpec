@@ -10,10 +10,20 @@ import { Button, Spinner } from "@vortspec/ui/ui";
 import { ProjectRail, projectRailItems } from "@vortspec/ui/ProjectRail";
 import { DesignPanel, ChangesBar } from "../components/run-canvas/DesignPanel";
 import { LibraryPanel } from "./LibraryPanel";
+import { matchKey, writesOverlay, type StyleScope } from "@vortspec/core/style-scope";
+import { fanOut, unwritten } from "@vortspec/core/style-intersection";
+
+/** The durable personalization overlay, relative to the project root. */
+const OVERRIDES_REL = ".vortspec/theme-overrides.json";
+/** What an overlay looks like with nothing in it — the state undo returns a first-ever override to. */
+const EMPTY_OVERLAY = `${JSON.stringify({ version: 1, tokens: {}, components: {}, googleFonts: [] }, null, 2)}\n`;
+import { fieldIntersection } from "../components/run-canvas/scope-reach";
 import { FigmaMcpBanner } from "../components/FigmaMcpBanner";
 import { StorybookSidebar } from "../components/run-canvas/StorybookSidebar";
 import { Sitemap, type PageGenState } from "../components/run-canvas/Sitemap";
 import type { RouteDiscovery, RouteNode, Rect } from "@vortspec/core/ipc";
+// Aliased: bare `Selection` in this file resolves to the DOM's, not the panel view-model's.
+import type { Selection as CanvasNodeSelection, BridgeTree } from "@vortspec/core/ipc";
 import { RunCanvas } from "../components/run-canvas/RunCanvas";
 import { Logo } from "../components/Logo";
 import { viewportsFromTokens, appliesInViewport, type ViewportId, type DeviceFrameKind } from "../components/run-canvas/viewports";
@@ -554,6 +564,41 @@ export function RunApp({
     bridge.reload();
   };
 
+  /**
+   * Re-theme the open screen whenever the personalization overlay changes ON DISK, not only when this
+   * view's own Library tab reports an edit.
+   *
+   * The overlay is materialized into every served page at request time, so the canvas shows a token
+   * change the moment it re-fetches — but ONLY something asks it to. The `onEdited` callback covers the
+   * Library tab mounted right here; it cannot cover the same panel mounted in the Design-tokens sidebar,
+   * a preset applied from there, or an agent writing the overlay directly. In those cases the file
+   * changed, the sidebar's Live Preview moved, and the screen kept rendering the values it loaded with —
+   * which reads as "the edit did nothing".
+   *
+   * Watching the file makes the canvas follow the design system regardless of who wrote it. Scoped to
+   * the overlay + presets so an ordinary source edit doesn't reload the canvas out from under an
+   * in-progress instant edit. The workspace watcher is reference-counted, so sharing it with
+   * LibraryPanel is safe.
+   */
+  const refreshRef = useRef(refresh);
+  refreshRef.current = refresh;
+  useEffect(() => {
+    if (!canvas) return;
+    void api.watchWorkspace(project.path);
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const off = api.onWorkspaceChange((e) => {
+      if (e.projectPath !== project.path) return;
+      if (e.path !== null && !/^\.vortspec\/(theme-overrides|presets)\.json$/.test(e.path)) return;
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => refreshRef.current(), 250);
+    });
+    return () => {
+      off();
+      if (timer) clearTimeout(timer);
+      void api.unwatchWorkspace(project.path);
+    };
+  }, [project.path, canvas]);
+
   // The chat assistant edits files on disk, but the canvas keeps showing the DOM it already loaded —
   // so an AI change (e.g. "make the content bigger") wouldn't appear until a manual reload. Reload the
   // canvas when the assistant finishes a turn (busy → idle), so AI edits show immediately, exactly like
@@ -676,6 +721,19 @@ export function RunApp({
   const undoStack = useRef<FileSnapshot[][]>([]);
   const redoStack = useRef<FileSnapshot[][]>([]);
   const MAX_HISTORY = 50; // cap undo/redo depth so a long session can't grow snapshots unbounded
+
+  /**
+   * Record an overlay write as ONE undo step (change: scoped-style-edits, task 4.6).
+   *
+   * A `component-token` or `token` edit writes a single JSON file, so its pre-edit content IS the whole
+   * undo entry — no per-element fan-out to coalesce. Pushed only after the write lands, so a failed
+   * write leaves no phantom step that would silently revert something the user never changed.
+   */
+  const rememberOverlayUndo = useCallback((entry: FileSnapshot[]) => {
+    undoStack.current.push(entry);
+    if (undoStack.current.length > MAX_HISTORY) undoStack.current.shift();
+    redoStack.current = []; // a fresh edit invalidates the redo trail, exactly as a source edit does
+  }, []);
   const autoPersist = useMemo(
     () =>
       createAutoPersist({
@@ -921,18 +979,26 @@ export function RunApp({
   // it appears as a persistent, detachable chip on the composer, grounds every
   // turn while the selection holds, and never triggers a run. Withdrawn when the
   // selection clears, the element is lost after a reload, or the canvas unmounts.
+  //
+  // A multi-selection is carried as ONE context, not one per member: five chips would say five things
+  // were selected separately, when the user selected one set. The chip states the count, and what the
+  // members have in common when they have anything, so the assistant and the user agree on what "the
+  // selection" refers to before a prompt is written against it.
   const publishSelection = usePublishCanvasSelection();
   useEffect(() => {
+    const ids = bridge.selectedIds;
     publishSelection(
       selection
         ? {
-            key: selection.nodeId,
-            label: selection.component ?? selection.label,
+            // Keyed on the whole set, so adding or removing a member replaces the chip rather than
+            // leaving one that describes a selection that no longer exists.
+            key: ids.length > 1 ? ids.join(",") : selection.nodeId,
+            label: multiSelectionLabel(selection, ids, bridge.tree),
             payload: buildSelectionContext(selection, Object.values(pending)),
           }
         : null,
     );
-  }, [selection, pending, publishSelection]);
+  }, [selection, pending, publishSelection, bridge.selectedIds, bridge.tree]);
   useEffect(() => () => publishSelection(null), [publishSelection]);
 
   // Storybook-backed component previews: the picker shows each component's story in
@@ -1523,6 +1589,10 @@ export function RunApp({
   selectionRef.current = selection;
   const readoutRef = useRef(bridge.readout);
   readoutRef.current = bridge.readout;
+  const matchedRef = useRef(bridge.matched);
+  matchedRef.current = bridge.matched;
+  const selectedIdsRef = useRef(bridge.selectedIds);
+  selectedIdsRef.current = bridge.selectedIds;
   // Current viewport + pending ledger as refs — read inside commitEdits / the re-scope
   // effect without stale closures or re-subscribing.
   const viewportIdRef = useRef(viewportId);
@@ -1747,8 +1817,132 @@ export function RunApp({
   );
 
   // A Design-panel field edit → live override + a recorded pending edit.
+  /**
+   * A style edit committed at `component` or `token` scope (change: scoped-style-edits).
+   *
+   * These write the durable personalization overlay, not the page's own source, so they take none of the
+   * per-element machinery below: no live DOM override, no fingerprint, no pending edit, and — crucially —
+   * no static-resolvability guard, because the write targets a component or token IDENTITY rather than
+   * this element's JSX. An element whose JSX cannot be resolved can still have its component re-themed.
+   *
+   * Nothing here reloads the canvas: the overlay watcher does that, so the screen re-themes on the same
+   * terms whether the write came from here, the design-system sidebar, a preset, or an agent.
+   */
+  const applyScopedOverride = useCallback(
+    async (key: string, value: string, scope: StyleScope, scopeKey?: string, scopeToken?: string): Promise<void> => {
+      if (!scopeKey) return;
+      // Snapshot the overlay BEFORE writing so the edit is one undo step, like every other edit here.
+      // `snapshotComponent` is really "read these files" — the name is historical, the behaviour is
+      // general. An overlay that does not exist yet snapshots as its EMPTY state rather than as nothing:
+      // undoing the first override anyone ever writes has to remove it, and restoring "nothing" would
+      // leave it in place.
+      const prior = await api
+        .snapshotComponent(project.path, OVERRIDES_REL)
+        .catch(() => [] as FileSnapshot[]);
+      const undoEntry: FileSnapshot[] =
+        prior.length > 0 ? prior : [{ path: OVERRIDES_REL, content: EMPTY_OVERLAY }];
+      try {
+        if (scope === "token") {
+          await api.setThemeTokenOverride(project.path, scopeKey, value);
+          rememberOverlayUndo(undoEntry);
+          return;
+        }
+        if (scope === "component-token") {
+          // The SAME token, redefined inside this component only. Cards reading `--radius-element` keep
+          // the design system's value; Buttons take this one — and the value stays a token, so it still
+          // follows a later theme. `scopeToken` is the token name; `scopeKey` is the component.
+          if (!scopeToken) return;
+          const prior = await api.getThemeOverrides(project.path).catch(() => null);
+          const priorBase = prior?.components?.[scopeKey]?.base ?? {};
+          await api.setThemeComponentOverride(project.path, scopeKey, {}, {
+            ...priorBase,
+            [`--${scopeToken}`]: value,
+          });
+          rememberOverlayUndo(undoEntry);
+          return;
+        }
+        const css = cssForField(key, value);
+        // A composite field (padding box, align, resize) maps to no single declaration set here. Rather
+        // than write half of it, decline — the narrow scopes still handle those correctly.
+        if (Object.keys(css).length === 0) return;
+        // MERGE, don't replace: `setComponentOverride` assigns the base bag wholesale, so writing just
+        // this property would silently drop every other property already overridden on this component.
+        const existing = await api.getThemeOverrides(project.path).catch(() => null);
+        const base = existing?.components?.[scopeKey]?.base ?? {};
+        await api.setThemeComponentOverride(project.path, scopeKey, {}, { ...base, ...css });
+        rememberOverlayUndo(undoEntry);
+      } catch {
+        /* the overlay write failed; the page keeps its current values rather than showing a lie */
+      }
+    },
+    [project.path],
+  );
+
+  /**
+   * A `matching`-scoped edit: apply to every element that currently LOOKS THE SAME (change:
+   * scoped-style-edits, revision 4b).
+   *
+   * The set comes from the guest, which is the only place the live computed styles are, and it excludes
+   * siblings of the same component that were styled differently — those were styled differently on
+   * purpose. Each member is written independently, so one element whose JSX cannot be resolved neither
+   * blocks the others nor disappears without being named.
+   */
+  const applyToMatching = useCallback(
+    async (key: string, value: string, component?: string): Promise<void> => {
+      const current = selectionRef.current?.sections.flatMap((s) => s.fields).find((f) => f.key === key);
+      if (!component || !current) return;
+      const ids = matchedRef.current[matchKey(component, current.value)];
+      // No answer yet means we do not know the set. Writing "every instance" instead would hit exactly the
+      // elements the user asked to leave alone, so decline and let them pick a scope we can honour.
+      if (!ids?.length) return;
+      const css = cssForField(key, value);
+      if (Object.keys(css).length === 0) return;
+      const results = await fanOut(ids, async (id) => bridge.applyOverride(id, css));
+      const missed = unwritten(results);
+      if (missed.length) {
+        setWriteError(`${missed.length} matching element(s) could not be updated.`);
+      }
+      // The live overrides ARE the edit on a light page; commitEdits persists the serialized DOM once for
+      // the whole fan-out, so undoing it restores every member in a single step.
+      commitEdits([{ key, value, cssProps: Object.keys(css), css }]);
+    },
+    [bridge, commitEdits],
+  );
+
+  /**
+   * A `selection`-scoped edit: apply to every selected element (change: scoped-style-edits, Phase 2).
+   *
+   * Only the property the user edited is written. Every OTHER property each member has — including ones
+   * the panel is showing as `Mixed` — is left exactly as it was, which is the difference between a bulk
+   * edit and a bulk overwrite. Members are written independently so one failure neither blocks the rest
+   * nor disappears without being named.
+   */
+  const applyToSelection = useCallback(
+    async (key: string, value: string): Promise<void> => {
+      const css = cssForField(key, value);
+      if (Object.keys(css).length === 0) return;
+      const results = await fanOut(selectedIdsRef.current, async (id) => bridge.applyOverride(id, css));
+      const missed = unwritten(results);
+      if (missed.length) setWriteError(`${missed.length} selected element(s) could not be updated.`);
+      commitEdits([{ key, value, cssProps: Object.keys(css), css }]);
+    },
+    [bridge, commitEdits],
+  );
+
   const onFieldChange = useCallback(
-    (key: string, value: string) => {
+    (key: string, value: string, scope: StyleScope = "element", scopeKey?: string, scopeToken?: string) => {
+      if (writesOverlay(scope)) {
+        void applyScopedOverride(key, value, scope, scopeKey, scopeToken);
+        return;
+      }
+      if (scope === "matching") {
+        void applyToMatching(key, value, scopeKey);
+        return;
+      }
+      if (scope === "selection" && selectedIdsRef.current.length > 1) {
+        void applyToSelection(key, value);
+        return;
+      }
       if (key === "content") {
         const id = selectedIdRef.current;
         if (id) setText(id, value); // live text preview
@@ -1845,7 +2039,7 @@ export function RunApp({
       // so a later undo of this edit is detectable as a real change.
       refreshReadout();
     },
-    [applyLive, commitEdits, setText, refreshReadout],
+    [applyLive, commitEdits, setText, refreshReadout, applyScopedOverride, applyToMatching, applyToSelection],
   );
 
   // An inline text edit on the canvas (double-click) — the guest already applied
@@ -1893,7 +2087,92 @@ export function RunApp({
     [setClass],
   );
 
-  const onSelectNode = useCallback((id: string) => select(id), [select]);
+  const onSelectNode = useCallback((id: string, additive?: boolean) => select(id, additive), [select]);
+
+  // Ask what the selected component and its parts are made of, whenever the selection changes.
+  const subtreeTokens = bridge.subtreeTokens;
+  useEffect(() => {
+    const id = bridge.selectedId;
+    if (id) bridge.requestSubtreeTokens(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bridge.selectedId]);
+
+  // Ask for every member's computed style whenever the selection grows past one, so the panel can say
+  // what they agree on. Only for a real multi-selection: one element already has its readout.
+  useEffect(() => {
+    if (bridge.selectedIds.length > 1) bridge.requestReadouts(bridge.selectedIds);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bridge.selectedIds.join(",")]);
+
+  /** Which fields the selection does NOT agree on — rendered as `Mixed`, never as one member's value. */
+  const mixedFields = useMemo(
+    () => fieldIntersection(selection, bridge.selectedIds, bridge.readouts),
+    [selection, bridge.selectedIds, bridge.readouts],
+  );
+
+  /**
+   * One built `Selection` per selected member — what the SCOPE rules read (change: scoped-style-edits).
+   *
+   * `scopeTargets` used to be handed the focused element alone, so `deriveScope`'s multi-member branch
+   * could not execute through the live UI: three selected Cards were scoped as one. Built HERE because a
+   * member's token per field is not recoverable from its computed style — `getComputedStyle` reports the
+   * resolved value, not the `var()` the author wrote — so it takes `buildSelection` over that member's own
+   * readout, with the project token list and the component roster, which is the recipe already applied to
+   * the focused member above. Inferring the others' tokens from resolved values instead would make "they
+   * share a token" a guess, and a wide scope justified by a guess edits things the user did not agree to.
+   *
+   * A member whose readout has not landed yet is omitted rather than defaulted: the readouts are requested
+   * the moment the selection grows, and not knowing is not the same as knowing it differs — the rule
+   * `fieldIntersection` already follows.
+   */
+  const memberSelections = useMemo(() => {
+    if (bridge.selectedIds.length < 2) return selection ? [selection] : [];
+    const built: CanvasNodeSelection[] = [];
+    for (const id of bridge.selectedIds) {
+      if (selection && id === selection.nodeId) {
+        built.push(selection); // reuse, so the focused member keeps one identity across renders
+        continue;
+      }
+      const readout = bridge.readouts[id];
+      if (!readout) continue;
+      try {
+        const node = bridge.tree?.nodes[id];
+        const component = resolveComponent(node, components, readout.componentCandidates);
+        built.push(buildSelection(readout, { tokens, component, tag: node?.tag }));
+      } catch (err) {
+        // Same reasoning as the focused selection above: one member that will not build must not
+        // blank the panel. It is dropped, which reads as "not known yet" rather than as agreement.
+        console.error("[run-canvas] failed to build member selection:", id, err);
+      }
+    }
+    return built;
+  }, [selection, bridge.selectedIds, bridge.readouts, bridge.tree, tokens, components]);
+
+  /**
+   * Every token the selected element resolves through, with the value it resolves to.
+   *
+   * Both halves of the Library tab's answer come from this: the ones the design system HAS are marked in
+   * place among its rows, and the ones it does not have are listed separately. A page can invent tokens —
+   * a light page routinely declares its own `:root` — and a component built on one would otherwise show
+   * nothing at all for that property, which reads as a broken panel rather than as the drift it is.
+   */
+  const selectionTokens = useMemo(() => {
+    const out: Record<string, string> = {};
+    // The component's own fields first — the panel already resolved these, values included.
+    for (const sec of selection?.sections ?? []) {
+      for (const f of sec.fields) {
+        const name = f.token ?? tokenNameFromVar(f.value);
+        if (name && !(name in out)) out[name] = f.value;
+      }
+    }
+    // Then its PARTS. A Card sets its own radius and background while its padding, type and shadow live
+    // on the elements inside it — without these, three of the five sections read empty for a component
+    // that plainly uses spacing and shadow, and the emptiness looks like a broken panel.
+    for (const [name, value] of Object.entries(subtreeTokens)) {
+      if (!(name in out)) out[name] = value;
+    }
+    return out;
+  }, [selection, subtreeTokens]);
   const onHoverNode = useCallback((id: string | null) => hover(id), [hover]);
 
   // Delete/Backspace deletes the selected element (Figma-style), in inspect mode only and
@@ -2237,10 +2516,32 @@ export function RunApp({
           // The design system, as the Library tab beside Design Attributes. An edit re-themes the open
           // screen through the SAME reload the header Refresh uses — the overlay is injected after each
           // page's own `:root`, so no new propagation mechanism is needed (design D6).
-          libraryPanel={<LibraryPanel project={project} onEdited={refresh} />}
+          // The design system marks which of its values compose the selected element — its background, its
+          // type, its radius — so "what is this component made of?" is answerable without leaving the tab.
+          // Marked in place: nothing is filtered, reordered or hidden, because a list that rearranges per
+          // selection is a list nobody learns.
+          libraryPanel={
+            <LibraryPanel
+              project={project}
+              onEdited={refresh}
+              tokensInUse={selectionTokens}
+              selectedComponent={selection?.component ?? null}
+              selectionLabel={selection?.label ?? null}
+              selectionElements={bridge.subtreeElements}
+            />
+          }
           selection={selection}
           tree={layersTree}
           hoveredId={bridge.hoveredId}
+          selectedIds={bridge.selectedIds}
+          memberSelections={memberSelections}
+          onSelectMatching={(by) => {
+            const id = selectedIdRef.current;
+            if (id) bridge.selectMatching(id, by);
+          }}
+          matched={bridge.matched}
+          mixed={mixedFields}
+          onMatchQuery={bridge.matchElements}
           onSelectNode={onSelectNode}
           onHoverNode={onHoverNode}
           onReorderNode={reorderNode}
@@ -2411,7 +2712,7 @@ export function RunApp({
                   the run finished without changing a file, so {Object.keys(pending).length === 1 ? "it’s" : "they’re"}{" "}
                   still preview-only. Try <b>Re-apply in Chat</b> to describe the change to Claude, or Discard.
                   {applyMissReason && (
-                    <span className="mt-1 block border-l-2 border-vs-warning/40 pl-2 text-[11px] italic text-vs-text-muted">
+                    <span className="mt-1 block border-l-2 border-vs-warning/40 ps-2 text-[11px] italic text-vs-text-muted">
                       Claude said: “{applyMissReason}”
                     </span>
                   )}
@@ -2908,3 +3209,26 @@ function ExternalLinkIcon(): React.JSX.Element {
 /** Shared style for the Playground header's icon-only actions (Open in browser, Refresh). */
 const HEADER_ICON_BTN =
   "rounded p-1.5 text-vs-text-muted transition-colors hover:bg-vs-bg-hover hover:text-vs-text-primary disabled:cursor-not-allowed disabled:opacity-50";
+
+
+/**
+ * What the assistant's chip calls the current selection (change: scoped-style-edits, Phase 2).
+ *
+ * One element keeps today's label. Several say how many, and name what they share when they share a
+ * component — "5 Buttons" is a thing a prompt can be written against; "Button" alongside four unnamed
+ * others is not. When they share nothing, the count alone is the honest answer.
+ *
+ * The count is of members actually still selected, so a partial re-acquisition after a reload reports
+ * what survived rather than what was originally chosen.
+ */
+export function multiSelectionLabel(
+  selection: CanvasNodeSelection,
+  ids: readonly string[],
+  tree: BridgeTree | null,
+): string {
+  if (ids.length <= 1) return selection.component ?? selection.label;
+  const components = ids.map((id) => tree?.nodes[id]?.component).filter(Boolean);
+  const shared =
+    components.length === ids.length && components.every((c) => c === components[0]) ? components[0] : null;
+  return shared ? `${ids.length} ${shared}s` : `${ids.length} elements`;
+}

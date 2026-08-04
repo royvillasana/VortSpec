@@ -54,7 +54,25 @@ async function baseTokenCssFor(projectPath: string): Promise<string> {
 export async function tokenCssFor(projectPath: string): Promise<string> {
   const base = await baseTokenCssFor(projectPath);
   const overlay = await materializeThemeCss(projectPath).catch(() => "");
-  return overlay ? `${base}\n${overlay}` : base;
+  return overlay ? hoistImports(`${base}\n${overlay}`) : base;
+}
+
+/**
+ * Move every `@import` to the top of the combined sheet.
+ *
+ * CSS ignores an `@import` that follows any other rule, and concatenating the overlay AFTER the base
+ * puts the overlay's imports there by construction. That silently breaks the one thing the overlay's
+ * import exists for: a chosen Google family is named but never fetched, so the type doesn't change and
+ * nothing says why. Hoisting is safe because both halves are token declarations — order between the
+ * imports themselves carries no meaning here.
+ */
+function hoistImports(css: string): string {
+  const imports: string[] = [];
+  const rest = css.replace(/^[ \t]*@import[^;]+;[ \t]*\n?/gm, (m) => {
+    imports.push(m.trim());
+    return "";
+  });
+  return imports.length ? `${imports.join("\n")}\n${rest}` : rest;
 }
 
 /**

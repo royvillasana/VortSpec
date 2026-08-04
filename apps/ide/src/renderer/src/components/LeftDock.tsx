@@ -56,7 +56,7 @@ export function LeftDock({
       // Honours `prefers-reduced-motion`: an animation nobody asked for should not be forced on anyone.
       aria-hidden={collapsed}
       className={`my-2 flex shrink-0 flex-col overflow-hidden transition-[width,margin,opacity] duration-200 ease-out motion-reduce:transition-none vs-panel-surface ${FLOAT_PANEL} ${
-        collapsed ? "pointer-events-none ml-0 opacity-0" : "ml-2 opacity-100"
+        collapsed ? "pointer-events-none ms-0 opacity-0" : "ms-2 opacity-100"
       }`}
     >
       <div className="flex flex-none items-stretch border-b border-vs-border-subtle text-[12px]">

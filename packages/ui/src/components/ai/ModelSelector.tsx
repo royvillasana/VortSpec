@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ChevronsUpDown, Check } from "lucide-react";
 import { KNOWN_MODELS } from "./slash-commands";
 import { cn } from "../../lib/cn";
@@ -27,6 +27,17 @@ export function ModelSelector({
   onSelect: (alias: string | undefined) => void;
 }): React.JSX.Element {
   const [open, setOpen] = useState(false);
+
+  // Escape closes, like every other dismissable surface here. Without it the only way out is Tab
+  // through every option, because the scrim that dismisses this is pointer-only.
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [open]);
   // Show the model Claude is ACTUALLY using (from the session's init event) once a
   // run exists; before that, fall back to the user's picked model or a placeholder.
   const label = active
@@ -51,7 +62,7 @@ export function ModelSelector({
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
           <div
-            role="listbox"
+            role="listbox" aria-label="Model"
             className="absolute bottom-full left-0 z-50 mb-1 min-w-[200px] rounded-md border border-vs-border-default bg-vs-bg-elevated py-1 shadow-xl"
           >
             {active && (
@@ -63,9 +74,9 @@ export function ModelSelector({
               const isSel = selected === m.alias;
               return (
                 <button
+                  role="option"
                   key={m.alias}
                   type="button"
-                  role="option"
                   aria-selected={isSel}
                   onClick={() => {
                     onSelect(isSel ? undefined : m.alias);

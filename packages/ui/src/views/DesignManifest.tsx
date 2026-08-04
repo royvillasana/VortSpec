@@ -540,7 +540,7 @@ function VersionsDrawer({
                       {formatTs(v.timestamp)}
                     </span>
                     {v.approved && (
-                      <span className="rounded-full border border-vs-border-strong px-1.5 text-[9px] text-vs-success">
+                      <span className="rounded-full border border-vs-border-strong px-1.5 text-[10px] text-vs-success">
                         approved
                       </span>
                     )}

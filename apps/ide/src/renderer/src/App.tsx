@@ -756,7 +756,7 @@ export default function App(): JSX.Element {
                 onClick={() => setBuildIndicatorDismissed(true)}
                 aria-label="Dismiss"
                 title="Dismiss — the build keeps running in the background"
-                className="ml-1 rounded p-0.5 text-vs-text-muted transition-colors hover:bg-vs-bg-hover hover:text-vs-text-primary"
+                className="ms-1 rounded p-0.5 text-vs-text-muted transition-colors hover:bg-vs-bg-hover hover:text-vs-text-primary"
               >
                 <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" aria-hidden>
                   <path d="M3 3l6 6M9 3l-6 6" />
@@ -766,7 +766,7 @@ export default function App(): JSX.Element {
           </div>
         )}
         <header
-          className="relative flex h-9 shrink-0 items-center justify-end pr-2 text-xs text-vs-text-muted"
+          className="relative flex h-9 shrink-0 items-center justify-end pe-2 text-xs text-vs-text-muted"
           style={{ WebkitAppRegion: "drag" } as unknown as CSSProperties}
         >
           {/* No brand here: the logo + name are the breadcrumb's Home crumb, one row down.

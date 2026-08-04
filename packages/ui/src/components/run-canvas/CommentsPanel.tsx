@@ -126,7 +126,7 @@ function ThreadRow({
         </span>
         {thread.anchor.thumbnail && <img src={thread.anchor.thumbnail} alt="" className="h-7 w-9 flex-none rounded object-cover" />}
       </button>
-      <div className="mt-1 flex items-center gap-2 pl-6 text-[10px]">
+      <div className="mt-1 flex items-center gap-2 ps-6 text-[10px]">
         <button type="button" onClick={() => onResolve(thread.id, !thread.resolved)} className="text-vs-text-muted hover:text-vs-text-secondary">
           {thread.resolved ? "Reopen" : "Resolve"}
         </button>

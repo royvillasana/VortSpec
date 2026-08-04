@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Palette } from "lucide-react";
 import type { Project } from "@vortspec/core/ipc";
 import { previewWithDrafts } from "@vortspec/core/design-library";
@@ -30,10 +30,37 @@ import { api } from "../lib/api";
 export function LibraryPanel({
   project,
   onEdited,
+  tokensInUse,
+  selectedComponent,
+  selectionLabel,
+  selectionElements = 0,
 }: {
   project: Project;
   /** Called after a committed edit, so whatever is previewed beside this panel reloads. */
   onEdited: () => void;
+  /**
+   * Token → resolved value for every token the selected element uses.
+   *
+   * The ones this design system HAS are marked in place — the design system is the same design system
+   * whatever is selected, so nothing is filtered, reordered or hidden. The ones it does NOT have are
+   * listed separately, because a component built on a token the design system never defined would
+   * otherwise show nothing, and silence is the one answer that is never true.
+   *
+   * A plain object, not a Map: this prop crosses the component-test boundary, where props are
+   * serialized and a Map arrives empty.
+   */
+  tokensInUse?: Readonly<Record<string, string>>;
+  /**
+   * The selected element's component name, when it HAS one. This is what gates the "only this component"
+   * write: it is written against `data-component`, which is durable — it exists on every page and
+   * survives a re-render. A plain element has no equivalent, and writing against its class would bind the
+   * design system to one page's markup and then stop applying silently when that markup changed.
+   */
+  selectedComponent?: string | null;
+  /** What to head the applied view with when the selection carries no component name. */
+  selectionLabel?: string | null;
+  /** How many elements the applied view's reading covered — stated so a broad selection explains itself. */
+  selectionElements?: number;
 }): React.JSX.Element {
   const [model, setModel] = useState<DesignSystemLibrary | null>(null);
   // Where the SCREENS differ, keyed by token so each row can offer its own adopt.
@@ -46,7 +73,32 @@ export function LibraryPanel({
   // written, which is the only question the preview exists to answer.
   const [presetPreview, setPresetPreview] = useState<Record<string, unknown> | null>(null);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
+  // Per-component overrides from the durable overlay. Read separately from the token model because they
+  // are a different kind of thing: not a value in the design system, but a rule laid over it.
+  const [componentOverrides, setComponentOverrides] = useState<[string, Record<string, string>][]>([]);
   const customize = useAgentRun();
+  // A Set so a large design system does not do a linear scan per tile.
+  const inUseSet = useMemo(() => new Set(Object.keys(tokensInUse ?? {})), [tokensInUse]);
+  /**
+   * The selected component's own styles, grouped by the design system's sections.
+   *
+   * Same rows, same tiles — collected under the component instead of scattered across five sections of a
+   * list hundreds of rows long. Marking answers "is this one used?"; this answers "what is this made of?".
+   */
+  const appliedHeading = selectedComponent ?? selectionLabel ?? null;
+  const componentSections = useMemo(() => {
+    if (!model || !(selectedComponent || selectionLabel)) return [];
+    return model.sections
+      .map((sec) => ({ ...sec, rows: sec.rows.filter((r) => inUseSet.has(r.token)) }))
+      .filter((sec) => sec.rows.length > 0);
+  }, [model, selectedComponent, selectionLabel, inUseSet]);
+
+  /** The selection's tokens this design system does not define — the drift, named. */
+  const unmapped = useMemo(() => {
+    if (!model) return [];
+    const known = new Set(model.sections.flatMap((sec) => sec.rows.map((r) => r.token)));
+    return Object.entries(tokensInUse ?? {}).filter(([name]) => !known.has(name));
+  }, [tokensInUse, model]);
 
   const load = useCallback(async () => {
     try {
@@ -57,6 +109,18 @@ export function LibraryPanel({
       setModel(lib);
       setDrift(new Map((d?.drifts ?? []).map((x) => [x.token, x])));
       setError(null);
+      // The override list is ADDITIONAL to the design system, so it is read separately and defensively:
+      // a failure here must leave the tokens on screen rather than blanking the panel behind an error.
+      try {
+        const overrides = await api.getThemeOverrides(project.path);
+        setComponentOverrides(
+          Object.entries(overrides?.components ?? {})
+            .map(([name, o]) => [name, o.base ?? {}] as [string, Record<string, string>])
+            .filter(([, decls]) => Object.keys(decls).length > 0),
+        );
+      } catch {
+        setComponentOverrides([]);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
@@ -111,8 +175,57 @@ export function LibraryPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [customize.model.status]);
 
+  /**
+   * A token edit while a component is selected is ambiguous by construction: the user is looking at one
+   * Card, and the token belongs to every component that reads it. Applying either reading silently is
+   * wrong half the time, so the edit is HELD and the question asked. With nothing selected there is no
+   * ambiguity and the write goes straight through.
+   */
+  const [pendingScope, setPendingScope] = useState<{ token: string; value: string } | null>(null);
+
   async function writeToken(token: string, value: string): Promise<void> {
+    if (selectedComponent && (tokensInUse ?? {})[token] !== undefined) {
+      setPendingScope({ token, value });
+      return;
+    }
     await commit(() => api.setThemeTokenOverride(project.path, token, value));
+  }
+
+  /** Apply the held edit once the user has said how far it reaches. */
+  async function resolveScope(scope: "component" | "system"): Promise<void> {
+    const p = pendingScope;
+    setPendingScope(null);
+    if (!p) return;
+    if (scope === "system") {
+      await commit(() => api.setThemeTokenOverride(project.path, p.token, p.value));
+      return;
+    }
+    // The same token, redefined inside this component only — so every Card follows and a Button reading
+    // it does not. Merged with any existing base so this never drops another property.
+    await commit(async () => {
+      const prior = await api.getThemeOverrides(project.path).catch(() => null);
+      const base = prior?.components?.[selectedComponent as string]?.base ?? {};
+      return api.setThemeComponentOverride(project.path, selectedComponent as string, {}, {
+        ...base,
+        [`--${p.token}`]: p.value,
+      });
+    });
+  }
+
+  /**
+   * Add a token the selection uses but the design system lacks, at the value the page already gives it.
+   *
+   * Explicit and per-token: the design system is not modified because something was SELECTED. This closes
+   * the drift in the direction the user actually works — they chose a value on the page, and the system
+   * follows it — through the same creation path any other new token uses.
+   */
+  async function adoptToken(name: string, value: string): Promise<void> {
+    await commit(() => api.createToken(project.path, name, value));
+  }
+
+  /** Remove a component's whole base override. An empty decl bag is how the store clears a target. */
+  async function clearComponentOverride(component: string): Promise<void> {
+    await commit(() => api.setThemeComponentOverride(project.path, component, {}, {}));
   }
 
   /** Choosing a family writes the stack AND records a Google family, so the font is fetched, not just named. */
@@ -243,6 +356,57 @@ export function LibraryPanel({
         </p>
       ) : (
         <div className="flex flex-col">
+          {pendingScope && selectedComponent && (
+            <ScopeQuestion
+              token={pendingScope.token}
+              value={pendingScope.value}
+              component={selectedComponent}
+              disabled={pending}
+              onChoose={(scope) => void resolveScope(scope)}
+              onCancel={() => setPendingScope(null)}
+            />
+          )}
+          {appliedHeading && componentSections.length > 0 && (
+            <section
+              aria-label={`Applied styles: ${appliedHeading}`}
+              className="border-b border-vs-border-default"
+            >
+              <div className="px-3 pb-1 pt-2">
+                <div className="text-[10px] uppercase tracking-[0.06em] text-vs-text-muted">
+                  Applied styles
+                </div>
+                <div className="text-[13px] font-semibold text-vs-text-primary">{appliedHeading}</div>
+                {/* The reading walks the selection's descendants, so it grows less informative the higher
+                    the selection sits. Stating the breadth lets an over-broad selection explain itself,
+                    which beats a threshold that silently collapses the view — any threshold would be
+                    wrong for someone. */}
+                <div className="font-mono text-[10px] tabular-nums text-vs-text-muted">
+                  {`${Object.keys(tokensInUse ?? {}).length} tokens`}
+                  {selectionElements > 0 && ` · ${selectionElements} element${selectionElements === 1 ? "" : "s"}`}
+                </div>
+              </div>
+              {componentSections.map((section) => (
+                <div key={`applied-${section.section}`} className="pb-1">
+                  <div className="flex items-baseline gap-1.5 px-3 pb-0.5">
+                    <span className="text-[10px] uppercase tracking-[0.06em] text-vs-text-secondary">
+                      {section.label}
+                    </span>
+                    <span className="font-mono text-[10px] text-vs-text-muted">{section.rows.length}</span>
+                  </div>
+                  <SectionBody
+                    section={section}
+                    drift={drift}
+                    disabled={pending}
+                    projectPath={project.path}
+                    onWrite={writeToken}
+                    onChooseFont={chooseFont}
+                    onDraft={draft}
+                    inUse={inUseSet}
+                  />
+                </div>
+              ))}
+            </section>
+          )}
           {model.sections.map((section) => (
             <Section
               key={section.section}
@@ -253,8 +417,15 @@ export function LibraryPanel({
               onWrite={writeToken}
               onChooseFont={chooseFont}
               onDraft={draft}
+              inUse={inUseSet}
             />
           ))}
+          <UnmappedTokens entries={unmapped} disabled={pending} onAdopt={adoptToken} />
+          <ComponentOverrides
+            entries={componentOverrides}
+            disabled={pending}
+            onClear={clearComponentOverride}
+          />
         </div>
       )}
 
@@ -298,7 +469,7 @@ function LivePreview({
         <span className="text-[11px] font-semibold uppercase tracking-wide text-vs-text-secondary">
           Live preview
         </span>
-        <span className="text-[9px] text-vs-text-muted">
+        <span className="text-[10px] text-vs-text-muted">
           {pending === "preset"
             ? "previewing a preset — not applied yet"
             : pending === "edit"
@@ -339,12 +510,12 @@ function LivePreview({
       </div>
 
       {used.length > 0 ? (
-        <span className="truncate font-mono text-[9px] text-vs-text-muted" title={used.map((t) => `--${t}`).join(", ")}>
+        <span className="truncate font-mono text-[10px] text-vs-text-muted" title={used.map((t) => `--${t}`).join(", ")}>
           using {used.map((t) => `--${t}`).join(", ")}
         </span>
       ) : (
         // Say so rather than showing an unstyled box the user has to puzzle over.
-        <span className="text-[9px] leading-relaxed text-vs-text-muted">
+        <span className="text-[10px] leading-relaxed text-vs-text-muted">
           None of this design system’s tokens matched the roles the preview draws with, so it is showing
           defaults.
         </span>
@@ -361,6 +532,7 @@ function Section({
   onWrite,
   onChooseFont,
   onDraft,
+  inUse,
 }: {
   section: LibrarySection;
   disabled: boolean;
@@ -369,6 +541,7 @@ function Section({
   onWrite: (token: string, value: string) => Promise<void>;
   onChooseFont: (token: string, stack: string, google?: string) => Promise<void>;
   onDraft: (token: string, value: string) => void;
+  inUse: ReadonlySet<string>;
 }): React.JSX.Element {
   const drifted = section.rows.filter((r) => drift.has(r.token)).length;
   // A big section (Astryx ships 100+ colors) opens collapsed so the panel isn't a wall on first sight —
@@ -381,14 +554,14 @@ function Section({
         onClick={() => setOpen((v) => !v)}
         className="flex w-full items-center gap-1.5 px-3 py-2 text-left"
       >
-        <span className="text-[9px] text-vs-text-muted">{open ? "▾" : "▸"}</span>
+        <span className="text-[10px] text-vs-text-muted">{open ? "▾" : "▸"}</span>
         <span className="text-[11px] font-semibold uppercase tracking-wide text-vs-text-secondary">
           {section.label}
         </span>
         <span className="ml-auto flex items-center gap-1.5">
           {drifted > 0 && (
             <span
-              className="rounded-full bg-vs-accent px-1.5 text-[9px] font-medium text-white"
+              className="rounded-full bg-vs-accent px-1.5 text-[10px] font-medium text-white"
               title={`${drifted} value${drifted === 1 ? "" : "s"} differ from your screens`}
             >
               {drifted}
@@ -413,6 +586,7 @@ function Section({
             onWrite={onWrite}
             onChooseFont={onChooseFont}
             onDraft={onDraft}
+            inUse={inUse}
           />
         ))}
     </section>
@@ -446,6 +620,7 @@ function shortName(token: string, section: string): string {
  * long, so its input scrolls rather than showing the whole thing at once; the full value is in the title.
  */
 function SectionBody({
+  inUse,
   section,
   drift,
   disabled,
@@ -461,6 +636,7 @@ function SectionBody({
   onWrite: (token: string, value: string) => Promise<void>;
   onChooseFont: (token: string, stack: string, google?: string) => Promise<void>;
   onDraft: (token: string, value: string) => void;
+  inUse: ReadonlySet<string>;
 }): React.JSX.Element {
   const [openToken, setOpenToken] = useState<string | null>(null);
   const opened = section.rows.find((r) => r.token === openToken) ?? null;
@@ -492,6 +668,7 @@ function SectionBody({
               section={section.section}
               drifted={drift.has(row.token)}
               selected={row.token === openToken}
+              inUse={inUse.has(row.token)}
               onSelect={() => setOpenToken((t) => (t === row.token ? null : row.token))}
             />
             {/* The editor is a grid ITEM spanning every column, placed right after its own tile. Grid
@@ -536,20 +713,23 @@ function Tile({
   section,
   drifted,
   selected,
+  inUse,
   onSelect,
 }: {
   row: LibraryRow;
   section: string;
   drifted: boolean;
   selected: boolean;
+  /** This value composes the element currently selected on the canvas. */
+  inUse: boolean;
   onSelect: () => void;
 }): React.JSX.Element {
   return (
     <button
       type="button"
       onClick={onSelect}
-      title={`--${row.token}\n${row.value}`}
-      aria-label={`${row.token}: ${row.value}`}
+      title={inUse ? `--${row.token}\n${row.value}\nUsed by the selected element` : `--${row.token}\n${row.value}`}
+      aria-label={`${row.token}: ${row.value}${inUse ? " · in use by the selection" : ""}`}
       aria-pressed={selected}
       className="flex min-w-0 flex-col gap-1 text-left"
     >
@@ -563,7 +743,14 @@ function Tile({
       >
         <TileArt section={section} row={row} />
       </span>
-      <span className="truncate text-[8px] leading-tight text-vs-text-muted">{shortName(row.token, section)}</span>
+      <span
+        className={`truncate text-[10px] leading-tight ${
+          inUse ? "font-semibold text-vs-text-primary" : "text-vs-text-muted"
+        }`}
+      >
+        {inUse && <span aria-hidden>• </span>}
+        {shortName(row.token, section)}
+      </span>
     </button>
   );
 }
@@ -615,7 +802,7 @@ function TileArt({ section, row }: { section: string; row: LibraryRow }): React.
         {/* The bar is the step, to scale against its siblings — the whole point of a spacing SCALE is the
             relationship between steps, which a column of numbers hides. */}
         <span className="h-2 rounded-sm bg-vs-accent" style={{ width: Math.max(2, Math.min(n, 44)) }} />
-        <span className="ml-auto shrink-0 font-mono text-[9px] text-vs-text-muted">{value}</span>
+        <span className="ml-auto shrink-0 font-mono text-[10px] text-vs-text-muted">{value}</span>
       </span>
     );
   }
@@ -639,7 +826,7 @@ function TileArt({ section, row }: { section: string; row: LibraryRow }): React.
 
 /** The honest fallback: show the value when it cannot be drawn as itself. */
 function Literal({ value }: { value: string }): React.JSX.Element {
-  return <span className="truncate px-1 font-mono text-[9px] text-vs-text-secondary">{value}</span>;
+  return <span className="truncate px-1 font-mono text-[10px] text-vs-text-secondary">{value}</span>;
 }
 
 /** One token: name, its live value, and the right control for what that value actually is. */
@@ -707,7 +894,7 @@ function Row({
           --{row.token}
         </span>
         {row.uses > 0 && (
-          <span className="shrink-0 text-[9px] text-vs-text-muted" title="Component references to this token">
+          <span className="shrink-0 text-[10px] text-vs-text-muted" title="Component references to this token">
             {row.uses} use{row.uses === 1 ? "" : "s"}
           </span>
         )}
@@ -723,7 +910,7 @@ function Row({
             <span className="min-w-0 flex-1 truncate text-[12px] text-vs-text-primary" style={{ fontFamily: row.value }}>
               {leadFamily(row.value)}
             </span>
-            <span className="shrink-0 text-[9px] text-vs-text-muted">{picking ? "▴" : "▾"}</span>
+            <span className="shrink-0 text-[10px] text-vs-text-muted">{picking ? "▴" : "▾"}</span>
           </button>
           {picking && (
             <FontPicker
@@ -767,9 +954,9 @@ function Row({
       </div>
       )}
       {ld && (
-        <span className="text-[9px] text-vs-text-muted">Light/dark pair — the swatch edits light.</span>
+        <span className="text-[10px] text-vs-text-muted">Light/dark pair — the swatch edits light.</span>
       )}
-      {!valid && <span className="text-[9px] text-vs-error">Not a valid {row.control} value.</span>}
+      {!valid && <span className="text-[10px] text-vs-error">Not a valid {row.control} value.</span>}
       {drift && (
         <div className="flex items-center gap-1.5 rounded border border-vs-border-strong bg-vs-bg-elevated px-1.5 py-1">
           {row.control === "color" && (
@@ -786,12 +973,219 @@ function Row({
             type="button"
             disabled={disabled}
             onClick={() => void onWrite(row.token, drift.adoptValue)}
-            className="shrink-0 cursor-pointer rounded border border-vs-border-strong px-1.5 py-px text-[9px] text-vs-text-secondary transition-colors hover:border-vs-accent hover:text-vs-text-primary disabled:cursor-default disabled:opacity-50"
+            className="shrink-0 cursor-pointer rounded border border-vs-border-strong px-1.5 py-px text-[10px] text-vs-text-secondary transition-colors hover:border-vs-accent hover:text-vs-text-primary disabled:cursor-default disabled:opacity-50"
           >
             Adopt
           </button>
         </div>
       )}
+    </div>
+  );
+}
+
+
+/**
+ * Per-component overrides currently laid over the design system (change: scoped-style-edits).
+ *
+ * These apply to every instance on every page, and until now nothing displayed them — a project could
+ * carry `[data-component="Button"] { border-radius: 0 }` forever with no screen that showed it and no way
+ * to undo it. An effect with no visible cause is indistinguishable from a bug, so the list exists even
+ * when it is empty of anything the current session wrote.
+ *
+ * Rendered only when there is something to show: an always-present empty section would imply overrides
+ * are a normal part of a design system rather than an exception laid on top of one.
+ */
+function ComponentOverrides({
+  entries,
+  disabled,
+  onClear,
+}: {
+  entries: [string, Record<string, string>][];
+  disabled: boolean;
+  onClear: (component: string) => Promise<void>;
+}): React.JSX.Element | null {
+  if (entries.length === 0) return null;
+  return (
+    <div className="border-t border-vs-border-default px-3 py-2">
+      <div className="pb-1.5 text-[10px] uppercase tracking-[0.06em] text-vs-text-muted">
+        Component overrides
+      </div>
+      <div className="flex flex-col gap-1">
+        {entries.map(([component, decls]) => (
+          <div
+            key={component}
+            className="flex items-start justify-between gap-2 rounded border border-vs-border-default px-2 py-1.5"
+          >
+            <div className="flex min-w-0 flex-col">
+              <span className="truncate text-[11.5px] text-vs-text-primary">{component}</span>
+              <span className="truncate font-mono text-[10px] text-vs-text-muted">
+                {Object.entries(decls)
+                  // A token redefined for this component reads as the token, because that is what it is —
+                  // the same name the design system uses, given a different value inside this component.
+                  .map(([prop, val]) => (prop.startsWith("--") ? `${prop} = ${val}` : `${prop}: ${val}`))
+                  .join("  ·  ")}
+              </span>
+            </div>
+            <button
+              type="button"
+              disabled={disabled}
+              aria-label={`Clear the ${component} override`}
+              onClick={() => void onClear(component)}
+              className="shrink-0 rounded border border-vs-border-default px-1.5 py-0.5 text-[10px] text-vs-text-muted transition-colors hover:border-vs-border-strong hover:text-vs-text-secondary disabled:opacity-50"
+            >
+              Clear
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+
+/**
+ * Tokens the selection uses that this design system does not define (change: scoped-style-edits).
+ *
+ * Without this the panel answers "what is this component made of?" with silence for every property built
+ * on a token the page invented — and silence reads as a broken panel rather than as the drift it is. A
+ * light page routinely declares its own `:root`, so this is the common case, not the exotic one.
+ *
+ * Listed apart from the marked rows so the two are never confused: those ARE the design system, these are
+ * values living outside it.
+ */
+function UnmappedTokens({
+  entries,
+  disabled,
+  onAdopt,
+}: {
+  entries: [string, string][];
+  disabled: boolean;
+  onAdopt: (name: string, value: string) => Promise<void>;
+}): React.JSX.Element | null {
+  if (entries.length === 0) return null;
+  return (
+    <section
+      aria-label="Used here, not in your design system"
+      className="border-t border-vs-border-default px-3 py-2"
+    >
+      <div className="pb-1 text-[10px] uppercase tracking-[0.06em] text-vs-text-muted">
+        Used here · not in your design system
+      </div>
+      <p className="pb-1.5 text-[10px] leading-tight text-vs-text-muted">
+        This screen resolves these through values your design system does not define.
+      </p>
+      <div className="flex flex-col gap-1">
+        {entries.map(([name, value]) => (
+          <div
+            key={name}
+            className="flex items-center justify-between gap-2 rounded border border-dashed border-vs-border-strong px-2 py-1.5"
+          >
+            <span className="min-w-0 truncate font-mono text-[10px] text-vs-text-secondary">
+              {`--${name}`}
+              <span className="text-vs-text-muted">{`  ·  ${value}`}</span>
+            </span>
+            <button
+              type="button"
+              disabled={disabled}
+              aria-label={`Add --${name} to the design system`}
+              onClick={() => void onAdopt(name, value)}
+              className="shrink-0 rounded border border-vs-border-default px-1.5 py-0.5 text-[10px] text-vs-text-muted transition-colors hover:border-vs-accent hover:text-vs-text-secondary disabled:opacity-50"
+            >
+              Add
+            </button>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+
+/**
+ * How far a token edit made from a selected component should reach (change: scoped-style-edits).
+ *
+ * Asked rather than assumed. The user is looking at one Card; the token belongs to every component that
+ * reads it. Guessing is wrong half the time, and the wrong guess is invisible — the Card changes either
+ * way, and only the components the user was not looking at reveal which reading was taken.
+ *
+ * Both options say what they affect, so the choice is made on consequences rather than on wording.
+ */
+function ScopeQuestion({
+  token,
+  value,
+  component,
+  disabled,
+  onChoose,
+  onCancel,
+}: {
+  token: string;
+  value: string;
+  component: string;
+  disabled: boolean;
+  onChoose: (scope: "component" | "system") => void;
+  onCancel: () => void;
+}): React.JSX.Element {
+  const first = useRef<HTMLButtonElement | null>(null);
+
+  // The edit is HELD until this is answered, so the control that completes it has to be reachable without
+  // hunting. Focus moves here on open: it puts a keyboard user one keystroke from an answer, announces the
+  // group and the default choice to a screen reader, and — because the panel scrolls — brings the question
+  // into view when the edited row was far down a list of 160+ rows.
+  useEffect(() => {
+    first.current?.focus();
+  }, []);
+
+  return (
+    <div
+      // NOT `alertdialog`: that role promises a modal contract — focus trapped inside, background inert —
+      // that this inline banner does not implement, and a promise the platform makes and breaks is worse
+      // than no promise. A labelled group plus a live region says exactly what is true.
+      role="group"
+      aria-label={`Apply --${token}`}
+      onKeyDown={(e) => {
+        if (e.key === "Escape") {
+          e.stopPropagation();
+          onCancel();
+        }
+      }}
+      className="sticky top-0 z-20 border-b border-vs-border-default bg-vs-bg-elevated px-3 py-2 shadow-[0_6px_16px_-8px_rgba(0,0,0,0.6)]"
+    >
+      {/* Announced without stealing focus, for the case where focus was moved elsewhere before we could. */}
+      <p role="status" className="pb-0.5 font-mono text-[10px] text-vs-text-secondary">
+        {`--${token} → ${value} · not applied yet`}
+      </p>
+      <p className="pb-1.5 text-[10px] leading-tight text-vs-text-muted">Apply this change to…</p>
+      <div className="flex flex-wrap gap-1">
+        <button
+          ref={first}
+          type="button"
+          disabled={disabled}
+          onClick={() => onChoose("component")}
+          className="rounded border border-vs-accent bg-vs-accent-muted px-2 py-1 text-[10px] text-vs-text-primary disabled:opacity-50"
+        >
+          {`Only ${component} components`}
+        </button>
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={() => onChoose("system")}
+          className="rounded border border-vs-border-default px-2 py-1 text-[10px] text-vs-text-secondary hover:border-vs-border-strong disabled:opacity-50"
+        >
+          The whole design system
+        </button>
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={onCancel}
+          aria-label="Cancel this change"
+          className="rounded px-2 py-1 text-[10px] text-vs-text-muted hover:text-vs-text-secondary disabled:opacity-50"
+        >
+          Cancel
+        </button>
+      </div>
+      <p className="pt-1 text-[10px] leading-tight text-vs-text-secondary">
+        {`Only ${component} components changes every ${component} and leaves other components reading --${token} alone. Escape cancels.`}
+      </p>
     </div>
   );
 }

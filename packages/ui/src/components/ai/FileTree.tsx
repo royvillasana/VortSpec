@@ -100,7 +100,7 @@ function Node({
           <span className="truncate font-mono">{entry.name}</span>
         </button>
         {onSelect && (
-          <span className="shrink-0 pr-1 text-vs-text-muted">
+          <span className="shrink-0 pe-1 text-vs-text-muted">
             {selected ? <Check size={11} className="text-vs-accent" /> : <Plus size={11} className="opacity-0 group-hover:opacity-100" />}
           </span>
         )}

@@ -195,7 +195,7 @@ function PresetRow({
       <span className="flex items-center gap-1.5">
         <span className="text-[11px] font-medium text-vs-text-primary">{title}</span>
         {active && (
-          <span className="rounded bg-vs-accent px-1 text-[8px] font-semibold uppercase tracking-wide text-white">
+          <span className="rounded bg-vs-accent px-1 text-[10px] font-semibold uppercase tracking-wide text-white">
             active
           </span>
         )}
@@ -240,7 +240,7 @@ function PlanPreview({
           your design system has no token for {skipped.map((o) => o.role.replace(/^[a-z]+\./, "")).join(", ")}.
         </p>
       )}
-      <p className="text-[9px] leading-relaxed text-vs-text-muted">
+      <p className="text-[10px] leading-relaxed text-vs-text-muted">
         Values you changed since the last apply will be overwritten.
       </p>
 

@@ -1,4 +1,5 @@
 import { createElement, useEffect, useRef, useState } from "react";
+import { DEVICE_CHROME } from "./DeviceFrame";
 import type { JSX, CSSProperties } from "react";
 import type { Rect } from "@vortspec/core/ipc";
 import type { InspectorBridge, CanvasMode } from "../../lib/useInspectorBridge";
@@ -186,7 +187,28 @@ export function RunCanvas({
         {/* Overlay lives inside the stage → boxes use guest coords directly.
             Only shown in Inspect mode — Interact leaves the app untouched. */}
         <div data-vs-overlay className="pointer-events-none absolute inset-0">
-          {mode === "inspect" && hovRect && <Box rect={hovRect} kind="hover" />}
+          {mode === "inspect" && hovRect && !bridge.marquee && <Box rect={hovRect} kind="hover" />}
+          {/* The marquee, drawn host-side like every other overlay so it shares their coordinate space
+              and cannot be captured into the page's own DOM. */}
+          {mode === "inspect" && bridge.marquee && (
+            <div
+              data-vs-marquee
+              className="pointer-events-none absolute border border-vs-accent bg-vs-accent/10"
+              style={{
+                left: bridge.marquee.x,
+                top: bridge.marquee.y,
+                width: bridge.marquee.width,
+                height: bridge.marquee.height,
+              }}
+            />
+          )}
+          {/* Every OTHER member of the selection. The focused member is drawn below with handles and a
+              label — a set of five where one is the panel's subject has to say which one, or the user
+              cannot tell what the attributes they are reading belong to. */}
+          {mode === "inspect" &&
+            bridge.selectedIds
+              .filter((id) => id !== bridge.selectedId)
+              .map((id) => bridge.rects[id] && <Box key={id} rect={bridge.rects[id]} kind="select" />)}
           {mode === "inspect" && showSpacing && selRect && readout && (
             <SpacingOverlay
               key={bridge.selectedId ?? ""}
@@ -363,13 +385,13 @@ function Stage({
       ? {
           borderRadius: 44,
           overflow: "hidden",
-          boxShadow: "0 0 0 11px #0b0b0e, 0 0 0 13px #3a3a40, 0 24px 60px -18px rgba(0,0,0,.55)",
+          boxShadow: `0 0 0 11px ${DEVICE_CHROME.iphone.body}, 0 0 0 13px ${DEVICE_CHROME.iphone.ring}, 0 24px 60px -18px rgba(0,0,0,.55)`,
         }
       : framed === "android"
         ? {
             borderRadius: 32,
             overflow: "hidden",
-            boxShadow: "0 0 0 9px #111214, 0 0 0 11px #2c2d31, 0 24px 60px -18px rgba(0,0,0,.55)",
+            boxShadow: `0 0 0 9px ${DEVICE_CHROME.android.body}, 0 0 0 11px ${DEVICE_CHROME.android.ring}, 0 24px 60px -18px rgba(0,0,0,.55)`,
           }
         : {};
   return (
@@ -513,7 +535,7 @@ function Box({
       }}
     >
       {kind === "hover" && (
-        <span className="absolute -top-5 left-0 whitespace-nowrap rounded bg-vs-accent px-1 py-px text-[9px] text-white">
+        <span className="absolute -top-5 left-0 whitespace-nowrap rounded bg-vs-accent px-1 py-px text-[10px] text-white">
           {Math.round(rect.width)}×{Math.round(rect.height)}
         </span>
       )}

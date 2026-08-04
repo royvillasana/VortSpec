@@ -1312,7 +1312,7 @@ function ComponentRow({
                 ? `Backed by a Figma component · variant axes: ${component.figmaVariants.join(", ")}`
                 : "Backed by a Figma component"
             }
-            className="shrink-0 rounded-full border border-vs-accent/40 bg-vs-accent/10 px-1.5 py-px text-[9px] font-medium uppercase tracking-wide text-vs-accent"
+            className="shrink-0 rounded-full border border-vs-accent/40 bg-vs-accent/10 px-1.5 py-px text-[10px] font-medium uppercase tracking-wide text-vs-accent"
           >
             Figma{component.figmaVariants && component.figmaVariants.length > 0 ? ` ·${component.figmaVariants.length}` : ""}
           </span>
@@ -1321,7 +1321,7 @@ function ComponentRow({
         {component.variants && component.variants.length > 0 && (
           <span
             title={`Variant set — axes: ${component.variants.join(", ")}`}
-            className="shrink-0 rounded-full border border-vs-border-strong bg-vs-bg-elevated px-1.5 py-px text-[9px] font-medium text-vs-text-secondary"
+            className="shrink-0 rounded-full border border-vs-border-strong bg-vs-bg-elevated px-1.5 py-px text-[10px] font-medium text-vs-text-secondary"
           >
             ⎇ {component.variants.join(" · ")}
           </span>
@@ -1447,7 +1447,7 @@ function OutputCard({
             </span>
           )}
           {optional && (
-            <span className="rounded-full border border-vs-border-default px-1.5 text-[9px] uppercase tracking-wide text-vs-text-muted">
+            <span className="rounded-full border border-vs-border-default px-1.5 text-[10px] uppercase tracking-wide text-vs-text-muted">
               optional
             </span>
           )}

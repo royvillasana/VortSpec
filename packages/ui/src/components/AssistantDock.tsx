@@ -816,7 +816,7 @@ function SendToControl({
           </button>
         ) : (
           <div className="min-w-[150px] py-1">
-            <div className="px-3 pb-1 text-[9px] uppercase tracking-wide text-vs-text-muted/70">Send selection to</div>
+            <div className="px-3 pb-1 text-[10px] uppercase tracking-wide text-vs-text-muted/70">Send selection to</div>
             {targets.map((t) => (
               <button key={t.id} type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => onPick(t.id)} className="block w-full truncate px-3 py-1 text-left text-vs-text-secondary hover:bg-vs-bg-hover">
                 {t.label}

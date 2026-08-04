@@ -15,6 +15,19 @@ import type { DeviceFrameKind } from "./viewports";
 
 const BEZEL = { iphone: 14, android: 12, none: 0 } as const;
 
+/**
+ * The simulated device chrome's own colours (change: interface review, finding 6).
+ *
+ * Deliberately NOT `--color-vs-*` tokens: a simulated iPhone bezel should look like an iPhone bezel
+ * whatever theme the app is wearing — it is a picture of a device, not part of the interface's palette.
+ * Exported because `RunCanvas` draws the same bezel as a box-shadow ring and had its own copy of these
+ * four values, which is how two renderings of one device drift apart.
+ */
+export const DEVICE_CHROME = {
+  iphone: { body: "#0b0b0e", ring: "#3a3a40" },
+  android: { body: "#111214", ring: "#2c2d31" },
+} as const;
+
 export function DeviceFrame({ kind, children }: { kind: DeviceFrameKind; children: ReactNode }): JSX.Element {
   if (kind === "none") return <>{children}</>;
   const b = BEZEL[kind];
@@ -25,9 +38,9 @@ export function DeviceFrame({ kind, children }: { kind: DeviceFrameKind; childre
       aria-hidden
       style={{
         padding: b,
-        background: kind === "iphone" ? "#0b0b0e" : "#111214",
+        background: DEVICE_CHROME[kind].body,
         borderRadius: radius,
-        boxShadow: `0 0 0 2px ${kind === "iphone" ? "#3a3a40" : "#2c2d31"}, 0 24px 60px -18px rgba(0,0,0,.55)`,
+        boxShadow: `0 0 0 2px ${DEVICE_CHROME[kind].ring}, 0 24px 60px -18px rgba(0,0,0,.55)`,
         position: "relative",
       }}
     >

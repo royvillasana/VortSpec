@@ -85,14 +85,14 @@ export function DrawWindow({ project }: { project: string }): React.JSX.Element 
   return (
     <div className="flex h-screen w-screen flex-col bg-vs-bg-base text-vs-text-primary">
       <header
-        className="flex flex-none items-center gap-2 border-b border-vs-border-subtle py-2 pl-20 pr-4 text-[13px]"
+        className="flex flex-none items-center gap-2 border-b border-vs-border-subtle py-2 ps-20 pe-4 text-[13px]"
         style={{ WebkitAppRegion: "drag" } as React.CSSProperties}
       >
         <span className="font-medium">Draw</span>
         <span className="text-vs-text-muted">— {name}</span>
-        {sent && <span className="ml-2 text-[11px] text-vs-success">Sent to the compose dialog ✓</span>}
+        {sent && <span className="ms-2 text-[11px] text-vs-success">Sent to the compose dialog ✓</span>}
         {needsSelection && (
-          <span className="ml-2 text-[11px] text-vs-warning">Select the drawing you want first — only the selection is built.</span>
+          <span className="ms-2 text-[11px] text-vs-warning">Select the drawing you want first — only the selection is built.</span>
         )}
         <button
           type="button"

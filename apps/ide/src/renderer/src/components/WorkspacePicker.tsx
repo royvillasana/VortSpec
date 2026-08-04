@@ -251,13 +251,13 @@ export function WorkspacePicker({
           ) : recent.length === 0 ? (
             <p className="text-sm text-vs-text-muted">No recent projects yet.</p>
           ) : (
-            <ul className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto pr-1">
+            <ul className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto pe-1">
               {recent.map((p) => (
                 <li key={p.path} className="group relative">
                   <button
                     type="button"
                     onClick={() => onOpen(p)}
-                    className="flex w-full min-w-0 flex-col items-start rounded-md border border-vs-border-subtle bg-vs-bg-surface py-2 pl-3 pr-9 text-left transition-colors hover:bg-vs-bg-hover"
+                    className="flex w-full min-w-0 flex-col items-start rounded-md border border-vs-border-subtle bg-vs-bg-surface py-2 ps-3 pe-9 text-left transition-colors hover:bg-vs-bg-hover"
                   >
                     <span className="text-sm text-vs-text-primary">{p.name}</span>
                     <span className="w-full break-all font-mono text-[11px] text-vs-text-muted">{p.path}</span>

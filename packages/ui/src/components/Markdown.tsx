@@ -75,7 +75,7 @@ function renderBlocks(text: string): React.JSX.Element[] {
       out.push(
         <ListTag
           key={key++}
-          className={`flex flex-col gap-1.5 pl-5 text-sm text-vs-text-secondary ${
+          className={`flex flex-col gap-1.5 ps-5 text-sm text-vs-text-secondary ${
             ordered ? "list-decimal" : "list-disc"
           }`}
         >

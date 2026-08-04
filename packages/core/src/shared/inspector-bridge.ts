@@ -279,7 +279,41 @@ export type StructureSnapshotWire = z.infer<typeof structureSnapshotSchema>;
 /** Messages the host renderer sends into the guest bridge. */
 export const bridgeCommandSchema = z.discriminatedUnion("t", [
   z.object({ t: z.literal("requestTree") }),
-  z.object({ t: z.literal("selectNode"), nodeId: z.string() }),
+  /**
+   * Select a node. `additive` toggles it in the current selection instead of replacing it — the tree and
+   * the canvas share one selection, so the tree needs the same gesture the canvas has.
+   */
+  z.object({ t: z.literal("selectNode"), nodeId: z.string(), additive: z.boolean().optional() }),
+  /** Empty the selection (Escape). Separate from `selectionLost`, which means an element went away. */
+  z.object({ t: z.literal("clearSelection") }),
+  /**
+   * Which elements currently LOOK THE SAME as the selected one: same `data-component`, and the same
+   * computed value for `cssProp`. Answered by the guest because matching is a question about the live DOM,
+   * and only the guest has it — the host's tree carries component identity but no computed style, so any
+   * count it produced would sweep up siblings that were styled differently on purpose.
+   */
+  z.object({ t: z.literal("matchElements"), key: z.string(), component: z.string(), cssProp: z.string(), value: z.string() }),
+  /**
+   * Read out several nodes at once, WITHOUT changing what is focused.
+   *
+   * Editing a multi-selection needs each member's computed style to know whether a property agrees across
+   * them; `selectNode` cannot serve that, because asking would move the focus the panel is describing.
+   */
+  z.object({ t: z.literal("readoutMany"), nodeIds: z.array(z.string()) }),
+  /** Which design tokens a node AND its descendants use — "what is this component made of?". */
+  z.object({ t: z.literal("subtreeTokens"), nodeId: z.string() }),
+  /**
+   * Extend the selection to every element matching one NAMED criterion. The criterion is explicit rather
+   * than inferred, because "select things like this one" means several different things and the user has
+   * to know which one they asked for before a bulk edit follows it.
+   */
+  z.object({
+    t: z.literal("selectMatching"),
+    nodeId: z.string(),
+    by: z.enum(["component", "tag", "token"]),
+    /** For `by: "token"`: the CSS property whose token binding must match. */
+    cssProp: z.string().optional(),
+  }),
   z.object({ t: z.literal("hoverNode"), nodeId: z.string().nullable() }),
   /**
    * Toggle guest input handling: `inspect` intercepts hover/click to drive
@@ -416,7 +450,32 @@ export const bridgeEventSchema = z.discriminatedUnion("t", [
   /** The bridge attached (or failed to) — the host toggles editing affordances. */
   z.object({ t: z.literal("ready"), ok: z.boolean(), message: z.string().optional() }),
   z.object({ t: z.literal("tree"), tree: bridgeTreeSchema }),
-  z.object({ t: z.literal("readout"), readout: nodeReadoutSchema }),
+  /**
+   * The focused node's readout. `additive` reports that the gesture which produced it held a modifier, so
+   * the host adds to (or removes from) the selection rather than replacing it.
+   *
+   * The flag rides on the EVENT, not on the readout: it describes the gesture, not the element, and the
+   * re-lock / double-click / context-menu paths that also emit a readout are never additive.
+   */
+  z.object({ t: z.literal("readout"), readout: nodeReadoutSchema, additive: z.boolean().optional() }),
+  /** The user emptied the selection from inside the guest (Escape on the canvas). */
+  z.object({ t: z.literal("selectionCleared") }),
+  /** The elements that look the same, for the `matchElements` query with this key. */
+  z.object({ t: z.literal("matchedElements"), key: z.string(), nodeIds: z.array(z.string()) }),
+  /** Readouts for a `readoutMany` query. Members that no longer resolve are simply absent. */
+  z.object({ t: z.literal("readouts"), readouts: z.array(nodeReadoutSchema) }),
+  /** Token names used by a subtree, with the value each resolves to on the selected node. */
+  z.object({
+    t: z.literal("subtreeTokens"),
+    nodeId: z.string(),
+    tokens: z.record(z.string(), z.string()),
+    /** How many elements were walked — the view states this so an over-broad selection explains itself. */
+    elements: z.number(),
+  }),
+  /** The in-flight marquee rectangle in guest coords, or null when the drag ends. */
+  z.object({ t: z.literal("marquee"), rect: rectSchema.nullable() }),
+  /** The marquee's result: the outermost elements it enclosed. `additive` extends the current set. */
+  z.object({ t: z.literal("selectedMany"), nodeIds: z.array(z.string()), additive: z.boolean() }),
   /** Geometry-only update (scroll/resize/layout) so overlays stay aligned. */
   z.object({ t: z.literal("geometry"), nodeId: z.string(), rect: rectSchema }),
   /** The element under the pointer in inspect mode (null when the pointer leaves). */

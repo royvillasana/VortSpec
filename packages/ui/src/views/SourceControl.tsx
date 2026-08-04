@@ -346,7 +346,7 @@ export function SourceControl({
                 aria-expanded={graphOpen}
                 className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-vs-text-secondary hover:text-vs-text-primary"
               >
-                <span className="text-[9px] text-vs-text-muted">{graphOpen ? "▾" : "▸"}</span>
+                <span className="text-[10px] text-vs-text-muted">{graphOpen ? "▾" : "▸"}</span>
                 Commit Graph
               </button>
               {graphOpen && (

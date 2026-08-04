@@ -36,6 +36,7 @@ export function visibleForFilter(tree: BridgeTree | null, filter: string): Set<s
 export const NodeTree = memo(function NodeTree({
   tree,
   selectedId,
+  selectedIds,
   hoveredId,
   onSelect,
   onHover,
@@ -44,8 +45,11 @@ export const NodeTree = memo(function NodeTree({
 }: {
   tree: BridgeTree | null;
   selectedId: string | null;
+  /** The whole selection. Defaults to just the focused member, so a caller that has not adopted
+   *  multi-select keeps today's behaviour exactly. */
+  selectedIds?: string[];
   hoveredId?: string | null;
-  onSelect: (id: string) => void;
+  onSelect: (id: string, additive?: boolean) => void;
   onHover?: (id: string | null) => void;
   /** Drag a layer: `before`/`after` reorders; `inside` nests it into the target container. */
   onReorder?: (nodeId: string, targetId: string, position: "before" | "after" | "inside") => void;
@@ -126,15 +130,18 @@ export const NodeTree = memo(function NodeTree({
     // While filtering, the surviving branches are always open — a match the user must expand to
     // see would defeat the search.
     const isOpen = expanded.has(id) || !!visible;
-    const isSelected = selectedId === id;
+    // `isSelected` drives the row's highlight; the focused member is drawn distinctly below, because a
+    // set of five where one is the panel's subject has to say which one.
+    const isSelected = selectedIds ? selectedIds.includes(id) : selectedId === id;
+    const isFocused = selectedId === id;
     const dropHere = dropAt?.id === id ? dropAt.pos : null;
     const row = (
       <button
         key={id}
-        ref={isSelected ? selectedRef : undefined}
+        ref={isFocused ? selectedRef : undefined}
         type="button"
         draggable={!!onReorder}
-        onClick={() => onSelect(id)}
+        onClick={(e) => onSelect(id, e.shiftKey || e.metaKey || e.ctrlKey)}
         onMouseEnter={() => onHover?.(id)}
         onMouseLeave={() => onHover?.(null)}
         onDragStart={
@@ -189,13 +196,13 @@ export const NodeTree = memo(function NodeTree({
             : undefined
         }
         style={{ paddingLeft: 6 + depth * 12 }}
-        className={`relative flex w-full items-center gap-1 py-[3px] pr-2 text-left text-[12px] ${
+        className={`relative flex w-full items-center gap-1 py-[3px] pe-2 text-left text-[12px] ${
           dragId === id ? "opacity-40" : ""
         } ${
           dropHere === "inside" ? "ring-1 ring-inset ring-vs-accent bg-vs-accent-subtle" : ""
         } ${
           isSelected
-            ? "bg-vs-accent-subtle text-vs-text-primary"
+            ? `bg-vs-accent-subtle text-vs-text-primary${isFocused ? " ring-1 ring-inset ring-vs-accent" : ""}`
             : hoveredId === id
               ? "bg-vs-bg-hover text-vs-text-primary"
               : "text-vs-text-secondary hover:bg-vs-bg-hover"

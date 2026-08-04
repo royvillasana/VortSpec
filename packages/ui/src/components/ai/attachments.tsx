@@ -180,7 +180,7 @@ export function AttachmentChips({
                   setPreview((p) => (p === a.id ? null : p));
                 }}
                 title="Remove"
-                className="ml-0.5 rounded px-0.5 leading-none text-vs-text-muted hover:text-vs-text-primary"
+                className="ms-0.5 rounded px-0.5 leading-none text-vs-text-muted hover:text-vs-text-primary"
               >
                 ×
               </button>

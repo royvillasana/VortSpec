@@ -99,3 +99,295 @@ test("a second mounted panel is never left stale after an edit on the first", as
   // …and so does the OTHER, which would otherwise still be offering to write back "20px".
   await expect(second).toHaveValue("40px");
 });
+
+test("a per-component override is visible and clearable, not applied invisibly", async ({ mount }) => {
+  // An override that applies to every instance on every page while appearing in no screen is
+  // indistinguishable from a bug: the user sees an effect with no cause and no way to undo it. The
+  // fixture seeds one the session did not write, which is exactly that case.
+  const c = await mount(<LibraryPanel project={PROJECT} onEdited={() => {}} />);
+
+  await expect(c.getByText("Component overrides")).toBeVisible();
+  await expect(c.getByText("Button", { exact: true })).toBeVisible();
+  await expect(c.getByText("border-radius: 0")).toBeVisible();
+
+  await c.getByRole("button", { name: "Clear the Button override" }).click();
+
+  await expect(c.getByText("Component overrides")).toHaveCount(0);
+});
+
+test("the design system marks what the selection is made of, and moves nothing", async ({ mount }) => {
+  // Selecting a component should answer "what is this made of?" against the SAME list, in the same order.
+  // A design system that rearranges itself per selection is one nobody learns.
+  const plain = await mount(<LibraryPanel project={PROJECT} onEdited={() => {}} />);
+  const orderBefore = await plain.getByLabel(/^color-/).evaluateAll((els) =>
+    els.map((e) => e.getAttribute("aria-label")?.split(":")[0]),
+  );
+  await plain.unmount();
+
+  const c = await mount(
+    <LibraryPanel project={PROJECT} onEdited={() => {}} tokensInUse={{ "color-accent": "#262626" }} />,
+  );
+
+  // The row in use says so in its accessible name; the others are untouched.
+  await expect(c.getByLabel(/^color-accent:.*in use by the selection/)).toBeVisible();
+  await expect(c.getByLabel(/^color-border:.*in use by the selection/)).toHaveCount(0);
+
+  // Same rows, same order — the marking is an annotation, not a filter.
+  const orderAfter = await c.getByLabel(/^color-/).evaluateAll((els) =>
+    els.map((e) => e.getAttribute("aria-label")?.split(":")[0]),
+  );
+  expect(orderAfter).toEqual(orderBefore);
+});
+
+test("a token the design system lacks is named, not silently absent", async ({ mount }) => {
+  // A light page routinely declares its own `:root`, so a component built on a token the design system
+  // never defined is the common case. Showing nothing for that property answers "what is this made of?"
+  // with silence, which reads as a broken panel rather than as the drift it actually is.
+  const c = await mount(
+    <LibraryPanel
+      project={PROJECT}
+      onEdited={() => {}}
+      tokensInUse={{
+        "color-accent": "#262626", // the design system HAS this one
+        "radius-pill": "999px", // …and not this one
+      }}
+    />,
+  );
+
+  const missing = c.getByRole("region", { name: /not in your design system/i });
+  await expect(missing).toBeVisible();
+  await expect(missing.getByText("--radius-pill")).toBeVisible();
+  await expect(missing.getByText(/999px/)).toBeVisible();
+
+  // The one it HAS is marked in place among its own rows, and is NOT listed as missing. Scoped to the
+  // region: the Live Preview also names the tokens it drew with, so an unscoped match would find it there.
+  await expect(c.getByLabel(/^color-accent:.*in use by the selection/)).toBeVisible();
+  await expect(missing.getByText("--color-accent")).toHaveCount(0);
+});
+
+test("nothing is claimed when the selection is fully mapped", async ({ mount }) => {
+  const c = await mount(
+    <LibraryPanel project={PROJECT} onEdited={() => {}} tokensInUse={{ "color-accent": "#262626" }} />,
+  );
+  await expect(c.getByRole("region", { name: /not in your design system/i })).toHaveCount(0);
+});
+
+test("adopting adds the token to the design system, and only on request", async ({ mount }) => {
+  const c = await mount(
+    <LibraryPanel project={PROJECT} onEdited={() => {}} tokensInUse={{ "radius-pill": "999px" }} />,
+  );
+
+  // Selecting something must never modify the design system on its own.
+  await expect(c.getByLabel(/^radius-pill:/)).toHaveCount(0);
+
+  await c.getByRole("button", { name: "Add --radius-pill to the design system" }).click();
+
+  // Now it IS the design system: a row of its own, and no longer listed as missing.
+  await expect(c.getByLabel(/^radius-pill:/)).toBeVisible();
+  await expect(c.getByRole("region", { name: /not in your design system/i })).toHaveCount(0);
+});
+
+test("editing a token with a component selected asks how far it reaches", async ({ mount }) => {
+  // Ambiguous by construction: the user is looking at one Card, and the token belongs to every component
+  // that reads it. Guessing is wrong half the time — and invisibly so, because the Card changes either
+  // way and only the components they were NOT looking at reveal which reading was taken.
+  const c = await mount(
+    <LibraryPanel
+      project={PROJECT}
+      onEdited={() => {}}
+      tokensInUse={{ "radius-card": "20px" }}
+      selectedComponent="Card"
+    />,
+  );
+
+  // Edited from the component's own applied view — where a user looking at a Card would reach for it.
+  const applied = c.getByRole("region", { name: "Applied styles: Card" });
+  await applied.getByLabel(/^radius-card:/).click();
+  const input = applied.getByLabel("radius-card", { exact: true });
+  await input.fill("4px");
+  await input.blur();
+
+  const ask = c.getByRole("group", { name: /Apply --radius-card/ });
+  await expect(ask).toBeVisible();
+  await expect(ask.getByRole("button", { name: "Only Card components" })).toBeVisible();
+  await expect(ask.getByRole("button", { name: "The whole design system" })).toBeVisible();
+  // It says what the narrow choice spares, so the decision is made on consequences.
+  await expect(ask.getByText(/leaves other components reading --radius-card alone/i)).toBeVisible();
+});
+
+test("with nothing selected there is nothing to ask", async ({ mount }) => {
+  const c = await mount(<LibraryPanel project={PROJECT} onEdited={() => {}} />);
+
+  await c.getByLabel(/^radius-card:/).click();
+  const input = c.getByLabel("radius-card", { exact: true });
+  await input.fill("4px");
+  await input.blur();
+
+  // No selection, no ambiguity: the edit is the design system's, and it just applies.
+  await expect(c.getByRole("group", { name: /^Apply --/ })).toHaveCount(0);
+  await expect(input).toHaveValue("4px");
+});
+
+test("cancelling the question applies neither reading", async ({ mount }) => {
+  const c = await mount(
+    <LibraryPanel
+      project={PROJECT}
+      onEdited={() => {}}
+      tokensInUse={{ "radius-card": "20px" }}
+      selectedComponent="Card"
+    />,
+  );
+
+  const applied = c.getByRole("region", { name: "Applied styles: Card" });
+  await applied.getByLabel(/^radius-card:/).click();
+  const input = applied.getByLabel("radius-card", { exact: true });
+  await input.fill("4px");
+  await input.blur();
+  await c.getByRole("button", { name: "Cancel this change" }).click();
+
+  await expect(c.getByRole("group", { name: /^Apply --/ })).toHaveCount(0);
+  // The design system is untouched — the row still reads what it did.
+  await expect(applied.getByLabel(/^radius-card: 20px/)).toBeVisible();
+});
+
+test("a selected component's styles are collected under its name, grouped and counted", async ({
+  mount,
+}) => {
+  // Marking answers "is this one used?". It does not answer "what is this Card made of?" — that answer
+  // was scattered across five sections of a list hundreds of rows long, found by hunting for highlights.
+  const c = await mount(
+    <LibraryPanel
+      project={PROJECT}
+      onEdited={() => {}}
+      tokensInUse={{ "color-accent": "#262626", "radius-card": "20px" }}
+      selectedComponent="Card"
+    />,
+  );
+
+  const applied = c.getByText("Applied styles");
+  await expect(applied).toBeVisible();
+  await expect(c.getByText("Card", { exact: true })).toBeVisible();
+
+  // One group per kind the component actually uses, each stating how much.
+  await expect(c.getByText("Colors")).toHaveCount(2); // the applied view + the design system below
+  await expect(c.getByText("Borders")).toHaveCount(2);
+
+  // A kind it uses nothing from is not invented: the fixture has no typography/spacing/shadow in use.
+  await expect(c.getByText("Typography")).toHaveCount(1); // the design system's own section only
+});
+
+test("the applied view leads, and leaves the design system below untouched", async ({ mount }) => {
+  const plain = await mount(<LibraryPanel project={PROJECT} onEdited={() => {}} />);
+  const before = await plain.getByLabel(/^color-/).evaluateAll((els) => els.length);
+  await plain.unmount();
+
+  const c = await mount(
+    <LibraryPanel
+      project={PROJECT}
+      onEdited={() => {}}
+      tokensInUse={{ "color-accent": "#262626" }}
+      selectedComponent="Card"
+    />,
+  );
+
+  // The design system is the same design system whatever is selected — the component view is a lead,
+  // not a filter. The accent now appears twice: once in the applied view, once in its own section.
+  const after = await c.getByLabel(/^color-/).evaluateAll((els) => els.length);
+  expect(after).toBe(before + 1);
+});
+
+test("nothing selected, nothing led with", async ({ mount }) => {
+  const c = await mount(<LibraryPanel project={PROJECT} onEdited={() => {}} />);
+  await expect(c.getByText("Applied styles")).toHaveCount(0);
+});
+
+test("a plain element gets the applied view too, headed by its own label", async ({ mount }) => {
+  // A page is mostly plain elements — 16 component names against hundreds of nodes. Gating the view on
+  // `data-component` would leave it off most of the time, for no reason a user can perceive.
+  const c = await mount(
+    <LibraryPanel
+      project={PROJECT}
+      onEdited={() => {}}
+      tokensInUse={{ "color-accent": "#262626" }}
+      selectionLabel="div.wrap"
+      selectionElements={12}
+    />,
+  );
+
+  await expect(c.getByRole("region", { name: "Applied styles: div.wrap" })).toBeVisible();
+  // And it states its own breadth, so an over-broad selection explains itself rather than being truncated.
+  await expect(c.getByText("1 tokens · 12 elements")).toBeVisible();
+});
+
+test("a plain element is offered no middle option — there is nothing durable to write against", async ({
+  mount,
+}) => {
+  // A component-scoped override is written against `data-component`, which survives a re-render and
+  // exists on every page. A class is neither, so offering "only these" would fail quietly and later.
+  const c = await mount(
+    <LibraryPanel
+      project={PROJECT}
+      onEdited={() => {}}
+      tokensInUse={{ "radius-card": "20px" }}
+      selectionLabel="div.grid"
+    />,
+  );
+
+  const applied = c.getByRole("region", { name: "Applied styles: div.grid" });
+  await applied.getByLabel(/^radius-card:/).click();
+  const input = applied.getByLabel("radius-card", { exact: true });
+  await input.fill("4px");
+  await input.blur();
+
+  await expect(c.getByRole("group", { name: /^Apply --/ })).toHaveCount(0);
+  await expect(input).toHaveValue("4px");
+});
+
+test("a component still gets both the view and the question", async ({ mount }) => {
+  const c = await mount(
+    <LibraryPanel
+      project={PROJECT}
+      onEdited={() => {}}
+      tokensInUse={{ "radius-card": "20px" }}
+      selectedComponent="Card"
+      selectionLabel="div.product"
+    />,
+  );
+
+  // The component name wins the heading over the element label.
+  await expect(c.getByRole("region", { name: "Applied styles: Card" })).toBeVisible();
+
+  const applied = c.getByRole("region", { name: "Applied styles: Card" });
+  await applied.getByLabel(/^radius-card:/).click();
+  await applied.getByLabel("radius-card", { exact: true }).fill("4px");
+  await applied.getByLabel("radius-card", { exact: true }).blur();
+  await expect(c.getByRole("group", { name: /Apply --radius-card/ })).toBeVisible();
+});
+
+test("the held edit puts focus on the choice, and Escape abandons it", async ({ mount }) => {
+  // The edit is HELD until answered, so the control that completes it must be reachable without hunting
+  // for it — the panel scrolls past 160+ rows, and a question pinned at the top is easy to never see.
+  const c = await mount(
+    <LibraryPanel
+      project={PROJECT}
+      onEdited={() => {}}
+      tokensInUse={{ "radius-card": "20px" }}
+      selectedComponent="Card"
+    />,
+  );
+
+  const applied = c.getByRole("region", { name: "Applied styles: Card" });
+  await applied.getByLabel(/^radius-card:/).click();
+  const input = applied.getByLabel("radius-card", { exact: true });
+  await input.fill("4px");
+  await input.blur();
+
+  // Focus lands on the first choice: one keystroke from an answer, and announced on arrival.
+  await expect(c.getByRole("button", { name: "Only Card components" })).toBeFocused();
+
+  // And it says plainly that nothing has happened yet, rather than leaving the edit looking applied.
+  await expect(c.getByRole("status")).toContainText("not applied yet");
+
+  await c.getByRole("button", { name: "Only Card components" }).press("Escape");
+  await expect(c.getByRole("group", { name: /^Apply --/ })).toHaveCount(0);
+});

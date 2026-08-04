@@ -11,9 +11,20 @@ import type {
 import { Link2, Unlink2, Search } from "lucide-react";
 import { NodeTree } from "./NodeTree";
 import type { PendingEdit } from "./pending";
-import { matchTokenName, tokenNameFromVar, tokensForField } from "./compose";
+import { cssForField, matchTokenName, tokenNameFromVar, tokensForField } from "./compose";
 import { ColorTokenField, type ColorToken } from "./ColorPicker";
 import { CreateVariableRow } from "./CreateVariableRow";
+import { ScopeSelector } from "./ScopeSelector";
+import { scopeReach, scopeTargets } from "./scope-reach";
+import {
+  availableScopes,
+  deriveScope,
+  matchKey,
+  promotionTarget,
+  type ScopeReach,
+  type ScopeTarget,
+  type StyleScope,
+} from "@vortspec/core/style-scope";
 
 /**
  * The Run-section Design panel (change: run-canvas-visual-editor).
@@ -95,6 +106,12 @@ export function DesignPanel({
   tree,
   hoveredId,
   onSelectNode,
+  onSelectMatching,
+  selectedIds,
+  memberSelections,
+  matched = {},
+  mixed = {},
+  onMatchQuery,
   onHoverNode,
   onReorderNode,
   onFieldChange,
@@ -121,14 +138,31 @@ export function DesignPanel({
   libraryPanel,
 }: {
   selection: Selection | null;
+  /** Every selected node, focused member included. Omitted → the focused member alone. */
+  selectedIds?: string[];
+  /**
+   * One built `Selection` per selected member, focused member included — what the SCOPE rules read.
+   *
+   * Built by `RunApp` rather than here, and not derivable from `selectedIds`: a member's token per
+   * field comes from `buildSelection(readout, { tokens })`, which needs the project token list, the
+   * component roster and the tree. Omitted → the focused member alone, which is the old behaviour
+   * and the reason `deriveScope`'s multi-member branch was unreachable.
+   */
+  memberSelections?: readonly (Selection | null)[];
+  /** Guest answers to "which elements look the same", keyed by query. */
+  matched?: Record<string, string[]>;
+  /** Fields whose value the selection does NOT agree on — shown as `Mixed`, never as one member's value. */
+  mixed?: Record<string, unknown>;
+  /** Ask the guest which elements look the same as the selection for a property. */
+  onMatchQuery?: (key: string, component: string, cssProp: string, value: string) => void;
   tree: BridgeTree | null;
   hoveredId?: string | null;
-  onSelectNode: (id: string) => void;
+  onSelectNode: (id: string, additive?: boolean) => void;
   onHoverNode?: (id: string | null) => void;
   /** Drag-to-reorder a layer: move `nodeId` before/after `targetId` — the page rearranges to match. */
   onReorderNode?: (nodeId: string, targetId: string, position: "before" | "after" | "inside") => void;
   /** An ephemeral property edit (section field key → new value). */
-  onFieldChange?: (key: string, value: string) => void;
+  onFieldChange?: (key: string, value: string, scope?: StyleScope, scopeKey?: string, scopeToken?: string) => void;
   /** A variant switch (variant prop key → new option). */
   onVariantChange?: (key: string, value: string) => void;
   /** Delete the selected element (hidden live, removed from source on Apply). */
@@ -154,6 +188,8 @@ export function DesignPanel({
   /** Create a new design token from a field's current value, then bind the field to it. Bootstraps
    *  the token file if the project has none yet. Throws with a human message on a bad name/dupe. */
   onCreateToken?: (name: string, value: string, tokenType?: string) => Promise<void>;
+  /** Select every element matching the current one by a named criterion. */
+  onSelectMatching?: (by: "component" | "tag") => void;
   /** Open the assign/replace-component dialog for the current selection (on demand). */
   onAssign?: () => void;
   /** Screen files whose spec owes a Screen Creation update (deferred from an insert). */
@@ -192,6 +228,7 @@ export function DesignPanel({
       <LayersRegion
         tree={tree}
         selectedId={selection?.nodeId ?? null}
+        selectedIds={selectedIds}
         hoveredId={hoveredId}
         onSelectNode={onSelectNode}
         onHoverNode={onHoverNode}
@@ -237,6 +274,27 @@ export function DesignPanel({
         ) : (
           <>
             <SelectionHeader selection={selection} onAssign={onAssign} onDelete={onDelete} />
+            {onSelectMatching && (
+              <div className="flex flex-wrap items-center gap-1 px-3 pb-1">
+                <span className="text-[10px] uppercase tracking-[0.06em] text-vs-text-muted">Select</span>
+                {selection.component && (
+                  <button
+                    type="button"
+                    onClick={() => onSelectMatching("component")}
+                    className="rounded border border-vs-border-default px-1.5 py-0.5 text-[10px] text-vs-text-muted transition-colors hover:border-vs-border-strong hover:text-vs-text-secondary"
+                  >
+                    {`All ${selection.component}s`}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => onSelectMatching("tag")}
+                  className="rounded border border-vs-border-default px-1.5 py-0.5 text-[10px] text-vs-text-muted transition-colors hover:border-vs-border-strong hover:text-vs-text-secondary"
+                >
+                  Same tag
+                </button>
+              </div>
+            )}
             {/* Assigning / reusing / extracting a component moved to the inspect
                 AssignDialog (change: canvas-compose-and-preview-bar) — this panel is
                 now just identity + editable properties. */}
@@ -251,6 +309,10 @@ export function DesignPanel({
                 onFieldChange={onFieldChange}
                 colorTokens={colorTokens}
                 tokens={tokens}
+                targets={scopeTargets(memberSelections ?? selection)}
+                onMatchQuery={onMatchQuery}
+                mixed={mixed}
+                reach={scopeReach(tokens, matched, tree)}
               />
             ))}
           </>
@@ -502,10 +564,10 @@ function ApplyBar({
                 {p.label} → <span className="font-mono">{p.value}</span>
               </span>
               {p.shared && (
-                <span className="flex-none rounded bg-vs-warning/20 px-1 text-[9px] text-vs-warning">shared token</span>
+                <span className="flex-none rounded bg-vs-warning/20 px-1 text-[10px] text-vs-warning">shared token</span>
               )}
               {p.kind !== "token" && (
-                <span className="flex-none rounded bg-vs-accent-subtle px-1 text-[9px] text-vs-accent">source edit</span>
+                <span className="flex-none rounded bg-vs-accent-subtle px-1 text-[10px] text-vs-accent">source edit</span>
               )}
               {onRemove && !applying && (
                 <button
@@ -617,6 +679,7 @@ function ReviewBar({ onKeep, onRevert }: { onKeep?: () => void; onRevert?: () =>
 function LayersRegion({
   tree,
   selectedId,
+  selectedIds,
   hoveredId,
   onSelectNode,
   onHoverNode,
@@ -625,8 +688,9 @@ function LayersRegion({
 }: {
   tree: BridgeTree | null;
   selectedId: string | null;
+  selectedIds?: string[];
   hoveredId?: string | null;
-  onSelectNode: (id: string) => void;
+  onSelectNode: (id: string, additive?: boolean) => void;
   onHoverNode?: (id: string | null) => void;
   onReorderNode?: (nodeId: string, targetId: string, position: "before" | "after" | "inside") => void;
   /** Pixel height of the tree body — the user drags the boundary below it to change this. */
@@ -676,6 +740,7 @@ function LayersRegion({
         <NodeTree
           tree={tree}
           selectedId={selectedId}
+          selectedIds={selectedIds}
           hoveredId={hoveredId}
           onSelect={onSelectNode}
           onHover={onHoverNode}
@@ -705,7 +770,7 @@ function SelectionHeader({
         {Math.round(selection.rect.width)} × {Math.round(selection.rect.height)}
       </span>
       {selection.component && (
-        <span className="rounded border border-vs-border-default px-1 py-px text-[9px] uppercase tracking-wide text-vs-text-muted">
+        <span className="rounded border border-vs-border-default px-1 py-px text-[10px] uppercase tracking-wide text-vs-text-muted">
           component
         </span>
       )}
@@ -781,32 +846,152 @@ const PropertySection = memo(function PropertySection({
   colorTokens = [],
   tokens = [],
   onCreateToken,
+  targets = [],
+  reach = {},
+  onMatchQuery,
+  mixed = {},
 }: {
   section: DesignSection;
-  onFieldChange?: (key: string, value: string) => void;
+  onFieldChange?: (key: string, value: string, scope?: StyleScope, scopeKey?: string, scopeToken?: string) => void;
   colorTokens?: ColorToken[];
   tokens?: InspectorToken[];
   onCreateToken?: (name: string, value: string, tokenType?: string) => Promise<void>;
+  targets?: ScopeTarget[];
+  reach?: ScopeReach;
+  onMatchQuery?: (key: string, component: string, cssProp: string, value: string) => void;
+  mixed?: Record<string, unknown>;
 }): JSX.Element | null {
   if (section.fields.length === 0) return null;
   return (
     <Collapsible title={section.title} defaultOpen>
       <div className="flex flex-col gap-2 px-3 pb-3">
         {section.fields.map((f) => (
-          <Row key={f.key} label={f.label}>
-            <Field
-              field={f}
-              colorTokens={colorTokens}
-              tokens={tokens}
-              onChange={(val) => onFieldChange?.(f.key, val)}
-              onCreateToken={onCreateToken}
-            />
-          </Row>
+          <ScopedField
+            key={f.key}
+            field={f}
+            colorTokens={colorTokens}
+            tokens={tokens}
+            onCreateToken={onCreateToken}
+            targets={targets}
+            reach={reach}
+            onMatchQuery={onMatchQuery}
+            isMixed={f.key in mixed}
+            onChange={(val, scope, scopeKey, scopeToken) =>
+              onFieldChange?.(f.key, val, scope, scopeKey, scopeToken)
+            }
+          />
         ))}
       </div>
     </Collapsible>
   );
 });
+
+/**
+ * One field plus the scope its edit will apply at (change: scoped-style-edits).
+ *
+ * The scope row appears when the field takes focus — before a value can be typed, which is the moment the
+ * spec requires it to be visible, and not a moment earlier: rendering a scope row under every field at
+ * rest would bury the panel in chrome the user is not using.
+ *
+ * The scope resets to its derived default whenever focus returns. A scope that persisted from the last
+ * edit would be a mode, and a mode is invisible exactly when it matters — the failure this whole change
+ * exists to prevent.
+ */
+function ScopedField({
+  field,
+  colorTokens,
+  tokens,
+  onChange,
+  onCreateToken,
+  targets,
+  reach,
+  onMatchQuery,
+  isMixed = false,
+}: {
+  field: SectionField;
+  colorTokens: ColorToken[];
+  tokens: InspectorToken[];
+  onChange: (value: string, scope: StyleScope, scopeKey?: string, scopeToken?: string) => void;
+  onCreateToken?: (name: string, value: string, tokenType?: string) => Promise<void>;
+  targets: ScopeTarget[];
+  reach: ScopeReach;
+  onMatchQuery?: (key: string, component: string, cssProp: string, value: string) => void;
+  /** The selection does not agree on this property — show it as Mixed until the user sets one. */
+  isMixed?: boolean;
+}): JSX.Element {
+  const options = availableScopes(targets, field.key, reach);
+  const derived = deriveScope(targets, field.key);
+  const [open, setOpen] = useState(false);
+  const [picked, setPicked] = useState<{ scope: StyleScope; key?: string; token?: string } | null>(null);
+  const active = picked ?? derived;
+  // A narrow edit that just hardcoded a value the design system already decides. Held so the offer can be
+  // made AFTER the edit lands — the edit is never blocked on answering, and declining costs one click.
+  const [promote, setPromote] = useState<{ token: string; value: string } | null>(null);
+
+  // Ask the guest what looks the same the moment the field opens, so the count on the chip is the real
+  // set by the time the user reads it. Asked per (component, value) — the same pair the label is keyed on.
+  const matchable = derived.scope === "matching" ? derived : null;
+  useEffect(() => {
+    if (!open || !matchable?.key || matchable.value === undefined) return;
+    const [cssProp] = Object.keys(cssForField(field.key, matchable.value));
+    if (cssProp) onMatchQuery?.(matchKey(matchable.key, matchable.value), matchable.key, cssProp, matchable.value);
+  }, [open, matchable?.key, matchable?.value, field.key, onMatchQuery]);
+
+  return (
+    <div
+      onFocus={() => setOpen(true)}
+      onBlur={(e) => {
+        // Only close when focus leaves the whole row — moving from the input to a scope chip must not
+        // dismiss the control the user is reaching for.
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
+          setOpen(false);
+          setPicked(null);
+        }
+      }}
+    >
+      <Row label={field.label}>
+        <Field
+          // A Mixed field shows NO member's value. Showing one would be a lie the user then acts on, and
+          // the blank is what makes "I did not touch this" and "I set this" distinguishable — which is the
+          // whole guarantee that an untouched property is never written.
+          field={isMixed ? { ...field, value: "" } : field}
+          colorTokens={colorTokens}
+          tokens={tokens}
+          onChange={(val) => {
+            onChange(val, active.scope, active.key, active.token);
+            // Offered only when every member reaches this property THROUGH one token: the edit has just
+            // written a literal over a value the design system decides, and next time the system will
+            // win. Never speculative — `promotionTarget` returns null when there is nothing to promote to.
+            const token = promotionTarget(active.scope, targets, field.key);
+            setPromote(token ? { token, value: val } : null);
+          }}
+          onCreateToken={onCreateToken}
+          placeholder={isMixed ? "Mixed" : undefined}
+        />
+      </Row>
+      {promote && (
+        <PromoteOffer
+          token={promote.token}
+          uses={reach.tokenUses?.[promote.token] ?? null}
+          onAccept={() => {
+            onChange(promote.value, "token", promote.token);
+            setPromote(null);
+          }}
+          onDismiss={() => setPromote(null)}
+        />
+      )}
+      {open && (
+        <div className="ps-[72px]">
+          <ScopeSelector
+            options={options}
+            value={active.scope}
+            onChange={(scope, key, token) => setPicked({ scope, key, token })}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
 
 function Field({
   field,
@@ -814,11 +999,14 @@ function Field({
   tokens,
   onChange,
   onCreateToken,
+  placeholder,
 }: {
   field: SectionField;
   colorTokens: ColorToken[];
   tokens: InspectorToken[];
   onChange: (value: string) => void;
+  /** Shown when the field has no value to display — a multi-selection that does not agree. */
+  placeholder?: string;
   onCreateToken?: (name: string, value: string, tokenType?: string) => Promise<void>;
 }): JSX.Element {
   const control =
@@ -853,7 +1041,7 @@ function Field({
     ) : field.key === "content" ? (
       <ContentTextarea value={field.value} onChange={onChange} />
     ) : (
-      <TextField value={field.value} onChange={onChange} mono />
+      <TextField value={field.value} onChange={onChange} mono placeholder={placeholder} />
     );
   // Color + length fields carry their own token indicator; other token-backed
   // fields get a badge underneath.
@@ -922,7 +1110,7 @@ function TokenValueChip({
         onBlur={onCommit}
         onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
         style={hugWidth(draft)}
-        className="bg-transparent text-right font-mono text-[12px] text-vs-text-primary outline-none"
+        className="rounded-sm bg-transparent text-right font-mono text-[12px] text-vs-text-primary outline-none focus-visible:ring-2 focus-visible:ring-vs-accent-subtle"
       />
       {showDot && (
         <button
@@ -1031,7 +1219,7 @@ function LengthTokenField({
   };
   return (
     <div className="relative w-full">
-      <div className="flex w-full items-center rounded border border-vs-border-default bg-vs-bg-surface pr-1 focus-within:border-vs-accent">
+      <div className="flex w-full items-center rounded border border-vs-border-default bg-vs-bg-surface pe-1 focus-within:border-vs-accent">
         {canPick && (
           <button
             type="button"
@@ -1119,7 +1307,7 @@ function ContentTextarea({ value, onChange }: { value: string; onChange: (v: str
 /** A pill showing the value is backed by a design token (vs a literal). */
 function TokenBadge({ name }: { name: string }): JSX.Element {
   return (
-    <span className="inline-flex w-fit items-center gap-1 rounded bg-vs-accent-subtle px-1.5 py-px text-[9px] text-vs-accent">
+    <span className="inline-flex w-fit items-center gap-1 rounded bg-vs-accent-subtle px-1.5 py-px text-[10px] text-vs-accent">
       <span className="h-1.5 w-1.5 rounded-full bg-vs-accent" />
       {name}
     </span>
@@ -1298,7 +1486,7 @@ function BoxSideInput({
   };
   return (
     <div className="relative min-w-0 flex-1">
-      <div className="flex items-center gap-1 rounded border border-vs-border-default bg-vs-bg-surface py-1 pl-1.5 pr-1 focus-within:border-vs-accent">
+      <div className="flex items-center gap-1 rounded border border-vs-border-default bg-vs-bg-surface py-1 ps-1.5 pe-1 focus-within:border-vs-accent">
         {glyph}
         {/* Bound → the whole value chip is a button (click anywhere opens the picker);
             raw → an editable input with a ◆ to bind. The chip hugs its content and the
@@ -1609,14 +1797,17 @@ function TextField({
   value,
   onChange,
   mono = false,
+  placeholder,
 }: {
   value: string;
   onChange: (v: string) => void;
   mono?: boolean;
+  placeholder?: string;
 }): JSX.Element {
   const [draft, setDraft] = useState(value);
   return (
     <input
+      placeholder={placeholder}
       value={draft}
       onChange={(e) => setDraft(e.target.value)}
       onBlur={() => draft !== value && onChange(draft)}
@@ -1647,7 +1838,7 @@ function Collapsible({
         onClick={() => setOpen((v) => !v)}
         className="flex w-full items-center gap-1.5 px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-vs-text-secondary hover:text-vs-text-primary"
       >
-        <span className="text-[9px] text-vs-text-muted">{open ? "▾" : "▸"}</span>
+        <span className="text-[10px] text-vs-text-muted">{open ? "▾" : "▸"}</span>
         {title}
       </button>
       {open && children}
@@ -1657,4 +1848,52 @@ function Collapsible({
 
 function cap(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+
+/**
+ * The offer to move an edit up into the design system (change: scoped-style-edits).
+ *
+ * Shown after a narrow edit hardcoded a value that a token already decides. It is an OFFER: the edit the
+ * user asked for has already been applied, so dismissing costs nothing and changes nothing. Accepting
+ * writes the token instead — which is the edit they probably meant, since the next time anything re-reads
+ * the design system the token wins anyway.
+ *
+ * The use count is stated because that is the difference between the two choices, and it is the number
+ * that makes accepting feel either obvious or alarming.
+ */
+function PromoteOffer({
+  token,
+  uses,
+  onAccept,
+  onDismiss,
+}: {
+  token: string;
+  uses: number | null;
+  onAccept: () => void;
+  onDismiss: () => void;
+}): JSX.Element {
+  return (
+    <div className="mt-1 flex items-center gap-1.5 rounded border border-vs-border-strong bg-vs-bg-elevated px-1.5 py-1 ps-[72px]">
+      <span className="min-w-0 flex-1 truncate text-[10px] text-vs-text-muted">
+        {`--${token} decides this`}
+        {uses !== null && ` · ${uses} uses`}
+      </span>
+      <button
+        type="button"
+        onClick={onAccept}
+        className="shrink-0 rounded border border-vs-accent bg-vs-accent-muted px-1.5 py-0.5 text-[10px] text-vs-text-primary"
+      >
+        Change the token
+      </button>
+      <button
+        type="button"
+        onClick={onDismiss}
+        aria-label="Keep the change on this element"
+        className="shrink-0 rounded border border-vs-border-default px-1.5 py-0.5 text-[10px] text-vs-text-muted hover:text-vs-text-secondary"
+      >
+        Keep
+      </button>
+    </div>
+  );
 }

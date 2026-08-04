@@ -147,15 +147,15 @@ export function ProjectSetup({
                 <span
                   className="flex h-5 w-5 flex-none items-center justify-center rounded-full border font-mono text-[10px]"
                   style={{
-                    borderColor: done ? "#23402F" : active ? "#34305C" : "#26282D",
+                    borderColor: done ? "#23402F" : active ? "#34305C" : "var(--color-vs-border-default)",
                     background: done ? "rgba(48,164,108,0.12)" : active ? "rgba(124,111,240,0.12)" : "transparent",
-                    color: done ? "#30A46C" : active ? "#A79BFF" : "#6B7280",
+                    color: done ? "var(--color-vs-success)" : active ? "#A79BFF" : "var(--color-vs-text-muted)",
                   }}
                 >
                   {done ? "✓" : i + 1}
                 </span>
                 <span className={active ? "font-semibold text-vs-text-primary" : "text-vs-text-secondary"}>{s.label}</span>
-                {i >= 2 && <span className="ml-auto font-mono text-[9.5px] text-vs-text-muted">optional</span>}
+                {i >= 2 && <span className="ml-auto font-mono text-[10px] text-vs-text-muted">optional</span>}
               </button>
             );
           })}
@@ -166,7 +166,7 @@ export function ProjectSetup({
                 5
               </span>
               <span className="text-[13.5px] text-vs-text-muted">Foundation</span>
-              <span className="ml-auto font-mono text-[9.5px] text-vs-text-muted">next</span>
+              <span className="ml-auto font-mono text-[10px] text-vs-text-muted">next</span>
             </div>
           </div>
         </aside>
@@ -418,7 +418,7 @@ function ZipUpload({
           <span className="min-w-0 truncate font-mono text-[12px] text-vs-text-primary">{value.split("/").pop()}</span>
           <button
             onClick={() => onPick("")}
-            className="ml-2 rounded px-1.5 leading-none text-vs-text-muted hover:text-vs-error"
+            className="ms-2 rounded px-1.5 leading-none text-vs-text-muted hover:text-vs-error"
             title="Remove"
             aria-label="Remove the selected file"
           >
@@ -554,9 +554,9 @@ function Chips({
               onClick={() => onChange(o)}
               className="rounded-full border px-3.5 py-1.5 text-xs hover:border-vs-accent"
               style={{
-                borderColor: active ? "#7C6FF0" : "#34373D",
+                borderColor: active ? "var(--color-vs-accent)" : "var(--color-vs-border-strong)",
                 background: active ? "rgba(124,111,240,0.12)" : "transparent",
-                color: active ? "#E7E9EC" : "#9BA1AB",
+                color: active ? "var(--color-vs-text-primary)" : "var(--color-vs-text-secondary)",
               }}
             >
               {o}
@@ -595,9 +595,9 @@ function Pills({
             onClick={() => onChange(o.value)}
             className="h-8 rounded-md border px-[13px] text-[12.5px] transition-colors hover:border-vs-border-strong"
             style={{
-              borderColor: active ? "#34305C" : "#26282D",
+              borderColor: active ? "#34305C" : "var(--color-vs-border-default)",
               background: active ? "rgba(124,111,240,0.10)" : "transparent",
-              color: active ? "#C4BBFF" : "#9BA1AB",
+              color: active ? "#C4BBFF" : "var(--color-vs-text-secondary)",
             }}
           >
             {o.label}

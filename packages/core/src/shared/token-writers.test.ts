@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { parseThemeOverrides } from "./theme-overrides";
 import {
   detectTokenFormat,
   materializeComponentCss,
@@ -98,5 +99,62 @@ describe("materializeComponentCss", () => {
     expect(css).toContain('[data-component="Button"] [data-slot="label"] {');
     expect(css).toContain("font-weight: 600;"); // camelCase prop kebab-cased
     expect(materializeComponentCss(EMPTY_THEME_OVERRIDES)).toBe("");
+  });
+});
+
+describe("a component-scoped token redefinition", () => {
+  it("emits the token under the component's selector, not at the root", () => {
+    // This is what makes "change every Button" possible without changing Cards: the SAME token name,
+    // redefined only inside the component. Custom properties inherit, so every Button subtree resolves
+    // the new value and everything outside keeps the design system's.
+    const css = materializeComponentCss(
+      parseThemeOverrides({
+        version: 1,
+        components: { Button: { base: { "--radius-element": "4px" } } },
+      }),
+    );
+    expect(css).toContain('[data-component="Button"]');
+    expect(css).toContain("--radius-element: 4px;");
+    // Emphatically NOT at :root — that is the spill this scope exists to avoid.
+    expect(css).not.toContain(":root");
+  });
+
+  it("leaves the custom property name intact rather than kebab-mangling it", () => {
+    // The decl writer kebab-cases camelCase property names. A token name is already kebab and begins with
+    // `--`; mangling it would emit a property nothing reads, and the edit would silently do nothing.
+    const css = materializeComponentCss(
+      parseThemeOverrides({
+        version: 1,
+        components: { Card: { base: { "--color-accent": "#5433EB" } } },
+      }),
+    );
+    expect(css).toContain("--color-accent: #5433EB;");
+  });
+
+  it("scopes each component separately, so siblings sharing a token are spared", () => {
+    const css = materializeComponentCss(
+      parseThemeOverrides({
+        version: 1,
+        components: {
+          Button: { base: { "--radius-element": "4px" } },
+          Card: { base: { "--radius-element": "16px" } },
+        },
+      }),
+    );
+    // Two independent rules — neither can reach the other's component.
+    expect(css).toMatch(/\[data-component="Button"\][^}]*--radius-element: 4px;/s);
+    expect(css).toMatch(/\[data-component="Card"\][^}]*--radius-element: 16px;/s);
+  });
+
+  it("carries a scoped token alongside a plain declaration on the same component", () => {
+    // A component can have both: a token redefined for it, and a property hardcoded on it.
+    const css = materializeComponentCss(
+      parseThemeOverrides({
+        version: 1,
+        components: { Button: { base: { "--radius-element": "4px", "box-shadow": "none" } } },
+      }),
+    );
+    expect(css).toContain("--radius-element: 4px;");
+    expect(css).toContain("box-shadow: none;");
   });
 });
