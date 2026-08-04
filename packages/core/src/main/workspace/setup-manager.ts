@@ -13,6 +13,15 @@ import {
   access,
 } from "node:fs/promises";
 import { buildProjectYaml, type SetupAnswers } from "@vortspec/core/setup";
+import {
+  buildFrameworkRulesDoc,
+  pruneFrameworkConfigDoc,
+  pruneReactArchitecture,
+  scopeReactRefMandate,
+  scopeReactRefExamples,
+  linkFrameworkRulesInClaudeMd,
+} from "@vortspec/core/framework-docs";
+import { readProjectConfig } from "./config-manager";
 import { refreshProject } from "./workspace-manager";
 import type { Project } from "@vortspec/core/ipc";
 
@@ -85,6 +94,77 @@ async function createSkillSymlinks(sourceDir: string, targetDir: string): Promis
   }
 }
 
+
+/**
+ * Scope the copied toolkit docs to THIS project's framework (change: framework-scoped rules).
+ *
+ * The toolkit ships one `framework-config.md` carrying all nine frameworks, and standards docs
+ * that state React's architecture as if it were framework-agnostic. `CLAUDE.md` indexes those
+ * standards and the doc-driven skills follow that index, so a Vue project has been reading
+ * React's CVA/`forwardRef` mandates on every `/generate-artifacts`.
+ *
+ * Three transformations, all deterministic:
+ *   1. write the active framework's rules as their own document;
+ *   2. LINK it from `CLAUDE.md`, because a file nothing indexes is never read;
+ *   3. remove the sections that contradict it — the other frameworks' config sections, and the
+ *      React-architecture sections in the shared standards.
+ *
+ * Failures are NOT swallowed. A doc that the toolkit simply does not ship is expected and
+ * skipped; anything else (a write failure, a permissions problem) throws, because reporting
+ * setup as successful while leaving contradictory React mandates in place is the exact silent
+ * wrongness this change exists to remove.
+ */
+async function scopeDocsToFramework(
+  projectPath: string,
+  sddeDir: string,
+  framework?: string | null,
+): Promise<void> {
+  if (!framework) return;
+  const rules = buildFrameworkRulesDoc(framework);
+  if (!rules) return; // unknown framework — generation is STOPped anyway; invent nothing
+  const docsDir = join(sddeDir, "docs");
+
+  await writeFile(join(docsDir, "framework-rules.md"), rules, "utf8");
+
+  // Link it from EVERY agent runtime's entry point, not just Claude's. VortSpec copies the same
+  // instructions to AGENTS.md / GEMINI.md / codex.md, and authority should not depend on which
+  // runtime opens the project. Idempotent, so resync cannot duplicate the line.
+  for (const entry of ["CLAUDE.md", "AGENTS.md", "GEMINI.md", "codex.md"]) {
+    await transformIfPresent(join(projectPath, entry), linkFrameworkRulesInClaudeMd);
+  }
+
+  // Drop the eight framework sections that do not apply.
+  await transformIfPresent(join(docsDir, "framework-config.md"), (t) =>
+    pruneFrameworkConfigDoc(t, framework),
+  );
+
+  // Shared standards: non-React projects lose the React architecture entirely; React/Next keep
+  // it but lose the unconditional `forwardRef` mandate, which is not React 19 guidance and
+  // would contradict the version-aware rule in framework-rules.md.
+  for (const name of ["component-standards.md", "styling-best-practices.md"]) {
+    await transformIfPresent(join(docsDir, name), (t) =>
+      scopeReactRefExamples(scopeReactRefMandate(pruneReactArchitecture(t, framework), framework), framework),
+    );
+  }
+}
+
+/**
+ * Rewrite a doc in place. A MISSING file is fine — older toolkit versions do not ship every
+ * document, and that is not a failure. Any other error propagates: a half-scoped project must
+ * not be reported as a successful setup.
+ */
+async function transformIfPresent(path: string, transform: (text: string) => string): Promise<void> {
+  let original: string;
+  try {
+    original = await readFile(path, "utf8");
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") return;
+    throw err;
+  }
+  const next = transform(original);
+  if (next !== original) await writeFile(path, next, "utf8");
+}
+
 export async function createProject(
   projectPath: string,
   answers: SetupAnswers,
@@ -114,6 +194,10 @@ export async function createProject(
       }
     }
   }
+
+  // Scope the copied docs to this project's framework. AFTER the CLAUDE.md copy, because it
+  // links the generated rules from that file's standards index.
+  await scopeDocsToFramework(projectPath, sddeDir, answers.framework);
 
   // .claude/skills symlinks
   await createSkillSymlinks(
@@ -171,6 +255,12 @@ export async function resyncToolkit(projectPath: string): Promise<Project> {
       /* CLAUDE.md may not ship in older toolkit versions */
     }
   }
+
+  // Re-scope AFTER both re-copies: the docs copy restores all nine frameworks' sections and the
+  // React architecture, and the CLAUDE.md overwrite drops the rules link. Both must be redone or
+  // a toolkit update silently un-scopes every project.
+  const cfg = await readProjectConfig(projectPath).catch(() => null);
+  await scopeDocsToFramework(projectPath, sddeDir, cfg?.framework);
 
   // Refresh `.claude/skills` symlinks — drop stale ones, recreate all from the new skills.
   const claudeSkills = join(projectPath, ".claude", "skills");

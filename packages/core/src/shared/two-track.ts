@@ -9,6 +9,7 @@
  * Pure: composes the light stand-in prompt (`buildLightStandInPrompt`) with the framework-track section.
  * The renderer dispatches it via the agent-run machinery; VortSpec never calls Figma directly.
  */
+import { frameworkIdiomClause } from "./framework-profiles";
 import { buildLightStandInPrompt, type StandInTarget } from "./light-standin";
 
 /** Order components by tier so the framework track builds atoms → molecules → organisms. */
@@ -24,7 +25,7 @@ export interface TwoTrackTarget extends StandInTarget {
  * "Generate previews" flow), then a framework-track pass that reuses the SAME reads to build real
  * components in atomic order, flipping each to framework-ready as it lands + is harvested.
  */
-export function buildTwoTrackBuildPrompt(targets: TwoTrackTarget[]): string {
+export function buildTwoTrackBuildPrompt(targets: TwoTrackTarget[], framework?: string | null): string {
   const ordered = [...targets].sort((a, b) => (TIER_ORDER[a.tier ?? ""] ?? 3) - (TIER_ORDER[b.tier ?? ""] ?? 3));
   const buildList = ordered
     .map((t) => `- ${t.name}${t.tier ? ` (${t.tier})` : ""} · variants: ${t.variants.length ? t.variants.join(", ") : "default"}`)
@@ -49,9 +50,12 @@ export function buildTwoTrackBuildPrompt(targets: TwoTrackTarget[]): string {
     "re-read the same nodes). Read `.sdd-de/project.yaml` for the framework/language/styling and follow the",
     "project's component standards. Build in ATOMIC ORDER (atoms → molecules → organisms), one component at",
     "a time, each via the 7-step cycle:",
+    "",
+    frameworkIdiomClause(framework),
+    "",
     "1. Build the component from its contract identity — the SAME name, variants, and props the light",
     "   stand-in used (identity MUST match the contract; do not rename or drop variants).",
-    "2. Follow the project standards: CVA variants in a `.variants.ts`, a `cn()` merge, `forwardRef`, and",
+    "2. Follow the FRAMEWORK CONTRACT above for this project's variant, export and ref conventions, with",
     "   EVERY color/spacing/radius/type value referencing a design token (no hardcoded values).",
     "3. Once it exists AND its story renders, HARVEST its real render back over the light stand-in so the",
     "   palette preview becomes the true component output — the component flips to `framework-ready`.",

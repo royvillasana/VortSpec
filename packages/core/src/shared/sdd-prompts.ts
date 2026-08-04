@@ -9,23 +9,44 @@
  * procedure here changes it in both apps at once (the binding invariant of the
  * two-app model).
  */
-import { resolveTypecheck } from "./framework-profiles";
+import { frameworkIdiomClause, resolveTypecheck, typecheckCoverageClause } from "./framework-profiles";
 
-export function buildOnePrompt(name: string, level?: string): string {
+export function buildOnePrompt(name: string, level?: string, framework?: string | null): string {
   return (
     `Read .sdd-de/project.yaml. Implement the "${name}" component` +
     (level ? ` (${level})` : "") +
     " into component_dir in the configured framework and language. " +
+    frameworkClause(framework) +
     DESIGN_REFERENCE_CLAUSE +
     " Run /generate-artifacts for it to produce its specs, then implement it. " +
     VARIANT_SET_CLAUSE
   );
 }
 
-/** Shared reminder so a collapsed variant set is ONE component, not many. */
+/**
+ * The project's framework conventions, stated outright (change: framework-profile-idioms).
+ *
+ * Every builder used to say only "in the configured framework and language" and leave the
+ * rest to `.sdd-de/project.yaml` — so which idiom the model reached for was its own habit,
+ * and the habit is React. Interpolating the profile's idioms makes the instruction concrete
+ * for the eight non-React frameworks. Empty (and therefore harmless) when the framework is
+ * unset or unrecognized, the clause is an explicit STOP: silence is fail-OPEN, because the
+ * build proceeds anyway and the model falls back to its own habit, which is React.
+ */
+function frameworkClause(framework?: string | null): string {
+  return `${frameworkIdiomClause(framework)}\n`;
+}
+
+/**
+ * Shared reminder so a collapsed variant set is ONE component, not many. The MECHANISM is
+ * deliberately left to the framework clause above: naming CVA here pushed every framework
+ * toward the React idiom, and in Angular `CVA` is `ControlValueAccessor` — a different thing
+ * entirely.
+ */
 const VARIANT_SET_CLAUSE =
   "If its .sdd-de/components.json entry has a `variants` array (variant axes), implement a SINGLE " +
-  "component that covers ALL those variants via variant props (e.g. CVA), not a separate component per variant.";
+  "component that covers ALL those variants via variant props, using this framework's variant " +
+  "mechanism as stated above — not a separate component per variant.";
 
 /**
  * The design anchor (change: figma-visual-validation, hardened in figma-node-reference).
@@ -33,11 +54,40 @@ const VARIANT_SET_CLAUSE =
  * from its name. The reference is the component's own Figma NODE (its component set),
  * resolved AUTONOMOUSLY — never by asking the user for a link. Detection records each
  * entry's `figmaNodeId`/`componentKey`; the build reads that exact node. When the id is
- * missing, the build resolves it itself via `search_design_system` (scoped to this
- * file's own library) — which is NOT subject to the 3-page listing cap. Tokens supply
+ * missing, the build resolves it itself via `search_design_system` — which is NOT subject
+ * to the 3-page listing cap, but which MUST be scoped via `includeLibraryKeys` (see
+ * SCOPED_SEARCH_CLAUSE; the file key alone does not scope it). Tokens supply
  * VALUES only; the reference supplies STRUCTURE. This is what stops "the alert looks
  * like a restyled button."
  */
+/**
+ * How to scope `search_design_system` — and why saying "scoped" was not enough
+ * (found by running the audit against a real file, 2026-08-04).
+ *
+ * This clause used to instruct "`search_design_system` scoped to THIS file's own library
+ * (from `figma_file_url`)". It is NOT scoped by passing the file key: `fileKey` is context,
+ * not a filter. Searching `button` against one real project file returned 20 component sets
+ * from 20 DIFFERENT libraries — Bootstrap, Radix, Joy UI, and other orgs' systems — three of
+ * them carrying byte-identical descriptions.
+ *
+ * That matters more than it looks: across the projects on disk, 0 of 242 roster entries carry
+ * a `figmaNodeId`, so step (2) is not a fallback — it is the ONLY resolution path any build
+ * uses today. A build asking for "button" has been choosing from twenty strangers' buttons.
+ *
+ * `includeLibraryKeys` is the actual filter. And because a wrong-library match is worse than
+ * no match (it silently reproduces someone else's component), a match found ONLY outside this
+ * file's own library must count as unresolved.
+ */
+const SCOPED_SEARCH_CLAUSE =
+  "`search_design_system` is NOT scoped by the file key alone — `fileKey` is context, not a filter, and an " +
+  "unscoped search returns same-named components from every library in the org. You MUST pass this file's " +
+  "OWN library key in `includeLibraryKeys`. That key is an `lk-…` LIBRARY key, which a Figma URL does NOT " +
+  "give you — a URL carries the FILE key. Get it from the metadata of a first, unscoped result that belongs " +
+  "to this file, then scope every subsequent search with it. If a " +
+  "name matches ONLY in another library, treat the component as UNRESOLVED — do NOT use a cross-library " +
+  "match, and never pick between same-named candidates by description: several libraries ship byte-identical " +
+  "component descriptions.";
+
 const DESIGN_REFERENCE_CLAUSE = [
   "DESIGN REFERENCE — do this BEFORE writing code, entirely yourself (never ask me for a Figma link):",
   "if project.yaml's `design_source` is a CONSUME source (`library` or `enterprise`), the authoritative",
@@ -49,9 +99,9 @@ const DESIGN_REFERENCE_CLAUSE = [
   "any values you map. Otherwise (`design_source: figma`), the authoritative reference for a component is",
   "its own Figma NODE (the component set). RESOLVE it in this order: (1) the entry's `figmaNodeId`/`componentKey` in",
   ".sdd-de/components.json — read that exact node via the Figma MCP (get_design_context / get_screenshot);",
-  "(2) if that is missing, resolve the node yourself with `search_design_system` scoped to THIS file's own",
-  "library (from `figma_file_url`) — it returns the component by name and is NOT capped like the page",
-  "listing; (3) the Desktop Bridge (figma-console) if connected. Do NOT rely on the remote page listing to",
+  "(2) if that is missing, resolve the node yourself with `search_design_system` — it returns the component",
+  "by name and is NOT capped like the page listing. " + SCOPED_SEARCH_CLAUSE + " (3) the Desktop Bridge",
+  "(figma-console) if connected. Do NOT rely on the remote page listing to",
   "locate it — that CAPS AT 3 pages. Read the resolved node's frames/variants and view its screenshot, and",
   "REPRODUCE that design — structure, parts, and every variant. Use the extracted design tokens ONLY for",
   "VALUES (color/spacing/radius/typography) and use the component's OWN design tokens (e.g. the",
@@ -82,14 +132,18 @@ const RESUMABLE =
   "that already exist, and do NOT re-verify a component that already has an up-to-date " +
   "visual-verify-report.md. Only do the remaining work, then stop.";
 
-export const BUILD_REMAINING_PROMPT =
+export function buildRemainingPrompt(framework?: string | null): string {
+  return (
   RESUMABLE +
   "\n\nRead .sdd-de/components.json and .sdd-de/project.yaml. Implement EVERY component listed in " +
   "components.json that is NOT yet implemented in component_dir, in the configured framework and " +
   "language. " +
+  frameworkClause(framework) +
   DESIGN_REFERENCE_CLAUSE +
   " For each, run /generate-artifacts to produce its specs, then implement it. Build in order: " +
-  "atoms → molecules → organisms. Skip components that already have a source file.";
+  "atoms → molecules → organisms. Skip components that already have a source file."
+  );
+}
 
 /**
  * Re-scan the design source and RECONCILE — additive, never destructive. Refresh
@@ -269,9 +323,10 @@ export const RESCAN_PROMPT = [
   "   and how many stale descriptions you corrected.",
 ].join("\n");
 
-export function newComponentPrompt(name: string, intent: string): string {
+export function newComponentPrompt(name: string, intent: string, framework?: string | null): string {
   return [
     `Add a brand-new component "${name}" to this design system.`,
+    frameworkIdiomClause(framework),
     "1. Append an entry to .sdd-de/components.json: { \"name\": \"" +
       name +
       "\", \"level\": <atom|molecule|organism>, \"description\": <one line from the intent below> }.",
@@ -290,9 +345,14 @@ export function newComponentPrompt(name: string, intent: string): string {
  * grounded in one authoritative node id — the engine reads that exact node
  * through the Figma MCP so the generated code matches what the user picked.
  */
-export function newComponentFromFigmaNodePrompt(name: string, nodeId: string): string {
+export function newComponentFromFigmaNodePrompt(
+  name: string,
+  nodeId: string,
+  framework?: string | null,
+): string {
   return [
     `Build a component from the Figma node the user selected: "${name}" (node id ${nodeId}).`,
+    frameworkIdiomClause(framework),
     `1. Read that exact node via the Figma MCP — resolve node id ${nodeId} in the file`,
     "   `figma_file_url` from .sdd-de/project.yaml (e.g. figma_get_component_details / a node fetch)",
     "   to get its structure, variants, and styles. Treat that node as authoritative.",
@@ -372,6 +432,11 @@ export const RESUME_PROMPT =
  * in the component and reported pass — and because Layer 1 is only BLOCKED when CODE fails,
  * that vacuous green cleared the path to a VISUAL pass on code nobody had compiled.
  * A framework with no meaningful check says so rather than running a command that lies.
+ *
+ * A command that RUNS can lie too, which is the second branch here. Angular's build reports exit 0
+ * on a wrong input binding unless the project enables `strictTemplates`, so the right command
+ * under the wrong config produces the same vacuous green by a different route — see
+ * `typecheckCoverageClause()`.
  */
 function typecheckClause(framework?: string | null, componentDir?: string | null): string {
   const r = resolveTypecheck(framework, { componentDir });
@@ -383,7 +448,10 @@ function typecheckClause(framework?: string | null, componentDir?: string | null
       ? ` That check is PARTIAL (${r.partial}) — report what it did and did not cover, and do ` +
         `not treat its pass as full CODE coverage.`
       : "";
-    return `run the project's framework-native type-check — '${r.cmd}' —${partial} and, for a Storybook/`;
+    // Their `partial` is an UNCONDITIONAL shortfall; my coverage gate is CONDITIONAL on a project
+    // setting and must be resolved before it can be claimed. Composed, not collapsed — merging them
+    // would mark a correctly-configured Angular project PARTIAL.
+    return `run the project's framework-native type-check — '${r.cmd}' —${partial}${typecheckCoverageClause(framework)} and, for a Storybook/`;
   }
   // Both remaining outcomes mean "we could not check". Neither may be reported as a pass:
   // an unrunnable check is BLOCKED, and BLOCKED propagates to Layer 1 exactly as a failure
@@ -414,9 +482,9 @@ export function verifyPrompt(
   const resolveRef = isFigma
     ? "RESOLVE each component's authoritative Figma reference YOURSELF — never ask me for a link. Use, in " +
       "order: (1) the entry's `figmaNodeId`/`componentKey` in .sdd-de/components.json, read via the Figma MCP " +
-      "(get_design_context / get_screenshot on that node); (2) if missing, `search_design_system` scoped to " +
-      "THIS file's own library (from `figma_file_url`) to resolve the node by name — it is NOT capped like the " +
-      "page listing; (3) the Desktop Bridge if connected. Do NOT use the remote page listing (caps at 3)."
+      "(get_design_context / get_screenshot on that node); (2) if missing, `search_design_system` to resolve " +
+      "the node by name — it is NOT capped like the page listing. " + SCOPED_SEARCH_CLAUSE + " (3) the " +
+      "Desktop Bridge if connected. Do NOT use the remote page listing (caps at 3)."
     : "Compare against the component's spec and design source (design_source is not Figma).";
   const compareTo = isFigma
     ? "the component's authoritative Figma node (resolved as above), screenshot included"
@@ -521,6 +589,12 @@ export interface BuildChunkOptions {
   storybook?: boolean;
   /** Refresh the design manifest (DESIGN.md) after building this chunk. */
   manifest?: boolean;
+  /**
+   * The project's framework (`project.yaml` → `framework`), so the prompt can state that
+   * framework's real conventions instead of leaving the model to infer them. Omitting it
+   * costs the idiom clause, not correctness of anything else.
+   */
+  framework?: string | null;
 }
 
 /**
@@ -536,6 +610,7 @@ export function buildChunkPrompt(names: string[], opts: BuildChunkOptions = {}):
     "",
     "Read .sdd-de/components.json and .sdd-de/project.yaml. Build ONLY these components, in " +
       `atoms → molecules → organisms order: ${list}. Do NOT build any other component in this run.`,
+    frameworkIdiomClause(opts.framework),
     DESIGN_REFERENCE_CLAUSE,
     "For EACH of them, run /generate-artifacts to produce its specs, then implement it into " +
       "component_dir in the configured framework and language. Skip any that already have a source file.",
@@ -569,12 +644,17 @@ export function buildChunkPrompt(names: string[], opts: BuildChunkOptions = {}):
 }
 
 /** Build every not-yet-built component AND verify it — the CLI's Apply → Verify chain. */
-export function buildVerifyRestPrompt(url: string | null, isFigma: boolean): string {
+export function buildVerifyRestPrompt(
+  url: string | null,
+  isFigma: boolean,
+  framework?: string | null,
+): string {
   return [
     RESUMABLE,
     "Read .sdd-de/components.json and .sdd-de/project.yaml. For EVERY component listed that is NOT " +
       "yet implemented in component_dir, in atoms → molecules → organisms order, run the full SDD-DE " +
       "cycle autonomously and in the background:",
+    frameworkIdiomClause(framework),
     "  a. " + DESIGN_REFERENCE_CLAUSE,
     "  b. /generate-artifacts to produce its specs, then implement it.",
     `  c. Verify in three layers reported in order — VISUAL (/visual-verify: render and compare every ` +

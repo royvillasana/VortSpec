@@ -12,6 +12,8 @@ import {
   vanillaCheckCmd,
   isNonComponentStem,
   profileFor,
+  frameworkIdiomClause,
+  idiomsFor,
   resolveTypecheck,
   sourceExtsFor,
   stripFileSuffix,
@@ -449,5 +451,164 @@ describe("vanillaCheckCmd — a check that could not run is not a pass", () => {
     await mkdir(join(dir, "src"), { recursive: true });
     await writeFile(join(dir, "src", "button.html"), "<button></button>\n", "utf8");
     expect(run(vanillaCheckCmd("src")!)).toBe(0);
+  });
+});
+
+describe("idioms — the authoring half of the profile", () => {
+  it("gives every offered framework a complete idiom set", () => {
+    // A blank field would silently drop a line from the prompt, which is how the React
+    // default crept back in the first place.
+    for (const f of FRAMEWORKS) {
+      const i = FRAMEWORK_PROFILES[f].idioms;
+      for (const key of ["label", "fileConvention", "props", "events", "slots", "variants", "styleScoping", "exports", "refs"] as const) {
+        expect(i[key], `${f}.idioms.${key} is empty`).toBeTruthy();
+      }
+    }
+  });
+
+  it("does not prescribe CVA or forwardRef outside React", () => {
+    // `component-standards.md` mandated both for all nine. `forwardRef` does not exist in
+    // Vue/Svelte/Angular/Astro/vanilla, and in Angular `CVA` is `ControlValueAccessor`.
+    for (const f of FRAMEWORKS.filter((x) => x !== "react" && x !== "next")) {
+      const { variants, refs } = FRAMEWORK_PROFILES[f].idioms;
+      // Naming CVA is fine — several rows name it precisely to warn it off. What must never
+      // happen is PRESCRIBING it, so any mention has to sit next to a prohibition.
+      if (/class-variance-authority|\bCVA\b/.test(variants)) {
+        expect(variants, `${f} mentions CVA without warning against it`).toMatch(/Do NOT/);
+      }
+      expect(refs, `${f} still implies React ref forwarding`).toMatch(
+        /no `forwardRef`|not applicable|querySelector|NOT React's ref forwarding/,
+      );
+    }
+  });
+
+  it("does not repeat the refuted claim that Svelte strips helper-built classes", () => {
+    // I asserted three times that a class built in an external module gets stripped and the
+    // component ships unstyled, and made `class:` a requirement on that basis. Bumble compiled
+    // both shapes on svelte 5.56.8: nothing is stripped either way, and a live-pruner control
+    // proved the negative real. Pinned so the myth cannot come back.
+    // Evidence: RESEARCH/VORTSPEC_SVELTE_FIXTURE_2026-08-04.md
+    for (const f of ["svelte", "sveltekit"] as const) {
+      const v = FRAMEWORK_PROFILES[f].idioms.variants;
+      expect(v, `${f} still claims stripping`).not.toMatch(/is stripped as unused CSS/);
+      expect(v, `${f} still claims it renders unstyled`).not.toMatch(/renders unstyled/);
+    }
+  });
+
+  it("keeps the class: recommendation on its true benefit", () => {
+    for (const f of ["svelte", "sveltekit"] as const) {
+      const v = FRAMEWORK_PROFILES[f].idioms.variants;
+      expect(v).toMatch(/class:/);
+      expect(v).toMatch(/statically visible/);
+      expect(v).toMatch(/not a correctness requirement/);
+    }
+  });
+
+  it("scopes the diagnostic loss to the element carrying the dynamic class", () => {
+    // My replacement claim overreached the other way: "every selector becomes unprovable" and
+    // "the analysis is switched off". A control on svelte 5.56.8 shows `div.never` and a child's
+    // `p.never` are BOTH still commented out and warned beside `<button class={x}>` — the
+    // compiler still reasons structurally. Only the element carrying the dynamic class loses it.
+    // Evidence: RESEARCH/VORTSPEC_SVELTE_CSS_SCOPE_CONTROL_2026-08-04.md
+    for (const f of ["svelte", "sveltekit"] as const) {
+      const { variants, pitfalls } = FRAMEWORK_PROFILES[f].idioms;
+      const both = `${variants} ${pitfalls.join(" ")}`;
+      // Must not claim global disablement.
+      expect(both, `${f} claims every selector is unprovable`).not.toMatch(/every selector/i);
+      expect(both, `${f} claims the analysis is switched off`).not.toMatch(/analysis OFF|wholly disabled|disables the unused/i);
+      // Must scope to the element carrying it, and preserve the structural exclusion.
+      expect(variants).toMatch(/element CARRYING the dynamic|could match it/);
+      expect(variants).toMatch(/exclude structurally|different tag/);
+    }
+  });
+
+  it("warns the BUILDER about Vue prop misspelling, since the checker will not", () => {
+    // The reverted gate's job, relocated to where it belongs. `strictTemplates` is off by default
+    // and enabling it rejects legitimate aria-*/data-* fallthrough, so this is not a CODE-verdict
+    // downgrade — it is guidance to whoever writes the binding. Rendered on vue 3.5.40:
+    // `<Button :cout="7" />` emits `<button cout="7">42</button>` — forwarded to the root, NOT
+    // dropped, with the real prop left at its default.
+    const clause = frameworkIdiomClause("vue");
+    expect(clause).toMatch(/Spell every prop exactly as the component declares it/);
+    expect(clause).toMatch(/forwards it to the root element/);
+    // The refuted mechanism must not come back in the emitted guidance.
+    expect(clause).not.toMatch(/dropped at render/);
+    expect(clause).not.toMatch(/silently dropped/);
+  });
+
+  it("tells Angular its event binding is (click), not Vue's @click", () => {
+    expect(FRAMEWORK_PROFILES.angular.idioms.events).toContain("(click)");
+    expect(FRAMEWORK_PROFILES.angular.idioms.pitfalls.join(" ")).toMatch(/ControlValueAccessor/);
+  });
+
+  it("does not claim a named export where the framework cannot have one", () => {
+    // `.vue`, `.svelte` and `.astro` compile to default exports; the old blanket
+    // "never a default export" rule was unsatisfiable for them.
+    for (const f of ["vue", "nuxt", "svelte", "sveltekit", "astro"] as const) {
+      expect(FRAMEWORK_PROFILES[f].idioms.exports).toMatch(/DEFAULT|export nothing/);
+    }
+  });
+});
+
+describe("idiomsFor / frameworkIdiomClause — fail closed, never fall back to React", () => {
+  it("returns the framework's own idioms", () => {
+    expect(idiomsFor("svelte")?.label).toBe("Svelte");
+    expect(idiomsFor("ANGULAR")?.label).toBe("Angular");
+  });
+
+  it("returns null for an unset or unknown framework instead of React's", () => {
+    // `sourceExtsFor` deliberately falls back to the UNION of every framework's extensions for
+    // DETECTION (over-inclusive is safe there). Idioms must not: asserting React's conventions
+    // about an unknown framework is the exact leak this table exists to stop. `profileFor` is
+    // itself fail-closed and returns null — it is not the fallback being contrasted here.
+    expect(idiomsFor(undefined)).toBeNull();
+    expect(idiomsFor(null)).toBeNull();
+    expect(idiomsFor("")).toBeNull();
+    expect(idiomsFor("brand-new-framework")).toBeNull();
+  });
+
+  it("emits an explicit STOP for an unknown framework, not silence", () => {
+    // Silence was fail-OPEN: with no clause the build proceeds and the model falls back to
+    // its own habit, which is React — the original bug. An unknown framework must block.
+    for (const f of ["brand-new-framework", undefined, null, ""] as const) {
+      const clause = frameworkIdiomClause(f);
+      expect(clause).toContain("STOP");
+      expect(clause).toMatch(/Do NOT generate any component/);
+      expect(clause).toMatch(/do NOT default to\s+React/);
+      expect(clause).toContain("/setup");
+    }
+  });
+
+  it("states that the contract overrides the toolkit's React-only standards", () => {
+    // component-standards.md still mandates CVA/cn()/forwardRef for all nine and
+    // /generate-artifacts loads it; without a precedence rule the agent gets two
+    // contradictory instructions and picks one at random.
+    const clause = frameworkIdiomClause("svelte");
+    expect(clause).toContain("OVERRIDES");
+    expect(clause).toContain("component-standards.md");
+  });
+
+  it("requires compiler-visible variant forms in Svelte, not just a local string", () => {
+    // A dynamically built class string is not guaranteed to be seen by the compiler even
+    // when it is built inside the component; the directive/attribute forms are.
+    const v = FRAMEWORK_PROFILES.svelte.idioms.variants;
+    expect(v).toContain("class:");
+    expect(v).toContain("data-variant");
+  });
+
+  it("does not claim Astro lacks a runtime for frontmatter code", () => {
+    // Astro frontmatter runs at BUILD time, so cva/clsx there ship no client JS. The old
+    // wording gave a wrong reason for a defensible preference.
+    const v = FRAMEWORK_PROFILES.astro.idioms.variants;
+    expect(v).toContain("BUILD time");
+    expect(FRAMEWORK_PROFILES.astro.idioms.pitfalls.join(" ")).not.toMatch(/no client runtime/);
+  });
+
+  it("names the framework and its conventions when it is known", () => {
+    const clause = frameworkIdiomClause("vue");
+    expect(clause).toContain("Vue 3");
+    expect(clause).toContain("defineProps");
+    expect(clause).toContain("<style scoped>");
+    expect(clause).not.toContain("class-variance-authority");
   });
 });
