@@ -14,7 +14,6 @@ import {
 } from "./sdd-prompts";
 import { componentTokenExtractionClause, componentTokenName } from "./component-tokens";
 import { themeContractFor } from "./setup";
-import { componentTokenName } from "./component-tokens";
 
 describe("buildCustomizeLibraryPrompt — apply the durable overlay via the library's lever (Phase 11)", () => {
   it("embeds MUI's theming + per-component lever and reads the durable overlay, not invented values", () => {
@@ -628,7 +627,7 @@ describe("verifyPrompt — Layer 2 compares token identity, not syntax or value"
   it("emits the canonical name the mapping currently produces", () => {
     const canonical = componentTokenName("Components/Accordion/Active Item Header Background");
     expect(canonical?.name).toBeTruthy();
-    expect(p()).toContain(canonical.name);
+    expect(p()).toContain(canonical!.name);
     // NOTE: this asserts AGREEMENT, not derivation. A hardcoded string that happens to be
     // correct passes it — proven by mutation: replacing the interpolation with the literal left
     // all 66 tests green. The derivation itself is pinned by the mocked test below, which is the

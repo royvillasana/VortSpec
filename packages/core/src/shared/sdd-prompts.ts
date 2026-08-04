@@ -453,6 +453,12 @@ function variantRosterClause(isFigma: boolean): string {
  * property falls back to its initial value and paints transparent with no error anywhere (PR #82,
  * case B3). Nothing downstream can catch it, which is why this must block at bind time.
  *
+ * WHAT THIS IS, precisely, because the sentences above can read as more than it delivers: this is
+ * PROSE appended to `verifyPrompt` — instructions that give a reviewer the means to catch this
+ * class of defect. Nothing here resolves a CSS custom property across themes. #85's render is what
+ * JUSTIFIES the rule; it is not a measurement this clause reruns, and a review pass acting on these
+ * instructions is what would catch a recurrence. Layer 2 is a review instruction, not an assertion.
+ *
  * The canonical name comes from `componentTokenName` rather than being restated here — one copy
  * of the naming contract, in the code that enforces it.
  */
