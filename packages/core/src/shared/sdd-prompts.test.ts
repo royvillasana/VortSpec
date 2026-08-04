@@ -185,6 +185,89 @@ describe("verifyPrompt — honest gate (no false PASS without a live render)", (
   });
 });
 
+/**
+ * Layer 1's checklist must come from the DESIGN, not from the implementation.
+ *
+ * WHAT THESE PROVE, EXACTLY: that the instruction is present and says the required thing. A prompt
+ * assertion cannot prove an agent obeys it — only a live verify run against a component with a known
+ * missing state can do that, and that run is the browser-runner work, not this. Claiming more from a
+ * string match is the "check runs, reports green, proves nothing" shape these tests exist to remove,
+ * so the limit is stated here rather than left to be assumed.
+ *
+ * The defect being closed is structural, not a lapse of care: `specs/accordion/visual-verify-report.md`
+ * passed four state rows on a component missing two of the eight states Figma defines, because the
+ * rows were enumerated from the code. A checklist built from the implementation has no row for a state
+ * the implementation omits.
+ */
+describe("verifyPrompt — the variant checklist is derived from the design, not the code", () => {
+  it("mandates enumerating the roster from Figma's variant properties before reading the code", () => {
+    const p = verifyPrompt("accordion", "http://localhost:6006", true);
+    expect(p).toMatch(/FROM THE REFERENCE, BEFORE you read the implementation/);
+    expect(p).toMatch(/VARIANT PROPERTY DEFINITIONS/);
+  });
+
+  it("puts the roster rule inside Layer 1, the layer whose verdict it governs", () => {
+    // Placement, which is checkable — NOT the agent's ordering, which is not. An earlier draft of
+    // this test asserted indexOf(roster) < indexOf("Layer 2") and called that proof of the
+    // before-you-read-the-code ordering. It is not: any position inside Layer 1 satisfies it, so
+    // it would have passed for a clause that said the opposite. That is the same defect Thor caught
+    // in V10 and Angular I4 — a measurement whose label claims more than it measures. The
+    // before-reading ORDER is an instruction to the agent and only a live run can check it.
+    const p = verifyPrompt("accordion", "http://localhost:6006", true);
+    const roster = p.indexOf("FROM THE REFERENCE, BEFORE you read the implementation");
+    expect(roster).toBeGreaterThan(p.indexOf("Layer 1 — VISUAL"));
+    expect(roster).toBeLessThan(p.indexOf("Layer 2 — TOKEN"));
+  });
+
+  it("names deriving the checklist from the component's own props as the thing NOT to do", () => {
+    // The discriminating half. Without this the prompt could say "enumerate the design's states"
+    // and still leave the implementation an acceptable source, which is the status quo it replaces.
+    const p = verifyPrompt("accordion", "http://localhost:6006", true);
+    expect(p).toMatch(/Do NOT derive the checklist from the component's own props\/variants/);
+    expect(p).toMatch(/cannot contain a row for a state the code omits/);
+  });
+
+  it("makes a designed-but-unimplemented state a FAILURE rather than an absent row", () => {
+    const p = verifyPrompt("accordion", "http://localhost:6006", true);
+    expect(p).toMatch(/is a Layer 1 FAILURE named as that state — never a row you silently drop/);
+    expect(p).toMatch(/including rows the implementation has no code for/);
+  });
+
+  it("reports the roster per state, so a missing one is visible instead of absent", () => {
+    // Honey's finding was a report that PASSED four rows while two designed states were unbuilt.
+    // A per-state line with a `missing` value is what makes that reportable at all.
+    const p = verifyPrompt("accordion", "http://localhost:6006", true);
+    expect(p).toMatch(/STATE <name>: pass\|fail\|missing/);
+    expect(p).toMatch(/any 'missing' forces\s+'?VISUAL: fail'?/);
+  });
+
+  it("BLOCKS rather than passes when the reference's variant set cannot be enumerated", () => {
+    // Fail-closed, same shape as `profileFor`: coverage that could not be derived is unproven,
+    // and unproven coverage must never be able to report PASS.
+    const p = verifyPrompt("accordion", "http://localhost:6006", true);
+    expect(p).toMatch(/If you cannot enumerate the reference's variant set.*Layer 1 BLOCKED/s);
+    expect(p).toMatch(/never PASS a variant checklist you could not derive from the design/);
+  });
+
+  it("refuses an implementation-generated spec as the source when the design source is not Figma", () => {
+    // The non-Figma polarity, and the subtler half: for these projects the spec is the nearest
+    // thing to a design, but a spec GENERATED from the code carries the identical blind spot.
+    const p = verifyPrompt("accordion", "http://localhost:6006", false);
+    expect(p).toMatch(/enumerate the states the design source itself defines/);
+    expect(p).toMatch(/generated FROM the implementation is not an independent source/);
+    // ...and it must not send a non-Figma project to the Figma MCP for variant properties.
+    expect(p).not.toMatch(/VARIANT PROPERTY DEFINITIONS/);
+  });
+
+  it("keeps the roster rule out of the source-only path's reach — it applies with or without a URL", () => {
+    // The no-URL run is already BLOCKED for rendering, but the roster is derivable from the design
+    // without a server. A missing state is exactly what a source-only audit CAN still report.
+    const p = verifyPrompt("accordion", null, true);
+    expect(p).toMatch(/FROM THE REFERENCE, BEFORE you read the implementation/);
+    expect(p).toMatch(/STATE <name>: pass\|fail\|missing/);
+  });
+});
+
 describe("design-anchored build — reproduce the Figma node, resolved autonomously", () => {
   it("buildOnePrompt anchors to the component's Figma node and forbids name-inference", () => {
     const p = buildOnePrompt("alert");

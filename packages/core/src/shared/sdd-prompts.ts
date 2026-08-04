@@ -388,6 +388,46 @@ function figmaClause(isFigma: boolean): string {
         "and screenshots for the comparison."
     : "Compare against each component's spec and its source files (design_source is not Figma).";
 }
+/**
+ * Where Layer 1's variant checklist comes from — the DESIGN, never the implementation.
+ *
+ * Measured on a real component (RESEARCH/VORTSPEC_FIGMA_TO_COMPONENT_LIVE_VALIDATION_2026-08-04.md):
+ * Figma's `accordion-item` defines four axes — Active × Disabled × Flush × Clicked. The built
+ * component implements neither `Disabled` nor `Clicked`, and `specs/accordion/visual-verify-report.md`
+ * still reported
+ *
+ *     All states present: default, hover, focus, active/expanded | PASS (code-level)
+ *
+ * Four rows, all green, for a component missing two of the designed states.
+ *
+ * That is not a careless reviewer, it is the checklist's SHAPE. Rows enumerated from the
+ * implementation's own props/variants cannot contain a row for a state the implementation omits, so
+ * every row passes and the omission is structurally invisible — the check runs, reports green, and
+ * proves nothing. The only fix is to derive the roster from the reference BEFORE reading the code,
+ * which is why the ordering below is mandated rather than suggested.
+ *
+ * Fail-closed on an unreadable variant set, for the same reason `profileFor` is: a roster that could
+ * not be derived is unproven coverage, and unproven coverage must not be able to report PASS.
+ */
+function variantRosterClause(isFigma: boolean): string {
+  const source = isFigma
+    ? "read the reference node's VARIANT PROPERTY DEFINITIONS via the Figma MCP (a component set " +
+      "declares its axes, e.g. `State=Active|Disabled`, `Flush=True|False`) and expand them into the " +
+      "combinations the design defines"
+    : "enumerate the states the design source itself defines. A spec that was generated FROM the " +
+      "implementation is not an independent source — it inherits the same blind spot, so do not " +
+      "substitute it for the design"
+  return (
+    `Build Layer 1's checklist FROM THE REFERENCE, BEFORE you read the implementation: ${source}. ` +
+    "That enumerated set IS the checklist. Every row must appear in your report BY NAME, including " +
+    "rows the implementation has no code for. A state the design defines and the component does not " +
+    "implement is a Layer 1 FAILURE named as that state — never a row you silently drop. Do NOT " +
+    "derive the checklist from the component's own props/variants: a checklist built from the code " +
+    "cannot contain a row for a state the code omits, so it passes every row while missing states go " +
+    "unreported. If you cannot enumerate the reference's variant set, say so and report Layer 1 " +
+    "BLOCKED — never PASS a variant checklist you could not derive from the design."
+  );
+}
 const NO_MANUAL_STEPS =
   "Do this entirely yourself, in the background — never tell me to open a browser, open Figma Dev " +
   "Mode, start a server, or run a command. You have the tools; use them.";
@@ -496,7 +536,7 @@ export function verifyPrompt(
       `layer's outcome independently and never let a green layer mask a failing one. ${resolveRef}`,
     `Layer 1 — VISUAL FIDELITY (the primary check): run /visual-verify for ${scope} — render it live and ` +
       `compare it, every variant and ` +
-      `state, to ${compareTo}. ${harnessClause(url)} Render at 375/768/1440px, ` +
+      `state, to ${compareTo}. ${variantRosterClause(isFigma)} ${harnessClause(url)} Render at 375/768/1440px, ` +
       `screenshot each variant/state, and compare to the reference; a component that COMPILES and uses ` +
       `tokens but does NOT match its reference FAILS this layer — call out the concrete differences (missing ` +
       `parts/slots, wrong container shape, wrong border/radius/height, absent variants, wrong proportions, an ` +
@@ -518,7 +558,11 @@ export function verifyPrompt(
       `compliance). Fix discrepancies inline, then write specs/<component>/visual-verify-report.md. That ` +
       `report MUST include a machine-readable block: one line each 'VISUAL: pass|fail|blocked', 'TOKEN: ` +
       `pass|fail', 'CODE: pass|fail', and a final 'VERIFY: PASS' / 'VERIFY: ISSUES (<failing layers>)' / ` +
-      `'VERIFY: BLOCKED (<what>)'. Also write the adversarial-review report.`,
+      `'VERIFY: BLOCKED (<what>)'. Before those lines, list the variant roster you derived from the ` +
+      `reference — one 'STATE <name>: pass|fail|missing' per state the DESIGN defines, where 'missing' ` +
+      `means the design defines it and the implementation does not. A roster line is what makes an ` +
+      `unimplemented state visible in the report instead of absent from it, so any 'missing' forces ` +
+      `'VISUAL: fail'. Also write the adversarial-review report.`,
     NO_MANUAL_STEPS,
     `Report PASS only if ${scope} COMPILES/BUILDS cleanly AND you ACTUALLY rendered and inspected the ` +
       `live component and compared it to the authoritative design (all three layers passing on real ` +
