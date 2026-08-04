@@ -62,8 +62,9 @@ export interface FrameworkIdioms {
   slots: string;
   /**
    * How variants are expressed. Deliberately NOT "CVA everywhere" — that instruction is
-   * React-specific, breaks Svelte's CSS analysis, and in Angular `CVA` names an unrelated
-   * forms interface.
+   * React-specific: in Svelte a helper-built dynamic class weakens unused-selector diagnostics
+   * for the element carrying it (it does NOT break styling — see the svelte row), and in Angular
+   * `CVA` names an unrelated forms interface.
    */
   variants: string;
   /** How a component's styles are scoped. */
