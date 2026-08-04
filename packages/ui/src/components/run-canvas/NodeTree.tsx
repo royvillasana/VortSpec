@@ -196,7 +196,7 @@ export const NodeTree = memo(function NodeTree({
             : undefined
         }
         style={{ paddingLeft: 6 + depth * 12 }}
-        className={`relative flex w-full items-center gap-1 py-[3px] pr-2 text-left text-[12px] ${
+        className={`relative flex w-full items-center gap-1 py-[3px] pe-2 text-left text-[12px] ${
           dragId === id ? "opacity-40" : ""
         } ${
           dropHere === "inside" ? "ring-1 ring-inset ring-vs-accent bg-vs-accent-subtle" : ""

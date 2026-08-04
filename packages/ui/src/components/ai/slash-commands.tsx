@@ -86,7 +86,7 @@ export function SlashMenu({
         >
           <span className="font-mono text-vs-accent">/{c.name}</span>
           <span className="truncate text-[11px] text-vs-text-muted">{c.summary}</span>
-          {c.kind === "prompt" && <span className="ml-auto text-[9px] uppercase text-vs-text-muted/70">cmd</span>}
+          {c.kind === "prompt" && <span className="ml-auto text-[10px] uppercase text-vs-text-muted/70">cmd</span>}
         </button>
       ))}
     </div>

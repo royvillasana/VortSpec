@@ -160,7 +160,7 @@ export function FontPicker({
               <span className="min-w-0 flex-1 truncate text-[12px] text-vs-text-primary" style={{ fontFamily: fontStack(f.family) }}>
                 {f.family}
               </span>
-              <span className="shrink-0 text-[9px] text-vs-text-muted" title={FONT_SOURCE_LABEL[f.source as FontSource]}>
+              <span className="shrink-0 text-[10px] text-vs-text-muted" title={FONT_SOURCE_LABEL[f.source as FontSource]}>
                 {shortLabel(f.source)}
               </span>
             </button>

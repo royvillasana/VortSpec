@@ -1,4 +1,5 @@
 import { createElement, useEffect, useRef, useState } from "react";
+import { DEVICE_CHROME } from "./DeviceFrame";
 import type { JSX, CSSProperties } from "react";
 import type { Rect } from "@vortspec/core/ipc";
 import type { InspectorBridge, CanvasMode } from "../../lib/useInspectorBridge";
@@ -384,13 +385,13 @@ function Stage({
       ? {
           borderRadius: 44,
           overflow: "hidden",
-          boxShadow: "0 0 0 11px #0b0b0e, 0 0 0 13px #3a3a40, 0 24px 60px -18px rgba(0,0,0,.55)",
+          boxShadow: `0 0 0 11px ${DEVICE_CHROME.iphone.body}, 0 0 0 13px ${DEVICE_CHROME.iphone.ring}, 0 24px 60px -18px rgba(0,0,0,.55)`,
         }
       : framed === "android"
         ? {
             borderRadius: 32,
             overflow: "hidden",
-            boxShadow: "0 0 0 9px #111214, 0 0 0 11px #2c2d31, 0 24px 60px -18px rgba(0,0,0,.55)",
+            boxShadow: `0 0 0 9px ${DEVICE_CHROME.android.body}, 0 0 0 11px ${DEVICE_CHROME.android.ring}, 0 24px 60px -18px rgba(0,0,0,.55)`,
           }
         : {};
   return (
@@ -534,7 +535,7 @@ function Box({
       }}
     >
       {kind === "hover" && (
-        <span className="absolute -top-5 left-0 whitespace-nowrap rounded bg-vs-accent px-1 py-px text-[9px] text-white">
+        <span className="absolute -top-5 left-0 whitespace-nowrap rounded bg-vs-accent px-1 py-px text-[10px] text-white">
           {Math.round(rect.width)}×{Math.round(rect.height)}
         </span>
       )}

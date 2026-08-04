@@ -36,6 +36,17 @@ export function StatusBranch({
   onCreate: () => void;
 }): JSX.Element {
   const [open, setOpen] = useState(false);
+
+  // Escape closes, like every other dismissable surface here. Without it the only way out is Tab
+  // through every option, because the scrim that dismisses this is pointer-only.
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [open]);
   const [branches, setBranches] = useState<GitBranch[] | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   // An inline notice (checkout error, or the dirty-tree block with a git link).
@@ -90,12 +101,12 @@ export function StatusBranch({
       >
         <BranchIcon />
         <span className="font-mono">{branch}</span>
-        <span className="text-[9px]">▾</span>
+        <span className="text-[10px]">▾</span>
       </button>
       {open && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div role="menu" className="absolute bottom-full left-0 z-50 mb-1 max-h-72 min-w-[200px] overflow-y-auto rounded-md border border-vs-border-default bg-vs-bg-elevated py-1 text-xs shadow-xl">
+          <div role="menu" aria-label="Branch actions" className="absolute bottom-full left-0 z-50 mb-1 max-h-72 min-w-[200px] overflow-y-auto rounded-md border border-vs-border-default bg-vs-bg-elevated py-1 text-xs shadow-xl">
             {branches === null ? (
               <div className="flex items-center gap-2 px-3 py-1.5 text-vs-text-muted">
                 <Spinner /> Loading branches…
@@ -107,9 +118,9 @@ export function StatusBranch({
                 ) : (
                   others.map((b) => (
                     <button
+                      role="menuitem"
                       key={b.name}
                       type="button"
-                      role="menuitem"
                       disabled={busy !== null}
                       onClick={() => void checkout(b.name)}
                       className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-vs-text-secondary hover:bg-vs-bg-hover disabled:opacity-60"
@@ -122,8 +133,8 @@ export function StatusBranch({
                 )}
                 <div className="my-1 border-t border-vs-border-subtle" />
                 <button
-                  type="button"
                   role="menuitem"
+                  type="button"
                   onClick={() => {
                     setOpen(false);
                     onCreate();

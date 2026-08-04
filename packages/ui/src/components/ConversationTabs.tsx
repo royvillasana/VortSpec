@@ -256,7 +256,7 @@ function TabRename({ initial, onCommit }: { initial: string; onCommit: (v: strin
           commit(initial);
         }
       }}
-      className="w-28 rounded border border-vs-accent bg-vs-bg-primary px-1 py-0.5 text-[12px] text-vs-text-primary focus:outline-none"
+      className="w-28 rounded border border-vs-accent bg-vs-bg-primary px-1 py-0.5 text-[12px] text-vs-text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-vs-accent-subtle"
     />
   );
 }

@@ -2642,7 +2642,7 @@ export function RunApp({
                   the run finished without changing a file, so {Object.keys(pending).length === 1 ? "it’s" : "they’re"}{" "}
                   still preview-only. Try <b>Re-apply in Chat</b> to describe the change to Claude, or Discard.
                   {applyMissReason && (
-                    <span className="mt-1 block border-l-2 border-vs-warning/40 pl-2 text-[11px] italic text-vs-text-muted">
+                    <span className="mt-1 block border-l-2 border-vs-warning/40 ps-2 text-[11px] italic text-vs-text-muted">
                       Claude said: “{applyMissReason}”
                     </span>
                   )}

@@ -380,7 +380,7 @@ export function LibraryPanel({
                     the selection sits. Stating the breadth lets an over-broad selection explain itself,
                     which beats a threshold that silently collapses the view — any threshold would be
                     wrong for someone. */}
-                <div className="font-mono text-[9.5px] text-vs-text-muted">
+                <div className="font-mono text-[10px] tabular-nums text-vs-text-muted">
                   {`${Object.keys(tokensInUse ?? {}).length} tokens`}
                   {selectionElements > 0 && ` · ${selectionElements} element${selectionElements === 1 ? "" : "s"}`}
                 </div>
@@ -391,7 +391,7 @@ export function LibraryPanel({
                     <span className="text-[10px] uppercase tracking-[0.06em] text-vs-text-secondary">
                       {section.label}
                     </span>
-                    <span className="font-mono text-[9.5px] text-vs-text-muted">{section.rows.length}</span>
+                    <span className="font-mono text-[10px] text-vs-text-muted">{section.rows.length}</span>
                   </div>
                   <SectionBody
                     section={section}
@@ -469,7 +469,7 @@ function LivePreview({
         <span className="text-[11px] font-semibold uppercase tracking-wide text-vs-text-secondary">
           Live preview
         </span>
-        <span className="text-[9px] text-vs-text-muted">
+        <span className="text-[10px] text-vs-text-muted">
           {pending === "preset"
             ? "previewing a preset — not applied yet"
             : pending === "edit"
@@ -510,12 +510,12 @@ function LivePreview({
       </div>
 
       {used.length > 0 ? (
-        <span className="truncate font-mono text-[9px] text-vs-text-muted" title={used.map((t) => `--${t}`).join(", ")}>
+        <span className="truncate font-mono text-[10px] text-vs-text-muted" title={used.map((t) => `--${t}`).join(", ")}>
           using {used.map((t) => `--${t}`).join(", ")}
         </span>
       ) : (
         // Say so rather than showing an unstyled box the user has to puzzle over.
-        <span className="text-[9px] leading-relaxed text-vs-text-muted">
+        <span className="text-[10px] leading-relaxed text-vs-text-muted">
           None of this design system’s tokens matched the roles the preview draws with, so it is showing
           defaults.
         </span>
@@ -554,14 +554,14 @@ function Section({
         onClick={() => setOpen((v) => !v)}
         className="flex w-full items-center gap-1.5 px-3 py-2 text-left"
       >
-        <span className="text-[9px] text-vs-text-muted">{open ? "▾" : "▸"}</span>
+        <span className="text-[10px] text-vs-text-muted">{open ? "▾" : "▸"}</span>
         <span className="text-[11px] font-semibold uppercase tracking-wide text-vs-text-secondary">
           {section.label}
         </span>
         <span className="ml-auto flex items-center gap-1.5">
           {drifted > 0 && (
             <span
-              className="rounded-full bg-vs-accent px-1.5 text-[9px] font-medium text-white"
+              className="rounded-full bg-vs-accent px-1.5 text-[10px] font-medium text-white"
               title={`${drifted} value${drifted === 1 ? "" : "s"} differ from your screens`}
             >
               {drifted}
@@ -744,7 +744,7 @@ function Tile({
         <TileArt section={section} row={row} />
       </span>
       <span
-        className={`truncate text-[8px] leading-tight ${
+        className={`truncate text-[10px] leading-tight ${
           inUse ? "font-semibold text-vs-text-primary" : "text-vs-text-muted"
         }`}
       >
@@ -802,7 +802,7 @@ function TileArt({ section, row }: { section: string; row: LibraryRow }): React.
         {/* The bar is the step, to scale against its siblings — the whole point of a spacing SCALE is the
             relationship between steps, which a column of numbers hides. */}
         <span className="h-2 rounded-sm bg-vs-accent" style={{ width: Math.max(2, Math.min(n, 44)) }} />
-        <span className="ml-auto shrink-0 font-mono text-[9px] text-vs-text-muted">{value}</span>
+        <span className="ml-auto shrink-0 font-mono text-[10px] text-vs-text-muted">{value}</span>
       </span>
     );
   }
@@ -826,7 +826,7 @@ function TileArt({ section, row }: { section: string; row: LibraryRow }): React.
 
 /** The honest fallback: show the value when it cannot be drawn as itself. */
 function Literal({ value }: { value: string }): React.JSX.Element {
-  return <span className="truncate px-1 font-mono text-[9px] text-vs-text-secondary">{value}</span>;
+  return <span className="truncate px-1 font-mono text-[10px] text-vs-text-secondary">{value}</span>;
 }
 
 /** One token: name, its live value, and the right control for what that value actually is. */
@@ -894,7 +894,7 @@ function Row({
           --{row.token}
         </span>
         {row.uses > 0 && (
-          <span className="shrink-0 text-[9px] text-vs-text-muted" title="Component references to this token">
+          <span className="shrink-0 text-[10px] text-vs-text-muted" title="Component references to this token">
             {row.uses} use{row.uses === 1 ? "" : "s"}
           </span>
         )}
@@ -910,7 +910,7 @@ function Row({
             <span className="min-w-0 flex-1 truncate text-[12px] text-vs-text-primary" style={{ fontFamily: row.value }}>
               {leadFamily(row.value)}
             </span>
-            <span className="shrink-0 text-[9px] text-vs-text-muted">{picking ? "▴" : "▾"}</span>
+            <span className="shrink-0 text-[10px] text-vs-text-muted">{picking ? "▴" : "▾"}</span>
           </button>
           {picking && (
             <FontPicker
@@ -954,9 +954,9 @@ function Row({
       </div>
       )}
       {ld && (
-        <span className="text-[9px] text-vs-text-muted">Light/dark pair — the swatch edits light.</span>
+        <span className="text-[10px] text-vs-text-muted">Light/dark pair — the swatch edits light.</span>
       )}
-      {!valid && <span className="text-[9px] text-vs-error">Not a valid {row.control} value.</span>}
+      {!valid && <span className="text-[10px] text-vs-error">Not a valid {row.control} value.</span>}
       {drift && (
         <div className="flex items-center gap-1.5 rounded border border-vs-border-strong bg-vs-bg-elevated px-1.5 py-1">
           {row.control === "color" && (
@@ -973,7 +973,7 @@ function Row({
             type="button"
             disabled={disabled}
             onClick={() => void onWrite(row.token, drift.adoptValue)}
-            className="shrink-0 cursor-pointer rounded border border-vs-border-strong px-1.5 py-px text-[9px] text-vs-text-secondary transition-colors hover:border-vs-accent hover:text-vs-text-primary disabled:cursor-default disabled:opacity-50"
+            className="shrink-0 cursor-pointer rounded border border-vs-border-strong px-1.5 py-px text-[10px] text-vs-text-secondary transition-colors hover:border-vs-accent hover:text-vs-text-primary disabled:cursor-default disabled:opacity-50"
           >
             Adopt
           </button>
@@ -1071,7 +1071,7 @@ function UnmappedTokens({
       <div className="pb-1 text-[10px] uppercase tracking-[0.06em] text-vs-text-muted">
         Used here · not in your design system
       </div>
-      <p className="pb-1.5 text-[9.5px] leading-tight text-vs-text-muted">
+      <p className="pb-1.5 text-[10px] leading-tight text-vs-text-muted">
         This screen resolves these through values your design system does not define.
       </p>
       <div className="flex flex-col gap-1">
@@ -1183,7 +1183,7 @@ function ScopeQuestion({
           Cancel
         </button>
       </div>
-      <p className="pt-1 text-[9.5px] leading-tight text-vs-text-secondary">
+      <p className="pt-1 text-[10px] leading-tight text-vs-text-secondary">
         {`Only ${component} components changes every ${component} and leaves other components reading --${token} alone. Escape cancels.`}
       </p>
     </div>

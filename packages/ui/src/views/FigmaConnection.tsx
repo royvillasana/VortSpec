@@ -103,7 +103,7 @@ export function FigmaConnection(): JSX.Element {
               <span className="text-vs-text-secondary">{appName}</span> to have App Management
               permission first.
             </p>
-            <ol className="mt-2 list-decimal space-y-1 pl-5 text-xs text-vs-text-secondary">
+            <ol className="mt-2 list-decimal space-y-1 ps-5 text-xs text-vs-text-secondary">
               <li>
                 Open <span className="font-medium">System Settings → Privacy &amp; Security → App
                 Management</span> and enable <span className="font-medium">{appName}</span>.

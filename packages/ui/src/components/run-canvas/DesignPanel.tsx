@@ -266,7 +266,7 @@ export function DesignPanel({
             <SelectionHeader selection={selection} onAssign={onAssign} onDelete={onDelete} />
             {onSelectMatching && (
               <div className="flex flex-wrap items-center gap-1 px-3 pb-1">
-                <span className="text-[9.5px] uppercase tracking-[0.06em] text-vs-text-muted">Select</span>
+                <span className="text-[10px] uppercase tracking-[0.06em] text-vs-text-muted">Select</span>
                 {selection.component && (
                   <button
                     type="button"
@@ -554,10 +554,10 @@ function ApplyBar({
                 {p.label} → <span className="font-mono">{p.value}</span>
               </span>
               {p.shared && (
-                <span className="flex-none rounded bg-vs-warning/20 px-1 text-[9px] text-vs-warning">shared token</span>
+                <span className="flex-none rounded bg-vs-warning/20 px-1 text-[10px] text-vs-warning">shared token</span>
               )}
               {p.kind !== "token" && (
-                <span className="flex-none rounded bg-vs-accent-subtle px-1 text-[9px] text-vs-accent">source edit</span>
+                <span className="flex-none rounded bg-vs-accent-subtle px-1 text-[10px] text-vs-accent">source edit</span>
               )}
               {onRemove && !applying && (
                 <button
@@ -760,7 +760,7 @@ function SelectionHeader({
         {Math.round(selection.rect.width)} × {Math.round(selection.rect.height)}
       </span>
       {selection.component && (
-        <span className="rounded border border-vs-border-default px-1 py-px text-[9px] uppercase tracking-wide text-vs-text-muted">
+        <span className="rounded border border-vs-border-default px-1 py-px text-[10px] uppercase tracking-wide text-vs-text-muted">
           component
         </span>
       )}
@@ -971,7 +971,7 @@ function ScopedField({
         />
       )}
       {open && (
-        <div className="pl-[72px]">
+        <div className="ps-[72px]">
           <ScopeSelector
             options={options}
             value={active.scope}
@@ -1100,7 +1100,7 @@ function TokenValueChip({
         onBlur={onCommit}
         onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
         style={hugWidth(draft)}
-        className="bg-transparent text-right font-mono text-[12px] text-vs-text-primary outline-none"
+        className="rounded-sm bg-transparent text-right font-mono text-[12px] text-vs-text-primary outline-none focus-visible:ring-2 focus-visible:ring-vs-accent-subtle"
       />
       {showDot && (
         <button
@@ -1209,7 +1209,7 @@ function LengthTokenField({
   };
   return (
     <div className="relative w-full">
-      <div className="flex w-full items-center rounded border border-vs-border-default bg-vs-bg-surface pr-1 focus-within:border-vs-accent">
+      <div className="flex w-full items-center rounded border border-vs-border-default bg-vs-bg-surface pe-1 focus-within:border-vs-accent">
         {canPick && (
           <button
             type="button"
@@ -1297,7 +1297,7 @@ function ContentTextarea({ value, onChange }: { value: string; onChange: (v: str
 /** A pill showing the value is backed by a design token (vs a literal). */
 function TokenBadge({ name }: { name: string }): JSX.Element {
   return (
-    <span className="inline-flex w-fit items-center gap-1 rounded bg-vs-accent-subtle px-1.5 py-px text-[9px] text-vs-accent">
+    <span className="inline-flex w-fit items-center gap-1 rounded bg-vs-accent-subtle px-1.5 py-px text-[10px] text-vs-accent">
       <span className="h-1.5 w-1.5 rounded-full bg-vs-accent" />
       {name}
     </span>
@@ -1476,7 +1476,7 @@ function BoxSideInput({
   };
   return (
     <div className="relative min-w-0 flex-1">
-      <div className="flex items-center gap-1 rounded border border-vs-border-default bg-vs-bg-surface py-1 pl-1.5 pr-1 focus-within:border-vs-accent">
+      <div className="flex items-center gap-1 rounded border border-vs-border-default bg-vs-bg-surface py-1 ps-1.5 pe-1 focus-within:border-vs-accent">
         {glyph}
         {/* Bound → the whole value chip is a button (click anywhere opens the picker);
             raw → an editable input with a ◆ to bind. The chip hugs its content and the
@@ -1828,7 +1828,7 @@ function Collapsible({
         onClick={() => setOpen((v) => !v)}
         className="flex w-full items-center gap-1.5 px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-vs-text-secondary hover:text-vs-text-primary"
       >
-        <span className="text-[9px] text-vs-text-muted">{open ? "▾" : "▸"}</span>
+        <span className="text-[10px] text-vs-text-muted">{open ? "▾" : "▸"}</span>
         {title}
       </button>
       {open && children}
@@ -1864,7 +1864,7 @@ function PromoteOffer({
   onDismiss: () => void;
 }): JSX.Element {
   return (
-    <div className="mt-1 flex items-center gap-1.5 rounded border border-vs-border-strong bg-vs-bg-elevated px-1.5 py-1 pl-[72px]">
+    <div className="mt-1 flex items-center gap-1.5 rounded border border-vs-border-strong bg-vs-bg-elevated px-1.5 py-1 ps-[72px]">
       <span className="min-w-0 flex-1 truncate text-[10px] text-vs-text-muted">
         {`--${token} decides this`}
         {uses !== null && ` · ${uses} uses`}

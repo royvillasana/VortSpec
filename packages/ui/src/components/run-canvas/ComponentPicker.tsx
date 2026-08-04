@@ -105,11 +105,11 @@ export function ComponentPicker({
                 )}
                 <span className="min-w-0 flex-1 truncate text-vs-text-primary">{c.name}</span>
                 {c.name === recommended && (
-                  <span className="rounded-full bg-vs-accent px-1.5 py-px text-[9px] font-medium text-white">Recommended</span>
+                  <span className="rounded-full bg-vs-accent px-1.5 py-px text-[10px] font-medium text-white">Recommended</span>
                 )}
-                {c.level && <span className="text-[9px] uppercase text-vs-text-muted">{c.level}</span>}
+                {c.level && <span className="text-[10px] uppercase text-vs-text-muted">{c.level}</span>}
                 {c.variants && c.variants.length > 0 && (
-                  <span className="font-mono text-[9px] text-vs-text-muted">⎇ {c.variants.join("·")}</span>
+                  <span className="font-mono text-[10px] text-vs-text-muted">⎇ {c.variants.join("·")}</span>
                 )}
               </button>
             );

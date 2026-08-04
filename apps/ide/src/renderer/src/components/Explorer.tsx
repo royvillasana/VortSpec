@@ -202,7 +202,7 @@ export function Explorer({
         }}
         onClick={(e) => e.stopPropagation()}
         style={{ marginLeft: `${6 + depth * 12}px` }}
-        className="my-[1px] w-[calc(100%-8px)] rounded border border-vs-accent bg-vs-bg-primary px-1 py-[2px] text-[13px] text-vs-text-primary focus:outline-none"
+        className="my-[1px] w-[calc(100%-8px)] rounded border border-vs-accent bg-vs-bg-primary px-1 py-[2px] text-[13px] text-vs-text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-vs-accent-subtle"
       />
     );
   }

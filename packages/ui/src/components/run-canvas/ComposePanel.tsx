@@ -425,7 +425,7 @@ function IconTab({
         }`}
       >
         <Icon size={14} />
-        {badge ? <span className="rounded-full bg-vs-accent px-1 text-[9px] font-medium text-white">{badge}</span> : null}
+        {badge ? <span className="rounded-full bg-vs-accent px-1 text-[10px] font-medium text-white">{badge}</span> : null}
       </button>
     </HoverTip>
   );

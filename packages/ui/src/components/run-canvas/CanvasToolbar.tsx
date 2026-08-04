@@ -376,7 +376,7 @@ function BridgeDot({ state, reason }: { state: BridgeState; reason: string }): J
       aria-label={reason}
       data-testid="canvas-bridge-status"
       data-state={state}
-      className="ml-1 mr-0.5 grid h-4 w-4 place-items-center"
+      className="ms-1 me-0.5 grid h-4 w-4 place-items-center"
     >
       <span className={`h-1.5 w-1.5 rounded-full ${DOT_CLASS[state]}`} />
     </span>
@@ -433,7 +433,7 @@ function Tooltip({ children }: { children: React.ReactNode }): JSX.Element {
   return (
     <span
       role="tooltip"
-      className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 -translate-x-1/2 translate-y-1 whitespace-nowrap rounded-md border border-vs-border-default bg-vs-bg-elevated px-2 py-1 text-[11px] font-medium text-vs-text-primary opacity-0 shadow-lg transition-all duration-100 group-hover:translate-y-0 group-hover:opacity-100"
+      className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 -translate-x-1/2 translate-y-1 whitespace-nowrap rounded-md border border-vs-border-default bg-vs-bg-elevated px-2 py-1 text-[11px] font-medium text-vs-text-primary opacity-0 shadow-lg transition-[opacity,translate] duration-100 group-hover:translate-y-0 group-hover:opacity-100"
     >
       {children}
     </span>

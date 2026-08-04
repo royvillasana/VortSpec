@@ -176,7 +176,7 @@ function IconButton({
           to the right of the rail (the rail sits at the left edge). */}
       <span
         role="tooltip"
-        className="pointer-events-none absolute left-full top-1/2 z-50 ml-2 -translate-x-1 -translate-y-1/2 whitespace-nowrap rounded-md border border-vs-border-default bg-vs-bg-elevated px-2 py-1 text-[11px] font-medium text-vs-text-primary opacity-0 shadow-lg transition-all duration-100 group-hover:translate-x-0 group-hover:opacity-100"
+        className="pointer-events-none absolute left-full top-1/2 z-50 ms-2 -translate-x-1 -translate-y-1/2 whitespace-nowrap rounded-md border border-vs-border-default bg-vs-bg-elevated px-2 py-1 text-[11px] font-medium text-vs-text-primary opacity-0 shadow-lg transition-[opacity,translate] duration-100 group-hover:translate-x-0 group-hover:opacity-100"
       >
         {active ? `${item.label} · toggle sidebar` : item.label}
       </span>

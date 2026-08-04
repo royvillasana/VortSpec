@@ -38,7 +38,7 @@ export function AuditBanner({ audit }: { audit: DesignAudit | null }): JSX.Eleme
           {audit.findings.map((f, i) => (
             <li key={`${f.component}-${i}`} data-testid="audit-finding" className="flex items-start gap-2 py-1 text-[12px]">
               <span
-                className={`mt-px flex-none rounded px-1 text-[9px] uppercase ${
+                className={`mt-px flex-none rounded px-1 text-[10px] uppercase ${
                   f.severity === "error" ? "bg-vs-danger-subtle text-vs-danger" : "bg-vs-bg-hover text-vs-text-muted"
                 }`}
               >

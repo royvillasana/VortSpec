@@ -27,7 +27,7 @@ export function ScopeSelector({
   if (options.length < 2) return null;
   return (
     <div className="flex flex-wrap items-center gap-1 pt-1" role="group" aria-label="Apply to">
-      <span className="text-[9.5px] uppercase tracking-[0.06em] text-vs-text-muted">Apply to</span>
+      <span className="text-[10px] uppercase tracking-[0.06em] text-vs-text-muted">Apply to</span>
       {options.map((o) => {
         const active = o.scope === value;
         return (
@@ -39,7 +39,7 @@ export function ScopeSelector({
             aria-label={scopeLabel(o)}
             title={scopeTitle(o)}
             onClick={() => onChange(o.scope, o.key, o.token)}
-            className={`rounded border px-1.5 py-0.5 text-[10px] transition-colors disabled:opacity-50 ${
+            className={`rounded border px-2 py-1 text-[10px] tabular-nums transition-colors disabled:opacity-50 ${
               active
                 ? "border-vs-accent bg-vs-accent-muted text-vs-text-primary"
                 : "border-vs-border-default text-vs-text-muted hover:border-vs-border-strong hover:text-vs-text-secondary"
