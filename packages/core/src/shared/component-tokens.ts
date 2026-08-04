@@ -111,6 +111,47 @@ export function declaredCustomProperties(css: string): string[] {
   return [...seen];
 }
 
+/**
+ * The extraction instruction, RENDERED FROM the mapping above rather than restated beside it.
+ *
+ * Every worked example below is produced by calling `componentTokenName` at render time, so the
+ * rule an agent is given and the rule `auditComponentTokenCoverage` enforces cannot drift apart —
+ * change the mapping and this text changes with it. Prose that merely *describes* a contract is
+ * how the seven naming schemes in the measured token file happened; a test asserts these examples
+ * are the function's real output.
+ *
+ * Composes with — and deliberately does not restate — the build-side rule that a near colour is
+ * never a match. This clause is about what EXTRACTION must emit so that rule has something to find.
+ */
+export function componentTokenExtractionClause(): string {
+  const example = componentTokenName("Components/Accordion/Active Item Header Background");
+  const nested = componentTokenName("Components/Button/Border/Hover");
+  // Non-null by construction; both inputs are component-namespaced with a slot.
+  const ex = example?.name ?? "";
+  const nx = nested?.name ?? "";
+  return [
+    `COMPONENT-SCOPED TOKENS — extract the \`${COMPONENT_NAMESPACE}/…\` namespace, do not skip it.`,
+    "A design system that defines a token FOR a component is telling you the exact value that",
+    "component must use. Dropping it does not lose a nicety: the build then finds no token, reaches",
+    "for the nearest global, and renders a visibly wrong colour that every syntactic check passes.",
+    "",
+    `Name every such variable by ONE rule — \`${COMPONENT_TOKEN_PREFIX}<component>-<slot>\`, lowercase,`,
+    "each path segment slugified, nested slot groups flattened:",
+    `  ${COMPONENT_NAMESPACE}/Accordion/Active Item Header Background  →  ${ex}`,
+    `  ${COMPONENT_NAMESPACE}/Button/Border/Hover                      →  ${nx}`,
+    "",
+    "Do NOT invent a per-component scheme. Names like `--switch-width`, `--progress-height-sm` or",
+    "`--spacing-overlap-xs` hold real component tokens that neither the build nor the token audit can",
+    "find, because both are instructed to look for the one prefix above. If a token file already",
+    "carries such names, ADD the canonical name alongside rather than renaming in place — an existing",
+    "component may reference the old one.",
+    "",
+    "Completeness is per component, not per file: report how many components in the source define",
+    "component-scoped variables and how many you emitted. If those two numbers differ, say so and name",
+    "the components you could not read — never let a partial extraction read as a complete one.",
+  ].join("\n");
+}
+
 export interface ComponentTokenCoverage {
   /** Figma component tokens with no declaration in the token file, by canonical name. */
   missing: ComponentTokenId[];

@@ -10,6 +10,7 @@
  * two-app model).
  */
 import { frameworkIdiomClause, resolveTypecheck, typecheckCoverageClause } from "./framework-profiles";
+import { componentTokenExtractionClause } from "./component-tokens";
 
 export function buildOnePrompt(name: string, level?: string, framework?: string | null): string {
   return (
@@ -275,6 +276,7 @@ export const RESCAN_PROMPT = [
   "   add newly-found tokens and update values that changed. NEVER guess or approximate a value — if one",
   "   truly can't be read, OMIT it and note it, never fabricate a value. Do NOT remove tokens that existing",
   "   components still reference.",
+  componentTokenExtractionClause(),
   "3. Detect the PUBLIC components in the source and MERGE into `.sdd-de/components.json`:",
   "   - keep every existing entry (including components added by hand),",
   "   - add any component found in the source that isn't already listed ({ name, level, description, variants? }),",

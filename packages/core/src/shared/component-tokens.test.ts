@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   COMPONENT_TOKEN_PREFIX,
   auditComponentTokenCoverage,
+  componentTokenExtractionClause,
   componentTokenName,
   declaredCustomProperties,
   isComponentScopedPath,
@@ -211,5 +212,48 @@ describe("auditComponentTokenCoverage — measured against the real TokenUpdate 
       covered: [],
       offConvention: [],
     });
+  });
+});
+
+describe("componentTokenExtractionClause", () => {
+  const clause = componentTokenExtractionClause();
+
+  // The whole point of rendering the clause from the mapping: the examples an agent reads
+  // must BE the function's output, not a hand-copied restatement that can rot beside it.
+  it("carries the mapping function's real output, not a restatement", () => {
+    const ex = componentTokenName("Components/Accordion/Active Item Header Background")!;
+    const nested = componentTokenName("Components/Button/Border/Hover")!;
+    expect(clause).toContain(ex.name);
+    expect(clause).toContain(nested.name);
+    // The exact defect that produced this work.
+    expect(clause).toContain("--component-accordion-active-item-header-background");
+  });
+
+  it("names the canonical prefix and the namespace it reads from", () => {
+    expect(clause).toContain(COMPONENT_TOKEN_PREFIX);
+    expect(clause).toContain("Components/");
+  });
+
+  it("names the real off-convention schemes as the thing not to do", () => {
+    // These are verbatim from the measured token file — the clause must warn using real
+    // examples, so an agent recognises the shape rather than an invented one.
+    for (const bad of ["--switch-width", "--progress-height-sm", "--spacing-overlap-xs"]) {
+      expect(clause).toContain(bad);
+    }
+  });
+
+  it("requires additive naming rather than renaming an existing token in place", () => {
+    expect(clause).toContain("ADD the canonical name alongside");
+  });
+
+  it("requires per-component completeness to be reported, not assumed", () => {
+    expect(clause).toContain("Completeness is per component");
+    expect(clause).toContain("never let a partial extraction read as a complete one");
+  });
+
+  it("does not restate the build-side near-colour rule that lives in sdd-prompts", () => {
+    // Composition, not duplication: two copies of one rule is how they drift.
+    expect(clause).not.toContain("TOKEN-BLOCKED");
+    expect(clause).not.toContain("four match rules");
   });
 });
