@@ -318,7 +318,21 @@ const RAW_PROFILES = {
   }),
   sveltekit: Object.freeze({
     sourceExts: [".svelte"],
-    typecheckCmd: "npx svelte-check --threshold error",
+    // `svelte-kit sync` FIRST — this is not Svelte's command with a different label.
+    //
+    //   WRONG v1: SvelteKit "likely inherits" Svelte's result, so the same `svelte-check` line
+    //   serves both. Refuted by scripts/framework-fixtures/sveltekit, case SK3
+    //   (@sveltejs/kit 2.70.2 / svelte-check 3.8.6): with `.svelte-kit/` absent, bare
+    //   `svelte-check` exits 1 on CORRECT, unmodified code with "Cannot find module './$types'".
+    //   SK4 restores the directory and the same sources exit 0, so the failure is the missing
+    //   generated types and not damage to the project.
+    //
+    // ACTUAL: Svelte has no generated types; SvelteKit does — `./$types` per route, produced by
+    // `svelte-kit sync`. `svelte-check` does not run it. Same shape as Nuxt, opposite ergonomics:
+    // `nuxi typecheck` self-prepares, so its command needs no help; `svelte-check` does not, so
+    // the sync has to be part of the command or a fresh checkout fails for a reason that has
+    // nothing to do with the code being checked.
+    typecheckCmd: "npx svelte-kit sync && npx svelte-check --threshold error",
     fileSuffixes: [],
     nonComponentSuffixes: [...NEVER_A_COMPONENT],
     storybookType: "sveltekit",
@@ -329,7 +343,9 @@ const RAW_PROFILES = {
       fileConvention: "`src/lib/components/<ComponentName>.svelte`; routes are `src/routes/<route>/+page.svelte`",
       ...SVELTE_BASE,
       pitfalls: [
-        "`tsc` cannot parse `.svelte` — the check is `svelte-check`.",
+        "`tsc` cannot parse `.svelte` — the check is `svelte-check`, and for SvelteKit it must be " +
+          "preceded by `svelte-kit sync`: the per-route `./$types` are GENERATED, and without them " +
+          "`svelte-check` fails on correct code with \"Cannot find module './$types'\".",
         "Import components through the `$lib` alias, not deep relative paths.",
       ],
     },

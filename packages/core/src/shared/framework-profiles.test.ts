@@ -612,3 +612,40 @@ describe("idiomsFor / frameworkIdiomClause — fail closed, never fall back to R
     expect(clause).not.toContain("class-variance-authority");
   });
 });
+
+/**
+ * SvelteKit's check must sync before it runs, and Svelte's must NOT.
+ *
+ * Refuted by scripts/framework-fixtures/sveltekit case SK3: with `.svelte-kit/` absent, bare
+ * `svelte-check` exits 1 on correct, unmodified code — "Cannot find module './$types'". SK4
+ * restores the directory and the same sources exit 0. Svelte has no generated types; SvelteKit
+ * has per-route `./$types`, and `svelte-check` does not produce them.
+ */
+describe("sveltekit — the check generates its route types before running", () => {
+  it("syncs first, and still runs svelte-check", () => {
+    const r = resolveTypecheck("sveltekit", null);
+    expect(r.kind).toBe("cmd");
+    if (r.kind !== "cmd") return;
+    expect(r.cmd).toMatch(/svelte-kit sync/);
+    expect(r.cmd).toMatch(/svelte-check/);
+    // Order matters: syncing after the check generates types nothing then reads.
+    expect(r.cmd.indexOf("svelte-kit sync")).toBeLessThan(r.cmd.indexOf("svelte-check"));
+  });
+
+  it("does NOT give plain Svelte the sync — it has no generated types to make", () => {
+    // The discriminating control. Putting the sync on SVELTE_BASE would satisfy the test above
+    // while telling every plain-Svelte project to run a SvelteKit-only command.
+    const r = resolveTypecheck("svelte", null);
+    expect(r.kind).toBe("cmd");
+    if (r.kind !== "cmd") return;
+    expect(r.cmd).not.toMatch(/svelte-kit sync/);
+    expect(r.cmd).toMatch(/svelte-check/);
+  });
+
+  it("tells the build about the generated route types in the emitted pitfall", () => {
+    expect(frameworkIdiomClause("sveltekit")).toMatch(/svelte-kit sync/);
+    expect(frameworkIdiomClause("sveltekit")).toMatch(/\$types/);
+    // ...and does not leak that into plain Svelte's guidance.
+    expect(frameworkIdiomClause("svelte")).not.toMatch(/svelte-kit sync/);
+  });
+});
