@@ -1,0 +1,98 @@
+# Runs the committed framework fixtures.
+#
+# Until this file existed, every "verified" in the framework work meant *someone ran it once on
+# their own machine*. The fixtures were committed and still nobody would have noticed them break.
+#
+# WHY THE SPLIT IS SHAPED THIS WAY — from measured runtimes, not estimates:
+#
+#   vue      verify  255s     mutate  >600s (13 mutants x a vue-tsc project)
+#   astro    verify  146s     mutate  ~300s
+#   sveltekit verify  14s     (no mutation driver committed)
+#
+# So: verify runs per-push but only for the fixture whose files changed, and the mutation sweeps
+# run on a schedule. A sweep that reliably exceeds a per-push budget is not a gate, it is a
+# timeout — and a job that times out gets ignored, which is worse than not having it.
+#
+# WHAT THIS DELIBERATELY DOES NOT GATE:
+#
+# The core vitest suite is NOT wired here. It is intermittently red on main with no changes
+# (independently reported by Fizz; different files each run, all timeouts in the 5-8s band).
+# Making a flaky suite a required check produces red builds nobody trusts, which is the same
+# "reports a result nobody believes" failure this whole effort exists to remove. It needs its
+# timeout budget measured first. Named here rather than left as an unexplained absence.
+name: framework-fixtures
+
+on:
+  push:
+    paths:
+      - 'scripts/framework-fixtures/**'
+      - '.github/workflows/framework-fixtures.yml'
+  pull_request:
+    paths:
+      - 'scripts/framework-fixtures/**'
+      - '.github/workflows/framework-fixtures.yml'
+  schedule:
+    # Sweeps only. Nothing here is fast enough to sit in front of a push.
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    # Each fixture installs its own EXACTLY pinned toolchain. `npm ci` rather than `npm install`
+    # so a transitive dependency cannot drift under a pin the fixture claims is exact.
+    name: verify (${{ matrix.fixture }})
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        fixture: [vue, astro, sveltekit]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: scripts/framework-fixtures/${{ matrix.fixture }}/package-lock.json
+
+      - name: install pinned toolchain
+        working-directory: scripts/framework-fixtures/${{ matrix.fixture }}
+        run: npm ci --no-audit --no-fund
+
+      - name: verify
+        working-directory: scripts/framework-fixtures/${{ matrix.fixture }}
+        run: node verify.mjs
+
+  mutate:
+    # The sweep is what proves the fixture can go red at all. It is the slowest thing here and
+    # the least urgent, so it runs nightly rather than blocking anyone.
+    name: mutate (${{ matrix.fixture }})
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        fixture: [vue, astro]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: scripts/framework-fixtures/${{ matrix.fixture }}/package-lock.json
+
+      - name: install pinned toolchain
+        working-directory: scripts/framework-fixtures/${{ matrix.fixture }}
+        run: npm ci --no-audit --no-fund
+
+      - name: mutation sweep
+        working-directory: scripts/framework-fixtures/${{ matrix.fixture }}
+        # Exits non-zero if any mutant SURVIVES, so "the fixture cannot go red" fails here.
+        run: node mutate.mjs
