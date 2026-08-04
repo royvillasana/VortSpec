@@ -1,5 +1,10 @@
 /**
- * The REAL Accordion, rendered in a real browser.
+ * The real Accordion's CLASS STRING and TOKENS, compiled by the real toolchain, rendered.
+ *
+ * Thor was right that "the real Accordion, rendered" overstated this. What runs is a hand-written
+ * `<button>` carrying the class string extracted from the component, styled by CSS that the source
+ * project's own tailwindcss CLI compiled from its own config and tokens. That is strictly less than
+ * mounting the React component, and strictly more than a reconstruction. The title now says which.
  *
  * #82 proved the *mechanism* on synthetic CSS: a valid `var()` bound to the wrong variable renders
  * a different colour. It deliberately did not claim the specific component renders wrong. This does
@@ -17,7 +22,8 @@
  * assertion that must come back EQUAL; without it an always-mismatch harness passes everything.
  */
 import { chromium } from "playwright";
-import { readFileSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { pathToFileURL } from "node:url";
 import { join } from "node:path";
 
@@ -34,6 +40,31 @@ const record = (id, pass, note) => {
   console.log(`${pass ? "PASS" : "FAIL"}  ${id}  ${note}`);
 };
 
+// ── G0/G1 — refuse to run rather than pass vacuously. ────────────────────────────────────────
+// Thor's finding: `built.css` is generated and gitignored, so skipping the manual build left
+// `#as-built` unstyled and A2/A2b/A3 all still passed, having proven nothing. A harness that
+// reports success without its subject present is the exact defect this thread exists to remove,
+// and it was in mine.
+const CSS = join(HERE, "built.css");
+if (!existsSync(CSS) || readFileSync(CSS, "utf8").length < 500) {
+  console.error("REFUSING TO RUN: built.css missing or empty. Compile it first — see README.");
+  process.exit(2);
+}
+
+// G2 — the committed copies must still match the project they were taken from. They are copies;
+// this is what stops them silently becoming stale copies. Absent source is reported, never passed.
+const SRC = "/Users/royvillasana/Desktop/Roy Villasana/VortSpec/testing project/TokenUpdate";
+const sha = (f) => createHash("sha256").update(readFileSync(f)).digest("hex").slice(0, 12);
+for (const [mine, theirs] of [["tokens.css", "src/styles/tokens.css"], ["tailwind.config.cjs", "tailwind.config.cjs"]]) {
+  const src = join(SRC, theirs);
+  if (!existsSync(src)) {
+    console.log(`SKIPPED  source-tie ${mine}  (source project not present here — cannot verify)`);
+    continue;
+  }
+  const same = sha(join(HERE, mine)) === sha(src);
+  record(`G2-source-tie-${mine}`, same, `${sha(join(HERE, mine))} vs ${sha(src)}`);
+}
+
 const browser = await chromium.launch();
 const page = await browser.newPage();
 await page.goto(pathToFileURL(join(HERE, "page.html")).href);
@@ -43,6 +74,14 @@ const paint = (sel) =>
     const cs = getComputedStyle(el);
     return { bg: cs.backgroundColor, fg: cs.color };
   });
+
+// G1 — the arbitrary class must actually resolve. Unstyled would be rgba(0, 0, 0, 0).
+const canary = await paint("#canary");
+record(
+  "G1-stylesheet-applied",
+  canary.bg !== "rgba(0, 0, 0, 0)",
+  `canary bg ${canary.bg} (default would mean the stylesheet never loaded)`,
+);
 
 const built = await paint("#as-built");
 const designed = await paint("#as-designed");
@@ -79,10 +118,17 @@ record(
 // A3 — the wrong token tracks a DIFFERENT scale. `--color-neutral-100` is overridden in the dark
 // theme, so the substitution does not merely paint one wrong colour: it follows a palette ramp the
 // component was never meant to follow, and diverges further wherever that ramp differs.
+// A3 — the mechanism, not merely "the colour changed". Thor's point: `dark.bg !== FIGMA_BG` is a
+// difference, and "tracks the wrong scale" is a stronger claim that needs its own evidence. Bind
+// the substituted token DIRECTLY per theme and require as-built to equal it in both. That is what
+// "follows the neutral ramp" means, stated as an assertion.
+const probeLight = await paint("#probe-neutral-light");
+const probeDark = await paint("#probe-neutral-dark");
 record(
-  "A3-dark-diverges-again",
-  dark.bg !== FIGMA_BG,
-  `as-built in dark -> ${dark.bg} (Figma specifies ${FIGMA_BG} for this slot regardless)`,
+  "A3-follows-the-neutral-ramp",
+  built.bg === probeLight.bg && dark.bg === probeDark.bg && probeLight.bg !== probeDark.bg,
+  `as-built light ${built.bg} == neutral-100 light ${probeLight.bg}; ` +
+    `as-built dark ${dark.bg} == neutral-100 dark ${probeDark.bg}; ramp differs ${probeLight.bg !== probeDark.bg}`,
 );
 
 await browser.close();
