@@ -13,7 +13,7 @@
 - [x] 2.4 List existing per-component overrides in the design-system surface — component, properties, values — with a clear action per override.
 - [x] 2.5 Clear the leftover `[data-component="Button"] { border-radius: 0 }` case correctly: clearing removes the entry and the instances return to inherited values.
 - [x] 2.6 Component tests: the selector shows the right options and counts; a `component`-scoped edit writes the overlay and not the page source; an `element`-scoped edit still writes page source.
-- [~] 2.7 Verify by hand on AstryxTest: set a radius at `component` scope on a Button, confirm every Button on the open screen changes, then clear it from the list and confirm they revert.
+- [x] 2.7 Verify by hand on AstryxTest: set a radius at `component` scope on a Button, confirm every Button on the open screen changes, then clear it from the list and confirm they revert. (SUPERSEDED by 4b/9: the `component` scope this describes was split into `matching` and `component-token`. Both were verified by hand instead — 4b.6 and 9.8 cover the behaviour this task was written for.)
 
 ## 3. Phase 2 — selection becomes a set
 
@@ -123,6 +123,6 @@
 ## 8. Verification
 
 - [x] 8.1 Full unit and component suites green across `packages/core`, `packages/ui`, and `apps/ide`. (core 1064, ui 182, CT 138 passed. 35 CT failures are PRE-EXISTING — verified by stashing every change and re-running: baseline is 35 failed / 136 passed, with the change 35 failed / 138 passed.)
-- [ ] 8.2 Manual on AstryxTest: select several cards sharing `--radius-card`, confirm the default scope is `token`, and confirm the reach count matches the Library panel's use count for that token.
-- [ ] 8.3 Manual on AstryxTest: select a mixed set, edit one property, and confirm no other property changed on any member.
+- [x] 8.2 Manual on AstryxTest: select several cards sharing `--radius-card`, confirm the default scope is `token`, and confirm the reach count matches the Library panel's use count for that token.
+- [x] 8.3 Manual on AstryxTest: select a mixed set, edit one property, and confirm no other property changed on any member.
 - [x] 8.4 Confirm no new IPC channel was added — `setThemeComponentOverride` and `setThemeTokenOverride` carry both overlay scopes.
