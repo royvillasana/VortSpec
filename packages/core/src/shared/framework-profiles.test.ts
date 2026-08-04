@@ -623,7 +623,7 @@ describe("idiomsFor / frameworkIdiomClause — fail closed, never fall back to R
  */
 describe("sveltekit — the check generates its route types before running", () => {
   it("syncs first, and still runs svelte-check", () => {
-    const r = resolveTypecheck("sveltekit", null);
+    const r = resolveTypecheck("sveltekit");
     expect(r.kind).toBe("cmd");
     if (r.kind !== "cmd") return;
     expect(r.cmd).toMatch(/svelte-kit sync/);
@@ -635,7 +635,7 @@ describe("sveltekit — the check generates its route types before running", () 
   it("does NOT give plain Svelte the sync — it has no generated types to make", () => {
     // The discriminating control. Putting the sync on SVELTE_BASE would satisfy the test above
     // while telling every plain-Svelte project to run a SvelteKit-only command.
-    const r = resolveTypecheck("svelte", null);
+    const r = resolveTypecheck("svelte");
     expect(r.kind).toBe("cmd");
     if (r.kind !== "cmd") return;
     expect(r.cmd).not.toMatch(/svelte-kit sync/);
@@ -689,7 +689,7 @@ describe("vanilla — the module-mode gate on its JS check", () => {
   it("keeps the gate SEPARATE from vanilla's unconditional partial", () => {
     // Both mechanisms must survive on this record. `partial` is always-true (JS-syntax-only);
     // the gate is conditional. Collapsing either into the other loses a distinct claim.
-    const r = resolveTypecheck("vanilla", "src/components");
+    const r = resolveTypecheck("vanilla", { componentDir: "src/components" });
     expect(r.kind).toBe("cmd");
     if (r.kind !== "cmd") return;
     expect(r.partial).toBeTruthy();
