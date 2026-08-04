@@ -1,0 +1,47 @@
+# `check-types` was already a script in this repo and nothing enforced it.
+#
+# On 2026-08-04 a hand-resolved merge put non-compiling code on `main` and four separate green
+# reports rolled past it, because vitest does not typecheck: 1278 tests passed over code that
+# does not compile. The gate was not weak, it was ABSENT.
+#
+# This is deliberately separate from `framework-fixtures.yml`. That one is path-filtered; this is
+# repo-wide and deterministic, so it is the one that can reasonably be a required check.
+#
+# Cost, measured on the runner rather than on a laptop: 63-69s end to end, over three runs
+# (30907062539 red, 30907514674 green, 30908008484 green). An earlier version of this comment said
+# 120s, which was my local number and about 2x the real one.
+#
+# NOT INCLUDED, deliberately: the core vitest suite. It is intermittently red on main with no
+# changes — different files each run, all timeouts in the 5-8s band. A flaky required check
+# produces red builds nobody trusts, which is the same failure this exists to remove. It needs
+# its timeout budget measured first, and that measurement is not done. Named here rather than
+# left as an unexplained absence.
+name: check-types
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check-types:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: install
+        run: pnpm install --frozen-lockfile
+
+      - name: check-types
+        run: pnpm check-types
