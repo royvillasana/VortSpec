@@ -1,0 +1,334 @@
+/**
+ * Design tokens — extracted from Figma
+ * File:  Design Engineering System (ojko9pGfsDAvmUf2DA38d2)
+ * Source: Figma variable collections + text styles. Values are read
+ *         directly from Figma — do not hand-edit. Re-run /sync-tokens.
+ */
+
+:root {
+  /* ── Primitive · Color ─────────────────────────────── */
+  --brand-primary-100: #E6F2F4;
+  --brand-secondary-100: #FCF2EB;
+  --brand-primary-200: #9CC9D3;
+  --brand-secondary-200: #F3CAB0;
+  --brand-primary-300: #6BAFBC;
+  --brand-secondary-300: #ECB088;
+  --brand-primary-400: #3994A6;
+  --brand-secondary-400: #E69561;
+  --brand-primary-500: #087990;
+  --brand-secondary-500: #E07B39;
+  --brand-primary-600: #066173;
+  --brand-secondary-600: #B3622E;
+  --brand-primary-700: #054956;
+  --brand-secondary-700: #864A22;
+  --brand-primary-800: #03303A;
+  --brand-secondary-800: #5A3117;
+  --brand-primary-900: #02181D;
+  --brand-secondary-900: #2D190B;
+  --primitive-neutral-100: #F8F9FA;
+  --primitive-neutral-300: #DEE2E6;
+  --primitive-neutral-500: #BABBBC;
+  --primitive-neutral-600: #6C757D;
+  --primitive-neutral-900: #212529;
+  --primitive-neutral-950: #1A1E21;
+  --primitive-green-500: #198754;
+  --primitive-red-500: #DC3545;
+  --primitive-yellow-300: #FFCD39;
+  --primitive-yellow-500: #FFC107;
+  --primitive-yellow-900: #7A6100;
+  --primitive-cyan-300: #3DD5F3;
+  --primitive-cyan-400: #25CFF2;
+  --primitive-cyan-500: #0DCAF0;
+  --primitive-cyan-700: #0A6C8A;
+  --primitive-purple-400: #7B61FF;
+  --primitive-green-400: #479F76;
+  --primitive-red-400: #EA868F;
+
+  /* ── Primitive · Spacing ───────────────────────────── */
+  --spacing-0: 0;
+  --spacing-xs: 8px;
+  --spacing-4: 4px;
+  --spacing-6: 6px;
+  --spacing-8: 8px;
+  --spacing-10: 10px;
+  --spacing-12: 12px;
+  --spacing-16: 16px;
+  --spacing-18: 18px;
+  --spacing-19: 19px;
+  --spacing-20: 20px;
+  --spacing-24: 24px;
+  --spacing-28: 28px;
+  --spacing-32: 32px;
+  --spacing-40: 40px;
+  --spacing-50: 50px;
+  --spacing-72: 72px;
+  --spacing-80: 80px;
+  --spacing-82: 82px;
+  --spacing-100: 100px;
+  --spacing-150: 150px;
+  --spacing-160: 160px;
+  --spacing-190: 190px;
+  --spacing-200: 200px;
+  --spacing-225: 225px;
+
+  /* ── Primitive · Size ──────────────────────────────── */
+  --size-150: 150px;
+  --size-200: 200px;
+
+  /* ── Primitive · Radius ────────────────────────────── */
+  --radius-none: 0;
+  --radius-sm: 4px;
+  --radius-4: 4px;
+  --radius-5: 5px;
+  --radius-6: 6px;
+  --radius-8: 8px;
+  --radius-lg: 12px;
+
+  /* ── Primitive · Stroke ────────────────────────────── */
+  --stroke-width-1: 1px;
+
+  /* ── Primitive · Effects ───────────────────────────── */
+  --shadow-default-radius: 16px;
+  --shadow-default-spread: 0;
+  --shadow-default-offset-x: 0;
+  --shadow-default-offset-y: 8px;
+  --shadow-default: var(--shadow-default-offset-x) var(--shadow-default-offset-y)
+    var(--shadow-default-radius) var(--shadow-default-spread) var(--shadow-default-color);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.08);
+  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.15), 0 2px 4px rgba(0, 0, 0, 0.12);
+
+  /* ── Semantic · Color (Light) ──────────────────────── */
+  --primitive-neutral-white: #FFFFFF;
+  --color-text-default: var(--primitive-neutral-900);
+  --color-neutral-600: var(--primitive-neutral-600);
+  --color-neutral-300: var(--primitive-neutral-300);
+  --color-accent-purple: var(--primitive-purple-400);
+  --color-neutral-100: var(--primitive-neutral-100);
+  --color-status-info: var(--primitive-cyan-500);
+  --color-status-warning: var(--primitive-yellow-500);
+  --color-status-danger: var(--primitive-red-500);
+  --color-status-success: var(--primitive-green-500);
+  --color-brand-secondary: var(--brand-secondary-500);
+  --color-brand-primary: var(--brand-primary-500);
+  --color-neutral-900: var(--primitive-neutral-950);
+  --color-status-secondary-dark: var(--brand-secondary-900);
+  --color-status-secondary-light: var(--brand-secondary-200);
+  --color-neutral-muted: var(--primitive-neutral-500);
+  --color-status-info-light: var(--primitive-cyan-300);
+  --color-status-info-medium: var(--primitive-cyan-400);
+  --color-status-warning-light: var(--primitive-yellow-300);
+  --color-surface: var(--primitive-neutral-white);
+  --color-border: var(--color-neutral-300);
+  --color-focus: var(--brand-primary-500);
+  --color-icon-muted: var(--color-neutral-600);
+  --color-icon-hover: var(--color-brand-primary);
+  --color-background-tooltip: var(--primitive-neutral-900);
+  --color-text-tooltip: var(--primitive-neutral-white);
+  --color-primary: var(--color-brand-primary);
+  --color-primary-hover: var(--color-icon-hover);
+  --component-button-warning-border-hover: #FFC720;
+  --primitive-red-600: #B02A37;
+  --component-button-danger-border-active: #A52834;
+  --primitive-green-600: #146C43;
+  --component-button-success-border-active: #13653F;
+  --component-button-secondary-border-hover: #B3622E;
+  --component-button-secondary-border-active: #51585E;
+  --component-button-primary-background-hover: #066173;
+  --component-button-dark-background-hover: #1C1F23;
+  --component-button-light-background-hover: #D3D4D5;
+  --component-button-info-background-hover: #31D2F2;
+  --component-button-warning-background-hover: #FFCA2C;
+  --component-button-danger-background-hover: #BB2D3B;
+  --component-button-success-background-hover: #157347;
+  --component-button-secondary-background-hover: #5C636A;
+  --primitive-neutral-black: #000000;
+  --primitive-yellow-100: #FFF3CD;
+  --primitive-yellow-200: #FFE69C;
+  --primitive-yellow-800: #664D03;
+  --primitive-cyan-100: #CFF4FC;
+  --primitive-cyan-200: #9EEAF9;
+  --primitive-cyan-800: #055160;
+  --primitive-purple-500: #6F42C1;
+  --shadow-default-color: #00000026;
+  --color-status-warning-emphasis: var(--primitive-yellow-900);
+  --color-status-info-emphasis: var(--primitive-cyan-700);
+  --color-status-secondary-emphasis: var(--brand-secondary-700);
+  --primitive-neutral-near-black: #1A1916;
+}
+
+/* ── Semantic · Color (Dark) ─────────────────────────── */
+/* Only tokens whose Dark-mode value differs from Light are overridden. */
+[data-theme="dark"] {
+  --color-text-default: var(--primitive-neutral-100);
+  --color-neutral-600: var(--primitive-neutral-500);
+  --color-neutral-300: var(--primitive-neutral-600);
+  --color-neutral-100: var(--primitive-neutral-950);
+  --color-status-danger: var(--primitive-red-400);
+  --color-status-success: var(--primitive-green-400);
+  --color-brand-secondary: var(--brand-secondary-400);
+  --color-brand-primary: var(--brand-primary-400);
+  --color-neutral-900: var(--primitive-neutral-100);
+  --color-neutral-muted: var(--primitive-neutral-600);
+  --color-surface: var(--primitive-neutral-950);
+  --color-border: var(--primitive-neutral-600);
+  --color-focus: var(--brand-primary-400);
+}
+
+/**
+ * Typography — extracted from Figma TEXT STYLES (not variables).
+ * Line heights are unitless ratios converted from Figma's PERCENT values.
+ * NOTE: Figma reports fontStyle "Regular" for every text style in this file,
+ * including Body/Bold, Body/Light and Body/Italic. No font-weight or
+ * font-style tokens are emitted here because the real values are not
+ * readable from the file — confirm with the design owner before adding them.
+ */
+:root {
+  /* ── Font families ─────────────────────────────────────── */
+  --font-family-base: Roboto;
+  --font-family-body: Roboto;
+  --font-family-mono: Consolas;
+
+  /* ── Body ──────────────────────────────────────────────── */
+  --font-size-xs: 12px;
+  --font-size-body-regular: 16px;
+  --line-height-body-regular: 1.5;
+  --font-size-body-bold: 16px;
+  --line-height-body-bold: 1.5;
+  --font-size-body-light: 16px;
+  --line-height-body-light: 1.5;
+  --font-size-body-italic: 16px;
+  --line-height-body-italic: 1.5;
+  --font-size-body-underline: 16px;
+  --line-height-body-underline: 1.5;
+  --font-size-body-strike: 16px;
+  --line-height-body-strike: 1.5;
+  --font-size-body-small: 14px;
+  --line-height-body-small: 1.5;
+  --font-size-body-code: 14px;
+  --line-height-body-code: 1.5;
+  --font-size-body-lead: 20px;
+  --line-height-body-lead: 1.5;
+  --font-size-body-blockquote: 20px;
+  --line-height-body-blockquote: 1.5;
+
+  /* ── Headings ──────────────────────────────────────────── */
+  --font-size-heading-h1: 40px;
+  --font-size-heading-h2: 32px;
+  --font-size-heading-h3: 28px;
+  --font-size-heading-h4: 24px;
+  --font-size-heading-h5: 20px;
+  --font-size-heading-h6: 16px;
+  --line-height-heading: 1.2;
+
+  /* ── Display ───────────────────────────────────────────── */
+  --font-size-display-h1: 80px;
+  --font-size-display-h2: 72px;
+  --font-size-display-h3: 64px;
+  --font-size-display-h4: 56px;
+  --font-size-display-h5: 48px;
+  --font-size-display-h6: 40px;
+  --line-height-display: 1.2;
+
+  /* ── Component-scoped text styles ──────────────────────── */
+  --font-size-floating-label-input: 16px;
+  --line-height-floating-label-input: 1.25;
+  --font-size-floating-label-focused: 13.6px;
+  --line-height-floating-label-focused: 1.5;
+
+  --font-size-badge-h1: 30px;
+  --font-size-badge-h2: 24px;
+  --font-size-badge-h3: 21px;
+  --font-size-badge-h4: 18px;
+  --font-size-badge-h5: 15px;
+  --font-size-badge-h6: 12px;
+  --line-height-badge: 1;
+
+  --font-size-dropdown-header: 14px;
+  --line-height-dropdown-header: 1.2;
+  --font-size-modal-title: 20px;
+  --line-height-modal-title: 1.5;
+  --font-size-offcanvas-title: 20px;
+  --line-height-offcanvas-title: 1.5;
+  --font-size-progress-label: 12px;
+  --line-height-progress-label: 1.5;
+  --font-size-toast-header-title: 14px;
+  --line-height-toast-header-title: 1.5;
+  --font-size-toast-header-time: 12.25px;
+  --line-height-toast-header-time: 1.5;
+
+  /* ── List Group component tokens ──────────────────── */
+  --font-size-list-group-sm: 13px;
+  --font-size-list-group-md: 14px;
+  --font-size-list-group-lg: 16px;
+  --size-list-group-sm: 32px;
+  --size-list-group-md: 40px;
+  --size-list-group-lg: 48px;
+
+  /* ── Switch component tokens ──────────────────────────── */
+  --switch-width: 44px;
+  --switch-height: 24px;
+  --switch-thumb-diameter: 20px;
+  --switch-track-radius: 12px;
+  --transition-duration-base: 150ms;
+  --transition-duration-fast: 100ms;
+  --transition-duration-slow: 200ms;
+  --duration-fast: 200ms;
+  --transition-timing-ease-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-timing-ease-in-out: cubic-bezier(0.4, 0, 0.6, 1);
+  --transition-timing-linear: linear;
+  --color-text-inverse: var(--primitive-neutral-white);
+  --color-neutral-400: #9CA3AF;
+  --color-neutral-500: #6B7280;
+  --radius-12: 12px;
+  --stroke-width-2: 2px;
+  --shadow-focus-ring: 0 0 0 2px rgba(8, 121, 144, 0.25);
+  --font-size-caption: 12px;
+  --line-height-caption: 1.4;
+
+  /* ── Progress component tokens ──────────────────────– */
+  --progress-background: var(--color-neutral-100);
+  --progress-height-sm: var(--spacing-4);
+  --progress-height-md: var(--spacing-8);
+  --progress-height-lg: var(--spacing-12);
+
+  /* ── Semantic Spacing Tokens ──────────────────────── */
+  --spacing-sm: var(--spacing-8);
+  --spacing-md: var(--spacing-16);
+  --spacing-lg: var(--spacing-24);
+  --spacing-xl: var(--spacing-32);
+
+  /* ── Avatar Group Overlap Tokens ──────────────────── */
+  --spacing-overlap-xs: -50%;
+  --spacing-overlap-sm: -33%;
+  --spacing-overlap-xl: -25%;
+
+  /* ── Semantic Color Tokens ──────────────────────── */
+  --color-text-primary: var(--color-text-default);
+  --color-text-secondary: var(--color-neutral-600);
+  --color-bg-default: var(--color-surface);
+  --color-bg-hover: var(--primitive-neutral-100);
+  --color-neutral-white: var(--primitive-neutral-white);
+  --color-accent-primary: var(--color-brand-primary);
+
+  /* ── Semantic Radius Tokens ──────────────────────– */
+  --radius-base: var(--radius-none);
+  --radius-avatar: 9999px;
+
+  /* ── Font Weight Tokens ──────────────────────────– */
+  --font-weight-bold: 700;
+  --font-weight-badge: 600;
+
+  /* ── Semantic Font Tokens ──────────────────────– */
+  --font-body-sm: var(--font-size-body-small);
+  --font-body-base: var(--font-size-body-regular);
+  --font-heading-sm: var(--font-size-heading-h6);
+
+  /* ── Popover component tokens ──────────────────– */
+  --popover-max-width: 400px;
+  --popover-min-width: 280px;
+  --popover-arrow-size: 8px;
+  --popover-arrow-offset: -4px;
+
+  /* ── Placeholders component tokens ──────────────– */
+  --shimmer-animation-offset: 1000px;
+}
