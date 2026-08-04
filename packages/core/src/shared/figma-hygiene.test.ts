@@ -139,11 +139,22 @@ describe("parseHygieneAuditResult", () => {
     expect(parseHygieneAuditResult(line({ blocking: 0 }))).toBeNull();
   });
 
-  it("coerces missing and wrong-typed fields rather than throwing", () => {
-    const r = parseHygieneAuditResult(line({ components: [{ name: "alert" }], blocking: "x" }));
+  it("FAILS CLOSED on malformed counts — an incomplete run must not read as clean", () => {
+    // Was: this blessed `blocking: "x"` as a successful zero-blocker result. A caller then reads
+    // "0 blockers" from a run that never reported any, which is absence of evidence sold as
+    // evidence of absence.
+    expect(parseHygieneAuditResult(line({ components: [{ name: "alert" }], blocking: "x", advisory: 0, unresolved: [] }))).toBeNull();
+    expect(parseHygieneAuditResult(line({ components: [], advisory: 0, unresolved: [] }))).toBeNull();
+    expect(parseHygieneAuditResult(line({ components: [], blocking: 0, unresolved: [] }))).toBeNull();
+    expect(parseHygieneAuditResult(line({ components: [], blocking: 0, advisory: 0 }))).toBeNull();
+  });
+
+  it("coerces missing per-component fields rather than throwing", () => {
+    const r = parseHygieneAuditResult(line({ components: [{ name: "alert" }], blocking: 0, advisory: 0, unresolved: [] }));
     expect(r!.components[0]).toEqual({
       name: "alert",
       nodeId: null,
+      libraryKey: null,
       pageId: null,
       pageName: null,
       variantAxes: [],
@@ -155,64 +166,79 @@ describe("parseHygieneAuditResult", () => {
   });
 
   it("drops entries with no usable name", () => {
-    const r = parseHygieneAuditResult(line({ components: [{ nodeId: "1:2" }, { name: "ok", nodeId: "1:3" }] }));
+    const r = parseHygieneAuditResult(
+      line({ components: [{ nodeId: "1:2" }, { name: "ok", nodeId: "1:3" }], blocking: 0, advisory: 0, unresolved: [] }),
+    );
     expect(r!.components).toHaveLength(1);
     expect(r!.components[0].name).toBe("ok");
   });
 });
 
-describe("rosterPatchFromAudit", () => {
-  it("emits a patch only for components that actually resolved", () => {
-    const patch = rosterPatchFromAudit({
-      components: [
-        {
-          name: "button",
-          nodeId: "1:23",
-          pageId: "0:1",
-          pageName: "button",
-          variantAxes: [],
-          hasDescription: true,
-          unboundValues: 0,
-          issues: [],
-        },
-        {
-          name: "mystery",
-          nodeId: null,
-          pageId: null,
-          pageName: null,
-          variantAxes: [],
-          hasDescription: false,
-          unboundValues: null,
-          issues: ["no node matched"],
-        },
-      ],
-      blocking: 1,
-      advisory: 0,
-      unresolved: ["mystery"],
-    });
-    expect(patch).toEqual([
-      { name: "button", figmaNodeId: "1:23", figmaPage: "button", figmaPageId: "0:1" },
+const OWN = "lk-own";
+const OTHER = "lk-someone-elses";
+const comp = (over: Record<string, unknown>) => ({
+  name: "x", nodeId: null, libraryKey: null, pageId: null, pageName: null,
+  variantAxes: [], hasDescription: false, unboundValues: null, issues: [], ...over,
+});
+const result = (components: unknown[]) =>
+  ({ components, blocking: 0, advisory: 0, unresolved: [] }) as never;
+
+describe("rosterPatchFromAudit — the library gate", () => {
+  it("patches a component whose observed library matches the expected one", () => {
+    const { patch, rejected } = rosterPatchFromAudit(
+      result([comp({ name: "button", nodeId: "1:23", libraryKey: OWN, pageId: "0:1", pageName: "button" })]),
+      OWN,
+    );
+    expect(patch).toEqual([{ name: "button", figmaNodeId: "1:23", figmaPage: "button", figmaPageId: "0:1" }]);
+    expect(rejected).toEqual([]);
+  });
+
+  it("omits page fields the audit could not determine", () => {
+    const { patch } = rosterPatchFromAudit(
+      result([comp({ name: "badge", nodeId: "9:9", libraryKey: OWN })]),
+      OWN,
+    );
+    expect(patch).toEqual([{ name: "badge", figmaNodeId: "9:9" }]);
+  });
+
+  // Thor's blocker 3: without this the cross-library fix stops at the prompt.
+  it("REJECTS a node resolved from another library, however well its name matches", () => {
+    const { patch, rejected } = rosterPatchFromAudit(
+      result([comp({ name: "button", nodeId: "1:23", libraryKey: OTHER })]),
+      OWN,
+    );
+    expect(patch).toEqual([]);
+    expect(rejected).toEqual([
+      { name: "button", observedLibraryKey: OTHER, reason: "node came from another library" },
     ]);
   });
 
-  it("omits page fields when the audit could not determine them", () => {
-    const patch = rosterPatchFromAudit({
-      components: [
-        {
-          name: "badge",
-          nodeId: "9:9",
-          pageId: null,
-          pageName: null,
-          variantAxes: [],
-          hasDescription: false,
-          unboundValues: null,
-          issues: [],
-        },
-      ],
-      blocking: 0,
-      advisory: 0,
-      unresolved: [],
-    });
-    expect(patch).toEqual([{ name: "badge", figmaNodeId: "9:9" }]);
+  it("REJECTS a node whose run reported no library at all — unverified is not a match", () => {
+    const { patch, rejected } = rosterPatchFromAudit(
+      result([comp({ name: "button", nodeId: "1:23", libraryKey: null })]),
+      OWN,
+    );
+    expect(patch).toEqual([]);
+    expect(rejected[0].reason).toBe("run reported no library key");
+  });
+
+  it("emits NOTHING when no expected key is supplied, and says why", () => {
+    // The key cannot be inferred from the audit's own results without circularity, so a caller
+    // must supply it. Returning an unfiltered patch would be the fail-open shape being removed.
+    const { patch, rejected } = rosterPatchFromAudit(
+      result([comp({ name: "button", nodeId: "1:23", libraryKey: OWN })]),
+      null,
+    );
+    expect(patch).toEqual([]);
+    expect(rejected[0].reason).toMatch(/no expected library key/);
+  });
+
+  it("ignores components that never resolved to a node", () => {
+    const { patch, rejected } = rosterPatchFromAudit(
+      result([comp({ name: "mystery", nodeId: null, libraryKey: OWN })]),
+      OWN,
+    );
+    expect(patch).toEqual([]);
+    expect(rejected).toEqual([]);
   });
 });

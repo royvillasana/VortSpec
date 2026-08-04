@@ -34,6 +34,20 @@ export interface HygieneRosterEntry {
 export interface HygieneAuditInput {
   /** The project's Figma file URL (`figma_file_url` in project.yaml). */
   fileUrl: string;
+  /**
+   * The library key this file's own components belong to, when it is already known.
+   *
+   * Required to emit a roster patch, and deliberately an INPUT rather than something the audit
+   * infers. Inferring it from an initial unscoped `search_design_system` would be circular: that
+   * is the exact result set proven to contain twenty unrelated libraries, so the inference would
+   * be drawn from the evidence it is meant to filter. Name matching is no better — the measured
+   * file is "Design Engineering System | Small" while its library reports as "Design Engineering
+   * System".
+   *
+   * When absent the audit still runs and REPORTS the library keys it observed, so a human can
+   * establish the value once; it just cannot produce a patch. See {@link rosterPatchFromAudit}.
+   */
+  expectedLibraryKey?: string | null;
   /** The roster to account for. Empty means "audit the whole file and report what you find". */
   roster: HygieneRosterEntry[];
   /** Whether the Figma Desktop Bridge (figma-console) is connected — it lists ALL pages. */
@@ -95,8 +109,13 @@ function enumerationClause(bridgeConnected: boolean): string {
 
 /**
  * Build the READ-ONLY audit prompt. Changes nothing in Figma; its job is to produce the facts —
- * above all the resolved node ids, which the app persists onto the roster so no later build has
- * to re-resolve anything.
+ * above all the resolved node ids.
+ *
+ * NOT WIRED. Nothing in the app calls this yet, and no build consults its output. `rosterPatchFromAudit`
+ * returns the shape a caller WOULD persist; persisting it is a separate, unwritten slice. Until that
+ * exists every production build still resolves through the fuzzy path this module was written to
+ * retire. Stated here rather than in a commit message because a docstring claiming an integration
+ * that does not exist is the same unchecked prose this work is about.
  */
 export function buildFigmaHygieneAuditPrompt(input: HygieneAuditInput): string {
   const { fileUrl, roster, bridgeConnected } = input;
@@ -130,12 +149,19 @@ export function buildFigmaHygieneAuditPrompt(input: HygieneAuditInput): string {
     "Report a component as PASS only for checks you actually verified. If a page could not be read or a",
     "node could not be resolved, say so — an unverified check is UNKNOWN, never PASS.",
     "",
-    "When done, output EXACTLY one final line of JSON and nothing after it, so the app can persist the",
-    "resolved ids onto the roster:",
-    '  RESULT: { "components": [ { "name": "button", "nodeId": "1:23", "pageId": "0:1", ' +
-      '"pageName": "button", "variantAxes": ["type","size"], "hasDescription": true, ' +
+    "REPORT THE LIBRARY EACH NODE CAME FROM. `libraryKey` is the key of the library the search",
+    "actually returned the node from — not the one you were aiming for. A node resolved from any",
+    "other library is WRONG however well its name matches, and reporting the intended key instead of",
+    "the observed one would hide exactly the confusion this scoping exists to prevent. Report what",
+    "you saw; the caller decides whether it matches.",
+    "",
+    "When done, output EXACTLY one final line of JSON and nothing after it:",
+    '  RESULT: { "components": [ { "name": "button", "nodeId": "1:23", "libraryKey": "lk-…", ' +
+      '"pageId": "0:1", "pageName": "button", "variantAxes": ["type","size"], "hasDescription": true, ' +
       '"unboundValues": 0, "issues": ["…"] } ], "blocking": 0, "advisory": 0, "unresolved": ["…"] }',
-    "Use null for a field you could not determine — never invent a node id.",
+    "Every one of `blocking`, `advisory` and `unresolved` is REQUIRED. Omitting one must not be",
+    "readable as zero — a caller cannot tell a clean file from an incomplete run otherwise.",
+    "Use null for a field you could not determine — never invent a node id or a library key.",
   ].join("\n");
 }
 
@@ -201,6 +227,15 @@ export function buildFigmaHygieneRepairPrompt(input: HygieneRepairInput): string
 export interface HygieneComponentResult {
   name: string;
   nodeId: string | null;
+  /**
+   * The library the resolved node ACTUALLY came from, as reported by the search result.
+   *
+   * Without this a wrong-library node is indistinguishable from a verified in-file one at the
+   * structured boundary — the prompt says `includeLibraryKeys`, but nothing downstream could tell
+   * whether it was honoured. Null means the run did not report one, which is treated as unverified
+   * rather than as a match.
+   */
+  libraryKey: string | null;
   pageId: string | null;
   pageName: string | null;
   variantAxes: string[];
@@ -224,6 +259,7 @@ function toComponent(raw: unknown): HygieneComponentResult | null {
   return {
     name: o.name,
     nodeId: typeof o.nodeId === "string" && o.nodeId ? o.nodeId : null,
+    libraryKey: typeof o.libraryKey === "string" && o.libraryKey ? o.libraryKey : null,
     pageId: typeof o.pageId === "string" && o.pageId ? o.pageId : null,
     pageName: typeof o.pageName === "string" && o.pageName ? o.pageName : null,
     variantAxes: Array.isArray(o.variantAxes) ? o.variantAxes.filter((v): v is string => typeof v === "string") : [],
@@ -243,11 +279,16 @@ export function parseHygieneAuditResult(text: string): HygieneAuditResult | null
   try {
     const j = JSON.parse(m[1]) as Record<string, unknown>;
     if (!Array.isArray(j.components)) return null;
+    // Fail CLOSED on the counts. Defaulting a missing or wrong-typed `blocking` to 0 makes an
+    // incomplete run indistinguishable from a clean file — the caller reads "0 blockers" and
+    // proceeds. Absent evidence is not evidence of absence, so an unparseable result is null.
+    if (typeof j.blocking !== "number" || typeof j.advisory !== "number") return null;
+    if (!Array.isArray(j.unresolved)) return null;
     return {
       components: j.components.map(toComponent).filter((c): c is HygieneComponentResult => c !== null),
-      blocking: typeof j.blocking === "number" ? j.blocking : 0,
-      advisory: typeof j.advisory === "number" ? j.advisory : 0,
-      unresolved: Array.isArray(j.unresolved) ? j.unresolved.filter((v): v is string => typeof v === "string") : [],
+      blocking: j.blocking,
+      advisory: j.advisory,
+      unresolved: j.unresolved.filter((v): v is string => typeof v === "string"),
     };
   } catch {
     return null;
@@ -255,20 +296,55 @@ export function parseHygieneAuditResult(text: string): HygieneAuditResult | null
 }
 
 /**
- * The roster patch an audit earns: name → the ids to record on `.sdd-de/components.json`.
- * This is the payload that closes the 0-of-242 gap — every component the audit resolved gets a
- * durable node id, so `DESIGN_REFERENCE_CLAUSE` step (1) hits instead of falling through to the
- * fuzzy name lookup. Components the audit could not resolve are omitted rather than guessed.
+ * The roster patch an audit earns — the ids a caller would record on `.sdd-de/components.json`.
+ *
+ * REQUIRES the expected library key, and drops any component whose OBSERVED key differs or is
+ * absent. Without that gate the cross-library fix stops at the prompt: the instruction says
+ * `includeLibraryKeys`, but a node resolved from an unrelated library arrives here looking exactly
+ * like a verified in-file one, and gets persisted as though it were. A measured search for `button`
+ * returned twenty component sets from twenty libraries, three sharing an identical description, so
+ * this is the realistic case rather than a defensive one.
+ *
+ * With no expected key it returns NOTHING and reports why. That is deliberate: the key cannot be
+ * inferred from the audit's own results without circularity, so a caller must supply it. Returning
+ * an unfiltered patch instead would be the fail-open shape this whole module exists to remove.
  */
 export function rosterPatchFromAudit(
   result: HygieneAuditResult,
-): Array<{ name: string; figmaNodeId: string; figmaPage?: string; figmaPageId?: string }> {
-  return result.components
-    .filter((c) => c.nodeId !== null)
-    .map((c) => ({
+  expectedLibraryKey: string | null | undefined,
+): {
+  patch: Array<{ name: string; figmaNodeId: string; figmaPage?: string; figmaPageId?: string }>;
+  /** Components dropped because their library could not be confirmed, with the key observed. */
+  rejected: Array<{ name: string; observedLibraryKey: string | null; reason: string }>;
+} {
+  const resolved = result.components.filter((c) => c.nodeId !== null);
+  if (!expectedLibraryKey) {
+    return {
+      patch: [],
+      rejected: resolved.map((c) => ({
+        name: c.name,
+        observedLibraryKey: c.libraryKey,
+        reason: "no expected library key supplied — cannot confirm the node came from this file",
+      })),
+    };
+  }
+  const patch: Array<{ name: string; figmaNodeId: string; figmaPage?: string; figmaPageId?: string }> = [];
+  const rejected: Array<{ name: string; observedLibraryKey: string | null; reason: string }> = [];
+  for (const c of resolved) {
+    if (c.libraryKey === null) {
+      rejected.push({ name: c.name, observedLibraryKey: null, reason: "run reported no library key" });
+      continue;
+    }
+    if (c.libraryKey !== expectedLibraryKey) {
+      rejected.push({ name: c.name, observedLibraryKey: c.libraryKey, reason: "node came from another library" });
+      continue;
+    }
+    patch.push({
       name: c.name,
       figmaNodeId: c.nodeId as string,
       ...(c.pageName ? { figmaPage: c.pageName } : {}),
       ...(c.pageId ? { figmaPageId: c.pageId } : {}),
-    }));
+    });
+  }
+  return { patch, rejected };
 }

@@ -1,5 +1,10 @@
 /**
- * Live fixture — real output from a real design file, not synthetic data.
+ * TRANSCRIPT fixture — real values captured from a real design file, replayed.
+ *
+ * It does NOT execute Figma. Thor's point stands: calling it "live" overstated the boundary. What
+ * it proves is that the parser and the prompt handle what Figma actually produced, which synthetic
+ * data cannot — the node ids, the library key and the findings below were observed, not invented.
+ * It proves nothing about the Figma API's behaviour today.
  *
  * Source: "Design Engineering System | Small", fileKey `JiUGxcr4u8Jj4FiV429ioK`, read
  * 2026-08-04 through the remote Figma MCP with the Desktop Bridge NOT connected (the
@@ -28,12 +33,13 @@ const OWN_LIBRARY =
  * Verbatim `RESULT:` line for what the live read actually found. Node ids are real ids from
  * the `Screens` page (8585:757); component keys are real keys from the scoped library search.
  */
-const LIVE_RESULT = `Audit complete.
+const TRANSCRIPT_RESULT = `Audit complete.
 RESULT: ${JSON.stringify({
   components: [
     {
       name: "button",
       nodeId: "8589:769",
+      libraryKey: OWN_LIBRARY,
       pageId: "8585:757",
       pageName: "Screens",
       variantAxes: [],
@@ -47,6 +53,7 @@ RESULT: ${JSON.stringify({
     {
       name: "Navbar",
       nodeId: "8588:758",
+      libraryKey: OWN_LIBRARY,
       pageId: "8585:757",
       pageName: "Screens",
       variantAxes: [],
@@ -57,6 +64,7 @@ RESULT: ${JSON.stringify({
     {
       name: "spacer",
       nodeId: "8612:1452",
+      libraryKey: OWN_LIBRARY,
       pageId: "8585:757",
       pageName: "Screens",
       variantAxes: [],
@@ -67,6 +75,7 @@ RESULT: ${JSON.stringify({
     {
       name: "Spacer",
       nodeId: "8597:771",
+      libraryKey: OWN_LIBRARY,
       pageId: "8585:757",
       pageName: "Screens",
       variantAxes: [],
@@ -77,6 +86,7 @@ RESULT: ${JSON.stringify({
     {
       name: "Carousel",
       nodeId: "8595:765",
+      libraryKey: OWN_LIBRARY,
       pageId: "8585:757",
       pageName: "Screens",
       variantAxes: [],
@@ -88,6 +98,7 @@ RESULT: ${JSON.stringify({
     {
       name: "button-group",
       nodeId: null,
+      libraryKey: OWN_LIBRARY,
       pageId: null,
       pageName: null,
       variantAxes: [],
@@ -101,9 +112,9 @@ RESULT: ${JSON.stringify({
   unresolved: ["button-group"],
 })}`;
 
-describe("figma-hygiene against a real design file", () => {
+describe("figma-hygiene against a captured real-file transcript", () => {
   it("parses the live audit result", () => {
-    const r = parseHygieneAuditResult(LIVE_RESULT);
+    const r = parseHygieneAuditResult(TRANSCRIPT_RESULT);
     expect(r).not.toBeNull();
     expect(r!.components).toHaveLength(6);
     expect(r!.blocking).toBe(3);
@@ -111,7 +122,7 @@ describe("figma-hygiene against a real design file", () => {
   });
 
   it("patches the roster with only the components that actually resolved", () => {
-    const patch = rosterPatchFromAudit(parseHygieneAuditResult(LIVE_RESULT)!);
+    const { patch } = rosterPatchFromAudit(parseHygieneAuditResult(TRANSCRIPT_RESULT)!, OWN_LIBRARY);
     // 5 of 6 resolved; button-group did not and must not be guessed.
     expect(patch).toHaveLength(5);
     expect(patch.map((p) => p.name)).not.toContain("button-group");
@@ -126,7 +137,7 @@ describe("figma-hygiene against a real design file", () => {
   });
 
   it("surfaces the case-variant duplicate the live file actually contains", () => {
-    const r = parseHygieneAuditResult(LIVE_RESULT)!;
+    const r = parseHygieneAuditResult(TRANSCRIPT_RESULT)!;
     const names = r.components.map((c) => c.name);
     expect(names).toContain("spacer");
     expect(names).toContain("Spacer");
@@ -136,7 +147,7 @@ describe("figma-hygiene against a real design file", () => {
   });
 
   it("records unbound-value counts, which this file passes — its values are variable-bound", () => {
-    const r = parseHygieneAuditResult(LIVE_RESULT)!;
+    const r = parseHygieneAuditResult(TRANSCRIPT_RESULT)!;
     const placed = r.components.filter((c) => c.nodeId !== null);
     for (const c of placed) expect(c.unboundValues).toBe(0);
   });
