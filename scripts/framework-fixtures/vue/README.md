@@ -21,9 +21,13 @@ pinned toolchain and must not be hoisted into the app's dependency graph.
 | `strictTemplates` governs unknown props | not prop types — and it rejects legitimate `aria-label`/`data-testid` too |
 | what reaches the DOM | a typo'd prop keeps its default *and* leaks onto the root as a stray attribute |
 
-Full write-up, including the withdrawn recommendation and why: `RESEARCH/VORTSPEC_VUE_FIXTURE_2026-08-04.md`
-in the agent workspace. Criteria were written before the fixture in `WHAT_THIS_MUST_PROVE.md`,
-which also records where the implementation diverged from the plan.
+Full write-up, including the withdrawn recommendation and why: [`EVIDENCE.md`](./EVIDENCE.md).
+Criteria were written before the fixture in [`WHAT_THIS_MUST_PROVE.md`](./WHAT_THIS_MUST_PROVE.md),
+which records where the implementation diverged from the plan.
+
+Every reference here is relative and committed. An earlier draft cited the agent workspace — the
+same unversioned location this directory exists to retire, so the citation would have rotted
+exactly as the fixture itself had.
 
 ## Why `mutate.mjs` exists
 
@@ -42,8 +46,10 @@ Two properties it enforces, both learned by getting them wrong first:
   table that looks complete is the same "reports green, proves nothing" defect the fixture exists
   to detect.
 
-`MUTATE_ONLY=<n>` runs the first n rows for cheap write-protocol checks; the output says loudly
-that it is not the full sweep.
+`MUTATE_ROWS=<a>-<b>` runs an inclusive slice, `MUTATE_ONLY=<n>` the first n. Both print the
+range and state loudly that they are not the full sweep. A slice exists because one uninterrupted
+sweep exceeds this environment's 10-minute command ceiling — sliced runs are honest about
+covering part of the matrix, whereas a killed sweep silently produces nothing at all.
 
 ## Cost
 

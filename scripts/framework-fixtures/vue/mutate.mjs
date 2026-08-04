@@ -68,8 +68,24 @@ for (const [label, from] of MUTANTS) {
 // rows — used to prove the WRITE PROTOCOL cheaply (e.g. against a read-only canonical) without
 // re-running the whole matrix. It never changes how a row is measured, only how many run, and
 // the printed table says so, because a 1-row table must not be mistaken for the full sweep.
-const LIMIT = Number(process.env.MUTATE_ONLY ?? MUTANTS.length);
-const SELECTED = MUTANTS.slice(0, LIMIT);
+// MUTATE_ROWS=<a>-<b> runs an inclusive 1-based slice; MUTATE_ONLY=<n> the first n.
+// A slice exists because one uninterrupted sweep exceeds a 10-minute command ceiling, and a
+// killed sweep produces NOTHING -- worse than a partial that admits what it covered.
+function selection() {
+  const rows = process.env.MUTATE_ROWS;
+  if (rows) {
+    const m = /^(\d+)-(\d+)$/.exec(rows.trim());
+    if (!m) { console.error(`FATAL: MUTATE_ROWS must look like "3-7", got "${rows}"`); process.exit(1); }
+    const [a, b] = [Number(m[1]), Number(m[2])];
+    if (a < 1 || b > MUTANTS.length || a > b) {
+      console.error(`FATAL: MUTATE_ROWS ${a}-${b} outside 1-${MUTANTS.length}`); process.exit(1);
+    }
+    return { rows: MUTANTS.slice(a - 1, b), label: `rows ${a}-${b}` };
+  }
+  const n = Number(process.env.MUTATE_ONLY ?? MUTANTS.length);
+  return { rows: MUTANTS.slice(0, n), label: `rows 1-${Math.min(n, MUTANTS.length)}` };
+}
+const { rows: SELECTED, label: RANGE } = selection();
 
 const rows = [];
 for (const [label, from, to] of SELECTED) {
@@ -99,7 +115,7 @@ for (const r of rows) {
 }
 
 if (SELECTED.length < MUTANTS.length) {
-  console.log(`\n*** PARTIAL: ${SELECTED.length} of ${MUTANTS.length} rows (MUTATE_ONLY). NOT the full sweep. ***`);
+  console.log(`\n*** PARTIAL: ${RANGE} -- ${SELECTED.length} of ${MUTANTS.length} rows. NOT the full sweep. ***`);
 }
 
 const survivors = rows.filter((r) => r.status === 0);
