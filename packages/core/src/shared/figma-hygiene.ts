@@ -8,10 +8,12 @@
  * `search_design_system` name lookup, re-run per component per build. Two runs can resolve the
  * same component to two different nodes and both report PASS.
  *
- * That makes Figma naming quality the de-facto accuracy mechanism, silently. This module makes
- * it explicit and then removes the dependency: the audit RESOLVES each roster component to a
- * real node id, and the app persists what it returns. After one clean pass, naming stops
- * mattering because the ids are recorded.
+ * That makes Figma naming quality the de-facto accuracy mechanism, silently. This module is the
+ * contract that WOULD remove the dependency: the audit resolves each roster component to a real
+ * node id, and `rosterPatchFromAudit` returns the shape a caller would persist. NOTHING CALLS IT
+ * YET — see `buildFigmaHygieneAuditPrompt`. Until a caller exists, every production build still
+ * resolves through the fuzzy path, and this header would be describing an integration that does
+ * not exist if it said otherwise.
  *
  * FRAMEWORK-NEUTRAL BY CONSTRUCTION. These prompts never mention React, CVA, props, or any
  * framework idiom. A Figma component set with named variant axes already maps cleanly to every
