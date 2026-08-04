@@ -39,6 +39,20 @@ async function temp(): Promise<string> {
   return mkdtemp(join(tmpdir(), "vortspec-tokens-"));
 }
 
+/**
+ * Explicit timeouts, because these are real filesystem work rather than pure functions.
+ *
+ * `createProject` and `resyncToolkit` each recursively copy the packaged toolkit's `ai-specs/
+ * skills` and `docs` trees; resync additionally `rm -rf`s them first. Vitest's 5s default was
+ * enough when this file ran alone and NOT enough under full-suite concurrency — Thor's run timed
+ * out on the two-resync case at exactly 5000 ms. A gate that passes only on a quiet machine is
+ * not a gate, so the budget is stated rather than inherited.
+ *
+ * Sized to the work: one toolkit copy per resync, two in the byte-identical case.
+ */
+const ONE_PASS_MS = 30_000;
+const TWO_PASS_MS = 60_000;
+
 /** Count of rule declarations — "exactly one" is the assertion Thor asked for. */
 const ruleCount = (yaml: string): number =>
   yaml.split("\n").filter((l) => l.trimStart().startsWith(`${RULE_KEY}:`)).length;
@@ -47,12 +61,7 @@ describe("createProject leaves the token contract on disk", () => {
   it("writes exactly one rule into project.yaml, the owned doc, and an entry link", async () => {
     const dir = await temp();
     try {
-      await createProject(dir, answers("react")).catch((e) => {
-        // The registry hydrate at the end is app state, not filesystem setup. If it fails the
-        // file writes above it have still happened, and those are what is under test — but do
-        // not swallow anything else.
-        if (!/registry|hydrate|ENOENT.*projects\.json/i.test(String(e))) throw e;
-      });
+      await createProject(dir, answers("react"));
 
       const yaml = await readFile(join(dir, ".sdd-de", "project.yaml"), "utf8");
       expect(ruleCount(yaml)).toBe(1);
@@ -65,7 +74,7 @@ describe("createProject leaves the token contract on disk", () => {
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
-  });
+  }, ONE_PASS_MS);
 });
 
 describe("resyncToolkit reaches a legacy project", () => {
@@ -88,36 +97,31 @@ describe("resyncToolkit reaches a legacy project", () => {
     "",
   ].join("\n");
 
-  const resync = (dir: string) =>
-    resyncToolkit(dir).catch((e) => {
-      if (!/registry|hydrate|ENOENT.*projects\.json/i.test(String(e))) throw e;
-    });
-
   it("adds exactly one rule and preserves every original config line", async () => {
     const dir = await legacyProject(LEGACY);
     try {
-      await resync(dir);
+      await resyncToolkit(dir);
       const yaml = await readFile(join(dir, ".sdd-de", "project.yaml"), "utf8");
       expect(ruleCount(yaml)).toBe(1);
       for (const line of LEGACY.trim().split("\n")) expect(yaml).toContain(line);
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
-  });
+  }, ONE_PASS_MS);
 
   it("is byte-identical on a second resync", async () => {
     const dir = await legacyProject(LEGACY);
     try {
-      await resync(dir);
+      await resyncToolkit(dir);
       const first = await readFile(join(dir, ".sdd-de", "project.yaml"), "utf8");
-      await resync(dir);
+      await resyncToolkit(dir);
       const second = await readFile(join(dir, ".sdd-de", "project.yaml"), "utf8");
       expect(second).toBe(first);
       expect(ruleCount(second)).toBe(1);
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
-  });
+  }, TWO_PASS_MS);
 
   // The installer sits OUTSIDE scopeDocsToFramework precisely because that one returns early
   // with no framework. If it were ever moved inside, this legacy shape would lose the contract
@@ -125,7 +129,7 @@ describe("resyncToolkit reaches a legacy project", () => {
   it("still installs when the legacy project has no framework set", async () => {
     const dir = await legacyProject("design_source: figma\ntoken_file: src/styles/tokens.css\n");
     try {
-      await resync(dir);
+      await resyncToolkit(dir);
       const yaml = await readFile(join(dir, ".sdd-de", "project.yaml"), "utf8");
       expect(ruleCount(yaml)).toBe(1);
       expect(yaml).toContain(COMPONENT_TOKEN_PREFIX);
@@ -133,5 +137,5 @@ describe("resyncToolkit reaches a legacy project", () => {
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
-  });
+  }, ONE_PASS_MS);
 });
