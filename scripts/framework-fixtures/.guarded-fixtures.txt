@@ -1,3 +1,0 @@
-astro
-sveltekit
-vue

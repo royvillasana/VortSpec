@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync, existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { profileFor } from "./framework-profiles";
 
@@ -86,16 +86,67 @@ describe.each(CASES)("$dir fixture command", (c) => {
   });
 });
 
-describe("the guard covers every fixture that has a profile command", () => {
-  // Without this, adding a framework fixture and forgetting its guard is invisible — the suite
-  // would stay green while the new fixture rots exactly as SvelteKit's did.
-  it("names every fixture directory carrying a .profile-cmd.txt", () => {
-    const named = new Set(CASES.map((c) => c.dir));
-    const onDisk = readFileSync(join(FIXTURES, ".guarded-fixtures.txt"), "utf8")
-      .split("\n").map((l) => l.trim()).filter(Boolean);
-    for (const dir of onDisk) {
-      expect(named.has(dir), `${dir} has a .profile-cmd.txt but no case in CASES`).toBe(true);
+/**
+ * Fixtures that carry a `verify.mjs` but deliberately no `.profile-cmd.txt`, each with its reason.
+ * A fixture belongs here ONLY if it runs no framework typecheck at all — a render harness, say.
+ * "I haven't got to it yet" is not a reason; that is the rot this file exists to make loud.
+ */
+const NO_PROFILE_CMD: { dir: string; because: string }[] = [];
+
+describe("the guard covers every fixture", () => {
+  /**
+   * The completeness case USED to read `.guarded-fixtures.txt` — a hand-maintained file claiming
+   * to list the guarded fixtures. Fizz got a mutant past it: a new `nuxt/.profile-cmd.txt` with no
+   * CASES entry and no line in that file passed all ten assertions. `expect(onDisk.length).toBe(
+   * CASES.length)` compared two hand-maintained lists to each other, so both could be wrong
+   * together — the same shape as the astro survivor above, and the same shape as the SvelteKit
+   * literal that claimed to be "verbatim from framework-profiles.ts" and silently stopped being
+   * true. A completeness check that trusts a transcription of the disk is not a completeness check.
+   *
+   * The disk is now the only source of truth. `.guarded-fixtures.txt` is deleted rather than left
+   * lying around as a stale list nothing reads.
+   *
+   * A directory is a fixture if it has EITHER file. Keying on `.profile-cmd.txt` alone catches
+   * Fizz's mutant but not a fixture that hardcodes its command and never opts in; keying on
+   * `verify.mjs` alone catches that one but not his. The union catches both.
+   */
+  const fixtureDirs = () =>
+    readdirSync(FIXTURES, { withFileTypes: true })
+      .filter((e) => e.isDirectory())
+      .map((e) => e.name)
+      .filter(
+        (d) =>
+          existsSync(join(FIXTURES, d, "verify.mjs")) ||
+          existsSync(join(FIXTURES, d, ".profile-cmd.txt")),
+      );
+
+  it("every fixture on disk is either guarded or explicitly exempt", () => {
+    const guarded = new Set(CASES.map((c) => c.dir));
+    const exempt = new Set(NO_PROFILE_CMD.map((e) => e.dir));
+    for (const dir of fixtureDirs()) {
+      expect(
+        guarded.has(dir) || exempt.has(dir),
+        `${dir} is a fixture with no case in CASES and no NO_PROFILE_CMD entry`,
+      ).toBe(true);
     }
-    expect(onDisk.length).toBe(CASES.length);
+  });
+
+  it("an exemption is a claim about the fixture, and the claim is checked", () => {
+    for (const e of NO_PROFILE_CMD) {
+      expect(
+        existsSync(join(FIXTURES, e.dir, ".profile-cmd.txt")),
+        `${e.dir} is listed exempt but HAS a .profile-cmd.txt — guard it instead`,
+      ).toBe(false);
+      expect(e.because.trim().length, `${e.dir}'s exemption states no reason`).toBeGreaterThan(0);
+    }
+  });
+
+  it("no exemption outlives the fixture it names", () => {
+    // Scoped to exemptions on purpose. A stale CASES entry is already caught by the per-case
+    // existsSync above, so asserting it here would be redundant coverage claimed as new.
+    const onDisk = new Set(fixtureDirs());
+    for (const e of NO_PROFILE_CMD) {
+      expect(onDisk.has(e.dir), `${e.dir} is exempted here but no such fixture exists`).toBe(true);
+    }
   });
 });
