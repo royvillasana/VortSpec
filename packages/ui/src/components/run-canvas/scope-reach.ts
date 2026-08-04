@@ -13,9 +13,8 @@ import { cssForField } from "./compose";
  * as a number, because an over-stated blast radius is worse than an unstated one.
  */
 
-/** The selection as the scope rules see it: identity, component, and the token behind each field. */
-export function scopeTargets(selection: Selection | null): ScopeTarget[] {
-  if (!selection) return [];
+/** One member of the selection as the scope rules see it: identity, component, token and value per field. */
+function scopeTargetFor(selection: Selection): ScopeTarget {
   const tokens: Record<string, string | undefined> = {};
   for (const section of selection.sections) {
     for (const field of section.fields) {
@@ -29,7 +28,35 @@ export function scopeTargets(selection: Selection | null): ScopeTarget[] {
   for (const section of selection.sections) {
     for (const field of section.fields) values[field.key] = field.value;
   }
-  return [{ id: selection.nodeId, component: selection.component, tag: undefined, tokens, values }];
+  return { id: selection.nodeId, component: selection.component, tag: undefined, tokens, values };
+}
+
+/**
+ * The selection as the scope rules see it — EVERY member, not just the focused one.
+ *
+ * THIS TOOK A `Selection | null` AND RETURNED A LENGTH-1 ARRAY UNCONDITIONALLY (Thor, review of
+ * #94). `DesignPanel` handed it the focused element and never the `selectedIds` it already receives
+ * as a prop, so `deriveScope`'s `selection.length > 1` branch and `availableScopes`' `selection`
+ * option were **structurally unreachable through the live UI** — in the change whose entire subject
+ * is scope. Select three Cards where two are 8px and one is 16px and the panel evaluated scope
+ * against the one focused Card, so it offered `element` where the honest answer is `selection`.
+ *
+ * WHY THE CALLER BUILDS THE MEMBER SELECTIONS AND THIS DOES NOT. A member's TOKEN per field is not
+ * recoverable from its computed style — `getComputedStyle` reports the resolved value, not the
+ * `var()` the author wrote. It comes from `buildSelection(readout, { tokens })`, which needs the
+ * project's token list, the component roster and the tree. All three live in `RunApp`, which
+ * already applies exactly that recipe to the focused member. So `RunApp` builds one `Selection` per
+ * member and passes them here, rather than this module (or the panel) acquiring four more inputs to
+ * redo it. The alternative — inferring the other members' tokens from resolved values — would make
+ * "they share a token" a guess, and a wide scope justified by a guess edits things the user did not
+ * agree to.
+ *
+ * A member whose readout has not arrived is simply absent from `selections`: not knowing is not the
+ * same as knowing it differs, which is the rule `fieldIntersection` below already follows.
+ */
+export function scopeTargets(selections: Selection | null | readonly (Selection | null)[]): ScopeTarget[] {
+  const list = Array.isArray(selections) ? selections : [selections as Selection | null];
+  return list.filter((s): s is Selection => s !== null).map(scopeTargetFor);
 }
 
 /**

@@ -2111,6 +2111,44 @@ export function RunApp({
   );
 
   /**
+   * One built `Selection` per selected member — what the SCOPE rules read (change: scoped-style-edits).
+   *
+   * `scopeTargets` used to be handed the focused element alone, so `deriveScope`'s multi-member branch
+   * could not execute through the live UI: three selected Cards were scoped as one. Built HERE because a
+   * member's token per field is not recoverable from its computed style — `getComputedStyle` reports the
+   * resolved value, not the `var()` the author wrote — so it takes `buildSelection` over that member's own
+   * readout, with the project token list and the component roster, which is the recipe already applied to
+   * the focused member above. Inferring the others' tokens from resolved values instead would make "they
+   * share a token" a guess, and a wide scope justified by a guess edits things the user did not agree to.
+   *
+   * A member whose readout has not landed yet is omitted rather than defaulted: the readouts are requested
+   * the moment the selection grows, and not knowing is not the same as knowing it differs — the rule
+   * `fieldIntersection` already follows.
+   */
+  const memberSelections = useMemo(() => {
+    if (bridge.selectedIds.length < 2) return selection ? [selection] : [];
+    const built: CanvasNodeSelection[] = [];
+    for (const id of bridge.selectedIds) {
+      if (selection && id === selection.nodeId) {
+        built.push(selection); // reuse, so the focused member keeps one identity across renders
+        continue;
+      }
+      const readout = bridge.readouts[id];
+      if (!readout) continue;
+      try {
+        const node = bridge.tree?.nodes[id];
+        const component = resolveComponent(node, components, readout.componentCandidates);
+        built.push(buildSelection(readout, { tokens, component, tag: node?.tag }));
+      } catch (err) {
+        // Same reasoning as the focused selection above: one member that will not build must not
+        // blank the panel. It is dropped, which reads as "not known yet" rather than as agreement.
+        console.error("[run-canvas] failed to build member selection:", id, err);
+      }
+    }
+    return built;
+  }, [selection, bridge.selectedIds, bridge.readouts, bridge.tree, tokens, components]);
+
+  /**
    * Every token the selected element resolves through, with the value it resolves to.
    *
    * Both halves of the Library tab's answer come from this: the ones the design system HAS are marked in
@@ -2496,6 +2534,7 @@ export function RunApp({
           tree={layersTree}
           hoveredId={bridge.hoveredId}
           selectedIds={bridge.selectedIds}
+          memberSelections={memberSelections}
           onSelectMatching={(by) => {
             const id = selectedIdRef.current;
             if (id) bridge.selectMatching(id, by);

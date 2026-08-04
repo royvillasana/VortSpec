@@ -108,6 +108,7 @@ export function DesignPanel({
   onSelectNode,
   onSelectMatching,
   selectedIds,
+  memberSelections,
   matched = {},
   mixed = {},
   onMatchQuery,
@@ -139,6 +140,15 @@ export function DesignPanel({
   selection: Selection | null;
   /** Every selected node, focused member included. Omitted → the focused member alone. */
   selectedIds?: string[];
+  /**
+   * One built `Selection` per selected member, focused member included — what the SCOPE rules read.
+   *
+   * Built by `RunApp` rather than here, and not derivable from `selectedIds`: a member's token per
+   * field comes from `buildSelection(readout, { tokens })`, which needs the project token list, the
+   * component roster and the tree. Omitted → the focused member alone, which is the old behaviour
+   * and the reason `deriveScope`'s multi-member branch was unreachable.
+   */
+  memberSelections?: readonly (Selection | null)[];
   /** Guest answers to "which elements look the same", keyed by query. */
   matched?: Record<string, string[]>;
   /** Fields whose value the selection does NOT agree on — shown as `Mixed`, never as one member's value. */
@@ -299,7 +309,7 @@ export function DesignPanel({
                 onFieldChange={onFieldChange}
                 colorTokens={colorTokens}
                 tokens={tokens}
-                targets={scopeTargets(selection)}
+                targets={scopeTargets(memberSelections ?? selection)}
                 onMatchQuery={onMatchQuery}
                 mixed={mixed}
                 reach={scopeReach(tokens, matched, tree)}
