@@ -455,6 +455,28 @@ const RAW_PROFILES = {
     storybookType: "html",
     supportLevel: "experimental",
     typecheckScope: "component-dir",
+    // `node --check` cannot see an ES-MODULE syntax error unless the module mode is DECIDED.
+    // Compiled by Honey (PR #83): the same `export function f( {` is exit 0 with no
+    // `package.json`, exit 1 with `{"type":"module"}`, and exit 1 with `{"type":"commonjs"}`.
+    // The mode does not have to be right, it has to be resolvable.
+    //
+    // That lands precisely on this profile: `idioms.events` mandates "an ES module", while the
+    // same record describes a target with no build step and no bundler — a shape that plausibly
+    // ships no `package.json` at all. So the gate is blind to exactly the syntax this profile
+    // tells authors to write, in exactly the project shape it describes.
+    typecheckCoverageGate: {
+      setting: "package.json \"type\"",
+      resolution:
+        "look for the nearest `package.json` at or above the component directory and read its `type` " +
+        "field. Either \"module\" or \"commonjs\" is enough — the value does not need to be correct, " +
+        "only PRESENT, because it is the ambiguity that blinds the check rather than the choice. If " +
+        "there is no `package.json`, or it has no `type`, the mode is undecided",
+      unchecked:
+        "ES-MODULE syntax errors — `import`/`export` at positions only valid in a module. A file whose " +
+        "only defect is module-level syntax passes `node --check` silently when the mode is undecided, " +
+        "so report the JS gate as covering non-module syntax ONLY and say the module surface was not " +
+        "checked. Do not report it as a pass over the whole file",
+    },
     idioms: {
       label: "Vanilla HTML/CSS/JS",
       fileConvention: "`<component_dir>/<component-name>.html` plus a sibling `<component-name>.css`",

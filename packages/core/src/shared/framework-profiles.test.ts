@@ -649,3 +649,63 @@ describe("sveltekit — the check generates its route types before running", () 
     expect(frameworkIdiomClause("svelte")).not.toMatch(/svelte-kit sync/);
   });
 });
+
+/**
+ * Vanilla's JS gate is blind to module syntax when the module mode is undecided.
+ *
+ * Compiled by Honey (PR #83): `export function f( {` in `src/bad.js` is exit 0 with no
+ * `package.json`, exit 1 with `{"type":"module"}`, exit 1 with `{"type":"commonjs"}`. The mode
+ * does not have to be RIGHT, it has to be DECIDED — and vanilla's own idioms mandate ES modules
+ * while describing a no-build, no-bundler target that plausibly ships no `package.json`.
+ *
+ * Expressed as `typecheckCoverageGate` rather than `partial` deliberately: `partial` is the
+ * UNCONDITIONAL shortfall (vanilla is always JS-syntax-only, never type-aware), and this one is
+ * CONDITIONAL on a project setting. Collapsing them would report a vanilla project that has a
+ * decided mode as having an unchecked module surface it does not have.
+ */
+describe("vanilla — the module-mode gate on its JS check", () => {
+  it("declares the setting the coverage depends on", () => {
+    const p = profileFor("vanilla");
+    expect(p?.typecheckCoverageGate?.setting).toMatch(/package\.json/);
+    expect(p?.typecheckCoverageGate?.setting).toMatch(/type/);
+  });
+
+  it("says PRESENT rather than correct — it is the ambiguity that blinds the check", () => {
+    // The subtle half, and the one a reader would most likely get wrong: `"commonjs"` works
+    // just as well as `"module"`. A resolution that demanded the *right* value would send an
+    // agent chasing a correctness question that does not exist.
+    const g = profileFor("vanilla")?.typecheckCoverageGate;
+    expect(g?.resolution).toMatch(/does not need to be correct/);
+    expect(g?.resolution).toMatch(/only PRESENT/);
+    expect(g?.resolution).toMatch(/commonjs/);
+  });
+
+  it("names the unchecked surface as module syntax, not the whole file", () => {
+    const g = profileFor("vanilla")?.typecheckCoverageGate;
+    expect(g?.unchecked).toMatch(/ES-MODULE syntax errors/);
+    expect(g?.unchecked).toMatch(/Do not report it as a pass over the whole file/);
+  });
+
+  it("keeps the gate SEPARATE from vanilla's unconditional partial", () => {
+    // Both mechanisms must survive on this record. `partial` is always-true (JS-syntax-only);
+    // the gate is conditional. Collapsing either into the other loses a distinct claim.
+    const r = resolveTypecheck("vanilla", "src/components");
+    expect(r.kind).toBe("cmd");
+    if (r.kind !== "cmd") return;
+    expect(r.partial).toBeTruthy();
+    expect(profileFor("vanilla")?.typecheckCoverageGate).toBeTruthy();
+  });
+
+  it("does not hand the module-mode gate to a framework whose checker is type-aware", () => {
+    // Discriminating control. Angular has its own gate (strictTemplates); every other framework
+    // must not acquire this one by a stray edit to a shared base.
+    for (const fw of ["react", "next", "vue", "nuxt", "svelte", "sveltekit", "astro"] as const) {
+      // `expect(undefined).not.toMatch(...)` THROWS rather than passing, so this has to compare
+      // the value. An earlier draft used toMatch and failed on the frameworks that correctly have
+      // no gate at all — the assertion could not express "absent is fine", which is the answer here.
+      const setting = profileFor(fw)?.typecheckCoverageGate?.setting;
+      expect(setting === undefined || !/package\.json/.test(setting), `${fw} gained vanilla's gate`).toBe(true);
+    }
+    expect(profileFor("angular")?.typecheckCoverageGate?.setting).toBe("strictTemplates");
+  });
+});
