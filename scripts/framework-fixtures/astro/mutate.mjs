@@ -32,7 +32,7 @@ const CHECKED_CLEAN = '  return run.status === 0;';
 const FAILED_WITH = "  return run.status !== 0 && new RegExp(`error ts\\\\(${code}\\\\):`).test(stripAnsi(run.out));";
 const FILES = "  const m = /Result \\((\\d+) files?\\)/.exec(stripAnsi(run.out));";
 const STRIP = "const stripAnsi = (s) => s.replace(/\\u001b\\[[0-9;]*[A-Za-z]/g, '');";
-const A5_NO_TSCONFIG = "withProject({ util: UTIL_ERROR, tsconfig: false }, (dir) => {";
+const A5_NO_TSCONFIG = "  rmSync(join(dir, 'tsconfig.json'));";
 
 const MUTANTS = [
   ['checkedClean -> always true', CHECKED_CLEAN, '  return true;'],
@@ -44,13 +44,14 @@ const MUTANTS = [
   ['failedWith -> always false', FAILED_WITH, '  return false;'],
   ['filesChecked -> always 5 (hide the scope narrowing)', FILES, '  const m = [null, "5"];'],
   ['stripAnsi -> identity', STRIP, 'const stripAnsi = (s) => s;'],
-  ['A5 no-tsconfig case GETS a tsconfig (erase the finding)', A5_NO_TSCONFIG,
-    'withProject({ util: UTIL_ERROR, tsconfig: true }, (dir) => {'],
+  ['A7: declare a CARET instead of an exact pin', '"astro": "5.14.1"', '"astro": "^5.14.1"', 'package.json'],
+  ['A5: stop deleting the tsconfig (erase the finding)', A5_NO_TSCONFIG,
+    "  // tsconfig deliberately NOT removed"],
 ];
 
 /** Fail loudly and immediately: an anchor that no longer matches means the table would lie. */
-for (const [label, from] of MUTANTS) {
-  if (!SOURCE.includes(from)) {
+for (const [label, from, , target = 'verify.mjs'] of MUTANTS) {
+  if (!readFileSync(join(ROOT, target), 'utf8').includes(from)) {
     console.error(`FATAL: anchor missing for "${label}".`);
     console.error('The mutation could not be applied, so any table printed would be incomplete');
     console.error('while looking complete. Update the anchor to match verify.mjs and re-run.');
@@ -82,12 +83,14 @@ function selection() {
 const { rows: SELECTED, label: RANGE } = selection();
 
 const rows = [];
-for (const [label, from, to] of SELECTED) {
-  const dir = mkdtempSync(join(tmpdir(), 'vue-mutate-'));
+for (const [label, from, to, target = 'verify.mjs'] of SELECTED) {
+  const dir = mkdtempSync(join(tmpdir(), 'astro-mutate-'));
   try {
-    cpSync(join(ROOT, 'package.json'), join(dir, 'package.json'));
     symlinkSync(join(ROOT, 'node_modules'), join(dir, 'node_modules'), 'dir');
-    writeFileSync(join(dir, 'verify.mjs'), SOURCE.replace(from, to));
+    for (const f of ['verify.mjs', 'package.json']) {
+      const body = readFileSync(join(ROOT, f), 'utf8');
+      writeFileSync(join(dir, f), f === target ? body.replace(from, to) : body);
+    }
     const r = spawnSync('node', ['verify.mjs'], { cwd: dir, encoding: 'utf8' });
     const out = `${r.stdout ?? ''}${r.stderr ?? ''}`;
     rows.push({

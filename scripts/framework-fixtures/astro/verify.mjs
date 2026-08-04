@@ -16,7 +16,7 @@
  *
  * Run: node verify.mjs -> non-zero if any case does not behave as declared.
  */
-import { mkdtempSync, writeFileSync, mkdirSync, symlinkSync, rmSync, cpSync, existsSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, readFileSync, mkdirSync, symlinkSync, rmSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -183,19 +183,40 @@ withProject({ page: PAGE_BAD_PROP }, (dir) => {
 // A5 — THE FINDING. Without tsconfig.json, `astro check` silently narrows its own scope.
 // The same project, the same error, the same command: reported with a tsconfig, invisible
 // without one. Not a crash and not a warning — a clean exit over 2 files instead of 5.
+// Thor: an earlier version ran these as two separate mkdtemp directories with identical
+// content and called it "the same project". Identical content is not the same project, and
+// "same" was doing real work in the claim. It is now literally ONE directory: check it, delete
+// only tsconfig.json, check it again. Nothing else differs because nothing else can.
 withProject({ util: UTIL_ERROR }, (dir) => {
   sync(dir);
-  const r = check(dir);
+  const withCfg = check(dir);
   record('A5-ts-with-tsconfig', 'an error in a .ts file IS reported when tsconfig.json exists',
-    failedWith(r, 2339) && filesChecked(r) === 5, `exit=${r.status} files=${filesChecked(r)}`, r.out);
+    failedWith(withCfg, 2339) && filesChecked(withCfg) === 5,
+    `exit=${withCfg.status} files=${filesChecked(withCfg)}`, withCfg.out);
+
+  rmSync(join(dir, 'tsconfig.json'));
+  const withoutCfg = check(dir);
+  record('A5-ts-no-tsconfig', 'the SAME directory, tsconfig deleted: NOT reported — 2 files, exit 0',
+    checkedClean(withoutCfg) && filesChecked(withoutCfg) === 2,
+    `exit=${withoutCfg.status} files=${filesChecked(withoutCfg)}`, withoutCfg.out);
 });
 
-withProject({ util: UTIL_ERROR, tsconfig: false }, (dir) => {
-  sync(dir);
-  const r = check(dir);
-  record('A5-ts-no-tsconfig', 'the SAME error is NOT reported without tsconfig.json — 2 files, exit 0',
-    checkedClean(r) && filesChecked(r) === 2, `exit=${r.status} files=${filesChecked(r)}`, r.out);
-});
+// A7 — the pin is a CLAIM, so it is checked rather than asserted in prose.
+// Thor: the README said "pinned exactly, with a test enforcing it" while the enforcing test
+// existed only as a command I ran once in a shell. Every result in this file is
+// version-sensitive, so a declared version drifting from the installed one would silently
+// change what the evidence means.
+{
+  const declared = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')).devDependencies;
+  const rows = Object.entries(declared).map(([name, want]) => {
+    const got = JSON.parse(readFileSync(join(ROOT, 'node_modules', name, 'package.json'), 'utf8')).version;
+    return { name, want, got, exact: /^\d+\.\d+\.\d+$/.test(want) && want === got };
+  });
+  record('A7-pins', 'every dependency is pinned exactly AND the installed version matches',
+    rows.every((r) => r.exact),
+    rows.map((r) => `${r.name} ${r.want}->${r.got}`).join(' '),
+    rows.map((r) => `${r.name}: declared=${r.want} installed=${r.got} ${r.exact ? 'EXACT' : 'MISMATCH'}`).join('\n'));
+}
 
 // A6 — the false polarity for `failedWith`. A different failure must not satisfy a declared one.
 // Without this single case, an always-true failedWith passes every failure case above.
