@@ -272,3 +272,56 @@ test("the token scope still reaches everything, and says so", async ({ mount }) 
   expect(scope).toBe("token");
   expect(scopeKey).toBe("radius-card");
 });
+
+test("editing one property never writes another, however they read", async ({ mount }) => {
+  // The most dangerous thing a multi-selection can do is flatten a property nobody looked at. It is
+  // silent at the moment it happens — the edited property looks right — and only shows up later on the
+  // members whose value was quietly replaced. So the panel must report ONLY what was touched.
+  const calls: unknown[][] = [];
+  const sel = {
+    nodeId: "b1",
+    label: "Button",
+    component: "Button",
+    rect: { x: 0, y: 0, width: 100, height: 40 },
+    variants: [],
+    sections: [
+      {
+        id: "appearance",
+        title: "Appearance",
+        fields: [
+          { key: "radius", label: "Radius", kind: "text", value: "20px", token: null, options: [] },
+          { key: "padding-top", label: "Padding", kind: "text", value: "4px", token: null, options: [] },
+        ],
+      },
+    ],
+  } as unknown as Selection;
+
+  const c = await mount(
+    <DesignPanel
+      storageKey={`mixed-${Math.random()}`}
+      selection={sel}
+      tree={TREE}
+      tokens={TOKENS}
+      onSelectNode={() => {}}
+      // `radius` differs across the selection; `padding-top` agrees.
+      mixed={{ radius: true }}
+      onFieldChange={((...a: unknown[]) => calls.push(a)) as never}
+    />,
+  );
+
+  // The Mixed field shows NO member's value — that blank is what makes "untouched" distinguishable
+  // from "set", which is the whole guarantee.
+  const radius = c.getByRole("textbox").first();
+  await expect(radius).toHaveValue("");
+  await expect(radius).toHaveAttribute("placeholder", "Mixed");
+
+  // Edit the OTHER field only.
+  const padding = c.getByRole("textbox").nth(1);
+  await padding.fill("12px");
+  await padding.press("Enter");
+
+  await expect.poll(() => calls.length).toBeGreaterThan(0);
+  // Exactly one property reported, and it is the one that was typed into.
+  expect(calls.map((a) => a[0])).toEqual(["padding-top"]);
+  expect(calls.every((a) => a[0] !== "radius")).toBe(true);
+});

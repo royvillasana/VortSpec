@@ -12,6 +12,11 @@ import { DesignPanel, ChangesBar } from "../components/run-canvas/DesignPanel";
 import { LibraryPanel } from "./LibraryPanel";
 import { matchKey, writesOverlay, type StyleScope } from "@vortspec/core/style-scope";
 import { fanOut, unwritten } from "@vortspec/core/style-intersection";
+
+/** The durable personalization overlay, relative to the project root. */
+const OVERRIDES_REL = ".vortspec/theme-overrides.json";
+/** What an overlay looks like with nothing in it — the state undo returns a first-ever override to. */
+const EMPTY_OVERLAY = `${JSON.stringify({ version: 1, tokens: {}, components: {}, googleFonts: [] }, null, 2)}\n`;
 import { fieldIntersection } from "../components/run-canvas/scope-reach";
 import { FigmaMcpBanner } from "../components/FigmaMcpBanner";
 import { StorybookSidebar } from "../components/run-canvas/StorybookSidebar";
@@ -716,6 +721,19 @@ export function RunApp({
   const undoStack = useRef<FileSnapshot[][]>([]);
   const redoStack = useRef<FileSnapshot[][]>([]);
   const MAX_HISTORY = 50; // cap undo/redo depth so a long session can't grow snapshots unbounded
+
+  /**
+   * Record an overlay write as ONE undo step (change: scoped-style-edits, task 4.6).
+   *
+   * A `component-token` or `token` edit writes a single JSON file, so its pre-edit content IS the whole
+   * undo entry — no per-element fan-out to coalesce. Pushed only after the write lands, so a failed
+   * write leaves no phantom step that would silently revert something the user never changed.
+   */
+  const rememberOverlayUndo = useCallback((entry: FileSnapshot[]) => {
+    undoStack.current.push(entry);
+    if (undoStack.current.length > MAX_HISTORY) undoStack.current.shift();
+    redoStack.current = []; // a fresh edit invalidates the redo trail, exactly as a source edit does
+  }, []);
   const autoPersist = useMemo(
     () =>
       createAutoPersist({
@@ -1813,9 +1831,20 @@ export function RunApp({
   const applyScopedOverride = useCallback(
     async (key: string, value: string, scope: StyleScope, scopeKey?: string, scopeToken?: string): Promise<void> => {
       if (!scopeKey) return;
+      // Snapshot the overlay BEFORE writing so the edit is one undo step, like every other edit here.
+      // `snapshotComponent` is really "read these files" — the name is historical, the behaviour is
+      // general. An overlay that does not exist yet snapshots as its EMPTY state rather than as nothing:
+      // undoing the first override anyone ever writes has to remove it, and restoring "nothing" would
+      // leave it in place.
+      const prior = await api
+        .snapshotComponent(project.path, OVERRIDES_REL)
+        .catch(() => [] as FileSnapshot[]);
+      const undoEntry: FileSnapshot[] =
+        prior.length > 0 ? prior : [{ path: OVERRIDES_REL, content: EMPTY_OVERLAY }];
       try {
         if (scope === "token") {
           await api.setThemeTokenOverride(project.path, scopeKey, value);
+          rememberOverlayUndo(undoEntry);
           return;
         }
         if (scope === "component-token") {
@@ -1829,6 +1858,7 @@ export function RunApp({
             ...priorBase,
             [`--${scopeToken}`]: value,
           });
+          rememberOverlayUndo(undoEntry);
           return;
         }
         const css = cssForField(key, value);
@@ -1840,6 +1870,7 @@ export function RunApp({
         const existing = await api.getThemeOverrides(project.path).catch(() => null);
         const base = existing?.components?.[scopeKey]?.base ?? {};
         await api.setThemeComponentOverride(project.path, scopeKey, {}, { ...base, ...css });
+        rememberOverlayUndo(undoEntry);
       } catch {
         /* the overlay write failed; the page keeps its current values rather than showing a lie */
       }
