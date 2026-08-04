@@ -58,12 +58,30 @@ describe('rendered token identity — what Layer 2 cannot see', () => {
     expect(built).to.not.equal(designed);
   });
 
-  it('B3: a MISSING token renders as nothing, not as an error', () => {
+  it('B3: a MISSING token renders as nothing, AND raises no error', () => {
     // `var(--never-defined)` is valid CSS. The property falls back to its initial value, so a
     // missing component token paints transparent and reports no failure anywhere — which is why
     // the build must fail loudly at bind time rather than relying on anything downstream noticing.
+    // Thor's blocker on this PR: the comment claimed "raises no error anywhere" while the
+    // assertion only checked the paint. That proved "paints transparent", not "silent" - a
+    // claim wider than its measurement, which is the defect this whole fixture exists to catch.
+    // Both channels are now recorded rather than described.
+    const errors = [];
+    const onErr = (e) => errors.push(String(e.message ?? e));
+    const origConsoleError = console.error;
+    console.error = (...a) => { errors.push(a.map(String).join(' ')); };
+    window.addEventListener('error', onErr);
+
     const painted = bg(render('header-missing-token'));
+
+    window.removeEventListener('error', onErr);
+    console.error = origConsoleError;
+
     expect(painted).to.be.oneOf(['rgba(0, 0, 0, 0)', 'transparent']);
     expect(painted).to.not.equal(FIGMA_SPEC);
+    // The half that was only prose before. An undefined custom property is VALID CSS: the
+    // property falls back to its initial value and nothing is reported, so there is no signal
+    // for any downstream check to find. That is the argument for blocking at bind time.
+    expect(errors, `expected silence, got: ${errors.join(' | ')}`).to.deep.equal([]);
   });
 });
