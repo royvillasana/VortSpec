@@ -1,0 +1,8 @@
+/* The two values Honey measured on the real project.
+   --color-neutral-100 is the global the build actually bound.
+   --component-accordion-* is what Figma specifies and what tokens.css never had. */
+:root {
+  --color-neutral-100: #F8F9FA;
+  --component-accordion-active-item-header-background: #CEE4E9;
+  --color-brand-primary: #0D6EFD;
+}

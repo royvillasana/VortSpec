@@ -1,0 +1,12 @@
+/* AS BUILT — a real var(), bound to the wrong variable. Passes every syntax check we have. */
+.header-as-built {
+  background-color: var(--color-neutral-100);
+}
+/* AS DESIGNED — the component-scoped token Figma binds. */
+.header-as-designed {
+  background-color: var(--component-accordion-active-item-header-background);
+}
+/* A token that does not exist. var() syntax is still perfectly valid. */
+.header-missing-token {
+  background-color: var(--component-accordion-does-not-exist);
+}
