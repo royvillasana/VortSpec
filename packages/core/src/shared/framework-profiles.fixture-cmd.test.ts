@@ -91,7 +91,15 @@ describe.each(CASES)("$dir fixture command", (c) => {
  * A fixture belongs here ONLY if it runs no framework typecheck at all — a render harness, say.
  * "I haven't got to it yet" is not a reason; that is the rot this file exists to make loud.
  */
-const NO_PROFILE_CMD: { dir: string; because: string }[] = [];
+const NO_PROFILE_CMD: { dir: string; because: string }[] = [
+  {
+    dir: "accordion-render",
+    because:
+      "render harness: it compiles Tailwind and asserts computed colors in a browser, and runs no " +
+      "framework typecheck, so there is no profile command for it to drift from. Verified by " +
+      "reading its verify.mjs — no tsc, no svelte-check, no astro check, no profileFor.",
+  },
+];
 
 describe("the guard covers every fixture", () => {
   /**
@@ -132,12 +140,38 @@ describe("the guard covers every fixture", () => {
   });
 
   it("an exemption is a claim about the fixture, and the claim is checked", () => {
+    // Not just the SHAPE of the exemption — its SUBSTANCE. An exemption says "this fixture runs no
+    // framework typecheck, so it has no profile command to drift from". Left as prose, that is the
+    // same unchecked-sentence class this whole file exists to kill: accordion-render could grow an
+    // `astro check` tomorrow and its exemption would quietly become a lie.
+    //
+    // Match on the BINARY, not the full command phrase. My first version forbade `mustContain`
+    // verbatim ("astro check", "svelte-kit sync") and could not fire: every fixture invokes
+    // `spawnSync('npx', [bin, ...args])`, so those phrases never appear as contiguous substrings in
+    // any of them. A matcher that cannot fire, in the guard against matchers that cannot fire —
+    // caught only because the mutant I wrote happened to use the realistic array form and survived.
+    //
+    // Measured before trusting it: tsc/vue-tsc/svelte-check/svelte-kit/astro appear 6-30 times
+    // across the three guarded fixtures and ZERO times in accordion-render, so this discriminates
+    // rather than merely running. Derived from CASES (first word of each token) plus the base
+    // compiler, so a newly guarded framework extends it without another hardcoded list.
+    const typecheckTokens = [
+      ...new Set(["tsc", ...CASES.flatMap((c) => c.mustContain).map((t) => t.split(" ")[0])]),
+    ];
     for (const e of NO_PROFILE_CMD) {
       expect(
         existsSync(join(FIXTURES, e.dir, ".profile-cmd.txt")),
         `${e.dir} is listed exempt but HAS a .profile-cmd.txt — guard it instead`,
       ).toBe(false);
       expect(e.because.trim().length, `${e.dir}'s exemption states no reason`).toBeGreaterThan(0);
+
+      const src = readFileSync(join(FIXTURES, e.dir, "verify.mjs"), "utf8");
+      for (const token of typecheckTokens) {
+        expect(
+          src,
+          `${e.dir} is exempt as running no framework typecheck, but its verify.mjs runs "${token}"`,
+        ).not.toContain(token);
+      }
     }
   });
 
