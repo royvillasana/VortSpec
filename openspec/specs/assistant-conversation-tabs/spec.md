@@ -14,9 +14,6 @@ The assistant SHALL support multiple conversation tabs. The user SHALL be able t
 - **WHEN** the user renames a conversation tab, and later closes a conversation
 - **THEN** the tab shows the new label, and closing removes only that conversation (the others are unchanged)
 
-#### Scenario: Cockpit unaffected
-- **WHEN** the cockpit uses the single-conversation assistant
-- **THEN** it behaves exactly as before (no tab strip, no regression)
 
 ### Requirement: Per-conversation agent
 Each conversation SHALL have a selectable **agent** chosen from a single picker that offers both the session's Claude Code **subagents** (from the `init` event) and VortSpec **custom presets** (a named role with a system prompt, and optionally a model and toolset). Selecting an agent SHALL shape that conversation's run — its system prompt, model, and allowed tools — without affecting other conversations.

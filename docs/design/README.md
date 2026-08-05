@@ -14,7 +14,7 @@ store**: tokens and components are plain files Claude Code writes into the user'
 project (`token_file` / Figma variables, `.sdd-de/components.json`, generated
 source under `component_dir`, `specs/*/…` reports). So provenance became
 "from Figma variables / from the generated code / hand-edited" (see
-`apps/desktop/src/shared/inspector.ts`), not IR inference. Adopt the visuals;
+`packages/core/src/shared/inspector.ts`), not IR inference. Adopt the visuals;
 ignore the v1 data model.
 
 ## Contents
@@ -32,7 +32,7 @@ HTML/zip handoff (exactly this shape: a bundle root README + a `project/` of
 dogfood input the bundle's own `HANDOFF.md` calls for.
 
 When that adapter is built, its tests should consume this directory in place
-(e.g. reference `docs/design/` from `apps/desktop/src/**/__fixtures__` rather
+(e.g. reference `docs/design/` from `apps/ide/src/**/__fixtures__` rather
 than duplicating the HTML). Keep the bundle byte-stable so fixture snapshots
 stay deterministic; if the design is revised, add a new dated bundle beside it
 rather than mutating this one.

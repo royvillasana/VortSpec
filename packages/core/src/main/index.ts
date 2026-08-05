@@ -1,11 +1,14 @@
 /**
  * Main-process entry point for the shared engine.
  *
- * Both app shells (the cockpit `apps/desktop` and the IDE `apps/ide`) import
- * from `@vortspec/core/main`: they create their own BrowserWindow and then
- * mount the identical IPC handler set from here. This is the mechanism that
- * keeps the SDD-DE procedure unified across both apps — the handlers ARE the
- * procedure, and they live once, here.
+ * The app shell (`apps/ide`) imports from `@vortspec/core/main`: it creates its
+ * BrowserWindow and then mounts the IPC handler set from here. The handlers ARE
+ * the SDD-DE procedure, and they live once, in this package.
+ *
+ * The boundary predates having one shell and survives it on its own merits: it
+ * keeps the engine headless and unit-testable without an Electron renderer,
+ * which the unit suite depends on. It is not here because a second app once
+ * consumed it.
  */
 export { registerIpc, setDrawWindowOpener } from "./ipc";
 export { stopAllDevServers } from "./workspace/dev-server";

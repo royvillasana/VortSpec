@@ -4,7 +4,7 @@
 TBD - created by archiving change ide-vscode-workbench. Update Purpose after archive.
 ## Requirements
 ### Requirement: The activity bar is the single navigation
-The activity bar SHALL be the IDE's sole navigation. It SHALL offer: sidebar-view activities (Explorer, Source Control, Settings) that render in the primary sidebar, and working-area activities (Flow/Pipeline, Run, Playground, Tokens, Manifest, History) that take over the working area. The reused cockpit panels SHALL render **chromeless** in the IDE — without their internal `ProjectRail` — because that rail's destinations (Flow, Run, Play, Tokens, Manifest, Source Control, History) now live on the activity bar. Selecting a sidebar-view activity SHALL show its view; selecting the active view's activity again SHALL toggle the primary sidebar's visibility.
+The activity bar SHALL be the IDE's sole navigation. It SHALL offer: sidebar-view activities (Explorer, Source Control, Settings) that render in the primary sidebar, and working-area activities (Flow/Pipeline, Run, Playground, Tokens, Manifest, History) that take over the working area. The reused shared panels SHALL render **chromeless** in the IDE — without their internal `ProjectRail` — because that rail's destinations (Flow, Run, Play, Tokens, Manifest, Source Control, History) now live on the activity bar. Selecting a sidebar-view activity SHALL show its view; selecting the active view's activity again SHALL toggle the primary sidebar's visibility.
 
 #### Scenario: Switch to Source Control
 - **WHEN** the user clicks the Source Control activity

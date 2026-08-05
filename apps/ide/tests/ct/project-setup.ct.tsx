@@ -36,3 +36,15 @@ test("offers Claude Design as its own live-link source", async ({ mount }) => {
   await expect(c.getByPlaceholder("https://claude.ai/design/p/…")).toBeVisible();
   await expect(c.getByText(/Claude Code reads the project through the design MCP/)).toBeVisible();
 });
+
+// Ported from the cockpit's design-input.ct.tsx when apps/desktop was deleted. The
+// GitHub source moved from that cockpit-only view into this shared one; ZIP and
+// Claude Design were already covered above, but GitHub was not, so this is the one
+// assertion that would otherwise have been lost with the shell.
+test("offers a GitHub-repo source that collects the repo url + branch", async ({ mount }) => {
+  const c = await mount(<ProjectSetup {...props} />, { hooksConfig: { mock: {} } });
+  await c.getByRole("button", { name: /GitHub Repository/ }).click();
+  await expect(c.getByText("GitHub repository URL")).toBeVisible();
+  await expect(c.getByPlaceholder("https://github.com/org/design-system")).toBeVisible();
+  await expect(c.getByText("Branch")).toBeVisible();
+});

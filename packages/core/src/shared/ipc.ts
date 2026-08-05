@@ -665,7 +665,7 @@ export const ipcContract = {
   "canvas:saveScene": { request: z.object({ projectPath: z.string(), scene: z.string() }), response: z.void() },
   "canvas:exportSketch": { request: z.object({ projectPath: z.string(), frameId: z.string(), dataUrl: z.string() }), response: z.string() },
   // Open (or focus) the separate Draw window for a project. The window itself is created by the app SHELL
-  // (apps/ide, apps/desktop) via a registered opener — core just relays the request. Request = projectPath.
+  // (`apps/ide`) via a registered opener — core just relays the request. Request = projectPath.
   "draw:open": { request: z.string(), response: z.void() },
   // Draw generate: persist the sketch to the graph, select the grounding subgraph, and build the
   // sketch→component prompt (the Draw window runs it with the sketch PNG attached). Then record the result.

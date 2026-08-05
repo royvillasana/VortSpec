@@ -18,11 +18,11 @@ The assistant chat SHALL be seeded with the currently open file and the live pre
 - **THEN** the run is seeded with the open file's path (and preview URL when present) as context
 
 ### Requirement: Spec-first gates hold in the IDE
-Generating or altering gated artifacts (briefs, specs, `DESIGN.md`) from the IDE SHALL require the same explicit user approval as the cockpit, recorded through the shared approval path. No gated artifact SHALL advance downstream without a recorded approval.
+Generating or altering gated artifacts (briefs, specs, `DESIGN.md`) from the IDE SHALL require explicit user approval, recorded through the shared approval path. No gated artifact SHALL advance downstream without a recorded approval.
 
 #### Scenario: Artifact change requires approval
 - **WHEN** an IDE run produces or modifies a gated artifact
-- **THEN** the user must explicitly approve it before implementation proceeds, and the approval is recorded exactly as in the cockpit
+- **THEN** the user must explicitly approve it before implementation proceeds, and the approval is recorded through the shared approval path
 
 ### Requirement: Runs are observable and resumable
 IDE runs SHALL be observable (holistic progress with surfaced blockers) and resumable across interruptions and app restarts, reusing the shared run-manager/recorder.

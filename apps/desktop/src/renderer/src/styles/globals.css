@@ -1,7 +1,0 @@
-/* The VortSpec design system (Tailwind + vs-* tokens + base + animations) lives
-   in @vortspec/ui so the cockpit and the IDE share one source of truth. */
-@import "@vortspec/ui/styles/tokens.css";
-
-/* Scan this app's own renderer for utility classes (Tailwind's automatic
-   detection covers files at the Vite root, but be explicit). */
-@source "../";

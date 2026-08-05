@@ -23,24 +23,24 @@
 
 ## 4. Delete the shell
 
-- [ ] 4.1 Delete `apps/desktop/` (source, config, tests, `package.json`)
-- [ ] 4.2 Confirm the pnpm `apps/*` glob and turbo need no edit; run a clean `pnpm install --frozen-lockfile` (the lockfile loses the workspace entry)
-- [ ] 4.3 Update stale path references: `docs/design/README.md`, the "both app shells" comments in `packages/core/src/main/index.ts` and `packages/core/src/shared/ipc.ts`, and `apps/ide/tests/ct/README.md`
-- [ ] 4.4 Drop the lockstep `apps/desktop` version bump from the release flow and its docs
+- [x] 4.1 Delete `apps/desktop/` (source, config, tests, `package.json`)
+- [x] 4.2 Confirm the pnpm `apps/*` glob and turbo need no edit; run a clean `pnpm install --frozen-lockfile` (the lockfile loses the workspace entry)
+- [x] 4.3 Update stale path references: `docs/design/README.md`, the "both app shells" comments in `packages/core/src/main/index.ts` and `packages/core/src/shared/ipc.ts`, and `apps/ide/tests/ct/README.md`
+- [x] 4.4 Drop the lockstep `apps/desktop` version bump from the release flow and its docs
 
 ## 5. Amend the specs
 
-- [ ] 5.1 `integrated-terminal` — rename "Interactive terminal in both apps" → "in the IDE"; drop the cockpit scenario; keep the core/ui split with its real justification
-- [ ] 5.2 `shared-core` — rename the two "both apps"/"both shells" requirements; **remove** "Cockpit behavior is unchanged by the extraction" (a completed one-time migration)
-- [ ] 5.3 `ide-shell` — the IDE is no longer defined by contrast with a second app; fix the scenario that claims the pipeline ships a *signed* cockpit dmg "alongside" the IDE, which is already false
-- [ ] 5.4 `ide-guided-flow` — state the intake/foundation behaviour directly instead of as parity with the cockpit
-- [ ] 5.5 Sweep the remaining 15 specs that mention the cockpit for references that become false, not merely stale
-- [ ] 5.6 `openspec validate --specs` passes
+- [x] 5.1 `integrated-terminal` — rename "Interactive terminal in both apps" → "in the IDE"; drop the cockpit scenario; keep the core/ui split with its real justification
+- [x] 5.2 `shared-core` — rename the two "both apps"/"both shells" requirements; **remove** "Cockpit behavior is unchanged by the extraction" (a completed one-time migration)
+- [x] 5.3 `ide-shell` — the IDE is no longer defined by contrast with a second app; fix the scenario that claims the pipeline ships a *signed* cockpit dmg "alongside" the IDE, which is already false
+- [x] 5.4 `ide-guided-flow` — state the intake/foundation behaviour directly instead of as parity with the cockpit
+- [x] 5.5 Sweep the remaining 15 specs that mention the cockpit for references that become false, not merely stale
+- [x] 5.6 `openspec validate --specs` passes
 
 ## 6. Verify end to end
 
-- [ ] 6.1 `check-types` 6/6 (now 4 tasks, not 6 — one fewer package)
-- [ ] 6.2 Full unit suite green
-- [ ] 6.3 IDE CT green, with the migrated tests included
-- [ ] 6.4 Build the IDE (`pnpm --filter @vortspec/ide dist`) and confirm the packaged app still opens a window — the smoke test's launch assertion must pass with the cockpit gone
+- [x] 6.1 `check-types` 6/6 (now 4 tasks, not 6 — one fewer package)
+- [x] 6.2 Full unit suite green
+- [x] 6.3 IDE CT green, with the migrated tests included
+- [x] 6.4 Build the IDE (`pnpm --filter @vortspec/ide dist`) and confirm the packaged app still opens a window — the smoke test's launch assertion must pass with the cockpit gone
 - [ ] 6.5 `/opsx:sync delete-cockpit-shell`, then archive
