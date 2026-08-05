@@ -113,7 +113,7 @@ import {
   findLatestArtifact,
 } from "./flow/flow-manager";
 import { getRunHistory } from "./flow/history-reader";
-import { checkForUpdate } from "./update/update-checker";
+import { checkForUpdate, readDismissal, dismissVersion } from "./update/update-checker";
 import {
   getManifest,
   saveManifest,
@@ -207,7 +207,9 @@ const handlers: Record<IpcChannel, Handler> = {
   // out/main; the IDE emits the guest preload beside it at out/preload/guest.mjs.
   "system:guestPreloadUrl": () => pathToFileURL(join(here(), "../preload/guest.mjs")).href,
   "system:clipboardImage": (() => readClipboardImage()) as Handler,
-  "system:checkUpdate": () => checkForUpdate(),
+  "system:checkUpdate": ((req: { force: boolean }) => checkForUpdate(req)) as Handler,
+  "system:getUpdateDismissal": () => readDismissal(),
+  "system:dismissUpdate": ((version: string) => dismissVersion(version)) as Handler,
 
   "env:check": () => checkEnvironment(),
   "env:verifyLogin": () => verifyClaudeLogin(),

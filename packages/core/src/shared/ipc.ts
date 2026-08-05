@@ -33,7 +33,11 @@ import { canvasEditSchema, canvasWriteResultSchema } from "./canvas-edit";
 import { flowSchema, stageStatusSchema, runHistoryResultSchema } from "./flow";
 import { devServerStatusSchema } from "./dev-server";
 import { manifestResultSchema, manifestVersionsResultSchema } from "./manifest";
-import { updateInfoSchema } from "./update";
+import {
+  updateInfoSchema,
+  updateCheckRequestSchema,
+  updateDismissalSchema,
+} from "./update";
 import { commentThreadSchema, commentCollaboratorSchema, notifyResultSchema } from "./comment";
 import { routeDiscoverySchema } from "./routes";
 export type { RouteDiscovery, RouteNode, RouterKind } from "./routes";
@@ -319,7 +323,11 @@ export const ipcContract = {
     request: z.void(),
     response: z.object({ path: z.string(), dataUrl: z.string() }).nullable(),
   },
-  "system:checkUpdate": { request: z.void(), response: updateInfoSchema },
+  // `force: true` bypasses the throttle — a user who clicks "Check for updates"
+  // and receives a cached answer has been told something untrue.
+  "system:checkUpdate": { request: updateCheckRequestSchema, response: updateInfoSchema },
+  "system:getUpdateDismissal": { request: z.void(), response: updateDismissalSchema },
+  "system:dismissUpdate": { request: z.string(), response: updateDismissalSchema },
 
   "env:check": { request: z.void(), response: envReportSchema },
   "env:verifyLogin": { request: z.void(), response: envCheckSchema },

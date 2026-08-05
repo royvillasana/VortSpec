@@ -8,7 +8,15 @@
  * it cannot drift. Return types are derived from the zod IPC contract
  * (`IpcResponse<channel>`), so they cannot drift from the handlers either.
  */
-import type { IpcResponse, StageStatus, SetupAnswers, FileSnapshot, Profile, PushPlan } from "./ipc";
+import type {
+  IpcRequest,
+  IpcResponse,
+  StageStatus,
+  SetupAnswers,
+  FileSnapshot,
+  Profile,
+  PushPlan,
+} from "./ipc";
 import type { DrawGraph } from "./draw-graph";
 import type { DrawSketchReady } from "./draw-events";
 import type { CommentThread } from "./comment";
@@ -34,7 +42,16 @@ export interface VortSpecApi {
   clipboardImage(): Promise<IpcResponse<"system:clipboardImage">>;
   /** Absolute path of a File dragged in from the OS (Finder). Synchronous. */
   getPathForFile(file: File): string;
-  checkUpdate(): Promise<IpcResponse<"system:checkUpdate">>;
+  /** Check for a newer release. `force` skips the throttle (the Settings button). */
+  checkUpdate(
+    req: IpcRequest<"system:checkUpdate">,
+  ): Promise<IpcResponse<"system:checkUpdate">>;
+  /** The version whose update prompt the user dismissed, if any. */
+  getUpdateDismissal(): Promise<IpcResponse<"system:getUpdateDismissal">>;
+  /** Suppress the update prompt for this version only. */
+  dismissUpdate(
+    version: IpcRequest<"system:dismissUpdate">,
+  ): Promise<IpcResponse<"system:dismissUpdate">>;
 
   // environment
   checkEnvironment(): Promise<IpcResponse<"env:check">>;

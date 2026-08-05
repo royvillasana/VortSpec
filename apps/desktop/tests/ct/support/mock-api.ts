@@ -18,6 +18,7 @@ import type {
   VerificationResult,
   IdeAction,
   IdeActionResult,
+  UpdateInfo,
 } from "@vortspec/core/ipc";
 
 /** Rows the mock design system exposes; mutated by a token write so a re-read shows the new value. */
@@ -58,6 +59,12 @@ function library() {
 }
 
 export interface MockConfig {
+  /** The result the launch/manual update check resolves to. Defaults to unreachable. */
+  update?: UpdateInfo;
+  /** Delay (ms) before checkUpdate() settles — for asserting the UI is usable meanwhile. */
+  updateDelayMs?: number;
+  /** A version already dismissed on a previous launch. */
+  dismissedUpdate?: string | null;
   tokens?: InspectorTokensResult;
   components?: InspectorComponentsResult;
   figmaMcp?: EnvCheck;
@@ -230,6 +237,9 @@ const RUNNING: DevServerStatus = {
 };
 
 export function installMockVortspec(cfg: MockConfig = {}): void {
+  // Dismissal is stateful within a test: dismissUpdate() must be observable by a
+  // later getUpdateDismissal(), the same way the real userData store behaves.
+  let dismissed: string | null = cfg.dismissedUpdate ?? null;
   const eventSubs = new Set<(e: { runId: string; event: RunEvent }) => void>();
   const rawSubs = new Set<(e: { runId: string; line: string }) => void>();
   const devSubs = new Set<(e: { projectPath: string; status: DevServerStatus }) => void>();
@@ -283,13 +293,28 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
     guestPreloadUrl: async () => "",
     clipboardImage: async () => cfg.clipboardImage ?? null,
     getPathForFile: (file: File) => (file as unknown as { __path?: string }).__path ?? file.name,
-    checkUpdate: async () => ({
-      current: "0.1.0",
-      latest: null,
-      hasUpdate: false,
-      releaseUrl: null,
-      downloadUrl: null,
-    }),
+    checkUpdate: async () => {
+      if (cfg.updateDelayMs) await new Promise((r) => setTimeout(r, cfg.updateDelayMs));
+      return (
+        cfg.update ?? {
+          current: "0.1.0",
+          latest: null,
+          hasUpdate: false,
+          // Default is "we never found out", not "up to date" — a test that
+          // wants the up-to-date state has to say so.
+          reachable: false,
+          releaseUrl: null,
+          downloadUrl: null,
+          downloadArch: null,
+          checkedAt: null,
+        }
+      );
+    },
+    getUpdateDismissal: async () => ({ dismissedVersion: dismissed }),
+    dismissUpdate: async (version: string) => {
+      dismissed = version;
+      return { dismissedVersion: version };
+    },
     checkEnvironment: async () => cfg.env ?? { checks: [], ready: true },
     verifyLogin: async () => ({ id: "claude-login", label: "Claude", status: "pass" }),
     verifyFigmaMcp: async () =>

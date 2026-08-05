@@ -12,6 +12,7 @@ import { Verification } from "./views/Verification";
 import { History } from "./views/History";
 import { DesignManifest } from "@vortspec/ui/DesignManifest";
 import { Profile } from "@vortspec/ui/Profile";
+import { AppUpdateBanner } from "@vortspec/ui/AppUpdateBanner";
 import { SourceControl } from "@vortspec/ui/SourceControl";
 import { RunApp } from "@vortspec/ui/RunApp";
 import { Tasks } from "@vortspec/ui/Tasks";
@@ -108,7 +109,7 @@ export default function App(): React.JSX.Element {
   // blocks startup, tolerant of being offline). Notify-only — the user chooses
   // to download; the ad-hoc-signed build can't auto-install macOS updates yet.
   useEffect(() => {
-    void api.checkUpdate().then((info) => {
+    void api.checkUpdate({ force: false }).then((info) => {
       if (info.hasUpdate) setUpdate(info);
     });
   }, []);
@@ -196,7 +197,7 @@ export default function App(): React.JSX.Element {
         }}
       />
       {update && (
-        <UpdateBanner
+        <AppUpdateBanner
           info={update}
           onDownload={() =>
             void api.openInstall(update.downloadUrl ?? update.releaseUrl ?? "")
@@ -428,48 +429,6 @@ export default function App(): React.JSX.Element {
         </div>
       )}
       </div>
-    </div>
-  );
-}
-
-/** A quiet, dismissible bar shown when a newer release is available on GitHub. */
-function UpdateBanner({
-  info,
-  onDownload,
-  onNotes,
-  onDismiss,
-}: {
-  info: UpdateInfo;
-  onDownload: () => void;
-  onNotes: () => void;
-  onDismiss: () => void;
-}): React.JSX.Element {
-  return (
-    <div className="flex items-center gap-3 border-b border-vs-accent/40 bg-vs-accent-muted px-6 py-2 text-[13px]">
-      <span className="inline-block h-1.5 w-1.5 rounded-full bg-vs-accent" />
-      <span className="text-vs-text-primary">
-        VortSpec <span className="font-mono">{info.latest}</span> is available
-        <span className="text-vs-text-muted"> — you have {info.current}</span>
-      </span>
-      <div className="flex-1" />
-      {info.releaseUrl && (
-        <button onClick={onNotes} className="text-vs-text-secondary hover:text-vs-text-primary">
-          What&rsquo;s new
-        </button>
-      )}
-      <button
-        onClick={onDownload}
-        className="rounded-md bg-vs-accent px-3 py-1 text-xs font-medium text-white hover:brightness-110"
-      >
-        Download
-      </button>
-      <button
-        onClick={onDismiss}
-        title="Dismiss"
-        className="rounded px-1.5 py-1 leading-none text-vs-text-muted hover:text-vs-text-primary"
-      >
-        ×
-      </button>
     </div>
   );
 }
