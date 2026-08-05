@@ -101,6 +101,24 @@ describe("DOM edits reach the document", () => {
     expect(docToLightHtml(doc)).not.toContain("data-vs-id");
   });
 
+  it("never lets an inline text edit write contenteditable into the page", async () => {
+    // The guest sets contenteditable on an element for the duration of an inline text edit, and
+    // serializeDom strips it before saving. Without the same exclusion here, editing any text would
+    // permanently write contenteditable="true" into the file — quietly, for everyone.
+    const { doc, container } = setup();
+    const p = container.querySelector("p")!;
+    p.setAttribute("contenteditable", "true");
+    await settle();
+    p.firstChild!.nodeValue = "edited";
+    await settle();
+    p.removeAttribute("contenteditable");
+    await settle();
+
+    const html = docToLightHtml(doc);
+    expect(html).toContain("<p>edited</p>");
+    expect(html).not.toContain("contenteditable");
+  });
+
   it("inserts at the right index when unmapped nodes are in the way", async () => {
     // An overlay node injected by the canvas is not part of the page. If it were counted, an insert
     // after it would land one position late.

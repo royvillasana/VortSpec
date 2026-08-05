@@ -4,8 +4,8 @@
 
 - [x] 1.1 Model a light page as a Yjs document (`Y.XmlFragment`), and write a round-trip test: HTML → CRDT → HTML is byte-identical for a set of real `.vortspec/light-pages/*.html` fixtures
 - [x] 1.2 Build the two-way CRDT↔DOM binding: local DOM mutations produce CRDT ops, CRDT ops apply to the DOM. Both directions, no echo loop
-- [ ] 1.2b Wire that binding into the guest preload and the host bridge. Split out from 1.2: the binding is verifiable in isolation, the wiring is not — it touches the webview, which is the app's most fragile seam (a rendering crash there is reported as a selector error), so it needs the app running to verify rather than a green test
-- [ ] 1.3 Change `writeLightPage` to serialize from converged state instead of `bridge.serializeDom()`
+- [x] 1.2b Wire that binding into the guest preload and the host bridge. Split out from 1.2: the binding is verifiable in isolation, the wiring is not — it touches the webview, which is the app's most fragile seam (a rendering crash there is reported as a selector error), so it needs the app running to verify rather than a green test
+- [x] 1.3 Change `writeLightPage` to serialize from converged state instead of `bridge.serializeDom()`
 - [x] 1.4 Prove the property the whole feature rests on: two documents editing *different* elements concurrently converge with both edits present — and the same test against today's snapshot-write to show it fails there
 - [ ] 1.5 Verify single-user editing is unchanged: instant edits, undo, and persistence behave exactly as before, with the existing CT suites green
 

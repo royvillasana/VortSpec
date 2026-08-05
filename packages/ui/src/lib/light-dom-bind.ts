@@ -279,7 +279,7 @@ function applyRecord(
   if (record.type === "attributes") {
     if (!(targetY instanceof Y.XmlElement)) return;
     const name = record.attributeName;
-    if (!name || name === FMT_ATTR || name.startsWith("data-vs")) return; // bridge instrumentation
+    if (!name || isInstrumentationAttr(name)) return;
     const value = (record.target as Element).getAttribute(name);
     // Idempotent on purpose: a mutation record fires even when an attribute is set to the value it
     // already had, so writing unconditionally here is what would turn one remote change into an
@@ -322,6 +322,20 @@ function applyRecord(
       targetY.insert(index, [built as never]);
     }
   }
+}
+
+/**
+ * Attributes the canvas puts on the page that are not part of it, and must never reach the document.
+ *
+ * `contenteditable` is the one that is easy to miss and expensive to get wrong: the guest sets it on
+ * an element for the duration of an inline text edit, and `serializeDom` strips it before saving. If
+ * the CRDT kept it, editing any text would permanently write `contenteditable="true"` into the file —
+ * quietly, and for everyone.
+ *
+ * This list must agree with what `serializeDom` strips (see `useInspectorBridge.ts`).
+ */
+function isInstrumentationAttr(name: string): boolean {
+  return name === FMT_ATTR || name.startsWith("data-vs") || name === "contenteditable";
 }
 
 /**
@@ -375,7 +389,7 @@ function toY(node: Node, link: (y: YNode, node: Node) => void, document: Doc): Y
   const source = node as Element;
   const el = new Y.XmlElement(source.tagName.toLowerCase());
   for (const attr of Array.from(source.attributes)) {
-    if (attr.name === FMT_ATTR || attr.name.startsWith("data-vs")) continue;
+    if (isInstrumentationAttr(attr.name)) continue;
     el.setAttribute(attr.name, attr.value);
   }
   link(el, node);

@@ -1,5 +1,6 @@
 import { createElement, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { docToLightHtml } from "@vortspec/core/light-doc";
 import type { DevServerStatus, Project, InspectorToken, InspectorComponent, FileSnapshot, StorybookEntry } from "@vortspec/core/ipc";
 import { ViewHeader } from "@vortspec/ui/ViewHeader";
 import { buildSelection, alignToCss, flowToCss, gapModeCss } from "@vortspec/core/selection-builder";
@@ -1682,7 +1683,15 @@ export function RunApp({
     lightPersistTimer.current = window.setTimeout(() => {
       const name = lightPageRef.current;
       if (!name) return;
-      void bridge.serializeDom().then((html) => {
+      // Write from the CONVERGED document when the page is live (live-playground, task 1.3), and
+      // from the DOM snapshot when it is not. The distinction is the whole point of the change:
+      // serializing the DOM writes one participant's entire copy of the page over the file, so with
+      // two editors the last one to stop typing erases the other. Writing from the document writes
+      // what everyone's edits merged into. With a single editor the two produce the same bytes,
+      // which is what makes this safe to switch on per page rather than all at once.
+      const live = bridge.live.adopted ? bridge.liveDoc.current : null;
+      const source = live ? Promise.resolve(docToLightHtml(live)) : bridge.serializeDom();
+      void source.then((html) => {
         if (html == null) return;
         // Persist the edit, then refresh generation status: editing a page that was already generated
         // makes it "stale" (its framework code no longer matches) → the row icon flips to Update.
