@@ -1,7 +1,8 @@
 import { app } from "electron";
 import { existsSync } from "node:fs";
 import { readdir } from "node:fs/promises";
-import { join } from "node:path";
+import { join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 import { execFileSafe } from "../util/exec";
 
 /**
@@ -16,7 +17,7 @@ import { execFileSafe } from "../util/exec";
 export function walkthroughArchivePath(): string {
   return app.isPackaged
     ? join(process.resourcesPath, "walkthrough.tar.gz")
-    : join(__dirname, "../../resources/walkthrough.tar.gz");
+    : join(dirname(fileURLToPath(import.meta.url)), "../../resources/walkthrough.tar.gz");
 }
 
 /**

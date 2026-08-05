@@ -1,8 +1,25 @@
 import { app, shell, BrowserWindow, session } from "electron";
-import { join } from "path";
+import { join, dirname } from "path";
+import { fileURLToPath } from "node:url";
 import { electronApp, optimizer, is } from "@electron-toolkit/utils";
 import { registerIpc, setDrawWindowOpener, stopAllDevServers, stopAllWatchers, stopAllTerminals, stopIdeMcp, fixGuiPath, ensureManagedRuntime } from "@vortspec/core/main";
 import { installMenu } from "./menu";
+
+/**
+ * `__dirname`, derived here rather than relied upon.
+ *
+ * This app is `"type": "module"`, so the built main process is ESM and
+ * `__dirname` does not exist. It only ever worked because the bundler injected
+ * `const __dirname = import.meta.dirname` for us — and in v0.1.35 that shim
+ * moved out of module scope into a nested chunk, so every use below became a
+ * `ReferenceError`. The packaged app started, `createWindow` threw, and no
+ * window ever appeared: a release that could not launch, from a commit whose
+ * main-process source was byte-identical to the release before it.
+ *
+ * Deriving it from `import.meta.url` costs one line and cannot be moved by a
+ * bundler. Do not go back to relying on the injected shim.
+ */
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 // Show "VortSpec IDE" in the menu bar / About / Quit instead of Electron's
 // default. Renaming the app moves userData (appData/<name>), which would strand

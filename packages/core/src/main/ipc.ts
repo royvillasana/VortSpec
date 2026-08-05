@@ -1,7 +1,16 @@
 import { ipcMain, shell, app, BrowserWindow, type WebContents } from "electron";
 import { homedir } from "node:os";
-import { join } from "node:path";
-import { pathToFileURL } from "node:url";
+import { join, dirname } from "node:path";
+import { pathToFileURL, fileURLToPath } from "node:url";
+
+/**
+ * This module is bundled into an ESM main process (`"type": "module"`), where
+ * `__dirname` does not exist. It only ever resolved because the bundler injected
+ * a shim — and when that shim moved out of module scope, the packaged v0.1.35
+ * app threw `ReferenceError: __dirname is not defined` and opened no window at
+ * all. Derive it instead; a bundler cannot move this.
+ */
+const here = (): string => dirname(fileURLToPath(import.meta.url));
 import { ipcContract, type IpcChannel } from "@vortspec/core/ipc";
 import { checkEnvironment, verifyClaudeLogin, verifyFigmaMcp, addFigmaMcp } from "./environment/env-manager";
 import { installGit, installClaudeCli } from "./environment/base-install";
@@ -194,9 +203,9 @@ const handlers: Record<IpcChannel, Handler> = {
   "system:isElectron": () => true,
   "system:getVersion": () => app.getVersion(),
   "system:homeDir": () => homedir(),
-  // Core is bundled into the app's main process, so __dirname is the app's
+  // Core is bundled into the app's main process, so `here` is the app's
   // out/main; the IDE emits the guest preload beside it at out/preload/guest.mjs.
-  "system:guestPreloadUrl": () => pathToFileURL(join(__dirname, "../preload/guest.mjs")).href,
+  "system:guestPreloadUrl": () => pathToFileURL(join(here(), "../preload/guest.mjs")).href,
   "system:clipboardImage": (() => readClipboardImage()) as Handler,
   "system:checkUpdate": () => checkForUpdate(),
 
