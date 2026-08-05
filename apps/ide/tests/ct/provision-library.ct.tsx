@@ -35,8 +35,7 @@ const unprovisioned = {
   tokens: TOKENS,
 };
 
-// QUARANTINED [REGISTRY] — see QUARANTINE.md
-test.fixme("a library project with no components nudges to provision, not to rebuild", async ({ mount }) => {
+test("a library project with no components nudges to provision, not to rebuild", async ({ mount }) => {
   const c = await mount(<GuidedFlow {...flowProps} />, { hooksConfig: { mock: unprovisioned } });
   // The un-provisioned empty state names the library and offers provisioning (the CTA
   // appears both in the action bar and the empty-state card).
@@ -47,7 +46,7 @@ test.fixme("a library project with no components nudges to provision, not to reb
   await expect(c.getByRole("button", { name: /Build only|Build & verify the rest/ })).toHaveCount(0);
 });
 
-// QUARANTINED [REGISTRY] — see QUARANTINE.md
+// QUARANTINED [ASSERT] — see QUARANTINE.md
 test.fixme("clicking Provision runs the /provision-library flow, not a component build", async ({ mount }) => {
   const c = await mount(<GuidedFlow {...flowProps} />, { hooksConfig: { mock: unprovisioned } });
   await c.getByRole("button", { name: /Provision shadcn/i }).first().click();
@@ -60,8 +59,7 @@ test.fixme("clicking Provision runs the /provision-library flow, not a component
   expect(provisionRun).toContain("do NOT hand-build components the library already ships");
 });
 
-// QUARANTINED [REGISTRY] — see QUARANTINE.md
-test.fixme("a provisioned library shows the roster + a Re-provision affordance", async ({ mount }) => {
+test("a provisioned library shows the roster + a Re-provision affordance", async ({ mount }) => {
   const provisioned = {
     projectConfig: { designSource: "library", componentLibrary: "shadcn" },
     components: {

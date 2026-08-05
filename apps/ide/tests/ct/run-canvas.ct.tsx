@@ -175,7 +175,7 @@ const barProps = {
   onFrameChange: () => {},
 };
 
-// QUARANTINED [REGISTRY] — see QUARANTINE.md
+// QUARANTINED [TIMEOUT] — see QUARANTINE.md
 test.fixme("a failed bridge disables the modes that need it, but never Interact", async ({ mount }) => {
   const c = await mount(
     <CanvasToolbar {...barProps} bridgeReady={false} bridgeError="the page blocked the inspector script" />,
@@ -193,7 +193,7 @@ test.fixme("a failed bridge disables the modes that need it, but never Interact"
   );
 });
 
-// QUARANTINED [REGISTRY] — see QUARANTINE.md
+// QUARANTINED [TIMEOUT] — see QUARANTINE.md
 test.fixme("an attached bridge enables every mode", async ({ mount }) => {
   const c = await mount(<CanvasToolbar {...barProps} bridgeReady bridgeError={null} />);
   await expect(c.getByTestId("canvas-bridge-status")).toHaveAttribute("data-state", "live");
@@ -308,8 +308,7 @@ const ROSTER: InspectorComponent[] = [
   comp("Card", "molecule"),
 ];
 
-// QUARANTINED [REGISTRY] — see QUARANTINE.md
-test.fixme("assign dialog: lists the whole roster (recommended first) and assigns any component to all matches", async ({ mount }) => {
+test("assign dialog: lists the whole roster (recommended first) and assigns any component to all matches", async ({ mount }) => {
   const assigned: { name: string; allSimilar: boolean }[] = [];
   const c = await mount(
     <AssignDialog
@@ -333,8 +332,7 @@ test.fixme("assign dialog: lists the whole roster (recommended first) and assign
   expect(assigned).toEqual([{ name: "ButtonGroup", allSimilar: true }]);
 });
 
-// QUARANTINED [REGISTRY] — see QUARANTINE.md
-test.fixme("assign dialog: a recognized component shows its badge but still lets you reassign", async ({ mount }) => {
+test("assign dialog: a recognized component shows its badge but still lets you reassign", async ({ mount }) => {
   const c = await mount(
     <AssignDialog recognized="Card" recommended={null} components={ROSTER} onAssign={() => {}} onClose={() => {}} />,
   );
@@ -369,8 +367,7 @@ test("the Design panel header can open the assign dialog on demand", async ({ mo
   expect(opened).toBe(1);
 });
 
-// QUARANTINED [REGISTRY] — see QUARANTINE.md
-test.fixme("a dialog is draggable by its header", async ({ mount, page }) => {
+test("a dialog is draggable by its header", async ({ mount, page }) => {
   await mount(
     <AssignDialog recognized="Card" recommended={null} components={ROSTER} onAssign={() => {}} onClose={() => {}} />,
   );
