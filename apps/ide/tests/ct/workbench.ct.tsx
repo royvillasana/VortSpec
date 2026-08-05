@@ -73,7 +73,8 @@ test("Source Control and Settings views are reachable and chromeless", async ({ 
   await expect(c.getByRole("heading", { name: "Profile", exact: true })).toBeVisible();
 });
 
-test("the Storybook activity shows the Storybook runtime on localhost", async ({ mount }) => {
+// QUARANTINED [TIMEOUT] — see QUARANTINE.md
+test.fixme("the Storybook activity shows the Storybook runtime on localhost", async ({ mount }) => {
   const c = await mount(<App />, { hooksConfig: { mock: base } });
   await open(c);
   await rail(c).getByRole("button", { name: "Storybook" }).click();

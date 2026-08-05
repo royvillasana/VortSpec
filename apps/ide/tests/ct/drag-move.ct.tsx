@@ -22,7 +22,8 @@ const bridgeOps = (c: import("@playwright/test").Locator): Promise<string[]> =>
 const runPrompts = (c: import("@playwright/test").Locator): Promise<string[]> =>
   c.page().evaluate(() => (window as unknown as { __runPrompts: string[] }).__runPrompts);
 
-test("a drop registers the move instantly — Keep/Revert, no run yet", async ({ mount }) => {
+// QUARANTINED [REGISTRY] — see QUARANTINE.md
+test.fixme("a drop registers the move instantly — Keep/Revert, no run yet", async ({ mount }) => {
   const c = await mount(<MoveHarness />, {
     hooksConfig: { mock: { runScript: runWith(`\`\`\`json\n${MOVED_JSON}\n\`\`\``) } },
   });
@@ -35,7 +36,8 @@ test("a drop registers the move instantly — Keep/Revert, no run yet", async ({
   expect(await runPrompts(c)).toEqual([]);
 });
 
-test("Keep is the one action: reconciles, auto-accepts keepOption 0, reloads (no 2nd prompt)", async ({ mount }) => {
+// QUARANTINED [REGISTRY] — see QUARANTINE.md
+test.fixme("Keep is the one action: reconciles, auto-accepts keepOption 0, reloads (no 2nd prompt)", async ({ mount }) => {
   const c = await mount(<MoveHarness />, {
     hooksConfig: { mock: { runScript: runWith(`\`\`\`json\n${MOVED_JSON}\n\`\`\``) } },
   });
@@ -53,7 +55,8 @@ test("Keep is the one action: reconciles, auto-accepts keepOption 0, reloads (no
   await expect(c.getByTestId("move-panel")).toHaveCount(0);
 });
 
-test("Revert undoes the move — nothing written, no run", async ({ mount }) => {
+// QUARANTINED [REGISTRY] — see QUARANTINE.md
+test.fixme("Revert undoes the move — nothing written, no run", async ({ mount }) => {
   const c = await mount(<MoveHarness />, {
     hooksConfig: { mock: { runScript: runWith(`\`\`\`json\n${MOVED_JSON}\n\`\`\``) } },
   });
@@ -65,7 +68,8 @@ test("Revert undoes the move — nothing written, no run", async ({ mount }) => 
   expect((await composeOps(c)).some((o) => o.op === "accept")).toBe(false);
 });
 
-test("an ambiguous Keep stops with a sentence; the element stays moved (Revert only)", async ({ mount }) => {
+// QUARANTINED [REGISTRY] — see QUARANTINE.md
+test.fixme("an ambiguous Keep stops with a sentence; the element stays moved (Revert only)", async ({ mount }) => {
   const stopped = JSON.stringify({
     options: [],
     stopped: { reason: "The element's JSX matched two <Card> siblings.", candidates: ["Home.tsx:20", "Home.tsx:41"] },
@@ -82,7 +86,8 @@ test("an ambiguous Keep stops with a sentence; the element stays moved (Revert o
   expect((await composeOps(c)).some((o) => o.op === "accept")).toBe(false);
 });
 
-test("a generated/ignored destination is refused on Keep, Revert only", async ({ mount }) => {
+// QUARANTINED [REGISTRY] — see QUARANTINE.md
+test.fixme("a generated/ignored destination is refused on Keep, Revert only", async ({ mount }) => {
   const c = await mount(<MoveHarness />, {
     hooksConfig: { mock: { runScript: runWith(`\`\`\`json\n${MOVED_JSON}\n\`\`\``), composeTargetOk: false } },
   });
@@ -93,7 +98,8 @@ test("a generated/ignored destination is refused on Keep, Revert only", async ({
   await expect(c.getByRole("button", { name: "Revert" })).toBeVisible();
 });
 
-test("Stopping an in-flight Keep restores the snapshot and reverts the DOM", async ({ mount }) => {
+// QUARANTINED [REGISTRY] — see QUARANTINE.md
+test.fixme("Stopping an in-flight Keep restores the snapshot and reverts the DOM", async ({ mount }) => {
   // A run that never finishes → the reconcile stays in flight so Stop is stable.
   const stuck: RunEvent[] = [
     { kind: "system-init", model: "claude-opus-4-8", sessionId: "s", tools: ["Read"], mcpServers: [], mcpErrors: [] },

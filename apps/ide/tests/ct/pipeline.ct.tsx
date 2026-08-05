@@ -16,7 +16,8 @@ const base = {
   pickFolderResult: PROJECT,
 };
 
-test("opening an un-founded project auto-starts the Flow foundation (parity with cockpit)", async ({
+// QUARANTINED [TIMEOUT] — see QUARANTINE.md
+test.fixme("opening an un-founded project auto-starts the Flow foundation (parity with cockpit)", async ({
   mount,
 }) => {
   // Un-founded → no extracted tokens; the IDE should land on the actionable

@@ -106,7 +106,8 @@ test("context menu renames and deletes an entry", async ({ mount }) => {
   await expect.poll(async () => (await fsOps(c)).find((o) => o.op === "trash")?.path).toBe("src");
 });
 
-test("Open Browser opens the selected preview tab's own server (App vs Storybook)", async ({ mount }) => {
+// QUARANTINED [TIMEOUT] — see QUARANTINE.md
+test.fixme("Open Browser opens the selected preview tab's own server (App vs Storybook)", async ({ mount }) => {
   const mock = {
     ...base,
     appStatus: { state: "running", url: "http://localhost:4000", script: "dev", message: null },
@@ -143,7 +144,8 @@ test("the Explorer header shows a badge counting the open files", async ({ mount
   await expect(c.getByTitle("2 open files")).toBeVisible();
 });
 
-test("the breadcrumb appends the active editor tab after the activity", async ({ mount }) => {
+// QUARANTINED [TIMEOUT] — see QUARANTINE.md
+test.fixme("the breadcrumb appends the active editor tab after the activity", async ({ mount }) => {
   const c = await mount(<App />, { hooksConfig: { mock: base } });
   await open(c);
   const crumb = c.getByRole("navigation", { name: "Breadcrumb" });

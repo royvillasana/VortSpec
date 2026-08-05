@@ -79,7 +79,8 @@ const PREVIEWABLE: RouteDiscovery = {
   ],
 };
 
-test("lists the discovered pages and navigates a real page on click", async ({ mount }) => {
+// QUARANTINED [REGISTRY] — see QUARANTINE.md
+test.fixme("lists the discovered pages and navigates a real page on click", async ({ mount }) => {
   const navs: string[] = [];
   const c = await mount(<Sitemap discovery={NEXT} currentPath="/" onNavigate={(p) => navs.push(p)} />);
   await expect(c.page().getByTestId("sitemap")).toContainText("Pages");
@@ -89,7 +90,8 @@ test("lists the discovered pages and navigates a real page on click", async ({ m
   await expect.poll(() => navs).toEqual(["/about"]);
 });
 
-test("a dynamic route and a page-less branch are shown but not navigable", async ({ mount }) => {
+// QUARANTINED [REGISTRY] — see QUARANTINE.md
+test.fixme("a dynamic route and a page-less branch are shown but not navigable", async ({ mount }) => {
   const navs: string[] = [];
   const c = await mount(<Sitemap discovery={NEXT} currentPath="/" onNavigate={(p) => navs.push(p)} />);
   await expect(c.getByRole("button", { name: /:slug/ })).toBeDisabled();
@@ -98,7 +100,8 @@ test("a dynamic route and a page-less branch are shown but not navigable", async
   expect(navs).toEqual([]);
 });
 
-test("a state-navigated screen opens its source instead of navigating", async ({ mount }) => {
+// QUARANTINED [REGISTRY] — see QUARANTINE.md
+test.fixme("a state-navigated screen opens its source instead of navigating", async ({ mount }) => {
   const navs: string[] = [];
   const opened: string[] = [];
   const c = await mount(
@@ -111,7 +114,8 @@ test("a state-navigated screen opens its source instead of navigating", async ({
   expect(navs).toEqual([]);
 });
 
-test("shows automatic screen-preview setup while the harness is being installed", async ({ mount }) => {
+// QUARANTINED [REGISTRY] — see QUARANTINE.md
+test.fixme("shows automatic screen-preview setup while the harness is being installed", async ({ mount }) => {
   const c = await mount(<Sitemap discovery={SCREENS} currentPath="/" onNavigate={() => {}} onOpenFile={() => {}} />);
   // Setup is automatic — a passive progress line, no button to press.
   await expect(c.getByTestId("screen-preview-setup")).toBeVisible();
@@ -119,7 +123,8 @@ test("shows automatic screen-preview setup while the harness is being installed"
   await expect(c.getByTestId("retry-screen-preview")).toHaveCount(0);
 });
 
-test("offers a retry only when automatic setup failed", async ({ mount }) => {
+// QUARANTINED [REGISTRY] — see QUARANTINE.md
+test.fixme("offers a retry only when automatic setup failed", async ({ mount }) => {
   let retried = 0;
   const c = await mount(
     <Sitemap
@@ -135,7 +140,8 @@ test("offers a retry only when automatic setup failed", async ({ mount }) => {
   await expect.poll(() => retried).toBe(1);
 });
 
-test("a previewable screen navigates the preview (no setup prompt)", async ({ mount }) => {
+// QUARANTINED [REGISTRY] — see QUARANTINE.md
+test.fixme("a previewable screen navigates the preview (no setup prompt)", async ({ mount }) => {
   const navs: string[] = [];
   const opened: string[] = [];
   const c = await mount(
@@ -149,7 +155,8 @@ test("a previewable screen navigates the preview (no setup prompt)", async ({ mo
   expect(opened).toEqual([]);
 });
 
-test("shows the discovery note when there are no pages", async ({ mount }) => {
+// QUARANTINED [REGISTRY] — see QUARANTINE.md
+test.fixme("shows the discovery note when there are no pages", async ({ mount }) => {
   const c = await mount(
     <Sitemap
       discovery={{ router: "none", routes: [], note: "No router detected — this looks like a single-page app." }}

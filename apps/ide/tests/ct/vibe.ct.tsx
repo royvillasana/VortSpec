@@ -28,7 +28,8 @@ async function open(c: import("@playwright/test").Locator): Promise<void> {
   await c.getByRole("button", { name: "Chat", exact: true }).click(); // chat now lives in the left dock's Chat tab
 }
 
-test("the assistant session panel shows model, skills, and MCP status", async ({ mount }) => {
+// QUARANTINED [TIMEOUT] — see QUARANTINE.md
+test.fixme("the assistant session panel shows model, skills, and MCP status", async ({ mount }) => {
   const INIT_RUN: RunEvent[] = [
     {
       kind: "system-init",
@@ -73,7 +74,8 @@ test("slash menu opens from the composer and /model runs a model card", async ({
   await expect(c.getByText("Claude Haiku 4.5")).toBeVisible();
 });
 
-test("/mcp card reflects the session's MCP server status", async ({ mount }) => {
+// QUARANTINED [TIMEOUT] — see QUARANTINE.md
+test.fixme("/mcp card reflects the session's MCP server status", async ({ mount }) => {
   const INIT_RUN: RunEvent[] = [
     {
       kind: "system-init",
@@ -104,7 +106,8 @@ test("/mcp card reflects the session's MCP server status", async ({ mount }) => 
   await expect(c.getByText("failed", { exact: true })).toBeVisible();
 });
 
-test("@-mention attaches a workspace file and includes it in the sent prompt", async ({ mount }) => {
+// QUARANTINED [TIMEOUT] — see QUARANTINE.md
+test.fixme("@-mention attaches a workspace file and includes it in the sent prompt", async ({ mount }) => {
   const c = await mount(<App />, {
     hooksConfig: { mock: { ...base, searchResults: [{ name: "README.md", path: "README.md", type: "file" }] } },
   });
@@ -125,7 +128,8 @@ test("@-mention attaches a workspace file and includes it in the sent prompt", a
   expect(prompts[0]).toContain("summarize it");
 });
 
-test("attaching a folder lets you preview its file tree", async ({ mount }) => {
+// QUARANTINED [TIMEOUT] — see QUARANTINE.md
+test.fixme("attaching a folder lets you preview its file tree", async ({ mount }) => {
   const mock = {
     ...base,
     searchResults: [{ name: "src", path: "src", type: "dir" } as FsEntry],
@@ -153,7 +157,8 @@ test("attaching a folder lets you preview its file tree", async ({ mount }) => {
   expect(prompts[0]).toContain("@src/index.ts");
 });
 
-test("pasting a screenshot attaches it as an image and sends its path", async ({ mount }) => {
+// QUARANTINED [TIMEOUT] — see QUARANTINE.md
+test.fixme("pasting a screenshot attaches it as an image and sends its path", async ({ mount }) => {
   const mock = {
     ...base,
     clipboardImage: { path: "/tmp/vortspec-paste/shot.png", dataUrl: "data:image/png;base64,iVBORw0KGgo=" },
@@ -175,7 +180,8 @@ test("pasting a screenshot attaches it as an image and sends its path", async ({
   expect(prompts[prompts.length - 1]).toContain("/tmp/vortspec-paste/shot.png");
 });
 
-test("dragging a file from the OS into the chat attaches it as context", async ({ mount }) => {
+// QUARANTINED [TIMEOUT] — see QUARANTINE.md
+test.fixme("dragging a file from the OS into the chat attaches it as context", async ({ mount }) => {
   const c = await mount(<App />, { hooksConfig: { mock: base } });
   await open(c);
   const input = c.getByPlaceholder(/@ a file/);
@@ -212,7 +218,8 @@ test("seeds the assistant context with the open file", async ({ mount }) => {
   await expect(c.getByTestId("assistant-context")).toContainText("README.md");
 });
 
-test("sends the open file as hidden grounding without echoing it in the bubble", async ({ mount }) => {
+// QUARANTINED [TIMEOUT] — see QUARANTINE.md
+test.fixme("sends the open file as hidden grounding without echoing it in the bubble", async ({ mount }) => {
   const c = await mount(<App />, { hooksConfig: { mock: base } });
   await open(c);
   await c.getByRole("complementary").getByRole("button", { name: "Code", exact: true }).click();

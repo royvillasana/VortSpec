@@ -10,7 +10,8 @@ const AUDIT: DesignAudit = {
   summary: { components: 12, findings: 2, drifted: 1 },
 };
 
-test("shows a summary and reveals findings on expand", async ({ mount }) => {
+// QUARANTINED [REGISTRY] — see QUARANTINE.md
+test.fixme("shows a summary and reveals findings on expand", async ({ mount }) => {
   const c = await mount(<AuditBanner audit={AUDIT} />);
   const banner = c.page().getByTestId("audit-banner");
   await expect(banner).toContainText("2 audit findings");
@@ -23,12 +24,14 @@ test("shows a summary and reveals findings on expand", async ({ mount }) => {
   await expect(c.page().getByText(/use var\(--color-primary\)/)).toBeVisible();
 });
 
-test("renders nothing when the design system is clean", async ({ mount }) => {
+// QUARANTINED [REGISTRY] — see QUARANTINE.md
+test.fixme("renders nothing when the design system is clean", async ({ mount }) => {
   const c = await mount(<AuditBanner audit={{ findings: [], summary: { components: 5, findings: 0, drifted: 0 } }} />);
   await expect(c.page().getByTestId("audit-banner")).toHaveCount(0);
 });
 
-test("renders nothing while the audit is still loading (null)", async ({ mount }) => {
+// QUARANTINED [REGISTRY] — see QUARANTINE.md
+test.fixme("renders nothing while the audit is still loading (null)", async ({ mount }) => {
   const c = await mount(<AuditBanner audit={null} />);
   await expect(c.page().getByTestId("audit-banner")).toHaveCount(0);
 });

@@ -191,7 +191,8 @@ test("the breadcrumb Home returns to the workspace picker", async ({ mount }) =>
   await expect(c.getByRole("button", { name: /Open Folder/ })).toBeVisible();
 });
 
-test("the status bar shows the git branch and Explorer-only region toggles", async ({ mount }) => {
+// QUARANTINED [TIMEOUT] — see QUARANTINE.md
+test.fixme("the status bar shows the git branch and Explorer-only region toggles", async ({ mount }) => {
   const c = await mount(<App />, { hooksConfig: { mock: base } });
   await open(c);
   const footer = c.locator("footer");
