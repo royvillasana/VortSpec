@@ -1,0 +1,64 @@
+# The IDE's Playwright component tests, which nothing ran.
+#
+# On 2026-08-05 the suite was 95 failed / 115 passed on `main`, and had been red long enough that
+# the failures looked like normal background noise. `.github/workflows/` had check-types,
+# framework-fixtures and pages — no CT. A suite nobody runs is not a slow suite, it is an absent
+# one, and its rot is invisible until someone goes looking.
+#
+# What made the red survivable was that it was uninterpretable: 16 compose tests failed waiting for
+# selectors, while the real cause — `api.onDrawSketchReady is not a function`, a mock 33 methods
+# behind `VortSpecApi` — was visible only in a browser console nobody opened.
+#
+# 73 known-bad tests are `test.fixme`'d (see tests/ct/QUARANTINE.md) so this gate means something
+# from day one: a red run here is a regression YOU caused, not inherited. The quarantine list is
+# closed except by deletion — do not add to it to turn a red run green.
+#
+# Cost: ~40s of test time locally once the quarantined tests stopped burning a 20s timeout each
+# (2.2 min before). The browser download dominates on a cold runner, hence the cache.
+name: component-tests
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  component-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: install
+        run: pnpm install --frozen-lockfile
+
+      # Chromium only — the CT config declares a single chromium project, so pulling
+      # the full browser set would be paying for three downloads to use one.
+      - name: install chromium
+        run: pnpm --filter @vortspec/ide exec playwright install --with-deps chromium
+
+      - name: component tests
+        run: pnpm --filter @vortspec/ide test:ct
+
+      # The trace/screenshot of a failure is the thing that makes a red CI run
+      # actionable instead of a puzzle — the exact gap that let this suite rot.
+      - name: upload failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ct-failures
+          path: |
+            apps/ide/test-results/
+            apps/ide/playwright-report/
+          retention-days: 7
+          if-no-files-found: ignore

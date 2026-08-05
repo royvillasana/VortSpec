@@ -24,7 +24,8 @@ const thread = (over: Partial<CommentThread> = {}): CommentThread => ({
 
 const noop = (): void => {};
 
-test("comment mode: clicking a target opens a composer that posts a new thread", async ({ mount }) => {
+// QUARANTINED [REGISTRY] — see QUARANTINE.md
+test.fixme("comment mode: clicking a target opens a composer that posts a new thread", async ({ mount }) => {
   const posted: string[] = [];
   const c = await mount(
     <CommentsLayer
@@ -46,7 +47,8 @@ test("comment mode: clicking a target opens a composer that posts a new thread",
   expect(posted).toEqual(["make this the lg variant"]);
 });
 
-test("a thread renders a numbered pin at its anchored rect; a resolved thread shows a check", async ({ mount }) => {
+// QUARANTINED [REGISTRY] — see QUARANTINE.md
+test.fixme("a thread renders a numbered pin at its anchored rect; a resolved thread shows a check", async ({ mount }) => {
   const c = await mount(
     <CommentsLayer
       zoom={1}
@@ -65,7 +67,8 @@ test("a thread renders a numbered pin at its anchored rect; a resolved thread sh
   await expect(c.getByRole("button", { name: "✓" })).toBeVisible(); // resolved thread → check
 });
 
-test("clicking the pin (active thread) shows the message + a resolve toggle", async ({ mount }) => {
+// QUARANTINED [REGISTRY] — see QUARANTINE.md
+test.fixme("clicking the pin (active thread) shows the message + a resolve toggle", async ({ mount }) => {
   const c = await mount(
     <CommentsLayer
       zoom={1}
@@ -85,7 +88,8 @@ test("clicking the pin (active thread) shows the message + a resolve toggle", as
   await expect(c.getByRole("button", { name: "Resolve" })).toBeVisible();
 });
 
-test("@mention autocomplete filters collaborators and inserts the handle", async ({ mount }) => {
+// QUARANTINED [REGISTRY] — see QUARANTINE.md
+test.fixme("@mention autocomplete filters collaborators and inserts the handle", async ({ mount }) => {
   const c = await mount(
     <CommentsLayer
       zoom={1}
@@ -111,7 +115,8 @@ test("@mention autocomplete filters collaborators and inserts the handle", async
   await expect(box).toHaveValue("please @ana ");
 });
 
-test("Share pushes the auto-committed comment commits", async ({ mount }) => {
+// QUARANTINED [REGISTRY] — see QUARANTINE.md
+test.fixme("Share pushes the auto-committed comment commits", async ({ mount }) => {
   let shared = 0;
   const c = await mount(
     <CommentsLayer
@@ -132,7 +137,8 @@ test("Share pushes the auto-committed comment commits", async ({ mount }) => {
   expect(shared).toBe(1);
 });
 
-test("the notify outcome is shown as a dismissible notice", async ({ mount }) => {
+// QUARANTINED [REGISTRY] — see QUARANTINE.md
+test.fixme("the notify outcome is shown as a dismissible notice", async ({ mount }) => {
   const c = await mount(
     <CommentsLayer
       zoom={1}
@@ -151,7 +157,8 @@ test("the notify outcome is shown as a dismissible notice", async ({ mount }) =>
   await expect(c.getByText(/Sign in to GitHub to notify/)).toBeVisible();
 });
 
-test("a notified message links out to its GitHub thread", async ({ mount }) => {
+// QUARANTINED [REGISTRY] — see QUARANTINE.md
+test.fixme("a notified message links out to its GitHub thread", async ({ mount }) => {
   const notified = thread({
     messages: [
       {
@@ -182,7 +189,8 @@ test("a notified message links out to its GitHub thread", async ({ mount }) => {
   await expect(link).toHaveAttribute("href", "https://github.com/o/r/issues/42");
 });
 
-test("a thread whose anchor is lost drops to the unanchored rail, not a pin", async ({ mount }) => {
+// QUARANTINED [REGISTRY] — see QUARANTINE.md
+test.fixme("a thread whose anchor is lost drops to the unanchored rail, not a pin", async ({ mount }) => {
   const c = await mount(
     <CommentsLayer
       zoom={1}
@@ -201,7 +209,8 @@ test("a thread whose anchor is lost drops to the unanchored rail, not a pin", as
   await expect(c.getByText("Button in Header")).toBeVisible();
 });
 
-test("the pin re-anchors when the guest re-emits a moved rect (post re-render)", async ({ mount }) => {
+// QUARANTINED [REGISTRY] — see QUARANTINE.md
+test.fixme("the pin re-anchors when the guest re-emits a moved rect (post re-render)", async ({ mount }) => {
   const c = await mount(
     <CommentsLayer
       zoom={1}

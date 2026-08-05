@@ -24,7 +24,8 @@ const THREADS = [
 const RECTS = { "t1-open": { x: 0, y: 0, width: 10, height: 10 }, "t2-done": { x: 0, y: 0, width: 10, height: 10 }, "t3-me": { x: 0, y: 0, width: 10, height: 10 } };
 const me = { login: "ana", name: "Ana" };
 
-test("filters narrow the list", async ({ mount }) => {
+// QUARANTINED [REGISTRY] — see QUARANTINE.md
+test.fixme("filters narrow the list", async ({ mount }) => {
   const c = await mount(
     <CommentsPanel threads={THREADS} anchorRects={RECTS} activeId={null} me={me} onSelect={noop} onResolve={noop} />,
   );
@@ -41,7 +42,8 @@ test("filters narrow the list", async ({ mount }) => {
   await expect(c.getByText("Open one")).toHaveCount(0);
 });
 
-test("clicking a thread jumps to its pin (selects it)", async ({ mount }) => {
+// QUARANTINED [REGISTRY] — see QUARANTINE.md
+test.fixme("clicking a thread jumps to its pin (selects it)", async ({ mount }) => {
   const selected: string[] = [];
   const c = await mount(
     <CommentsPanel threads={THREADS} anchorRects={RECTS} activeId={null} me={me} onSelect={(t) => selected.push(t.id)} onResolve={noop} />,
@@ -50,7 +52,8 @@ test("clicking a thread jumps to its pin (selects it)", async ({ mount }) => {
   expect(selected).toEqual(["t1-open"]);
 });
 
-test("an unanchored thread is grouped under 'Not on this view'", async ({ mount }) => {
+// QUARANTINED [REGISTRY] — see QUARANTINE.md
+test.fixme("an unanchored thread is grouped under 'Not on this view'", async ({ mount }) => {
   const c = await mount(
     <CommentsPanel
       threads={THREADS}

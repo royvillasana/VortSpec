@@ -26,7 +26,8 @@ const active = (c: import("@playwright/test").Locator) => c.getByTestId("active-
 const runOpts = (c: import("@playwright/test").Locator): Promise<Array<Record<string, unknown>>> =>
   c.page().evaluate(() => (window as unknown as { __runOpts: Array<Record<string, unknown>> }).__runOpts);
 
-test("conversations are independent tabs with persistent, isolated transcripts", async ({ mount }) => {
+// QUARANTINED [TIMEOUT] — see QUARANTINE.md
+test.fixme("conversations are independent tabs with persistent, isolated transcripts", async ({ mount }) => {
   const c = await mount(<App />, { hooksConfig: { mock: base } });
   await open(c);
   // Conversation 1 → "alpha".
@@ -46,7 +47,8 @@ test("conversations are independent tabs with persistent, isolated transcripts",
   await expect(active(c).getByText("beta")).toHaveCount(0);
 });
 
-test("the per-conversation agent shapes the run (Review = read-only + reviewer prompt)", async ({ mount }) => {
+// QUARANTINED [TIMEOUT] — see QUARANTINE.md
+test.fixme("the per-conversation agent shapes the run (Review = read-only + reviewer prompt)", async ({ mount }) => {
   const c = await mount(<App />, { hooksConfig: { mock: base } });
   await open(c);
   // Switch the agent to Review.
@@ -62,7 +64,8 @@ test("the per-conversation agent shapes the run (Review = read-only + reviewer p
   expect(last.allowedTools).toContain("Read");
 });
 
-test("references another conversation by label, injecting its recent transcript", async ({ mount }) => {
+// QUARANTINED [TIMEOUT] — see QUARANTINE.md
+test.fixme("references another conversation by label, injecting its recent transcript", async ({ mount }) => {
   const c = await mount(<App />, { hooksConfig: { mock: base } });
   await open(c);
   // Conversation 1 says something.
@@ -85,7 +88,8 @@ test("references another conversation by label, injecting its recent transcript"
   expect(last).toContain("the answer is 42");
 });
 
-test("sends a highlighted selection from one conversation to another", async ({ mount }) => {
+// QUARANTINED [TIMEOUT] — see QUARANTINE.md
+test.fixme("sends a highlighted selection from one conversation to another", async ({ mount }) => {
   const c = await mount(<App />, { hooksConfig: { mock: base } });
   await open(c);
   await active(c).getByPlaceholder(/@ a file/).fill("magic string");

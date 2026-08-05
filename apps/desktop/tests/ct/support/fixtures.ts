@@ -66,6 +66,9 @@ export const TOKENS: InspectorTokensResult = {
 export const COMPONENTS: InspectorComponentsResult = {
   componentDir: "src/components",
   previewUrl: null,
+  // Figma-side fields, required since the design-source split; no Figma in CT.
+  figmaOnly: [],
+  figmaSynced: false,
   components: [
     {
       name: "Button",
@@ -73,8 +76,9 @@ export const COMPONENTS: InspectorComponentsResult = {
       description: "Primary action",
       file: "src/components/Button.tsx",
       props: [
-        { key: "variant", kind: "enum", options: ["primary", "ghost"], defaultValue: "primary" },
-        { key: "disabled", kind: "boolean", options: ["true", "false"] },
+        // `classes` is required by the prop type; these fixtures predate it.
+        { key: "variant", kind: "enum", options: ["primary", "ghost"], defaultValue: "primary", classes: {} },
+        { key: "disabled", kind: "boolean", options: ["true", "false"], classes: {} },
       ],
       tokens: ["color-primary", "color-text"],
       status: "verified",

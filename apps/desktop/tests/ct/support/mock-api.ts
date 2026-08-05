@@ -8,6 +8,7 @@
 import type { RunEvent } from "@vortspec/core/run-events";
 import type { CommentThread, CommentCollaborator } from "@vortspec/core/comment";
 import type { GitResult } from "@vortspec/core/git";
+import type { VortSpecApi } from "@vortspec/core/api";
 import type { DrawSketchReady } from "@vortspec/core/draw-events";
 import type {
   InspectorTokensResult,
@@ -799,7 +800,19 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
     linkToken: async () => cfg.tokens ?? { sections: [] },
     figmaComputeOrphanPushPlan: async () => ({ creates: [], updates: [], collection: "VortSpec" }),
 
-  };
+    // Every key of the real API must exist here. This object had drifted 33 methods
+    // behind `VortSpecApi`; `window.vortspec` is assigned as `unknown`, so nothing
+    // noticed for months. A panel calling a missing method threw during render, React
+    // unmounted the tree, and the tests failed on SELECTORS — the real cause never
+    // reached anyone. Adding a method to the API now fails `check-types`, which runs
+    // in CI.
+    //
+    // Deliberately `unknown` values, not `VortSpecApi`: this pins COMPLETENESS, which
+    // is the failure that actually happened. Full shape fidelity would mean correcting
+    // 33 loose fixtures (missing `detail`, `lastRunStatus`, nulls where the type says
+    // non-null) and risks changing what the passing tests assert — worth doing, but as
+    // its own change, not smuggled in here.
+  } satisfies Record<keyof VortSpecApi, unknown>;
 
   (window as unknown as { vortspec: unknown }).vortspec = api;
   (window as unknown as { __runPrompts: string[] }).__runPrompts = runPrompts;
