@@ -130,6 +130,24 @@
       @keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
 
       /* app screenshot / window mock */
+      /* Captioned demo clips. Real recordings of the app, cut to one action each and
+         published as GIF so there is no player, no autoplay policy, and no JS. The
+         caption carries the explanation so the clip does not have to be self-evident. */
+      /* 660px is the GIFs' native width — capping here keeps them pixel-exact
+         rather than upscaled and soft. */
+      .demo { margin: 26px auto 0; max-width: 660px; }
+      .demo img {
+        display: block; width: 100%; height: auto; border-radius: 12px;
+        border: 1px solid var(--border); background: #0b0c0e;
+        box-shadow: 0 24px 60px rgba(0,0,0,0.5);
+      }
+      .demo figcaption {
+        margin-top: 12px; font-size: 13.5px; line-height: 1.55; color: var(--text-3);
+        text-align: left;
+      }
+      .demo figcaption b { color: var(--text-2); font-weight: 600; }
+      @media (max-width: 760px) { .demo figcaption { font-size: 13px; } }
+
       .shot {
         margin: 8px auto 0; max-width: 940px;
         border: 1px solid var(--border); border-radius: 14px; overflow: hidden;
@@ -359,6 +377,10 @@
               <p>Watch live agent progress — tool calls, file edits, completion — as friendly activity, with the raw stream-json terminal always one click away. A lens, not a cage.</p>
             </div>
           </div>
+          <figure class="demo">
+            <img src="./media/design-system.gif" alt="Browsing design tokens grouped by colour, typography, spacing and shadow" loading="lazy" decoding="async" width="660" />
+            <figcaption><b>Your design system, as data.</b> Tokens are extracted from your source and grouped by kind — colour, typography, spacing, radius, shadow — each with its name, its value, and where it is used. This is what every generated component is built from.</figcaption>
+          </figure>
         </div>
       </section>
 
@@ -395,6 +417,10 @@
               </div>
             </div>
           </div>
+          <figure class="demo">
+            <img src="./media/playground.gif" alt="A composed screen rendering live in the VortSpec Playground" loading="lazy" decoding="async" width="660" />
+            <figcaption><b>A real screen, running.</b> Pages composed from your design system render live in the Playground — the actual app, not a mockup — so you scroll and click the thing you are about to ship.</figcaption>
+          </figure>
         </div>
       </section>
 
@@ -437,6 +463,10 @@
               <p>Ask the assistant to open a folder, clone a repository, or switch projects — every workspace-changing action asks for a one-click confirmation first. A model can advise and edit, but never silently swap your project.</p>
             </div>
           </div>
+          <figure class="demo">
+            <img src="./media/storybook.gif" alt="Browsing a component's Storybook documentation inside VortSpec" loading="lazy" decoding="async" width="660" />
+            <figcaption><b>Every component documented, not just rendered.</b> VortSpec stands up a real Storybook and embeds it: identity, the full props table, states and behaviour, accessibility notes, and the anti-patterns to avoid — the same page your AI reads before it writes anything.</figcaption>
+          </figure>
         </div>
       </section>
 
@@ -462,6 +492,10 @@
               <p>Approve the design manifest, then optionally publish to GitHub with your own git — ready to build on-brand screens for your product.</p>
             </div>
           </div>
+          <figure class="demo">
+            <img src="./media/canvas-edit.gif" alt="Selecting an element on the VortSpec canvas and editing its properties" loading="lazy" decoding="async" width="660" />
+            <figcaption><b>Edit the running screen, not a picture of it.</b> Selecting an element on the canvas reveals its layer in the tree and its real properties — layout, spacing, typography, colour — on the right. Changes are written back to the component's source, so what you nudge here is the code you ship.</figcaption>
+          </figure>
         </div>
       </section>
 
