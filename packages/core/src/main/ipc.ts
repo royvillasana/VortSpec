@@ -2,15 +2,6 @@ import { ipcMain, shell, app, BrowserWindow, type WebContents } from "electron";
 import { homedir } from "node:os";
 import { join, dirname } from "node:path";
 import { pathToFileURL, fileURLToPath } from "node:url";
-
-/**
- * This module is bundled into an ESM main process (`"type": "module"`), where
- * `__dirname` does not exist. It only ever resolved because the bundler injected
- * a shim — and when that shim moved out of module scope, the packaged v0.1.35
- * app threw `ReferenceError: __dirname is not defined` and opened no window at
- * all. Derive it instead; a bundler cannot move this.
- */
-const here = (): string => dirname(fileURLToPath(import.meta.url));
 import { ipcContract, type IpcChannel } from "@vortspec/core/ipc";
 import { checkEnvironment, verifyClaudeLogin, verifyFigmaMcp, addFigmaMcp } from "./environment/env-manager";
 import { installGit, installClaudeCli } from "./environment/base-install";
@@ -157,6 +148,15 @@ import {
 } from "./workspace/dev-server";
 import type { AgentRunOptions } from "@vortspec/core/run-events";
 import type { StageStatus } from "@vortspec/core/flow";
+
+/**
+ * This module is bundled into an ESM main process (`"type": "module"`), where
+ * `__dirname` does not exist. It only ever resolved because the bundler injected
+ * a shim — and when that shim moved out of module scope, the packaged v0.1.35
+ * app threw `ReferenceError: __dirname is not defined` and opened no window at
+ * all. Derive it instead; a bundler cannot move this.
+ */
+const here = (): string => dirname(fileURLToPath(import.meta.url));
 
 /**
  * The single place IPC handlers are registered. Every request and response is
