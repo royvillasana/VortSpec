@@ -3,6 +3,8 @@ import type { Profile as ProfileT, ProfilePreferences, UsageResult } from "@vort
 import { ViewHeader } from "@vortspec/ui/ViewHeader";
 import { api } from "../lib/api";
 import { Button, Card, Spinner } from "@vortspec/ui/ui";
+import { AppUpdateBanner } from "@vortspec/ui/AppUpdateBanner";
+import { toCheckState, type UpdateCheckState } from "@vortspec/ui/app-update";
 
 /**
  * The global Profile page (top-right avatar → here). Three sections:
@@ -235,6 +237,13 @@ export function Profile({ onBack, onSaved }: { onBack: () => void; onSaved?: (p:
           <FigmaTokenSettings />
         </section>
 
+        <section className="flex flex-col gap-3">
+          <h2 className="text-[13px] font-semibold uppercase tracking-wide text-vs-text-muted">
+            Software update
+          </h2>
+          <SoftwareUpdateSettings />
+        </section>
+
         <div className="flex items-center gap-3">
           <Button variant="primary" onClick={() => void save()}>
             Save profile
@@ -243,6 +252,86 @@ export function Profile({ onBack, onSaved }: { onBack: () => void; onSaved?: (p:
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * Software update: the running version, always visible, plus an on-demand check.
+ *
+ * Four states, kept deliberately distinct (`toCheckState`). The one that matters
+ * is `unreachable` vs `current`: both carry `hasUpdate: false`, and telling an
+ * offline user they are up to date would be asserting something never verified.
+ *
+ * The manual check passes `force: true` so it bypasses the 4-hour throttle —
+ * answering an explicit "check now" from cache would be a lie.
+ *
+ * This section is also the disclosure that checking contacts GitHub. The launch
+ * check is deliberately not defeatable (design D6), so saying so here is the
+ * only honest accounting the user gets.
+ */
+function SoftwareUpdateSettings(): React.JSX.Element {
+  const [version, setVersion] = useState<string | null>(null);
+  const [state, setState] = useState<UpdateCheckState>({ kind: "idle" });
+
+  useEffect(() => {
+    void api.getVersion().then(setVersion);
+  }, []);
+
+  async function check(): Promise<void> {
+    setState({ kind: "checking" });
+    // `checkForUpdate` never rejects — it resolves as unreachable — but a
+    // rejection here must still not leave the control stuck disabled.
+    try {
+      setState(toCheckState(await api.checkUpdate({ force: true })));
+    } catch {
+      setState({ kind: "unreachable" });
+    }
+  }
+
+  const info = state.kind === "available" ? state.info : null;
+
+  return (
+    <Card className="flex flex-col gap-3">
+      <div className="flex items-center gap-3">
+        <span className="text-[13px] text-vs-text-primary">
+          VortSpec <span className="font-mono">{version ?? "…"}</span>
+        </span>
+        <div className="flex-1" />
+        <Button variant="default" disabled={state.kind === "checking"} onClick={() => void check()}>
+          {state.kind === "checking" ? "Checking…" : "Check for updates"}
+        </Button>
+      </div>
+
+      {state.kind === "current" && (
+        <span className="text-[12px] text-vs-success">
+          ✓ You&rsquo;re on the latest version ({state.latest}).
+        </span>
+      )}
+
+      {state.kind === "unreachable" && (
+        // NOT "up to date" — we never found out.
+        <span className="text-[12px] text-vs-warning">
+          Couldn&rsquo;t reach GitHub to check. You may be offline — try again in a moment.
+        </span>
+      )}
+
+      {info && (
+        <AppUpdateBanner
+          info={info}
+          className="rounded-md border"
+          onDownload={() => void api.openInstall(info.downloadUrl ?? info.releaseUrl ?? "")}
+          onNotes={() => info.releaseUrl && void api.openInstall(info.releaseUrl)}
+          // Dismissal belongs to the initial-screen prompt. Hiding the section's
+          // own answer would defeat the point of asking.
+          onDismiss={() => setState({ kind: "idle" })}
+        />
+      )}
+
+      <span className="text-[11px] text-vs-text-muted">
+        VortSpec checks GitHub for new releases on launch and installs nothing on its own — updates
+        are downloaded and installed by you.
+      </span>
+    </Card>
   );
 }
 

@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { JSX, CSSProperties } from "react";
-import type { Project, Profile as ProfileT } from "@vortspec/core/ipc";
+import type { Project, Profile as ProfileT, UpdateInfo } from "@vortspec/core/ipc";
 import type { IdeState } from "@vortspec/core/ide-mcp";
 import { api } from "@vortspec/ui/api";
+import { AppUpdateBanner } from "@vortspec/ui/AppUpdateBanner";
+import { shouldPromptForUpdate } from "@vortspec/ui/app-update";
 import { Logo } from "@vortspec/ui/Logo";
 import type { PendingSelectionRef } from "@vortspec/ui/AssistantDock";
 import { ConversationTabs, type IncomingTask } from "@vortspec/ui/ConversationTabs";
@@ -106,6 +108,10 @@ export default function App(): JSX.Element {
   // "Clone Repository" from the native File menu routes Home and auto-opens the
   // clone input in the WorkspacePicker (it owns the repo-URL quick-input).
   const [welcomeIntent, setWelcomeIntent] = useState<"clone" | null>(null);
+  // A newer release, if the launch check found one, plus the version the user
+  // already waved away. Both null until the check settles.
+  const [update, setUpdate] = useState<UpdateInfo | null>(null);
+  const [dismissedUpdate, setDismissedUpdate] = useState<string | null>(null);
   // Bumped by File → New to ask the Explorer to start a new-file input at root.
   const [newFileSignal, setNewFileSignal] = useState(0);
   const [saveSignal, setSaveSignal] = useState(0);
@@ -127,6 +133,19 @@ export default function App(): JSX.Element {
   // The background-build indicator is dismissable — once the user hides it, keep it hidden for the rest
   // of this build session; a fresh completion notice re-shows it (reset below).
   const [buildIndicatorDismissed, setBuildIndicatorDismissed] = useState(false);
+  // Check for a newer release once on launch. Fire-and-forget by design: nothing
+  // awaits it and nothing renders behind it, so an update notice can never cost
+  // startup time — the banner just appears late if there is one. `force: false`
+  // honours the throttle; the Settings button is the one that goes live.
+  //
+  // Deliberately unconditional. There is no setting or flag to suppress this: a
+  // notice is only worth building if it reaches everyone, and the alternative is
+  // users silently stranded on old builds. See design D6.
+  useEffect(() => {
+    void api.checkUpdate({ force: false }).then(setUpdate);
+    void api.getUpdateDismissal().then((d) => setDismissedUpdate(d.dismissedVersion));
+  }, []);
+
   useEffect(() => {
     if (autoBuild.justFinished === 0) return;
     setBuildIndicatorDismissed(false); // the "✓ ready" notice shows even if the spinner was dismissed
@@ -499,6 +518,21 @@ export default function App(): JSX.Element {
         >
           <span className="font-bold text-vs-text-secondary">VortSpec</span>
         </header>
+        {/* The initial screen is the one surface every user passes through before
+            opening a workspace, so an available update is announced here. */}
+        {update && shouldPromptForUpdate(update, dismissedUpdate) && (
+          <AppUpdateBanner
+            info={update}
+            onDownload={() => void api.openInstall(update.downloadUrl ?? update.releaseUrl ?? "")}
+            onNotes={() => update.releaseUrl && void api.openInstall(update.releaseUrl)}
+            onDismiss={() => {
+              // Persist immediately: dismissal has to survive a relaunch, or
+              // "Later" would mean "until you quit".
+              if (update.latest) void api.dismissUpdate(update.latest);
+              setDismissedUpdate(update.latest);
+            }}
+          />
+        )}
         <div className="flex min-h-0 flex-1 overflow-hidden">
           <ActivityBar
             active={welcomeView === "settings" ? "settings" : "home"}

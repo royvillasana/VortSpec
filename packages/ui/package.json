@@ -229,6 +229,14 @@
       "types": "./src/components/ToolkitUpdateBanner.tsx",
       "default": "./src/components/ToolkitUpdateBanner.tsx"
     },
+    "./AppUpdateBanner": {
+      "types": "./src/components/AppUpdateBanner.tsx",
+      "default": "./src/components/AppUpdateBanner.tsx"
+    },
+    "./app-update": {
+      "types": "./src/lib/app-update.ts",
+      "default": "./src/lib/app-update.ts"
+    },
     "./useInspectorBridge": {
       "types": "./src/lib/useInspectorBridge.ts",
       "default": "./src/lib/useInspectorBridge.ts"

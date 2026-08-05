@@ -65,7 +65,9 @@ const api: VortSpecApi = {
   // Resolve the absolute path of a File dropped from the OS (Electron 32+ removed
   // File.path). Not an IPC call — runs in the preload with webUtils.
   getPathForFile: (file: File) => webUtils.getPathForFile(file),
-  checkUpdate: () => invoke("system:checkUpdate"),
+  checkUpdate: (req) => invoke("system:checkUpdate", req),
+  getUpdateDismissal: () => invoke("system:getUpdateDismissal"),
+  dismissUpdate: (version) => invoke("system:dismissUpdate", version),
 
   checkEnvironment: () => invoke("env:check"),
   verifyLogin: () => invoke("env:verifyLogin"),
