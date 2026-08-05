@@ -71,12 +71,13 @@ test("the Playground shows the unified left dock (Design + Chat tabs), never zer
   await expect(dock.getByRole("button", { name: "Chat", exact: true })).toBeVisible();
 });
 
-// QUARANTINED [TIMEOUT] — see QUARANTINE.md
-test.fixme("the Run activity shows the Figma-style Design panel beside the canvas", async ({ mount }) => {
+test("the Run activity shows the Figma-style Design panel beside the canvas", async ({ mount }) => {
   const c = await mount(<App />, { hooksConfig: { mock: base } });
   await openRun(c);
   // The Design panel replaces the file Explorer here: Layers + an empty-selection hint.
-  await expect(c.getByRole("button", { name: /Layers/ })).toBeVisible();
+  // The Layers region is a header, not a collapsible button, since the mode
+  // toggle and zoom moved out to the canvas toolbar.
+  await expect(c.getByText(/Layers tree/)).toBeVisible();
   await expect(c.getByText(/Select an element on the canvas/)).toBeVisible();
   // With no guest preload in the CT browser, the canvas shows its preparing state
   // (no real <webview> is mounted).
@@ -97,44 +98,41 @@ test("the Run view offers to create a missing .env", async ({ mount }) => {
   await expect(c.getByRole("button", { name: /Create \.env from \.env\.example/ })).toBeVisible();
 });
 
-// QUARANTINED [TIMEOUT] — see QUARANTINE.md
-test.fixme("the canvas toolbar carries the modes and zoom, bottom-center over the canvas", async ({ mount }) => {
+test("the canvas toolbar carries the modes and zoom, bottom-center over the canvas", async ({ mount }) => {
   const c = await mount(<App />, { hooksConfig: { mock: base } });
   await openRun(c);
   const bar = c.getByTestId("canvas-toolbar");
   await expect(bar).toBeVisible();
   // The modes moved out of the Layers header onto the toolbar the canvas owns.
   await expect(bar.getByRole("button", { name: "Interact" })).toBeVisible();
-  await expect(bar.getByRole("button", { name: "Inspect" })).toBeVisible();
+  await expect(bar.getByRole("button", { name: "Edit", exact: true })).toBeVisible();
   await expect(bar.getByRole("button", { name: "Comment" })).toBeVisible();
   await expect(bar.getByRole("button", { name: "Insert" })).toBeVisible();
   await expect(c.getByRole("button", { name: "Pan" })).toHaveCount(0); // never existed
   // Zoom was replaced by the viewport selector — Desktop is the default.
-  await expect(bar.getByRole("button", { name: /Desktop/ })).toBeVisible();
+  await expect(bar.getByRole("button", { name: "Viewport" })).toBeVisible();
   // The Design panel is still a resizable sidebar (like the Explorer rail).
   await expect(c.getByRole("separator", { name: "Resize sidebar" })).toBeVisible();
 });
 
-// QUARANTINED [TIMEOUT] — see QUARANTINE.md
-test.fixme("the mode and viewport controls exist exactly once on the canvas toolbar", async ({ mount }) => {
+test("the mode and viewport controls exist exactly once on the canvas toolbar", async ({ mount }) => {
   const c = await mount(<App />, { hooksConfig: { mock: base } });
   await openRun(c);
   // The Design panel (now in the left dock) and the Comments panel each used to re-implement
   // these; they live only on the canvas toolbar now — exactly one of each, independent of the
   // dock's Section/Chat tabs.
   const bar = c.getByTestId("canvas-toolbar");
-  await expect(bar.getByRole("button", { name: "Inspect" })).toHaveCount(1);
-  await expect(bar.getByRole("button", { name: /Desktop/ })).toHaveCount(1);
-  await expect(c.getByRole("button", { name: "Inspect" })).toHaveCount(1);
+  await expect(bar.getByRole("button", { name: "Edit", exact: true })).toHaveCount(1);
+  await expect(bar.getByRole("button", { name: "Viewport" })).toHaveCount(1);
+  await expect(c.getByRole("button", { name: "Edit", exact: true })).toHaveCount(1);
 });
 
-// QUARANTINED [TIMEOUT] — see QUARANTINE.md
-test.fixme("interact is the resting default mode", async ({ mount }) => {
+test("interact is the resting default mode", async ({ mount }) => {
   const c = await mount(<App />, { hooksConfig: { mock: base } });
   await openRun(c);
   const bar = c.getByTestId("canvas-toolbar");
   await expect(bar.getByRole("button", { name: "Interact" })).toHaveAttribute("aria-pressed", "true");
-  await expect(bar.getByRole("button", { name: "Inspect" })).toHaveAttribute("aria-pressed", "false");
+  await expect(bar.getByRole("button", { name: "Edit", exact: true })).toHaveAttribute("aria-pressed", "false");
 });
 
 test("the canvas toolbar has a Figma menu trigger, disabled until Figma is connected", async ({ mount }) => {
@@ -148,8 +146,7 @@ test("the canvas toolbar has a Figma menu trigger, disabled until Figma is conne
   await expect(bar.getByRole("tooltip", { name: "Connect Figma to send screens" })).toBeAttached();
 });
 
-// QUARANTINED [TIMEOUT] — see QUARANTINE.md
-test.fixme("a bridge that is still connecting does not disable anything", async ({ mount }) => {
+test("a bridge that is still connecting does not disable anything", async ({ mount }) => {
   const c = await mount(<App />, { hooksConfig: { mock: base } });
   await openRun(c);
   // No guest preload mounts in the CT browser, so the bridge is attaching and has
@@ -158,7 +155,7 @@ test.fixme("a bridge that is still connecting does not disable anything", async 
   // otherwise Inspect/Comment die on each agent-driven reload.
   const bar = c.getByTestId("canvas-toolbar");
   await expect(bar.getByTestId("canvas-bridge-status")).toHaveAttribute("data-state", "connecting");
-  await expect(bar.getByRole("button", { name: "Inspect" })).toBeEnabled();
+  await expect(bar.getByRole("button", { name: "Edit", exact: true })).toBeEnabled();
   await expect(bar.getByRole("button", { name: "Comment" })).toBeEnabled();
   await expect(bar.getByRole("button", { name: "Interact" })).toBeEnabled();
 });
@@ -175,13 +172,12 @@ const barProps = {
   onFrameChange: () => {},
 };
 
-// QUARANTINED [TIMEOUT] — see QUARANTINE.md
-test.fixme("a failed bridge disables the modes that need it, but never Interact", async ({ mount }) => {
+test("a failed bridge disables the modes that need it, but never Interact", async ({ mount }) => {
   const c = await mount(
     <CanvasToolbar {...barProps} bridgeReady={false} bridgeError="the page blocked the inspector script" />,
   );
   await expect(c.getByTestId("canvas-bridge-status")).toHaveAttribute("data-state", "failed");
-  await expect(c.getByRole("button", { name: "Inspect" })).toBeDisabled();
+  await expect(c.getByRole("button", { name: "Edit", exact: true })).toBeDisabled();
   await expect(c.getByRole("button", { name: "Comment" })).toBeDisabled();
   await expect(c.getByRole("button", { name: "Insert" })).toBeDisabled();
   // Interact never needs the bridge — the app has to stay usable.
@@ -193,11 +189,10 @@ test.fixme("a failed bridge disables the modes that need it, but never Interact"
   );
 });
 
-// QUARANTINED [TIMEOUT] — see QUARANTINE.md
-test.fixme("an attached bridge enables every mode", async ({ mount }) => {
+test("an attached bridge enables every mode", async ({ mount }) => {
   const c = await mount(<CanvasToolbar {...barProps} bridgeReady bridgeError={null} />);
   await expect(c.getByTestId("canvas-bridge-status")).toHaveAttribute("data-state", "live");
-  await expect(c.getByRole("button", { name: "Inspect" })).toBeEnabled();
+  await expect(c.getByRole("button", { name: "Edit", exact: true })).toBeEnabled();
   await expect(c.getByRole("button", { name: "Comment" })).toBeEnabled();
   await expect(c.getByRole("button", { name: "Insert" })).toBeEnabled();
   await expect(c.getByRole("button", { name: "Interact" })).toBeEnabled();

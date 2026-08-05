@@ -26,10 +26,15 @@ const base = {
 async function open(c: import("@playwright/test").Locator): Promise<void> {
   await c.getByRole("button", { name: /acme-design-system/ }).click();
   await c.getByRole("button", { name: "Chat", exact: true }).click(); // chat now lives in the left dock's Chat tab
+  // These fixtures configure no framework, so the background-build gate reports
+  // "setup required" and its fixed bottom-center toast lands on top of the chat's
+  // Send button — every click here failed on an interception, not a missing element.
+  // Dismiss it: an unconfigured framework is not what these assistant tests are about.
+  const toast = c.getByRole("button", { name: "Dismiss" });
+  if (await toast.count()) await toast.first().click();
 }
 
-// QUARANTINED [TIMEOUT] — see QUARANTINE.md
-test.fixme("the assistant session panel shows model, skills, and MCP status", async ({ mount }) => {
+test("the assistant session panel shows model, skills, and MCP status", async ({ mount }) => {
   const INIT_RUN: RunEvent[] = [
     {
       kind: "system-init",
@@ -74,8 +79,7 @@ test("slash menu opens from the composer and /model runs a model card", async ({
   await expect(c.getByText("Claude Haiku 4.5")).toBeVisible();
 });
 
-// QUARANTINED [TIMEOUT] — see QUARANTINE.md
-test.fixme("/mcp card reflects the session's MCP server status", async ({ mount }) => {
+test("/mcp card reflects the session's MCP server status", async ({ mount }) => {
   const INIT_RUN: RunEvent[] = [
     {
       kind: "system-init",
@@ -106,8 +110,7 @@ test.fixme("/mcp card reflects the session's MCP server status", async ({ mount 
   await expect(c.getByText("failed", { exact: true })).toBeVisible();
 });
 
-// QUARANTINED [TIMEOUT] — see QUARANTINE.md
-test.fixme("@-mention attaches a workspace file and includes it in the sent prompt", async ({ mount }) => {
+test("@-mention attaches a workspace file and includes it in the sent prompt", async ({ mount }) => {
   const c = await mount(<App />, {
     hooksConfig: { mock: { ...base, searchResults: [{ name: "README.md", path: "README.md", type: "file" }] } },
   });
@@ -128,8 +131,7 @@ test.fixme("@-mention attaches a workspace file and includes it in the sent prom
   expect(prompts[0]).toContain("summarize it");
 });
 
-// QUARANTINED [TIMEOUT] — see QUARANTINE.md
-test.fixme("attaching a folder lets you preview its file tree", async ({ mount }) => {
+test("attaching a folder lets you preview its file tree", async ({ mount }) => {
   const mock = {
     ...base,
     searchResults: [{ name: "src", path: "src", type: "dir" } as FsEntry],
@@ -157,8 +159,7 @@ test.fixme("attaching a folder lets you preview its file tree", async ({ mount }
   expect(prompts[0]).toContain("@src/index.ts");
 });
 
-// QUARANTINED [TIMEOUT] — see QUARANTINE.md
-test.fixme("pasting a screenshot attaches it as an image and sends its path", async ({ mount }) => {
+test("pasting a screenshot attaches it as an image and sends its path", async ({ mount }) => {
   const mock = {
     ...base,
     clipboardImage: { path: "/tmp/vortspec-paste/shot.png", dataUrl: "data:image/png;base64,iVBORw0KGgo=" },
@@ -180,8 +181,7 @@ test.fixme("pasting a screenshot attaches it as an image and sends its path", as
   expect(prompts[prompts.length - 1]).toContain("/tmp/vortspec-paste/shot.png");
 });
 
-// QUARANTINED [TIMEOUT] — see QUARANTINE.md
-test.fixme("dragging a file from the OS into the chat attaches it as context", async ({ mount }) => {
+test("dragging a file from the OS into the chat attaches it as context", async ({ mount }) => {
   const c = await mount(<App />, { hooksConfig: { mock: base } });
   await open(c);
   const input = c.getByPlaceholder(/@ a file/);
@@ -218,8 +218,7 @@ test("seeds the assistant context with the open file", async ({ mount }) => {
   await expect(c.getByTestId("assistant-context")).toContainText("README.md");
 });
 
-// QUARANTINED [TIMEOUT] — see QUARANTINE.md
-test.fixme("sends the open file as hidden grounding without echoing it in the bubble", async ({ mount }) => {
+test("sends the open file as hidden grounding without echoing it in the bubble", async ({ mount }) => {
   const c = await mount(<App />, { hooksConfig: { mock: base } });
   await open(c);
   await c.getByRole("complementary").getByRole("button", { name: "Code", exact: true }).click();

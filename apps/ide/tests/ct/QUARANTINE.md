@@ -43,30 +43,37 @@ selector timeout is never the cause.
 
 ---
 
-## Batch — `TIMEOUT` (23) and `ASSERT` (1)
+## What is left — 5 tests
 
-**Real UI drift.** These wait for something the interface no longer renders — the
-same category as the compose dialog losing its `Continue` step. Each needs reading
-against the current component and either updating or deleting.
+Each is an independent investigation; the shared causes are gone.
+
+| File | Test | Symptom |
+|---|---|---|
+| `workspace` | Open Browser opens the selected preview tab's own server | click times out |
+| `workspace` | the breadcrumb appends the active editor tab after the activity | breadcrumb text differs |
+| `shell` | the status bar shows the git branch and Explorer-only region toggles | no `Explorer` button in the footer |
+| `pipeline` | opening an un-founded project auto-starts the Flow foundation | no `Set up the foundation` heading |
+| `provision-library` | clicking Provision runs the /provision-library flow | asserted value is `undefined` |
 
 Deleting is a legitimate outcome when the behaviour is genuinely gone: prefer it to
 rewording a test into something it never checked. Say so in the commit.
 
-| File | Tests |
-|---|---|
-| `run-canvas` | 7 |
-| `vibe` | 7 |
-| `conversations` | 4 |
-| `workspace` | 2 |
-| `pipeline` | 1 |
-| `provision-library` | 1 (ASSERT) |
-| `shell` | 1 |
-| `workbench` | 1 |
+### Causes already found and fixed, worth recognising again
 
-`run-canvas` and `vibe` are the two worth taking first — 14 of the 24, and within
-each file the failures likely share one cause.
-
----
+- **A fixed bottom-center toast intercepting clicks.** The background-build indicator
+  (`fixed bottom-4 left-1/2 z-[60]`) appears whenever the fixture project has no
+  framework configured, and lands on top of the chat's Send button. Playwright
+  reports this as a *click timeout on an element that is visible, enabled and
+  stable* — the interception is only named further down the call log. Cost: 11 tests
+  across `vibe` and `conversations`. Fix: dismiss it in the file's `open()` helper.
+- **`getByRole(..., { name })` matches as a SUBSTRING.** When the canvas mode was
+  relabelled `Inspect` → `Edit`, a page-wide `toHaveCount(1)` started counting every
+  button whose accessible name merely contains "edit". The old label was unique by
+  luck. Use `exact: true` for uniqueness claims.
+- **Labels drift quietly**: `Inspect` → `Edit`, the Layers *button* → a "Layers tree"
+  header, per-size viewport buttons → one `Viewport` menu, and "Storybook" now
+  appearing in the breadcrumb as well as the view header (a strict-mode violation
+  rather than a failure).
 
 ## How this rotted, so it doesn't again
 
