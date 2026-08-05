@@ -135,7 +135,10 @@
          caption carries the explanation so the clip does not have to be self-evident. */
       /* 660px is the GIFs' native width — capping here keeps them pixel-exact
          rather than upscaled and soft. */
-      .demo { margin: 26px auto 0; max-width: 660px; }
+      /* Sources are 1582px wide; shown at up to 1032px so a Retina display still has
+         ~1.5x the pixels it needs. Sizing a GIF to its CSS width is what made these
+         look soft before. */
+      .demo { margin: 30px auto 38px; max-width: 1032px; }
       .demo img {
         display: block; width: 100%; height: auto; border-radius: 12px;
         border: 1px solid var(--border); background: #0b0c0e;
@@ -275,7 +278,7 @@
       <!-- The real IDE, recorded. Replaces the hand-built window mock that used to sit here. -->
       <div class="wrap">
         <figure class="demo">
-          <img src="./media/ide-editor.gif" alt="The VortSpec IDE: file tree, open editor tabs, component source, and the Chat pane" width="660" decoding="async" />
+          <img src="./media/ide-editor.gif" alt="The VortSpec IDE: file tree, open editor tabs, component source, and the Chat pane" width="1582" height="984" decoding="async" />
           <figcaption><b>This is the actual app.</b> A file tree, real editor tabs, your component's source — and Claude Code in the next pane, working on the same files you are.</figcaption>
         </figure>
       </div>
@@ -319,11 +322,11 @@
             </div>
           </div>
           <figure class="demo">
-            <img src="./media/design-system.gif" alt="Browsing design tokens grouped by colour, typography, spacing and shadow" loading="lazy" decoding="async" width="660" />
+            <img src="./media/design-system.gif" alt="Browsing design tokens grouped by colour, typography, spacing and shadow" loading="lazy" decoding="async" width="1582" height="984" />
             <figcaption><b>Your design system, as data.</b> Tokens are extracted from your source and grouped by kind — colour, typography, spacing, radius, shadow — each with its name, its value, and where it is used. This is what every generated component is built from.</figcaption>
           </figure>
           <figure class="demo">
-            <img src="./media/playground.gif" alt="A composed screen rendering live in the VortSpec Playground" loading="lazy" decoding="async" width="660" />
+            <img src="./media/playground.gif" alt="A composed screen rendering live in the VortSpec Playground" loading="lazy" decoding="async" width="1582" height="984" />
             <figcaption><b>A real screen, running.</b> Pages composed from your design system render live in the Playground — the actual app, not a mockup — so you scroll and click the thing you are about to ship.</figcaption>
           </figure>
         </div>
@@ -370,7 +373,7 @@
             </div>
           </div>
           <figure class="demo">
-            <img src="./media/storybook.gif" alt="Browsing a component's Storybook documentation inside VortSpec" loading="lazy" decoding="async" width="660" />
+            <img src="./media/storybook.gif" alt="Browsing a component's Storybook documentation inside VortSpec" loading="lazy" decoding="async" width="1582" height="984" />
             <figcaption><b>Every component documented, not just rendered.</b> VortSpec stands up a real Storybook and embeds it: identity, the full props table, states and behaviour, accessibility notes, and the anti-patterns to avoid — the same page your AI reads before it writes anything.</figcaption>
           </figure>
         </div>
@@ -399,7 +402,7 @@
             </div>
           </div>
           <figure class="demo">
-            <img src="./media/canvas-edit.gif" alt="Selecting an element on the VortSpec canvas and editing its properties" loading="lazy" decoding="async" width="660" />
+            <img src="./media/canvas-edit.gif" alt="Selecting an element on the VortSpec canvas and editing its properties" loading="lazy" decoding="async" width="1582" height="984" />
             <figcaption><b>Edit the running screen, not a picture of it.</b> Selecting an element on the canvas reveals its layer in the tree and its real properties — layout, spacing, typography, colour — on the right. Changes are written back to the component's source, so what you nudge here is the code you ship.</figcaption>
           </figure>
         </div>
