@@ -79,6 +79,49 @@ Two problems then need answering, and they are the ones most likely to bite:
 
 An in-flight comment is awareness state. **Posting** it writes a thread through the existing `comment-store` and its anchor model, so it is committed, pushed, notified via GitHub, and visible to people who were never in the session — exactly like every other comment. Live comments are a faster way to *create* comments, not a second kind of comment.
 
+### D7. Adoption is all-or-nothing, and a page we cannot reproduce exactly is not adopted
+
+*Added while implementing group 1.* Modelling HTML means parsing it, and every parser normalises
+something. If adoption reformatted a page, the first collaborative edit would land in git as a
+whole-file diff — the page rewritten around one changed colour — and this product reviews everything
+through git.
+
+So the parser is source-faithful rather than spec-compliant: attribute order, the whitespace between
+attributes, the quote character, boolean attributes, `<br>` vs `<br />`, comments and the doctype are
+all preserved verbatim. A page is adopted only when `serialize(parse(html)) === html` byte for byte;
+anything else — an omitted end tag, mis-nesting — is **refused**, and that page stays on today's
+whole-document write. The worst case is that one page is not live. The alternative, guessing, is a
+corrupted file in someone's repository.
+
+All four real light pages on disk round-trip byte-identically. That they do is not luck: they were
+written out by `serializeDom`, so they are already browser-normalised. A page a person hand-wrote is
+the case that distinguishes a faithful implementation from one that merely regenerates canonical
+attributes, and it is tested separately for exactly that reason.
+
+### D8. The DOM is built from the document, and the two live in different packages
+
+The guest DOM is constructed from the CRDT node by node rather than via `innerHTML`. Parsing markup
+lets the HTML parser insert nodes nobody wrote — the implied `<tbody>` — and each one is a DOM node
+with no CRDT counterpart, which is the misalignment that eventually sends an edit to the wrong
+element. Building the tree ourselves makes the mapping 1:1 by construction.
+
+The pure document model (`light-html`, `light-doc`) lives in `packages/core`; the DOM binding
+(`light-dom-bind`) lives in `packages/ui`. That split is not cosmetic: `packages/core` compiles
+without DOM types today, so a main-process file cannot reference `document` and still type-check —
+and a main-process crash that types did not catch is exactly how v0.1.35 shipped unable to open a
+window. Keeping the binding out of core preserves that.
+
+### D9. Two constraints that only appeared once it was running
+
+- **One peer seeds the page; everyone else receives it.** Two documents parsed independently from
+  identical bytes are not replicas — they share no history, so merging them concatenates two copies
+  of the page. Whoever opens the page first loads the file; every later participant syncs the
+  document. This is a requirement on the session handshake in group 2, not an implementation detail.
+- **Serialization must be deterministic across replicas.** Attributes an edit introduced arrive in
+  whatever order updates happened to reach each peer, so map order differs per participant. Two
+  people writing the same converged document would produce byte-different files, and the second to
+  save would see a git diff nobody made. Added attributes are therefore ordered by name.
+
 ## Risks / Trade-offs
 
 **This introduces a persistent outbound connection to a product whose defining promise is that it runs nothing.** → It is opt-in per project, connects only to a relay the team configures, is absent by default, and is visible while active. The spec makes "no relay → no connection, no error" normative. Being honest about this in the docs matters more than the implementation detail: the pitch becomes "your own Claude, your own GitHub, your own relay."

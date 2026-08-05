@@ -1,0 +1,909 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Animated carousel card — PaychexDSTest Lite Design System</title>
+<style>
+  /* ══════════════════════════════════════════════════════════════
+     Design-system tokens (mirrored from tokens.css / designer.md)
+     Only tokens that this component consumes are mirrored here.
+     ══════════════════════════════════════════════════════════════ */
+  :root {
+    /* Neutrals */
+    --color-white: #ffffff;
+    --color-body: #212529;
+    --color-text-muted: #6c757d;
+    --color-border: #dee2e6;
+    --color-gray-100: #f8f9fa;
+    --color-gray-200: #e9ecef;
+    --color-gray-400: #ced4da;
+
+    /* Brand / contextual */
+    --color-primary: #0d6efd;
+    --color-primary-hover: #0b5ed7;
+    --color-primary-active: #0a58ca;
+    --color-primary-100: #cfe2ff;
+    --color-primary-200: #9ec5fe;
+    --color-secondary: #6c757d;
+    --color-on-primary: #ffffff;
+    --color-primary-ring: rgba(13, 110, 253, 0.5);
+    --color-primary-tint-10: rgba(13, 110, 253, 0.1);
+    --color-primary-tint-20: rgba(13, 110, 253, 0.2);
+
+    /* Typography */
+    --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --font-size-xs: 0.75rem;
+    --font-size-sm: 0.875rem;
+    --font-size-base: 1rem;
+    --font-size-h6: 1rem;
+    --font-size-h5: 1.25rem;
+    --font-size-h3: 1.75rem;
+    --font-weight-normal: 400;
+    --font-weight-medium: 500;
+    --font-weight-semibold: 600;
+    --line-height-12: 0.75rem;
+    --line-height-16: 1rem;
+    --line-height-20: 1.25rem;
+    --line-height-24: 1.5rem;
+    --line-height-base: 1.5;
+    --line-height-tight: 1.25;
+
+    /* Spacing */
+    --spacing-px-2: 0.125rem;
+    --spacing-px-4: 0.25rem;
+    --spacing-px-6: 0.375rem;
+    --spacing-px-8: 0.5rem;
+    --spacing-px-10: 0.625rem;
+    --spacing-px-12: 0.75rem;
+    --spacing-px-16: 1rem;
+    --spacing-px-24: 1.5rem;
+    --spacing-px-40: 2.5rem;
+    --spacing-px-48: 3rem;
+    --spacing-px-64: 4rem;
+
+    /* Radius */
+    --radius-sm: 0.25rem;
+    --radius-base: 0.375rem;
+    --radius-lg: 0.5rem;
+    --radius-pill: 50rem;
+    --radius-full: 9999px;
+
+    /* Shadows */
+    --shadow-rendered-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    --shadow-rendered-base: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.1);
+    --shadow-rendered-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
+    --shadow-rendered-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+  }
+
+  /* ── Component-local scalars ─────────────────────────────────────
+     Composition metrics (card footprint, motion curve) derived from
+     spacing tokens, so no raw px enters the component. The hairline
+     matches the 1px border the design-system Card and Button ship. */
+  .acc {
+    --acc-hairline: calc(var(--spacing-px-2) / 2);
+    --acc-card-w: calc(var(--spacing-px-64) * 5);          /* 20rem */
+    /* Sized to the tallest card the content can produce — a two-line title,
+       a one-line byline, a four-line excerpt, and the footer — so every card
+       shows its copy in full and none is left with a hole above its footer. */
+    --acc-card-h: calc(var(--spacing-px-64) * 6.5 + var(--spacing-px-24));   /* 27.5rem */
+    --acc-media-h: calc(var(--spacing-px-48) * 2.75);      /* 8.25rem */
+    --acc-rail: min(100%, calc(var(--acc-card-w) * 2.5));
+    --acc-step: 58%;                                       /* neighbour offset, share of card width */
+    /* Where the edge fade starts and ends. The centre card sits inside the
+       opaque band, so only the flanking cards are dissolved. */
+    --acc-fade-in: 28%;
+    --acc-fade-out: 72%;
+    --acc-duration: 420ms;
+    --acc-duration-fast: 150ms;                            /* design-system control transition */
+    --acc-ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+    --acc-ease-ds: cubic-bezier(0.4, 0, 0.2, 1);           /* design-system easing */
+  }
+
+  /* ══════════════════════════════════════════════════════════════
+     Page shell (preview scaffolding only)
+     ══════════════════════════════════════════════════════════════ */
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    padding: var(--spacing-px-48) var(--spacing-px-24);
+    background-color: var(--color-gray-100);
+    color: var(--color-body);
+    font-family: var(--font-sans);
+    font-size: var(--font-size-base);
+    font-weight: var(--font-weight-normal);
+    line-height: var(--line-height-base);
+  }
+
+  .page { max-width: calc(var(--spacing-px-64) * 19.5); margin: 0 auto; }
+
+  .page__eyebrow {
+    margin: 0 0 var(--spacing-px-8);
+    color: var(--color-text-muted);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-semibold);
+    letter-spacing: var(--spacing-px-2);
+    line-height: var(--line-height-12);
+    text-transform: uppercase;
+  }
+
+  .page__title {
+    margin: 0 0 var(--spacing-px-8);
+    color: var(--color-body);
+    font-size: var(--font-size-h3);
+    font-weight: var(--font-weight-semibold);
+    line-height: var(--line-height-tight);
+  }
+
+  .page__lede {
+    max-width: calc(var(--spacing-px-64) * 9);
+    margin: 0 0 var(--spacing-px-40);
+    color: var(--color-text-muted);
+    font-size: var(--font-size-sm);
+    line-height: var(--line-height-20);
+  }
+
+  /* Screen-reader-only live region. */
+  .acc__sr-only {
+    position: absolute;
+    width: var(--acc-hairline);
+    height: var(--acc-hairline);
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  /* ══════════════════════════════════════════════════════════════
+     Carousel — data-component="Carousel"
+     Coverflow stage: the centre card rests at full scale, neighbours
+     scale and rotate back into depth. Draggable left / right, with an
+     autoplay timer that ping-pongs between the first and last card.
+     ══════════════════════════════════════════════════════════════ */
+  .acc {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--spacing-px-16);
+    border-radius: var(--radius-base);
+  }
+
+  /* The stage is capped to the rail width, and a wide gradient mask dissolves
+     both edges — so the flanking cards fade out into the page instead of being
+     sliced off by a hard crop. The mask is a true alpha fade, so it reads the
+     same on any surface the carousel is dropped onto. */
+  .acc__viewport {
+    position: relative;
+    width: var(--acc-rail);
+    height: var(--acc-card-h);
+    overflow: hidden;
+    border-radius: var(--radius-base);
+    cursor: grab;
+    touch-action: pan-y;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-mask-image: linear-gradient(
+      to right,
+      transparent 0%,
+      rgba(0, 0, 0, 1) var(--acc-fade-in),
+      rgba(0, 0, 0, 1) var(--acc-fade-out),
+      transparent 100%
+    );
+    mask-image: linear-gradient(
+      to right,
+      transparent 0%,
+      rgba(0, 0, 0, 1) var(--acc-fade-in),
+      rgba(0, 0, 0, 1) var(--acc-fade-out),
+      transparent 100%
+    );
+  }
+
+  .acc__viewport:focus-visible {
+    outline: var(--spacing-px-2) solid var(--color-primary);
+    outline-offset: var(--spacing-px-4);
+  }
+
+  .acc[data-dragging="true"] .acc__viewport { cursor: grabbing; }
+
+  .acc__stage {
+    position: absolute;
+    inset: 0;
+    perspective: calc(var(--spacing-px-64) * 18);
+    transform-style: preserve-3d;
+  }
+
+  .acc__slide {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    width: var(--acc-card-w);
+    height: 100%;
+    margin-left: calc(var(--acc-card-w) / -2);
+    transform-origin: 50% 50%;
+    /* --acc-dim is the slide's distance from centre, written by the island.
+       Depth of field keeps a neighbour's copy from competing with the card
+       actually being read — one step out is a soft shape, two is a hint. */
+    --acc-dim: 0;
+    filter: blur(calc(var(--acc-dim) * var(--spacing-px-2)));
+    transition:
+      transform var(--acc-duration) var(--acc-ease),
+      opacity var(--acc-duration) var(--acc-ease),
+      filter var(--acc-duration) var(--acc-ease);
+    will-change: transform, opacity;
+  }
+
+  /* The centre card is read, not suggested — never soften it. */
+  .acc__slide[data-active="true"] { filter: none; }
+
+  /* A live drag tracks the pointer 1:1 — no easing in between. */
+  .acc[data-dragging="true"] .acc__slide { transition: none; }
+
+  /* Off-centre cards are decorative until promoted: they must not
+     swallow pointer input or expose their controls to the tab order. */
+  .acc__slide[data-active="false"] { pointer-events: none; }
+  .acc__slide[data-offscreen="true"] { visibility: hidden; }
+
+  /* ── Card — data-component="Card" ─────────────────────────────
+     Design-system Card: hairline border, radius-base, white surface,
+     shadow-rendered-sm at rest. The centre card is lifted. */
+  .card {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+    border: var(--acc-hairline) solid var(--color-border);
+    border-radius: var(--radius-base);
+    background-color: var(--color-white);
+    box-shadow: var(--shadow-rendered-sm);
+    transition:
+      box-shadow var(--acc-duration) var(--acc-ease),
+      border-color var(--acc-duration) var(--acc-ease);
+  }
+
+  .acc__slide[data-active="true"] .card {
+    border-color: var(--color-primary-200);
+    box-shadow: var(--shadow-rendered-xl);
+  }
+
+  /* ── Image — data-component="Image" ─────────────────────────── */
+  .card__media {
+    display: block;
+    flex-shrink: 0;
+    width: 100%;
+    max-width: 100%;
+    height: var(--acc-media-h);
+    border-bottom: var(--acc-hairline) solid var(--color-border);
+    background-color: var(--color-gray-200);
+    object-fit: cover;
+  }
+
+  /* min-height:0 lets the body shrink inside the fixed-height card, so an
+     overlong excerpt is clamped rather than pushing the footer off the card. */
+  .card__body {
+    display: flex;
+    flex: 1 1 0%;
+    flex-direction: column;
+    min-height: 0;
+    padding: var(--spacing-px-16);
+  }
+
+  .card__eyebrow {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    gap: var(--spacing-px-8);
+    margin-bottom: var(--spacing-px-12);
+  }
+
+  /* ── Badge — data-component="Badge" ─────────────────────────── */
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--spacing-px-2) var(--spacing-px-8);
+    border-radius: var(--radius-base);
+    background-color: var(--color-primary);
+    color: var(--color-on-primary);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-semibold);
+    line-height: var(--line-height-12);
+  }
+
+  /* ── Tag — data-component="Tag" ─────────────────────────────── */
+  .tag {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-px-4);
+    padding: var(--spacing-px-4) var(--spacing-px-10);
+    border: var(--acc-hairline) solid var(--color-primary-tint-20);
+    border-radius: var(--radius-full);
+    background-color: var(--color-primary-tint-10);
+    color: var(--color-primary);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
+    line-height: var(--font-size-sm);
+  }
+
+  /* Every text block is clamped at its own line budget, so the eyebrow,
+     title, byline, excerpt, and footer always land inside the card. */
+  .card__title {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    flex-shrink: 0;
+    margin: 0 0 var(--spacing-px-4);
+    overflow: hidden;
+    color: var(--color-body);
+    font-size: var(--font-size-h6);
+    font-weight: var(--font-weight-semibold);
+    line-height: var(--line-height-24);
+  }
+
+  .card__subtitle {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 1;
+    line-clamp: 1;
+    flex-shrink: 0;
+    margin: 0 0 var(--spacing-px-12);
+    overflow: hidden;
+    color: var(--color-text-muted);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-normal);
+    line-height: var(--line-height-20);
+  }
+
+  /* The body copy is the only part of the card that may be squeezed, so a
+     long excerpt never pushes the footer past the card's fixed height. */
+  .card__text {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 4;
+    line-clamp: 4;
+    min-height: 0;
+    margin: 0 0 var(--spacing-px-16);
+    overflow: hidden;
+    color: var(--color-body);
+    font-size: var(--font-size-sm);
+    line-height: var(--line-height-20);
+  }
+
+  .card__footer {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    gap: var(--spacing-px-12);
+    margin-top: auto;
+    padding-top: var(--spacing-px-12);
+    border-top: var(--acc-hairline) solid var(--color-border);
+  }
+
+  /* ── Avatar — data-component="Avatar" ───────────────────────── */
+  .avatar {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: var(--spacing-px-40);
+    height: var(--spacing-px-40);
+    overflow: hidden;
+    border-radius: var(--radius-full);
+    background-color: var(--color-primary);
+    color: var(--color-on-primary);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    line-height: var(--line-height-20);
+  }
+
+  .card__meta {
+    flex: 1 1 0%;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--color-text-muted);
+    font-size: var(--font-size-xs);
+    line-height: var(--line-height-16);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* ── Button — data-component="Button" ───────────────────────── */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--spacing-px-8);
+    padding: var(--spacing-px-6) var(--spacing-px-12);
+    border: var(--acc-hairline) solid var(--color-primary);
+    border-radius: var(--radius-base);
+    background-color: var(--color-primary);
+    color: var(--color-on-primary);
+    font-family: var(--font-sans);
+    font-size: var(--font-size-base);
+    font-weight: var(--font-weight-normal);
+    line-height: var(--line-height-24);
+    text-align: center;
+    cursor: pointer;
+    transition:
+      color var(--acc-duration-fast) var(--acc-ease-ds),
+      background-color var(--acc-duration-fast) var(--acc-ease-ds),
+      border-color var(--acc-duration-fast) var(--acc-ease-ds);
+  }
+
+  .btn:hover {
+    border-color: var(--color-primary-hover);
+    background-color: var(--color-primary-hover);
+  }
+
+  .btn:active {
+    border-color: var(--color-primary-active);
+    background-color: var(--color-primary-active);
+  }
+
+  .btn:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 var(--spacing-px-4) var(--color-primary-ring);
+  }
+
+  .btn--sm {
+    padding: var(--spacing-px-4) var(--spacing-px-10);
+    font-size: var(--font-size-sm);
+    line-height: var(--line-height-20);
+  }
+
+  /* ── Indicators ─────────────────────────────────────────────────
+     The only chrome the carousel carries. Everything else — direction,
+     position, dwell — is expressed by the stage itself. */
+  .acc__dots {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--spacing-px-8);
+    width: var(--acc-rail);
+  }
+
+  .acc__dot {
+    width: var(--spacing-px-10);
+    height: var(--spacing-px-10);
+    padding: 0;
+    border: 0;
+    border-radius: var(--radius-full);
+    background-color: var(--color-gray-400);
+    cursor: pointer;
+    transition:
+      background-color var(--acc-duration-fast) var(--acc-ease-ds),
+      width var(--acc-duration-fast) var(--acc-ease-ds);
+  }
+
+  .acc__dot:hover { background-color: var(--color-secondary); }
+
+  .acc__dot:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 var(--spacing-px-4) var(--color-primary-ring);
+  }
+
+  .acc__dot[aria-current="true"] {
+    width: var(--spacing-px-24);
+    background-color: var(--color-primary);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .acc { --acc-duration: 1ms; --acc-duration-fast: 1ms; }
+  }
+
+  @media (max-width: 40rem) {
+    .acc {
+      --acc-card-w: calc(var(--spacing-px-64) * 4);       /* 16rem */
+      --acc-card-h: calc(var(--spacing-px-64) * 6.75);    /* 27rem */
+      --acc-media-h: calc(var(--spacing-px-48) * 2);      /* 6rem  */
+      --acc-step: 52%;
+      --acc-rail: 100%;
+      /* Less rail to work with, so the fade starts closer to the edges. */
+      --acc-fade-in: 14%;
+      --acc-fade-out: 86%;
+    }
+
+    /* A narrower card wraps the same excerpt onto one more line — the shorter
+       media leaves room for it, so raise the budget rather than truncate. */
+    .card__text {
+      -webkit-line-clamp: 5;
+      line-clamp: 5;
+    }
+  }
+</style>
+</head>
+<body>
+<main class="page">
+  <p class="page__eyebrow">Design system · molecule</p>
+  <h1 class="page__title">Animated carousel card</h1>
+  <p class="page__lede">
+    A coverflow carousel built from the design-system Carousel, Card, Badge, Tag, Avatar, and
+    Button. The centre card rests at full scale while its neighbours scale, rotate back into
+    depth, and dissolve into the page. Drag left or right, use the indicators, or use the
+    keyboard — autoplay advances on its own and steps back when it reaches the last card.
+  </p>
+
+  <div class="acc" data-component="Carousel" id="acc" aria-roledescription="carousel" aria-label="Featured payroll and HR insights" data-dragging="false">
+
+    <div class="acc__viewport" id="accViewport" tabindex="0" role="group" aria-label="Carousel cards — drag or use the arrow keys to change card">
+      <div class="acc__stage" id="accStage">
+
+        <div class="acc__slide" aria-roledescription="slide" aria-label="1 of 5" data-active="false" data-offscreen="true" aria-hidden="true" style="transform: translateX(-145%) rotateY(22deg) scale(0.68); opacity: 0.06; --acc-dim: 2.00; z-index: 0;">
+          <article class="card" data-component="Card">
+            <img class="card__media" data-component="Image" src="https://picsum.photos/seed/acc-payroll/640/360" alt="A payroll specialist reviewing a pay run on a laptop">
+            <div class="card__body">
+              <div class="card__eyebrow">
+                <span class="badge" data-component="Badge">Payroll</span>
+                <span class="tag" data-component="Tag"><span>6 min read</span></span>
+              </div>
+              <h5 class="card__title">Run payroll in three steps</h5>
+              <h6 class="card__subtitle">Updated for the 2026 tax year</h6>
+              <p class="card__text">
+                Review hours, approve exceptions, and submit. Every pay run is reconciled against
+                the general ledger before it leaves the queue.
+              </p>
+              <div class="card__footer">
+                <div class="avatar" data-component="Avatar"><span aria-hidden="true">AB</span></div>
+                <span class="card__meta">Ana Belmonte · Payroll operations</span>
+                <button class="btn btn--sm" data-component="Button" type="button" aria-disabled="false" tabindex="-1">
+                  <span>Read</span>
+                </button>
+              </div>
+            </div>
+          </article>
+        </div>
+
+        <div class="acc__slide" aria-roledescription="slide" aria-label="2 of 5" data-active="false" data-offscreen="false" aria-hidden="true" style="transform: translateX(-116%) rotateY(22deg) scale(0.74); opacity: 0.06; --acc-dim: 2.00; z-index: 10;">
+          <article class="card" data-component="Card">
+            <img class="card__media" data-component="Image" src="https://picsum.photos/seed/acc-benefits/640/360" alt="Two colleagues comparing benefits plans on a tablet">
+            <div class="card__body">
+              <div class="card__eyebrow">
+                <span class="badge" data-component="Badge">Benefits</span>
+                <span class="tag" data-component="Tag"><span>4 min read</span></span>
+              </div>
+              <h5 class="card__title">Open enrollment, without the paperwork</h5>
+              <h6 class="card__subtitle">Employee self-service</h6>
+              <p class="card__text">
+                Plan comparisons, dependant records, and carrier feeds stay in sync, so elections
+                land correctly on the first deduction.
+              </p>
+              <div class="card__footer">
+                <div class="avatar" data-component="Avatar"><span aria-hidden="true">DR</span></div>
+                <span class="card__meta">Devon Reyes · Benefits advisory</span>
+                <button class="btn btn--sm" data-component="Button" type="button" aria-disabled="false" tabindex="-1">
+                  <span>Read</span>
+                </button>
+              </div>
+            </div>
+          </article>
+        </div>
+
+        <div class="acc__slide" aria-roledescription="slide" aria-label="3 of 5" data-active="false" data-offscreen="false" aria-hidden="true" style="transform: translateX(-58%) rotateY(11deg) scale(0.87); opacity: 0.45; --acc-dim: 1.00; z-index: 20;">
+          <article class="card" data-component="Card">
+            <img class="card__media" data-component="Image" src="https://picsum.photos/seed/acc-time/640/360" alt="A time clock terminal mounted beside a warehouse door">
+            <div class="card__body">
+              <div class="card__eyebrow">
+                <span class="badge" data-component="Badge">Time</span>
+                <span class="tag" data-component="Tag"><span>5 min read</span></span>
+              </div>
+              <h5 class="card__title">Catch overtime before it happens</h5>
+              <h6 class="card__subtitle">Scheduling &amp; attendance</h6>
+              <p class="card__text">
+                Threshold alerts surface at the shift level, so a manager can rebalance coverage
+                while the week is still editable.
+              </p>
+              <div class="card__footer">
+                <div class="avatar" data-component="Avatar"><span aria-hidden="true">MK</span></div>
+                <span class="card__meta">Mira Kaur · Workforce management</span>
+                <button class="btn btn--sm" data-component="Button" type="button" aria-disabled="false" tabindex="-1">
+                  <span>Read</span>
+                </button>
+              </div>
+            </div>
+          </article>
+        </div>
+
+        <div class="acc__slide" aria-roledescription="slide" aria-label="4 of 5" data-active="true" data-offscreen="false" aria-hidden="false" style="transform: translateX(0%) rotateY(0deg) scale(1); opacity: 1; --acc-dim: 0.00; z-index: 30;">
+          <article class="card" data-component="Card">
+            <img class="card__media" data-component="Image" src="https://picsum.photos/seed/acc-compliance/640/360" alt="A compliance officer annotating a printed filing calendar">
+            <div class="card__body">
+              <div class="card__eyebrow">
+                <span class="badge" data-component="Badge">Compliance</span>
+                <span class="tag" data-component="Tag"><span>7 min read</span></span>
+              </div>
+              <h5 class="card__title">Filing deadlines, tracked for you</h5>
+              <h6 class="card__subtitle">Federal, state, and local</h6>
+              <p class="card__text">
+                Jurisdiction rules update automatically, and each filing carries an audit trail
+                you can hand to a reviewer as-is.
+              </p>
+              <div class="card__footer">
+                <div class="avatar" data-component="Avatar"><span aria-hidden="true">JT</span></div>
+                <span class="card__meta">Jordan Tam · Tax &amp; compliance</span>
+                <button class="btn btn--sm" data-component="Button" type="button" aria-disabled="false" tabindex="0">
+                  <span>Read</span>
+                </button>
+              </div>
+            </div>
+          </article>
+        </div>
+
+        <div class="acc__slide" aria-roledescription="slide" aria-label="5 of 5" data-active="false" data-offscreen="false" aria-hidden="true" style="transform: translateX(58%) rotateY(-11deg) scale(0.87); opacity: 0.45; --acc-dim: 1.00; z-index: 20;">
+          <article class="card" data-component="Card">
+            <img class="card__media" data-component="Image" src="https://picsum.photos/seed/acc-insights/640/360" alt="A dashboard of workforce cost charts on a wide monitor">
+            <div class="card__body">
+              <div class="card__eyebrow">
+                <span class="badge" data-component="Badge">Insights</span>
+                <span class="tag" data-component="Tag"><span>3 min read</span></span>
+              </div>
+              <h5 class="card__title">See labour cost by department</h5>
+              <h6 class="card__subtitle">Analytics &amp; reporting</h6>
+              <p class="card__text">
+                Blend payroll, time, and headcount into one view, then export the same figures your
+                finance team already reconciles.
+              </p>
+              <div class="card__footer">
+                <div class="avatar" data-component="Avatar"><span aria-hidden="true">SO</span></div>
+                <span class="card__meta">Sam Okafor · People analytics</span>
+                <button class="btn btn--sm" data-component="Button" type="button" aria-disabled="false" tabindex="-1">
+                  <span>Read</span>
+                </button>
+              </div>
+            </div>
+          </article>
+        </div>
+
+      </div>
+    </div>
+
+    <div class="acc__dots" role="group" aria-label="Choose a card" id="accDots">
+      <button class="acc__dot" type="button" aria-current="false" aria-label="Card 1"></button>
+      <button class="acc__dot" type="button" aria-current="false" aria-label="Card 2"></button>
+      <button class="acc__dot" type="button" aria-current="false" aria-label="Card 3"></button>
+      <button class="acc__dot" type="button" aria-current="true" aria-label="Card 4"></button>
+      <button class="acc__dot" type="button" aria-current="false" aria-label="Card 5"></button>
+    </div>
+
+    <p class="acc__sr-only" role="status" aria-live="polite" id="accStatus">Card 4 of 5</p>
+  </div>
+</main>
+
+<script>
+  /* ── Animated carousel card — vanilla behaviour island ──────────
+     Position is a continuous value, so a drag animates the whole stage
+     live and then settles on the nearest card. Autoplay ping-pongs
+     between the first and last card rather than jump-cutting back to
+     the start, which would break the coverflow illusion. */
+  (function () {
+    var root = document.getElementById('acc');
+    var viewport = document.getElementById('accViewport');
+    var slides = Array.prototype.slice.call(document.querySelectorAll('#accStage .acc__slide'));
+    var dots = Array.prototype.slice.call(document.querySelectorAll('#accDots .acc__dot'));
+    var status = document.getElementById('accStatus');
+
+    var last = slides.length - 1;
+    var VISIBLE = 2;          /* neighbours drawn on each side */
+    var INTERVAL = 5200;      /* ms an autoplaying card holds the centre */
+    var FLICK = 0.33;         /* share of a card width that commits a drag */
+
+    var index = 0;            /* settled card */
+    var offset = 0;           /* live drag offset, in card widths */
+
+    var reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
+
+    /* ── Stage ────────────────────────────────────────────────── */
+    function stepPercent() {
+      var parsed = parseFloat(getComputedStyle(root).getPropertyValue('--acc-step'));
+      return isNaN(parsed) ? 58 : parsed;
+    }
+
+    function paint() {
+      var step = stepPercent();
+      var centre = Math.round(index + offset);
+
+      slides.forEach(function (slide, i) {
+        var rel = i - index - offset;
+        var dist = Math.abs(rel);
+        var clamped = Math.max(-VISIBLE, Math.min(VISIBLE, rel));
+        var active = centre === i;
+
+        /* Cards past the visible band keep drifting, but at half pace,
+           so they stack up behind the edge instead of flying away. */
+        var translate = clamped * step + (rel - clamped) * (step / 2);
+        var scale = Math.max(0.68, 1 - 0.13 * dist);
+        var rotate = -11 * clamped;
+        /* Distance reads as transparency: one step out is already half
+           dissolved, two is barely a ghost. The viewport's gradient mask
+           then carries whatever is left away at the edges. */
+        var opacity = Math.max(0.06, 1 - 0.55 * dist);
+
+        slide.style.transform =
+          'translateX(' + translate.toFixed(2) + '%) ' +
+          'rotateY(' + rotate.toFixed(2) + 'deg) ' +
+          'scale(' + scale.toFixed(3) + ')';
+        slide.style.opacity = opacity.toFixed(3);
+        slide.style.setProperty('--acc-dim', Math.min(VISIBLE, dist).toFixed(2));
+        slide.style.zIndex = String(Math.max(0, 30 - Math.round(dist * 10)));
+        slide.setAttribute('data-active', active ? 'true' : 'false');
+        slide.setAttribute('data-offscreen', dist > VISIBLE + 0.5 ? 'true' : 'false');
+        slide.setAttribute('aria-hidden', active ? 'false' : 'true');
+
+        /* Only the centre card's controls belong in the tab order. */
+        Array.prototype.forEach.call(slide.querySelectorAll('button, a[href]'), function (node) {
+          node.tabIndex = active ? 0 : -1;
+        });
+      });
+
+      dots.forEach(function (dot, i) {
+        dot.setAttribute('aria-current', i === index ? 'true' : 'false');
+      });
+    }
+
+    function goTo(target, announce) {
+      var clamped = Math.max(0, Math.min(last, target));
+      var changed = clamped !== index;
+      index = clamped;
+      offset = 0;
+      paint();
+      if (announce !== false && changed) {
+        status.textContent = 'Card ' + (index + 1) + ' of ' + slides.length;
+      }
+      return changed;
+    }
+
+    /* ── Autoplay ─────────────────────────────────────────────────
+       The carousel plays on its own — there is no visible transport, so
+       `holds` is the whole story: it counts the temporary suspensions
+       (hover, focus, a hidden tab) that pause the dwell timer. */
+    var holds = 0;
+    var direction = 1;
+    var elapsed = 0;
+    var stamp = 0;
+    var frame = null;
+
+    function advance() {
+      if (index >= last) { direction = -1; }
+      else if (index <= 0) { direction = 1; }
+      goTo(index + direction, true);
+    }
+
+    function tick(now) {
+      if (stamp === 0) { stamp = now; }
+      elapsed += now - stamp;
+      stamp = now;
+
+      if (elapsed >= INTERVAL) {
+        elapsed = 0;
+        advance();
+      }
+      frame = window.requestAnimationFrame(tick);
+    }
+
+    function sync() {
+      var running = holds === 0 && !reduce.matches;
+
+      if (running && frame === null) {
+        stamp = 0;
+        frame = window.requestAnimationFrame(tick);
+      } else if (!running && frame !== null) {
+        window.cancelAnimationFrame(frame);
+        frame = null;
+        stamp = 0;
+      }
+    }
+
+    function hold(on) {
+      holds = Math.max(0, holds + (on ? 1 : -1));
+      sync();
+    }
+
+    /* Any deliberate navigation restarts the dwell timer, so the card
+       the user just chose gets a full turn on stage. */
+    function restart() {
+      elapsed = 0;
+    }
+
+    /* Autoplay must never fight the user: it stands down while the pointer
+       is over the stage or focus is on a card. Scoped to the viewport, not
+       the whole carousel — a hold on the indicators too would strand the
+       timer, since focus stays on a dot after the press. */
+    viewport.addEventListener('pointerenter', function () { hold(true); });
+    viewport.addEventListener('pointerleave', function () { hold(false); });
+    viewport.addEventListener('focusin', function () { hold(true); });
+    viewport.addEventListener('focusout', function (event) {
+      if (!viewport.contains(event.relatedTarget)) { hold(false); }
+    });
+
+    document.addEventListener('visibilitychange', function () {
+      hold(document.hidden);
+    });
+
+    reduce.addEventListener('change', sync);
+
+    /* ── Drag to left / drag to right ─────────────────────────── */
+    var pointerId = null;
+    var startX = 0;
+    var moved = false;
+
+    viewport.addEventListener('pointerdown', function (event) {
+      if (event.button !== 0 || pointerId !== null) { return; }
+      pointerId = event.pointerId;
+      startX = event.clientX;
+      moved = false;
+      root.setAttribute('data-dragging', 'true');
+      viewport.setPointerCapture(pointerId);
+    });
+
+    viewport.addEventListener('pointermove', function (event) {
+      if (event.pointerId !== pointerId) { return; }
+      var width = viewport.getBoundingClientRect().width || 1;
+      var delta = (startX - event.clientX) / width;
+      if (Math.abs(delta) > 0.01) { moved = true; }
+
+      /* Rubber-band past the first and last card instead of running off. */
+      var raw = index + delta;
+      if (raw < 0) { delta = -index + raw * 0.35; }
+      if (raw > last) { delta = (last - index) + (raw - last) * 0.35; }
+
+      offset = delta;
+      paint();
+    });
+
+    function endDrag(event) {
+      if (event.pointerId !== pointerId) { return; }
+      if (viewport.hasPointerCapture(pointerId)) { viewport.releasePointerCapture(pointerId); }
+      pointerId = null;
+      root.setAttribute('data-dragging', 'false');
+
+      /* A flick past a third of a card commits; anything less snaps back. */
+      var settled = offset > FLICK ? Math.ceil(index + offset)
+                  : offset < -FLICK ? Math.floor(index + offset)
+                  : index;
+
+      /* A drag chooses its own direction — autoplay picks it up from there. */
+      if (settled > index) { direction = 1; }
+      else if (settled < index) { direction = -1; }
+
+      goTo(settled, moved);
+      restart();
+    }
+
+    viewport.addEventListener('pointerup', endDrag);
+    viewport.addEventListener('pointercancel', endDrag);
+    viewport.addEventListener('dragstart', function (event) { event.preventDefault(); });
+
+    /* ── Controls ─────────────────────────────────────────────── */
+    function step(delta) {
+      direction = delta > 0 ? 1 : -1;
+      goTo(index + delta, true);
+      restart();
+    }
+
+    dots.forEach(function (dot, i) {
+      dot.addEventListener('click', function () {
+        if (i !== index) { direction = i > index ? 1 : -1; }
+        goTo(i, true);
+        restart();
+      });
+    });
+
+    viewport.addEventListener('keydown', function (event) {
+      var handled = true;
+      if (event.key === 'ArrowLeft') { step(-1); }
+      else if (event.key === 'ArrowRight') { step(1); }
+      else if (event.key === 'Home') { goTo(0, true); restart(); }
+      else if (event.key === 'End') { goTo(last, true); restart(); }
+      else { handled = false; }
+      if (handled) { event.preventDefault(); }
+    });
+
+    window.addEventListener('resize', paint);
+
+    /* Rest state opens on the middle card, so the stage reads as one
+       centre card flanked on both sides — as drawn in the sketch. */
+    goTo(Math.floor(last / 2), false);
+    sync();
+  }());
+</script>
+
+</body></html>

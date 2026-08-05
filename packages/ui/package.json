@@ -279,7 +279,8 @@
     "lucide-react": "^1.23.0",
     "streamdown": "^2.5.0",
     "tailwind-merge": "^3.6.0",
-    "thinking-orbs": "^0.2.0"
+    "thinking-orbs": "^0.2.0",
+    "yjs": "^13.6.32"
   },
   "peerDependencies": {
     "react": "^19.0.0",
@@ -289,6 +290,7 @@
     "@types/node": "^22.10.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
+    "happy-dom": "^20.11.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "typescript": "^5.9.0",
