@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/experimental-ct-react";
 import App from "../../src/renderer/src/App";
 import type { Project } from "@vortspec/core/ipc";
-import { EMPTY_TOKENS, FOUNDED_TOKENS } from "../../../desktop/tests/ct/support/mock-api";
+import { EMPTY_TOKENS, FOUNDED_TOKENS } from "./support/mock-api";
 
 const PROJECT = {
   id: "p1",

@@ -33,7 +33,7 @@ during render. Do not start rewriting selectors.
 ### A correction, kept on purpose
 
 PR #107 said those 52 were caused by two incomplete fixture objects in
-`apps/desktop/tests/ct/support/fixtures.ts`. **That was wrong.** `fixtures.ts` is
+`tests/ct/support/fixtures.ts` (then under `apps/desktop`). **That was wrong.** `fixtures.ts` is
 imported only by *desktop's own* CT tests — it is not in the IDE bundle's graph at all.
 Verified by reverting both fields to their broken state and re-running: 207 still pass.
 
@@ -77,8 +77,7 @@ the compose `into gap` / `new container` distinction (placement is always
 
 ## Keep the mock complete
 
-`apps/desktop/tests/ct/support/mock-api.ts` — reused by `apps/ide` via
-`playwright/index.tsx` — had drifted **33 methods** behind `VortSpecApi`. It is now typed
+`apps/ide/tests/ct/support/mock-api.ts` had drifted **33 methods** behind `VortSpecApi`. It is now typed
 `const api: VortSpecApi`, so both a missing method **and** a wrong return shape fail
 `check-types`. Both are mutation-checked.
 

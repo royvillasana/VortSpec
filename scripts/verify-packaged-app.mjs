@@ -20,8 +20,17 @@ import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { createRequire } from "node:module";
 
-/** How long to wait for a window. Cold first launch on a slow disk is the worst case. */
-const LAUNCH_TIMEOUT_MS = 45_000;
+/**
+ * How long to wait for a window.
+ *
+ * The worst case is not a slow disk — it is the x64 build's FIRST launch on an
+ * Apple Silicon machine, where Rosetta translates the binary ahead of time. That
+ * took longer than the original 45s and failed the gate on a build that was
+ * perfectly fine; re-running it passed, because the translation was then cached.
+ * A gate that fails once and passes on retry is the kind people learn to re-run
+ * instead of read, which is the exact failure this script exists to remove.
+ */
+const LAUNCH_TIMEOUT_MS = 150_000;
 
 const requireFrom = createRequire(import.meta.url);
 const { extractAll } = requireFrom("@electron/asar");

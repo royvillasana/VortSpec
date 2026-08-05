@@ -3,16 +3,16 @@
 ## Purpose
 TBD - created by archiving change vortspec-ide. Update Purpose after archive.
 ## Requirements
-### Requirement: VortSpec IDE is a separate Electron application
-The IDE SHALL ship as `apps/ide`, a second Electron application distinct from the cockpit, reusing the same main-process handlers from `packages/core`. It SHALL be packaged and signed as its own macOS artifact in the existing release pipeline.
+### Requirement: VortSpec IDE is the Electron application
+The IDE SHALL ship as `apps/ide`, the project's Electron application, mounting the main-process handlers from `packages/core`. It SHALL be packaged as a macOS artifact by the release pipeline.
 
 #### Scenario: IDE launches independently
 - **WHEN** the user opens the VortSpec IDE
-- **THEN** it starts as its own app window, mounts the `core` IPC handlers, and does not require the cockpit app to be running
+- **THEN** it starts as its own app window and mounts the `core` IPC handlers
 
-#### Scenario: Second signed macOS artifact
+#### Scenario: The release produces the macOS artifacts
 - **WHEN** the release pipeline runs
-- **THEN** it produces a separate signed IDE dmg alongside the cockpit dmg, and the site can offer both downloads
+- **THEN** it produces the arm64 and Intel IDE dmgs the site offers for download, and the packaged app is verified to open a window before it is published
 
 ### Requirement: VS Code–style four-region layout
 The IDE SHALL present four regions: an Activity/Explorer sidebar on the left, an editor group in the center, a live preview pane paired with the editor, and the assistant chat on the right.

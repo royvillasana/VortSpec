@@ -870,6 +870,9 @@ export function GuidedFlow({
                         variant="default"
                         disabled={busy}
                         tip="Build the remaining components in chunks of five — each chunk on a cheaper model by complexity, followed by Storybook + manifest so the first results are usable right away."
+                        // Distinguishable from the per-component "Build" in the roster,
+                        // which shares its label.
+                        data-testid="gf-build-remaining"
                         onClick={() => void buildRemaining(false)}
                       >
                         Build
@@ -1024,7 +1027,7 @@ export function GuidedFlow({
                         )}
                       </div>
                       <p className="text-[11px] text-vs-text-muted">
-                        Components designed in Figma with no code match. Use “+ New component” to build one.
+                        Components designed in Figma with no code match. Use “New” to build one.
                       </p>
                     </Card>
                   )}

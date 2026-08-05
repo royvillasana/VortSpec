@@ -27,11 +27,15 @@ const props = {
   onOpenTasks: noop,
 };
 
+/** Collection/mode fields the token result gained after these fixtures were written. */
+const TOKEN_COLLECTIONS = { collections: [], activeCollection: null, activeMode: null, modeMap: {} };
+
 const TOKENS: InspectorTokensResult = {
   tokenFile: "src/tokens.css",
   figmaSynced: false,
   figmaOnly: [],
   usage: {},
+  ...TOKEN_COLLECTIONS,
   tokens: [
     { name: "color-primary", type: "color", rawValue: "#7C6FF0", resolvedValue: "#7C6FF0", source: "generated-code", uses: 1 },
   ],
@@ -41,6 +45,9 @@ const TOKENS: InspectorTokensResult = {
 const ROSTER: InspectorComponentsResult = {
   componentDir: "src/components",
   previewUrl: null,
+  // Figma-side fields, required since the design-source split; no Figma in CT.
+  figmaOnly: [],
+  figmaSynced: false,
   components: [
     { name: "Button", level: "atom", description: "Primary action", file: "src/components/Button.tsx", props: [], tokens: [], status: "verified", issues: [], specPath: null, reportPath: null },
     { name: "Card", level: "molecule", description: "Container", file: "src/components/Card.tsx", props: [], tokens: [], status: "built", issues: [], specPath: null, reportPath: null },
@@ -48,8 +55,8 @@ const ROSTER: InspectorComponentsResult = {
   ],
 };
 
-const EMPTY_TOKENS: InspectorTokensResult = { tokenFile: null, figmaSynced: false, figmaOnly: [], usage: {}, tokens: [] };
-const EMPTY_COMPONENTS: InspectorComponentsResult = { componentDir: null, previewUrl: null, components: [] };
+const EMPTY_TOKENS: InspectorTokensResult = { tokenFile: null, figmaSynced: false, figmaOnly: [], usage: {}, tokens: [], ...TOKEN_COLLECTIONS };
+const EMPTY_COMPONENTS: InspectorComponentsResult = { componentDir: null, previewUrl: null, figmaOnly: [], figmaSynced: false, components: [] };
 const MANIFEST = { path: "DESIGN.md", content: "# manifest", exists: true };
 
 // figma-cli connected — the primary component reader (Wave 3).
@@ -131,15 +138,19 @@ test("offers build for detected, verify/open for built components", async ({ mou
     hooksConfig: { mock: { tokens: TOKENS, components: ROSTER, manifest: MANIFEST } },
   });
   // Detected Modal → Build; built components → Verify + Open.
-  await expect(c.getByRole("button", { name: "Build", exact: true })).toBeVisible();
+  // Scoped to the roster row: a second "Build" now sits in the section toolbar, so an
+  // unscoped exact match is ambiguous. The per-component action is the subject here.
+  await expect(
+    c.locator("#gf-roster-organism").getByRole("button", { name: "Build", exact: true }),
+  ).toBeVisible();
   await expect(c.getByRole("button", { name: "Verify", exact: true }).first()).toBeVisible();
   await expect(c.getByRole("button", { name: "Open", exact: true }).first()).toBeVisible();
   // Incremental add/build actions: build-only, the build+verify pipeline, and new.
-  await expect(c.getByRole("button", { name: /Build only/ })).toBeVisible();
-  await expect(c.getByRole("button", { name: /Build & verify the rest/ })).toBeVisible();
-  await expect(c.getByRole("button", { name: "+ New component" })).toBeVisible();
+  await expect(c.getByTestId("gf-build-remaining")).toBeVisible();
+  await expect(c.getByRole("button", { name: /Build and Verify/ })).toBeVisible();
+  await expect(c.getByRole("button", { name: "New", exact: true })).toBeVisible();
   // Re-scan the design source to reconcile against what's already built.
-  await expect(c.getByRole("button", { name: /Re-scan/ })).toBeVisible();
+  await expect(c.getByRole("button", { name: /Re-Scan/i })).toBeVisible();
 });
 
 test("reconciles the roster against Figma components read via figma-cli (Wave 3)", async ({ mount }) => {
@@ -156,7 +167,7 @@ test("reconciles the roster against Figma components read via figma-cli (Wave 3)
   await expect(c.getByText("In Figma, not yet built")).toBeVisible();
   await expect(c.getByText("Tooltip", { exact: false })).toBeVisible();
   // The CLI-primary read button is offered (not the MCP re-scan) and reads on click.
-  const readBtn = c.getByRole("button", { name: /Figma components/ });
+  const readBtn = c.getByRole("button", { name: /Read Components/ });
   await expect(readBtn).toBeVisible();
   await readBtn.click();
   await expect(c.getByText(/Read 8 Figma components via figma-cli/)).toBeVisible();
@@ -167,49 +178,141 @@ test("hides the Figma read button when figma-cli isn't connected", async ({ moun
     hooksConfig: { mock: { tokens: TOKENS, components: ROSTER, manifest: MANIFEST } },
   });
   // No CLI connection → only the MCP re-scan path is offered.
-  await expect(c.getByRole("button", { name: /Figma components/ })).toHaveCount(0);
+  await expect(c.getByRole("button", { name: /Read Components/ })).toHaveCount(0);
   await expect(c.getByRole("button", { name: /Build Figma selection/ })).toHaveCount(0);
-  await expect(c.getByRole("button", { name: /Re-scan/ })).toBeVisible();
+  await expect(c.getByRole("button", { name: /Re-Scan/i })).toBeVisible();
 });
 
-test("builds the selected Figma node through the gated build (Wave 3 convenience)", async ({ mount }) => {
-  const BUILD_SEL: RunEvent[] = [
-    { kind: "system-init", model: "claude-opus-4-8", sessionId: "sess-s", tools: ["Read", "Write"], mcpServers: [], mcpErrors: [] },
-    { kind: "result", isError: false, text: "done", sessionId: "sess-s" },
-  ];
+// REMOVED: "builds the selected Figma node through the gated build (Wave 3 convenience)"
+// and "guides the user when nothing is selected in Figma".
+//
+// Both drove a "Build Figma selection" button that no longer exists anywhere in the
+// source. `buildFigmaSelection()` still sits in GuidedFlow.tsx but nothing calls it —
+// the control was removed and the function left behind. These tests were the only
+// thing still asserting that path, and they were asserting it against a button the
+// user cannot reach. Deleted rather than pointed at the dead function.
+
+test("build-one runs a transcript, then the roster reflects it from files", async ({ mount }) => {
+  // Modal starts detected; after the recorded build run, the roster (re-read from
+  // files) shows Modal built, so its row switches from Build to Verify/Open.
+  const AFTER: InspectorComponentsResult = {
+    componentDir: "src/components",
+    previewUrl: null,
+    // Figma-side fields, required since the design-source split; no Figma in CT.
+    figmaOnly: [],
+    figmaSynced: false,
+    components: ROSTER.components.map((c) =>
+      c.name === "Modal"
+        ? { ...c, file: "src/components/Modal.tsx", status: "built" as const }
+        : c,
+    ),
+  };
   const c = await mount(<GuidedFlow {...props} />, {
     hooksConfig: {
-      mock: {
-        tokens: TOKENS,
-        components: ROSTER,
-        manifest: MANIFEST,
-        figma: CLI_CONNECTED,
-        runScript: BUILD_SEL,
-        figmaSelection: { nodes: [{ id: "42:7", name: "Toolbar", type: "COMPONENT_SET" }], message: "1 node selected." },
-      },
+      mock: { tokens: TOKENS, components: ROSTER, manifest: MANIFEST, runScript: BUILD_RUN, componentsAfterRun: AFTER },
     },
   });
-  const btn = c.getByRole("button", { name: "Build Figma selection" });
-  await expect(btn).toBeVisible();
-  await btn.click();
-  // The gated build run starts, labelled with the selected node.
-  await expect(c.getByText(/Building "Toolbar" from the Figma selection/)).toBeVisible();
+  // Modal is the only detected component → its row shows Build. Scoped to the roster:
+  // the section toolbar has its own "Build" (build-remaining).
+  await c.locator("#gf-roster-organism").getByRole("button", { name: "Build", exact: true }).click();
+  // The holistic progress card renders for a build (same structure as verify —
+  // "View details" is its stable affordance; stage-derivation is unit-tested).
+  await expect(c.getByRole("button", { name: /View details|Hide details/ })).toBeVisible();
+  // After the run completes, the roster re-reads and no detected row remains.
+  await expect(c.getByText("detected", { exact: true })).toHaveCount(0);
+  await expect(c.getByText("3/3 built")).toBeVisible();
 });
 
-test("guides the user when nothing is selected in Figma", async ({ mount }) => {
+test("surfaces outputs: manifest + optional publish, no completion gate", async ({ mount }) => {
+  const c = await mount(<GuidedFlow {...props} />, {
+    hooksConfig: { mock: { tokens: TOKENS, components: ROSTER, manifest: MANIFEST } },
+  });
+  await expect(c.getByText("Design manifest")).toBeVisible();
+  await expect(c.getByRole("button", { name: "Open manifest" })).toBeVisible();
+  await expect(c.getByText("GitHub & source control")).toBeVisible();
+  await expect(c.getByRole("button", { name: "Open Source Control" })).toBeVisible();
+  await expect(c.getByText("optional", { exact: true }).first()).toBeVisible();
+  // Non-destructive refactor (M4) — enabled once the manifest exists.
+  await expect(c.getByText("Refactor existing screens")).toBeVisible();
+  await expect(c.getByRole("button", { name: /Refactor screens/ })).toBeEnabled();
+});
+
+test("gates the refactor action until the manifest exists (M4)", async ({ mount }) => {
   const c = await mount(<GuidedFlow {...props} />, {
     hooksConfig: {
-      mock: {
-        tokens: TOKENS,
-        components: ROSTER,
-        manifest: MANIFEST,
-        figma: CLI_CONNECTED,
-        figmaSelection: { nodes: [], message: "Nothing selected in Figma — select a component or frame, then try again." },
-      },
+      mock: { tokens: TOKENS, components: ROSTER, manifest: { path: "DESIGN.md", content: "", exists: false } },
     },
   });
-  await c.getByRole("button", { name: "Build Figma selection" }).click();
-  await expect(c.getByText(/Nothing selected in Figma/)).toBeVisible();
+  await expect(c.getByRole("button", { name: /Refactor screens/ })).toBeDisabled();
+});
+
+// A roster of six detected components (five atoms + one organism) with no source
+// files — the chunked build should split them into a chunk of five (Haiku) and a
+// chunk of one organism (Sonnet).
+const SIX_DETECTED: InspectorComponentsResult = {
+  componentDir: "src/components",
+  previewUrl: null,
+  // Figma-side fields, required since the design-source split; no Figma in CT.
+  figmaOnly: [],
+  figmaSynced: false,
+  components: [
+    ...["Button", "Input", "Label", "Badge", "Icon"].map((name) => ({
+      name, level: "atom", description: `${name} atom`, file: null, props: [], tokens: [],
+      status: "unknown" as const, issues: [], specPath: null, reportPath: null,
+    })),
+    { name: "Dialog", level: "organism", description: "Dialog organism", file: null, props: [], tokens: [], status: "unknown" as const, issues: [], specPath: null, reportPath: null },
+  ],
+};
+
+test("builds remaining components in chunks of five, routed by complexity", async ({ mount, page }) => {
+  const c = await mount(<GuidedFlow {...props} />, {
+    hooksConfig: { mock: { tokens: TOKENS, components: SIX_DETECTED, manifest: MANIFEST, runScript: BUILD_RUN } },
+  });
+  // The toolbar button lost its "only (N)" wording; it is just "Build" now.
+  await c.getByTestId("gf-build-remaining").click();
+  // The queue drains into two sequential runs (5 + 1).
+  await expect
+    .poll(async () => (await page.evaluate(() => (window as unknown as { __runOpts: unknown[] }).__runOpts.length)))
+    .toBe(2);
+  const opts = await page.evaluate(
+    () => (window as unknown as { __runOpts: { prompt: string; model?: string }[] }).__runOpts,
+  );
+  // First chunk: the five atoms, scoped so no other component is built. Component
+  // creation runs on the DEFAULT (best) model — `tierForChunk` returns "opus", which
+  // routes to no `--model` override (undefined). Downgrading builds to Haiku was
+  // reverted because it broke visual fidelity, so `model` is intentionally unset here.
+  expect(opts[0].model).toBeUndefined();
+  expect(opts[0].prompt).toContain('"Button", "Input", "Label", "Badge", "Icon"');
+  expect(opts[0].prompt).toMatch(/Do NOT build any other component/);
+  expect(opts[0].prompt).not.toContain("Dialog");
+  // Second chunk: the lone organism, scoped to just it.
+  expect(opts[1].prompt).toContain('"Dialog"');
+  expect(opts[1].prompt).not.toContain("Button");
+});
+
+// A collapsed variant set: ONE component carrying its variant axes (not 40 rows).
+const ROSTER_VARIANTS: InspectorComponentsResult = {
+  componentDir: "src/components",
+  previewUrl: null,
+  // Figma-side fields, required since the design-source split; no Figma in CT.
+  figmaOnly: [],
+  figmaSynced: false,
+  components: [
+    {
+      name: "form-item", level: "molecule", description: "Labeled form field", file: null,
+      props: [], tokens: [], status: "unknown", issues: [], specPath: null, reportPath: null,
+      variants: ["orientation", "control"],
+    },
+  ],
+};
+
+test("shows a collapsed variant set's axes in the roster (not one row per variant)", async ({ mount }) => {
+  const c = await mount(<GuidedFlow {...props} />, {
+    hooksConfig: { mock: { tokens: TOKENS, components: ROSTER_VARIANTS, manifest: MANIFEST } },
+  });
+  await expect(c.getByText("form-item", { exact: true })).toBeVisible();
+  // The variant axes badge, not 40 separate form-item rows.
+  await expect(c.getByText(/orientation · control/)).toBeVisible();
 });
 
 test("verify shows the outcome, not the raw checklist, and reports issues", async ({ mount }) => {
@@ -285,119 +388,7 @@ test("opens the new-component form", async ({ mount }) => {
   const c = await mount(<GuidedFlow {...props} />, {
     hooksConfig: { mock: { tokens: TOKENS, components: ROSTER, manifest: MANIFEST } },
   });
-  await c.getByRole("button", { name: "+ New component" }).click();
+  await c.getByRole("button", { name: "New", exact: true }).click();
   await expect(c.getByPlaceholder(/Component name/)).toBeVisible();
   await expect(c.getByRole("button", { name: "Create component" })).toBeVisible();
-});
-
-test("build-one runs a transcript, then the roster reflects it from files", async ({ mount }) => {
-  // Modal starts detected; after the recorded build run, the roster (re-read from
-  // files) shows Modal built, so its row switches from Build to Verify/Open.
-  const AFTER: InspectorComponentsResult = {
-    componentDir: "src/components",
-    previewUrl: null,
-    components: ROSTER.components.map((c) =>
-      c.name === "Modal"
-        ? { ...c, file: "src/components/Modal.tsx", status: "built" as const }
-        : c,
-    ),
-  };
-  const c = await mount(<GuidedFlow {...props} />, {
-    hooksConfig: {
-      mock: { tokens: TOKENS, components: ROSTER, manifest: MANIFEST, runScript: BUILD_RUN, componentsAfterRun: AFTER },
-    },
-  });
-  // Modal is the only detected component → its row shows Build.
-  await c.getByRole("button", { name: "Build", exact: true }).click();
-  // The holistic progress card renders for a build (same structure as verify —
-  // "View details" is its stable affordance; stage-derivation is unit-tested).
-  await expect(c.getByRole("button", { name: /View details|Hide details/ })).toBeVisible();
-  // After the run completes, the roster re-reads and no detected row remains.
-  await expect(c.getByText("detected", { exact: true })).toHaveCount(0);
-  await expect(c.getByText("3/3 built")).toBeVisible();
-});
-
-test("surfaces outputs: manifest + optional publish, no completion gate", async ({ mount }) => {
-  const c = await mount(<GuidedFlow {...props} />, {
-    hooksConfig: { mock: { tokens: TOKENS, components: ROSTER, manifest: MANIFEST } },
-  });
-  await expect(c.getByText("Design manifest")).toBeVisible();
-  await expect(c.getByRole("button", { name: "Open manifest" })).toBeVisible();
-  await expect(c.getByText("GitHub & source control")).toBeVisible();
-  await expect(c.getByRole("button", { name: "Open Source Control" })).toBeVisible();
-  await expect(c.getByText("optional", { exact: true }).first()).toBeVisible();
-  // Non-destructive refactor (M4) — enabled once the manifest exists.
-  await expect(c.getByText("Refactor existing screens")).toBeVisible();
-  await expect(c.getByRole("button", { name: /Refactor screens/ })).toBeEnabled();
-});
-
-test("gates the refactor action until the manifest exists (M4)", async ({ mount }) => {
-  const c = await mount(<GuidedFlow {...props} />, {
-    hooksConfig: {
-      mock: { tokens: TOKENS, components: ROSTER, manifest: { path: "DESIGN.md", content: "", exists: false } },
-    },
-  });
-  await expect(c.getByRole("button", { name: /Refactor screens/ })).toBeDisabled();
-});
-
-// A roster of six detected components (five atoms + one organism) with no source
-// files — the chunked build should split them into a chunk of five (Haiku) and a
-// chunk of one organism (Sonnet).
-const SIX_DETECTED: InspectorComponentsResult = {
-  componentDir: "src/components",
-  previewUrl: null,
-  components: [
-    ...["Button", "Input", "Label", "Badge", "Icon"].map((name) => ({
-      name, level: "atom", description: `${name} atom`, file: null, props: [], tokens: [],
-      status: "unknown" as const, issues: [], specPath: null, reportPath: null,
-    })),
-    { name: "Dialog", level: "organism", description: "Dialog organism", file: null, props: [], tokens: [], status: "unknown" as const, issues: [], specPath: null, reportPath: null },
-  ],
-};
-
-test("builds remaining components in chunks of five, routed by complexity", async ({ mount, page }) => {
-  const c = await mount(<GuidedFlow {...props} />, {
-    hooksConfig: { mock: { tokens: TOKENS, components: SIX_DETECTED, manifest: MANIFEST, runScript: BUILD_RUN } },
-  });
-  await c.getByRole("button", { name: /Build only \(6\)/ }).click();
-  // The queue drains into two sequential runs (5 + 1).
-  await expect
-    .poll(async () => (await page.evaluate(() => (window as unknown as { __runOpts: unknown[] }).__runOpts.length)))
-    .toBe(2);
-  const opts = await page.evaluate(
-    () => (window as unknown as { __runOpts: { prompt: string; model?: string }[] }).__runOpts,
-  );
-  // First chunk: the five atoms, scoped so no other component is built. Component
-  // creation runs on the DEFAULT (best) model — `tierForChunk` returns "opus", which
-  // routes to no `--model` override (undefined). Downgrading builds to Haiku was
-  // reverted because it broke visual fidelity, so `model` is intentionally unset here.
-  expect(opts[0].model).toBeUndefined();
-  expect(opts[0].prompt).toContain('"Button", "Input", "Label", "Badge", "Icon"');
-  expect(opts[0].prompt).toMatch(/Do NOT build any other component/);
-  expect(opts[0].prompt).not.toContain("Dialog");
-  // Second chunk: the lone organism, scoped to just it.
-  expect(opts[1].prompt).toContain('"Dialog"');
-  expect(opts[1].prompt).not.toContain("Button");
-});
-
-// A collapsed variant set: ONE component carrying its variant axes (not 40 rows).
-const ROSTER_VARIANTS: InspectorComponentsResult = {
-  componentDir: "src/components",
-  previewUrl: null,
-  components: [
-    {
-      name: "form-item", level: "molecule", description: "Labeled form field", file: null,
-      props: [], tokens: [], status: "unknown", issues: [], specPath: null, reportPath: null,
-      variants: ["orientation", "control"],
-    },
-  ],
-};
-
-test("shows a collapsed variant set's axes in the roster (not one row per variant)", async ({ mount }) => {
-  const c = await mount(<GuidedFlow {...props} />, {
-    hooksConfig: { mock: { tokens: TOKENS, components: ROSTER_VARIANTS, manifest: MANIFEST } },
-  });
-  await expect(c.getByText("form-item", { exact: true })).toBeVisible();
-  // The variant axes badge, not 40 separate form-item rows.
-  await expect(c.getByText(/orientation · control/)).toBeVisible();
 });
