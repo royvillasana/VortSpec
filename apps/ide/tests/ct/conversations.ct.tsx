@@ -20,14 +20,18 @@ const base = {
 async function open(c: import("@playwright/test").Locator): Promise<void> {
   await c.getByRole("button", { name: /acme-design-system/ }).click();
   await c.getByRole("button", { name: "Chat", exact: true }).click(); // chat now lives in the left dock's Chat tab
+  // No framework is configured in these fixtures, so the background-build gate
+  // reports "setup required" and its fixed bottom-center toast covers the chat's
+  // Send button — the clicks below failed on interception, not a missing element.
+  const toast = c.getByRole("button", { name: "Dismiss" });
+  if (await toast.count()) await toast.first().click();
 }
 
 const active = (c: import("@playwright/test").Locator) => c.getByTestId("active-conversation");
 const runOpts = (c: import("@playwright/test").Locator): Promise<Array<Record<string, unknown>>> =>
   c.page().evaluate(() => (window as unknown as { __runOpts: Array<Record<string, unknown>> }).__runOpts);
 
-// QUARANTINED [TIMEOUT] — see QUARANTINE.md
-test.fixme("conversations are independent tabs with persistent, isolated transcripts", async ({ mount }) => {
+test("conversations are independent tabs with persistent, isolated transcripts", async ({ mount }) => {
   const c = await mount(<App />, { hooksConfig: { mock: base } });
   await open(c);
   // Conversation 1 → "alpha".
@@ -47,8 +51,7 @@ test.fixme("conversations are independent tabs with persistent, isolated transcr
   await expect(active(c).getByText("beta")).toHaveCount(0);
 });
 
-// QUARANTINED [TIMEOUT] — see QUARANTINE.md
-test.fixme("the per-conversation agent shapes the run (Review = read-only + reviewer prompt)", async ({ mount }) => {
+test("the per-conversation agent shapes the run (Review = read-only + reviewer prompt)", async ({ mount }) => {
   const c = await mount(<App />, { hooksConfig: { mock: base } });
   await open(c);
   // Switch the agent to Review.
@@ -64,8 +67,7 @@ test.fixme("the per-conversation agent shapes the run (Review = read-only + revi
   expect(last.allowedTools).toContain("Read");
 });
 
-// QUARANTINED [TIMEOUT] — see QUARANTINE.md
-test.fixme("references another conversation by label, injecting its recent transcript", async ({ mount }) => {
+test("references another conversation by label, injecting its recent transcript", async ({ mount }) => {
   const c = await mount(<App />, { hooksConfig: { mock: base } });
   await open(c);
   // Conversation 1 says something.
@@ -88,8 +90,7 @@ test.fixme("references another conversation by label, injecting its recent trans
   expect(last).toContain("the answer is 42");
 });
 
-// QUARANTINED [TIMEOUT] — see QUARANTINE.md
-test.fixme("sends a highlighted selection from one conversation to another", async ({ mount }) => {
+test("sends a highlighted selection from one conversation to another", async ({ mount }) => {
   const c = await mount(<App />, { hooksConfig: { mock: base } });
   await open(c);
   await active(c).getByPlaceholder(/@ a file/).fill("magic string");

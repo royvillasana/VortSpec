@@ -14,8 +14,7 @@ const canvasWrites = (c: L): Promise<Array<{ file: string; edit: Record<string, 
 const runPrompts = (c: L): Promise<string[]> =>
   c.page().evaluate(() => (window as unknown as { __runPrompts: string[] }).__runPrompts ?? []);
 
-// QUARANTINED [REGISTRY] — see QUARANTINE.md
-test.fixme("6.1 a style edit persists deterministically — no AI run, no Apply/Keep gate", async ({ mount }) => {
+test("6.1 a style edit persists deterministically — no AI run, no Apply/Keep gate", async ({ mount }) => {
   const c = await mount(<InstantEditsHarness />);
   await c.getByRole("button", { name: "Change color" }).click();
   // A deterministic write landed…
@@ -29,8 +28,7 @@ test.fixme("6.1 a style edit persists deterministically — no AI run, no Apply/
   await expect(c.getByTestId("write-error")).toHaveCount(0);
 });
 
-// QUARANTINED [REGISTRY] — see QUARANTINE.md
-test.fixme("6.2 a delete writes a delete op deterministically — no AI", async ({ mount }) => {
+test("6.2 a delete writes a delete op deterministically — no AI", async ({ mount }) => {
   const c = await mount(<InstantEditsHarness />);
   await c.getByRole("button", { name: "Delete element" }).click();
   await expect.poll(() => canvasWrites(c).then((w) => w.length)).toBe(1);
@@ -39,8 +37,7 @@ test.fixme("6.2 a delete writes a delete op deterministically — no AI", async 
   await expect(c.getByTestId("apply-bar")).toHaveCount(0);
 });
 
-// QUARANTINED [REGISTRY] — see QUARANTINE.md
-test.fixme("6.3 an un-writable edit surfaces a fixable notice and starts NO AI", async ({ mount }) => {
+test("6.3 an un-writable edit surfaces a fixable notice and starts NO AI", async ({ mount }) => {
   // writeCanvasEdit reports the anchor isn't statically resolvable (e.g. inside a .map()).
   const c = await mount(<InstantEditsHarness />, {
     hooksConfig: { mock: { canvasWriteResult: { ok: false, reason: "It's rendered inside a list (.map())." } } },
@@ -51,8 +48,7 @@ test.fixme("6.3 an un-writable edit surfaces a fixable notice and starts NO AI",
   expect(await runPrompts(c)).toEqual([]);
 });
 
-// QUARANTINED [REGISTRY] — see QUARANTINE.md
-test.fixme("6.4 the assistant button routes to the AI path (a run starts)", async ({ mount }) => {
+test("6.4 the assistant button routes to the AI path (a run starts)", async ({ mount }) => {
   const c = await mount(<InstantEditsHarness />);
   await c.getByRole("button", { name: "Ask the assistant" }).click();
   await expect.poll(() => runPrompts(c).then((p) => p.length)).toBeGreaterThan(0);
@@ -61,8 +57,7 @@ test.fixme("6.4 the assistant button routes to the AI path (a run starts)", asyn
   expect(await canvasWrites(c)).toEqual([]);
 });
 
-// QUARANTINED [REGISTRY] — see QUARANTINE.md
-test.fixme("6.6 time-to-visible is bounded by the overlay — the change shows even if the write never lands", async ({ mount }) => {
+test("6.6 time-to-visible is bounded by the overlay — the change shows even if the write never lands", async ({ mount }) => {
   // writeCanvasEdit hangs forever: if the visible result depended on the write, the swatch would
   // never update. It updates immediately from the optimistic overlay → write is off the critical path.
   const c = await mount(<InstantEditsHarness />, { hooksConfig: { mock: { canvasWriteHang: true } } });
@@ -73,8 +68,7 @@ test.fixme("6.6 time-to-visible is bounded by the overlay — the change shows e
   expect(await runPrompts(c)).toEqual([]);
 });
 
-// QUARANTINED [REGISTRY] — see QUARANTINE.md
-test.fixme("6.3b an un-stamped element falls to the gated ledger (Apply), not a silent AI run", async ({ mount }) => {
+test("6.3b an un-stamped element falls to the gated ledger (Apply), not a silent AI run", async ({ mount }) => {
   const c = await mount(<InstantEditsHarness stamped={false} />);
   await c.getByRole("button", { name: "Change color" }).click();
   await expect(c.getByTestId("apply-bar")).toBeVisible();

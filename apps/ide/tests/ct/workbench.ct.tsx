@@ -73,13 +73,15 @@ test("Source Control and Settings views are reachable and chromeless", async ({ 
   await expect(c.getByRole("heading", { name: "Profile", exact: true })).toBeVisible();
 });
 
-// QUARANTINED [TIMEOUT] — see QUARANTINE.md
-test.fixme("the Storybook activity shows the Storybook runtime on localhost", async ({ mount }) => {
+test("the Storybook activity shows the Storybook runtime on localhost", async ({ mount }) => {
   const c = await mount(<App />, { hooksConfig: { mock: base } });
   await open(c);
   await rail(c).getByRole("button", { name: "Storybook" }).click();
-  // The RunApp view in Storybook mode — its own header, distinct from "Playground".
-  await expect(c.getByText("Storybook", { exact: true })).toBeVisible();
+  // "Storybook" now appears twice — the breadcrumb reflects the activity as well as
+  // the view's own header — so an unscoped exact match is a strict-mode violation.
+  // Assert both places rather than picking one and calling it the header.
+  await expect(c.getByRole("navigation", { name: "Breadcrumb" })).toContainText("Storybook");
+  await expect(c.getByText("Storybook", { exact: true })).toHaveCount(2);
   await expect(c.getByText("localhost", { exact: true })).toBeVisible();
 });
 

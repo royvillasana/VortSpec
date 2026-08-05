@@ -9,12 +9,12 @@
 # selectors, while the real cause — `api.onDrawSketchReady is not a function`, a mock 33 methods
 # behind `VortSpecApi` — was visible only in a browser console nobody opened.
 #
-# 73 known-bad tests are `test.fixme`'d (see tests/ct/QUARANTINE.md) so this gate means something
-# from day one: a red run here is a regression YOU caused, not inherited. The quarantine list is
-# closed except by deletion — do not add to it to turn a red run green.
+# The suite is fully green — 207 passing, nothing quarantined — so a red run here is a regression
+# YOU caused, not one you inherited. Don't reach for `test.fixme` to turn a red run green; the
+# hard-won debugging notes in apps/ide/tests/ct/README.md exist so you don't have to.
 #
-# Cost: ~40s of test time locally once the quarantined tests stopped burning a 20s timeout each
-# (2.2 min before). The browser download dominates on a cold runner, hence the cache.
+# Cost: ~45s of test time locally (2.2 min when the failures were each burning a 20s timeout).
+# The browser download dominates on a cold runner, hence the cache.
 name: component-tests
 
 on:

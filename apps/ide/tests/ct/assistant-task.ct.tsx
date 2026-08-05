@@ -11,8 +11,7 @@ const PROJECT = {
 
 const active = (c: import("@playwright/test").Locator) => c.getByTestId("active-conversation");
 
-// QUARANTINED [REGISTRY] — see QUARANTINE.md
-test.fixme("a handed-off task opens a dedicated tab that auto-runs its prompt", async ({ mount }) => {
+test("a handed-off task opens a dedicated tab that auto-runs its prompt", async ({ mount }) => {
   const c = await mount(
     <ConversationTabs
       project={PROJECT}

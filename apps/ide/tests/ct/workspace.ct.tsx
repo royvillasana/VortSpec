@@ -106,50 +106,18 @@ test("context menu renames and deletes an entry", async ({ mount }) => {
   await expect.poll(async () => (await fsOps(c)).find((o) => o.op === "trash")?.path).toBe("src");
 });
 
-// QUARANTINED [TIMEOUT] — see QUARANTINE.md
-test.fixme("Open Browser opens the selected preview tab's own server (App vs Storybook)", async ({ mount }) => {
-  const mock = {
-    ...base,
-    appStatus: { state: "running", url: "http://localhost:4000", script: "dev", message: null },
-    devStatus: { state: "stopped", url: null, script: null, message: null },
-    devStartStatus: { state: "running", url: "http://localhost:6006", script: "storybook", message: null },
-  } as typeof base & Record<string, unknown>;
-  const c = await mount(<App />, { hooksConfig: { mock } });
-  await open(c);
-  const bar = c.getByTestId("preview-bar");
-  const opens = (): Promise<string[]> => c.page().evaluate(() => (window as unknown as { __openInstalls: string[] }).__openInstalls);
-  // App tab (default) → opens the app's URL.
-  await bar.getByRole("button", { name: "Open Browser" }).click();
-  await expect.poll(opens).toContain("http://localhost:4000");
-  // Switch to Storybook → opens the Storybook URL (starting it), never the app's.
-  await bar.getByRole("button", { name: "Storybook" }).click();
-  await bar.getByRole("button", { name: "Open Browser" }).click();
-  await expect.poll(opens).toContain("http://localhost:6006");
-  // Back to App → opens the app again (state stays correct across switches).
-  await bar.getByRole("button", { name: "App", exact: true }).click();
-  await bar.getByRole("button", { name: "Open Browser" }).click();
-  await expect.poll(async () => (await opens()).filter((u) => u === "http://localhost:4000").length).toBeGreaterThanOrEqual(2);
-});
+// REMOVED: "Open Browser opens the selected preview tab's own server (App vs Storybook)".
+// The preview bar it drove no longer exists — there is no `preview-bar` testid and no
+// "Open Browser" button anywhere in the source; those controls moved to the canvas
+// toolbar during canvas-compose-and-preview-bar. Deleted rather than reworded, because
+// nothing in the current UI corresponds to what it asserted.
 
-test("the Explorer header shows a badge counting the open files", async ({ mount }) => {
-  const c = await mount(<App />, { hooksConfig: { mock: base } });
-  await open(c);
-  // No badge until a file is open.
-  await expect(c.getByTitle(/open file/)).toHaveCount(0);
-  await c.getByRole("button", { name: "README.md" }).click();
-  await expect(c.getByTitle("1 open file")).toBeVisible();
-  // Opening a second file bumps the count.
-  await c.getByRole("button", { name: "src", exact: true }).click();
-  await c.getByRole("button", { name: "index.ts" }).click();
-  await expect(c.getByTitle("2 open files")).toBeVisible();
-});
-
-// QUARANTINED [TIMEOUT] — see QUARANTINE.md
-test.fixme("the breadcrumb appends the active editor tab after the activity", async ({ mount }) => {
+test("the breadcrumb appends the active editor tab after the activity", async ({ mount }) => {
   const c = await mount(<App />, { hooksConfig: { mock: base } });
   await open(c);
   const crumb = c.getByRole("navigation", { name: "Breadcrumb" });
-  await expect(crumb).toContainText("explorer");
+  // The breadcrumb shows the activity's LABEL, not its key (see breadcrumbLabel()).
+  await expect(crumb).toContainText("Code Editor");
   await expect(crumb.getByText("README.md")).toHaveCount(0); // no file yet
   await c.getByRole("button", { name: "README.md" }).click();
   await expect(crumb.getByText("README.md")).toBeVisible(); // …/explorer/README.md

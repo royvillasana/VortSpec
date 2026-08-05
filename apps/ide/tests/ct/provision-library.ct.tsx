@@ -35,8 +35,7 @@ const unprovisioned = {
   tokens: TOKENS,
 };
 
-// QUARANTINED [REGISTRY] — see QUARANTINE.md
-test.fixme("a library project with no components nudges to provision, not to rebuild", async ({ mount }) => {
+test("a library project with no components nudges to provision, not to rebuild", async ({ mount }) => {
   const c = await mount(<GuidedFlow {...flowProps} />, { hooksConfig: { mock: unprovisioned } });
   // The un-provisioned empty state names the library and offers provisioning (the CTA
   // appears both in the action bar and the empty-state card).
@@ -47,21 +46,23 @@ test.fixme("a library project with no components nudges to provision, not to reb
   await expect(c.getByRole("button", { name: /Build only|Build & verify the rest/ })).toHaveCount(0);
 });
 
-// QUARANTINED [REGISTRY] — see QUARANTINE.md
-test.fixme("clicking Provision runs the /provision-library flow, not a component build", async ({ mount }) => {
+test("clicking Provision runs the /provision-library flow, not a component build", async ({ mount }) => {
   const c = await mount(<GuidedFlow {...flowProps} />, { hooksConfig: { mock: unprovisioned } });
   await c.getByRole("button", { name: /Provision shadcn/i }).first().click();
   const prompts = await c
     .page()
     .evaluate(() => (window as unknown as { __runPrompts: string[] }).__runPrompts ?? []);
-  const provisionRun = prompts.find((p) => p.includes("/provision-library"));
+  // The prompt no longer names the `/provision-library` skill or says "hand-build";
+  // it now states the same contract in its own words, so anchor on that instead of
+  // on wording that has already moved once.
+  const provisionRun = prompts.find((p) => p.includes("Provision this project's component library"));
   expect(provisionRun).toBeTruthy();
-  // It provisions the real library, never rebuilds from scratch.
-  expect(provisionRun).toContain("do NOT hand-build components the library already ships");
+  // It CONSUMES the real library rather than rebuilding it — the claim this test exists for.
+  expect(provisionRun).toContain("never reimplement");
+  expect(provisionRun).toContain("never generate a wrapper file per component");
 });
 
-// QUARANTINED [REGISTRY] — see QUARANTINE.md
-test.fixme("a provisioned library shows the roster + a Re-provision affordance", async ({ mount }) => {
+test("a provisioned library shows the roster + a Re-provision affordance", async ({ mount }) => {
   const provisioned = {
     projectConfig: { designSource: "library", componentLibrary: "shadcn" },
     components: {
