@@ -10,13 +10,25 @@
 # clip of a blank page. If you re-record, re-check them before trusting these
 # timestamps.
 #
-# Output is FULL RESOLUTION (the recording's native size). The clips are displayed
-# at roughly half their pixel width on the page, which is what keeps them sharp on
-# a Retina display — a GIF sized to its CSS width renders soft there. That costs
-# real bytes, so every clip is lazy-loaded.
+# Output is full resolution, minus the desktop showing around the app. The clips
+# are displayed at roughly two-thirds their pixel width on the page, which is what
+# keeps them sharp on a Retina display — a GIF sized to its CSS width renders soft
+# there. That costs real bytes, so every clip is lazy-loaded.
+#
+# CROP: the recording captured the whole screen, leaving a black margin on every
+# side of the app window. `cropdetect` reports the same box at every timestamp
+# sampled across the recording, so it is hard-coded rather than detected per run —
+# a per-run detection would silently change framing if one clip happened to start
+# on a dark frame. Re-derive it after a new recording:
+#
+#   ffmpeg -ss 55 -t 1 -i rec.mov -vf cropdetect=limit=24:round=2 -f null - 2>&1 \
+#     | grep -o "crop=[0-9:]*" | tail -1
 set -euo pipefail
 
 SRC="${1:?usage: make-site-gifs.sh <recording.mov>}"
+
+# w:h:x:y — the app window inside the 1582x984 capture.
+CROP="crop=1470:872:56:38"
 OUT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../site/media" && pwd)"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
@@ -42,13 +54,13 @@ for spec in "${CLIPS[@]}"; do
   # stats_mode=diff weights the palette toward what actually MOVES, which matters
   # when most of the frame is a static dark panel.
   ffmpeg -y -v error -ss "$ss" -t "$dur" -i "$SRC" \
-    -vf "fps=$fps,palettegen=max_colors=$colors:stats_mode=diff" "$pal"
+    -vf "$CROP,fps=$fps,palettegen=max_colors=$colors:stats_mode=diff" "$pal"
 
   # dither=none: the UI is flat colour, and dithering it adds noise and bytes.
   # The output label + -map is required — without it ffmpeg tries to mux the
   # palette PNG as a second video stream and the GIF muxer refuses.
   ffmpeg -y -v error -ss "$ss" -t "$dur" -i "$SRC" -i "$pal" \
-    -filter_complex "[0:v]fps=$fps[x];[x][1:v]paletteuse=dither=none:diff_mode=rectangle[o]" \
+    -filter_complex "[0:v]$CROP,fps=$fps[x];[x][1:v]paletteuse=dither=none:diff_mode=rectangle[o]" \
     -map "[o]" "$OUT/$name.gif"
 
   size="$(du -h "$OUT/$name.gif" | cut -f1)"
