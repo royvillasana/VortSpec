@@ -130,29 +130,28 @@
       @keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
 
       /* app screenshot / window mock */
-      .shot {
-        margin: 8px auto 0; max-width: 940px;
-        border: 1px solid var(--border); border-radius: 14px; overflow: hidden;
-        background: var(--surface); box-shadow: 0 30px 80px rgba(0,0,0,0.55);
+      /* Captioned demo clips. Real recordings of the app, cut to one action each and
+         published as GIF so there is no player, no autoplay policy, and no JS. The
+         caption carries the explanation so the clip does not have to be self-evident. */
+      /* 660px is the GIFs' native width — capping here keeps them pixel-exact
+         rather than upscaled and soft. */
+      /* Sources are 1470px wide (the app window, cropped out of a full-screen
+         capture); shown at up to 1032px so a Retina display still has ~1.4x the
+         pixels it needs. Sizing a GIF to its CSS width is what made these look
+         soft before. */
+      .demo { margin: 30px auto 38px; max-width: 1032px; }
+      .demo img {
+        display: block; width: 100%; height: auto; border-radius: 12px;
+        border: 1px solid var(--border); background: #0b0c0e;
+        box-shadow: 0 24px 60px rgba(0,0,0,0.5);
       }
-      .shot .bar { display: flex; align-items: center; gap: 8px; padding: 11px 14px; border-bottom: 1px solid var(--border); background: #101114; }
-      .shot .bar i { width: 11px; height: 11px; border-radius: 50%; display: inline-block; }
-      .shot .bar .t { margin-left: 10px; font-size: 12px; color: var(--text-3); }
-      .shot .body { display: grid; grid-template-columns: 150px 1fr; min-height: 300px; }
-      .shot .rail { border-right: 1px solid var(--border); padding: 14px 10px; display: flex; flex-direction: column; gap: 4px; }
-      .shot .rail .item { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--text-2); padding: 6px 8px; border-radius: 6px; }
-      .shot .rail .item.on { background: var(--elevated); color: var(--accent); font-weight: 500; }
-      .shot .rail .item .g { width: 6px; height: 6px; border-radius: 2px; background: currentColor; opacity: 0.5; }
-      .shot .canvas { padding: 22px; }
-      .shot .h { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
-      .shot .hsub { font-size: 12.5px; color: var(--text-3); margin-bottom: 16px; }
-      .shot .comp { display: flex; align-items: center; gap: 12px; border-top: 1px solid var(--border); padding: 10px 2px; font-size: 13px; }
-      .shot .comp:first-of-type { border-top: 0; }
-      .shot .comp .nm { flex: 1; }
-      .shot .comp .st { font-family: "Geist Mono", monospace; font-size: 10px; }
-      .st.ok { color: var(--success); } .st.mid { color: var(--text-2); } .st.new { color: var(--text-3); }
-      .shot .comp .cdot { width: 6px; height: 6px; border-radius: 50%; }
-      @media (max-width: 640px) { .shot .body { grid-template-columns: 1fr; } .shot .rail { display: none; } }
+      .demo figcaption {
+        margin-top: 12px; font-size: 13.5px; line-height: 1.55; color: var(--text-3);
+        text-align: left;
+      }
+      .demo figcaption b { color: var(--text-2); font-weight: 600; }
+      @media (max-width: 760px) { .demo figcaption { font-size: 13px; } }
+
 
       /* section */
       section { padding: 76px 0; }
@@ -173,21 +172,6 @@
 
       /* two-app split */
 
-      /* IDE window mock — reuses .shot; a two-pane editor + terminal strip */
-      .shot .ide { display: grid; grid-template-columns: 40px 138px 1fr; min-height: 300px; }
-      .shot .act { border-right: 1px solid var(--border); display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 14px 0; }
-      .shot .act .b { width: 18px; height: 18px; border-radius: 5px; background: var(--elevated); }
-      .shot .act .b.on { background: rgba(124,111,240,0.25); box-shadow: inset 2px 0 0 var(--accent); }
-      .shot .tree { border-right: 1px solid var(--border); padding: 12px 10px; display: flex; flex-direction: column; gap: 7px; font-size: 12px; color: var(--text-2); }
-      .shot .tree .f { color: var(--text-3); }
-      .shot .edit { display: flex; flex-direction: column; min-width: 0; }
-      .shot .edit .tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--border); padding: 0 8px; }
-      .shot .edit .tab { font-size: 11.5px; color: var(--text-2); padding: 8px 12px; border-bottom: 2px solid var(--accent); }
-      .shot .edit .code { flex: 1; padding: 14px 16px; font-family: "Geist Mono", monospace; font-size: 11.5px; line-height: 1.7; color: var(--text-2); }
-      .shot .edit .code .k { color: var(--accent); } .shot .edit .code .s { color: var(--success); } .shot .edit .code .c { color: var(--text-3); }
-      .shot .edit .term { border-top: 1px solid var(--border); background: #0d0e11; padding: 10px 16px; font-family: "Geist Mono", monospace; font-size: 11px; color: var(--text-2); }
-      .shot .edit .term .p { color: var(--success); }
-      @media (max-width: 640px) { .shot .ide { grid-template-columns: 1fr; } .shot .act, .shot .tree { display: none; } }
 
       /* steps */
       .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 44px; }
@@ -292,33 +276,12 @@
         </div>
       </header>
 
-      <!-- WINDOW MOCK -->
+      <!-- The real IDE, recorded. Replaces the hand-built window mock that used to sit here. -->
       <div class="wrap">
-        <div class="shot" aria-hidden="true">
-          <div class="bar">
-            <i style="background:#ff5f57"></i><i style="background:#febc2e"></i><i style="background:#28c840"></i>
-            <span class="t">VortSpec — Design system</span>
-          </div>
-          <div class="body">
-            <div class="rail">
-              <div class="item on"><span class="g"></span> Flow</div>
-              <div class="item"><span class="g"></span> Run</div>
-              <div class="item"><span class="g"></span> Playground</div>
-              <div class="item"><span class="g"></span> Tokens</div>
-              <div class="item"><span class="g"></span> Manifest</div>
-              <div class="item"><span class="g"></span> History</div>
-            </div>
-            <div class="canvas">
-              <div class="h">Design system</div>
-              <div class="hsub">Foundation ready · 8/11 built · 5 verified</div>
-              <div class="comp"><span class="cdot" style="background:#30a46c"></span><span class="nm">Button</span><span class="st ok">verified</span></div>
-              <div class="comp"><span class="cdot" style="background:#30a46c"></span><span class="nm">Input</span><span class="st ok">verified</span></div>
-              <div class="comp"><span class="cdot" style="background:#9ba1ab"></span><span class="nm">Card</span><span class="st mid">built</span></div>
-              <div class="comp"><span class="cdot" style="background:#9ba1ab"></span><span class="nm">Badge</span><span class="st mid">built</span></div>
-              <div class="comp"><span class="cdot" style="background:#6b7280"></span><span class="nm">Modal</span><span class="st new">detected</span></div>
-            </div>
-          </div>
-        </div>
+        <figure class="demo">
+          <img src="./media/ide-editor.gif" alt="The VortSpec IDE: file tree, open editor tabs, component source, and the Chat pane" width="1470" height="872" decoding="async" />
+          <figcaption><b>This is the actual app.</b> A file tree, real editor tabs, your component's source — and Claude Code in the next pane, working on the same files you are.</figcaption>
+        </figure>
       </div>
 
       <!-- FEATURES -->
@@ -359,44 +322,17 @@
               <p>Watch live agent progress — tool calls, file edits, completion — as friendly activity, with the raw stream-json terminal always one click away. A lens, not a cage.</p>
             </div>
           </div>
+          <figure class="demo">
+            <img src="./media/design-system.gif" alt="Browsing design tokens grouped by colour, typography, spacing and shadow" loading="lazy" decoding="async" width="1470" height="872" />
+            <figcaption><b>Your design system, as data.</b> Tokens are extracted from your source and grouped by kind — colour, typography, spacing, radius, shadow — each with its name, its value, and where it is used. This is what every generated component is built from.</figcaption>
+          </figure>
+          <figure class="demo">
+            <img src="./media/playground.gif" alt="A composed screen rendering live in the VortSpec Playground" loading="lazy" decoding="async" width="1470" height="872" />
+            <figcaption><b>A real screen, running.</b> Pages composed from your design system render live in the Playground — the actual app, not a mockup — so you scroll and click the thing you are about to ship.</figcaption>
+          </figure>
         </div>
       </section>
 
-      <!-- IDE SHOWCASE -->
-      <section id="apps">
-        <div class="wrap">
-
-          <!-- IDE WINDOW MOCK -->
-          <div class="shot" aria-hidden="true" style="margin-top:34px;">
-            <div class="bar">
-              <i style="background:#ff5f57"></i><i style="background:#febc2e"></i><i style="background:#28c840"></i>
-              <span class="t"><img src="./vortspec-ide-icon.png" alt="" style="width:15px;height:15px;border-radius:3.5px;vertical-align:-3px;margin-right:7px;" />VortSpec IDE — acme-design-system</span>
-            </div>
-            <div class="ide">
-              <div class="act">
-                <div class="b on"></div><div class="b"></div><div class="b"></div><div class="b"></div><div class="b"></div>
-              </div>
-              <div class="tree">
-                <div>src/</div>
-                <div class="f">&nbsp;&nbsp;Button.tsx</div>
-                <div class="f">&nbsp;&nbsp;Card.tsx</div>
-                <div>tokens.css</div>
-                <div>DESIGN.md</div>
-              </div>
-              <div class="edit">
-                <div class="tabs"><span class="tab">Button.tsx</span></div>
-                <div class="code">
-                  <span class="c">// grounded in the open file + live preview</span><br />
-                  <span class="k">export function</span> Button({ variant }) {<br />
-                  &nbsp;&nbsp;<span class="k">return</span> &lt;button className={<span class="s">styles[variant]</span>} /&gt;;<br />
-                  }
-                </div>
-                <div class="term"><span class="p">acme ~</span> pnpm storybook <span style="color:var(--text-3)">· preview reloading…</span></div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
 
       <!-- THE IDE -->
       <section id="ide">
@@ -437,6 +373,10 @@
               <p>Ask the assistant to open a folder, clone a repository, or switch projects — every workspace-changing action asks for a one-click confirmation first. A model can advise and edit, but never silently swap your project.</p>
             </div>
           </div>
+          <figure class="demo">
+            <img src="./media/storybook.gif" alt="Browsing a component's Storybook documentation inside VortSpec" loading="lazy" decoding="async" width="1470" height="872" />
+            <figcaption><b>Every component documented, not just rendered.</b> VortSpec stands up a real Storybook and embeds it: identity, the full props table, states and behaviour, accessibility notes, and the anti-patterns to avoid — the same page your AI reads before it writes anything.</figcaption>
+          </figure>
         </div>
       </section>
 
@@ -462,6 +402,10 @@
               <p>Approve the design manifest, then optionally publish to GitHub with your own git — ready to build on-brand screens for your product.</p>
             </div>
           </div>
+          <figure class="demo">
+            <img src="./media/canvas-edit.gif" alt="Selecting an element on the VortSpec canvas and editing its properties" loading="lazy" decoding="async" width="1470" height="872" />
+            <figcaption><b>Edit the running screen, not a picture of it.</b> Selecting an element on the canvas reveals its layer in the tree and its real properties — layout, spacing, typography, colour — on the right. Changes are written back to the component's source, so what you nudge here is the code you ship.</figcaption>
+          </figure>
         </div>
       </section>
 

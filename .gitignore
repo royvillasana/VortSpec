@@ -44,3 +44,8 @@ apps/ide/release/
 packages/core/resources/vortspec-stamp.mjs
 apps/ide/resources/vortspec-stamp.mjs
 apps/desktop/resources/vortspec-stamp.mjs
+
+# Screen recordings are the SOURCE for site/media/*.gif — keep them out of the repo
+# (this one was 84MB). The published clips are the GIFs, which are committed.
+*.mov
+*.mp4
