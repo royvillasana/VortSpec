@@ -58,6 +58,55 @@ const NODE_COMMENT = 8;
  * losslessly in the CRDT for serialization regardless.
  */
 export function bindLightDom(doc: Y.Doc, container: Element, document: Doc): LightBinding {
+  return start(doc, container, document, "build")!;
+}
+
+/**
+ * Bind to the DOM the browser has ALREADY rendered, instead of replacing it.
+ *
+ * This is the one the guest uses, and the difference matters. The Playground loads a light page over
+ * a local HTTP server, and by the time we get there the page is live: the light server has injected a
+ * token stylesheet, the inspector has minted a node id per element, and the page's own scripts have
+ * run. Rebuilding that document from the CRDT would throw all of it away to gain nothing the user can
+ * see — on the app's most fragile seam, where a rendering failure surfaces as a selector error rather
+ * than as itself.
+ *
+ * So the live tree is paired with the CRDT tree node by node. If they line up, we observe and never
+ * touch what is on screen. If they diverge anywhere — the HTML parser inserted an implied `<tbody>`,
+ * a script rewrote the page before we arrived — this returns `null` and that page is simply not live.
+ * Refusing costs a collaborative session; guessing costs a misaligned tree, which is how an edit ends
+ * up applied to the wrong element.
+ */
+export function adoptLightDom(doc: Y.Doc, container: Element, document: Doc): LightBinding | null {
+  return start(doc, container, document, "adopt");
+}
+
+/**
+ * Adopt a whole page the way the guest actually has it: a live `document`, not a container element.
+ *
+ * The CRDT's top level is `[doctype, whitespace, <html>]`, and only the `<html>` has a counterpart on
+ * screen — a document's doctype cannot be replaced and the whitespace between them is not a node the
+ * browser kept. So the page's root element is paired with `document.documentElement` and everything
+ * below follows. The skipped top-level nodes are still carried in the CRDT, so writing the file back
+ * reproduces it exactly.
+ */
+export function adoptLightPage(doc: Y.Doc, document: Document): LightBinding | null {
+  const fragment = doc.getXmlFragment(PAGE_FRAGMENT);
+  const root = (fragment.toArray() as YNode[]).find(
+    (node): node is Y.XmlElement => node instanceof Y.XmlElement && node.nodeName.toLowerCase() === "html",
+  );
+  if (!root || !document.documentElement) return null;
+  return start(doc, document.documentElement, document, "adopt", root);
+}
+
+function start(
+  doc: Y.Doc,
+  container: Element,
+  document: Doc,
+  mode: "build" | "adopt",
+  /** When given, `container` IS this node rather than its parent. */
+  rootY?: Y.XmlElement,
+): LightBinding | null {
   const fragment = doc.getXmlFragment(PAGE_FRAGMENT);
   const domFor = new Map<YNode, Node>();
   const yFor = new WeakMap<Node, YNode>();
@@ -92,10 +141,17 @@ export function bindLightDom(doc: Y.Doc, container: Element, document: Doc): Lig
     return el;
   };
 
-  while (container.firstChild) container.removeChild(container.firstChild);
-  for (const top of fragment.toArray()) {
-    const built = build(top as YNode);
-    if (built) container.appendChild(built);
+  if (mode === "build") {
+    while (container.firstChild) container.removeChild(container.firstChild);
+    for (const top of fragment.toArray()) {
+      const built = build(top as YNode);
+      if (built) container.appendChild(built);
+    }
+  } else if (rootY) {
+    link(rootY, container);
+    if (!pair(rootY, container, link)) return null;
+  } else if (!pair(fragment, container, link)) {
+    return null;
   }
 
   // ── CRDT → DOM ────────────────────────────────────────────────────────
@@ -142,6 +198,44 @@ export function bindLightDom(doc: Y.Doc, container: Element, document: Doc): Lig
       domFor.clear();
     },
   };
+}
+
+/**
+ * Walk the CRDT tree and the live DOM in lockstep, linking each pair. False the moment they disagree
+ * about the shape of the document — no repair, no best effort.
+ *
+ * Doctype nodes are skipped: they are carried in the CRDT so the file can be written back exactly,
+ * but they are not children of the element we are given.
+ */
+function pair(yParent: Y.XmlFragment | Y.XmlElement, domParent: Element, link: (y: YNode, node: Node) => void): boolean {
+  const yChildren = (yParent.toArray() as YNode[]).filter(
+    (child) => !(child instanceof Y.XmlElement && child.nodeName === DOCTYPE_NODE),
+  );
+  // Instrumentation the canvas injected is not part of the page and has no counterpart to pair with.
+  const domChildren = Array.from(domParent.childNodes).filter((node) => !isInstrumentation(node));
+  if (yChildren.length !== domChildren.length) return false;
+
+  for (let i = 0; i < yChildren.length; i += 1) {
+    const y = yChildren[i]!;
+    const node = domChildren[i]!;
+    if (y instanceof Y.XmlText) {
+      if (node.nodeType !== NODE_TEXT) return false;
+      link(y, node);
+      continue;
+    }
+    if (y.nodeName === COMMENT_NODE) {
+      if (node.nodeType !== NODE_COMMENT) return false;
+      link(y, node);
+      continue;
+    }
+    if (node.nodeType !== NODE_ELEMENT) return false;
+    const el = node as Element;
+    if (el.tagName.toLowerCase() !== y.nodeName.toLowerCase()) return false;
+    link(y, el);
+    // A void element's CRDT node has no children, and neither does its DOM node.
+    if (!pair(y, el, link)) return false;
+  }
+  return true;
 }
 
 type Delta = { retain?: number; insert?: unknown[]; delete?: number };

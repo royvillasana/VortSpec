@@ -520,6 +520,41 @@ export function RunApp({
     if (isLightPage && lightPageSrc) bridge.loadUrl(lightPageSrc);
   }, [isLightPage, lightPageSrc, bridge.loadUrl]);
 
+  // Seed the live document once the page is on screen (live-playground, task 1.2b). The CRDT is built
+  // from the FILE, not from the DOM: the served page is not the file (the light server injects a token
+  // stylesheet), and the DOM has lost the file's formatting regardless — and a collaborative edit has
+  // to land in git as one changed attribute, not a reformat of the whole page.
+  //
+  // Framework pages never start a session: their edits are codemods into .tsx, which is a different
+  // problem with a different failure mode. Nothing here reaches the network — there is no relay yet.
+  useEffect(() => {
+    if (!isLightPage || !lightPage || !bridge.ready) {
+      bridge.stopLive();
+      return;
+    }
+    let alive = true;
+    void api
+      .liteReadPage(project.path, lightPage)
+      .then((html) => {
+        if (alive && typeof html === "string" && html) bridge.startLive(html);
+      })
+      .catch(() => {
+        /* the page stays on today's write path */
+      });
+    return () => {
+      alive = false;
+    };
+  }, [isLightPage, lightPage, bridge.ready, project.path, bridge.startLive, bridge.stopLive]);
+
+  // Until the Playground shows session state in the UI (tasks 2.6 and 5.3), this is the only way to
+  // tell whether a page joined a live document. Kept deliberately: "not live" is a normal outcome and
+  // silently indistinguishable from "live" otherwise, which is how a broken adoption goes unnoticed.
+  useEffect(() => {
+    if (!isLightPage || !lightPage) return;
+    if (bridge.live.adopted) console.info(`[vortspec:live] "${lightPage}" is a live document`);
+    else if (bridge.live.reason) console.info(`[vortspec:live] "${lightPage}" is not live — ${bridge.live.reason}`);
+  }, [isLightPage, lightPage, bridge.live]);
+
   // Auto-open the existing page when arriving at the Playground. A light-first project has a light page
   // but no framework dev server — so without this it opened on the "No app dev script found" error and
   // the user had to click the page to see it. If a light page exists, nothing is selected yet, and there

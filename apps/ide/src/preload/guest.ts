@@ -26,6 +26,8 @@ import {
 } from "@vortspec/core/inspector-bridge";
 import { resolveInsertTarget, placeholderSizing, type FlowAxis } from "@vortspec/core/insert-geometry";
 import { buildStructuralModel, slotAt, type StructuralNode, type Slot } from "@vortspec/core/structure-model";
+import * as Y from "yjs";
+import { adoptLightPage, type LightBinding } from "@vortspec/ui/light-dom-bind";
 
 /**
  * Run-Canvas inspector bridge — guest preload (change: run-canvas-visual-editor).
@@ -1010,8 +1012,76 @@ function reacquirePlaceholder(): void {
   send({ t: "placeholderReady", target: placeholderTarget, rect: rectOf(el) });
 }
 
+// ── Live document (change: live-playground, task 1.2b) ─────────────────────────
+/**
+ * The page as a CRDT, paired with the DOM the browser already rendered. Null whenever the page is
+ * not live — which is the normal state for a framework page, for a page whose markup we cannot model
+ * exactly, and for every page before the host sends its state.
+ */
+let liveDoc: Y.Doc | null = null;
+let liveBinding: LightBinding | null = null;
+
+/** The bridge is a JSON channel, so Yjs's binary updates travel as base64. */
+const toBase64 = (bytes: Uint8Array): string => {
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary);
+};
+
+const fromBase64 = (text: string): Uint8Array => {
+  const binary = atob(text);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+};
+
+/** Marks an update as having arrived from the host, so it is not sent straight back. */
+const HOST_ORIGIN = "vs-host";
+
+function stopLive(): void {
+  liveBinding?.destroy();
+  liveBinding = null;
+  liveDoc?.destroy();
+  liveDoc = null;
+}
+
+function startLive(state: string): void {
+  stopLive();
+  try {
+    const doc = new Y.Doc();
+    Y.applyUpdate(doc, fromBase64(state));
+    const binding = adoptLightPage(doc, document);
+    if (!binding) {
+      doc.destroy();
+      // Not an error. The page renders and edits exactly as it does today; it just cannot join a
+      // session, because pairing a mismatched tree is how an edit lands on the wrong element.
+      send({ t: "liveAdopted", ok: false, reason: "the rendered page does not match the file exactly" });
+      return;
+    }
+    doc.on("update", (update: Uint8Array, origin: unknown) => {
+      if (origin === HOST_ORIGIN) return;
+      send({ t: "liveUpdate", update: toBase64(update) });
+    });
+    liveDoc = doc;
+    liveBinding = binding;
+    send({ t: "liveAdopted", ok: true });
+  } catch (err) {
+    stopLive();
+    send({ t: "liveAdopted", ok: false, reason: err instanceof Error ? err.message : String(err) });
+  }
+}
+
 function handleCommand(cmd: BridgeCommand): void {
   switch (cmd.t) {
+    case "liveInit":
+      startLive(cmd.state);
+      return;
+    case "liveUpdate":
+      if (liveDoc) Y.applyUpdate(liveDoc, fromBase64(cmd.update), HOST_ORIGIN);
+      return;
+    case "liveStop":
+      stopLive();
+      return;
     case "requestTree":
       send({ t: "tree", tree: buildTree() });
       return;

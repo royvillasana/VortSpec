@@ -28,9 +28,10 @@
     "@vortspec/core": "workspace:*",
     "@vortspec/ui": "workspace:*",
     "monaco-editor": "^0.52.0",
-    "zod": "^3.24.1",
     "node-pty": "^1.0.0",
-    "ts-morph": "^24.0.0"
+    "ts-morph": "^24.0.0",
+    "yjs": "^13.6.32",
+    "zod": "^3.24.1"
   },
   "devDependencies": {
     "@playwright/experimental-ct-react": "^1.61.1",

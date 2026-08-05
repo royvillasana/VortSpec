@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { readoutForFocus } from "./focus-readout";
+import * as Y from "yjs";
+import { lightHtmlToDoc } from "@vortspec/core/light-doc";
 import {
   INSPECTOR_BRIDGE_CHANNEL,
   bridgeEventSchema,
@@ -157,6 +159,17 @@ export interface InspectorBridge {
   watchAnchors: (fingerprints: string[]) => void;
   /** Scroll the element for a comment anchor into view (jump-to-pin). */
   scrollToAnchor: (fingerprint: string) => void;
+  /**
+   * Live document (change: live-playground). `startLive` seeds a page's CRDT from the file's exact
+   * bytes and hands it to the guest; it returns false when the page cannot be modelled exactly, in
+   * which case nothing changes and the page keeps working as it does today.
+   */
+  startLive: (html: string) => boolean;
+  stopLive: () => void;
+  /** Whether this page joined a live document, and why not when it did not. */
+  live: LiveState;
+  /** The host's replica of the page. Persistence writes from this rather than from a DOM snapshot. */
+  liveDoc: { current: Y.Doc | null };
   /** Capture a ~160px thumbnail of a guest rect (webview capturePage crop); "" if unavailable. */
   captureThumbnail: (rect: Rect) => Promise<string>;
   applyOverride: (id: string, css: Record<string, string>) => void;
@@ -182,6 +195,26 @@ export interface InspectorBridge {
   setLightMode: (on: boolean) => void;
 }
 
+/** Whether this page joined a live document, and why not when it did not. */
+export type LiveState = { adopted: boolean; reason: string | null };
+
+/** Marks an update as having come from the guest, so it is not echoed back to it. */
+const GUEST_ORIGIN = "vs-guest";
+
+/** The bridge is a JSON channel, so Yjs's binary updates travel as base64. */
+const toBase64 = (bytes: Uint8Array): string => {
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary);
+};
+
+const fromBase64 = (text: string): Uint8Array => {
+  const binary = atob(text);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+};
+
 /**
  * Renderer side of the Run-Canvas inspector bridge (change: run-canvas-visual-editor).
  *
@@ -192,6 +225,12 @@ export interface InspectorBridge {
  */
 export function useInspectorBridge(): InspectorBridge {
   const webviewRef = useRef<WebviewEl | null>(null);
+  // ── Live document (change: live-playground, task 1.2b) ───────────────────────
+  // The host's replica of the page. It exists so persistence can write from converged state rather
+  // than from one snapshot of the DOM, and so a relay has something to attach to later. Kept in a
+  // ref, not state: it changes on every keystroke and nothing renders from its contents.
+  const liveDocRef = useRef<Y.Doc | null>(null);
+  const [live, setLive] = useState<LiveState>({ adopted: false, reason: null });
   // The element we've wired listeners onto. The <webview> REMOUNTS when its `src`/key changes
   // (e.g. opening a light page), so we must re-attach to each NEW element — a once-only boolean
   // guard would leave the remounted webview with no listeners (no "ready", no tree → uneditable
@@ -250,6 +289,16 @@ export function useInspectorBridge(): InspectorBridge {
         return;
       case "tree":
         setTree(event.tree);
+        return;
+      case "liveAdopted":
+        // `ok: false` is a normal outcome, not a failure to report as an error: the page keeps
+        // working exactly as it does today, it just cannot join a session.
+        setLive({ adopted: event.ok, reason: event.reason ?? null });
+        return;
+      case "liveUpdate":
+        if (liveDocRef.current) {
+          Y.applyUpdate(liveDocRef.current, fromBase64(event.update), GUEST_ORIGIN);
+        }
         return;
       case "readout": {
         const id = event.readout.nodeId;
@@ -612,6 +661,40 @@ export function useInspectorBridge(): InspectorBridge {
       /* webview not ready — the caller can retry */
     }
   }, []);
+  /**
+   * Seed a live session for a light page from the file's exact bytes and hand it to the guest.
+   * Returns false when the page cannot be modelled exactly, in which case nothing changes and the
+   * page stays on today's write path.
+   */
+  const startLive = useCallback(
+    (html: string): boolean => {
+      stopLive();
+      const doc = lightHtmlToDoc(html);
+      if (!doc) {
+        setLive({ adopted: false, reason: "this page's markup cannot be modelled exactly" });
+        return false;
+      }
+      // Forward the host's own changes to the guest, but never the ones that came from it.
+      doc.on("update", (update: Uint8Array, origin: unknown) => {
+        if (origin === GUEST_ORIGIN) return;
+        send({ t: "liveUpdate", update: toBase64(update) });
+      });
+      liveDocRef.current = doc;
+      send({ t: "liveInit", state: toBase64(Y.encodeStateAsUpdate(doc)) });
+      return true;
+    },
+    [send],
+  );
+
+  const stopLive = useCallback((): void => {
+    if (liveDocRef.current) {
+      liveDocRef.current.destroy();
+      liveDocRef.current = null;
+      send({ t: "liveStop" });
+    }
+    setLive({ adopted: false, reason: null });
+  }, [send]);
+
   const serializeDom = useCallback(async (): Promise<string | null> => {
     const wv = webviewRef.current;
     if (!wv) return null;
@@ -707,5 +790,9 @@ export function useInspectorBridge(): InspectorBridge {
     loadUrl,
     serializeDom,
     setLightMode,
+    startLive,
+    stopLive,
+    live,
+    liveDoc: liveDocRef,
   };
 }

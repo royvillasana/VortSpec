@@ -2,7 +2,10 @@
 import { describe, it, expect } from "vitest";
 import * as Y from "yjs";
 import { docToLightHtml, lightHtmlToDoc, PAGE_FRAGMENT } from "@vortspec/core/light-doc";
-import { bindLightDom, LOCAL_ORIGIN } from "./light-dom-bind";
+import { readFileSync, readdirSync } from "node:fs";
+import { join as joinPath } from "node:path";
+import { Window } from "happy-dom";
+import { adoptLightDom, adoptLightPage, bindLightDom, LOCAL_ORIGIN } from "./light-dom-bind";
 
 /** Mutation records arrive on a microtask, so every DOM→CRDT assertion has to let one pass. */
 const settle = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
@@ -224,5 +227,103 @@ describe("destroy", () => {
     expect(docToLightHtml(doc)).not.toContain("color: red");
     yRoot(doc).setAttribute("id", "x");
     expect(container.querySelector("div")!.hasAttribute("id")).toBe(false);
+  });
+});
+
+describe("adopting a DOM the browser already rendered", () => {
+  /** What the guest actually has: the page parsed by the browser, plus a document from the file. */
+  const rendered = (html: string) => {
+    const container = document.createElement("main");
+    container.innerHTML = html;
+    document.body.appendChild(container);
+    return container;
+  };
+
+  it("pairs with the live tree without rebuilding it", () => {
+    const doc = lightHtmlToDoc(PAGE)!;
+    const container = rendered(PAGE);
+    const before = container.firstChild;
+
+    const binding = adoptLightDom(doc, container, document);
+
+    expect(binding).not.toBeNull();
+    // The very same nodes: nothing on screen was replaced, which is the whole point of adopting.
+    expect(container.firstChild).toBe(before);
+    expect(container.innerHTML).toBe(PAGE);
+  });
+
+  it("syncs both ways once adopted", async () => {
+    const doc = lightHtmlToDoc(PAGE)!;
+    const container = rendered(PAGE);
+    adoptLightDom(doc, container, document);
+
+    container.querySelector("div")!.setAttribute("style", "color: red");
+    await settle();
+    expect(docToLightHtml(doc)).toContain('style="color: red"');
+
+    yRoot(doc).setAttribute("id", "remote");
+    expect(container.querySelector("div")!.getAttribute("id")).toBe("remote");
+  });
+
+  it("refuses when the browser inserted a node nobody wrote", () => {
+    // The implied <tbody>: the file says table > tr, the DOM says table > tbody > tr. Pairing those
+    // would put every later index one level off, so the page is left uncollaborative instead.
+    const doc = lightHtmlToDoc("<table><tr><td>a</td></tr></table>")!;
+    const container = rendered("<table><tr><td>a</td></tr></table>");
+    expect(container.querySelector("tbody")).not.toBeNull();
+    expect(adoptLightDom(doc, container, document)).toBeNull();
+  });
+
+  it("refuses when the live page has drifted from the file", () => {
+    const doc = lightHtmlToDoc(PAGE)!;
+    const container = rendered(PAGE);
+    container.querySelector("div")!.appendChild(document.createElement("span"));
+    expect(adoptLightDom(doc, container, document)).toBeNull();
+  });
+
+  it("ignores canvas instrumentation when pairing", () => {
+    // The inspector's overlay is in the live DOM and never in the file. If it were counted, no page
+    // with a selection on it could ever go live.
+    const doc = lightHtmlToDoc(PAGE)!;
+    const container = rendered(PAGE);
+    const overlay = document.createElement("div");
+    overlay.setAttribute("data-vs-overlay", "");
+    container.appendChild(overlay);
+    expect(adoptLightDom(doc, container, document)).not.toBeNull();
+  });
+
+  it("refuses a real page whose live document has drifted", () => {
+    // Guards the test above from being vacuous: whole-document adoption has to be actually looking
+    // at the rendered tree, not just finding an <html> and declaring success.
+    const dir = joinPath(process.cwd(), "../core/src/shared/__fixtures__/light-pages");
+    const file = readdirSync(dir).filter((f) => f.endsWith(".html"))[0]!;
+    const src = readFileSync(joinPath(dir, file), "utf8");
+
+    const win = new Window();
+    win.document.write(src);
+    win.document.body.appendChild(win.document.createElement("aside"));
+
+    expect(adoptLightPage(lightHtmlToDoc(src)!, win.document as unknown as Document)).toBeNull();
+  });
+
+  it("adopts every real light page, as a whole document", () => {
+    // Through the browser's own parser, into a real `document` — which is what the guest has. An
+    // earlier version of this test set a full page as the innerHTML of an element, where the parser
+    // silently discards <html>, <head> and <body>; it therefore proved nothing at all.
+    const dir = joinPath(process.cwd(), "../core/src/shared/__fixtures__/light-pages");
+    const files = readdirSync(dir).filter((f) => f.endsWith(".html"));
+    expect(files.length).toBeGreaterThanOrEqual(4);
+
+    for (const file of files) {
+      const src = readFileSync(joinPath(dir, file), "utf8");
+      const win = new Window();
+      win.document.write(src);
+      const doc = lightHtmlToDoc(src);
+      expect(doc, file).not.toBeNull();
+      expect(
+        adoptLightPage(doc!, win.document as unknown as Document),
+        `${file} should adopt`,
+      ).not.toBeNull();
+    }
   });
 });

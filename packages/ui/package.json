@@ -260,6 +260,10 @@
     "./DrawWindow": {
       "types": "./src/views/DrawWindow.tsx",
       "default": "./src/views/DrawWindow.tsx"
+    },
+    "./light-dom-bind": {
+      "types": "./src/lib/light-dom-bind.ts",
+      "default": "./src/lib/light-dom-bind.ts"
     }
   },
   "scripts": {
