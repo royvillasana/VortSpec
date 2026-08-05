@@ -15,22 +15,35 @@ would have cost minutes if it had been written down.
 
 ## A rendering crash is disguised as a selector error
 
-This bit three separate times, and it is the single most useful thing here. A component
-that throws during render leaves React with an empty tree, so Playwright reports the
-thing you were *looking for* — a missing button, an unregistered component — never the
-thing that broke.
+This is the single most useful thing here. A component that throws during render leaves
+React with an empty tree, so Playwright reports the thing you were *looking for* — a
+missing button, an unregistered component — never the thing that broke.
 
 - 16 compose tests failed on selectors. Cause: `api.onDrawSketchReady` was missing from
   the mock, so calling it threw on mount.
 - 52 tests failed with `Unregistered component … registered: (empty)` and
   `metainfo.json` reporting `components: 0`. That reads exactly like a Playwright
-  harness bug. Cause: **two incomplete fixture objects** — a `props` entry missing
-  `classes`, and `COMPONENTS` missing `figmaOnly` / `figmaSynced`.
+  harness bug. It was not one — completing the mock fixed them.
 
 **When a CT test fails and the component looks innocent**, mount it in a throwaway
 `.ct.tsx`, attach `page.on("pageerror")` and `page.on("console")`, and dump
 `document.body.innerHTML`. An empty `#root` with no test error means something threw
 during render. Do not start rewriting selectors.
+
+### A correction, kept on purpose
+
+PR #107 said those 52 were caused by two incomplete fixture objects in
+`apps/desktop/tests/ct/support/fixtures.ts`. **That was wrong.** `fixtures.ts` is
+imported only by *desktop's own* CT tests — it is not in the IDE bundle's graph at all.
+Verified by reverting both fields to their broken state and re-running: 207 still pass.
+
+What actually fixed them was completing the mock. The intermediate "73 failures"
+measurement that the claim rested on was unreliable, and the true number after the mock
+fix was 24 the whole time.
+
+The lesson is the same one as above, aimed at myself: a plausible correlation measured
+once is not a cause. Both changes landed close together, one of them was obviously
+*shaped* like the fix, and I wrote it up without isolating it.
 
 ## A visible, enabled, stable element whose click still times out
 
@@ -65,8 +78,13 @@ the compose `into gap` / `new container` distinction (placement is always
 ## Keep the mock complete
 
 `apps/desktop/tests/ct/support/mock-api.ts` — reused by `apps/ide` via
-`playwright/index.tsx` — had drifted **33 methods** behind `VortSpecApi`. It is pinned
-with `satisfies Record<keyof VortSpecApi, unknown>`, so an omission now fails
-`check-types`. That is completeness, not shape: a *missing* method is the failure that
-actually happens. Full shape fidelity would mean correcting ~33 loose fixtures and is
-still open.
+`playwright/index.tsx` — had drifted **33 methods** behind `VortSpecApi`. It is now typed
+`const api: VortSpecApi`, so both a missing method **and** a wrong return shape fail
+`check-types`. Both are mutation-checked.
+
+Tightening it from completeness to shape caught a real harness bug immediately:
+`libraryReadiness` had been returning `null`, and `GuidedFlow` reads
+`libraryReadiness?.ready ?? total > 0`. Replacing `null` with a literal
+`ready: false` is *not* equivalent — `??` stops falling back — so a fixture with
+components started reading as un-provisioned. Mock returns are now **derived from the
+fixture** rather than hardcoded, so they mirror what the real probe would say.

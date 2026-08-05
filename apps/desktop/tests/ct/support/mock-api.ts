@@ -244,13 +244,36 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
   let dismissed: string | null = cfg.dismissedUpdate ?? null;
   const eventSubs = new Set<(e: { runId: string; event: RunEvent }) => void>();
   const rawSubs = new Set<(e: { runId: string; line: string }) => void>();
-  const devSubs = new Set<(e: { projectPath: string; status: DevServerStatus }) => void>();
+  const devSubs = new Set<
+    (e: { projectPath: string; status: DevServerStatus; kind: "app" | "storybook" }) => void
+  >();
   const termSubs = new Set<(e: { id: string; data: string; exit?: number | null }) => void>();
   // Workspace-change subscribers. Real ones, so a test can fire a change and assert every watcher re-reads
   // — which is how the two-surface staleness guarantee is verified.
-  const wsSubs: Array<(e: { projectPath: string; path: string | null; kind: string }) => void> = [];
+  const wsSubs: Array<
+    (e: { projectPath: string; path: string | null; kind: "add" | "change" | "unlink" | "refresh" }) => void
+  > = [];
   const ideActionSubs = new Set<(a: IdeAction) => void>();
   const drawSketchSubs = new Set<(p: DrawSketchReady) => void>();
+
+  /** A `Project` with every field the type requires — the loose literals below predate them. */
+  const projectAt = (path: string): import("@vortspec/core/ipc").Project => ({
+    id: "p",
+    name: "p",
+    path,
+    // A refreshed/opened project is set up by default, so the IDE's `openProject`
+    // routes it to the workspace rather than the intake stepper. Tests wanting the
+    // un-configured path pass an explicit project.
+    toolkit: { present: true, configured: true, version: "1.0.0", updateAvailable: false },
+    lastRunStatus: "none",
+    addedAt: "2026-01-01T00:00:00.000Z",
+  });
+
+  /** The empty flow. `getFlow` returns a Flow, never null — nothing to render, but a real shape. */
+  const EMPTY_FLOW: import("@vortspec/core/flow").Flow = {
+    definitions: [],
+    state: { currentStageId: "", stages: [] },
+  };
   const ideResolutions: IdeActionResult[] = [];
   // Stateful in-memory comment threads (seeded from cfg; list/upsert/resolve mutate it).
   const comments: CommentThread[] = [...(cfg.comments ?? [])];
@@ -287,7 +310,7 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
     return { runId };
   };
 
-  const api = {
+  const api: VortSpecApi = {
     isElectron: async () => true,
     getVersion: async () => "test",
     homeDir: async () => "/Users/dev",
@@ -319,7 +342,7 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
       return { dismissedVersion: version };
     },
     checkEnvironment: async () => cfg.env ?? { checks: [], ready: true },
-    verifyLogin: async () => ({ id: "claude-login", label: "Claude", status: "pass" }),
+    verifyLogin: async () => ({ id: "claude-login" as const, label: "Claude", status: "pass" as const, detail: "" }),
     verifyFigmaMcp: async () =>
       cfg.figmaMcp ?? { id: "figma-mcp", label: "Figma MCP", status: "unknown", detail: "" },
     addFigmaMcp: async () =>
@@ -341,24 +364,11 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
     removeProject: async (id: string) => (cfg.projects ?? []).filter((p) => p.id !== id),
     openFolder: async () => undefined,
     revealPath: async () => undefined,
-    refreshProject: async (path: string) => ({
-      id: "p",
-      name: "p",
-      path,
-      // A refreshed recent/opened project is a set-up one by default, so the ide
-      // App's `openProject` routes it to the workspace (not the intake stepper).
-      // Tests that want the un-configured intake path pass an explicit project.
-      toolkit: { present: true, configured: true, version: "1.0.0", updateAvailable: false },
-    }),
-    createProject: async () => null,
+    refreshProject: async (path: string) => projectAt(path),
+    createProject: async () => projectAt("/tmp/created"),
     toolkitStatus: async () => ({ present: true, configured: true, version: "1.0.0", updateAvailable: false }),
     installToolkit: async () => ({ present: true, configured: true, version: "1.0.0", updateAvailable: false }),
-    resyncToolkit: async (path: string) => ({
-      id: "p",
-      name: "p",
-      path,
-      toolkit: { present: true, configured: true, version: "1.0.0", updateAvailable: false },
-    }),
+    resyncToolkit: async (path: string) => projectAt(path),
 
     startRun,
     // Cancelling ends the run — emit a terminal result so the UI leaves its
@@ -429,7 +439,7 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
       return () => rawSubs.delete(cb);
     },
 
-    getFlow: async () => cfg.flow ?? null,
+    getFlow: async () => (cfg.flow as typeof EMPTY_FLOW | undefined) ?? EMPTY_FLOW,
     getManifest: async () =>
       (generated && cfg.manifestAfterGenerate) ||
       cfg.manifest || { path: "DESIGN.md", content: "", exists: false },
@@ -444,11 +454,11 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
       cfg.manifest ?? { path: "DESIGN.md", content: "", exists: false },
     snapshotManifest: async () =>
       cfg.manifest ?? { path: "DESIGN.md", content: "", exists: false },
-    setStageStatus: async () => null,
-    approveStage: async () => null,
-    requestChanges: async () => null,
-    saveIntake: async () => null,
-    completeInput: async () => null,
+    setStageStatus: async () => EMPTY_FLOW,
+    approveStage: async () => EMPTY_FLOW,
+    requestChanges: async () => EMPTY_FLOW,
+    saveIntake: async () => EMPTY_FLOW,
+    completeInput: async () => EMPTY_FLOW,
     getHistory: async () => ({ runs: [] }),
     startDevServer: async () => cfg.devStartStatus ?? RUNNING,
     stopDevServer: async () => undefined,
@@ -472,11 +482,16 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
     // The Playground provisioning effect wires the styling pipeline and reconciles
     // exports before installing Storybook; stub both so the effect reaches the real
     // ensureStorybook path instead of throwing on an undefined method.
-    ensureStylingPipeline: async () => ({ ok: true as const, changed: false }),
-    reconcileExports: async () => ({ ok: true as const, changed: [] }),
-    onDevServerUpdate: (cb: (e: { projectPath: string; status: DevServerStatus }) => void) => {
+    ensureStylingPipeline: async () => ({ applicable: false, created: [], preExisting: [], depsInstalled: false }),
+    reconcileExports: async () => ({ filesChanged: 0, changes: [] }),
+    onDevServerUpdate: (
+      cb: (e: { projectPath: string; status: DevServerStatus; kind: "app" | "storybook" }) => void,
+    ) => {
       devSubs.add(cb);
-      return () => devSubs.delete(cb);
+      // Set.delete returns a boolean; the unsubscribe contract is `() => void`.
+      return () => {
+        devSubs.delete(cb);
+      };
     },
 
     // Workspace filesystem (IDE Explorer / editor)
@@ -513,7 +528,10 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
     unwatchWorkspace: async () => undefined,
     fileAtHead: async (_projectPath: string, relPath: string) => cfg.fsHead?.[relPath] ?? null,
     // Real subscribers, so a test can fire a change and assert that everything watching re-reads.
-    onWorkspaceChange: (cb: (e: { projectPath: string; path: string | null; kind: string }) => void) => {
+    onWorkspaceChange: (
+      // `kind` is an enum in the contract, not a bare string.
+      cb: (e: { projectPath: string; path: string | null; kind: "add" | "change" | "unlink" | "refresh" }) => void,
+    ) => {
       wsSubs.push(cb);
       return () => {
         const i = wsSubs.indexOf(cb);
@@ -522,7 +540,7 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
     },
 
     // ── Design system (change: design-system-style-panel) ──
-    designSystemLibrary: async () => library(),
+    designSystemLibrary: async () => library() as unknown as import("@vortspec/core/design-library").DesignSystemLibrary,
     designSystemTokenDrift: async () => ({ screens: [], drifts: [] }),
     designSystemFonts: async () => ({ families: [], googleComplete: true }),
     setThemeFontFamily: async () => ({ version: 1, tokens: {}, components: {}, googleFonts: [] }),
@@ -663,7 +681,7 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
       },
     setFigmaToken: async () => cfg.setFigmaTokenResult ?? { ok: true, message: "Figma token updated." },
 
-    setPublishTarget: async () => null,
+    setPublishTarget: async () => EMPTY_FLOW,
     readArtifact: async () => null,
     findLatestArtifact: async () => null,
     projectConfig: async () => cfg.projectConfig ?? null,
@@ -758,8 +776,8 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
     // so nothing checked the mock against `VortSpecApi`, and any panel calling
     // one of them threw on mount — React then rendered NOTHING, and 46 component
     // tests failed on selectors that were never the real problem.
-    getLitePalette: async () => ({ html: "", tokens: [] }),
-    writeDesignerManifest: async () => ({ ok: true, path: "designer.md" }),
+    getLitePalette: async () => "",
+    writeDesignerManifest: async () => "designer.md",
     liteStandInPrompt: async () => "",
     liteTwoTrackPrompt: async () => "",
     litePageUrl: async (_p: string, name: string) => `http://localhost:5199/${name}.html`,
@@ -768,23 +786,23 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
     enterpriseStorybookUrl: async () => null,
     enterpriseSnapshotPrompt: async () => "",
     enterpriseGeneratePrompt: async () => "",
-    liteGenStatus: async () => ({ generated: [], pending: [] }),
-    liteMarkGenerated: async () => undefined,
+    liteGenStatus: async () => [],
+    liteMarkGenerated: async () => true,
     liteStandIns: async () => [],
     liteReadiness: async () => [],
     litepagePrompt: async () => "",
-    liteReadPage: async () => null,
+    liteReadPage: async () => "",
     litePages: async () => [],
     liteWritePage: async () => undefined,
-    canvasLoadGraph: async () => null,
+    canvasLoadGraph: async () => ({ schemaVersion: 1 as const, nodes: [], edges: [] }),
     canvasSaveGraph: async () => undefined,
     canvasLoadScene: async () => null,
     canvasSaveScene: async () => undefined,
-    canvasExportSketch: async () => ({ pngPath: "/tmp/sketch.png" }),
+    canvasExportSketch: async () => "/tmp/sketch.png",
     drawOpen: async () => undefined,
-    drawGeneratePrompt: async () => "",
-    drawRecordGeneration: async () => undefined,
-    drawReturnSketch: async () => undefined,
+    drawGeneratePrompt: async () => ({ prompt: "", outputPath: "", name: "", sketchId: "" }),
+    drawRecordGeneration: async () => "",
+    drawReturnSketch: async () => "",
     // A real subscription: ComposePanel registers on mount and calls the returned
     // unsubscribe on cleanup. Its absence — returning undefined, then calling it —
     // is what threw and blanked the whole compose harness.
@@ -794,25 +812,22 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
         drawSketchSubs.delete(cb);
       };
     },
-    libraryReadiness: async () => null,
-    libraryDetect: async () => null,
-    libraryEnumerateComponent: async () => null,
-    linkToken: async () => cfg.tokens ?? { sections: [] },
-    figmaComputeOrphanPushPlan: async () => ({ creates: [], updates: [], collection: "VortSpec" }),
+    // Derived from the fixture, not hardcoded. The contract is non-nullable, and
+    // GuidedFlow reads `libraryReadiness?.ready ?? total > 0` — so a flat
+    // `ready: false` overrides the components-exist fallback and makes a fixture
+    // WITH components read as un-provisioned. Mirror what the real probe reports:
+    // a library project is ready once its components have landed.
+    libraryReadiness: async () => ({
+      applicable: cfg.projectConfig?.designSource === "library",
+      ready: (cfg.components?.components?.length ?? 0) > 0,
+      detail: "",
+    }),
+    libraryDetect: async () => ({ detail: "" }),
+    libraryEnumerateComponent: async () => ({ component: "", props: [] }),
+    linkToken: async () => cfg.tokens ?? EMPTY_TOKENS,
+    figmaComputeOrphanPushPlan: async () => ({ collection: "VortSpec", entries: [] }),
 
-    // Every key of the real API must exist here. This object had drifted 33 methods
-    // behind `VortSpecApi`; `window.vortspec` is assigned as `unknown`, so nothing
-    // noticed for months. A panel calling a missing method threw during render, React
-    // unmounted the tree, and the tests failed on SELECTORS — the real cause never
-    // reached anyone. Adding a method to the API now fails `check-types`, which runs
-    // in CI.
-    //
-    // Deliberately `unknown` values, not `VortSpecApi`: this pins COMPLETENESS, which
-    // is the failure that actually happened. Full shape fidelity would mean correcting
-    // 33 loose fixtures (missing `detail`, `lastRunStatus`, nulls where the type says
-    // non-null) and risks changing what the passing tests assert — worth doing, but as
-    // its own change, not smuggled in here.
-  } satisfies Record<keyof VortSpecApi, unknown>;
+  };
 
   (window as unknown as { vortspec: unknown }).vortspec = api;
   (window as unknown as { __runPrompts: string[] }).__runPrompts = runPrompts;
