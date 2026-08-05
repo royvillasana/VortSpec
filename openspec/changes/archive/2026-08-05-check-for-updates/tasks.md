@@ -49,4 +49,4 @@
 - [x] 6.1 Run the full workspace `check-types`, unit tests, and both apps' CT suites — 6/6 typecheck, 1684 unit tests pass, IDE CT 164 passed (+21 new). The 46 CT failures are PRE-EXISTING: a clean-tree baseline run gives the identical 46 failed / 143 passed
 - [x] 6.2 Verified the REAL checker against the LIVE v0.1.35 release (network + parse + asset pick, only version/arch/store overridden): 0.1.34+arm64 → arm64 DMG; 0.1.34+x64 → **intel** DMG (the bug, fixed against production data); 0.1.35 → no update; 0.9.9 → no downgrade. NOT done: launching the Electron app to see the banner on screen — the wiring is covered by CT instead
 - [x] 6.3 Confirmed via the module's own abort path against an unroutable host (aborted at 8003ms, reported unreachable, cache not poisoned) and a DNS failure; CT covers the screen staying interactive while the check is in flight
-- [ ] 6.4 Update `openspec/specs/` via `/opsx:sync` (or archive the change) once implementation is verified
+- [x] 6.4 Update `openspec/specs/` via `/opsx:sync` — synced in #108: `app-updates` created (6 requirements), `ide-shell` and `profile` each gained one. Purely additive; 69/69 specs validate
