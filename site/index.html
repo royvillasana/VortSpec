@@ -487,6 +487,21 @@
           <h2>What's new</h2>
           <p class="lead">Recent releases.</p>
           <div class="log">
+            <div class="rel now">
+              <div class="rel-head">
+                <span class="ver">v0.1.36</span>
+                <span class="ttl">It tells you when it's out of date &mdash; and it opens</span>
+                <span class="now-tag">Latest</span>
+                <span class="when">Aug 5, 2026</span>
+              </div>
+              <ul>
+                <li><b>Fixes v0.1.35, which would not start</b> &mdash; that build launched and never opened a window. Nothing in the app had changed: the build toolchain moved a piece of generated code out of scope, and the main process failed before the window existed. The app no longer depends on that generated line, the toolchain is pinned to exact versions, and the release check now launches the packaged app and refuses to ship it unless a window actually appears.</li>
+                <li><b>VortSpec tells you when there's a new version</b> &mdash; the start screen says so when one is available, with the release notes one click away. Nothing installs itself: you download the new version and install it, the same as before.</li>
+                <li><b>Settings &rarr; Software update</b> &mdash; see the version you're running and check on demand. &ldquo;Couldn't reach GitHub&rdquo; now reads differently from &ldquo;you're up to date&rdquo;, so an offline check is never mistaken for good news.</li>
+                <li><b>The download matches your Mac</b> &mdash; Apple Silicon and Intel each get their own build. Previously the link always pointed at the Apple Silicon one, which would not run on an Intel Mac.</li>
+                <li><b>Everything from v0.1.35</b> &mdash; scoped style edits, canvas multi-select, the Library panel, screens bound to the design system, and the framework fixtures. Listed below; withdrawn there, shipping here.</li>
+              </ul>
+            </div>
             <div class="rel pulled">
               <div class="rel-head">
                 <span class="ver">v0.1.35</span>
@@ -494,7 +509,7 @@
                 <span class="pulled-tag">Withdrawn</span>
                 <span class="when">Aug 5, 2026</span>
               </div>
-              <p class="rel-note">This build did not open a window on macOS and has been withdrawn — a build-toolchain regression, not a change in the app. Download v0.1.34 below; these changes return in the next release.</p>
+              <p class="rel-note">This build did not open a window on macOS and has been withdrawn — a build-toolchain regression, not a change in the app. Its changes ship in v0.1.36 above &mdash; install that instead.</p>
               <ul>
                 <li><b>Every style edit carries a blast radius</b> — change a value and choose, on the same control, whether it applies to this element, everything that looks like it, every instance of the component, or the token itself. Each option states how many elements it will affect <i>before</i> you commit, so a wide change is never a surprise.</li>
                 <li><b>Change one component without disturbing the others</b> — a token is shared, so &ldquo;restyle every Button&rdquo; used to mean restyling every Card that read the same token. It is now written as that token redefined <i>inside</i> the component: Buttons follow, Cards keep their value, and the value stays a token rather than a hardcoded literal.</li>
@@ -504,11 +519,10 @@
                 <li><b>Framework support you can check</b> — Vue, Astro, SvelteKit, Nuxt and vanilla each gained an executable fixture that compiles a real project and proves the check catches what it claims. They run in CI on every change, including a mutation sweep that proves each fixture can actually fail.</li>
               </ul>
             </div>
-            <div class="rel now">
+            <div class="rel">
               <div class="rel-head">
                 <span class="ver">v0.1.34</span>
                 <span class="ttl">The design system, by property</span>
-                <span class="now-tag">Latest</span>
                 <span class="when">Aug 2, 2026</span>
               </div>
               <ul>
