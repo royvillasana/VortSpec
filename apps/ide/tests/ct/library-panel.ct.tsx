@@ -278,6 +278,10 @@ test("a selected component's styles are collected under its name, grouped and co
 
 test("the applied view leads, and leaves the design system below untouched", async ({ mount }) => {
   const plain = await mount(<LibraryPanel project={PROJECT} onEdited={() => {}} />);
+  // Wait for the panel's async token load before counting. Counting straight after
+  // mount raced on CI and read 0, which made the delta assertion below fail with a
+  // number that looked like a real off-by-one rather than a timing bug.
+  await expect(plain.getByLabel(/^color-/).first()).toBeVisible();
   const before = await plain.getByLabel(/^color-/).evaluateAll((els) => els.length);
   await plain.unmount();
 
@@ -292,8 +296,11 @@ test("the applied view leads, and leaves the design system below untouched", asy
 
   // The design system is the same design system whatever is selected — the component view is a lead,
   // not a filter. The accent now appears twice: once in the applied view, once in its own section.
-  const after = await c.getByLabel(/^color-/).evaluateAll((els) => els.length);
-  expect(after).toBe(before + 1);
+  // Same wait on the second mount, then assert the delta once it has settled.
+  await expect(c.getByLabel(/^color-/).first()).toBeVisible();
+  await expect
+    .poll(() => c.getByLabel(/^color-/).evaluateAll((els) => els.length))
+    .toBe(before + 1);
 });
 
 test("nothing selected, nothing led with", async ({ mount }) => {

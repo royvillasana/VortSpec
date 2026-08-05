@@ -46,6 +46,15 @@ When the canvas mode was relabelled `Inspect` → `Edit`, a page-wide `toHaveCou
 started counting every button whose accessible name merely *contains* "edit". The old
 label had been unique by luck. **Use `exact: true` for any uniqueness claim.**
 
+## Count after the load has settled, not after mount
+
+`library-panel` counted rendered rows straight after `mount()`, before the panel's
+async token load resolved. It passed on a laptop and failed on CI, where the count
+read 0 — and the delta assertion then failed with a number that looked like a real
+off-by-one rather than a timing bug. It survived because nothing ran the suite on CI.
+Wait for the data (`await expect(locator.first()).toBeVisible()`) before measuring,
+and prefer `expect.poll` for the assertion itself.
+
 ## Deleting a test is a legitimate fix
 
 When the behaviour is genuinely gone, delete it and say so in the commit — that is
