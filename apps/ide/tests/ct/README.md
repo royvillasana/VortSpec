@@ -65,8 +65,13 @@ the compose `into gap` / `new container` distinction (placement is always
 ## Keep the mock complete
 
 `apps/desktop/tests/ct/support/mock-api.ts` — reused by `apps/ide` via
-`playwright/index.tsx` — had drifted **33 methods** behind `VortSpecApi`. It is pinned
-with `satisfies Record<keyof VortSpecApi, unknown>`, so an omission now fails
-`check-types`. That is completeness, not shape: a *missing* method is the failure that
-actually happens. Full shape fidelity would mean correcting ~33 loose fixtures and is
-still open.
+`playwright/index.tsx` — had drifted **33 methods** behind `VortSpecApi`. It is now typed
+`const api: VortSpecApi`, so both a missing method **and** a wrong return shape fail
+`check-types`. Both are mutation-checked.
+
+Tightening it from completeness to shape caught a real harness bug immediately:
+`libraryReadiness` had been returning `null`, and `GuidedFlow` reads
+`libraryReadiness?.ready ?? total > 0`. Replacing `null` with a literal
+`ready: false` is *not* equivalent — `??` stops falling back — so a fixture with
+components started reading as un-provisioned. Mock returns are now **derived from the
+fixture** rather than hardcoded, so they mirror what the real probe would say.
