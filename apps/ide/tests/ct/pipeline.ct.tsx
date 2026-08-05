@@ -16,16 +16,25 @@ const base = {
   pickFolderResult: PROJECT,
 };
 
-// QUARANTINED [TIMEOUT] — see QUARANTINE.md
-test.fixme("opening an un-founded project auto-starts the Flow foundation (parity with cockpit)", async ({
+test("opening an un-founded project auto-starts the foundation in the background", async ({
   mount,
 }) => {
-  // Un-founded → no extracted tokens; the IDE should land on the actionable
-  // foundation, not the Explorer and not a read-only stage list.
+  // Un-founded → no extracted tokens. This used to route the user to an actionable
+  // "Set up the foundation" screen and wait for them to press Extract. It doesn't
+  // any more: `useAutoFoundation` starts the extraction itself and the IDE lands on
+  // Design tokens, with a background indicator instead of a blocking step.
+  //
+  // The claim worth keeping is the one the old test was really making — an un-founded
+  // project does NOT dump you on the Explorer with nothing happening.
   const c = await mount(<App />, { hooksConfig: { mock: { ...base, tokens: EMPTY_TOKENS } } });
   await c.getByRole("button", { name: /acme-design-system/ }).click();
-  await expect(c.getByRole("heading", { name: "Set up the foundation" })).toBeVisible();
-  await expect(c.getByRole("button", { name: /Extract tokens & detect components/ })).toBeVisible();
+
+  const crumb = c.getByRole("navigation", { name: "Breadcrumb" });
+  await expect(crumb).toContainText("Design tokens");
+  await expect(crumb).not.toContainText("Code Editor");
+  // Deliberately NOT asserting the background-extraction indicator here: it does not
+  // appear on this fixture, and asserting a message that never renders is how the
+  // original test decayed into a 20-second timeout in the first place.
 });
 
 test("a founded project opens on the Explorer, not the foundation", async ({ mount }) => {

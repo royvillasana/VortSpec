@@ -191,15 +191,16 @@ test("the breadcrumb Home returns to the workspace picker", async ({ mount }) =>
   await expect(c.getByRole("button", { name: /Open Folder/ })).toBeVisible();
 });
 
-// QUARANTINED [TIMEOUT] — see QUARANTINE.md
-test.fixme("the status bar shows the git branch and Explorer-only region toggles", async ({ mount }) => {
+test("the status bar shows the git branch and Explorer-only region toggles", async ({ mount }) => {
   const c = await mount(<App />, { hooksConfig: { mock: base } });
   await open(c);
   const footer = c.locator("footer");
   // The current git branch shows beside the project name.
   await expect(footer.getByText("main")).toBeVisible();
   // Region toggles are present in the Explorer activity, wrapped with an active state.
-  await expect(footer.getByRole("button", { name: "Explorer" })).toBeVisible();
+  // The sidebar toggle is labelled "Sidebar" now, not "Explorer" — the toggles are
+  // named for the region they show, not the activity they belong to.
+  await expect(footer.getByRole("button", { name: "Sidebar" })).toBeVisible();
   await expect(footer.getByRole("button", { name: "Editor" })).toBeVisible();
   await expect(footer.getByRole("button", { name: "Assistant" })).toHaveCount(0); // no assistant sidebar
   // Switching to a non-Explorer activity hides the region toggles (branch stays).
