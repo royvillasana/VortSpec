@@ -4,6 +4,7 @@ import { api } from "@vortspec/ui/api";
 import { useAgentRun } from "../lib/useAgentRun";
 import type { ChatMessage, ToolStep } from "@vortspec/ui/run-model";
 import { Spinner } from "@vortspec/ui/ui";
+import { ThinkingOrb } from "thinking-orbs";
 import { Response } from "./ai/Response";
 import { RunLimitNotice } from "./RunLimitNotice";
 import { Shimmer } from "./ai/Shimmer";
@@ -549,7 +550,11 @@ export function AssistantDock({
             {run.model.streamingText && <Bubble role="assistant" text={run.model.streamingText} />}
             {run.running && !run.model.streamingText && !run.model.reasoning && (
               <div className="flex items-center gap-2 text-xs">
-                <Spinner />
+                {/* `theme="dark"` rather than the default `auto`: auto follows the OS
+                    `prefers-color-scheme`, and this UI is dark-only, so a light-mode
+                    Mac would render the light orb inside a dark panel. The component
+                    honours `prefers-reduced-motion` itself — don't override that. */}
+                <ThinkingOrb state="working" size={20} speed={2.6} theme="dark" />
                 <Shimmer>Thinking…</Shimmer>
               </div>
             )}
