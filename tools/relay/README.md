@@ -64,6 +64,20 @@ stripping `Upgrade` is the usual culprit, and no amount of app-side logging can 
 the app that is indistinguishable from a relay that is merely slow, because it says "connecting"
 either way.
 
+## Sharing a session in one command
+
+```bash
+./tools/relay/share.sh "/path/to/the/project"
+```
+
+Starts the relay, opens a tunnel, verifies a WebSocket actually passes through it, writes the address
+into the project's `.vortspec/collab.json`, and pushes it. Anyone who clones then joins the session.
+
+Keep it running: the relay and the tunnel live only as long as that process, and the address is
+random — every restart is a different URL and another commit. Doing that by hand at the start of a
+session, with somebody waiting, is how people end up pointed at a relay that stopped existing
+yesterday.
+
 ## A tunnel, for testing without deploying
 
 `cloudflared` gives a public HTTPS/WSS address with no account:
