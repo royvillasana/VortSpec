@@ -41,6 +41,20 @@ Hocuspocus runs on Node, Bun, Deno, and Cloudflare Workers. Anything that can ho
 - **A stable hostname**, since it goes in project configuration.
 - **WebSocket support end to end.** The most common deployment failure is a proxy or load balancer that quietly downgrades or drops the upgrade, which looks like "collaboration silently doesn't work" rather than an error.
 
+## Reading the log
+
+```
++ vs-cbf9…        a client joined that room
+- vs-cbf9… (1)    a client left; how many remain
+~ vs-cbf9… — 2 client(s), 3 top-level node(s)
+```
+
+The node count is the useful one. **A light page has exactly three top-level nodes** — the doctype, a
+newline, and `<html>` — so anything else means the room is holding more than one copy of the page.
+That happens if two clients each seed it from their own file, and the symptom is not what you would
+guess: everything reports connected and healthy while each person edits a different copy and no edit
+ever crosses. The relay warns when it sees it, because from inside the app that failure is invisible.
+
 ## Persistence
 
 This server keeps documents in memory only. That is deliberate: the durable copy of a page is the file in your repository, committed and pushed like everything else. A restart drops in-flight session state, so anything not yet saved to the project is lost — the Playground is responsible for making that visible.

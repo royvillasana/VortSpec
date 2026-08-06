@@ -48,17 +48,17 @@ const server = new Server({
     console.log(`+ ${documentName}`);
   },
 
-  // TEMPORARY (diagnosing why edits do not cross): every document change the relay receives, with
-  // who sent it and how big the room's document is. This distinguishes "the edit never left the
-  // sender" from "it arrived and the receiver ignored it" — which no amount of app-side logging can,
-  // because both sides look identical from inside one process.
+  /**
+   * The document's size, logged on change. It reads like noise and is not: a light page has exactly
+   * three top-level nodes (doctype, whitespace, `<html>`), so any other number means the room holds
+   * more than one copy of the page — the failure where two people edit different documents while
+   * everything reports healthy. It was invisible from inside the app, because "the edit never left"
+   * and "the edit arrived and was ignored" are the same silence there. Keep it.
+   */
   async onChange({ documentName, clientsCount, document }) {
-    const size = document.getXmlFragment("page").length;
-    console.log(`~ ${documentName} changed — ${clientsCount} client(s), page fragment has ${size} top-level node(s)`);
-  },
-
-  async onLoadDocument({ documentName }) {
-    console.log(`? ${documentName} requested (relay has no copy yet — the first client will seed it)`);
+    const nodes = document.getXmlFragment("page").length;
+    const warn = nodes > 3 ? `  ⚠ ${Math.round(nodes / 3)} copies of the page in one room` : "";
+    console.log(`~ ${documentName} — ${clientsCount} client(s), ${nodes} top-level node(s)${warn}`);
   },
 
   async onDisconnect({ documentName, clientsCount }) {
