@@ -12,5 +12,8 @@
   },
   "dependencies": {
     "@hocuspocus/server": "^3.4.0"
+  },
+  "devDependencies": {
+    "ws": "^8.21.2"
   }
 }

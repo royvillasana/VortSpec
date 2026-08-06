@@ -50,6 +50,33 @@ Without it the server is **open**: anyone who can reach it and knows a room id c
 
 The better answer, not built yet, is to validate against the git host so that access to the repository *is* access to the session — one source of truth instead of a second secret to distribute and rotate.
 
+## When a session will not go live on a new network
+
+Check the network before debugging the app:
+
+```bash
+node tools/relay/wstest.mjs wss://your-relay.example.com
+```
+
+`OPEN` means the network allows the upgrade and any remaining problem is in the app or the room.
+`TIMEOUT` means something in between accepted the connection and ate the upgrade — a corporate proxy
+stripping `Upgrade` is the usual culprit, and no amount of app-side logging can see it: from inside
+the app that is indistinguishable from a relay that is merely slow, because it says "connecting"
+either way.
+
+## A tunnel, for testing without deploying
+
+`cloudflared` gives a public HTTPS/WSS address with no account:
+
+```bash
+cloudflared tunnel --url http://localhost:1234
+# → https://<random>.trycloudflare.com   (use its wss:// form as the relay address)
+```
+
+Good enough to test two real machines over the real internet. Not for ongoing use: the address
+changes every restart, and the relay address is committed to the project, so a new address means a
+new commit.
+
 ## Deploying it
 
 Hocuspocus runs on Node, Bun, Deno, and Cloudflare Workers. Anything that can hold a WebSocket open works. In practice you need:
