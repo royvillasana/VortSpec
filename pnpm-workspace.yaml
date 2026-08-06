@@ -1,6 +1,9 @@
 packages:
   - apps/*
   - packages/*
+  # The self-hosted collaboration relay (live-playground). A dev/ops tool, deliberately NOT a
+  # dependency of the app — VortSpec never runs it, a team runs it for themselves.
+  - tools/*
 
 onlyBuiltDependencies:
   - electron

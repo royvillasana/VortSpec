@@ -11,8 +11,8 @@
 
 ## 2. Awareness only — cursors, names, count (no document sync)
 
-- [ ] 2.1 Stand up a Hocuspocus relay for development; document how a team self-hosts it (not shipped in the app)
-- [ ] 2.2 Derive the room id from the git remote + page name; decide hash-vs-plain (design D4) and record the choice
+- [x] 2.1 Stand up a Hocuspocus relay for development; document how a team self-hosts it (not shipped in the app)
+- [x] 2.2 Derive the room id from the git remote + page name; decide hash-vs-plain (design D4) and record the choice
 - [ ] 2.3 Join/leave a session on light-page open/close; never for framework pages
 - [ ] 2.4 Publish cursor position in **document space**, plus name and colour from the profile
 - [ ] 2.5 Render remote cursors on the existing canvas overlay so they track the canvas transform — verify a cursor points at the same element at two different zoom levels
