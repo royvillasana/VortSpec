@@ -113,6 +113,31 @@ survive `findFrameworkPointers`, so hints carry no import paths, no module alias
 are prose about intent, which is naturally framework-free. Serialization already throws on a leak;
 that guard is the enforcement.
 
+**Components are scaffolded deterministically; the model supplies content, not structure.**
+The reference architecture writes a component's file set with a `scaffold-component` skill —
+implementation, style module, metadata, test, barrel — so the structure is identical every time.
+VortSpec produces the same set by *instruction*: `CLAUDE.md`, the standards docs, and
+`frameworkIdiomClause` describe the shape and a model reproduces it per component. Two things
+follow. First, metadata coverage: theirs is 100% by construction because a component cannot be
+created without a record, while ours arrives later from `/storybook` and therefore always lags.
+Second, variance: their benchmark's 26.5% → 0.04% figure is partly earned on the write side, and a
+retrieval-only change cannot claim it. Scaffolding moves the decision of *which files exist* out of
+the model and leaves it only the content. *Alternative considered:* keeping generation
+prompt-driven and enforcing structure with a post-hoc check — rejected because a check that fires
+after the fact still costs a regeneration round-trip, and it leaves coverage aspirational.
+
+**The audit's reach depends on the styling approach, and that must be declared per component.**
+The reference `token-auditor` reasons over token-based CSS modules: every value is a discrete
+declaration in one file, so hierarchy and elevation rules have something to bind to. VortSpec is
+styling-agnostic and the light path leans toward utility classes, where the same rule has far less
+to work with. This is a real limit on the governance capability, and the honest handling is to
+record each component's styling surface at scaffold time and report *reduced audit coverage*
+rather than silently reporting a component as clean because the checks could not run. Marking
+unevaluable components as passing would be the worst outcome available — it manufactures
+confidence. *Alternative considered:* mandating token-based CSS modules for extract sources —
+rejected as too large a constraint to impose inside this change; it is raised as an open question
+instead.
+
 **Storybook becomes a reader in the same change that widens the schema.**
 Splitting them would leave a window where `ComponentDocs` reads a module that generation has stopped
 writing. `/storybook` and `ComponentDocs` are switched to the JSON store as part of group 1.
@@ -145,6 +170,21 @@ serialize exactly as they do today, so the two changes can land in either order.
 diff of what the agent will read is the point, and it is what makes staleness visible in code review
 rather than only in CI.
 
+**Governance v2 is materially weaker under utility-class styling than under token-based CSS
+modules** → Declare each component's styling surface at scaffold time and report reduced audit
+coverage explicitly. The risk is not that some components go unchecked — it is that they are
+reported as clean. The specs forbid that outcome.
+
+**A scaffold constrains component structure that projects may already have their own opinions
+about** → Drive the file set from `.sdd-de/project.yaml` (framework, language, styling) and omit
+files that do not apply rather than emitting empty placeholders. The scaffold codifies the
+project's existing standards docs; it does not introduce new ones.
+
+**Adding a test file to the scaffold produces tests nobody asked for** → Require exactly one real
+assertion — that the component renders — so the file is a genuine smoke test rather than a stub
+that passes vacuously. The specs make "the runner passes on a newly scaffolded component" the
+acceptance condition.
+
 **Intent rules encode opinions that may not be this project's opinions** → Rules are per-project
 data under `.vortspec/ai/governance/`, seeded with defaults and editable. A rule the team disagrees
 with is deleted, not worked around.
@@ -173,3 +213,9 @@ unlikely and the automation would be more dangerous than the manual step.
   is cheap, but a level that moves without an explicit action may read as noise.
 - For consume sources, is shadow-implementation detection meaningful against a vendor library the
   team cannot change, or should it be limited to the team's own application code?
+- Should token-based CSS modules become the recommended styling for extract sources, so governance
+  v2 has a surface to reason over? This would materially strengthen the audit and materially
+  constrain the project — it is deliberately left open rather than decided inside this change.
+- Does the scaffold replace the model-driven component step of the SDD cycle, or run ahead of it
+  (scaffold the files, then let the cycle fill them in)? The latter is less disruptive; the former
+  is what actually removes structural variance.

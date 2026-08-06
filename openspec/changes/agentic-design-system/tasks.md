@@ -55,9 +55,22 @@
 - [ ] 5.4 Recompute the level when the index is rebuilt
 - [ ] 5.5 Test the level transitions: no metadata and no governance → Libraries; complete metadata plus encoded governance → a higher level with the responsible signals attributable
 
-## 6. Close out
+## 6. Deterministic component scaffold
 
-- [ ] 6.1 Run the full test suite and the CT suite; confirm no regression in the existing digest, audit and metadata paths
-- [ ] 6.2 Record the benchmark results (accuracy, variance, false negatives, token cost) in `docs/agentic-design-system-plan.md` against the §1.6 targets
-- [ ] 6.3 Resolve the design's open questions (configurable elevation scale; recompute-on-build vs on-demand; shadow detection scope for consume sources) and fold the answers into the specs
-- [ ] 6.4 Run `/opsx:sync` to fold the delta specs into `openspec/specs/`
+- [ ] 6.1 Read `.sdd-de/docs/component-standards.md` and `framework-config.md` and record the current authoritative file set per framework/language/styling combination — the scaffold codifies these, it does not invent a new standard
+- [ ] 6.2 Add the scaffold in `packages/core`, driven by `.sdd-de/project.yaml`, writing the implementation, variants (only where the styling approach separates them), test file, and barrel export, plus index registration where the project uses one
+- [ ] 6.3 Omit inapplicable files rather than emitting empty placeholders; assert no zero-content file is ever written
+- [ ] 6.4 Emit a real smoke test per component — at least one executable assertion that it renders — and assert the project's test runner passes on a freshly scaffolded component
+- [ ] 6.5 Write the `.vortspec/metadata/<name>.json` record as part of scaffolding, with `identity` fully populated and the analysis-derived sections marked incomplete
+- [ ] 6.6 Assert structural determinism: scaffolding the same component twice produces the same file set at the same paths, and a missing file surfaces as a scaffold failure rather than a generation-quality issue
+- [ ] 6.7 Record each component's styling surface at scaffold time, and have the audit report reduced coverage for components whose styling exposes no discrete token declarations — never report an unevaluable rule as passing
+- [ ] 6.8 Assert the scaffold never writes into a consumed library's source tree for a consume-source project
+- [ ] 6.9 Wire the scaffold into the component-creation path so the model supplies content into an existing file set instead of deciding which files exist; keep the SDD cycle's per-task flow intact
+- [ ] 6.10 Verify: metadata coverage for a project whose components were all scaffolded reports zero missing records
+
+## 7. Close out
+
+- [ ] 7.1 Run the full test suite and the CT suite; confirm no regression in the existing digest, audit and metadata paths
+- [ ] 7.2 Record the benchmark results (accuracy, variance, false negatives, token cost) in `docs/agentic-design-system-plan.md` against the §1.6 targets
+- [ ] 7.3 Resolve the design's open questions (configurable elevation scale; recompute-on-build vs on-demand; shadow detection scope for consume sources; CSS-modules recommendation; scaffold-replaces vs scaffold-precedes the cycle) and fold the answers into the specs
+- [ ] 7.4 Run `/opsx:sync` to fold the delta specs into `openspec/specs/`

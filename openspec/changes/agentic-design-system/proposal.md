@@ -37,6 +37,13 @@ exploration into analysis rather than adding spend.
   wrong position, plus adoption and token-violation reports.
 - **AI-readiness level as a product surface.** A computed 1–5 maturity level with the specific next
   action that raises it.
+- **Components are scaffolded, not instructed into existence.** Today a component's file set is
+  produced by a model following the standards docs; the reference architecture writes it with a
+  deterministic scaffold and lets the model supply only the content. That difference is where
+  metadata coverage stops being aspirational (a component cannot exist without a record) and where
+  a share of the benchmark's variance reduction actually comes from. Adds a test file and a barrel
+  export/registration to the file set, and makes each component declare the styling surface the
+  audit can reason over.
 - `compose-run.ts`'s `DESIGN.md` `.slice(0, 4000)` is replaced by the structured digest — truncating
   prose at a byte boundary is the worst available use of those tokens.
 
@@ -53,6 +60,9 @@ exploration into analysis rather than adding spend.
 - `design-governance`: intent-level design rules, the violations they produce, and the adoption /
   token-violation reports generated from the index.
 - `ai-readiness-level`: the computed maturity level and the next action that raises it.
+- `component-scaffold`: deterministic creation of a component's full file set — implementation,
+  variants, test, barrel/registration, and its metadata record — with the styling surface each
+  component exposes to the audit declared rather than assumed.
 
 ### Modified Capabilities
 - `design-system-workspace`: "Rich per-component Storybook docs" changes ownership — Storybook docs
