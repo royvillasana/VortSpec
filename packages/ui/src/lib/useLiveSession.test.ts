@@ -8,6 +8,8 @@ const base = (): LiveSessionInput => ({
   credential: "",
   remote: "git@github.com:acme/design-system.git",
   page: "home",
+  name: "Roy",
+  cursor: null,
 });
 
 describe("a session is joined only when everything is in place", () => {
@@ -56,5 +58,6 @@ describe("the off state", () => {
     expect(offSession.status).toBe("off");
     expect(offSession.detail).toBe("");
     expect(offSession.participants).toBe(0);
+    expect(offSession.peers).toEqual([]);
   });
 });

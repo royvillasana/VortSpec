@@ -18,6 +18,13 @@ import * as Y from "yjs";
 import { HocuspocusProvider } from "@hocuspocus/provider";
 import { hasRelay, type CollabConfig } from "@vortspec/core/collab-config";
 import { roomIdFor, sha256Hex } from "@vortspec/core/live-session";
+import {
+  participantCount,
+  participantsFrom,
+  presenceColor,
+  type CursorAnchor,
+  type Participant,
+} from "./live-presence";
 
 /** What the Playground can say about the session, and why it is not live when it is not. */
 export type LiveSessionState = {
@@ -27,9 +34,11 @@ export type LiveSessionState = {
   detail: string;
   /** How many people are in the session, including this one. 0 when not live. */
   participants: number;
+  /** Everyone else, with their cursors. Empty when not live — never render your own. */
+  peers: Participant[];
 };
 
-export const offSession: LiveSessionState = { status: "off", detail: "", participants: 0 };
+export const offSession: LiveSessionState = { status: "off", detail: "", participants: 0, peers: [] };
 
 export type LiveSessionInput = {
   /** The CRDT for the page — the host replica. Null when the page is not adopted. */
@@ -42,6 +51,10 @@ export type LiveSessionInput = {
   remote: string;
   /** The light page's name; null when the Playground is not on a light page. */
   page: string | null;
+  /** This user's display name, from their profile. */
+  name: string;
+  /** This user's pointer in document terms, or null when it is off the page. */
+  cursor: CursorAnchor | null;
 };
 
 /**
@@ -79,7 +92,7 @@ export function useLiveSession(input: LiveSessionInput): LiveSessionState {
 
     let alive = true;
     let provider: HocuspocusProvider | null = null;
-    setState({ status: "connecting", detail: "", participants: 0 });
+    setState({ status: "connecting", detail: "", participants: 0, peers: [] });
 
     void roomIdFor(remote, input.page, sha256Hex)
       .then((room) => {
@@ -109,6 +122,7 @@ export function useLiveSession(input: LiveSessionInput): LiveSessionState {
                 ? `The relay rejected this machine's credential (${reason || "not accepted"}).`
                 : "This relay requires a credential and this machine has none stored.",
               participants: 0,
+              peers: [],
             });
           },
           onDisconnect: () => {
@@ -117,18 +131,38 @@ export function useLiveSession(input: LiveSessionInput): LiveSessionState {
               status: "unreachable",
               detail: "The relay is not reachable. Your edits are still saved to the project.",
               participants: 0,
+              peers: [],
             });
           },
         });
         providerRef.current = provider;
 
-        provider.on("awarenessUpdate", ({ states }: { states: unknown[] }) => {
-          if (!alive) return;
-          setState((prev) => (prev.status === "live" ? { ...prev, participants: states.length } : prev));
+        // Presence is awareness state, not document content: replicated to peers, dropped
+        // automatically on disconnect, and never written to the project. "Presence disappears when
+        // someone leaves" is therefore true by construction rather than by cleanup code.
+        provider.setAwarenessField("presence", {
+          name: input.name,
+          color: presenceColor(input.name),
+          cursor: input.cursor,
+        });
+
+        provider.on("awarenessChange", () => {
+          if (!alive || !provider) return;
+          const states = provider.awareness?.getStates();
+          if (!states) return;
+          setState((prev) =>
+            prev.status === "live"
+              ? {
+                  ...prev,
+                  participants: participantCount(states),
+                  peers: participantsFrom(states, provider!.document.clientID),
+                }
+              : prev,
+          );
         });
       })
       .catch(() => {
-        if (alive) setState({ status: "unreachable", detail: "The session could not be started.", participants: 0 });
+        if (alive) setState({ status: "unreachable", detail: "The session could not be started.", participants: 0, peers: [] });
       });
 
     return () => {
@@ -137,6 +171,18 @@ export function useLiveSession(input: LiveSessionInput): LiveSessionState {
       providerRef.current = null;
     };
   }, [doc, config, credential, remote, page]);
+
+  // The cursor changes constantly; the connection must not. Publishing it in its own effect keeps a
+  // pointer move from tearing down and rebuilding the session twenty times a second.
+  useEffect(() => {
+    const provider = providerRef.current;
+    if (!provider) return;
+    provider.setAwarenessField("presence", {
+      name: input.name,
+      color: presenceColor(input.name),
+      cursor: input.cursor,
+    });
+  }, [input.name, input.cursor]);
 
   return state;
 }

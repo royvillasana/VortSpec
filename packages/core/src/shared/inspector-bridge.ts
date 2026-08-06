@@ -455,6 +455,12 @@ export const bridgeCommandSchema = z.discriminatedUnion("t", [
   z.object({ t: z.literal("liveInit"), state: z.string() }),
   z.object({ t: z.literal("liveUpdate"), update: z.string() }),
   z.object({ t: z.literal("liveStop") }),
+  /**
+   * Report the pointer's position for a live session, as an element + a fraction within it rather
+   * than a pixel (change: live-playground, task 2.4). Off by default: a page with nobody else in it
+   * has no reason to stream pointer traffic across the bridge.
+   */
+  z.object({ t: z.literal("setCursorReporting"), on: z.boolean() }),
 ]);
 export type BridgeCommand = z.infer<typeof bridgeCommandSchema>;
 
@@ -610,6 +616,12 @@ export const bridgeEventSchema = z.discriminatedUnion("t", [
    */
   z.object({ t: z.literal("liveAdopted"), ok: z.boolean(), reason: z.string().optional() }),
   z.object({ t: z.literal("liveUpdate"), update: z.string() }),
+  /**
+   * Where this user's pointer is, in document terms: the fingerprint of the element under it and the
+   * fraction across that element's box. `fp` empty means the pointer left the page, which clears the
+   * cursor for everyone else rather than freezing it where it was last seen.
+   */
+  z.object({ t: z.literal("cursor"), fp: z.string(), fx: z.number(), fy: z.number() }),
 ]);
 export type BridgeEvent = z.infer<typeof bridgeEventSchema>;
 

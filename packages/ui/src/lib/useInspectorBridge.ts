@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { readoutForFocus } from "./focus-readout";
 import * as Y from "yjs";
 import { lightHtmlToDoc } from "@vortspec/core/light-doc";
+import type { CursorAnchor } from "./live-presence";
 import {
   INSPECTOR_BRIDGE_CHANNEL,
   bridgeEventSchema,
@@ -170,6 +171,10 @@ export interface InspectorBridge {
   live: LiveState;
   /** The host's replica of the page. Persistence writes from this rather than from a DOM snapshot. */
   liveDoc: { current: Y.Doc | null };
+  /** This user's pointer in document terms (element + fraction), or null when off the page. */
+  localCursor: CursorAnchor | null;
+  /** Turn guest pointer reporting on or off; off unless a session is live. */
+  setCursorReporting: (on: boolean) => void;
   /** Capture a ~160px thumbnail of a guest rect (webview capturePage crop); "" if unavailable. */
   captureThumbnail: (rect: Rect) => Promise<string>;
   applyOverride: (id: string, css: Record<string, string>) => void;
@@ -231,6 +236,8 @@ export function useInspectorBridge(): InspectorBridge {
   // ref, not state: it changes on every keystroke and nothing renders from its contents.
   const liveDocRef = useRef<Y.Doc | null>(null);
   const [live, setLive] = useState<LiveState>({ adopted: false, reason: null });
+  /** This user's pointer, as reported by the guest in document terms. Null when off the page. */
+  const [localCursor, setLocalCursor] = useState<CursorAnchor | null>(null);
   // The element we've wired listeners onto. The <webview> REMOUNTS when its `src`/key changes
   // (e.g. opening a light page), so we must re-attach to each NEW element — a once-only boolean
   // guard would leave the remounted webview with no listeners (no "ready", no tree → uneditable
@@ -294,6 +301,11 @@ export function useInspectorBridge(): InspectorBridge {
         // `ok: false` is a normal outcome, not a failure to report as an error: the page keeps
         // working exactly as it does today, it just cannot join a session.
         setLive({ adopted: event.ok, reason: event.reason ?? null });
+        return;
+      case "cursor":
+        // Empty fingerprint = the pointer left the page. Cleared rather than frozen, so a cursor
+        // never lingers somewhere its owner is not.
+        setLocalCursor(event.fp ? { fp: event.fp, fx: event.fx, fy: event.fy } : null);
         return;
       case "liveUpdate":
         if (liveDocRef.current) {
@@ -695,6 +707,15 @@ export function useInspectorBridge(): InspectorBridge {
     setLive({ adopted: false, reason: null });
   }, [send]);
 
+  /** Ask the guest to report the pointer. Off by default — see the guest for why. */
+  const setCursorReporting = useCallback(
+    (on: boolean) => {
+      send({ t: "setCursorReporting", on });
+      if (!on) setLocalCursor(null);
+    },
+    [send],
+  );
+
   const serializeDom = useCallback(async (): Promise<string | null> => {
     const wv = webviewRef.current;
     if (!wv) return null;
@@ -794,5 +815,7 @@ export function useInspectorBridge(): InspectorBridge {
     stopLive,
     live,
     liveDoc: liveDocRef,
+    localCursor,
+    setCursorReporting,
   };
 }

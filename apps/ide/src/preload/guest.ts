@@ -1071,6 +1071,70 @@ function startLive(state: string): void {
   }
 }
 
+// ── Cursor reporting for a live session (live-playground, task 2.4) ───────────
+/**
+ * Off unless the host asks for it: a page with nobody else on it has no reason to stream pointer
+ * traffic across the bridge, and this fires on every pointermove.
+ */
+let cursorReporting = false;
+let cursorTimer: number | undefined;
+/** The last thing sent, so an unchanged position is not re-sent 20 times a second. */
+let lastCursor = "";
+
+/**
+ * Report the pointer as an ELEMENT plus a fraction within it, never a pixel — two people previewing
+ * the same page at different widths have different geometry, so a shared pixel would put a cursor on
+ * a different element while looking entirely plausible.
+ */
+function reportCursor(e: PointerEvent): void {
+  if (!cursorReporting) return;
+  if (cursorTimer !== undefined) return; // throttled below
+  cursorTimer = window.setTimeout(() => {
+    cursorTimer = undefined;
+  }, 50);
+
+  const el = document.elementFromPoint(e.clientX, e.clientY);
+  if (!el || el === document.documentElement) {
+    if (lastCursor !== "") {
+      lastCursor = "";
+      send({ t: "cursor", fp: "", fx: 0, fy: 0 });
+    }
+    return;
+  }
+  const rect = el.getBoundingClientRect();
+  const fx = rect.width > 0 ? (e.clientX - rect.left) / rect.width : 0;
+  const fy = rect.height > 0 ? (e.clientY - rect.top) / rect.height : 0;
+  const fp = fingerprintFor(el);
+  const key = `${fp}:${fx.toFixed(3)}:${fy.toFixed(3)}`;
+  if (key === lastCursor) return;
+  lastCursor = key;
+  send({ t: "cursor", fp, fx: clamp01(fx), fy: clamp01(fy) });
+}
+
+function clamp01(n: number): number {
+  return Number.isFinite(n) ? Math.min(1, Math.max(0, n)) : 0;
+}
+
+function setCursorReporting(on: boolean): void {
+  if (cursorReporting === on) return;
+  cursorReporting = on;
+  if (on) {
+    window.addEventListener("pointermove", reportCursor, { passive: true, capture: true });
+    window.addEventListener("pointerleave", clearCursor, { passive: true, capture: true });
+  } else {
+    window.removeEventListener("pointermove", reportCursor, { capture: true });
+    window.removeEventListener("pointerleave", clearCursor, { capture: true });
+    clearCursor();
+  }
+}
+
+/** The pointer left the page — clear it for everyone rather than freezing it where it was. */
+function clearCursor(): void {
+  if (lastCursor === "") return;
+  lastCursor = "";
+  send({ t: "cursor", fp: "", fx: 0, fy: 0 });
+}
+
 function handleCommand(cmd: BridgeCommand): void {
   switch (cmd.t) {
     case "liveInit":
@@ -1081,6 +1145,9 @@ function handleCommand(cmd: BridgeCommand): void {
       return;
     case "liveStop":
       stopLive();
+      return;
+    case "setCursorReporting":
+      setCursorReporting(cmd.on);
       return;
     case "requestTree":
       send({ t: "tree", tree: buildTree() });
