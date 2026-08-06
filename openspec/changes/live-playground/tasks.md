@@ -53,6 +53,6 @@
 
 ## 7. Verify end to end
 
-- [ ] 7.1 Full workspace `check-types`, unit tests, and the IDE CT suite green
+- [x] 7.1 Full workspace `check-types`, unit tests, and the IDE CT suite green
 - [ ] 7.2 A real multi-machine session: 3+ participants, cursors, concurrent edits, a posted comment, then persist → commit → push → another participant pulls and sees the same page
 - [ ] 7.3 `/opsx:sync live-playground`, then archive
