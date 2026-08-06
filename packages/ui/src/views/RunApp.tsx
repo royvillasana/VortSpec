@@ -1624,6 +1624,8 @@ export function RunApp({
 
   /** Edits exist in the session that this machine has not written to the project file. */
   const [unpersisted, setUnpersisted] = useState(false);
+  /** The comment currently being typed on the canvas, shared live under this user's cursor. */
+  const [commentDraft, setCommentDraft] = useState<string | null>(null);
   const [collabConfig, setCollabConfig] = useState<CollabConfig | null>(null);
   const [relayCredential, setRelayCredential] = useState("");
   const [gitRemote, setGitRemote] = useState("");
@@ -1664,6 +1666,9 @@ export function RunApp({
     page: isLightPage ? lightPage : null,
     name: userName,
     cursor: bridge.localCursor,
+    // The comment being typed at the cursor, broadcast so everyone sees it as it is written
+    // (task 4.1). Nothing is stored until it is posted — an abandoned draft simply disappears.
+    draft: commentDraft,
   };
   const session = useLiveSession(sessionInput);
 
@@ -3211,6 +3216,7 @@ export function RunApp({
                 : session
             }
             comments={{
+              onDraftChange: (body: string) => setCommentDraft(body.trim() ? body : null),
                     threads: comments.threads,
                     anchorRects: bridge.anchorRects,
                     target: commentTarget,

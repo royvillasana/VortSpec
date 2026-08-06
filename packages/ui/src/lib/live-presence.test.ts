@@ -83,6 +83,17 @@ describe("reading the awareness channel", () => {
     expect(participantsFrom(new Map([[1, {}], [2, undefined]]), 9)).toEqual([]);
   });
 
+  it("carries a comment someone is typing", () => {
+    const typing = new Map<number, unknown>([[1, { presence: { name: "Roy", draft: "should this be blue?" } }]]);
+    expect(participantsFrom(typing, 9)[0]!.draft).toBe("should this be blue?");
+  });
+
+  it("treats a blank draft as no draft", () => {
+    // Otherwise clearing the composer leaves an empty bubble hanging under the cursor.
+    const blank = new Map<number, unknown>([[1, { presence: { name: "Roy", draft: "   " } }]]);
+    expect(participantsFrom(blank, 9)[0]!.draft).toBeNull();
+  });
+
   it("discards a malformed cursor rather than trusting it", () => {
     const bad = new Map<number, unknown>([
       [1, { presence: { name: "Roy", cursor: { fp: "", fx: 0, fy: 0 } } }],
@@ -105,10 +116,10 @@ describe("reading the awareness channel", () => {
 describe("which elements need rects", () => {
   it("collects each fingerprint once", () => {
     const people: Participant[] = [
-      { clientId: 1, name: "a", color: "#000", cursor: { fp: "x", fx: 0, fy: 0 } },
-      { clientId: 2, name: "b", color: "#000", cursor: { fp: "x", fx: 1, fy: 1 } },
-      { clientId: 3, name: "c", color: "#000", cursor: { fp: "y", fx: 0, fy: 0 } },
-      { clientId: 4, name: "d", color: "#000", cursor: null },
+      { clientId: 1, name: "a", color: "#000", cursor: { fp: "x", fx: 0, fy: 0 } , draft: null },
+      { clientId: 2, name: "b", color: "#000", cursor: { fp: "x", fx: 1, fy: 1 } , draft: null },
+      { clientId: 3, name: "c", color: "#000", cursor: { fp: "y", fx: 0, fy: 0 } , draft: null },
+      { clientId: 4, name: "d", color: "#000", cursor: null , draft: null },
     ];
     expect(cursorFingerprints(people).sort()).toEqual(["x", "y"]);
   });

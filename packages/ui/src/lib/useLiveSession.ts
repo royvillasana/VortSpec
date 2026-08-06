@@ -73,6 +73,8 @@ export type LiveSessionInput = {
   name: string;
   /** This user's pointer in document terms, or null when it is off the page. */
   cursor: CursorAnchor | null;
+  /** A comment this user is typing, shown live under their cursor for everyone else. */
+  draft: string | null;
 };
 
 /**
@@ -171,6 +173,7 @@ export function useLiveSession(input: LiveSessionInput): LiveSessionState {
           name: input.name,
           color: presenceColor(input.name),
           cursor: input.cursor,
+          draft: input.draft,
         });
 
         provider.on("awarenessChange", () => {
@@ -218,8 +221,9 @@ export function useLiveSession(input: LiveSessionInput): LiveSessionState {
       name: input.name,
       color: presenceColor(input.name),
       cursor: input.cursor,
+      draft: input.draft,
     });
-  }, [input.name, input.cursor]);
+  }, [input.name, input.cursor, input.draft]);
 
   return state;
 }

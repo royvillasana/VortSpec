@@ -32,6 +32,8 @@ export interface CommentsLayerProps {
   onCancelTarget: () => void;
   /** Push the auto-committed comment commits (manual Share). */
   onShare?: () => void;
+  /** The new-thread composer's text as it is typed, for live sharing under the cursor. */
+  onDraftChange?: (body: string) => void;
 }
 
 export function CommentsLayer({
@@ -45,6 +47,7 @@ export function CommentsLayer({
   onClearNotice,
   onSelectThread,
   onCreate,
+  onDraftChange,
   onReply,
   onResolve,
   onCancelTarget,
@@ -105,6 +108,7 @@ export function CommentsLayer({
             submitLabel="Comment"
             collaborators={collaborators}
             onSubmit={(body) => onCreate(body)}
+            onDraftChange={onDraftChange}
             onCancel={onCancelTarget}
           />
         </PopoverCard>
@@ -255,6 +259,7 @@ function Composer({
   collaborators = [],
   onSubmit,
   onCancel,
+  onDraftChange,
 }: {
   placeholder: string;
   submitLabel: string;
@@ -262,6 +267,12 @@ function Composer({
   collaborators?: CommentCollaborator[];
   onSubmit: (body: string) => void;
   onCancel?: () => void;
+  /**
+   * The text as it is typed, for broadcasting under this user's cursor (live-playground, task 4.1).
+   * Reported rather than lifted so the composer keeps owning its own state — the draft is shared,
+   * not moved.
+   */
+  onDraftChange?: (body: string) => void;
 }): JSX.Element {
   const [draft, setDraft] = useState("");
   const [caret, setCaret] = useState(0);
@@ -299,6 +310,7 @@ function Composer({
     onSubmit(body);
     setDraft("");
     setCaret(0);
+    onDraftChange?.("");
   };
   const syncCaret = (el: HTMLTextAreaElement): void => setCaret(el.selectionStart ?? el.value.length);
 
@@ -309,6 +321,7 @@ function Composer({
         value={draft}
         onChange={(e) => {
           setDraft(e.target.value);
+          onDraftChange?.(e.target.value);
           syncCaret(e.target);
         }}
         onClick={(e) => syncCaret(e.currentTarget)}

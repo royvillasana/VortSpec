@@ -53,6 +53,17 @@ export function RemoteCursors({ peers, anchorRects }: RemoteCursorsProps): JSX.E
           >
             {peer.name}
           </span>
+          {/* A comment being typed, under the cursor writing it (task 4.1). Shown while it is a
+              draft and gone the moment it is abandoned — nothing is stored until it is posted. */}
+          {peer.draft && (
+            <div
+              data-testid={`remote-draft-${peer.clientId}`}
+              className="ml-2.5 mt-1 max-w-64 rounded-md bg-neutral-900/95 px-2 py-1.5 text-[11px] leading-snug text-neutral-100 shadow-lg ring-1"
+              style={{ borderLeft: `2px solid ${peer.color}` }}
+            >
+              {peer.draft}
+            </div>
+          )}
         </div>
       ))}
     </div>

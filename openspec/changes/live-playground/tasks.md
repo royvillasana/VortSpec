@@ -30,10 +30,10 @@
 
 ## 4. Comment on the cursor
 
-- [ ] 4.1 Compose a comment at the cursor; broadcast the draft as awareness so others see it under that cursor
-- [ ] 4.2 Post it through the existing `comment-store`, anchored to its element — no second comment format
-- [ ] 4.3 An abandoned draft leaves no thread and disappears for others
-- [ ] 4.4 Verify a posted comment behaves like any other afterwards: commits, pushes, notifies via GitHub, visible to someone who was never in the session
+- [x] 4.1 Compose a comment at the cursor; broadcast the draft as awareness so others see it under that cursor
+- [x] 4.2 Post it through the existing `comment-store`, anchored to its element — no second comment format
+- [x] 4.3 An abandoned draft leaves no thread and disappears for others
+- [x] 4.4 Verify a posted comment behaves like any other afterwards: commits, pushes, notifies via GitHub, visible to someone who was never in the session
 
 ## 5. The persistence seam
 

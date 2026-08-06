@@ -32,6 +32,13 @@ export type Participant = {
   name: string;
   color: string;
   cursor: CursorAnchor | null;
+  /**
+   * A comment being typed, shown under their cursor. Awareness state, so an abandoned draft leaves
+   * nothing behind — it disappears when they clear it or disconnect, by construction rather than by
+   * cleanup. Only POSTING writes anything, and that goes to the repo-backed comment store like every
+   * other comment.
+   */
+  draft: string | null;
 };
 
 /** What this client publishes about itself. */
@@ -39,6 +46,7 @@ export type LocalPresence = {
   name: string;
   color: string;
   cursor: CursorAnchor | null;
+  draft: string | null;
 };
 
 /**
@@ -120,6 +128,7 @@ export function participantsFrom(
       name: presenceName(value.name ?? ""),
       color: value.color || presenceColor(value.name ?? ""),
       cursor: isCursor(value.cursor) ? value.cursor : null,
+      draft: typeof value.draft === "string" && value.draft.trim() ? value.draft : null,
     });
   }
   // Stable order so cursors do not reshuffle in the DOM on every awareness tick.

@@ -10,6 +10,7 @@ const base = (): LiveSessionInput => ({
   page: "home",
   name: "Roy",
   cursor: null,
+  draft: null,
 });
 
 describe("a session is joined only when everything is in place", () => {
