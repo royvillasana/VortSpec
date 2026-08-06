@@ -116,6 +116,23 @@ function start(
     yFor.set(node, y);
   };
 
+  /**
+   * Formatting records rescued from nodes deleted in the current batch, so a MOVED element keeps the
+   * source's attribute order and spacing. A move is a delete plus a fresh insert (the document has no
+   * move operation), and without this the re-created element loses its `data-vs-fmt` and comes back
+   * with attributes in alphabetical order — turning "I dragged a button" into a diff that also
+   * reshuffles its attributes. Observed on a real page before it was fixed.
+   */
+  const rescuedFmt = new WeakMap<Node, string>();
+  const rescueFmt = (node: Node): void => {
+    const y = yFor.get(node);
+    if (y instanceof Y.XmlElement) {
+      const fmt = y.getAttribute(FMT_ATTR);
+      if (typeof fmt === "string") rescuedFmt.set(node, fmt);
+    }
+    for (const child of Array.from(node.childNodes)) rescueFmt(child);
+  };
+
   const build = (y: YNode): Node | null => {
     if (y instanceof Y.XmlText) {
       const node = document.createTextNode(textOf(y));
@@ -185,8 +202,8 @@ function start(
       // removed from where it was and inserted where it went, reported as two records — and in the
       // order the browser happens to give them. Processing them as they arrive either duplicates the
       // element (insert seen first, then a delete that no longer matches) or loses it entirely.
-      for (const record of records) applyRecord(record, yFor, link, document, "remove");
-      for (const record of records) applyRecord(record, yFor, link, document, "insert");
+      for (const record of records) applyRecord(record, yFor, link, document, "remove", rescuedFmt, rescueFmt);
+      for (const record of records) applyRecord(record, yFor, link, document, "insert", rescuedFmt, rescueFmt);
     }, LOCAL_ORIGIN);
   });
   observer.observe(container, {
@@ -284,6 +301,8 @@ function applyRecord(
   link: (y: YNode, node: Node) => void,
   document: Doc,
   phase: "remove" | "insert",
+  rescuedFmt: WeakMap<Node, string>,
+  rescueFmt: (node: Node) => void,
 ): void {
   const targetY = yFor.get(record.target);
   if (!targetY) return; // a node we never mapped — not part of the page
@@ -324,6 +343,8 @@ function applyRecord(
       for (const removed of Array.from(record.removedNodes)) {
         const y = yFor.get(removed);
         if (!y) continue;
+        rescueFmt(removed); // in case this is the first half of a move
+
         const index = targetY.toArray().indexOf(y as never);
         if (index >= 0) targetY.delete(index, 1);
       }
@@ -336,7 +357,7 @@ function applyRecord(
       // has no move operation, so it is re-created here rather than skipped.
       if (known && !isDeleted(known)) continue;
       if (isInstrumentation(added)) continue;
-      const built = toY(added, link, document);
+      const built = toY(added, link, document, rescuedFmt);
       if (!built) continue;
       const index = domIndexOf(record.target as Element, added, yFor);
       if (index < 0) continue;
@@ -393,7 +414,12 @@ function domIndexOf(parent: Element, node: Node, yFor: WeakMap<Node, YNode>): nu
 }
 
 /** Build a CRDT node from a DOM node, mapping it and its subtree as it goes. */
-function toY(node: Node, link: (y: YNode, node: Node) => void, document: Doc): YNode | null {
+function toY(
+  node: Node,
+  link: (y: YNode, node: Node) => void,
+  document: Doc,
+  rescuedFmt?: WeakMap<Node, string>,
+): YNode | null {
   if (node.nodeType === NODE_TEXT) {
     const text = new Y.XmlText();
     text.insert(0, (node as Text).data);
@@ -409,6 +435,9 @@ function toY(node: Node, link: (y: YNode, node: Node) => void, document: Doc): Y
   if (node.nodeType !== NODE_ELEMENT) return null;
   const source = node as Element;
   const el = new Y.XmlElement(source.tagName.toLowerCase());
+  // A moved element keeps the formatting it had before the move, so the diff shows the move alone.
+  const fmt = rescuedFmt?.get(node);
+  if (fmt !== undefined) el.setAttribute(FMT_ATTR, fmt);
   for (const attr of Array.from(source.attributes)) {
     if (isInstrumentationAttr(attr.name)) continue;
     el.setAttribute(attr.name, attr.value);
@@ -416,7 +445,7 @@ function toY(node: Node, link: (y: YNode, node: Node) => void, document: Doc): Y
   link(el, node);
   const children: YNode[] = [];
   for (const child of Array.from(source.childNodes)) {
-    const built = toY(child, link, document);
+    const built = toY(child, link, document, rescuedFmt);
     if (built) children.push(built);
   }
   if (children.length > 0) el.insert(0, children as never);

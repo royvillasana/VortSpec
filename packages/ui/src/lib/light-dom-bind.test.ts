@@ -95,6 +95,29 @@ describe("DOM edits reach the document", () => {
     expect(docToLightHtml(doc)).toBe('<div id="a"></div><div id="b"><p>x</p></div>');
   });
 
+  it("keeps a moved element's formatting, so the diff shows the move alone", async () => {
+    // Seen on a real page: dragging a button produced a diff that ALSO reshuffled its attributes
+    // into alphabetical order, because the re-created element had lost its formatting record. The
+    // reviewable diff is the whole point of the source-faithful parser, so a move must not cost it.
+    const page = '<div id="a"><a class="btn" href="#x" data-component="Button">Go</a></div><div id="b"></div>';
+    const { doc, container } = setup(page);
+    container.querySelector("#b")!.appendChild(container.querySelector("a")!);
+    await settle();
+    expect(docToLightHtml(doc)).toBe(
+      '<div id="a"></div><div id="b"><a class="btn" href="#x" data-component="Button">Go</a></div>',
+    );
+  });
+
+  it("keeps formatting for a moved element's descendants too", async () => {
+    const page = '<div id="a"><p class="c" id="p"><span title="t" class="s">x</span></p></div><div id="b"></div>';
+    const { doc, container } = setup(page);
+    container.querySelector("#b")!.appendChild(container.querySelector("p")!);
+    await settle();
+    expect(docToLightHtml(doc)).toBe(
+      '<div id="a"></div><div id="b"><p class="c" id="p"><span title="t" class="s">x</span></p></div>',
+    );
+  });
+
   it("carries a reorder within one parent", async () => {
     const { doc, container } = setup("<ul><li>one</li><li>two</li></ul>");
     const ul = container.querySelector("ul")!;
