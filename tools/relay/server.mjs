@@ -48,6 +48,19 @@ const server = new Server({
     console.log(`+ ${documentName}`);
   },
 
+  // TEMPORARY (diagnosing why edits do not cross): every document change the relay receives, with
+  // who sent it and how big the room's document is. This distinguishes "the edit never left the
+  // sender" from "it arrived and the receiver ignored it" — which no amount of app-side logging can,
+  // because both sides look identical from inside one process.
+  async onChange({ documentName, clientsCount, document }) {
+    const size = document.getXmlFragment("page").length;
+    console.log(`~ ${documentName} changed — ${clientsCount} client(s), page fragment has ${size} top-level node(s)`);
+  },
+
+  async onLoadDocument({ documentName }) {
+    console.log(`? ${documentName} requested (relay has no copy yet — the first client will seed it)`);
+  },
+
   async onDisconnect({ documentName, clientsCount }) {
     console.log(`- ${documentName} (${clientsCount} remaining)`);
   },

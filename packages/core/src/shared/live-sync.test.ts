@@ -42,6 +42,20 @@ const room = () => {
       peers.push(doc);
       return doc;
     },
+    /**
+     * A client that seeds BEFORE it connects — the old bug's exact order. A fresh `Y.Doc` was built
+     * and loaded from the file immediately, and only then did the provider attach. Seeding after
+     * connecting cannot show this, because loading clears the document first.
+     */
+    seedThenAttach(html: string): Y.Doc {
+      const doc = new Y.Doc();
+      loadLightHtml(doc, html);
+      doc.on("update", (update: Uint8Array) => Y.applyUpdate(relay, update));
+      Y.applyUpdate(relay, Y.encodeStateAsUpdate(doc));
+      Y.applyUpdate(doc, Y.encodeStateAsUpdate(relay));
+      peers.push(doc);
+      return doc;
+    },
     /** Everyone catches up with the relay, in any order. */
     sync(): void {
       for (const p of peers) Y.applyUpdate(relay, Y.encodeStateAsUpdate(p));
@@ -76,6 +90,29 @@ describe("who seeds the page", () => {
     expect(docToLightHtml(a)).toBe(PAGE);
     expect(docToLightHtml(b)).toBe(PAGE);
     expect(docToLightHtml(a).match(/<h1>/g)?.length).toBe(1);
+  });
+
+  it("duplicates the page when one client seeds twice — which is why a page keeps ONE document", () => {
+    // Not hypothetical: this shipped. `startLive` ran more than once per page open (the effect
+    // re-runs as the bridge becomes ready and the page name resolves), each run built a fresh
+    // document, seeded it from the file, and the provider pushed it into the same room.
+    //
+    // Documents with no shared history do not merge, they CONCATENATE. The room went from 3
+    // top-level nodes to 6 to 12 — two then four whole copies of the page — with each window
+    // editing a different one. It presents as "sync is broken", never as "the document is doubled".
+    const r = room();
+    const first = r.join(PAGE);
+    r.sync();
+    const topLevel = (doc: Y.Doc): number => doc.getXmlFragment(PAGE_FRAGMENT).length;
+    expect(topLevel(first)).toBe(3); // doctype, whitespace, <html>
+
+    // The same client seeding again, as a second Y.Doc for the same page. `join` would not do this
+    // — it checks the room first, which is the fix — so the buggy path is written out explicitly.
+    const second = r.seedThenAttach(PAGE);
+    r.sync();
+
+    expect(topLevel(second)).toBeGreaterThan(3);
+    expect(docToLightHtml(second).match(/<html/g)?.length).toBeGreaterThan(1);
   });
 
   it("gives a late joiner the edits made before they arrived", () => {

@@ -542,7 +542,7 @@ export function RunApp({
     void api
       .liteReadPage(project.path, lightPage)
       .then((html) => {
-        if (alive && typeof html === "string" && html) bridge.startLive(html);
+        if (alive && typeof html === "string" && html) bridge.startLive(html, lightPage);
       })
       .catch(() => {
         /* the page stays on today's write path */

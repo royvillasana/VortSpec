@@ -165,7 +165,7 @@ export interface InspectorBridge {
    * bytes and hands it to the guest; it returns false when the page cannot be modelled exactly, in
    * which case nothing changes and the page keeps working as it does today.
    */
-  startLive: (html: string) => boolean;
+  startLive: (html: string, page: string) => boolean;
   /** Seed the document if nobody else has, then hand it to the guest. See the implementation. */
   settleLive: () => void;
   stopLive: () => void;
@@ -253,6 +253,15 @@ export function useInspectorBridge(): InspectorBridge {
   /** The page's bytes, held until `settleLive` decides whether this client is the one that seeds. */
   const pendingHtmlRef = useRef<string | null>(null);
   const settledRef = useRef(false);
+  /**
+   * Which page the current document belongs to. `startLive` is called more than once per page open —
+   * the effect re-runs as the bridge becomes ready and the page name resolves — and building a fresh
+   * document each time is catastrophic rather than wasteful: every one gets seeded from the file and
+   * pushed into the same room, where documents with no shared history CONCATENATE. The room ends up
+   * holding two, then four copies of the page, each window editing a different one, and it looks
+   * exactly like sync being broken.
+   */
+  const liveDocPageRef = useRef<string | null>(null);
   // The element we've wired listeners onto. The <webview> REMOUNTS when its `src`/key changes
   // (e.g. opening a light page), so we must re-attach to each NEW element — a once-only boolean
   // guard would leave the remounted webview with no listeners (no "ready", no tree → uneditable
@@ -694,7 +703,9 @@ export function useInspectorBridge(): InspectorBridge {
    * page stays on today's write path.
    */
   const startLive = useCallback(
-    (html: string): boolean => {
+    (html: string, page: string): boolean => {
+      // Already have a document for this page: keep it. Re-seeding is what duplicates the room.
+      if (liveDocRef.current && liveDocPageRef.current === page) return true;
       stopLive();
       // NOT seeded here. Whoever opens the page first loads the file; everyone after that receives
       // the document from the relay. Two peers seeding independently from identical bytes do not
@@ -713,6 +724,7 @@ export function useInspectorBridge(): InspectorBridge {
         send({ t: "liveUpdate", update: toBase64(update) });
       });
       liveDocRef.current = doc;
+      liveDocPageRef.current = page;
       setLive({ adopted: false, reason: null, prepared: true });
       return true;
     },
@@ -739,6 +751,7 @@ export function useInspectorBridge(): InspectorBridge {
   const stopLive = useCallback((): void => {
     pendingHtmlRef.current = null;
     settledRef.current = false;
+    liveDocPageRef.current = null;
     if (liveDocRef.current) {
       liveDocRef.current.destroy();
       liveDocRef.current = null;
