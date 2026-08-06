@@ -63,62 +63,45 @@ describe("what a selection shares", () => {
   });
 });
 
-describe("deriveScope applies its rules in order", () => {
-  it("1 — a shared token AND component scopes the token to the component", () => {
-    // Still points at the token — the thing that decides the value — but confined to the component the
-    // user was looking at, so a Button reading the same token is spared.
+describe("deriveScope preselects the narrowest scope", () => {
+  // The reported bug in one assertion: one selected instance of a component, and the edit lands on
+  // that instance. It used to derive `component-token`, which rewrote every page in the project.
+  it("a single element defaults to itself, even when it is a component instance on a token", () => {
+    expect(deriveScope([card("a", "radius-card")], "border-radius")).toEqual({ scope: "element" });
+  });
+
+  it("a token-backed value does not widen the edit by itself", () => {
+    expect(deriveScope([card("a", "radius-card", null)], "border-radius")).toEqual({ scope: "element" });
+  });
+
+  it("a component instance does not widen the edit by itself", () => {
+    expect(deriveScope([card("a", undefined, "Card", "8px")], "border-radius")).toEqual({ scope: "element" });
+  });
+
+  it("a deliberate multi-selection defaults to that selection", () => {
+    // Not an exception to the rule — selecting several elements IS the narrowest thing the user can
+    // have meant by it.
     const sel = [card("a", "radius-card"), card("b", "radius-card")];
-    expect(deriveScope(sel, "border-radius")).toEqual({
-      scope: "component-token",
-      key: "Card",
-      token: "radius-card",
-    });
-  });
-
-  it("1 — the same holds for a single element", () => {
-    expect(deriveScope([card("a", "radius-card")], "border-radius")).toEqual({
-      scope: "component-token",
-      key: "Card",
-      token: "radius-card",
-    });
-  });
-
-  it("2 — a shared token across DIFFERENT components falls to the token itself", () => {
-    // Nothing to scope to: there is no one component the change could be confined to.
-    const sel = [card("a", "radius-card"), card("b", "radius-card", "Button")];
-    expect(sharedComponent(sel)).toBeNull();
-    expect(deriveScope(sel, "border-radius")).toEqual({ scope: "token", key: "radius-card" });
-  });
-
-  it("2 — an unmarked element with a token falls to the token itself", () => {
-    expect(deriveScope([card("a", "radius-card", null)], "border-radius")).toEqual({
-      scope: "token",
-      key: "radius-card",
-    });
-  });
-
-  it("2 — a shared component AND a shared value wins when the token is not shared", () => {
-    const sel = [card("a", "radius-card"), card("b", "radius-pill")];
-    expect(deriveScope(sel, "border-radius")).toEqual({ scope: "matching", key: "Card", value: "8px" });
-  });
-
-  it("2 — a shared component with DIFFERING values does not match", () => {
-    // The three Buttons at 16px were styled that way on purpose; there is no single "looks like this".
-    const sel = [card("a", undefined, "Card", "8px"), card("b", undefined, "Card", "16px")];
     expect(deriveScope(sel, "border-radius")).toEqual({ scope: "selection" });
   });
 
-  it("3 — several members sharing neither fall to the selection", () => {
-    const sel = [card("a", "radius-card"), card("b", "radius-pill", "Button", "16px")];
-    expect(deriveScope(sel, "border-radius")).toEqual({ scope: "selection" });
-  });
-
-  it("4 — one member sharing nothing falls to the element", () => {
-    expect(deriveScope([card("a", undefined, null)], "border-radius")).toEqual({ scope: "element" });
+  it("a multi-selection sharing a token still does not write the token", () => {
+    const sel = [card("a", "radius-card"), card("b", "radius-card")];
+    expect(deriveScope(sel, "border-radius").scope).not.toBe("component-token");
+    expect(deriveScope(sel, "border-radius").scope).not.toBe("token");
   });
 
   it("an empty selection derives element, which can write nothing", () => {
     expect(deriveScope([], "border-radius")).toEqual({ scope: "element" });
+  });
+
+  it("still OFFERS every wider scope — only the default narrowed", () => {
+    // The distinction the change rests on: nothing was removed. `availableScopes` is untouched, so a
+    // user who wants the token can still reach it in one click.
+    const sel = [card("a", "radius-card")];
+    const offered = availableScopes(sel, "border-radius").map((s) => s.scope);
+    expect(offered).toContain("element");
+    expect(offered).toContain("component-token");
   });
 });
 

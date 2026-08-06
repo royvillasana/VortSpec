@@ -14,7 +14,7 @@ The cost is asymmetric, which is what settles it. A narrow edit that should have
 
 - **A single selection defaults to `element`.** The edit lands on the element you selected and nothing else.
 - **Widening is offered after the fact, not before.** Once the edit is applied, the user is asked whether to apply it to every instance of the same component. Acting first and offering second means the narrow result is already real and the wide one is a deliberate answer to a direct question.
-- **The offer is by component identity** — every instance created from that component — which is broader than today's `matching` ("the ones that look alike right now"). Both remain expressible; only which one the offer names changes.
+- **The offer is by component identity, minus the instances that already differ.** Every instance created from that component EXCEPT those whose current value for the edited property had already diverged — those were styled that way on purpose, and "apply to all" must not be a way to quietly overwrite a decision somebody made and never revisited. This keeps exactly what `c8faafc9` was protecting while fixing what was actually wrong, which was the default.
 - **A multi-element selection still defaults to `selection`.** Those elements were selected on purpose.
 - **Token scopes stay available and stop being automatic.** `component-token` and `token` reach beyond the page, so they are chosen, never inherited from a default.
 
@@ -33,4 +33,4 @@ Explicitly **not** in scope: removing any scope, changing what each scope writes
 | Design panel edit controls | The scope control stops carrying the decision alone; a post-edit offer to widen appears |
 | `packages/core/src/shared/canvas-edit-router.ts` | Unchanged in what it writes; it receives `element` far more often |
 
-**This reverses a deliberate earlier decision** (`c8faafc9`, "apply-to-all means 'looks like this', not 'every instance'"), and the reversal is partial: that commit was about what "all" MEANS, and it is still right that look-alike matching exists. What changes is that "all" is no longer the default and, when offered, is named by component identity rather than by current appearance.
+**This does NOT reverse the earlier decision** (`c8faafc9`, "apply-to-all means 'looks like this', not 'every instance'"), which an earlier draft of this proposal did. That commit protects an element somebody deliberately styled differently, and the offer here skips exactly those. What changes is only that the wide scope stopped being the DEFAULT — the part that was actually wrong — and that the offer is framed by component identity so a user reads it as "the other Buttons" rather than as a value match they have to reason about.

@@ -125,34 +125,35 @@ export function sharedValue(selection: readonly ScopeTarget[], property: string)
 }
 
 /**
- * The scope to preselect, by four ordered rules:
+ * The scope to preselect:
  *
- *   1. same token AND same component                                    → `component-token`
- *   2. else same token                                                  → `token`
- *   3. else same component AND same current value                       → `matching`
- *   4. else more than one member                                        → `selection`
- *   5. else                                                             → `element`
+ *   1. more than one member  → `selection`
+ *   2. else                  → `element`
  *
- * Pointing at the token is the opinionated step. When the design system already governs a property,
- * editing the instance fights it — so the default points at the thing that actually decides the value.
- * This is what makes the feature improve the design system instead of scattering overrides.
+ * It used to point at the widest scope the selection supported — the token, or a token scoped to the
+ * component, or every element that looked alike — on the principle that when a design system governs a
+ * property, editing the instance fights it.
  *
- * Rule 1 sits above rule 2 because it satisfies that principle WITHOUT the spill: still the token, but
- * confined to the component the user was looking at. Changing it everywhere stays one click away, wearing
- * its use count.
+ * That principle is still true, and it was still the wrong default. It made a single click change every
+ * instance of a component, and through a token every page in the project, from a control the user had not
+ * looked at. Reported as: "I'm applying the change only on that component, just like the button asked me
+ * to do" — and it changed all of them.
  *
- * An empty selection has nothing to derive from and yields `element`, which offers nothing to write.
+ * The costs are not symmetric, which is what settles it. A narrow edit that should have been wide is one
+ * more action. A wide edit that should have been narrow rewrites work the user cannot see, on pages they
+ * are not looking at, and they find out later or never. So the derivation now returns the smallest thing
+ * the user can have meant, and reaching further is a decision they make with the result already in front
+ * of them.
+ *
+ * Every wider scope is still OFFERED — see `availableScopes`, which is unchanged. This function only
+ * decides what is selected before the user says anything.
+ *
+ * A multi-element selection still defaults to `selection`: those elements were chosen deliberately, and
+ * respecting that is the same principle, not an exception to it.
+ *
+ * An empty selection yields `element`, which offers nothing to write.
  */
-export function deriveScope(selection: readonly ScopeTarget[], property: string): DerivedScope {
-  const token = sharedToken(selection, property);
-  const shared = sharedComponent(selection);
-  if (token && shared) return { scope: "component-token", key: shared, token };
-  if (token) return { scope: "token", key: token };
-  const component = sharedComponent(selection);
-  const value = sharedValue(selection, property);
-  // Rule 2 needs BOTH: a shared component says what kind of thing this is, the shared value says which of
-  // them look alike. Same component with differing values has no single "looks like this" to match.
-  if (component && value !== null) return { scope: "matching", key: component, value };
+export function deriveScope(selection: readonly ScopeTarget[], _property: string): DerivedScope {
   if (selection.length > 1) return { scope: "selection" };
   return { scope: "element" };
 }

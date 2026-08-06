@@ -47,32 +47,37 @@ describe("scopeTargets — every member reaches the scope rules", () => {
     expect(offered.find((o) => o.scope === "selection")?.reach).toBe(2);
   });
 
-  it("a shared token across members still derives the component-token scope", () => {
+  it("a shared token across members still OFFERS the component-token scope", () => {
     // The reason the members are BUILT rather than inferred: each one's token comes from its own
     // readout through `buildSelection`. A computed style could not tell us this — it reports the
     // resolved value, not the `var()` — and guessing it would justify a wide edit with a guess.
+    //
+    // It is offered, not derived: since `edit-scope-defaults` the default is the narrowest scope,
+    // so what this asserts is that the token still REACHES the control — the pipeline carrying the
+    // token through is what the file is about, and that is unchanged.
     const sel = [member("a", "Card", "--space-2", "8px"), member("b", "Card", "--space-2", "8px")];
-    const derived = deriveScope(scopeTargets(sel), "padding");
-    expect(derived.scope).toBe("component-token");
-    expect(derived.token).toBe("--space-2");
+    const offered = availableScopes(scopeTargets(sel), "padding");
+    expect(offered.find((o) => o.scope === "component-token")?.token).toBe("--space-2");
+    expect(deriveScope(scopeTargets(sel), "padding").scope).toBe("selection");
   });
 
-  it("same component, same value, no token → `matching`", () => {
+  it("same component, same value, no token → `matching` is offered", () => {
     const sel = [member("a", "Card", undefined, "8px"), member("b", "Card", undefined, "8px")];
-    expect(deriveScope(scopeTargets(sel), "padding").scope).toBe("matching");
+    const targets = scopeTargets(sel);
+    expect(availableScopes(targets, "padding").some((o) => o.scope === "matching")).toBe(true);
+    expect(deriveScope(targets, "padding").scope).toBe("selection");
   });
 
   it("CONTROL: one member is never offered the `selection` scope", () => {
     // Every case above needs MORE than one target, so a `scopeTargets` that fabricated members
     // would satisfy them all. This is the polarity that says it must not.
     //
-    // Note what one member DOES derive: `matching`, not `element` — rule 2 fires on a shared
-    // component plus a shared value, and one element trivially shares both with itself. That is
-    // the shipped behaviour and this test asserts it rather than the behaviour I first assumed;
-    // `element` is what you get when there is nothing to key on, which is the case below.
+    // What one member derives is now `element` — it used to be `matching`, because a lone element
+    // trivially shares a component and a value with itself, which made "change every one that looks
+    // like this" the default for a single click. That is the bug `edit-scope-defaults` fixes.
     const one = scopeTargets(member("a", "Card", undefined, "8px"));
     expect(one).toHaveLength(1);
-    expect(deriveScope(one, "padding").scope).toBe("matching");
+    expect(deriveScope(one, "padding").scope).toBe("element");
     expect(availableScopes(one, "padding").some((o) => o.scope === "selection")).toBe(false);
   });
 
@@ -92,9 +97,16 @@ describe("scopeTargets — every member reaches the scope rules", () => {
     // `RunApp` omits a member whose readout has not landed. A `null` slot must drop out rather than
     // become a target with no tokens and no values — that would read as disagreement and push the
     // scope wider than the facts support.
-    expect(scopeTargets([member("a", "Card", "--space-2", "8px"), null])).toHaveLength(1);
-    expect(deriveScope(scopeTargets([member("a", "Card", "--space-2", "8px"), null]), "padding").scope).toBe(
-      "component-token",
+    //
+    // Asserted through what is OFFERED rather than derived: a phantom member would make the one
+    // real target look like a disagreeing pair, and the giveaway is that `component-token` stops
+    // being available at all. The derived scope can no longer show this — it is `element` either
+    // way now — so the check moved to where the difference is still visible.
+    const targets = scopeTargets([member("a", "Card", "--space-2", "8px"), null]);
+    expect(targets).toHaveLength(1);
+    expect(availableScopes(targets, "padding").find((o) => o.scope === "component-token")?.token).toBe(
+      "--space-2",
     );
+    expect(availableScopes(targets, "padding").some((o) => o.scope === "selection")).toBe(false);
   });
 });

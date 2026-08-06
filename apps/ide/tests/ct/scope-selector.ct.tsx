@@ -96,23 +96,26 @@ test("the scope is shown before a value can be typed, with each reach stated", a
   await expect(scopes.getByRole("button", { name: "--radius-card · 40 uses" })).toBeVisible();
 });
 
-test("the default points at the token, but confined to the component", async ({ mount }) => {
+test("the default is this element, even when a token governs the property", async ({ mount }) => {
   const c = await mount(panel(selection({ component: "Button", token: "radius-card" })));
   await c.getByRole("textbox").first().focus();
 
-  // Editing the instance would fight the design system, so the default points at the token. But writing
-  // the token outright would also change every OTHER component reading it — so the default is the token
-  // scoped to this component, which satisfies the principle without the spill.
-  await expect(c.getByRole("button", { name: "All 3 Buttons" })).toHaveAttribute("aria-pressed", "true");
+  // It used to default to the token scoped to the component — editing the instance fights the design
+  // system, so point at the thing that decides the value. True, and still the wrong DEFAULT: one click
+  // on a control the user had not looked at changed every Button on every page. Reported as exactly
+  // that. The wide scopes are one click away and now have to be chosen.
+  await expect(c.getByRole("button", { name: "This element" })).toHaveAttribute("aria-pressed", "true");
+  await expect(c.getByRole("button", { name: "All 3 Buttons" })).toHaveAttribute("aria-pressed", "false");
   await expect(c.getByRole("button", { name: "--radius-card · 40 uses" })).toHaveAttribute("aria-pressed", "false");
   await expect(c.getByRole("button", { name: "Buttons like this" })).toHaveAttribute("aria-pressed", "false");
 });
 
-test("the default falls to \"looks like this\" when no token governs the property", async ({ mount }) => {
+test("the default is still this element when no token governs the property", async ({ mount }) => {
   const c = await mount(panel(selection({ component: "Button", token: null })));
   await c.getByRole("textbox").first().focus();
 
-  await expect(c.getByRole("button", { name: "Buttons like this" })).toHaveAttribute("aria-pressed", "true");
+  await expect(c.getByRole("button", { name: "This element" })).toHaveAttribute("aria-pressed", "true");
+  await expect(c.getByRole("button", { name: "Buttons like this" })).toHaveAttribute("aria-pressed", "false");
   // With no token there is nothing to offer at token scope — the option is withheld, not shown disabled.
   await expect(c.getByRole("button", { name: /radius-card/ })).toHaveCount(0);
 });
@@ -243,8 +246,11 @@ test("a shared token AND component scopes the token to the component, sparing it
   await expect(scopes.getByRole("button", { name: "All 3 Buttons" })).toBeVisible();
   await expect(scopes.getByRole("button", { name: /radius-card/ })).toBeVisible();
 
-  // And the component-scoped one is the default: it points at the token without the spill.
-  await expect(scopes.getByRole("button", { name: "All 3 Buttons" })).toHaveAttribute("aria-pressed", "true");
+  // The default is the element; the component-scoped token is CHOSEN. That it still writes a token
+  // redefinition confined to the component — rather than the token itself — is what this test is
+  // actually about, and that is unchanged.
+  await expect(scopes.getByRole("button", { name: "This element" })).toHaveAttribute("aria-pressed", "true");
+  await scopes.getByRole("button", { name: "All 3 Buttons" }).click();
 
   await input.fill("4px");
   await input.press("Enter");

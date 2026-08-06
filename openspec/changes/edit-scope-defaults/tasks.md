@@ -2,10 +2,10 @@
 
 ## 1. Default to the element
 
-- [ ] 1.1 Change `deriveScope` so a single selection returns `element` regardless of component identity or token backing; keep `selection` for multi-element selections
-- [ ] 1.2 Rewrite the ordering rationale in `style-scope.ts` — it currently argues for predictability and then returns the widest scope, and the next person will follow the comment rather than the code
-- [ ] 1.3 Update the existing scope tests: the ones asserting `matching`/`component-token`/`token` as the DERIVED default now assert availability instead
-- [ ] 1.4 Verify a token-backed value on a component instance no longer writes the overlay or a component-scoped redefinition by default — the case that reaches other pages
+- [x] 1.1 Change `deriveScope` so a single selection returns `element` regardless of component identity or token backing; keep `selection` for multi-element selections
+- [x] 1.2 Rewrite the ordering rationale in `style-scope.ts` — it currently argues for predictability and then returns the widest scope, and the next person will follow the comment rather than the code
+- [x] 1.3 Update the existing scope tests: the ones asserting `matching`/`component-token`/`token` as the DERIVED default now assert availability instead
+- [x] 1.4 Verify a token-backed value on a component instance no longer writes the overlay or a component-scoped redefinition by default — the case that reaches other pages
 
 ## 2. Offer to widen, after the fact
 

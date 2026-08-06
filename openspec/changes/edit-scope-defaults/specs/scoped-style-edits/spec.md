@@ -27,6 +27,8 @@ After a single-element edit is applied, the app SHALL offer to apply the same ch
 
 Offering afterwards rather than pre-selecting means the predictable result exists first and the broad one is an answer to a direct question.
 
+The offer SHALL skip instances whose current value for the edited property already differs from what the edited element had before the change. An instance that was styled differently was styled differently on purpose, and "apply to all" must not be a way to silently discard a decision somebody made earlier and never revisited. So "all" means every instance that still agreed with this one — the ones that would have looked wrong if left behind — and never the ones that had already diverged.
+
 #### Scenario: The offer appears and is declined
 
 - **WHEN** a user edits one instance of a component and does not accept the offer to widen
@@ -35,7 +37,12 @@ Offering afterwards rather than pre-selecting means the predictable result exist
 #### Scenario: The offer is accepted
 
 - **WHEN** the user accepts the offer
-- **THEN** every instance of that component receives the same change
+- **THEN** every instance of that component that still matched the edited element's previous value receives the same change
+
+#### Scenario: A deliberately different instance is left alone
+
+- **WHEN** an instance of the same component already has a different value for the edited property
+- **THEN** it is not changed, and the offer says how many instances it skipped for that reason
 
 #### Scenario: Nothing to widen to
 
