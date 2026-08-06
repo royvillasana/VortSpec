@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { readoutForFocus } from "./focus-readout";
 import * as Y from "yjs";
-import { lightHtmlToDoc } from "@vortspec/core/light-doc";
+import { canAdoptLightHtml, loadLightHtml, PAGE_FRAGMENT } from "@vortspec/core/light-doc";
 import type { CursorAnchor } from "./live-presence";
 import {
   INSPECTOR_BRIDGE_CHANNEL,
@@ -166,6 +166,8 @@ export interface InspectorBridge {
    * which case nothing changes and the page keeps working as it does today.
    */
   startLive: (html: string) => boolean;
+  /** Seed the document if nobody else has, then hand it to the guest. See the implementation. */
+  settleLive: () => void;
   stopLive: () => void;
   /** Whether this page joined a live document, and why not when it did not. */
   live: LiveState;
@@ -238,6 +240,9 @@ export function useInspectorBridge(): InspectorBridge {
   const [live, setLive] = useState<LiveState>({ adopted: false, reason: null });
   /** This user's pointer, as reported by the guest in document terms. Null when off the page. */
   const [localCursor, setLocalCursor] = useState<CursorAnchor | null>(null);
+  /** The page's bytes, held until `settleLive` decides whether this client is the one that seeds. */
+  const pendingHtmlRef = useRef<string | null>(null);
+  const settledRef = useRef(false);
   // The element we've wired listeners onto. The <webview> REMOUNTS when its `src`/key changes
   // (e.g. opening a light page), so we must re-attach to each NEW element — a once-only boolean
   // guard would leave the remounted webview with no listeners (no "ready", no tree → uneditable
@@ -681,24 +686,48 @@ export function useInspectorBridge(): InspectorBridge {
   const startLive = useCallback(
     (html: string): boolean => {
       stopLive();
-      const doc = lightHtmlToDoc(html);
-      if (!doc) {
+      // NOT seeded here. Whoever opens the page first loads the file; everyone after that receives
+      // the document from the relay. Two peers seeding independently from identical bytes do not
+      // produce one page — they produce two, merged, because the documents share no history. So the
+      // document starts empty and `settleLive` decides, once the transport has had its say.
+      if (!canAdoptLightHtml(html)) {
         setLive({ adopted: false, reason: "this page's markup cannot be modelled exactly" });
         return false;
       }
+      const doc = new Y.Doc();
+      pendingHtmlRef.current = html;
+      settledRef.current = false;
       // Forward the host's own changes to the guest, but never the ones that came from it.
       doc.on("update", (update: Uint8Array, origin: unknown) => {
         if (origin === GUEST_ORIGIN) return;
         send({ t: "liveUpdate", update: toBase64(update) });
       });
       liveDocRef.current = doc;
-      send({ t: "liveInit", state: toBase64(Y.encodeStateAsUpdate(doc)) });
       return true;
     },
     [send],
   );
 
+  /**
+   * Settle the document and hand it to the guest. Called once the transport has had its chance:
+   * immediately when no relay is configured, or after the provider reports it is synced.
+   *
+   * Seeding only when the document is still empty is what makes "first one in loads the file, the
+   * rest receive it" true, and it is the same mechanism a late joiner needs — they arrive to a
+   * non-empty document and take it as it stands rather than overwriting it with the file on disk.
+   */
+  const settleLive = useCallback((): void => {
+    const doc = liveDocRef.current;
+    const html = pendingHtmlRef.current;
+    if (!doc || settledRef.current || html === null) return;
+    settledRef.current = true;
+    if (doc.getXmlFragment(PAGE_FRAGMENT).length === 0) loadLightHtml(doc, html);
+    send({ t: "liveInit", state: toBase64(Y.encodeStateAsUpdate(doc)) });
+  }, [send]);
+
   const stopLive = useCallback((): void => {
+    pendingHtmlRef.current = null;
+    settledRef.current = false;
     if (liveDocRef.current) {
       liveDocRef.current.destroy();
       liveDocRef.current = null;
@@ -812,6 +841,7 @@ export function useInspectorBridge(): InspectorBridge {
     serializeDom,
     setLightMode,
     startLive,
+    settleLive,
     stopLive,
     live,
     liveDoc: liveDocRef,

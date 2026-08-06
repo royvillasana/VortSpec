@@ -1658,6 +1658,16 @@ export function RunApp({
     cursor: bridge.localCursor,
   });
 
+  // Hand the document to the guest once its content is settled: immediately when no relay is
+  // configured or it cannot be reached, and after the relay has sent what it has when there is one.
+  // Settling early is the dangerous direction — it would seed from the file over work that is
+  // already in the room.
+  useEffect(() => {
+    if (session.status === "off" || session.status === "unreachable" || session.synced) {
+      bridge.settleLive();
+    }
+  }, [session.status, session.synced, bridge.settleLive]);
+
   // Report the pointer only while a session is actually live — it fires on every pointermove.
   useEffect(() => {
     bridge.setCursorReporting(session.status === "live");

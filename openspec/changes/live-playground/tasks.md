@@ -22,11 +22,11 @@
 
 ## 3. Live document sync
 
-- [ ] 3.1 Connect the CRDT document to the provider; remote ops apply to the guest DOM
-- [ ] 3.2 A late joiner receives the current document, including edits made before they joined
-- [ ] 3.3 Verify convergence with concurrent edits from 3+ clients, including insert/delete (the ops most likely to break tree merges)
-- [ ] 3.4 Confirm the anchor-drift class of bug is gone: concurrent inserts above an element do not misdirect a later edit to it
-- [ ] 3.5 Verify an edit to one element never discards a concurrent edit to another — the spec's load-bearing claim
+- [x] 3.1 Connect the CRDT document to the provider; remote ops apply to the guest DOM
+- [x] 3.2 A late joiner receives the current document, including edits made before they joined
+- [x] 3.3 Verify convergence with concurrent edits from 3+ clients, including insert/delete (the ops most likely to break tree merges)
+- [x] 3.4 Confirm the anchor-drift class of bug is gone: concurrent inserts above an element do not misdirect a later edit to it
+- [x] 3.5 Verify an edit to one element never discards a concurrent edit to another — the spec's load-bearing claim
 
 ## 4. Comment on the cursor
 

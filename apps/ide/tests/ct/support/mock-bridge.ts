@@ -83,6 +83,7 @@ export function makeBridge(overrides: Partial<InspectorBridge> = {}): InspectorB
     localCursor: null,
     setCursorReporting: noop,
     startLive: () => false,
+    settleLive: noop,
     stopLive: noop,
     live: { adopted: false, reason: null },
     liveDoc: { current: null },

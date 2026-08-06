@@ -36,9 +36,21 @@ export type LiveSessionState = {
   participants: number;
   /** Everyone else, with their cursors. Empty when not live — never render your own. */
   peers: Participant[];
+  /**
+   * The relay has sent whatever it already had for this room. Until this is true, an empty document
+   * means "not yet told", not "nobody has this page" — seeding before it would overwrite everyone
+   * else's work with the file on disk.
+   */
+  synced: boolean;
 };
 
-export const offSession: LiveSessionState = { status: "off", detail: "", participants: 0, peers: [] };
+export const offSession: LiveSessionState = {
+  status: "off",
+  detail: "",
+  participants: 0,
+  peers: [],
+  synced: false,
+};
 
 export type LiveSessionInput = {
   /** The CRDT for the page — the host replica. Null when the page is not adopted. */
@@ -92,7 +104,7 @@ export function useLiveSession(input: LiveSessionInput): LiveSessionState {
 
     let alive = true;
     let provider: HocuspocusProvider | null = null;
-    setState({ status: "connecting", detail: "", participants: 0, peers: [] });
+    setState({ status: "connecting", detail: "", participants: 0, peers: [], synced: false });
 
     void roomIdFor(remote, input.page, sha256Hex)
       .then((room) => {
@@ -104,6 +116,9 @@ export function useLiveSession(input: LiveSessionInput): LiveSessionState {
           token: credential || undefined,
           // The document is seeded from the file by whoever opened the page first; the provider's
           // job here is only transport.
+          onSynced: () => {
+            if (alive) setState((prev) => ({ ...prev, synced: true }));
+          },
           onStatus: ({ status }) => {
             if (!alive) return;
             setState((prev) =>
@@ -123,6 +138,7 @@ export function useLiveSession(input: LiveSessionInput): LiveSessionState {
                 : "This relay requires a credential and this machine has none stored.",
               participants: 0,
               peers: [],
+              synced: false,
             });
           },
           onDisconnect: () => {
@@ -132,6 +148,7 @@ export function useLiveSession(input: LiveSessionInput): LiveSessionState {
               detail: "The relay is not reachable. Your edits are still saved to the project.",
               participants: 0,
               peers: [],
+              synced: false,
             });
           },
         });
@@ -162,7 +179,13 @@ export function useLiveSession(input: LiveSessionInput): LiveSessionState {
         });
       })
       .catch(() => {
-        if (alive) setState({ status: "unreachable", detail: "The session could not be started.", participants: 0, peers: [] });
+        if (alive) setState({
+              status: "unreachable",
+              detail: "The session could not be started.",
+              participants: 0,
+              peers: [],
+              synced: false,
+            });
       });
 
     return () => {
