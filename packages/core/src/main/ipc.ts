@@ -156,6 +156,14 @@ import type { StageStatus } from "@vortspec/core/flow";
  * app threw `ReferenceError: __dirname is not defined` and opened no window at
  * all. Derive it instead; a bundler cannot move this.
  */
+import {
+  hasRelayCredential,
+  readCollabConfig,
+  relayCredential,
+  setRelayCredential,
+  writeCollabConfig,
+} from "./collab/collab-store";
+
 const here = (): string => dirname(fileURLToPath(import.meta.url));
 
 /**
@@ -440,6 +448,13 @@ const handlers: Record<IpcChannel, Handler> = {
   "lite:pagePrompt": ((r: { projectPath: string; name: string; description: string }) =>
     buildProjectLightPagePrompt(r.projectPath, r.name, r.description)) as Handler,
   "lite:page": ((r: { projectPath: string; name: string }) => readLightPage(r.projectPath, r.name)) as Handler,
+  "collab:config": ((projectPath: string) => readCollabConfig(projectPath)) as Handler,
+  "collab:setConfig": ((r: { projectPath: string; relayUrl: string }) =>
+    writeCollabConfig(r.projectPath, { relayUrl: r.relayUrl })) as Handler,
+  "collab:hasCredential": ((relayUrl: string) => hasRelayCredential(relayUrl)) as Handler,
+  "collab:credential": ((relayUrl: string) => relayCredential(relayUrl)) as Handler,
+  "collab:setCredential": ((r: { relayUrl: string; secret: string }) =>
+    setRelayCredential(r.relayUrl, r.secret)) as Handler,
   "lite:pages": ((projectPath: string) => listLightPages(projectPath)) as Handler,
   "lite:writePage": ((r: { projectPath: string; name: string; html: string }) =>
     writeLightPage(r.projectPath, r.name, r.html)) as Handler,

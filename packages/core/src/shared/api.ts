@@ -165,6 +165,15 @@ export interface VortSpecApi {
   litepagePrompt(projectPath: string, name: string, description: string): Promise<IpcResponse<"lite:pagePrompt">>;
   liteReadPage(projectPath: string, name: string): Promise<IpcResponse<"lite:page">>;
   litePages(projectPath: string): Promise<IpcResponse<"lite:pages">>;
+  /** The project's committed relay address (empty when the project has no live session). */
+  collabConfig(projectPath: string): Promise<IpcResponse<"collab:config">>;
+  /** Store the relay address. Rejects an address carrying a secret — it would be committed. */
+  collabSetConfig(projectPath: string, relayUrl: string): Promise<IpcResponse<"collab:setConfig">>;
+  /** Whether THIS machine holds a credential for a relay — never the credential itself. */
+  collabHasCredential(relayUrl: string): Promise<IpcResponse<"collab:hasCredential">>;
+  /** The credential itself, for opening the socket. Never written to the project. */
+  collabCredential(relayUrl: string): Promise<IpcResponse<"collab:credential">>;
+  collabSetCredential(relayUrl: string, secret: string): Promise<IpcResponse<"collab:setCredential">>;
   liteWritePage(projectPath: string, name: string, html: string): Promise<IpcResponse<"lite:writePage">>;
 
   // Draw tool — persist the drawing graph + Excalidraw scene, export a sketch PNG (docs/draw-to-component-graph.md).
