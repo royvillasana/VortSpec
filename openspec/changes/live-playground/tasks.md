@@ -37,10 +37,10 @@
 
 ## 5. The persistence seam
 
-- [ ] 5.1 Elect a single writer per session (design D5); re-elect on disconnect
-- [ ] 5.2 Every participant ends with the correct file locally, including one who leaves mid-session
-- [ ] 5.3 Indicate in the Playground when a session has edits not yet written to the project file
-- [ ] 5.4 Answer the open question from design: whether the elected writer is the right person to hold the working-tree change, and make the answer visible in the UI
+- [x] 5.1 Elect a single writer per session (design D5); re-elect on disconnect
+- [x] 5.2 Every participant ends with the correct file locally, including one who leaves mid-session
+- [x] 5.3 Indicate in the Playground when a session has edits not yet written to the project file
+- [x] 5.4 Answer the open question from design: whether the elected writer is the right person to hold the working-tree change, and make the answer visible in the UI — ANSWERED: no, and it does not need to be. The elected writer writes DURING the session, and anyone leaving with unsaved work writes on the way out, so every participant ends with the correct file locally and any of them can commit. The election prevents N simultaneous writes; it does not decide who owns the change.
 
 ## 6. Degradation and disclosure
 

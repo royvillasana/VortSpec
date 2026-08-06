@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { docToLightHtml } from "@vortspec/core/light-doc";
 import type { CollabConfig } from "@vortspec/core/collab-config";
 import { shouldJoin, useLiveSession } from "../lib/useLiveSession";
+import { shouldWrite } from "../lib/live-writer";
 import { cursorFingerprints } from "../lib/live-presence";
 import { RemoteCursors } from "../components/run-canvas/RemoteCursors";
 import { LiveParticipants } from "../components/run-canvas/LiveParticipants";
@@ -1621,6 +1622,8 @@ export function RunApp({
 
   const comments = useComments(project.path, watchCommentAnchors, bridge.ready);
 
+  /** Edits exist in the session that this machine has not written to the project file. */
+  const [unpersisted, setUnpersisted] = useState(false);
   const [collabConfig, setCollabConfig] = useState<CollabConfig | null>(null);
   const [relayCredential, setRelayCredential] = useState("");
   const [gitRemote, setGitRemote] = useState("");
@@ -1681,6 +1684,30 @@ export function RunApp({
     // `live.prepared` is in the deps because the document becomes ready AFTER the session has
     // already settled into its status — without it the two wait for each other and nothing happens.
   }, [session.status, session.synced, bridge.live.prepared, collabConfig, gitRemote, bridge.settleLive]);
+
+  // The persist timer reads the session through a ref: it fires 500ms after an edit, and by then
+  // the elected writer may have changed because somebody joined or left.
+  const sessionRef = useRef(session);
+  sessionRef.current = session;
+  const unpersistedRef = useRef(unpersisted);
+  unpersistedRef.current = unpersisted;
+
+  // Leaving with unsaved work writes it, whoever the elected writer was. Not being the writer is not
+  // permission to lose an afternoon because someone else's laptop closed first (task 5.2).
+  useEffect(() => {
+    return () => {
+      if (!unpersistedRef.current || !isLightPageRef.current) return;
+      const name = lightPageRef.current;
+      const doc = bridge.live.adopted ? bridge.liveDoc.current : null;
+      if (!name || !doc) return;
+      try {
+        void api.liteWritePage(project.path, name, docToLightHtml(doc));
+      } catch {
+        /* leaving is not a moment to raise an error the user cannot act on */
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Report the pointer only while a session is actually live — it fires on every pointermove.
   useEffect(() => {
@@ -1801,12 +1828,22 @@ export function RunApp({
           console.error("[vortspec:live] serializing the document failed; falling back to the DOM", err);
         }
       }
+      // In a live session exactly ONE participant writes the file (live-playground, task 5.1).
+      // Everyone holds the same converged document, so everyone writing means the file is written
+      // N times with identical content and N git working trees show a change nobody made. The
+      // others are not idle: they hold the same document, and they write on the way out.
+      if (!shouldWrite({ live: sessionRef.current.status === "live", clientIds: sessionRef.current.clientIds, myClientId: sessionRef.current.myClientId })) {
+        setUnpersisted(true);
+        return;
+      }
+
       // An empty result counts as a failure too: writing it would truncate the page to nothing.
       void (converged ? Promise.resolve(converged) : bridge.serializeDom()).then((html) => {
         if (html == null) return;
         // Persist the edit, then refresh generation status: editing a page that was already generated
         // makes it "stale" (its framework code no longer matches) → the row icon flips to Update.
         void api.liteWritePage(project.path, name, html).then(() => {
+          setUnpersisted(false);
           loadGenStatus();
           // Commit the burst's pre-edit snapshot as one undo entry (a fresh edit clears the redo trail).
           const baseline = lightUndoBaselineRef.current;
@@ -3161,6 +3198,7 @@ export function RunApp({
             // A connected session whose document is NOT bound to the page is not collaboration: the
             // cursors move, and no edit is shared. Reporting that as "2 here" is worse than useless
             // — it is confidently wrong, and it took a real two-window run to notice.
+            liveUnpersisted={unpersisted}
             liveSession={
               session.status === "live" && !bridge.live.adopted
                 ? {

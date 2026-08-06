@@ -60,5 +60,7 @@ describe("the off state", () => {
     expect(offSession.participants).toBe(0);
     expect(offSession.peers).toEqual([]);
     expect(offSession.synced).toBe(false);
+    expect(offSession.clientIds).toEqual([]);
+    expect(offSession.myClientId).toBeNull();
   });
 });

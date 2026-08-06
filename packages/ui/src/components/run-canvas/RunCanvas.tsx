@@ -44,6 +44,7 @@ export function RunCanvas({
   comments,
   liveCursors,
   liveSession,
+  liveUnpersisted,
   skeleton,
   viewport,
   frame,
@@ -89,6 +90,8 @@ export function RunCanvas({
   liveCursors?: RemoteCursorsProps;
   /** Session state for the toolbar's participant count. Absent when no session is configured. */
   liveSession?: LiveSessionState;
+  /** The session holds edits not yet written to the project file. */
+  liveUnpersisted?: boolean;
   /** An "AI is working" placeholder over the preview: a shimmer block where a
    *  component is being built, or a full-page animated gradient for page work. */
   skeleton?: { mode: "page"; label?: string } | { mode: "block"; rect: Rect; label?: string } | null;
@@ -321,7 +324,7 @@ export function RunCanvas({
       {liveSession && (
         <div className="pointer-events-none absolute right-3 top-3 z-40">
           <div className="pointer-events-auto rounded-md bg-vs-bg-elevated/90 shadow-sm backdrop-blur">
-            <LiveParticipants session={liveSession} />
+            <LiveParticipants session={liveSession} unpersisted={liveUnpersisted} />
           </div>
         </div>
       )}

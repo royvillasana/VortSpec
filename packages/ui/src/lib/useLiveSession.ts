@@ -42,6 +42,10 @@ export type LiveSessionState = {
    * else's work with the file on disk.
    */
   synced: boolean;
+  /** Client ids in the session, including this one. Empty when not live. */
+  clientIds: number[];
+  /** This client's id, or null before the session has one. */
+  myClientId: number | null;
 };
 
 export const offSession: LiveSessionState = {
@@ -50,6 +54,8 @@ export const offSession: LiveSessionState = {
   participants: 0,
   peers: [],
   synced: false,
+  clientIds: [],
+  myClientId: null,
 };
 
 export type LiveSessionInput = {
@@ -104,7 +110,7 @@ export function useLiveSession(input: LiveSessionInput): LiveSessionState {
 
     let alive = true;
     let provider: HocuspocusProvider | null = null;
-    setState({ status: "connecting", detail: "", participants: 0, peers: [], synced: false });
+    setState({ ...offSession, status: "connecting" });
 
     void roomIdFor(remote, input.page, sha256Hex)
       .then((room) => {
@@ -139,6 +145,8 @@ export function useLiveSession(input: LiveSessionInput): LiveSessionState {
               participants: 0,
               peers: [],
               synced: false,
+              clientIds: [],
+              myClientId: null,
             });
           },
           onDisconnect: () => {
@@ -149,6 +157,8 @@ export function useLiveSession(input: LiveSessionInput): LiveSessionState {
               participants: 0,
               peers: [],
               synced: false,
+              clientIds: [],
+              myClientId: null,
             });
           },
         });
@@ -173,6 +183,8 @@ export function useLiveSession(input: LiveSessionInput): LiveSessionState {
                   ...prev,
                   participants: participantCount(states),
                   peers: participantsFrom(states, provider!.document.clientID),
+                  clientIds: [...states.keys()],
+                  myClientId: provider!.document.clientID,
                 }
               : prev,
           );
@@ -185,6 +197,8 @@ export function useLiveSession(input: LiveSessionInput): LiveSessionState {
               participants: 0,
               peers: [],
               synced: false,
+              clientIds: [],
+              myClientId: null,
             });
       });
 
