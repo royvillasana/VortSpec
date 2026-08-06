@@ -15,8 +15,8 @@
 - [x] 2.2 Derive the room id from the git remote + page name; decide hash-vs-plain (design D4) and record the choice
 - [x] 2.3 Join/leave a session on light-page open/close; never for framework pages
 - [x] 2.4 Publish cursor position in **document space**, plus name and colour from the profile
-- [ ] 2.5 Render remote cursors on the existing canvas overlay so they track the canvas transform — verify a cursor points at the same element at two different zoom levels
-- [ ] 2.6 Show the participant count in the Playground header
+- [x] 2.5 Render remote cursors on the existing canvas overlay so they track the canvas transform — verify a cursor points at the same element at two different zoom levels
+- [x] 2.6 Show the participant count in the Playground header
 - [ ] 2.7 Verify presence lifecycle: a disconnect removes the cursor and decrements the count; nothing about presence is ever written to the project
 - [ ] 2.8 **Test on a real corporate/VPN network, not just localhost.** This is the step that decides whether the transport choice survives
 

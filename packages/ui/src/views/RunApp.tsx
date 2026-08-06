@@ -1,6 +1,11 @@
 import { createElement, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { docToLightHtml } from "@vortspec/core/light-doc";
+import type { CollabConfig } from "@vortspec/core/collab-config";
+import { useLiveSession } from "../lib/useLiveSession";
+import { cursorFingerprints } from "../lib/live-presence";
+import { RemoteCursors } from "../components/run-canvas/RemoteCursors";
+import { LiveParticipants } from "../components/run-canvas/LiveParticipants";
 import type { DevServerStatus, Project, InspectorToken, InspectorComponent, FileSnapshot, StorybookEntry } from "@vortspec/core/ipc";
 import { ViewHeader } from "@vortspec/ui/ViewHeader";
 import { buildSelection, alignToCss, flowToCss, gapModeCss } from "@vortspec/core/selection-builder";
@@ -1596,7 +1601,77 @@ export function RunApp({
   }, [mode, bridge.ready, setGuestMode]);
 
   // Run-canvas comments (repo-backed threads pinned to sections).
-  const comments = useComments(project.path, bridge.watchAnchors, bridge.ready);
+  // ── Live session (live-playground, tasks 2.3–2.6) ───────────────────────────
+  // The anchor-watch list is SHARED with comments, and the guest replaces it wholesale on each
+  // `watchAnchors`. Calling it separately for cursors would silently stop comment pins from tracking
+  // — so both sets are merged here and the union is sent.
+  const commentAnchorsRef = useRef<string[]>([]);
+  const cursorAnchorsRef = useRef<string[]>([]);
+  const sendWatchAnchors = useCallback(() => {
+    bridge.watchAnchors([...new Set([...commentAnchorsRef.current, ...cursorAnchorsRef.current])]);
+  }, [bridge.watchAnchors]);
+  const watchCommentAnchors = useCallback(
+    (fingerprints: string[]) => {
+      commentAnchorsRef.current = fingerprints;
+      sendWatchAnchors();
+    },
+    [sendWatchAnchors],
+  );
+
+  const comments = useComments(project.path, watchCommentAnchors, bridge.ready);
+
+  const [collabConfig, setCollabConfig] = useState<CollabConfig | null>(null);
+  const [relayCredential, setRelayCredential] = useState("");
+  const [gitRemote, setGitRemote] = useState("");
+  const [userName, setUserName] = useState("");
+
+  useEffect(() => {
+    let alive = true;
+    void api.collabConfig(project.path).then(async (config) => {
+      if (!alive) return;
+      setCollabConfig(config);
+      if (config.relayUrl) {
+        const secret = await api.collabCredential(config.relayUrl).catch(() => "");
+        if (alive) setRelayCredential(typeof secret === "string" ? secret : "");
+      }
+    }).catch(() => alive && setCollabConfig({ relayUrl: "" }));
+    void api.gitRemotes(project.path).then((remotes) => {
+      if (!alive) return;
+      // `origin` when it exists, else whatever the project has — a fork with one differently-named
+      // remote is still one project.
+      const origin = remotes.find((r) => r.name === "origin") ?? remotes[0];
+      setGitRemote(origin?.url ?? "");
+    }).catch(() => alive && setGitRemote(""));
+    void api.getProfile().then((p) => alive && setUserName(p?.name ?? "")).catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [project.path]);
+
+  const session = useLiveSession({
+    doc: bridge.live.adopted ? bridge.liveDoc.current : null,
+    config: collabConfig,
+    credential: relayCredential,
+    remote: gitRemote,
+    page: isLightPage ? lightPage : null,
+    name: userName,
+    cursor: bridge.localCursor,
+  });
+
+  // Report the pointer only while a session is actually live — it fires on every pointermove.
+  useEffect(() => {
+    bridge.setCursorReporting(session.status === "live");
+  }, [session.status, bridge.setCursorReporting]);
+
+  // Ask the guest for the rects of the elements other people's cursors are on, merged with the
+  // comment pins' anchors.
+  useEffect(() => {
+    const next = cursorFingerprints(session.peers);
+    const prev = cursorAnchorsRef.current;
+    if (next.length === prev.length && next.every((fp, i) => fp === prev[i])) return;
+    cursorAnchorsRef.current = next;
+    sendWatchAnchors();
+  }, [session.peers, sendWatchAnchors]);
   const { create: createComment, reply: replyComment, setResolved: resolveComment } = comments;
   const { commentTarget, clearCommentTarget, captureThumbnail } = bridge;
   // Post a new thread from the pending comment-mode target (adds its thumbnail).
@@ -3058,7 +3133,9 @@ export function RunApp({
                   figmaStatus={figmaToolbarStatus}
                   figmaConnected={figmaConnected}
                   figmaMapped={!!figmaScreen}
-                  comments={{
+                  liveCursors={{ peers: session.peers, anchorRects: bridge.anchorRects }}
+            liveSession={session}
+            comments={{
                     threads: comments.threads,
                     anchorRects: bridge.anchorRects,
                     target: commentTarget,
