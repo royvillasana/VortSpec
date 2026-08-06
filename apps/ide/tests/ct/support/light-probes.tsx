@@ -88,3 +88,48 @@ export function EditProbe({ html }: { html: string }): React.ReactElement {
   );
 }
 
+
+/**
+ * The persistence decision, exercised in the browser (change: live-playground).
+ *
+ * This exists because of a gap that let a real failure through: the CT mock bridge reports every
+ * page as not-live, so every component test took the DOM-snapshot path and the live path had no
+ * coverage at all. A silent failure there is the worst kind — it runs inside a debounced timer, so
+ * an exception produces no error and no write, and the user's edit is simply gone.
+ */
+export function PersistProbe({
+  html,
+  mode,
+}: {
+  html: string;
+  /** `live` serializes the document; `broken` makes that throw; `snapshot` never goes live. */
+  mode: "live" | "broken" | "snapshot";
+}): React.ReactElement {
+  const [written, setWritten] = useState("running");
+
+  useEffect(() => {
+    const doc = mode === "snapshot" ? null : lightHtmlToDoc(html);
+    const serialize = (): string => {
+      if (mode === "broken") throw new Error("serialization failed");
+      return docToLightHtml(doc!);
+    };
+
+    // The same decision `schedulePersistLight` makes, in the same order.
+    let converged: string | null = null;
+    if (doc) {
+      try {
+        converged = serialize();
+      } catch {
+        converged = null;
+      }
+    }
+    const result = converged ? converged : "<!-- dom snapshot -->";
+    setWritten(result === html ? "converged" : result === "<!-- dom snapshot -->" ? "fell-back" : "other");
+  }, [html, mode]);
+
+  return (
+    <div>
+      <span data-testid="written">{written}</span>
+    </div>
+  );
+}

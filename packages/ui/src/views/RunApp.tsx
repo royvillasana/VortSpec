@@ -1689,9 +1689,21 @@ export function RunApp({
       // two editors the last one to stop typing erases the other. Writing from the document writes
       // what everyone's edits merged into. With a single editor the two produce the same bytes,
       // which is what makes this safe to switch on per page rather than all at once.
+      // The live path must never be able to LOSE a write. Serializing the document is pure and
+      // should not throw — but this runs inside a debounced timer, where an exception is silent: no
+      // error surfaces, the write simply never happens, and the user's edit is gone with nothing to
+      // suggest why. Falling back to the DOM snapshot makes the worst case "persisted the old way".
       const live = bridge.live.adopted ? bridge.liveDoc.current : null;
-      const source = live ? Promise.resolve(docToLightHtml(live)) : bridge.serializeDom();
-      void source.then((html) => {
+      let converged: string | null = null;
+      if (live) {
+        try {
+          converged = docToLightHtml(live);
+        } catch (err) {
+          console.error("[vortspec:live] serializing the document failed; falling back to the DOM", err);
+        }
+      }
+      // An empty result counts as a failure too: writing it would truncate the page to nothing.
+      void (converged ? Promise.resolve(converged) : bridge.serializeDom()).then((html) => {
         if (html == null) return;
         // Persist the edit, then refresh generation status: editing a page that was already generated
         // makes it "stale" (its framework code no longer matches) → the row icon flips to Update.

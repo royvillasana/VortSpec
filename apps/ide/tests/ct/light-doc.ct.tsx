@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { test, expect } from "@playwright/experimental-ct-react";
-import { AdoptionProbe, EditProbe } from "./support/light-probes";
+import { AdoptionProbe, EditProbe, PersistProbe } from "./support/light-probes";
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -49,4 +49,23 @@ test("an edit reaches the document and rewrites only the line it touched", async
   // "carried:1" — the edit is in the document, and exactly one line of the file differs. That second
   // number is the reviewable-diff claim: a whole-file reformat would show up here as hundreds.
   await expect(component.getByTestId("result")).toHaveText("carried:1");
+});
+
+// The live persistence path had no CT coverage at all — the mock bridge reports every page as
+// not-live, so a break in it was invisible to the suite. These pin the decision itself.
+test("a live page persists the converged document", async ({ mount }) => {
+  const c = await mount(<PersistProbe html={shopdev} mode="live" />);
+  await expect(c.getByTestId("written")).toHaveText("converged");
+});
+
+test("a page that never went live persists the DOM snapshot", async ({ mount }) => {
+  const c = await mount(<PersistProbe html={shopdev} mode="snapshot" />);
+  await expect(c.getByTestId("written")).toHaveText("fell-back");
+});
+
+test("a failure to serialize the document falls back rather than losing the write", async ({ mount }) => {
+  // The one that matters: inside a debounced timer an exception is silent, so without a fallback
+  // the edit is lost with nothing to explain it.
+  const c = await mount(<PersistProbe html={shopdev} mode="broken" />);
+  await expect(c.getByTestId("written")).toHaveText("fell-back");
 });
