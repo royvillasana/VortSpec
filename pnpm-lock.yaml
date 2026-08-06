@@ -294,6 +294,9 @@ importers:
       vitest:
         specifier: ^3.2.0
         version: 3.2.6(@types/debug@4.1.13)(@types/node@22.20.0)(happy-dom@20.11.1)(jiti@2.7.0)(lightningcss@1.32.0)(yaml@2.9.0)
+      y-protocols:
+        specifier: ^1.0.7
+        version: 1.0.7(yjs@13.6.32)
 
   tools/relay:
     dependencies:

@@ -17,7 +17,7 @@
 - [x] 2.4 Publish cursor position in **document space**, plus name and colour from the profile
 - [x] 2.5 Render remote cursors on the existing canvas overlay so they track the canvas transform — verify a cursor points at the same element at two different zoom levels
 - [x] 2.6 Show the participant count in the Playground header
-- [ ] 2.7 Verify presence lifecycle: a disconnect removes the cursor and decrements the count; nothing about presence is ever written to the project
+- [x] 2.7 Verify presence lifecycle: a disconnect removes the cursor and decrements the count; nothing about presence is ever written to the project
 - [ ] 2.8 **Test on a real corporate/VPN network, not just localhost.** This is the step that decides whether the transport choice survives
 
 ## 3. Live document sync
