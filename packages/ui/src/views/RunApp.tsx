@@ -2,7 +2,7 @@ import { createElement, useCallback, useEffect, useMemo, useRef, useState } from
 import { createPortal } from "react-dom";
 import { docToLightHtml } from "@vortspec/core/light-doc";
 import type { CollabConfig } from "@vortspec/core/collab-config";
-import { useLiveSession } from "../lib/useLiveSession";
+import { shouldJoin, useLiveSession } from "../lib/useLiveSession";
 import { cursorFingerprints } from "../lib/live-presence";
 import { RemoteCursors } from "../components/run-canvas/RemoteCursors";
 import { LiveParticipants } from "../components/run-canvas/LiveParticipants";
@@ -560,6 +560,7 @@ export function RunApp({
     if (bridge.live.adopted) console.info(`[vortspec:live] "${lightPage}" is a live document`);
     else if (bridge.live.reason) console.info(`[vortspec:live] "${lightPage}" is not live — ${bridge.live.reason}`);
   }, [isLightPage, lightPage, bridge.live]);
+
 
   // Auto-open the existing page when arriving at the Playground. A light-first project has a light page
   // but no framework dev server — so without this it opened on the "No app dev script found" error and
@@ -1648,25 +1649,38 @@ export function RunApp({
     };
   }, [project.path]);
 
-  const session = useLiveSession({
-    doc: bridge.live.adopted ? bridge.liveDoc.current : null,
+  // Built once so the settle decision below asks the SAME question the session asks — if these ever
+  // disagreed, a window could seed while another was still waiting for the relay.
+  const sessionInput = {
+    // The document exists as soon as it is prepared; adoption only decides whether the GUEST is
+    // bound to it. Waiting for adoption here would deadlock the settle that causes adoption.
+    doc: bridge.live.prepared ? bridge.liveDoc.current : null,
     config: collabConfig,
     credential: relayCredential,
     remote: gitRemote,
     page: isLightPage ? lightPage : null,
     name: userName,
     cursor: bridge.localCursor,
-  });
+  };
+  const session = useLiveSession(sessionInput);
 
   // Hand the document to the guest once its content is settled: immediately when no relay is
   // configured or it cannot be reached, and after the relay has sent what it has when there is one.
   // Settling early is the dangerous direction — it would seed from the file over work that is
   // already in the room.
   useEffect(() => {
-    if (session.status === "off" || session.status === "unreachable" || session.synced) {
+    // `off` alone is NOT permission to seed. It is also the state before connecting has begun, and
+    // seeding there means every window loads the file into the room — producing one room holding two
+    // independent copies of the page, where each person edits their own and nothing appears to
+    // propagate even though the session looks healthy. So when a session is expected, wait for the
+    // relay to have spoken; settle immediately only when there is nothing to wait for.
+    const expectsSession = shouldJoin(sessionInput);
+    if (!expectsSession || session.synced || session.status === "unreachable") {
       bridge.settleLive();
     }
-  }, [session.status, session.synced, bridge.settleLive]);
+    // `live.prepared` is in the deps because the document becomes ready AFTER the session has
+    // already settled into its status — without it the two wait for each other and nothing happens.
+  }, [session.status, session.synced, bridge.live.prepared, collabConfig, gitRemote, bridge.settleLive]);
 
   // Report the pointer only while a session is actually live — it fires on every pointermove.
   useEffect(() => {
@@ -3144,7 +3158,20 @@ export function RunApp({
                   figmaConnected={figmaConnected}
                   figmaMapped={!!figmaScreen}
                   liveCursors={{ peers: session.peers, anchorRects: bridge.anchorRects }}
-            liveSession={session}
+            // A connected session whose document is NOT bound to the page is not collaboration: the
+            // cursors move, and no edit is shared. Reporting that as "2 here" is worse than useless
+            // — it is confidently wrong, and it took a real two-window run to notice.
+            liveSession={
+              session.status === "live" && !bridge.live.adopted
+                ? {
+                    ...session,
+                    status: "unreachable" as const,
+                    detail:
+                      bridge.live.reason ??
+                      "This page could not be shared, so edits stay on this machine.",
+                  }
+                : session
+            }
             comments={{
                     threads: comments.threads,
                     anchorRects: bridge.anchorRects,

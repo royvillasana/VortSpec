@@ -1050,12 +1050,17 @@ function startLive(state: string): void {
   try {
     const doc = new Y.Doc();
     Y.applyUpdate(doc, fromBase64(state));
-    const binding = adoptLightPage(doc, document);
+    const problem = { at: "" };
+    const binding = adoptLightPage(doc, document, problem);
     if (!binding) {
       doc.destroy();
       // Not an error. The page renders and edits exactly as it does today; it just cannot join a
       // session, because pairing a mismatched tree is how an edit lands on the wrong element.
-      send({ t: "liveAdopted", ok: false, reason: "the rendered page does not match the file exactly" });
+      send({
+        t: "liveAdopted",
+        ok: false,
+        reason: `the rendered page does not match the file — ${problem.at || "structure differs"}`,
+      });
       return;
     }
     doc.on("update", (update: Uint8Array, origin: unknown) => {

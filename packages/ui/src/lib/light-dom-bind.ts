@@ -90,13 +90,13 @@ export function adoptLightDom(doc: Y.Doc, container: Element, document: Doc): Li
  * below follows. The skipped top-level nodes are still carried in the CRDT, so writing the file back
  * reproduces it exactly.
  */
-export function adoptLightPage(doc: Y.Doc, document: Document): LightBinding | null {
+export function adoptLightPage(doc: Y.Doc, document: Document, problem?: { at: string }): LightBinding | null {
   const fragment = doc.getXmlFragment(PAGE_FRAGMENT);
   const root = (fragment.toArray() as YNode[]).find(
     (node): node is Y.XmlElement => node instanceof Y.XmlElement && node.nodeName.toLowerCase() === "html",
   );
   if (!root || !document.documentElement) return null;
-  return start(doc, document.documentElement, document, "adopt", root);
+  return start(doc, document.documentElement, document, "adopt", root, problem);
 }
 
 function start(
@@ -106,6 +106,7 @@ function start(
   mode: "build" | "adopt",
   /** When given, `container` IS this node rather than its parent. */
   rootY?: Y.XmlElement,
+  problem?: { at: string },
 ): LightBinding | null {
   const fragment = doc.getXmlFragment(PAGE_FRAGMENT);
   const domFor = new Map<YNode, Node>();
@@ -166,7 +167,7 @@ function start(
     }
   } else if (rootY) {
     link(rootY, container);
-    if (!pair(rootY, container, link)) return null;
+    if (!pair(rootY, container, link, "html", problem)) return null;
   } else if (!pair(fragment, container, link)) {
     return null;
   }
@@ -229,33 +230,60 @@ function start(
  * Doctype nodes are skipped: they are carried in the CRDT so the file can be written back exactly,
  * but they are not children of the element we are given.
  */
-function pair(yParent: Y.XmlFragment | Y.XmlElement, domParent: Element, link: (y: YNode, node: Node) => void): boolean {
+function pair(
+  yParent: Y.XmlFragment | Y.XmlElement,
+  domParent: Element,
+  link: (y: YNode, node: Node) => void,
+  /** Where we are, so a refusal can say WHICH element disagreed rather than just that one did. */
+  path = "html",
+  problem?: { at: string },
+): boolean {
   const yChildren = (yParent.toArray() as YNode[]).filter(
     (child) => !(child instanceof Y.XmlElement && child.nodeName === DOCTYPE_NODE),
   );
   // Instrumentation the canvas injected is not part of the page and has no counterpart to pair with.
   const domChildren = Array.from(domParent.childNodes).filter((node) => !isInstrumentation(node));
-  if (yChildren.length !== domChildren.length) return false;
+  if (yChildren.length !== domChildren.length) {
+    if (problem && !problem.at) {
+      const fileKids = yChildren.map(describeY).join(",");
+      const domKids = domChildren.map(describeDom).join(",");
+      problem.at = `${path}: file has ${yChildren.length} children [${fileKids}], page has ${domChildren.length} [${domKids}]`;
+    }
+    return false;
+  }
 
   for (let i = 0; i < yChildren.length; i += 1) {
     const y = yChildren[i]!;
     const node = domChildren[i]!;
+    const where = `${path}>${describeY(y)}[${i}]`;
     if (y instanceof Y.XmlText) {
-      if (node.nodeType !== NODE_TEXT) return false;
+      if (node.nodeType !== NODE_TEXT) {
+        if (problem && !problem.at) problem.at = `${where}: file has text, page has ${describeDom(node)}`;
+        return false;
+      }
       link(y, node);
       continue;
     }
     if (y.nodeName === COMMENT_NODE) {
-      if (node.nodeType !== NODE_COMMENT) return false;
+      if (node.nodeType !== NODE_COMMENT) {
+        if (problem && !problem.at) problem.at = `${where}: file has a comment, page has ${describeDom(node)}`;
+        return false;
+      }
       link(y, node);
       continue;
     }
-    if (node.nodeType !== NODE_ELEMENT) return false;
+    if (node.nodeType !== NODE_ELEMENT) {
+      if (problem && !problem.at) problem.at = `${where}: page has ${describeDom(node)}`;
+      return false;
+    }
     const el = node as Element;
-    if (el.tagName.toLowerCase() !== y.nodeName.toLowerCase()) return false;
+    if (el.tagName.toLowerCase() !== y.nodeName.toLowerCase()) {
+      if (problem && !problem.at) problem.at = `${where}: page has <${el.tagName.toLowerCase()}>`;
+      return false;
+    }
     link(y, el);
     // A void element's CRDT node has no children, and neither does its DOM node.
-    if (!pair(y, el, link)) return false;
+    if (!pair(y, el, link, where, problem)) return false;
   }
   return true;
 }
@@ -288,6 +316,18 @@ function applyChildDelta(el: Element, delta: Delta[], build: (y: YNode) => Node 
     }
   }
 }
+
+const describeY = (y: YNode): string =>
+  y instanceof Y.XmlText ? "#text" : y.nodeName === COMMENT_NODE ? "#comment" : `<${y.nodeName}>`;
+
+const describeDom = (n: Node): string =>
+  n.nodeType === NODE_TEXT
+    ? `#text${JSON.stringify((n as Text).data.slice(0, 12))}`
+    : n.nodeType === NODE_COMMENT
+      ? "#comment"
+      : n.nodeType === NODE_ELEMENT
+        ? `<${(n as Element).tagName.toLowerCase()}>`
+        : `#${n.nodeType}`;
 
 /** True once this node has been deleted from the document — its mapping is stale. */
 function isDeleted(y: YNode): boolean {

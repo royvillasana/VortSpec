@@ -85,7 +85,7 @@ export function makeBridge(overrides: Partial<InspectorBridge> = {}): InspectorB
     startLive: () => false,
     settleLive: noop,
     stopLive: noop,
-    live: { adopted: false, reason: null },
+    live: { adopted: false, reason: null, prepared: false },
     liveDoc: { current: null },
     ...overrides,
   };

@@ -5,12 +5,13 @@ import { presenceColor, presenceName } from "../../lib/live-presence";
 /**
  * How many people are on this page, in the Playground header (change: live-playground, task 2.6).
  *
- * Renders NOTHING when no session is configured. That is the state almost every project is in, and
- * showing "1 person here" to someone editing alone would turn a feature they never asked for into
- * permanent furniture — worse, it would imply collaboration is switched on when nothing is connected.
+ * Renders NOTHING unless somebody else is actually here. Not when no session is configured (the state
+ * almost every project is in), and not when connected but alone — an indicator that says "1 here" to
+ * a person editing by themselves is furniture, and it tells them about plumbing rather than about
+ * anyone. Presence UI should appear because a PERSON appeared.
  *
- * `unreachable` is shown, because a relay that was configured and cannot be reached is something the
- * user needs to know: their edits still save, but nobody else is seeing them.
+ * `unreachable` is the exception: a relay that was configured and cannot be reached is worth saying,
+ * because edits still save but nobody else will see them, and silence there looks like working.
  */
 export interface LiveParticipantsProps {
   session: LiveSessionState;
@@ -32,27 +33,16 @@ export function LiveParticipants({ session }: LiveParticipantsProps): JSX.Elemen
     );
   }
 
-  if (session.status === "connecting") {
-    return (
-      <span data-testid="live-participants" className="flex items-center gap-1.5 px-2 py-1 text-xs text-neutral-400">
-        <span className="size-1.5 rounded-full bg-neutral-500" aria-hidden="true" />
-        Connecting…
-      </span>
-    );
-  }
+  // Connecting is plumbing, and alone is not news: both stay silent.
+  if (session.status === "connecting") return null;
 
-  // Live. Alone in the room is still worth showing once a session exists: it says the connection is
-  // up and nobody else has arrived, which is different from not being connected.
   const others = session.peers.length;
+  if (others === 0) return null;
   return (
     <span
       data-testid="live-participants"
       className="flex items-center gap-2 rounded px-2 py-1 text-xs text-neutral-300"
-      title={
-        others === 0
-          ? "You are the only one on this page"
-          : session.peers.map((p) => presenceName(p.name)).join(", ")
-      }
+      title={session.peers.map((p) => presenceName(p.name)).join(", ")}
     >
       <span className="flex -space-x-1.5" aria-hidden="true">
         {session.peers.slice(0, 4).map((p) => (

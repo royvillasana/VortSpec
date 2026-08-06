@@ -203,7 +203,17 @@ export interface InspectorBridge {
 }
 
 /** Whether this page joined a live document, and why not when it did not. */
-export type LiveState = { adopted: boolean; reason: string | null };
+export type LiveState = {
+  adopted: boolean;
+  reason: string | null;
+  /**
+   * A document exists and is waiting to be settled. This is a SIGNAL, not bookkeeping: settling is
+   * driven by session status, and the document becomes ready asynchronously afterwards. Without
+   * something to re-trigger on, the two wait for each other forever — the document never reaches the
+   * guest, so no session ever starts, so the status never changes, so nothing settles.
+   */
+  prepared: boolean;
+};
 
 /** Marks an update as having come from the guest, so it is not echoed back to it. */
 const GUEST_ORIGIN = "vs-guest";
@@ -237,7 +247,7 @@ export function useInspectorBridge(): InspectorBridge {
   // than from one snapshot of the DOM, and so a relay has something to attach to later. Kept in a
   // ref, not state: it changes on every keystroke and nothing renders from its contents.
   const liveDocRef = useRef<Y.Doc | null>(null);
-  const [live, setLive] = useState<LiveState>({ adopted: false, reason: null });
+  const [live, setLive] = useState<LiveState>({ adopted: false, reason: null, prepared: false });
   /** This user's pointer, as reported by the guest in document terms. Null when off the page. */
   const [localCursor, setLocalCursor] = useState<CursorAnchor | null>(null);
   /** The page's bytes, held until `settleLive` decides whether this client is the one that seeds. */
@@ -305,7 +315,7 @@ export function useInspectorBridge(): InspectorBridge {
       case "liveAdopted":
         // `ok: false` is a normal outcome, not a failure to report as an error: the page keeps
         // working exactly as it does today, it just cannot join a session.
-        setLive({ adopted: event.ok, reason: event.reason ?? null });
+        setLive((prev) => ({ ...prev, adopted: event.ok, reason: event.reason ?? null }));
         return;
       case "cursor":
         // Empty fingerprint = the pointer left the page. Cleared rather than frozen, so a cursor
@@ -691,7 +701,7 @@ export function useInspectorBridge(): InspectorBridge {
       // produce one page — they produce two, merged, because the documents share no history. So the
       // document starts empty and `settleLive` decides, once the transport has had its say.
       if (!canAdoptLightHtml(html)) {
-        setLive({ adopted: false, reason: "this page's markup cannot be modelled exactly" });
+        setLive({ adopted: false, reason: "this page's markup cannot be modelled exactly", prepared: false });
         return false;
       }
       const doc = new Y.Doc();
@@ -703,6 +713,7 @@ export function useInspectorBridge(): InspectorBridge {
         send({ t: "liveUpdate", update: toBase64(update) });
       });
       liveDocRef.current = doc;
+      setLive({ adopted: false, reason: null, prepared: true });
       return true;
     },
     [send],
@@ -733,7 +744,7 @@ export function useInspectorBridge(): InspectorBridge {
       liveDocRef.current = null;
       send({ t: "liveStop" });
     }
-    setLive({ adopted: false, reason: null });
+    setLive({ adopted: false, reason: null, prepared: false });
   }, [send]);
 
   /** Ask the guest to report the pointer. Off by default — see the guest for why. */
