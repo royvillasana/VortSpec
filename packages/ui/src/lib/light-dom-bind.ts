@@ -181,7 +181,12 @@ function start(
   // ── DOM → CRDT ────────────────────────────────────────────────────────
   const observer = new MutationObserver((records) => {
     doc.transact(() => {
-      for (const record of records) applyRecord(record, yFor, link, document);
+      // Two passes over the batch, removals before insertions. A drag on the canvas is ONE node
+      // removed from where it was and inserted where it went, reported as two records — and in the
+      // order the browser happens to give them. Processing them as they arrive either duplicates the
+      // element (insert seen first, then a delete that no longer matches) or loses it entirely.
+      for (const record of records) applyRecord(record, yFor, link, document, "remove");
+      for (const record of records) applyRecord(record, yFor, link, document, "insert");
     }, LOCAL_ORIGIN);
   });
   observer.observe(container, {
@@ -267,16 +272,24 @@ function applyChildDelta(el: Element, delta: Delta[], build: (y: YNode) => Node 
   }
 }
 
+/** True once this node has been deleted from the document — its mapping is stale. */
+function isDeleted(y: YNode): boolean {
+  const item = (y as unknown as { _item?: { deleted: boolean } | null })._item;
+  return item ? item.deleted : false;
+}
+
 function applyRecord(
   record: MutationRecord,
   yFor: WeakMap<Node, YNode>,
   link: (y: YNode, node: Node) => void,
   document: Doc,
+  phase: "remove" | "insert",
 ): void {
   const targetY = yFor.get(record.target);
   if (!targetY) return; // a node we never mapped — not part of the page
 
   if (record.type === "attributes") {
+    if (phase !== "remove") return;
     if (!(targetY instanceof Y.XmlElement)) return;
     const name = record.attributeName;
     if (!name || isInstrumentationAttr(name)) return;
@@ -294,6 +307,7 @@ function applyRecord(
   }
 
   if (record.type === "characterData") {
+    if (phase !== "remove") return;
     if (!(targetY instanceof Y.XmlText)) return;
     const next = (record.target as Text).data;
     const current = textOf(targetY);
@@ -306,14 +320,21 @@ function applyRecord(
   if (record.type === "childList") {
     if (!(targetY instanceof Y.XmlElement) && !(targetY instanceof Y.XmlText)) return;
     if (targetY instanceof Y.XmlText) return;
-    for (const removed of Array.from(record.removedNodes)) {
-      const y = yFor.get(removed);
-      if (!y) continue;
-      const index = targetY.toArray().indexOf(y as never);
-      if (index >= 0) targetY.delete(index, 1);
+    if (phase === "remove") {
+      for (const removed of Array.from(record.removedNodes)) {
+        const y = yFor.get(removed);
+        if (!y) continue;
+        const index = targetY.toArray().indexOf(y as never);
+        if (index >= 0) targetY.delete(index, 1);
+      }
+      return;
     }
     for (const added of Array.from(record.addedNodes)) {
-      if (yFor.get(added)) continue; // already ours (a remote insert we just built)
+      const known = yFor.get(added);
+      // A node whose CRDT counterpart is still live is one we already have — a remote insert we
+      // just built. A node whose counterpart was DELETED in this same batch is a move: the document
+      // has no move operation, so it is re-created here rather than skipped.
+      if (known && !isDeleted(known)) continue;
       if (isInstrumentation(added)) continue;
       const built = toY(added, link, document);
       if (!built) continue;

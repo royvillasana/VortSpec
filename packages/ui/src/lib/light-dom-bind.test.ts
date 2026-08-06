@@ -84,6 +84,25 @@ describe("DOM edits reach the document", () => {
     expect(docToLightHtml(doc)).toContain('<span class="new">x</span>');
   });
 
+  it("carries a move — the same node removed from one parent and inserted into another", async () => {
+    // A drag on the canvas is exactly this: one node, removed and re-inserted. It is NOT two edits,
+    // and treating the insert as "a node I already know about" loses the element entirely — it is
+    // deleted from where it was and never added to where it went.
+    const { doc, container } = setup('<div id="a"><p>x</p></div><div id="b"></div>');
+    const moved = container.querySelector("p")!;
+    container.querySelector("#b")!.appendChild(moved);
+    await settle();
+    expect(docToLightHtml(doc)).toBe('<div id="a"></div><div id="b"><p>x</p></div>');
+  });
+
+  it("carries a reorder within one parent", async () => {
+    const { doc, container } = setup("<ul><li>one</li><li>two</li></ul>");
+    const ul = container.querySelector("ul")!;
+    ul.insertBefore(ul.children[1]!, ul.children[0]!);
+    await settle();
+    expect(docToLightHtml(doc)).toBe("<ul><li>two</li><li>one</li></ul>");
+  });
+
   it("carries a deletion", async () => {
     const { doc, container } = setup();
     const p = container.querySelector("p")!;
