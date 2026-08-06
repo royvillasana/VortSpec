@@ -4,6 +4,23 @@ A small [Hocuspocus](https://tiptap.dev/docs/hocuspocus) server that lets two or
 
 **VortSpec does not run this for you, and it is not shipped inside the app.** A team runs it themselves, the same way they bring their own Claude and their own GitHub. A project with no relay configured behaves exactly as it does today: no connection is attempted, and nothing is blocked.
 
+## What this changes about "local-first"
+
+VortSpec's pitch is that it runs nothing: your own Claude, your own GitHub, your project as plain
+files on disk. A live session is the one exception, and it is worth stating rather than glossing.
+
+Live collaboration needs an always-on connection between people, which git cannot provide. So the
+shape stays the same — the relay is **yours**, the way your Claude and your GitHub are — but a
+project with a relay configured does hold an open outbound WebSocket while a light page is open.
+
+What has NOT changed:
+
+- A project with no relay configured connects to **nothing**. There is no default host anywhere in
+  the app; the address only exists if somebody put it in `.vortspec/collab.json`.
+- Your files stay where they were. The durable copy of a page is still the file in your repository,
+  and the relay keeps nothing after a restart.
+- Losing the relay costs collaboration, never your work. Edits keep applying and keep saving.
+
 ## Read this first
 
 **The relay can read what it relays.** Yjs updates through Hocuspocus are not end-to-end encrypted, so whoever operates this server can read the content of every page synced through it.

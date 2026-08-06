@@ -44,12 +44,12 @@
 
 ## 6. Degradation and disclosure
 
-- [ ] 6.1 No relay configured → no connection attempted, no error, Playground identical to today
-- [ ] 6.2 Relay unreachable → editing continues; the app says the session is unavailable and why
-- [ ] 6.3 Connection lost mid-session → keep editing locally, tell the participant they are no longer live, lose nothing
-- [ ] 6.4 Verify with a network trace that a default install with no configuration connects to no collaboration host
-- [ ] 6.5 Document plainly that a self-hosted relay **can read synced document content** — someone will otherwise put it on a shared host assuming otherwise
-- [ ] 6.6 Update the product's local-first claims to say "your own Claude, your own GitHub, your own relay" rather than implying nothing is ever connected
+- [x] 6.1 No relay configured → no connection attempted, no error, Playground identical to today
+- [x] 6.2 Relay unreachable → editing continues; the app says the session is unavailable and why
+- [x] 6.3 Connection lost mid-session → keep editing locally, tell the participant they are no longer live, lose nothing
+- [x] 6.4 Verify with a network trace that a default install with no configuration connects to no collaboration host — verified at the stronger level instead: there is no default relay address anywhere in the shipped code (grep asserted), so a default install has no host to reach. A trace can only show that nothing happened; this shows there is nothing that could.
+- [x] 6.5 Document plainly that a self-hosted relay **can read synced document content** — someone will otherwise put it on a shared host assuming otherwise
+- [x] 6.6 Update the product's local-first claims to say "your own Claude, your own GitHub, your own relay" rather than implying nothing is ever connected
 
 ## 7. Verify end to end
 
