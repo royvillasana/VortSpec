@@ -7,7 +7,9 @@ import {
   parseImports,
   resolveChain,
   resolveSpecifier,
+  kebabCase,
   stripNonCode,
+  tagAliasesFor,
   type GraphFile,
   type ShadowFinding,
 } from "./relationship-graph";
@@ -443,5 +445,70 @@ describe("a render without an import is still an edge (task 2.8)", () => {
 
   it("never treats a component's own file as an instance of itself", () => {
     expect(button.usedBy).not.toContain("Button");
+  });
+});
+
+describe("a component's template tag is not its class name (framework registration)", () => {
+  it("derives the kebab form Vue resolves to the same component", () => {
+    expect(kebabCase("MyButton")).toBe("my-button");
+    expect(kebabCase("HTMLButton")).toBe("html-button");
+    expect(tagAliasesFor("MyButton", "")).toEqual(["MyButton", "my-button"]);
+  });
+
+  it("READS an Angular selector, which the class name cannot predict", () => {
+    // `ButtonComponent` ↔ `<app-button>`: nothing about the class name implies the tag, so it has
+    // to come from the source. Without this, an Angular project's graph has no edges at all.
+    const source = `@Component({ selector: 'app-button', templateUrl: './button.html' })
+      export class ButtonComponent {}`;
+    expect(tagAliasesFor("ButtonComponent", source)).toContain("app-button");
+  });
+
+  it("takes only the ELEMENT forms from a compound Angular selector", () => {
+    // `'app-button, [appButton]'` — an attribute selector can never appear as a tag.
+    const aliases = tagAliasesFor("ButtonComponent", `@Component({ selector: 'app-button, [appButton]' })`);
+    expect(aliases).toContain("app-button");
+    expect(aliases.some((alias) => alias.includes("["))).toBe(false);
+  });
+
+  it("reads a web component's registered tag", () => {
+    expect(tagAliasesFor("VsButton", `customElements.define("vs-button", VsButton);`)).toContain("vs-button");
+  });
+
+  it("counts an Angular instance in a template", () => {
+    const source = `<div><app-button></app-button><app-button/></div>`;
+    expect(countInstances(source, ["ButtonComponent", "app-button"]).count).toBe(2);
+  });
+
+  it("counts a kebab-case Vue instance", () => {
+    expect(countInstances(`<my-button/>`, ["MyButton", "my-button"]).count).toBe(1);
+  });
+
+  it("never counts a plain HTML element as a component", () => {
+    // The reason aliases are a RESOLVED SET and not a guess: match any lowercase tag and every
+    // <div> in the project becomes an instance.
+    expect(countInstances(`<div/><span/><button/>`, ["MyButton", "my-button"]).count).toBe(0);
+  });
+
+  it("builds real edges for an Angular project end to end", () => {
+    const files: GraphFile[] = [
+      {
+        path: "src/app/button/button.component.ts",
+        component: "ButtonComponent",
+        designSystem: true,
+        source: `@Component({ selector: 'app-button', template: '<button></button>' })\nexport class ButtonComponent {}`,
+      },
+      {
+        path: "src/app/home/home.component.ts",
+        component: "HomeComponent",
+        source: `@Component({ selector: 'app-home', template: '<app-button></app-button><app-button></app-button>' })\nexport class HomeComponent {}`,
+      },
+    ];
+    const graph = buildRelationshipGraph(files, { framework: "angular" });
+    const button = graph.components.find((component) => component.name === "ButtonComponent")!;
+
+    // Before tag aliases this was 0 instances and no edges — the graph was silently empty.
+    expect(button.instanceCount).toBe(2);
+    expect(button.usedBy).toEqual(["HomeComponent"]);
+    expect(button.adoption).toBe("adopted");
   });
 });

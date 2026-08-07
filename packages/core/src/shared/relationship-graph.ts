@@ -170,6 +170,76 @@ function joinPosix(base: string, relative: string): string {
   return out.join("/");
 }
 
+// ── How a component is written in a template ─────────────────────────
+
+/**
+ * Every tag name a component can be RENDERED as.
+ *
+ * A component's class name and its template tag are the same thing only in JSX. Everywhere else
+ * they are not, and assuming they are makes the graph silently edgeless:
+ *
+ *  • **Angular** declares an unrelated element selector — class `ButtonComponent`, tag
+ *    `<app-button>`. Nothing about the class name predicts it, so it must be READ from the source.
+ *  • **Vue** resolves `MyButton` and `<my-button>` to the same component, and templates commonly
+ *    use the kebab form. That mapping is deterministic, so it is derived rather than parsed.
+ *  • **Web components** register their own tag through `customElements.define("vs-button", …)`.
+ *  • **React / Svelte / Astro / Solid** use the name as written.
+ *
+ * Returning a SET rather than one name is what lets `countInstances` match a lowercase tag safely:
+ * only a tag in this set counts, so a plain `<div>` is never mistaken for a component.
+ */
+export function tagAliasesFor(name: string, source: string): string[] {
+  const aliases = new Set<string>();
+  if (name) {
+    aliases.add(name);
+    const kebab = kebabCase(name);
+    if (kebab && kebab !== name) aliases.add(kebab);
+  }
+  for (const selector of declaredSelectors(source)) aliases.add(selector);
+  return [...aliases];
+}
+
+/**
+ * The markup inside an INLINE template property — Angular's `template:` and Vue's option of the
+ * same name.
+ *
+ * `stripLiterals` erases quoted strings so `const doc = "<Button/>"` is never counted as a render.
+ * That is right for documentation and wrong for exactly one thing: an inline template, where the
+ * string genuinely IS markup. Extracting it by property NAME keeps both true — the value of a
+ * `template:` is markup, and every other string still is not.
+ */
+export function inlineTemplates(source: string): string {
+  const pattern = /\btemplate\s*:\s*(`(?:[^`\\]|\\.)*`|'(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*")/g;
+  const out: string[] = [];
+  for (const match of source.matchAll(pattern)) out.push(match[1].slice(1, -1));
+  return out.join("\n");
+}
+
+/** `MyButton` → `my-button`. Vue's own PascalCase↔kebab resolution, and the web-component form. */
+export function kebabCase(name: string): string {
+  return name
+    .replace(/([a-z0-9])([A-Z])/g, "$1-$2")
+    .replace(/([A-Z]+)([A-Z][a-z])/g, "$1-$2")
+    .toLowerCase();
+}
+
+/** An Angular `selector:` and any `customElements.define(...)` tag declared in a source file. */
+export function declaredSelectors(source: string): string[] {
+  const src = stripNonCode(source);
+  const out = new Set<string>();
+
+  // @Component({ … selector: 'app-button' … }). The selector can be a list and can carry attribute
+  // or class forms (`'app-button, [appButton]'`); only the ELEMENT forms can appear as a tag.
+  for (const match of src.matchAll(/selector\s*:\s*['"]([^'"]+)['"]/g))
+    for (const part of match[1].split(","))
+      if (/^[a-z][\w-]*$/i.test(part.trim())) out.add(part.trim());
+
+  for (const match of src.matchAll(/customElements\s*\.\s*define\s*\(\s*['"]([^'"]+)['"]/g))
+    out.add(match[1]);
+
+  return [...out];
+}
+
 // ── Instances ────────────────────────────────────────────────────────
 
 /**
@@ -196,12 +266,20 @@ export interface InstanceCount {
  *
  * Self-closing and paired tags both count; a closing tag never does.
  */
-export function countInstances(source: string, name: string): InstanceCount {
-  const src = stripLiterals(source);
-  const tag = new RegExp(`<(/?)(${escapeRe(name)})(?=[\\s/>])`, "g");
-  // Depth is tracked over ALL component tags, not just the one being counted, so nesting inside a
-  // different component still registers.
-  const anyTag = /<(\/?)([A-Z][\w.]*)(?=[\s/>])|(\/>)/g;
+export function countInstances(
+  source: string,
+  nameOrAliases: string | readonly string[],
+): InstanceCount {
+  // Literal-stripped code PLUS any inline template, which is markup wearing a string's clothes.
+  const src = `${stripLiterals(source)}\n${inlineTemplates(source)}`;
+  const aliases = typeof nameOrAliases === "string" ? [nameOrAliases] : [...nameOrAliases];
+  if (aliases.length === 0) return { count: 0, depth: 0, slotNested: false };
+  const targets = new Set(aliases);
+  // Depth is tracked over every tag that could BE a component: PascalCase (JSX and friends) plus any
+  // declared alias. A lowercase tag counts ONLY when it is a known alias, so `<div>` is never
+  // mistaken for a component — which is the whole reason aliases are a resolved set, not a guess.
+  const aliasPattern = aliases.map(escapeRe).join("|");
+  const anyTag = new RegExp(`<(/?)([A-Z][\\w.]*|${aliasPattern})(?=[\\s/>])|(/>)`, "g");
   let depth = 0;
   let minDepth = Number.POSITIVE_INFINITY;
   let count = 0;
@@ -219,15 +297,13 @@ export function countInstances(source: string, name: string): InstanceCount {
       depth = Math.max(0, depth - 1);
       continue;
     }
-    if (tagName === name) {
+    if (targets.has(tagName)) {
       count++;
       minDepth = Math.min(minDepth, depth);
       if (depth > 0) slotNested = true;
     }
     depth++;
   }
-  // The regex above is the authority on depth; `tag` is kept for the no-match fast path.
-  if (count === 0 && !tag.test(src)) return { count: 0, depth: 0, slotNested: false };
   return {
     count,
     depth: Number.isFinite(minDepth) ? minDepth : 0,
@@ -334,6 +410,12 @@ export function buildRelationshipGraph(
   const definitionOf = new Map<string, string>(); // component name → defining path
   for (const file of files) if (file.component && !definitionOf.has(file.component)) definitionOf.set(file.component, file.path);
 
+  // Every tag each component can be rendered as. Resolved ONCE, from the component's own source,
+  // because an Angular selector is only knowable by reading it — see `tagAliasesFor`.
+  const aliasesOf = new Map<string, string[]>();
+  for (const [name, path] of definitionOf)
+    aliasesOf.set(name, tagAliasesFor(name, byPath.get(path)?.source ?? ""));
+
   const usage = new Map<string, ComponentUsage>();
   for (const [name, path] of definitionOf)
     usage.set(name, {
@@ -383,7 +465,7 @@ export function buildRelationshipGraph(
     for (const [name] of definitionOf) {
       if (importedComponents.has(name)) continue;
       if (definitionOf.get(name) === file.path) continue; // a component is not its own instance
-      if (countInstances(file.source, name).count === 0) continue;
+      if (countInstances(file.source, aliasesOf.get(name) ?? [name]).count === 0) continue;
       localToComponent.set(name, name);
     }
 
@@ -398,7 +480,13 @@ export function buildRelationshipGraph(
         if (!entry.importedBy.includes(file.path)) entry.importedBy.push(file.path);
       }
 
-      const instances = countInstances(file.source, local);
+      // An IMPORTED component is referenced by its local binding; an un-imported one by any tag it
+      // declares. Using the alias set for an import alias would match the wrong thing when a file
+      // renames on import.
+      const instances = countInstances(
+        file.source,
+        importedNames.has(local) ? local : (aliasesOf.get(component) ?? [local]),
+      );
       entry.instanceCount += instances.count;
       if (instances.count === 0 && wasImported) {
         // The bug the series names: an import is not adoption. Recorded per component AND per file,

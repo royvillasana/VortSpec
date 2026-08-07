@@ -287,3 +287,46 @@ describe("the token reverse index answers without scanning component sources (ta
     expect(await readIndexStamp(dir)).toBe(STAMP);
   });
 });
+
+describe("frameworks whose template tag is not the class name (Angular end to end)", () => {
+  it("builds real edges for an Angular project with a separate template file", async () => {
+    // The two halves of the same failure: the tag `<app-button>` is unrelated to the class
+    // `ButtonComponent`, AND it lives in a `.html` the `.ts` scan would never open. Miss either and
+    // an Angular project's graph is silently empty of edges.
+    const ng = await mkdtemp(join(tmpdir(), "vortspec-ng-"));
+    const put = async (rel: string, body: string) => {
+      await mkdir(dirname(join(ng, rel)), { recursive: true });
+      await writeFile(join(ng, rel), body, "utf8");
+    };
+    try {
+      await put(".sdd-de/project.yaml", "framework: angular\ncomponent_dir: src/app\ntoken_file: src/tokens.css\n");
+      await put("src/tokens.css", ":root { --color-primary: #1d4ed8; }\n");
+      await put(
+        ".sdd-de/components.json",
+        JSON.stringify([
+          { name: "ButtonComponent", level: "atom" },
+          { name: "HomeComponent", level: "organism" },
+        ]),
+      );
+      await put(
+        "src/app/button/button.component.ts",
+        `@Component({ selector: 'app-button', templateUrl: './button.component.html' })\nexport class ButtonComponent {}`,
+      );
+      await put("src/app/button/button.component.html", `<button class="btn"></button>`);
+      await put(
+        "src/app/home/home.component.ts",
+        `@Component({ selector: 'app-home', templateUrl: './home.component.html' })\nexport class HomeComponent {}`,
+      );
+      await put("src/app/home/home.component.html", `<app-button></app-button><app-button></app-button>`);
+
+      const result = await buildRelationshipIndex(ng, { generatedAt: STAMP });
+      const button = result.graph.components.find((component) => component.name === "ButtonComponent")!;
+
+      expect(button.instanceCount).toBe(2);
+      expect(button.usedBy).toEqual(["HomeComponent"]);
+      expect(button.adoption).toBe("adopted");
+    } finally {
+      await rm(ng, { recursive: true, force: true });
+    }
+  });
+});

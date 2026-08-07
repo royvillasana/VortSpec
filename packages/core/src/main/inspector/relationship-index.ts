@@ -10,7 +10,7 @@ import {
   type ShadowFinding,
 } from "@vortspec/core/relationship-graph";
 import { parseToon, writeToon, type ToonValue } from "@vortspec/core/toon";
-import { ALL_SOURCE_EXTS } from "@vortspec/core/framework-profiles";
+import { ALL_SOURCE_EXTS, profileFor } from "@vortspec/core/framework-profiles";
 import { getInspectorComponents } from "./component-reader";
 import { getInspectorTokens } from "./token-parser";
 import { readProjectConfig } from "../workspace/config-manager";
@@ -66,7 +66,8 @@ async function collectGraphFiles(projectPath: string): Promise<GraphFile[]> {
   // Component sources first, then any other source file that could RENDER one — a page that
   // imports Button is not on the component roster but is exactly where instances live.
   for (const relative of paths) await push(relative);
-  for (const relative of await listSourceFiles(projectPath, config?.componentDir)) await push(relative);
+  for (const relative of await listSourceFiles(projectPath, config?.componentDir, config?.framework))
+    await push(relative);
 
   async function push(relative: string): Promise<void> {
     if (seen.has(relative) || !isComponentFile(relative)) return;
@@ -80,7 +81,11 @@ async function collectGraphFiles(projectPath: string): Promise<GraphFile[]> {
     const component = byPath.get(relative) ?? nodeNameFor(relative);
     files.push({
       path: relative,
-      source,
+      // A separate template file is part of this component's source for graph purposes. Angular's
+      // `templateUrl: './button.html'` puts every instance it renders in a file the `.ts` scan would
+      // never open — so an Angular project's graph would be empty of edges without this, which is
+      // the same failure the tag aliases fixed on the other side.
+      source: `${source}\n${await readSiblingTemplate(projectPath, relative, source)}`,
       component,
       ...(componentDir && relative.startsWith(`${componentDir}/`) ? { designSystem: true } : {}),
     });
@@ -88,8 +93,25 @@ async function collectGraphFiles(projectPath: string): Promise<GraphFile[]> {
   return files;
 }
 
-/** Source files under `src/` (or the project root), excluding dependencies and build output. */
-async function listSourceFiles(projectPath: string, componentDir?: string | null): Promise<string[]> {
+/**
+ * Source files under `src/` (or the project root), excluding dependencies and build output.
+ *
+ * Filtered by the FRAMEWORK's own extensions, not the union of every framework's. Angular's profile
+ * is explicit that "the component IS the `.ts` class; the sibling `.html` is its template, not a
+ * second component" — scanning `.html` as a component source makes every Angular component a
+ * DUPLICATE node whose template file wins the name, taking the `.ts` file's `selector` with it and
+ * leaving the graph edgeless. A template is reached through `templateUrl`, which is the only way it
+ * is actually part of a component.
+ *
+ * Falls back to the union when no framework is configured — a scan with no profile should see more,
+ * not less, since a missed file is a missed relationship.
+ */
+async function listSourceFiles(
+  projectPath: string,
+  componentDir?: string | null,
+  framework?: string | null,
+): Promise<string[]> {
+  const extensions = profileFor(framework)?.sourceExts ?? ALL_SOURCE_EXTS;
   const { readdir } = await import("node:fs/promises");
   const skip = new Set(["node_modules", ".git", "dist", "build", "out", ".next", ".turbo", "coverage", ".vortspec", ".sdd-de"]);
   const roots = ["src", componentDir ?? ""].filter(Boolean);
@@ -106,11 +128,36 @@ async function listSourceFiles(projectPath: string, componentDir?: string | null
       if (skip.has(entry.name)) continue;
       const here = relative ? `${relative}/${entry.name}` : entry.name;
       if (entry.isDirectory()) await walk(here, depth + 1);
-      else if (ALL_SOURCE_EXTS.some((extension) => entry.name.endsWith(extension))) out.push(here);
+      else if (extensions.some((extension) => entry.name.endsWith(extension))) out.push(here);
     }
   };
   for (const root of [...new Set(roots.map(normalize))]) await walk(root, 0);
   return out;
+}
+
+/**
+ * The template a component points at with `templateUrl`, or "".
+ *
+ * Resolved relative to the component file, and bounded to the project — a `templateUrl` is project
+ * data, and a `../../../` in one must not read outside the tree.
+ */
+async function readSiblingTemplate(
+  projectPath: string,
+  relative: string,
+  source: string,
+): Promise<string> {
+  const match = /\btemplateUrl\s*:\s*['"]([^'"]+)['"]/.exec(source);
+  if (!match) return "";
+  const dir = relative.split("/").slice(0, -1);
+  const segments = [...dir, ...match[1].split("/")].filter((part) => part && part !== ".");
+  const resolved: string[] = [];
+  for (const segment of segments) {
+    if (segment === "..") resolved.pop();
+    else resolved.push(segment);
+  }
+  const target = resolved.join("/");
+  if (!target || target.startsWith("..")) return "";
+  return (await readFile(join(projectPath, target), "utf8").catch(() => "")) || "";
 }
 
 /**
