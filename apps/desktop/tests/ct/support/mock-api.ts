@@ -677,6 +677,7 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
       findings: [],
       violations: 0,
       deferred: 0,
+      unevaluable: 0,
       rulesFrom: "defaults" as const,
       consumeSource: false,
     }),
@@ -687,6 +688,7 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
       blocking: ["graph-connectedness"],
       nextAction: "Build the index so relationships exist to read.",
     }),
+    scaffoldComponent: async () => ({ written: [], skipped: [], files: [], refused: null }),
     tokensIngest: async () => ({
       ok: true,
       tokenFile: "src/styles/tokens.css",

@@ -975,11 +975,20 @@ export function GuidedFlow({
                                 // Styling foundation first, then Storybook (both idempotent), then build.
                                 void ensureStyling().finally(() => {
                                   void api.ensureStorybook(project.path).catch(() => undefined);
-                                  void op(`Building "${c.name}"`, buildOnePrompt(c.name, c.level, config?.framework), {
-                                    kind: "build",
-                                    model: tierForChunk([c]),
-                                    ground: true,
-                                  });
+                                  // Scaffold FIRST (task 6.9) so the run fills a known file set instead
+                                  // of deciding which files a component consists of. A refusal (consume
+                                  // source) or a failure just means no file list — the build proceeds
+                                  // exactly as it did before, so this can never block a build.
+                                  void api
+                                    .scaffoldComponent(project.path, c.name, c.level)
+                                    .catch(() => null)
+                                    .then((scaffold) => {
+                                      void op(
+                                        `Building "${c.name}"`,
+                                        buildOnePrompt(c.name, c.level, config?.framework, scaffold?.files ?? []),
+                                        { kind: "build", model: tierForChunk([c]), ground: true },
+                                      );
+                                    });
                                 });
                               }}
                               onVerify={() => void verify(c.name, `Verifying "${c.name}"`)}

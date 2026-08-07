@@ -7,7 +7,7 @@ import {
   type GovernanceConfig,
   type GovernanceRule,
 } from "./governance";
-import { tokenApplications, type TokenApplication } from "./token-application";
+import { opaqueUtilities, tokenApplications, type TokenApplication } from "./token-application";
 
 /**
  * Deterministic evaluation of the governance rules — OpenSpec change: agentic-design-system, task 4.3.
@@ -44,9 +44,27 @@ export interface DeferredCheck {
   evidence: TokenApplication[];
 }
 
+/**
+ * A component whose styling the rules could not read (task 6.7).
+ *
+ * Reported so an unevaluable rule is never counted as passing. "We checked and it is fine" and "we
+ * could not check" are different claims, and only one of them earns a clean report.
+ */
+export interface CoverageGap {
+  component: string;
+  file: string | null;
+  /** The classes that hide a token behind a scale key. */
+  opaque: string[];
+  /** Which properties are affected, so a reader can see which rules went unevaluated. */
+  properties: string[];
+  reason: string;
+}
+
 export interface GovernanceResult {
   violations: GovernanceViolation[];
   deferred: DeferredCheck[];
+  /** Components the rules could not fully evaluate. */
+  coverageGaps: CoverageGap[];
 }
 
 export interface GovernanceSubject {
@@ -78,6 +96,7 @@ export function evaluateGovernance(
 ): GovernanceResult {
   const violations: GovernanceViolation[] = [];
   const deferred: DeferredCheck[] = [];
+  const coverageGaps: CoverageGap[] = [];
   const active = config.rules.filter((rule) => rule.enabled);
   const byId = new Map(active.map((rule) => [rule.id, rule]));
 
@@ -149,6 +168,21 @@ export function evaluateGovernance(
         );
     }
 
+    // Styling the rules cannot read (task 6.7). A theme-mapped utility names a property but resolves
+    // its token at build time, so nothing here can say which token landed on it. Recorded as a gap
+    // rather than passed over, because a component whose colours are all invisible to the hierarchy
+    // rule would otherwise appear in the report as clean.
+    const opaque = opaqueUtilities(subject.source);
+    if (opaque.length)
+      coverageGaps.push({
+        component: subject.component,
+        file: subject.file,
+        opaque: opaque.map((utility) => utility.className),
+        properties: [...new Set(opaque.map((utility) => utility.property))].sort(),
+        reason:
+          "Theme-mapped utilities resolve their token at build time, so no rule can see which token landed on these properties.",
+      });
+
     // The judgment rules: gathered with their evidence, never decided here.
     for (const rule of active) {
       if (rule.evaluation !== "judgment") continue;
@@ -158,7 +192,7 @@ export function evaluateGovernance(
     }
   }
 
-  return { violations, deferred };
+  return { violations, deferred, coverageGaps };
 }
 
 /**

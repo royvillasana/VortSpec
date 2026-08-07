@@ -25,6 +25,8 @@ export interface ReportResult {
   written: string[];
   /** The violations as findings, for the Issues view (task 4.8). */
   findings: AuditFinding[];
+  /** Components the rules could not fully evaluate (task 6.7). */
+  unevaluable: number;
   violations: number;
   deferred: number;
   /** Which rule set was used — a malformed project file falls back and says so. */
@@ -75,7 +77,7 @@ export async function generateReports(
     subjects.push({ component: component.name, file: component.file, source });
   }
 
-  const { violations, deferred } = evaluateGovernance(subjects, governance);
+  const { violations, deferred, coverageGaps } = evaluateGovernance(subjects, governance);
   const projectName = basename(projectPath) || "Project";
 
   await mkdir(join(projectPath, REPORTS_DIR), { recursive: true });
@@ -89,6 +91,7 @@ export async function generateReports(
         generatedAt,
         violations,
         deferredRules: deferred.map((d) => ({ rule: d.rule, component: d.component })),
+        coverageGaps,
       }),
     ],
   ] as const) {
@@ -113,6 +116,7 @@ export async function generateReports(
     })),
     violations: violations.length,
     deferred: deferred.length,
+    unevaluable: coverageGaps.length,
     rulesFrom,
     consumeSource,
   };

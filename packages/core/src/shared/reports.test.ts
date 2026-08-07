@@ -154,3 +154,44 @@ describe("token-violations.md (task 4.6)", () => {
     expect(text).not.toContain("## Not yet judged");
   });
 });
+
+describe("reduced coverage is reported, never counted as passing (task 6.7)", () => {
+  const gap = {
+    component: "Badge",
+    file: "src/components/Badge.tsx",
+    opaque: ["bg-primary", "text-lg"],
+    properties: ["color", "background-color"],
+    reason: "Theme-mapped utilities resolve their token at build time, so no rule can see which token landed on these properties.",
+  };
+
+  it("names the components the rules could not read, and why", () => {
+    const text = tokenViolationReport({
+      projectName: "Acme",
+      generatedAt: STAMP,
+      violations: [],
+      coverageGaps: [gap],
+    });
+    expect(text).toContain("## Reduced coverage");
+    expect(text).toContain("NOT reported as passing");
+    expect(text).toContain("Badge");
+    expect(text).toContain("bg-primary");
+  });
+
+  it("does not add the section when every component was readable", () => {
+    const text = tokenViolationReport({ projectName: "Acme", generatedAt: STAMP, violations: [] });
+    expect(text).not.toContain("## Reduced coverage");
+  });
+
+  it("keeps a clean report honest — zero violations plus a gap is not a pass", () => {
+    // The distinction the whole task exists for: "we checked and it is fine" versus "we could not
+    // check". A report showing only "0 violations" would collapse them.
+    const text = tokenViolationReport({
+      projectName: "Acme",
+      generatedAt: STAMP,
+      violations: [],
+      coverageGaps: [gap],
+    });
+    expect(text).toContain("0 violation(s)");
+    expect(text).toContain("## Reduced coverage");
+  });
+});

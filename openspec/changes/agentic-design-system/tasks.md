@@ -63,9 +63,9 @@
 - [x] 6.4 DONE, with a stated limit: the generated smoke test is EXECUTED under a real vitest run for `vanilla` (its assertion needs only `node:fs`) and passes. The React/Vue/Svelte/Angular smoke tests cannot be executed in this repository — it has no DOM harness at all (no @testing-library, no jsdom, no happy-dom; component behaviour is covered by Playwright CT). Their correctness is asserted structurally instead: real `expect(`, no `it.todo`, no snapshot, and the component under test actually rendered
 - [x] 6.5 Write the `.vortspec/metadata/<name>.json` record as part of scaffolding, with `identity` fully populated and the analysis-derived sections marked incomplete
 - [x] 6.6 Assert structural determinism: scaffolding the same component twice produces the same file set at the same paths, and a missing file surfaces as a scaffold failure rather than a generation-quality issue
-- [ ] 6.7 Record each component's styling surface at scaffold time, and have the audit report reduced coverage for components whose styling exposes no discrete token declarations — never report an unevaluable rule as passing
+- [x] 6.7 Record each component's styling surface at scaffold time, and have the audit report reduced coverage for components whose styling exposes no discrete token declarations — never report an unevaluable rule as passing
 - [x] 6.8 Assert the scaffold never writes into a consumed library's source tree for a consume-source project
-- [ ] 6.9 Wire the scaffold into the component-creation path so the model supplies content into an existing file set instead of deciding which files exist; keep the SDD cycle's per-task flow intact
+- [x] 6.9 Wire the scaffold into the component-creation path so the model supplies content into an existing file set instead of deciding which files exist; keep the SDD cycle's per-task flow intact
 - [x] 6.10 Verify: metadata coverage for a project whose components were all scaffolded reports zero missing records
 
 ## 7. Canonical token pipeline

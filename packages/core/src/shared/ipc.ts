@@ -79,11 +79,11 @@ import {
 // The canonical token pipeline's on-demand routes (task 7.14).
 import { tokenEmitResultSchema } from "./token-emit-ledger";
 import { tokenIngestResultSchema } from "./canonical-ingest";
-import { indexStalenessSchema, reportResultSchema, readinessAssessmentSchema } from "./inspector";
+import { indexStalenessSchema, reportResultSchema, readinessAssessmentSchema, scaffoldResultSchema } from "./inspector";
 export { tokenEmitResultSchema } from "./token-emit-ledger";
 export { tokenIngestResultSchema } from "./canonical-ingest";
 export { indexStalenessSchema, reportResultSchema } from "./inspector";
-export type { ReportResultPayload, ReadinessAssessmentPayload } from "./inspector";
+export type { ReportResultPayload, ReadinessAssessmentPayload, ScaffoldResultPayload } from "./inspector";
 export { readinessAssessmentSchema } from "./inspector";
 export {
   figmaConnectionSchema,
@@ -494,6 +494,10 @@ export const ipcContract = {
   "index:staleness": { request: z.object({ projectPath: z.string() }), response: indexStalenessSchema },
   "reports:generate": { request: z.object({ projectPath: z.string() }), response: reportResultSchema },
   "readiness:level": { request: z.object({ projectPath: z.string() }), response: readinessAssessmentSchema },
+  "scaffold:component": {
+    request: z.object({ projectPath: z.string(), name: z.string(), tier: z.string().optional() }),
+    response: scaffoldResultSchema,
+  },
   "figma:selection": { request: z.void(), response: figmaSelectionSchema },
   "figma:checkHealth": { request: figmaHealthRequestSchema, response: figmaHealthSchema },
   "figma:tokenStatus": { request: z.void(), response: figmaTokenStatusSchema },

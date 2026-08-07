@@ -147,3 +147,46 @@ export function tokenApplications(source: string): TokenApplication[] {
 
   return out.sort((a, b) => a.token.localeCompare(b.token) || a.property.localeCompare(b.property));
 }
+
+/** A styling decision the rules cannot read: a utility that sets a property from a scale key. */
+export interface OpaqueUtility {
+  /** The class as written, e.g. `bg-primary`. */
+  className: string;
+  /** The CSS property it sets. */
+  property: string;
+}
+
+/** A theme-mapped utility: `bg-primary`, `text-lg` — a known prefix with a bare scale key. */
+const THEME_UTILITY = /(?:^|[\s"'`])(-?[a-z]+(?:-[a-z]+)?)-([a-z0-9][\w.]*)(?=$|[\s"'`])/g;
+
+/** Layout and state utilities whose value is not a design token, so their opacity is not a gap. */
+const NOT_A_TOKEN_VALUE = new Set(["auto", "full", "none", "screen", "px", "0", "fit", "min", "max"]);
+
+/**
+ * Styling this file makes that the governance rules CANNOT read (task 6.7).
+ *
+ * `bg-[var(--color-surface)]` names a token and a property, so every rule can be evaluated against
+ * it. `bg-primary` names a scale key that Tailwind resolves at build time — the property is known,
+ * the TOKEN is not, so a hierarchy rule has nothing to compare. Those components must be reported as
+ * reduced coverage rather than counted as passing, which is the difference between "we checked and
+ * it is fine" and "we could not check".
+ *
+ * Deliberately conservative. Only utilities whose property is already in the table count, and values
+ * that are plainly not design tokens (`auto`, `full`, `screen`) are excluded — over-reporting here
+ * would put every layout class into a coverage warning and the warning would stop being read.
+ */
+export function opaqueUtilities(source: string): OpaqueUtility[] {
+  const out: OpaqueUtility[] = [];
+  const seen = new Set<string>();
+  for (const match of source.matchAll(THEME_UTILITY)) {
+    const utility = match[1] ?? "";
+    const value = match[2] ?? "";
+    const property = TAILWIND_PROPERTY[utility];
+    if (!property || NOT_A_TOKEN_VALUE.has(value)) continue;
+    const className = `${utility}-${value}`;
+    if (seen.has(className)) continue;
+    seen.add(className);
+    out.push({ className, property });
+  }
+  return out.sort((a, b) => a.className.localeCompare(b.className));
+}

@@ -729,6 +729,8 @@ export const reportResultSchema = z.object({
   written: z.array(z.string()).default([]),
   violations: z.number(),
   deferred: z.number(),
+  /** Components whose styling the rules could not read — never counted as passing (task 6.7). */
+  unevaluable: z.number().default(0),
   rulesFrom: z.enum(["project", "defaults", "malformed"]),
   consumeSource: z.boolean(),
   /**
@@ -765,6 +767,18 @@ export const readinessAssessmentSchema = z.object({
   nextAction: z.string().nullable(),
 });
 export type ReadinessAssessmentPayload = z.infer<typeof readinessAssessmentSchema>;
+
+/** What a scaffold run created (OpenSpec change: agentic-design-system, task 6.9). */
+export const scaffoldResultSchema = z.object({
+  written: z.array(z.string()).default([]),
+  /** Files that already existed and were left untouched — re-scaffolding is safe. */
+  skipped: z.array(z.string()).default([]),
+  /** The whole declared file set, whether written now or already present. */
+  files: z.array(z.string()).default([]),
+  /** Set when the scaffold declined; `written` is then empty and nothing was touched. */
+  refused: z.string().nullable().default(null),
+});
+export type ScaffoldResultPayload = z.infer<typeof scaffoldResultSchema>;
 
 /** A captured file (project-relative path + content), for gated revert of a modify run. */
 export const fileSnapshotSchema = z.object({ path: z.string(), content: z.string() });

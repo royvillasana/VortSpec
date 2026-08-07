@@ -407,6 +407,11 @@ export interface VortSpecApi {
   generateReports(projectPath: string): Promise<IpcResponse<"reports:generate">>;
   /** The AI-readiness level, recomputed from the current artifacts on every call (task 5.4). */
   readinessLevel(projectPath: string): Promise<IpcResponse<"readiness:level">>;
+  /**
+   * Create the component's file set before a build run (task 6.9), so the model fills files in
+   * rather than deciding which exist. Safe to re-run; never overwrites.
+   */
+  scaffoldComponent(projectPath: string, name: string, tier?: string): Promise<IpcResponse<"scaffold:component">>;
   /** Read design-system components from Figma into the reconcile cache (figma-cli primary). */
   figmaSyncComponents(projectPath: string): Promise<IpcResponse<"figma:syncComponents">>;
   /** Read the node(s) currently selected in Figma Desktop (figma-cli). */

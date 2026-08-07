@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { kebabProperty, tokenApplications } from "./token-application";
+import { kebabProperty, opaqueUtilities, tokenApplications } from "./token-application";
 
 const find = (source: string, token: string) =>
   tokenApplications(source).filter((a) => a.token === token);
@@ -77,5 +77,35 @@ describe("kebabProperty", () => {
     expect(kebabProperty("backgroundColor")).toBe("background-color");
     expect(kebabProperty("background-color")).toBe("background-color");
     expect(kebabProperty("borderTopLeftRadius")).toBe("border-top-left-radius");
+  });
+});
+
+describe("styling the rules cannot read (task 6.7)", () => {
+  it("flags a theme-mapped utility, which names a property but not a token", () => {
+    expect(opaqueUtilities('<div className="bg-primary" />')).toEqual([
+      { className: "bg-primary", property: "background-color" },
+    ]);
+  });
+
+  it("says nothing about an arbitrary value, which IS readable", () => {
+    expect(opaqueUtilities('<div className="bg-[var(--color-surface)]" />')).toEqual([]);
+  });
+
+  it("ignores values that are plainly not design tokens", () => {
+    // Over-reporting would put every layout class into a coverage warning, and the warning would
+    // stop being read.
+    expect(opaqueUtilities('<div className="w-full h-screen m-auto p-px" />')).toEqual([]);
+  });
+
+  it("ignores a utility whose property is not in the table", () => {
+    expect(opaqueUtilities('<div className="flex items-center ring-2" />')).toEqual([]);
+  });
+
+  it("counts a class once however often it appears", () => {
+    expect(opaqueUtilities('a="bg-primary" b="bg-primary" c="bg-primary"')).toHaveLength(1);
+  });
+
+  it("finds nothing in a component with no styling", () => {
+    expect(opaqueUtilities("export const X = () => <div />;")).toEqual([]);
   });
 });

@@ -12,7 +12,13 @@
 import { frameworkIdiomClause, resolveTypecheck, typecheckCoverageClause } from "./framework-profiles";
 import { componentTokenExtractionClause, componentTokenName } from "./component-tokens";
 
-export function buildOnePrompt(name: string, level?: string, framework?: string | null): string {
+export function buildOnePrompt(
+  name: string,
+  level?: string,
+  framework?: string | null,
+  /** Files the scaffold already created (task 6.9), project-relative. */
+  scaffolded?: readonly string[],
+): string {
   return (
     `Read .sdd-de/project.yaml. Implement the "${name}" component` +
     (level ? ` (${level})` : "") +
@@ -20,7 +26,30 @@ export function buildOnePrompt(name: string, level?: string, framework?: string 
     frameworkClause(framework) +
     DESIGN_REFERENCE_CLAUSE +
     " Run /generate-artifacts for it to produce its specs, then implement it. " +
-    VARIANT_SET_CLAUSE
+    VARIANT_SET_CLAUSE +
+    scaffoldClause(scaffolded)
+  );
+}
+
+/**
+ * The scaffolded file set, when there is one (task 6.9).
+ *
+ * The point of the scaffold is that the model stops DECIDING which files a component consists of and
+ * starts supplying content into files that exist. Without this clause it would keep inventing the
+ * set anyway — and worse, it would sometimes delete a scaffolded file it did not think was needed,
+ * which is the failure the deterministic set exists to remove.
+ *
+ * Empty when nothing was scaffolded, so a project that has not adopted the scaffold is unaffected.
+ */
+export function scaffoldClause(scaffolded?: readonly string[]): string {
+  if (!scaffolded?.length) return "";
+  return (
+    "\n\nThese files ALREADY EXIST for this component — fill them in; do not create additional files " +
+    "for it, and do not delete or rename any of these:\n" +
+    scaffolded.map((path) => `- ${path}`).join("\n") +
+    "\nThe metadata record among them has its `identity` filled and every analysis section empty: complete " +
+    "those sections from what you build. If a file genuinely does not belong, say so in your result " +
+    "rather than deleting it — the file set is a project convention, not a suggestion."
   );
 }
 

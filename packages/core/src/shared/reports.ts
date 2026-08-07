@@ -1,5 +1,5 @@
 import type { ComponentUsage, RelationshipGraph, ShadowFinding } from "./relationship-graph";
-import type { GovernanceViolation } from "./governance-eval";
+import type { CoverageGap, GovernanceViolation } from "./governance-eval";
 
 /**
  * The generated audit reports — OpenSpec change: agentic-design-system, tasks 4.5 and 4.6.
@@ -125,6 +125,8 @@ export interface ViolationReportInput {
   violations: readonly GovernanceViolation[];
   /** Rules that need a model and have not been judged yet — reported, never counted as clean. */
   deferredRules?: readonly { rule: string; component: string }[];
+  /** Components whose styling the rules could not read (task 6.7). */
+  coverageGaps?: readonly CoverageGap[];
   generatedAt: string;
 }
 
@@ -186,6 +188,26 @@ export function tokenViolationReport(input: ViolationReportInput): string {
       (a, b) => a.component.localeCompare(b.component) || a.rule.localeCompare(b.rule),
     ))
       lines.push(`| ${item.component} | \`${item.rule}\` |`);
+    lines.push("");
+  }
+
+  const gaps = input.coverageGaps ?? [];
+  if (gaps.length) {
+    lines.push(
+      "## Reduced coverage",
+      "",
+      // Never silent. A component whose colours are invisible to the hierarchy rule would otherwise
+      // appear in this report as clean, which is the difference between "we checked and it is fine"
+      // and "we could not check".
+      "The rules could not be fully evaluated for these components. They are NOT reported as passing.",
+      "",
+      "| Component | Properties not checked | Because |",
+      "|---|---|---|",
+    );
+    for (const gap of [...gaps].sort((a, b) => a.component.localeCompare(b.component)))
+      lines.push(
+        `| ${gap.component} | ${gap.properties.join(", ")} | ${gap.reason} \`${gap.opaque.slice(0, 6).join("`, `")}\`${gap.opaque.length > 6 ? ` +${gap.opaque.length - 6}` : ""} |`,
+      );
     lines.push("");
   }
 
