@@ -92,3 +92,19 @@
 - [ ] 8.2 Record the benchmark results (accuracy, variance, false negatives, token cost) in `docs/agentic-design-system-plan.md` against the §1.6 targets
 - [ ] 8.3 Resolve the design's open questions (configurable elevation scale; recompute-on-build vs on-demand; shadow detection scope for consume sources; CSS-modules recommendation; scaffold-replaces vs scaffold-precedes the cycle; whether push reads canonical) and fold the answers into the specs
 - [ ] 8.4 Run `/opsx:sync` to fold the delta specs into `openspec/specs/`
+
+## 9. Consume-source parity in the SDD-DE skills (adjacent scope — found during 7.15)
+
+> `enterprise` is a first-class design source in the APP — it is in `DESIGN_SOURCE_OPTIONS`
+> ("Connect Enterprise Design System"), `isConsumeSource` covers it, and `theme_apply` resolves it to
+> `overlay-injected` — but the `.sdd-de` skills have never heard of it. Four skills carry a five-way
+> branch table keyed on `design_source` (`setup`, `enrich-brief`, `generate-artifacts`,
+> `visual-verify`) and none of them names `enterprise`, so a project created through the app's own
+> enterprise flow matches NO branch and the agent improvises — most likely down Branch A, the Figma
+> path, for a project that has no Figma file. This is a pre-existing defect, not something this
+> change introduced; it is recorded here because 7.15 is what surfaced it, and it could reasonably be
+> split into its own change.
+
+- [ ] 9.1 Add `enterprise` to `setup`'s design-source question and give it a branch — the skill can currently only produce five of the six sources the app supports, so a config the app writes cannot be written by `/setup`; the branch asks the consume-source questions (library/package or repo to consume, its Storybook/docs URL if any, where its tokens live) and records `token_file` as a POINTER to the consumed source rather than a path VortSpec will write
+- [ ] 9.2 Route `enterprise` through the consume branch in `enrich-brief`, `generate-artifacts` and `visual-verify` — retitle each "Branch B — Component Library Flow (`design_source: library | enterprise`)" and state the consume rules the branch implies: the base component comes from the consumed library and is never recreated, customization is an overlay rather than a fork, and `visual-verify` references the vendor's own docs/Storybook rather than a Figma frame
+- [ ] 9.3 Assert the parity rather than trusting the prose: a test over the skill files that every `design_source` value in `DESIGN_SOURCE_OPTIONS` is named by a branch in each branching skill, so the next source added to the app cannot silently lack a branch
