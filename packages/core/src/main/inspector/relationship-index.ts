@@ -14,6 +14,7 @@ import { ALL_SOURCE_EXTS, profileFor } from "@vortspec/core/framework-profiles";
 import { getInspectorComponents } from "./component-reader";
 import { getInspectorTokens } from "./token-parser";
 import { readProjectConfig } from "../workspace/config-manager";
+import { tiersPresent, writeQueryProtocols } from "./query-protocols";
 
 /**
  * The fs half of the relationship index — OpenSpec change: agentic-design-system, task 2.6.
@@ -30,10 +31,10 @@ import { readProjectConfig } from "../workspace/config-manager";
  * on every build would show a change every time and train everyone to skip it.
  */
 
-export const AI_DIR = ".vortspec/ai";
-export const INDEX_PATH = `${AI_DIR}/index.toon`;
-export const USAGE_PATH = `${AI_DIR}/component-usage.toon`;
-export const TOKENS_PATH = `${AI_DIR}/design-tokens.toon`;
+// Defined in `shared/artifact-paths.ts` — the query-protocol documents name these paths in their
+// prose and `shared/` cannot import from `main/`. Re-exported so existing importers are unaffected.
+import { AI_DIR, INDEX_PATH, USAGE_PATH, TOKENS_PATH, RULES_DIR } from "../../shared/artifact-paths";
+export { AI_DIR, INDEX_PATH, USAGE_PATH, TOKENS_PATH, RULES_DIR };
 
 export interface RelationshipIndexResult {
   graph: RelationshipGraph;
@@ -230,6 +231,19 @@ export async function buildRelationshipIndex(
     await writeFile(join(projectPath, path), content, "utf8");
     written.push(path);
   }
+
+  // The rules are written by the SAME build that writes the artifacts they describe (task 3.1).
+  // Separating them would let the two drift: rules naming a tier order the roster no longer has, or
+  // pointing at an artifact path that moved, are worse than no rules — an agent follows them.
+  written.push(
+    ...(await writeQueryProtocols(projectPath, {
+      framework: config?.framework ?? null,
+      componentDir: config?.componentDir ? normalize(config.componentDir) : "the component directory",
+      tiers: tiersPresent(graph),
+      componentCount: graph.components.filter((component) => component.designSystem).length,
+      generatedAt,
+    })),
+  );
   return { graph, shadows, written, generatedAt };
 }
 

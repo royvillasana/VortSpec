@@ -5,6 +5,7 @@ import { dirname, join } from "node:path";
 import { parseToon, type ToonValue } from "@vortspec/core/toon";
 import {
   INDEX_PATH,
+  RULES_DIR,
   TOKENS_PATH,
   USAGE_PATH,
   buildRelationshipIndex,
@@ -74,9 +75,17 @@ async function artifact(path: string): Promise<Record<string, ToonValue>> {
 }
 
 describe("building the index artifacts (task 2.6)", () => {
-  it("writes all three artifacts under .vortspec/ai/", async () => {
+  it("writes all three artifacts under .vortspec/ai/, then the rules that describe them", async () => {
     const result = await buildRelationshipIndex(dir, { generatedAt: STAMP });
-    expect(result.written).toEqual([INDEX_PATH, USAGE_PATH, TOKENS_PATH]);
+    expect(result.written).toEqual([
+      INDEX_PATH,
+      USAGE_PATH,
+      TOKENS_PATH,
+      `${RULES_DIR}/atomic-hierarchy.md`,
+      `${RULES_DIR}/deep-tracing.md`,
+      `${RULES_DIR}/load-once.md`,
+      `${RULES_DIR}/metadata-schema.md`,
+    ]);
   });
 
   it("stamps every artifact, so staleness is answerable without a rebuild", async () => {
@@ -173,7 +182,12 @@ describe("building the index artifacts (task 2.6)", () => {
     try {
       const result = await buildRelationshipIndex(bare, { generatedAt: STAMP });
       expect(result.graph.components).toEqual([]);
-      expect(result.written).toHaveLength(3);
+      expect(result.written).toHaveLength(7);
+      // The rules are still written, and the hierarchy document tells the truth about a roster with
+      // no tiers instead of teaching an order that does not apply here.
+      const hierarchy = await readFile(join(bare, RULES_DIR, "atomic-hierarchy.md"), "utf8");
+      expect(hierarchy).toContain("no atomic tiers");
+      expect(hierarchy).not.toContain("Select in this order");
     } finally {
       await rm(bare, { recursive: true, force: true });
     }
@@ -554,5 +568,47 @@ describe("the CI script agrees with checkIndexFreshness (task 2.9)", () => {
     expect(script.code).toBe(0);
     expect(core.code).toBe(0);
     expect(script.out).toContain("current");
+  });
+});
+
+describe("the query-protocol rules (task 3.1)", () => {
+  const rule = async (name: string): Promise<string> =>
+    readFile(join(dir, RULES_DIR, name), "utf8");
+
+  it("teaches the tier order this roster actually has", async () => {
+    // The fixture is an atom and a molecule — no organisms, no templates. A rule document telling
+    // the agent to start at the organism would send it looking for something that is not there.
+    await buildRelationshipIndex(dir, { generatedAt: STAMP });
+    const hierarchy = await rule("atomic-hierarchy.md");
+    expect(hierarchy).toContain("`molecule` → `atom`");
+    expect(hierarchy).not.toContain("organism");
+  });
+
+  it("names the project's real framework, component directory and roster size", async () => {
+    await buildRelationshipIndex(dir, { generatedAt: STAMP });
+    const loadOnce = await rule("load-once.md");
+    expect(loadOnce).toContain("react");
+    expect(loadOnce).toContain("src/components");
+    expect(loadOnce).toContain("2-component roster");
+  });
+
+  it("points at the artifacts the SAME build just wrote", async () => {
+    // The reason the rules are written here rather than separately: an agent follows a path, and a
+    // path that drifted from the writer is worse than no rule at all.
+    const result = await buildRelationshipIndex(dir, { generatedAt: STAMP });
+    const tracing = await rule("deep-tracing.md");
+    for (const path of [INDEX_PATH, USAGE_PATH, TOKENS_PATH]) {
+      expect(result.written).toContain(path);
+      expect(tracing).toContain(path);
+    }
+  });
+
+  it("rewrites rather than accumulating across builds", async () => {
+    await buildRelationshipIndex(dir, { generatedAt: STAMP });
+    await write(".sdd-de/project.yaml", "framework: svelte\nlanguage: typescript\nstyling: css\ntoken_file: src/tokens.css\ncomponent_dir: src/ui\n");
+    await buildRelationshipIndex(dir, { generatedAt: STAMP });
+    const loadOnce = await rule("load-once.md");
+    expect(loadOnce).toContain("svelte");
+    expect(loadOnce).not.toContain("react");
   });
 });

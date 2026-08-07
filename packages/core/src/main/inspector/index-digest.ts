@@ -185,15 +185,61 @@ export async function buildIndexDigest(
 }
 
 /**
+ * The query-protocol rules, read from the files the index build wrote (task 3.2).
+ *
+ * READ, not regenerated. Regenerating would produce a prompt that agrees with the current code while
+ * the committed rules say something else — and the committed files are what a reviewer reads. Reading
+ * them means the run and the repository are provably the same text.
+ *
+ * The generated footer is stripped: it stamps the project and framework for someone opening the file,
+ * and the digest immediately above already says all of it. Four copies of it in a system prompt is
+ * pure cost.
+ *
+ * "" when the rules have not been built — a grounded run still gets its digest.
+ */
+export async function readQueryProtocols(projectPath: string): Promise<string> {
+  const { readFile } = await import("node:fs/promises");
+  const { join } = await import("node:path");
+  const { RULES_DIR } = await import("@vortspec/core/artifact-paths");
+  const { queryProtocolDocuments } = await import("@vortspec/core/query-protocols");
+
+  // The names come from the generator, so a document added there reaches the prompt without a
+  // second list here needing to be remembered.
+  const names = Object.keys(
+    queryProtocolDocuments({
+      framework: null,
+      componentDir: "",
+      tiers: [],
+      componentCount: 0,
+      generatedAt: "",
+    }),
+  ).sort();
+
+  const parts: string[] = [];
+  for (const name of names) {
+    const raw = await readFile(join(projectPath, RULES_DIR, name), "utf8").catch(() => null);
+    if (raw === null) continue;
+    parts.push(raw.split("\n---\n")[0]!.trimEnd());
+  }
+  if (!parts.length) return "";
+  return ["BEGIN QUERY PROTOCOLS — how to read the index above", "", parts.join("\n\n"), "", "END QUERY PROTOCOLS"].join("\n");
+}
+
+/**
  * Return `opts` with the index digest prepended to `--append-system-prompt` when the
  * run asked to be grounded (`groundWithIndex`). A no-op otherwise, and a best-effort
  * addition — a failure to build the digest never blocks the run.
+ *
+ * The rules ride WITH the digest or not at all. Attaching a block that explains how to navigate
+ * artifacts this run was never given would instruct the agent to read files that do not exist.
  */
 export async function groundOptions(opts: AgentRunOptions): Promise<AgentRunOptions> {
   if (!opts.groundWithIndex) return opts;
   const digest = await buildIndexDigest(opts.cwd, { inScope: opts.inScopeComponents }).catch(() => "");
   if (!digest) return opts;
-  const appendSystemPrompt = opts.appendSystemPrompt ? `${digest}\n\n${opts.appendSystemPrompt}` : digest;
+  const protocols = await readQueryProtocols(opts.cwd).catch(() => "");
+  const grounding = protocols ? `${digest}\n\n${protocols}` : digest;
+  const appendSystemPrompt = opts.appendSystemPrompt ? `${grounding}\n\n${opts.appendSystemPrompt}` : grounding;
   return { ...opts, appendSystemPrompt };
 }
 

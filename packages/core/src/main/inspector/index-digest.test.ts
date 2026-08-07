@@ -313,3 +313,53 @@ describe("on-demand relationship lookup (task 2.8)", () => {
     expect(await lookupRelationships(dir, "Button")).toBeNull();
   });
 });
+
+describe("query protocols reach a grounded run (task 3.2)", () => {
+  let dir: string;
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), "vortspec-digest-rules-"));
+    await scaffold(dir);
+  });
+  afterEach(async () => {
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  it("attaches the rules after the digest, from the files on disk", async () => {
+    await buildRelationshipIndex(dir, { generatedAt: "2026-08-07T12:00:00.000Z" });
+    const grounded = await groundOptions({ prompt: "p", cwd: dir, groundWithIndex: true });
+    const prompt = grounded.appendSystemPrompt ?? "";
+    expect(prompt).toContain("END DESIGN-SYSTEM INDEX");
+    expect(prompt).toContain("BEGIN QUERY PROTOCOLS");
+    expect(prompt.indexOf("END DESIGN-SYSTEM INDEX")).toBeLessThan(prompt.indexOf("BEGIN QUERY PROTOCOLS"));
+    for (const heading of ["# Metadata schema", "# Atomic hierarchy", "# Deep tracing", "# Load once"])
+      expect(prompt).toContain(heading);
+  });
+
+  it("drops the per-file generated footer, which the digest already says", async () => {
+    await buildRelationshipIndex(dir, { generatedAt: "2026-08-07T12:00:00.000Z" });
+    const grounded = await groundOptions({ prompt: "p", cwd: dir, groundWithIndex: true });
+    expect(grounded.appendSystemPrompt).not.toContain("Do not hand-edit");
+  });
+
+  it("carries no rules block when the index was never built", async () => {
+    // Rules describing artifacts this run was not given would send the agent after missing files.
+    const bare = await mkdtemp(join(tmpdir(), "vortspec-digest-norules-"));
+    try {
+      await writeFile(
+        join(bare, "project.yaml"),
+        "framework: react\ncomponent_dir: src/components\n",
+        "utf8",
+      );
+      const grounded = await groundOptions({ prompt: "p", cwd: bare, groundWithIndex: true });
+      expect(grounded.appendSystemPrompt ?? "").not.toContain("BEGIN QUERY PROTOCOLS");
+    } finally {
+      await rm(bare, { recursive: true, force: true });
+    }
+  });
+
+  it("leaves an ungrounded run untouched", async () => {
+    await buildRelationshipIndex(dir, { generatedAt: "2026-08-07T12:00:00.000Z" });
+    const plain = await groundOptions({ prompt: "p", cwd: dir });
+    expect(plain.appendSystemPrompt).toBeUndefined();
+  });
+});
