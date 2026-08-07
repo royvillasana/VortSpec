@@ -32,8 +32,8 @@
 - [x] 3.4 Extend `LiteComponent` in `shared/lite-manifest.ts` with an optional framework-free `hints` block (`selectionCriteria`, variant `purpose`, anti-pattern scenarios) and serialize it into `designer.md`; assert `findFrameworkPointers` still finds nothing and that serialization throws on a leak
 - [x] 3.5 Carry selection criteria and anti-patterns into light-page composition. DEVIATION: the criteria are carried in `designer.md`'s `hints` block (3.4) and `buildLightPagePrompt` carries the METHOD that makes them binding, rather than a second copy of the data. `designer.md` is already the prompt's component context; inlining every component's criteria as well would pay for the same text twice and let the two disagree. The coverage assertion therefore runs against the serialized manifest — every `data-component` name the prompt permits has its criteria present there
 - [x] 3.6 Confirm a component with no metadata still appears in `designer.md` with its stand-in and does not block light-page composition
-- [ ] 3.7 Replace the `DESIGN.md` `.slice(0, 4000)` in `shared/compose-run.ts:295` with the structured digest plus in-scope metadata records
-- [ ] 3.8 Verify: re-run the benchmark questions with rules present and compare against the group 2 baseline
+- [x] 3.7 Replace the `DESIGN.md` `.slice(0, 4000)` in `shared/compose-run.ts:295` with the structured digest plus in-scope metadata records
+- [~] 3.8 BLOCKED on the same agent trials as 2.10 — the rules and the selection method are in the prompt and asserted, but whether they IMPROVE an answer is an accuracy question, and accuracy needs N independent trials graded against the answer key. Recorded cost: the rules bundle is ~1.4k tokens on a grounded run and the selection method ~0.35k on a compose run
 
 ## 4. Governance v2 and reports
 

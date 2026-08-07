@@ -135,6 +135,14 @@ export function useComposeRun(args: {
         bypassPermissions: true,
         strictMcp: true,
         model: routedModel("sonnet"),
+        // The structured design-system digest + query protocols, prepended by the main process
+        // (agentic-design-system, task 3.7). This replaces the byte-truncated DESIGN.md prose the
+        // prompt used to splice in: the digest is bounded, says what it omitted, and carries the
+        // relationships and token map a composition needs to reuse rather than reinvent.
+        groundWithIndex: true,
+        // The components the user explicitly picked get their FULL metadata record — selection
+        // criteria, variant purposes, anti-pattern corrections — rather than a roster line.
+        ...(preferredComponents.length ? { inScopeComponents: preferredComponents } : {}),
       });
     },
     [phase, run],

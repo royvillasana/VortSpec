@@ -231,6 +231,22 @@ export function buildPromoteComponentPrompt(opts: {
   ].join("\n");
 }
 
+/**
+ * DESIGN.md prose, kept for a caller that still supplies it — truncated at a SECTION boundary and
+ * told when it was cut.
+ *
+ * The structured digest is the real hand-off now. This exists so a caller passing prose does not get
+ * a silent mid-sentence cut, which reads to the model as a complete document that simply ends.
+ */
+function designMdHandoff(designMd: string): string {
+  const LIMIT = 4000;
+  if (designMd.length <= LIMIT) return `\nDESIGN.md hand-off (follow it):\n${designMd}`;
+  const head = designMd.slice(0, LIMIT);
+  const lastHeading = head.lastIndexOf("\n#");
+  const kept = lastHeading > 0 ? head.slice(0, lastHeading) : head;
+  return `\nDESIGN.md hand-off (follow it) — TRUNCATED, ${designMd.length - kept.length} characters of later sections are not shown:\n${kept}`;
+}
+
 export function buildComposePrompt(input: ComposePromptInput): string {
   const count = Math.max(1, Math.min(MAX_COMPOSE_OPTIONS, input.count ?? MAX_COMPOSE_OPTIONS));
   const { slot } = input;
@@ -304,7 +320,13 @@ export function buildComposePrompt(input: ComposePromptInput): string {
           input.tokens.length > 40 ? ", …" : ""
         }). Do NOT introduce a hardcoded hex or px value where a token exists.`
       : "Ground every value in the project's design tokens. Do NOT hardcode hex or px where a token exists.",
-    input.designMd ? `\nDESIGN.md hand-off (follow it):\n${input.designMd.slice(0, 4000)}` : "",
+    // DESIGN.md's prose used to be spliced in here, byte-truncated at 4,000 characters (task 3.7).
+    // Cutting markdown at an arbitrary offset is the worst possible way to spend those tokens: it
+    // lands mid-sentence, drops whatever came after, and says nothing about what was lost. The
+    // structured digest replaces it — the run now sets `groundWithIndex`, so the main process
+    // prepends the roster, relationships, tokens and the in-scope metadata records as a bounded,
+    // self-describing block, with the query protocols that say how to read it.
+    input.designMd ? designMdHandoff(input.designMd) : "",
     "",
     DISTINCTNESS_CLAUSE,
     "",
