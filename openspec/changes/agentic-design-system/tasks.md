@@ -94,6 +94,19 @@
 - [ ] 9b.1 Add the **Props Glossary & Lookup Table** (board Frame 241). The board feeds it from the component set INTO the AI-ready metadata, i.e. it is a cross-component index of prop name → meaning, type and accepted values, so `variant`/`size`/`tone` mean the same thing everywhere and a generator stops inventing a fourth spelling of the same prop. VortSpec has the inputs already — `metadataPropSchema` per component plus the roster — so this is a derived artifact plus a governance rule ("a prop name that exists in the glossary must match its recorded type"), not new extraction
 - [ ] 9b.2 Adopt the board's **ARC vocabulary (Audit · Report · Compose)** in the query protocols of group 3, since it is the frame the benchmark scores against: each of the four questions is mapped to a phase, and the rule documents currently name none of them. Naming the phase a query belongs to is what lets a run choose "query the index" over "explore the filesystem"
 
+## 2b. Generated validation page (audit does not wait for a user screen)
+
+> Recorded as a decision in `design.md`. The audit, the token check and the benchmark all need a page
+> that renders components; all three were implicitly blocked on the user authoring a screen first,
+> which inverts the order the work happens in — components come before screens, and that is when
+> token discipline is cheapest to fix.
+
+- [x] 2b.1 Generate a validation page per TIER (atoms/molecules/organisms) that renders every component with each of its variants, written under a clearly-marked path and removed after the run unless kept. One page per tier rather than one page total, because a single page makes benchmark Q4 ("used on other pages") degenerate — with tiers, a molecule renders atoms and the reuse signal is real
+- [x] 2b.2 Emit it deterministically for the JSX-family frameworks (react, next, solid, astro) and via the existing idioms prompt for the rest; FAIL LOUDLY by name for a framework with neither, exactly as the token emitters do — never write a page a project cannot compile
+- [ ] 2b.3 Use it as the audit and benchmark subject when the project has no entry page of its own, and record in the report WHICH subject was used — a finding measured against a generated page is weaker evidence than one measured against a real screen, and conflating them would overstate the audit
+- [ ] 2b.4 Offer to keep it (committed, as a reviewable "whole design system rendered" artifact) and encourage the user to run the same audit against their own screens — the generated page is the floor, not the ceiling
+- [ ] 2b.5 Verify: a project with no screens produces a complete audit and a runnable benchmark; a component with no variants still appears; and the page is gone afterwards unless kept
+
 ## 8. Close out
 
 - [ ] 8.1 Run the full test suite and the CT suite; confirm no regression in the existing digest, audit, metadata and token paths

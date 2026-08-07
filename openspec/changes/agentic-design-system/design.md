@@ -221,6 +221,37 @@ instead.
 Splitting them would leave a window where `ComponentDocs` reads a module that generation has stopped
 writing. `/storybook` and `ComponentDocs` are switched to the JSON store as part of group 1.
 
+**Validation does not wait for a user-authored screen: VortSpec generates one.**
+The audit, the token-usage check and the §1.6 benchmark all need a PAGE — something that renders
+components so there are instances to count, tokens to resolve, and reuse to measure. Every one of
+those was implicitly blocked on the user having built a screen first, which inverts the order the
+work actually happens in: components are created before screens, and that is exactly when their
+token discipline is cheapest to fix. Waiting also means the first audit runs against whatever screen
+happens to exist, so coverage is accidental — a component nobody has used yet is simply unaudited,
+and silently so.
+
+So VortSpec generates a VALIDATION PAGE that renders every component, uses it as the audit and
+benchmark subject, and deletes it afterwards unless the user keeps it. Keeping it is worth offering:
+it is a real answer to "show me the whole design system rendered", and as a committed artifact it
+gives the report a stable, reviewable subject rather than a moving one.
+
+Two consequences worth stating rather than discovering later:
+
+- **One page makes Q4 trivial.** "How many of these components are used on other pages" is zero when
+  there is exactly one page. The generator therefore emits ONE PAGE PER TIER — atoms, molecules,
+  organisms — which mirrors how the system is actually composed: a molecule renders atoms, so an
+  atom legitimately appears on both its own page and inside the molecule's. That produces real reuse
+  signal instead of a degenerate answer.
+- **A generated page is not a substitute for a real one.** It proves a component RENDERS and which
+  tokens it resolves; it cannot prove the component is used correctly in context. The user's own
+  screens remain the better audit subject, and the flow should encourage them — this is the floor,
+  not the ceiling.
+
+*Alternative considered:* deriving the audit purely from static analysis with no page at all —
+rejected because token RESOLUTION is what the audit is for, and a token's resolved value depends on
+the cascade a component actually renders in. Static analysis can say a component references
+`--color-primary`; only a render says what that resolved to.
+
 ## Risks / Trade-offs
 
 **Instance counting is the hardest part and the easiest to get quietly wrong** → Build it
