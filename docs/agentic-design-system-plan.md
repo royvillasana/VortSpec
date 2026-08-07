@@ -131,6 +131,34 @@ ARC in practice:
 | False negatives | 60% | 0% | eliminated |
 | Token cost | 27,211 | 28,166 | +3.5% |
 
+#### The four questions (recovered from the board, Frame 184)
+
+The plan referenced "the four fixed questions" without ever recording them, which made tasks 2.10
+and 3.8 unexecutable. They are, asked IN SEQUENCE in one session:
+
+| # | Question (as run on the board's Astro repo) | ARC phase | What it exercises |
+|---|---|---|---|
+| Q1 | "How many components do we have on this repo?" | Audit | Query the index for a complete inventory |
+| Q2 | "List all components used on `index.astro`" | Report | Read the relationship graph, generate a specification |
+| Q3 | "List all atoms used on that page" | Compose | Reason over cached data, filter by category |
+| Q4 | "How many of these components are being used on other pages?" | Compose | Traverse pre-computed `usedBy` |
+
+**They are sequential, not independent.** Q3 says "that page" and Q4 says "these components" — each
+depends on the previous answer. The board tested this deliberately, listing "session pollution,
+sequential queries, accumulated context" as the real conditions the infrastructure had to survive.
+Running the four as separate sessions would measure something easier than what was claimed.
+
+**Q2 must be parameterized to stay framework-agnostic.** `index.astro` is the board's own repo, not a
+property of the method. VortSpec supports nine frameworks and Astro is one of them, so a literal
+`index.astro` would make the benchmark unrunnable on eight of the nine. The question is really "list
+the components used on the project's main entry page"; the entry page resolves per framework
+(`src/pages/index.astro`, `app/page.tsx`, `src/App.tsx`, …), which `FRAMEWORK_PROFILES` already knows
+how to find. Q3 and Q4 then chain off whatever Q2 resolved.
+
+**Control vs agentic setup.** Control: no `.vortspec/ai/` artifacts, no `CLAUDE.md`, discovery by
+filesystem traversal. Agentic: pre-generated TOON index, relationship graph, and the project
+instructions that tell the agent to query rather than explore.
+
 **The token cost is flat.** The infrastructure does not buy cheaper runs — it converts token spend
 *from exploration into analysis*. That is the whole thesis, and it is the number to keep in mind when
 weighing this against the cost/token-optimization priority: this is not a spend increase, it is a

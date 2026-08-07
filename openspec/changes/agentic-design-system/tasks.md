@@ -22,7 +22,7 @@
 - [ ] 2.7 Add the token reverse index (token → consuming components) and verify it answers without scanning component sources
 - [ ] 2.8 Extend `buildIndexDigest` with a bounded relationship section plus an on-demand `uses`/`usedBy` lookup; regression-test digest size against a large fixture and assert truncation is stated, not silent
 - [ ] 2.9 Add staleness detection (component dir mtime vs `generatedAt`), expose it to the UI, and add the CI check that fails on a stale index naming the missing components
-- [ ] 2.10 Verify: run the four benchmark questions from `docs/agentic-design-system-plan.md` §1.6 against a real project with and without the index; record accuracy, variance and token cost
+- [ ] 2.10 Verify: run the four benchmark questions (now recorded in §1.6) against a real project with and without the index, IN SEQUENCE in one session — Q3/Q4 depend on Q2's answer, and running them independently measures something easier than what was claimed; parameterize Q2's entry page per framework rather than hardcoding `index.astro`; token cost is measurable deterministically from the digest, while accuracy/variance/false-negatives need repeated trials (the board used 11)
 
 ## 3. Query protocols
 
@@ -85,6 +85,14 @@
 - [x] 7.13 Retire or derive `.vortspec/figma-variables.json` per the merge rule, so exactly one canonical shape remains
 - [x] 7.14 Wire the pipeline to its callers — `ingestTokensFromProject` and `emitTokenFiles` have NO callers today, so nothing actually produces `token_file` and "derived artifact" is aspirational: emit at the end of both ingest paths (`syncVariablesToCache`, `ingestTokensFromProject`) per the emission-timing decision in `design.md`, add an on-demand route for a styling switch (asserting it makes no design-source read, per 7.9), surface the `diverged` and `read-only` outcomes as a user-facing choice rather than a silent no-op, and assert a Figma sync leaves `token_file` matching its ledger (i.e. a second emit reports `up-to-date`, never `diverged`)
 - [x] 7.15 Stop `sync-tokens` writing `token_file` directly — it contradicts "the styling token file is a derived artifact" now that `extract-design-system` (7.12) emits it: depends on 7.14 for the machinery. Branch A step 5 collapses — a Figma variable with no code counterpart just means the artifact is stale, so re-ingest and the token appears — and Branch C/D/E step 3 ("create a token variable in the project token file") authors into `.vortspec/tokens.json` instead, since those sources have no live design tool to create it in and the artifact IS their source of truth; for Branch B (`library`, and `enterprise`) route the write to the durable overlay instead, since `token_file` there is the consumed source (7.10); update the skill's Tailwind note, which tells the agent the bridge reads a hand-maintained `tokens.css`
+
+## 9b. From the FigJam board, not previously captured
+
+> Read off `figma.com/board/zilsOCRmQ0EBmqwIRXe3ET` in full. Everything else on the board maps to an
+> existing group; these two do not appear anywhere in the plan.
+
+- [ ] 9b.1 Add the **Props Glossary & Lookup Table** (board Frame 241). The board feeds it from the component set INTO the AI-ready metadata, i.e. it is a cross-component index of prop name → meaning, type and accepted values, so `variant`/`size`/`tone` mean the same thing everywhere and a generator stops inventing a fourth spelling of the same prop. VortSpec has the inputs already — `metadataPropSchema` per component plus the roster — so this is a derived artifact plus a governance rule ("a prop name that exists in the glossary must match its recorded type"), not new extraction
+- [ ] 9b.2 Adopt the board's **ARC vocabulary (Audit · Report · Compose)** in the query protocols of group 3, since it is the frame the benchmark scores against: each of the four questions is mapped to a phase, and the rule documents currently name none of them. Naming the phase a query belongs to is what lets a run choose "query the index" over "explore the filesystem"
 
 ## 8. Close out
 
