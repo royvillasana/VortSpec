@@ -20,22 +20,20 @@ export const BRANCHING_SKILLS = ["setup", "enrich-brief", "generate-artifacts", 
 export type BranchingSkill = (typeof BRANCHING_SKILLS)[number];
 
 /**
- * Sources known to be missing a branch today, with the reason kept next to them.
+ * Sources known to be missing a branch, with the reason kept next to them.
  *
  * An allowlist, not an exemption: the parity check fails when a NEW gap appears **and** when an entry
  * here is fixed. A stale allowlist is how a known-failure list turns into a permanent one — the same
  * failure mode as a red suite people learn to scroll past.
+ *
+ * EMPTY as of `@royvillasana/sdd-de@1.21.0`, which added branches for `enterprise` and
+ * `claude-design` across `setup`, `enrich-brief`, `generate-artifacts`, `visual-verify` and
+ * `sync-tokens`. Both entries were removed because the staleness check demanded it — which is the
+ * mechanism working, not a formality: the list shrank on evidence rather than on someone remembering.
+ *
+ * Empty is the correct steady state. A new entry here should be rare and temporary.
  */
-export const KNOWN_GAPS: { source: string; why: string }[] = [
-  {
-    source: "enterprise",
-    why: "The app's own 'Connect Enterprise Design System' flow writes this value, so a project the app created matches no branch. Fix in the sdd-de repo: retitle Branch B to `library | enterprise` and state the consume rules.",
-  },
-  {
-    source: "claude-design",
-    why: "Found by this check, not by the task list that motivated it. A `claude-design` project matches no branch either, and the agent most likely falls through to the Figma path.",
-  },
-];
+export const KNOWN_GAPS: { source: string; why: string }[] = [];
 
 export interface ParityResult {
   /** Sources with no branch, per skill. */

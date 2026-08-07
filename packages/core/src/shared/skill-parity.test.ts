@@ -59,11 +59,22 @@ describe("design-source parity between the app and the skills (task 9.3)", () =>
     ).toEqual([]);
   });
 
-  it("records WHY each known gap exists, not just that it does", () => {
-    for (const gap of KNOWN_GAPS) {
-      expect(gap.why.trim(), `${gap.source} has no reason recorded`).not.toBe("");
-      expect(gap.why.length).toBeGreaterThan(40);
-    }
+  it("has an EMPTY allowlist — every design source has a branch", () => {
+    // Asserted as emptiness rather than by looping the list. The previous version of this test
+    // iterated KNOWN_GAPS and checked each entry carried a reason; once the list emptied, that loop
+    // ran zero times and passed while asserting nothing. A vacuous green is worse than no test,
+    // because it reads as coverage. This claim is falsifiable: it breaks the moment a gap returns.
+    expect(KNOWN_GAPS).toEqual([]);
+  });
+
+  it("still demands a reason on any entry that comes back", () => {
+    // The invariant kept alive against a fixture, so emptying the real list did not delete the rule.
+    const withReason = [{ source: "x", why: "a".repeat(50) }];
+    const withoutReason = [{ source: "x", why: "" }];
+    const hasReasons = (gaps: typeof withReason) => gaps.every((gap) => gap.why.trim().length > 40);
+    expect(hasReasons(withReason)).toBe(true);
+    expect(hasReasons(withoutReason)).toBe(false);
+    expect(hasReasons(KNOWN_GAPS)).toBe(true);
   });
 
   it("would catch a source the app adds without a branch", () => {
