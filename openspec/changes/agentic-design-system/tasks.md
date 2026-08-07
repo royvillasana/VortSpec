@@ -43,7 +43,7 @@
 - [x] 4.4 Build the fixture with a syntactically valid but hierarchy-violating token reference and assert existence-only checks pass while intent checking flags it; assert intent findings are a strict superset of the existing findings
 - [x] 4.5 Generate `.vortspec/ai/reports/adoption.md` from the group 2 index — utilization, unused components, efficiency, shadow implementations — with a `generatedAt` stamp
 - [x] 4.6 Generate `.vortspec/ai/reports/token-violations.md` grouped by component
-- [ ] 4.7 Run report generation in the background on the cheapest capable model (Haiku), non-blocking, surfacing on completion
+- [x] 4.7 DONE, with a DEVIATION worth stating: the plan budgeted Haiku for report generation, but the group 4 design made both reports deterministic derivations of the graph, so generating them costs no model call at all — cheaper than Haiku. The only part that needs a model is the `judgment` rules, and `governance-judge.ts` routes exactly those to Haiku (`JUDGE_TIER`), builds no prompt when nothing is deferred, bounds the batch at 40 and reports what it omitted. Generation runs in the main process over `reports:generate`, so the renderer never blocks on the scan
 - [ ] 4.8 Surface governance findings and both reports in the Inspector Issues view, filterable by kind
 - [x] 4.9 For consume sources, assert findings are reported without writing any file in the consumed library and that corrections route to the durable overlay
 

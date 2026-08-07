@@ -672,6 +672,13 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
       changedCount: 0,
       message: "No design-system index has been built yet (.vortspec/ai/index.toon is absent).",
     }),
+    generateReports: async () => ({
+      written: [],
+      violations: 0,
+      deferred: 0,
+      rulesFrom: "defaults" as const,
+      consumeSource: false,
+    }),
     tokensIngest: async () => ({
       ok: true,
       tokenFile: "src/styles/tokens.css",

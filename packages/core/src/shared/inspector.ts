@@ -717,6 +717,23 @@ export const indexStalenessSchema = z.object({
 });
 export type IndexStalenessResult = z.infer<typeof indexStalenessSchema>;
 
+/**
+ * The outcome of a report-generation pass (OpenSpec change: agentic-design-system, task 4.7).
+ *
+ * `deferred` is surfaced rather than folded into `violations` because the two are different claims:
+ * a violation is a finding, a deferred check is one nobody has judged yet. Summing them would let a
+ * project read as failing for checks that never ran.
+ */
+export const reportResultSchema = z.object({
+  /** Project-relative paths written. */
+  written: z.array(z.string()).default([]),
+  violations: z.number(),
+  deferred: z.number(),
+  rulesFrom: z.enum(["project", "defaults", "malformed"]),
+  consumeSource: z.boolean(),
+});
+export type ReportResultPayload = z.infer<typeof reportResultSchema>;
+
 /** A captured file (project-relative path + content), for gated revert of a modify run. */
 export const fileSnapshotSchema = z.object({ path: z.string(), content: z.string() });
 export type FileSnapshot = z.infer<typeof fileSnapshotSchema>;

@@ -400,6 +400,11 @@ export interface VortSpecApi {
   indexBuild(projectPath: string): Promise<IpcResponse<"index:build">>;
   /** Whether the index still describes the code, naming what changed (task 2.9). */
   indexStaleness(projectPath: string): Promise<IpcResponse<"index:staleness">>;
+  /**
+   * Generate the adoption + token-violation reports. Deterministic and model-free, so the cost is a
+   * scan; the renderer fires it and shows the result when it lands (task 4.7).
+   */
+  generateReports(projectPath: string): Promise<IpcResponse<"reports:generate">>;
   /** Read design-system components from Figma into the reconcile cache (figma-cli primary). */
   figmaSyncComponents(projectPath: string): Promise<IpcResponse<"figma:syncComponents">>;
   /** Read the node(s) currently selected in Figma Desktop (figma-cli). */
