@@ -104,8 +104,8 @@
 - [x] 2b.1 Generate a validation page per TIER (atoms/molecules/organisms) that renders every component with each of its variants, written under a clearly-marked path and removed after the run unless kept. One page per tier rather than one page total, because a single page makes benchmark Q4 ("used on other pages") degenerate — with tiers, a molecule renders atoms and the reuse signal is real
 - [x] 2b.2 Emit it deterministically for the JSX-family frameworks (react, next, solid, astro) and via the existing idioms prompt for the rest; FAIL LOUDLY by name for a framework with neither, exactly as the token emitters do — never write a page a project cannot compile
 - [x] 2b.3 Use it as the audit and benchmark subject when the project has no entry page of its own, and record in the report WHICH subject was used — a finding measured against a generated page is weaker evidence than one measured against a real screen, and conflating them would overstate the audit
-- [ ] 2b.4 Offer to keep it (committed, as a reviewable "whole design system rendered" artifact) and encourage the user to run the same audit against their own screens — the generated page is the floor, not the ceiling
-- [ ] 2b.5 Verify: a project with no screens produces a complete audit and a runnable benchmark; a component with no variants still appears; and the page is gone afterwards unless kept
+- [x] 2b.4 Offer to keep it (committed, as a reviewable "whole design system rendered" artifact) and encourage the user to run the same audit against their own screens — the generated page is the floor, not the ceiling
+- [x] 2b.5 Verify: a project with no screens produces a complete audit and a runnable benchmark; a component with no variants still appears; and the page is gone afterwards unless kept
 
 ## 2c. Two audits: component creation and screen generation
 

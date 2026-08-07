@@ -70,7 +70,11 @@ export async function buildComponentCreationAudit(
   ]);
   const tokens = toks.tokens;
   const components = comps.components;
-  const subject = options.validationPages?.length ? "validation-page" : "component-source";
+  // The pages are ADDITIONAL, never a substitute. A generated page renders `<Button />`; the
+  // hardcoded value lives in Button's own source, so auditing only the pages would report a clean
+  // design system while every violation sat one file away. Each target carries its OWN subject, so
+  // a page finding is still never presented as equal evidence to a source one.
+  const auditsPages = (options.validationPages?.length ?? 0) > 0;
 
   const colorByValue = valueIndex(tokens, (token) => token.type === "color");
   // Spacing and radius share the length space, so one index serves both — the message names the
@@ -85,7 +89,7 @@ export async function buildComponentCreationAudit(
     drifted++;
     findings.push({
       scope: "component-creation",
-      subject,
+      subject: auditsPages ? "validation-page" : "component-source",
       component: "(tokens)",
       file: toks.tokenFile,
       severity: "warning",
@@ -94,9 +98,16 @@ export async function buildComponentCreationAudit(
     });
   }
 
-  const targets = options.validationPages?.length
-    ? options.validationPages.map((file) => ({ name: file.split("/").pop() ?? file, file }))
-    : components.filter((component) => component.file).map((c) => ({ name: c.name, file: c.file! }));
+  const targets: { name: string; file: string; subject: "component-source" | "validation-page" }[] = [
+    ...components
+      .filter((component) => component.file)
+      .map((c) => ({ name: c.name, file: c.file!, subject: "component-source" as const })),
+    ...(options.validationPages ?? []).map((file) => ({
+      name: file.split("/").pop() ?? file,
+      file,
+      subject: "validation-page" as const,
+    })),
+  ];
 
   for (const target of targets) {
     if (findings.length >= MAX_FINDINGS) break;
@@ -111,7 +122,7 @@ export async function buildComponentCreationAudit(
       seenColors.add(value);
       findings.push({
         scope: "component-creation",
-        subject,
+        subject: target.subject,
         component: target.name,
         file: target.file,
         severity: "error",
@@ -131,7 +142,7 @@ export async function buildComponentCreationAudit(
       seenLengths.add(key);
       findings.push({
         scope: "component-creation",
-        subject,
+        subject: target.subject,
         component: target.name,
         file: target.file,
         severity: "error",

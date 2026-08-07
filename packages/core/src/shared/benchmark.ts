@@ -71,6 +71,14 @@ export const BENCHMARK_QUESTIONS: readonly BenchmarkQuestion[] = [
 export function resolveEntryPage(framework: string | undefined, files: readonly string[]): string | null {
   const present = new Set(files);
   for (const candidate of entryCandidates(framework)) if (present.has(candidate)) return candidate;
+  // A KEPT validation page is a legitimate entry page (group 2b). For a component library with no
+  // screens at all it is the ONLY page that renders the design system, which is exactly the case
+  // that made Q2–Q4 unanswerable before 2b existed.
+  const validation = files
+    .filter((file) => file.includes("__vortspec_validation__"))
+    .sort((a, b) => a.localeCompare(b));
+  if (validation.length) return validation[0];
+
   // Fall back to any index-ish page the project does have, so a non-standard layout still runs.
   const fallback = files
     .filter((file) => /(^|\/)(index|page|app|home)\.[jt]sx?$|(^|\/)(index|page)\.(astro|vue|svelte)$/i.test(file))
