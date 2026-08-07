@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { mapTokenGroup, mapTier, buildDeriveInput, liteGenerationStatus, markPageGenerated } from "./lite-source";
+import { dirname, join } from "node:path";
+import { mapTokenGroup, mapTier, buildDeriveInput, liteGenerationStatus, markPageGenerated , deriveProjectLiteManifest } from "./lite-source";
 import { deriveLiteManifest } from "../../shared/lite-manifest";
 
 describe("mapTokenGroup", () => {
@@ -139,4 +139,40 @@ describe("per-page framework-generation status", () => {
       { name: "Home", generated: true, stale: false },
     ]);
   });
+});
+
+describe("component hints reach designer.md (task 3.4 regression)", () => {
+  it("finds a metadata record whose name is NOT lowercase", async () => {
+    // The bug this pins: `readMetadataFor` keys its map by `normComponentName(name)`, so looking up
+    // the raw roster name found nothing for every PascalCase component — which is all of them. The
+    // hints block was inert from task 3.4 until the props glossary's fixture exposed it.
+    const dir = await mkdtemp(join(tmpdir(), "vortspec-hints-"));
+    try {
+      const w = async (rel: string, content: string) => {
+        await mkdir(dirname(join(dir, rel)), { recursive: true });
+        await writeFile(join(dir, rel), content, "utf8");
+      };
+      await w(
+        ".sdd-de/project.yaml",
+        "framework: react\nlanguage: typescript\nstyling: css\ntoken_file: src/tokens.css\ncomponent_dir: src/components\n",
+      );
+      await w("src/tokens.css", ":root { --color-primary: #1d4ed8; }\n");
+      await w(".sdd-de/components.json", JSON.stringify([{ name: "Callout", level: "molecule" }]));
+      await w("src/components/Callout.tsx", "export const Callout = () => <div/>;");
+      await w(
+        ".vortspec/metadata/callout.json",
+        JSON.stringify({
+          name: "Callout",
+          identity: { name: "Callout", category: "molecule", type: "display", description: "", importPath: "" },
+          aiHints: { context: "", selectionCriteria: ["the main callout in a section"], keywords: [], generationRules: [] },
+        }),
+      );
+
+      const manifest = await deriveProjectLiteManifest(dir);
+      const callout = manifest.components.find((c) => c.name === "Callout");
+      expect(callout?.hints?.selectionCriteria).toEqual(["the main callout in a section"]);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  }, 60000);
 });

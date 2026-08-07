@@ -16,6 +16,7 @@ import { getInspectorTokens } from "./token-parser";
 import { readProjectConfig } from "../workspace/config-manager";
 import { tiersPresent, writeQueryProtocols } from "./query-protocols";
 import { seedGovernance } from "./governance-store";
+import { writePropsGlossary } from "./props-glossary";
 
 /**
  * The fs half of the relationship index — OpenSpec change: agentic-design-system, task 2.6.
@@ -245,6 +246,11 @@ export async function buildRelationshipIndex(
       generatedAt,
     })),
   );
+  // The props glossary is DERIVED from the roster + metadata, so it belongs to the same build that
+  // reads them (task 9b.1). Nothing is written when a project has no props to index.
+  const glossary = await writePropsGlossary(projectPath, { generatedAt }).catch(() => ({ written: null }));
+  if (glossary.written) written.push(glossary.written);
+
   // Seeded, not rewritten (task 4.1). Once a project has a rules file it is the team's; overwriting
   // it here would revert a deliberate `enabled: false` on the next routine rescan.
   const seeded = await seedGovernance(projectPath);

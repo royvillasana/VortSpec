@@ -36,6 +36,7 @@ import { buildTwoTrackBuildPrompt } from "../../shared/two-track";
 import { readProjectConfig } from "../workspace/config-manager";
 import { LIGHT_PAGES_DIR, buildLightPagePrompt, buildGenerateCodePrompt } from "../../shared/light-page";
 import { readAllMetadata } from "../inspector/component-metadata";
+import { normComponentName } from "../inspector/figma-reconcile";
 import type { ComponentMetadata } from "@vortspec/core/inspector";
 import { detectedComponentsSchema } from "../../shared/flow";
 
@@ -284,13 +285,16 @@ export async function deriveProjectLiteManifest(projectPath: string): Promise<Li
   const coded = componentsResult.components.map((c) => ({
     ...c,
     readiness: "framework-ready" as Readiness,
-    ...(liteHintsFrom(metadata.get(c.name)) ? { hints: liteHintsFrom(metadata.get(c.name))! } : {}),
+    // NORMALISED key: `readMetadataFor` stores `normComponentName(name)`. Looking up the raw name
+    // silently found nothing for every component whose name is not already lowercase, which made the
+    // whole hints block inert from task 3.4 until this was caught by the glossary's fixture.
+    ...(liteHintsFrom(metadata.get(normComponentName(c.name))) ? { hints: liteHintsFrom(metadata.get(normComponentName(c.name)))! } : {}),
   }));
   const figmaOnly = componentsResult.figmaOnly.map((f) => ({
     name: f.name,
     props: [] as { key: string; kind: string; options: string[]; defaultValue?: string }[],
     readiness: "light-only" as Readiness,
-    ...(liteHintsFrom(metadata.get(f.name)) ? { hints: liteHintsFrom(metadata.get(f.name))! } : {}),
+    ...(liteHintsFrom(metadata.get(normComponentName(f.name))) ? { hints: liteHintsFrom(metadata.get(normComponentName(f.name)))! } : {}),
   }));
   const components = [...coded, ...figmaOnly];
   const input = buildDeriveInput(

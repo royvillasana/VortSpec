@@ -82,6 +82,7 @@ describe("building the index artifacts (task 2.6)", () => {
       INDEX_PATH,
       USAGE_PATH,
       TOKENS_PATH,
+      `${RULES_DIR}/arc-phases.md`,
       `${RULES_DIR}/atomic-hierarchy.md`,
       `${RULES_DIR}/deep-tracing.md`,
       `${RULES_DIR}/load-once.md`,
@@ -185,7 +186,7 @@ describe("building the index artifacts (task 2.6)", () => {
     try {
       const result = await buildRelationshipIndex(bare, { generatedAt: STAMP });
       expect(result.graph.components).toEqual([]);
-      expect(result.written).toHaveLength(8);
+      expect(result.written).toHaveLength(9);
       // The rules are still written, and the hierarchy document tells the truth about a roster with
       // no tiers instead of teaching an order that does not apply here.
       const hierarchy = await readFile(join(bare, RULES_DIR, "atomic-hierarchy.md"), "utf8");
@@ -599,10 +600,12 @@ describe("the query-protocol rules (task 3.1)", () => {
     // The reason the rules are written here rather than separately: an agent follows a path, and a
     // path that drifted from the writer is worse than no rule at all.
     const result = await buildRelationshipIndex(dir, { generatedAt: STAMP });
-    const tracing = await rule("deep-tracing.md");
+    // arc-phases owns the routing table since task 9b.2; deep-tracing points at it rather than
+    // repeating it.
+    const routing = await rule("arc-phases.md");
     for (const path of [INDEX_PATH, USAGE_PATH, TOKENS_PATH]) {
       expect(result.written).toContain(path);
-      expect(tracing).toContain(path);
+      expect(routing).toContain(path);
     }
   });
 

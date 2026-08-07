@@ -474,6 +474,7 @@ export const auditFindingSchema = z.object({
     "elevation-drift",
     "semantic-misuse",
     "typography-split",
+    "prop-type-conflict",
   ]),
   /** A human, one-line description with the fix. */
   message: z.string(),

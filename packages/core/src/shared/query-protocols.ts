@@ -40,11 +40,21 @@ export interface ProtocolContext {
 /**
  * Rough token ceiling for the whole bundle, asserted in tests.
  *
- * Set against what the bundle replaces: the group 2 measurement put the index digest at ~1,591
- * tokens and the exploration it displaces far above that. Rules costing more than a third of the
- * digest would be the tail wagging the dog.
+ * **Raised from 1,400 to 1,800 when `arc-phases.md` was added (task 9b.2), and the old number's
+ * stated reason was wrong.** It claimed to be "a third of the digest" against a ~1,591-token digest;
+ * 1,400 is 88% of that, so the constant never matched its own justification. Recording the error
+ * rather than quietly re-deriving a ratio that fits.
+ *
+ * What the ceiling actually guards is unchecked GROWTH — five documents that each grow a paragraph
+ * per change is how a rules bundle reaches 5,000 tokens without anyone deciding to spend them. The
+ * size is justified by measurement instead of by ratio: the 10-trial re-run put the grounded arm at
+ * 36.3k tokens against the control's 33.8k, with 3.0 tool calls versus 6.6 and 25.0s versus 52.6s,
+ * and 100% accuracy versus 75%. At this size the bundle is paying for itself.
+ *
+ * Adding a sixth document should mean deleting or merging something, not raising this again — the
+ * arc-phases addition removed deep-tracing's duplicate routing table for exactly that reason.
  */
-export const PROTOCOL_BUDGET = 1400;
+export const PROTOCOL_BUDGET = 1800;
 
 /** Cheap 4-chars-per-token estimate — the same one the benchmark uses, for comparable numbers. */
 export function approxProtocolTokens(documents: Record<string, string>): number {
@@ -136,20 +146,47 @@ in the caller.
 ${footer(context)}`;
 }
 
-/** `deep-tracing.md` — how to answer relationship questions from the index rather than by reading. */
+/**
+ * `arc-phases.md` — the vocabulary that decides WHICH layer answers a question (task 9b.2).
+ *
+ * Adopted from the reference board, and it is the frame the benchmark scores against: each of the
+ * four questions belongs to a phase. Naming the phase is what turns "should I read the index or
+ * explore the repository" from a judgement call into a lookup — a run that can classify its own
+ * question stops re-deriving what an artifact already states.
+ */
+export function arcPhaseRules(context: ProtocolContext): string {
+  return `# ARC phases
+
+Every question about the design system is one of three. Classify it FIRST — the phase decides which
+artifact answers it, and reaching for the filesystem is only correct in the last case.
+
+| Phase | The question | Answered by |
+|---|---|---|
+| **Audit** | What EXISTS? counts, inventory, coverage | \`${INDEX_PATH}\` |
+| **Report** | How does it RELATE? what uses what, what a page renders | \`${USAGE_PATH}\`, \`${TOKENS_PATH}\` |
+| **Compose** | What should I BUILD with? selection, variants, reuse | metadata records + the two above |
+
+## Why the phase matters
+
+- **Audit answers are already computed.** Counting components by listing files gives a different
+  number from the index, more slowly.
+- **Report answers are bidirectional**, so "what depends on this" needs no search. Grepping a name
+  finds mentions, not renders — which is where reuse gets undercounted.
+- **Compose is the only phase that reads a metadata record.** Load one for a candidate, never for
+  the roster.
+
+A question fitting no phase is about SOURCE CODE, not the design system — read the file. That is the
+one case where exploring is right.
+${footer(context)}`;
+}
+
+/** \`deep-tracing.md\` — how to answer relationship questions from the index rather than by reading. */
 export function deepTracingRules(context: ProtocolContext): string {
   return `# Deep tracing
 
 \`${USAGE_PATH}\` records, per component, \`uses\` (what it renders), \`usedBy\` (what renders it) and
-\`importedBy\`. Both directions are already computed. Trace them; do not grep.
-
-## Direct answers
-
-| Question | Where |
-|---|---|
-| What exists? | \`${INDEX_PATH}\` |
-| What does X render, and what renders X? | \`${USAGE_PATH}\` |
-| Who consumes token T? | \`${TOKENS_PATH}\` (\`usedBy\`) |
+\`importedBy\`. Both directions are already computed. Trace them; do not grep. (Which artifact answers
+which question is in \`arc-phases.md\`.)
 
 ## Recursive traversal
 
@@ -200,6 +237,7 @@ export function queryProtocolDocuments(context: ProtocolContext): Record<string,
   return {
     "metadata-schema.md": metadataSchemaRules(context),
     "atomic-hierarchy.md": atomicHierarchyRules(context),
+    "arc-phases.md": arcPhaseRules(context),
     "deep-tracing.md": deepTracingRules(context),
     "load-once.md": loadOnceRules(context),
   };

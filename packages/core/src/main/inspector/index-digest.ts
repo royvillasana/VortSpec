@@ -5,6 +5,9 @@ import { getInspectorTokens } from "./token-parser";
 import { readMetadataFor } from "./component-metadata";
 import { normComponentName } from "./figma-reconcile";
 import { safePromptField } from "./prompt-safe";
+import { glossaryDigestLines } from "@vortspec/core/props-glossary";
+import { buildPropsGlossary } from "@vortspec/core/props-glossary";
+import { collectGlossaryInput } from "./props-glossary";
 
 // Bounds (Plan B security/cost hardening): the digest is prepended to EVERY grounded
 // run's system prompt, so it must stay small regardless of design-system size, and every
@@ -228,6 +231,11 @@ export async function buildIndexDigest(
     }
     if (tokens.length > MAX_TOKENS) lines.push(`- (+${tokens.length - MAX_TOKENS} more — read the token file)`);
   }
+
+  // Prop CONFLICTS only (task 9b.1). The full table is on disk; disagreements are few and are what
+  // makes a generator invent a fourth spelling of an existing prop.
+  const glossary = buildPropsGlossary(await collectGlossaryInput(projectPath).catch(() => []));
+  lines.push(...glossaryDigestLines(glossary));
 
   lines.push("", "END DESIGN-SYSTEM INDEX");
   return lines.join("\n");

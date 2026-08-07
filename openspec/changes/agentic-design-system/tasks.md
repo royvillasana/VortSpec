@@ -91,8 +91,8 @@
 > Read off `figma.com/board/zilsOCRmQ0EBmqwIRXe3ET` in full. Everything else on the board maps to an
 > existing group; these two do not appear anywhere in the plan.
 
-- [ ] 9b.1 Add the **Props Glossary & Lookup Table** (board Frame 241). The board feeds it from the component set INTO the AI-ready metadata, i.e. it is a cross-component index of prop name → meaning, type and accepted values, so `variant`/`size`/`tone` mean the same thing everywhere and a generator stops inventing a fourth spelling of the same prop. VortSpec has the inputs already — `metadataPropSchema` per component plus the roster — so this is a derived artifact plus a governance rule ("a prop name that exists in the glossary must match its recorded type"), not new extraction
-- [ ] 9b.2 Adopt the board's **ARC vocabulary (Audit · Report · Compose)** in the query protocols of group 3, since it is the frame the benchmark scores against: each of the four questions is mapped to a phase, and the rule documents currently name none of them. Naming the phase a query belongs to is what lets a run choose "query the index" over "explore the filesystem"
+- [x] 9b.1 DONE — `shared/props-glossary.ts` derives the cross-component index from the roster's DETECTED prop controls (which know the values) merged with each metadata record's DECLARED props (which know the TS type); `normaliseType` is what stops two spellings of the same type reading as a conflict. Written as `.vortspec/ai/props-glossary.toon` by the index build; only the CONFLICTS reach the digest. Governance rule `props/prop-type-conflict` added to the defaults
+- [x] 9b.2 DONE — `arc-phases.md` is a fifth rule document mapping every question to Audit, Report or Compose and naming which artifact answers each. It TOOK OVER the routing table from `deep-tracing.md` rather than duplicating it, so the bundle grew by less than the document's size
 
 ## 2b. Generated validation page (audit does not wait for a user screen)
 

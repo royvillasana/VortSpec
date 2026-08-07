@@ -32,6 +32,8 @@ export const ruleFamilySchema = z.enum([
   "semantic-color",
   /** Family/size/weight/line-height applied as a unit rather than piecemeal. */
   "typography",
+  /** Prop names mean the same thing across the system (task 9b.1). */
+  "props",
 ]);
 export type RuleFamily = z.infer<typeof ruleFamilySchema>;
 
@@ -41,6 +43,7 @@ export const intentFindingKinds = [
   "elevation-drift",
   "semantic-misuse",
   "typography-split",
+  "prop-type-conflict",
 ] as const;
 export type IntentFindingKind = (typeof intentFindingKinds)[number];
 
@@ -109,9 +112,13 @@ export const TYPOGRAPHY_PROPERTIES = ["font-family", "font-size", "font-weight",
 /**
  * The seeded defaults.
  *
- * Deliberately few. A governance layer that ships forty rules is read once and disabled; these four
+ * Deliberately few. A governance layer that ships forty rules is read once and disabled; these
  * families are the ones the reference architecture names, and each earns its place by catching a
  * mistake that every existence check passes.
+ *
+ * ONE list, not a base list plus extras. Splitting them made `defaultGovernance()` return more rules
+ * than `DEFAULT_RULES` contained, which two tests caught immediately — and which a reader counting
+ * rules would have got wrong every time.
  */
 export const DEFAULT_RULES: GovernanceRule[] = [
   {
@@ -185,6 +192,18 @@ export const DEFAULT_RULES: GovernanceRule[] = [
     correction: "Apply the whole type style — family, size, weight and line-height — from its tokens.",
     rationale:
       "A tokenized size beside a literal line-height is the state that survives every existence check and breaks on the first scale change: the size moves, the leading does not, and the block reflows wrong.",
+    enabled: true,
+  },
+  {
+    id: "props/prop-type-conflict",
+    family: "props",
+    kind: "prop-type-conflict",
+    severity: "warning",
+    evaluation: "deterministic",
+    statement: "A prop name that exists in the glossary must be declared with the type the glossary records.",
+    correction: "Reuse the existing name and type, or rename this prop if it genuinely means something else.",
+    rationale:
+      "Once `size` is an enum on nine components and a number on one, a generator seeing the disagreement picks one or invents a fourth spelling to sidestep it. Warning rather than error because the fix is sometimes a rename, which is a judgement about meaning.",
     enabled: true,
   },
 ];

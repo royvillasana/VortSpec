@@ -4,6 +4,7 @@ import { INDEX_PATH, USAGE_PATH, TOKENS_PATH } from "./artifact-paths";
 import {
   approxProtocolTokens,
   atomicHierarchyRules,
+  arcPhaseRules,
   deepTracingRules,
   loadOnceRules,
   metadataSchemaRules,
@@ -69,12 +70,31 @@ describe("atomic-hierarchy.md", () => {
   });
 });
 
-describe("deep-tracing.md", () => {
+describe("arc-phases.md", () => {
   it("routes each question to the artifact that answers it", () => {
-    const document = deepTracingRules(context());
+    // Moved here from deep-tracing when arc-phases took ownership of the routing table. Keeping it
+    // in both was ~100 tokens of duplication on every grounded run.
+    const document = arcPhaseRules(context());
     expect(document).toContain(INDEX_PATH);
     expect(document).toContain(USAGE_PATH);
     expect(document).toContain(TOKENS_PATH);
+  });
+
+  it("names all three phases and what each answers", () => {
+    const document = arcPhaseRules(context());
+    for (const phase of ["Audit", "Report", "Compose"]) expect(document).toContain(phase);
+  });
+
+  it("says which case is NOT covered by the artifacts", () => {
+    // Without this the document reads as "never open a file", which is wrong and would make a run
+    // answer a source-code question from an index that does not contain the answer.
+    expect(arcPhaseRules(context())).toContain("about SOURCE CODE");
+  });
+});
+
+describe("deep-tracing.md", () => {
+  it("points at the routing table rather than repeating it", () => {
+    expect(deepTracingRules(context())).toContain("arc-phases.md");
   });
 
   it("requires a visited set, because the graph can cycle", () => {
@@ -103,8 +123,9 @@ describe("load-once.md", () => {
 });
 
 describe("the bundle", () => {
-  it("writes exactly the four documents the proposal names", () => {
+  it("writes exactly the documents the proposal names", () => {
     expect(Object.keys(queryProtocolDocuments(context())).sort()).toEqual([
+      "arc-phases.md",
       "atomic-hierarchy.md",
       "deep-tracing.md",
       "load-once.md",
