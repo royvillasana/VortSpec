@@ -275,6 +275,10 @@ const api: VortSpecApi = {
   ) => invoke("tokens:emit", { projectPath, ...options }),
   /** Read the project's own token file as the design source, then emit (tasks 7.10 + 7.14). */
   tokensIngest: (projectPath: string) => invoke("tokens:ingest", { projectPath }),
+  /** Build `.vortspec/ai/*.toon` — the relationship index (group 2). */
+  indexBuild: (projectPath: string) => invoke("index:build", { projectPath }),
+  /** Whether the index still describes the code, naming what changed (task 2.9). */
+  indexStaleness: (projectPath: string) => invoke("index:staleness", { projectPath }),
   figmaSyncComponents: (projectPath: string) => invoke("figma:syncComponents", { projectPath }),
   figmaSelection: () => invoke("figma:selection", undefined),
   checkFigmaHealth: (req) => invoke("figma:checkHealth", req),

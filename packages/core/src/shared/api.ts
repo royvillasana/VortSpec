@@ -396,6 +396,10 @@ export interface VortSpecApi {
   ): Promise<IpcResponse<"tokens:emit">>;
   /** Read the project's own token file as the design source, then emit (tasks 7.10 + 7.14). */
   tokensIngest(projectPath: string): Promise<IpcResponse<"tokens:ingest">>;
+  /** Build `.vortspec/ai/*.toon` — the relationship index (group 2). */
+  indexBuild(projectPath: string): Promise<IpcResponse<"index:build">>;
+  /** Whether the index still describes the code, naming what changed (task 2.9). */
+  indexStaleness(projectPath: string): Promise<IpcResponse<"index:staleness">>;
   /** Read design-system components from Figma into the reconcile cache (figma-cli primary). */
   figmaSyncComponents(projectPath: string): Promise<IpcResponse<"figma:syncComponents">>;
   /** Read the node(s) currently selected in Figma Desktop (figma-cli). */

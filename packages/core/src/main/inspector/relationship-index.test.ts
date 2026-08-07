@@ -8,7 +8,9 @@ import {
   TOKENS_PATH,
   USAGE_PATH,
   buildRelationshipIndex,
+  checkIndexFreshness,
   componentsUsingToken,
+  indexStaleness,
   readIndexStamp,
   readTokenIndex,
   tokensUsedByComponent,
@@ -328,5 +330,180 @@ describe("frameworks whose template tag is not the class name (Angular end to en
     } finally {
       await rm(ng, { recursive: true, force: true });
     }
+  });
+});
+
+describe("staleness (task 2.9)", () => {
+  it("reports a freshly built index as current, not as stale", async () => {
+    // The regression this guards: `generatedAt` is an ISO string with millisecond precision while
+    // an mtime has more, so a file written at …991.4ms looked NEWER than an index stamped …991 —
+    // a fresh index failing its own CI gate.
+    await buildRelationshipIndex(dir, { generatedAt: new Date().toISOString() });
+    const staleness = await indexStaleness(dir);
+    expect(staleness).toMatchObject({ stale: false, built: true });
+    expect(staleness.message).toContain("current");
+  });
+
+  it("NAMES the files that changed, because 'stale' alone is not actionable", async () => {
+    // A stale index is worse than no index: every reader treats it as authoritative, so a component
+    // added after the build reads as "does not exist" and an agent creates a duplicate — the
+    // benchmark's false negative arriving through the back door.
+    await buildRelationshipIndex(dir, { generatedAt: "2020-01-01T00:00:00.000Z" });
+
+    const staleness = await indexStaleness(dir);
+
+    expect(staleness.stale).toBe(true);
+    expect(staleness.changed).toContain("src/components/Button.tsx");
+    expect(staleness.message).toContain("src/components/Button.tsx");
+    expect(staleness.message).toContain("Rebuild it");
+  });
+
+  it("does not count a file twice when scan roots overlap", async () => {
+    // `src` contains `src/components`, and a framework's scanDirs contain both, so the roots
+    // overlap by design.
+    await buildRelationshipIndex(dir, { generatedAt: "2020-01-01T00:00:00.000Z" });
+    const staleness = await indexStaleness(dir);
+    expect(new Set(staleness.changed).size).toBe(staleness.changed.length);
+  });
+
+  it("caps the names but not the count", async () => {
+    for (let i = 0; i < 15; i++) await write(`src/components/Extra${i}.tsx`, `export const Extra${i} = () => <i/>;`);
+    await buildRelationshipIndex(dir, { generatedAt: "2020-01-01T00:00:00.000Z" });
+
+    const staleness = await indexStaleness(dir);
+
+    expect(staleness.changed.length).toBeLessThanOrEqual(10);
+    expect(staleness.changedCount).toBeGreaterThan(10);
+    expect(staleness.message).toMatch(/\+\d+ more/);
+  });
+
+  it("distinguishes ABSENT from stale", async () => {
+    // Conflating them would fail CI on every project that never opted into the index.
+    const bare = await mkdtemp(join(tmpdir(), "vortspec-stale-bare-"));
+    try {
+      const staleness = await indexStaleness(bare);
+      expect(staleness).toMatchObject({ stale: false, built: false, generatedAt: null });
+      expect(staleness.message).toContain("No design-system index has been built");
+    } finally {
+      await rm(bare, { recursive: true, force: true });
+    }
+  });
+
+  it("the CI gate fails on stale, passes on current, and passes on absent", async () => {
+    await buildRelationshipIndex(dir, { generatedAt: "2020-01-01T00:00:00.000Z" });
+    expect((await checkIndexFreshness(dir)).code).toBe(1);
+
+    await buildRelationshipIndex(dir, { generatedAt: new Date().toISOString() });
+    expect((await checkIndexFreshness(dir)).code).toBe(0);
+
+    const bare = await mkdtemp(join(tmpdir(), "vortspec-ci-bare-"));
+    try {
+      // Absent PASSES: a project that has not opted in has nothing to be out of date with, and
+      // failing there would make every repo without one red for a reason nobody chose.
+      expect((await checkIndexFreshness(bare)).code).toBe(0);
+    } finally {
+      await rm(bare, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("folded in from the reference script (task 2.9)", () => {
+  it("walks the framework's own directories, not just src and component_dir", async () => {
+    // An Astro project keeps layouts in `src/layouts`; walking only `component_dir` misses every
+    // instance they render, which silently understates adoption.
+    const astro = await mkdtemp(join(tmpdir(), "vortspec-astro-"));
+    const put = async (rel: string, body: string) => {
+      await mkdir(dirname(join(astro, rel)), { recursive: true });
+      await writeFile(join(astro, rel), body, "utf8");
+    };
+    try {
+      await put(".sdd-de/project.yaml", "framework: astro\ncomponent_dir: src/components\ntoken_file: src/t.css\n");
+      await put("src/t.css", ":root { --a: 1px; }");
+      await put(".sdd-de/components.json", JSON.stringify([{ name: "Button", level: "atom" }]));
+      await put("src/components/Button.astro", `<button/>`);
+      await put("src/layouts/Base.astro", `---\nimport Button from "../components/Button.astro";\n---\n<Button/><Button/>`);
+
+      const result = await buildRelationshipIndex(astro, { generatedAt: STAMP });
+      const button = result.graph.components.find((component) => component.name === "Button")!;
+
+      expect(button.instanceCount).toBe(2);
+      expect(button.usedBy).toEqual(["Base"]);
+    } finally {
+      await rm(astro, { recursive: true, force: true });
+    }
+  });
+
+  it("derives the atomic tier from the path when the roster records none", async () => {
+    // Benchmark Q3 is "list all atoms used on that page". Without this a project that never ran
+    // extraction cannot answer it, even though its own directories say `atoms/`.
+    await write("src/components/atoms/Chip.tsx", `export const Chip = () => <span/>;`);
+    await write("src/components/molecules/Field.tsx", `import { Chip } from "../atoms/Chip";\nexport const Field = () => <Chip/>;`);
+    await buildRelationshipIndex(dir, { generatedAt: STAMP });
+
+    const components = (await artifact(INDEX_PATH)).components as Record<string, ToonValue>[];
+    expect(components.find((c) => c.name === "Chip")?.tier).toBe("atom");
+    expect(components.find((c) => c.name === "Field")?.tier).toBe("molecule");
+  });
+
+  it("lets a RECORDED level win over the path — a decision beats a convention", async () => {
+    await write(".sdd-de/components.json", JSON.stringify([{ name: "Button", level: "organism" }, { name: "Card" }]));
+    await buildRelationshipIndex(dir, { generatedAt: STAMP });
+    const components = (await artifact(INDEX_PATH)).components as Record<string, ToonValue>[];
+    expect(components.find((c) => c.name === "Button")?.tier).toBe("organism");
+  });
+});
+
+describe("the CI script agrees with checkIndexFreshness (task 2.9)", () => {
+  /**
+   * `scripts/check-index-freshness.mjs` is self-contained plain JS — core exports TypeScript and the
+   * repo has no TS runner at its root, so importing the real function there would put a build step
+   * in front of a check whose value is being cheap enough to run on every push. This test is what
+   * stops the copy drifting: it SPAWNS the script and asserts the same verdict.
+   */
+  const SCRIPT = join(process.cwd(), "..", "..", "scripts", "check-index-freshness.mjs");
+
+  async function runScript(target: string): Promise<{ code: number; out: string }> {
+    const { execFile } = await import("node:child_process");
+    return new Promise((resolve) => {
+      execFile(process.execPath, [SCRIPT, target], (error, stdout) => {
+        resolve({ code: error ? ((error as { code?: number }).code ?? 1) : 0, out: stdout });
+      });
+    });
+  }
+
+  it("agrees on ABSENT (both pass)", async () => {
+    const bare = await mkdtemp(join(tmpdir(), "vortspec-agree-absent-"));
+    try {
+      const script = await runScript(bare);
+      const core = await checkIndexFreshness(bare);
+      expect(script.code).toBe(core.code);
+      expect(script.code).toBe(0);
+      expect(script.out).toContain("No design-system index has been built");
+    } finally {
+      await rm(bare, { recursive: true, force: true });
+    }
+  });
+
+  it("agrees on STALE (both fail) and both NAME the changed files", async () => {
+    await buildRelationshipIndex(dir, { generatedAt: "2020-01-01T00:00:00.000Z" });
+
+    const script = await runScript(dir);
+    const core = await checkIndexFreshness(dir);
+
+    expect(script.code).toBe(1);
+    expect(core.code).toBe(1);
+    expect(script.out).toContain("src/components/Button.tsx");
+    expect(core.message).toContain("src/components/Button.tsx");
+  });
+
+  it("agrees on CURRENT (both pass)", async () => {
+    await buildRelationshipIndex(dir, { generatedAt: new Date().toISOString() });
+
+    const script = await runScript(dir);
+    const core = await checkIndexFreshness(dir);
+
+    expect(script.code).toBe(0);
+    expect(core.code).toBe(0);
+    expect(script.out).toContain("current");
   });
 });

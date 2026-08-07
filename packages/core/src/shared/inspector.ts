@@ -645,6 +645,21 @@ export type MetadataStatus = z.infer<typeof metadataStatusSchema>;
 export const metadataPlanSchema = metadataStatusSchema.extend({ prompt: z.string() });
 export type MetadataPlan = z.infer<typeof metadataPlanSchema>;
 
+/**
+ * Whether the design-system index still describes the code (OpenSpec change:
+ * agentic-design-system, task 2.9). `built: false` means absent, which is NOT stale.
+ */
+export const indexStalenessSchema = z.object({
+  stale: z.boolean(),
+  built: z.boolean(),
+  generatedAt: z.string().nullable(),
+  /** Changed files, capped and newest first. */
+  changed: z.array(z.string()).default([]),
+  changedCount: z.number(),
+  message: z.string(),
+});
+export type IndexStalenessResult = z.infer<typeof indexStalenessSchema>;
+
 /** A captured file (project-relative path + content), for gated revert of a modify run. */
 export const fileSnapshotSchema = z.object({ path: z.string(), content: z.string() });
 export type FileSnapshot = z.infer<typeof fileSnapshotSchema>;

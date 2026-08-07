@@ -324,6 +324,8 @@ export interface GraphFile {
   source: string;
   /** The component this file defines, when it defines one. */
   component?: string;
+  /** The atomic tier, when the roster records one. Falls back to `tierFromPath`. */
+  tier?: ComponentTier;
   /**
    * Whether this file is part of the DESIGN SYSTEM (under `component_dir`) rather than a consumer
    * of it — a page, a screen, a feature.
@@ -368,6 +370,8 @@ export interface ComponentUsage {
   instanceCount: number;
   /** The state to branch on. `efficiency` is a detail of it, not a substitute for it. */
   adoption: AdoptionState;
+  /** Atomic tier — from the roster when recorded, else inferred from the path. */
+  tier?: ComponentTier;
   /**
    * Whether this node is a DESIGN-SYSTEM component rather than a consumer of one.
    *
@@ -428,6 +432,8 @@ export function buildRelationshipGraph(
       instanceCount: 0,
       adoption: "unimported",
       designSystem: byPath.get(path)?.designSystem === true,
+      // A recorded level is a decision; a directory name is a convention. Decision wins.
+      ...((byPath.get(path)?.tier ?? tierFromPath(path)) ? { tier: byPath.get(path)?.tier ?? tierFromPath(path) } : {}),
     });
 
   const neverRendered = new Map<string, string[]>();
@@ -548,6 +554,29 @@ export function resolveChain(graph: RelationshipGraph, name: string): string[] {
   seen.delete(name);
   return [...seen].sort();
 }
+
+/**
+ * The atomic tier a file's PATH implies, or undefined.
+ *
+ * Adopted from the reference `codebase-index` script. Benchmark Q3 is "list all atoms used on that
+ * page", and VortSpec otherwise takes the tier only from `.sdd-de/components.json` — so a project
+ * that has never run extraction cannot answer Q3 at all, even though its own directory names say
+ * `atoms/` and `molecules/`. This is the fallback, never an override: a recorded level is a decision
+ * someone made, and a directory name is a convention.
+ *
+ * `ui/` maps to atom and `layouts/` to template because that is what those conventions MEAN in the
+ * projects that use them — the same mapping VortSpec's own category table already uses.
+ */
+export function tierFromPath(path: string): ComponentTier | undefined {
+  const lower = `/${path.toLowerCase()}`;
+  if (/\/(atoms?|ui)\//.test(lower)) return "atom";
+  if (/\/(molecules?|modules?)\//.test(lower)) return "molecule";
+  if (/\/(organisms?|sections?)\//.test(lower)) return "organism";
+  if (/\/(templates?|layouts?)\//.test(lower)) return "template";
+  return undefined;
+}
+
+export type ComponentTier = "atom" | "molecule" | "organism" | "template";
 
 /** Whether a file is a component source rather than a test/story/config sibling. */
 export function isComponentFile(path: string): boolean {

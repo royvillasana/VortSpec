@@ -79,8 +79,10 @@ import {
 // The canonical token pipeline's on-demand routes (task 7.14).
 import { tokenEmitResultSchema } from "./token-emit-ledger";
 import { tokenIngestResultSchema } from "./canonical-ingest";
+import { indexStalenessSchema } from "./inspector";
 export { tokenEmitResultSchema } from "./token-emit-ledger";
 export { tokenIngestResultSchema } from "./canonical-ingest";
+export { indexStalenessSchema } from "./inspector";
 export {
   figmaConnectionSchema,
   figmaCliModeSchema,
@@ -482,6 +484,12 @@ export const ipcContract = {
   },
   // Read the project's own token file as the design source, then emit (tasks 7.10 + 7.14).
   "tokens:ingest": { request: z.object({ projectPath: z.string() }), response: tokenIngestResultSchema },
+  // The relationship index (group 2): build it, and ask whether it still describes the code.
+  "index:build": {
+    request: z.object({ projectPath: z.string() }),
+    response: z.object({ written: z.array(z.string()).default([]), generatedAt: z.string() }),
+  },
+  "index:staleness": { request: z.object({ projectPath: z.string() }), response: indexStalenessSchema },
   "figma:selection": { request: z.void(), response: figmaSelectionSchema },
   "figma:checkHealth": { request: figmaHealthRequestSchema, response: figmaHealthSchema },
   "figma:tokenStatus": { request: z.void(), response: figmaTokenStatusSchema },

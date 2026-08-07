@@ -663,6 +663,15 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
       diverged: [],
       kept: [],
     }),
+    indexBuild: async () => ({ written: [], generatedAt: "2026-08-07T12:00:00.000Z" }),
+    indexStaleness: async () => ({
+      stale: false,
+      built: false,
+      generatedAt: null,
+      changed: [],
+      changedCount: 0,
+      message: "No design-system index has been built yet (.vortspec/ai/index.toon is absent).",
+    }),
     tokensIngest: async () => ({
       ok: true,
       tokenFile: "src/styles/tokens.css",

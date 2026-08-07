@@ -66,6 +66,7 @@ import { applyCanvasEdit } from "./canvas/write";
 import { getTokenSanitation } from "./inspector/token-sanitation";
 import { emitTokenFiles } from "./inspector/token-emit";
 import { ingestTokensFromProject } from "./inspector/token-ingest";
+import { buildRelationshipIndex, indexStaleness } from "./inspector/relationship-index";
 import { writeTokenLink } from "./inspector/token-resolver";
 import { discoverRoutes } from "./routes/route-discovery";
 import { computePushPlan, computeOrphanPushPlan, VORTSPEC_COLLECTION } from "./inspector/figma-push";
@@ -332,6 +333,11 @@ const handlers: Record<IpcChannel, Handler> = {
   // `tokens:ingest` reads the project's OWN token file as the design source (task 7.10) — the path
   // for a project with no design tool attached, and the one that keeps a consumed library's
   // artifact current.
+  "index:build": (async (r: { projectPath: string }) => {
+    const result = await buildRelationshipIndex(r.projectPath);
+    return { written: result.written, generatedAt: result.generatedAt };
+  }) as Handler,
+  "index:staleness": ((r: { projectPath: string }) => indexStaleness(r.projectPath)) as Handler,
   "tokens:ingest": ((r: { projectPath: string }) =>
     ingestTokensFromProject(r.projectPath, { generatedAt: new Date().toISOString() })) as Handler,
   "figma:syncComponents": ((r: { projectPath: string }) =>

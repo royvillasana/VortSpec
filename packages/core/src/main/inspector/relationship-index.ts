@@ -57,8 +57,12 @@ async function collectGraphFiles(projectPath: string): Promise<GraphFile[]> {
   ]);
   const componentDir = config?.componentDir ? normalize(config.componentDir) : null;
   const byPath = new Map<string, string>();
+  const tierByPath = new Map<string, string>();
   for (const component of components?.components ?? [])
-    if (component.file) byPath.set(normalize(component.file), component.name);
+    if (component.file) {
+      byPath.set(normalize(component.file), component.name);
+      if (component.level) tierByPath.set(normalize(component.file), component.level);
+    }
 
   const files: GraphFile[] = [];
   const seen = new Set<string>();
@@ -87,6 +91,9 @@ async function collectGraphFiles(projectPath: string): Promise<GraphFile[]> {
       // the same failure the tag aliases fixed on the other side.
       source: `${source}\n${await readSiblingTemplate(projectPath, relative, source)}`,
       component,
+      ...(ATOMIC_TIERS.has(tierByPath.get(relative) ?? "")
+        ? { tier: tierByPath.get(relative) as "atom" | "molecule" | "organism" | "template" }
+        : {}),
       ...(componentDir && relative.startsWith(`${componentDir}/`) ? { designSystem: true } : {}),
     });
   }
@@ -114,7 +121,10 @@ async function listSourceFiles(
   const extensions = profileFor(framework)?.sourceExts ?? ALL_SOURCE_EXTS;
   const { readdir } = await import("node:fs/promises");
   const skip = new Set(["node_modules", ".git", "dist", "build", "out", ".next", ".turbo", "coverage", ".vortspec", ".sdd-de"]);
-  const roots = ["src", componentDir ?? ""].filter(Boolean);
+  // The framework's own directories as well as `src` and `component_dir`. An Astro project keeps
+  // layouts in `src/layouts` and a SvelteKit project keeps routes in `src/routes`; walking only
+  // `src` finds them by luck, and walking only `component_dir` misses every instance they render.
+  const roots = ["src", componentDir ?? "", ...(profileFor(framework)?.scanDirs ?? [])].filter(Boolean);
   const out: string[] = [];
   const walk = async (relative: string, depth: number): Promise<void> => {
     if (depth > 12 || out.length > MAX_FILES) return;
@@ -132,7 +142,10 @@ async function listSourceFiles(
     }
   };
   for (const root of [...new Set(roots.map(normalize))]) await walk(root, 0);
-  return out;
+  // Deduped: the roots OVERLAP by design — `src` contains `src/components`, and a framework's
+  // scanDirs contain both. Without this a file inside two roots is scanned twice, which
+  // double-counts it in the staleness report and inflates the "files scanned" stat.
+  return [...new Set(out)].sort();
 }
 
 /**
@@ -175,6 +188,9 @@ function nodeNameFor(relative: string): string {
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join("");
 }
+
+/** The recorded levels that are real atomic tiers; anything else falls back to the path. */
+const ATOMIC_TIERS = new Set(["atom", "molecule", "organism", "template"]);
 
 /** A backstop so a pathological repo cannot stall an index build. Reported, never silent. */
 const MAX_FILES = 4000;
@@ -258,6 +274,8 @@ export function indexArtifact(
       name: component.name,
       path: component.path,
       kind: component.designSystem ? "component" : "page",
+      // Benchmark Q3 is "list all atoms used on that page" — unanswerable without this column.
+      tier: component.tier ?? "",
       adoption: component.adoption,
       imports: component.importCount,
       instances: component.instanceCount,
@@ -407,4 +425,93 @@ export async function tokensUsedByComponent(
 function splitList(value: ToonValue): string[] {
   const text = typeof value === "string" ? value : "";
   return text ? text.split("|") : [];
+}
+
+// ── Staleness (task 2.9) ─────────────────────────────────────────────
+
+export interface IndexStaleness {
+  /** False when the index is current, or when it has never been built (see `built`). */
+  stale: boolean;
+  /** Whether an index exists at all. */
+  built: boolean;
+  generatedAt: string | null;
+  /** Project-relative files changed since the index was generated, newest first. Capped. */
+  changed: string[];
+  /** How many changed in total — `changed` is capped, this is not. */
+  changedCount: number;
+  /** Ready to show a person, or to fail a CI job with. */
+  message: string;
+}
+
+/** How many changed files are NAMED before the rest are counted. */
+const STALE_NAMES_SHOWN = 10;
+
+/**
+ * Whether the index still describes the code — OpenSpec change: agentic-design-system, task 2.9.
+ *
+ * Compares each source file's mtime against the artifact's `generatedAt`. A stale index is worse
+ * than no index: every reader treats it as authoritative, so a component added after the last build
+ * reads as "does not exist" and an agent will happily create a duplicate. That is the false negative
+ * the benchmark measures, arriving through the back door.
+ *
+ * NAMES the changed files rather than reporting a bare boolean, because "the index is stale" is not
+ * actionable and "these four components changed" is.
+ */
+export async function indexStaleness(projectPath: string): Promise<IndexStaleness> {
+  const generatedAt = await readIndexStamp(projectPath);
+  if (!generatedAt)
+    return {
+      stale: false,
+      built: false,
+      generatedAt: null,
+      changed: [],
+      changedCount: 0,
+      // Not stale — ABSENT. A caller that conflates the two would fail CI on every project that has
+      // never opted into the index.
+      message: "No design-system index has been built yet (.vortspec/ai/index.toon is absent).",
+    };
+
+  const stamp = Date.parse(generatedAt);
+  const config = await readProjectConfig(projectPath);
+  const files = await listSourceFiles(projectPath, config?.componentDir, config?.framework);
+  const { stat } = await import("node:fs/promises");
+
+  const changed: { path: string; mtime: number }[] = [];
+  for (const relative of files) {
+    const info = await stat(join(projectPath, relative)).catch(() => null);
+    // FLOORED to the millisecond, because `generatedAt` is an ISO string and ISO has no
+    // sub-millisecond precision. A file written at …991.4ms against a stamp of …991 would otherwise
+    // read as newer than an index built after it — a freshly built index failing its own CI gate,
+    // which is the worst kind of false positive: it teaches people to ignore the gate.
+    if (info && Math.floor(info.mtimeMs) > stamp) changed.push({ path: relative, mtime: info.mtimeMs });
+  }
+  changed.sort((a, b) => b.mtime - a.mtime);
+  const names = changed.slice(0, STALE_NAMES_SHOWN).map((entry) => entry.path);
+
+  return {
+    stale: changed.length > 0,
+    built: true,
+    generatedAt,
+    changed: names,
+    changedCount: changed.length,
+    message: changed.length
+      ? `The design-system index is stale: ${changed.length} file${changed.length === 1 ? "" : "s"} changed since ${generatedAt}` +
+        ` (${names.join(", ")}${changed.length > names.length ? `, +${changed.length - names.length} more` : ""}).` +
+        " Rebuild it so a run does not read a component that no longer matches its source."
+      : `The design-system index is current (generated ${generatedAt}).`,
+  };
+}
+
+/**
+ * The CI gate. Exit-code semantics rather than a throw, so a workflow can call it directly.
+ *
+ * Returns 0 when the index is current OR absent, and 1 when it is stale. ABSENT PASSES on purpose:
+ * a project that has not opted into the index has nothing to be out of date with, and failing there
+ * would make every repo without one red for a reason its authors never chose.
+ */
+export async function checkIndexFreshness(
+  projectPath: string,
+): Promise<{ code: 0 | 1; message: string }> {
+  const staleness = await indexStaleness(projectPath);
+  return { code: staleness.stale ? 1 : 0, message: staleness.message };
 }
