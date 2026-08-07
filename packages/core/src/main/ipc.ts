@@ -64,6 +64,8 @@ import {
 } from "./inspector/token-parser";
 import { applyCanvasEdit } from "./canvas/write";
 import { getTokenSanitation } from "./inspector/token-sanitation";
+import { emitTokenFiles } from "./inspector/token-emit";
+import { ingestTokensFromProject } from "./inspector/token-ingest";
 import { writeTokenLink } from "./inspector/token-resolver";
 import { discoverRoutes } from "./routes/route-discovery";
 import { computePushPlan, computeOrphanPushPlan, VORTSPEC_COLLECTION } from "./inspector/figma-push";
@@ -310,6 +312,28 @@ const handlers: Record<IpcChannel, Handler> = {
   "figma:connect": ((r: { mode: FigmaCliMode }) => figmaCli.connect(r.mode)) as Handler,
   "figma:syncVariables": ((r: { projectPath: string }) =>
     figmaCli.syncVariablesToCache(r.projectPath)) as Handler,
+
+  // ── The canonical token pipeline (OpenSpec change: agentic-design-system, group 7) ──
+  //
+  // Ingest emits on its own tail, so these two exist for the cases an ingest does not cover:
+  // `tokens:emit` is the ON-DEMAND route — a styling switch, which changes what the token file
+  // should contain without changing the artifact, and therefore must not touch the design source
+  // (asserted in `one-scan-many-emits.test.ts`). It also carries `onDivergence`, which is how a
+  // reported divergence is finally resolved: the user's answer, never a default.
+  "tokens:emit": ((r: {
+    projectPath: string;
+    onDivergence?: "overwrite" | "keep";
+    tailwindVersion?: 3 | 4;
+  }) =>
+    emitTokenFiles(r.projectPath, {
+      onDivergence: r.onDivergence,
+      tailwindVersion: r.tailwindVersion,
+    })) as Handler,
+  // `tokens:ingest` reads the project's OWN token file as the design source (task 7.10) — the path
+  // for a project with no design tool attached, and the one that keeps a consumed library's
+  // artifact current.
+  "tokens:ingest": ((r: { projectPath: string }) =>
+    ingestTokensFromProject(r.projectPath, { generatedAt: new Date().toISOString() })) as Handler,
   "figma:syncComponents": ((r: { projectPath: string }) =>
     figmaCli.syncComponentsToCache(r.projectPath)) as Handler,
   "figma:selection": (() => figmaCli.getSelection()) as Handler,

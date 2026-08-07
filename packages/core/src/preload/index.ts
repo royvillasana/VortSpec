@@ -268,6 +268,13 @@ const api: VortSpecApi = {
   screenMapUpsert: (projectPath: string, screenKey: string, entry: ScreenEntry, fileKey?: string) =>
     invoke("screenMap:upsert", { projectPath, screenKey, entry, fileKey }),
   figmaSyncVariables: (projectPath: string) => invoke("figma:syncVariables", { projectPath }),
+  /** Re-emit `token_file` from the canonical artifact — the styling-switch route (task 7.14). */
+  tokensEmit: (
+    projectPath: string,
+    options?: { onDivergence?: "overwrite" | "keep"; tailwindVersion?: 3 | 4 },
+  ) => invoke("tokens:emit", { projectPath, ...options }),
+  /** Read the project's own token file as the design source, then emit (tasks 7.10 + 7.14). */
+  tokensIngest: (projectPath: string) => invoke("tokens:ingest", { projectPath }),
   figmaSyncComponents: (projectPath: string) => invoke("figma:syncComponents", { projectPath }),
   figmaSelection: () => invoke("figma:selection", undefined),
   checkFigmaHealth: (req) => invoke("figma:checkHealth", req),

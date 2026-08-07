@@ -651,6 +651,28 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
         mode: "yolo",
         message: "Read 12 Figma variables via figma-cli (yolo mode).",
       },
+    // The canonical token pipeline's on-demand routes (task 7.14). Stubbed as a no-op success: no
+    // component test drives them yet, and a mock that reported a divergence would put every
+    // consumer of this harness into an error path it never asked for.
+    tokensEmit: async () => ({
+      status: "up-to-date" as const,
+      styling: "css",
+      format: "css" as const,
+      files: [],
+      written: [],
+      diverged: [],
+      kept: [],
+    }),
+    tokensIngest: async () => ({
+      ok: true,
+      tokenFile: "src/styles/tokens.css",
+      format: "css" as const,
+      count: 12,
+      dropped: [],
+      files: ["src/styles/tokens.css"],
+      readOnly: false,
+      message: "Read 12 design tokens from src/styles/tokens.css (css).",
+    }),
     figmaSyncComponents: async () =>
       cfg.figmaSyncComponents ?? {
         ok: true,

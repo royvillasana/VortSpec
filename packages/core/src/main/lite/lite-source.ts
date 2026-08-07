@@ -22,9 +22,13 @@ import {
   type LiteManifest,
   type StandIn,
   type TokenGroup,
+  mapCanonicalTokenGroup,
   type ComponentTier,
   type Readiness,
 } from "../../shared/lite-manifest";
+import { flattenCanonicalTokens, formatTokenLiteral } from "../../shared/token-emitters";
+import type { DesignTokenDocument } from "../../shared/design-tokens";
+import { readCanonicalTokens } from "../inspector/canonical-tokens";
 import { buildPalette, renderPaletteHtml } from "../../shared/palette";
 import { LIGHT_HTML_DIR, normSegment, buildLightStandInPrompt, type StandInTarget } from "../../shared/light-standin";
 import { buildTwoTrackBuildPrompt } from "../../shared/two-track";
@@ -32,8 +36,17 @@ import { readProjectConfig } from "../workspace/config-manager";
 import { LIGHT_PAGES_DIR, buildLightPagePrompt, buildGenerateCodePrompt } from "../../shared/light-page";
 import { detectedComponentsSchema } from "../../shared/flow";
 
-/** Map an inspector token `type` (singular) to a manifest token group (plural); null ⇒ skip. */
-export function mapTokenGroup(type: string): TokenGroup | null {
+/**
+ * Map an inspector token `type` (singular) to a manifest token group (plural).
+ *
+ * The LEGACY path, kept for a project with no canonical artifact yet. It reads VortSpec's coarse
+ * five-value `TokenType`, which has already lost the distinctions `mapCanonicalTokenGroup` relies on
+ * — a duration arrives here having been folded into `spacing` upstream — so the best it can do is
+ * route what it recognises and send the rest to `other`. It no longer returns null: dropping the
+ * token was the bug (task 7.11), and "I could not classify this" is not a reason to make it
+ * unreferenceable.
+ */
+export function mapTokenGroup(type: string): TokenGroup {
   switch (type) {
     case "color":
       return "colors";
@@ -46,8 +59,30 @@ export function mapTokenGroup(type: string): TokenGroup | null {
     case "radius":
       return "radius";
     default:
-      return null; // e.g. "other" — not a visual group the palette renders
+      return "other";
   }
+}
+
+/**
+ * The canonical artifact → the manifest's token list — the READ this task exists to add (7.11).
+ *
+ * `flattenCanonicalTokens` is the same read-time projection the emitters use, so the manifest and the
+ * emitted token file describe the same tokens under the same names; `formatTokenLiteral` renders the
+ * value with the units the `$type` implies, which is exactly the information the old path had thrown
+ * away (a duration reached `designer.md` as a bare `150`, if it reached it at all).
+ *
+ * Aliases are resolved: a light page is framework-free HTML with no cascade to resolve `{color.blue}`
+ * against, so the manifest carries the value the stand-in can actually render — the same dual-key
+ * rule the manifest already follows, where the NAME preserves discipline and the VALUE renders.
+ */
+export function canonicalDeriveTokens(doc: DesignTokenDocument): DeriveInput["tokens"] {
+  const out: DeriveInput["tokens"] = [];
+  for (const token of flattenCanonicalTokens(doc)) {
+    const value = formatTokenLiteral(token.resolved, token.type);
+    if (!value) continue; // a valueless token has nothing a light page could render
+    out.push({ name: token.name, value, group: mapCanonicalTokenGroup(token.type, token.name) });
+  }
+  return out;
 }
 
 /** Normalize a detected `level` to a contract tier; unknown ⇒ atom (safe default). */
@@ -79,20 +114,28 @@ function variantsOf(props: PropLike[]): string[] {
 }
 
 /**
- * Pure mapping: inspector tokens + components → the `deriveLiteManifest` input. Tokens become
- * dual-key entries (name + resolvedValue) grouped by kind; components carry tier, variants, and props.
- * Stand-ins are left to harvest/placeholder (not set here).
+ * Pure mapping: tokens + components → the `deriveLiteManifest` input. Tokens become dual-key entries
+ * (name + resolved value) grouped by kind; components carry tier, variants, and props. Stand-ins are
+ * left to harvest/placeholder (not set here).
+ *
+ * `canonical` is the PREFERRED token source (task 7.11): the canonical artifact still carries the
+ * `$type` a design source declared, so a duration reaches `designer.md` as motion with its `ms`
+ * intact instead of arriving pre-flattened into "spacing" — or being dropped outright. The inspector
+ * tokens remain the fallback for a project that has not been scanned into an artifact yet, so this
+ * never regresses a working project to an empty manifest.
  */
 export function buildDeriveInput(
   projectName: string,
   tokens: { name: string; type: string; resolvedValue: string }[],
   components: { name: string; level?: string; props: PropLike[]; readiness?: Readiness }[],
+  canonical?: DesignTokenDocument | null,
 ): DeriveInput {
-  const mapped: DeriveInput["tokens"] = [];
-  for (const t of tokens) {
-    const group = mapTokenGroup(t.type);
-    if (group && t.resolvedValue) mapped.push({ name: t.name, value: t.resolvedValue, group });
-  }
+  const fromCanonical = canonical ? canonicalDeriveTokens(canonical) : [];
+  const mapped: DeriveInput["tokens"] = fromCanonical.length
+    ? fromCanonical
+    : tokens
+        .filter((t) => t.resolvedValue)
+        .map((t) => ({ name: t.name, value: t.resolvedValue, group: mapTokenGroup(t.type) }));
   return {
     projectName,
     tokens: mapped,
@@ -191,10 +234,12 @@ export async function listComponentReadiness(projectPath: string): Promise<Array
 
 /** Read the real project sources and derive the in-memory lite manifest (with Figma stand-ins if present). */
 export async function deriveProjectLiteManifest(projectPath: string): Promise<LiteManifest> {
-  const [tokensResult, componentsResult, figmaStandIns] = await Promise.all([
+  const [tokensResult, componentsResult, figmaStandIns, canonical] = await Promise.all([
     getInspectorTokens(projectPath),
     getInspectorComponents(projectPath),
     readFigmaStandIns(projectPath),
+    // The canonical artifact when the project has one — null degrades to the inspector tokens.
+    readCanonicalTokens(projectPath),
   ]);
   // A light-first design system shows ALL designed components — include Figma components that aren't
   // coded yet (`figmaOnly`) alongside the code roster, so the palette reflects the whole design system.
@@ -203,7 +248,12 @@ export async function deriveProjectLiteManifest(projectPath: string): Promise<Li
   const coded = componentsResult.components.map((c) => ({ ...c, readiness: "framework-ready" as Readiness }));
   const figmaOnly = componentsResult.figmaOnly.map((f) => ({ name: f.name, props: [] as { key: string; kind: string; options: string[]; defaultValue?: string }[], readiness: "light-only" as Readiness }));
   const components = [...coded, ...figmaOnly];
-  const input = buildDeriveInput(basename(projectPath) || "Project", tokensResult.tokens, components);
+  const input = buildDeriveInput(
+    basename(projectPath) || "Project",
+    tokensResult.tokens,
+    components,
+    canonical,
+  );
   // Join stand-ins to components by the normalized segment (matches how light-standin wrote them).
   const standIns: Record<string, StandIn[]> = {};
   for (const c of input.components) {

@@ -389,6 +389,13 @@ export interface VortSpecApi {
   ): Promise<IpcResponse<"screenMap:upsert">>;
   /** Read design variables from Figma into the reconcile cache (figma-cli primary). */
   figmaSyncVariables(projectPath: string): Promise<IpcResponse<"figma:syncVariables">>;
+  /** Re-emit `token_file` from the canonical artifact — the styling-switch route (task 7.14). */
+  tokensEmit(
+    projectPath: string,
+    options?: { onDivergence?: "overwrite" | "keep"; tailwindVersion?: 3 | 4 },
+  ): Promise<IpcResponse<"tokens:emit">>;
+  /** Read the project's own token file as the design source, then emit (tasks 7.10 + 7.14). */
+  tokensIngest(projectPath: string): Promise<IpcResponse<"tokens:ingest">>;
   /** Read design-system components from Figma into the reconcile cache (figma-cli primary). */
   figmaSyncComponents(projectPath: string): Promise<IpcResponse<"figma:syncComponents">>;
   /** Read the node(s) currently selected in Figma Desktop (figma-cli). */

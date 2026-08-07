@@ -130,6 +130,37 @@ durable variable keys go in `$extensions`, which keeps the artifact valid DTCG a
 rejected because it forfeits every existing DTCG tool and re-litigates a format that already
 solved 90% of the problem.
 
+**Emission runs at the end of every ingest, plus an explicit on-demand route.**
+Making `token_file` a derived artifact is only true if something actually derives it. If emission is
+a step a person or an agent has to remember, the file drifts from the artifact and the ledger's
+divergence report starts firing for changes nobody made by hand — at which point the guard is noise
+and gets clicked through, which is strictly worse than not having it. So the ingest paths emit:
+`syncVariablesToCache` and `ingestTokensFromProject` write the artifact and then emit from it, in one
+call path. A separate on-demand route covers the case with no artifact change — a styling switch,
+which task 7.9 asserts costs no design-source read.
+
+"Automatic" deliberately means *at the end of ingest*, NOT a filesystem watcher on
+`.vortspec/tokens.json`. A watcher would also fire on a person editing the artifact directly, and
+re-emitting mid-edit would fight them. The artifact has exactly two writers, both of them ingest
+paths, so hooking the emit to those two is complete without being ambient.
+
+**An ingest never emits back over the file it just read.** The two ingest paths are not symmetric,
+and implementing the above surfaced why. A design-tool ingest has an EXTERNAL source, so `token_file`
+is genuinely downstream of it and emitting is the point. The non-design-tool ingest reads
+`token_file` ITSELF — that file is the design source, and `.vortspec/tokens.json` is what is derived
+from it. Emitting there would replace the user's authored stylesheet with a projection of itself,
+losing its comments, its ordering, and anything the emitter does not model. So `emitAfterIngest`
+takes the path that was read and refuses when the emit would write it, reporting `skipped` with the
+reason. A consumed source falls through to the existing `read-only` answer, which says the same
+thing more precisely. The direction of derivation is a property of the SOURCE, not a global rule.
+
+What survives is the case the ledger was actually built for: a HUMAN hand-edited the token file.
+Once VortSpec stops being the second writer that is the only way a divergence can arise, so
+reporting it becomes unambiguous rather than an artifact of our own workflow.
+*Alternative considered:* emit only on demand — rejected because it makes "derived" aspirational;
+the token file would be correct only after someone remembered a step, which is the state this change
+exists to remove.
+
 **Resolving the overlap with `figma-native-token-model`.**
 That change (unarchived) argues the same core point — the current model is "flat and mode-blind"
 and flattening produces false drift — but answers it by enriching `.vortspec/figma-variables.json`

@@ -70,19 +70,21 @@
 
 ## 7. Canonical token pipeline
 
-- [ ] 7.1 Agree the `$extensions` payload shape with `figma-native-token-model` (collections, modes, per-mode values, alias refs, durable variable keys) before writing either side — this is the merge point named in `design.md`
-- [ ] 7.2 Stop flattening on ingest: persist the `figma-cli export dtcg` tree to `.vortspec/tokens.json` unmodified, with group nesting and DTCG aliases intact
-- [ ] 7.3 Move `dtcgToVariables` (`figma-cli.ts:355`) to a read-time projection over the canonical artifact; keep its output shape so existing consumers don't change yet
-- [ ] 7.4 Assert the artifact validates as DTCG and that no design-source-specific field appears outside `$extensions`
-- [ ] 7.5 Add whole-file emitters from canonical for each supported styling: css-vars, scss, tailwind v3 config, tailwind v4 `@theme`, ts theme — modelled on the existing per-format writers in `token-writers.ts`
-- [ ] 7.6 Make the Tailwind emitter produce the curated semantic mapping the `extract-design-system` skill prescribes (scale names → tokens), never a raw arbitrary-value dump; assert standard utilities resolve to project tokens
-- [ ] 7.7 Fail loudly on a styling approach with no emitter — never fall back to a format the project cannot consume
-- [ ] 7.8 Make `token_file` a derived artifact: emission is idempotent (byte-identical on re-run), and a token file that diverged from its last emission is reported rather than overwritten
-- [ ] 7.9 Assert one-scan-many-emits: read the design source once, emit every supported format, and verify the source was read exactly once; verify a styling switch makes no design-source request
-- [ ] 7.10 Add the non-design-tool ingest path (CSS custom properties / theme object / consumed library token file) producing the same canonical artifact; for consume sources assert it is a read-only projection
-- [ ] 7.11 Feed `buildDeriveInput` (`lite-source.ts:86`) from the canonical artifact so `$type` values outside the five visual groups (duration, dimension) reach `designer.md` instead of being dropped by `mapTokenGroup`
-- [ ] 7.12 Update `extract-design-system` Step 2A: write the canonical artifact, then emit — no styling-format call to the design source
+- [x] 7.1 Agree the `$extensions` payload shape with `figma-native-token-model` (collections, modes, per-mode values, alias refs, durable variable keys) before writing either side — this is the merge point named in `design.md`
+- [x] 7.2 Stop flattening on ingest: persist the `figma-cli export dtcg` tree to `.vortspec/tokens.json` unmodified, with group nesting and DTCG aliases intact
+- [x] 7.3 Move `dtcgToVariables` (`figma-cli.ts:355`) to a read-time projection over the canonical artifact; keep its output shape so existing consumers don't change yet
+- [x] 7.4 Assert the artifact validates as DTCG and that no design-source-specific field appears outside `$extensions`
+- [x] 7.5 Add whole-file emitters from canonical for each supported styling: css-vars, scss, tailwind v3 config, tailwind v4 `@theme`, ts theme — modelled on the existing per-format writers in `token-writers.ts`
+- [x] 7.6 Make the Tailwind emitter produce the curated semantic mapping the `extract-design-system` skill prescribes (scale names → tokens), never a raw arbitrary-value dump; assert standard utilities resolve to project tokens
+- [x] 7.7 Fail loudly on a styling approach with no emitter — never fall back to a format the project cannot consume
+- [x] 7.8 Make `token_file` a derived artifact: emission is idempotent (byte-identical on re-run), and a token file that diverged from its last emission is reported rather than overwritten
+- [x] 7.9 Assert one-scan-many-emits: read the design source once, emit every supported format, and verify the source was read exactly once; verify a styling switch makes no design-source request
+- [x] 7.10 Add the non-design-tool ingest path (CSS custom properties / theme object / consumed library token file) producing the same canonical artifact; for consume sources assert it is a read-only projection
+- [x] 7.11 Feed `buildDeriveInput` (`lite-source.ts:86`) from the canonical artifact so `$type` values outside the five visual groups (duration, dimension) reach `designer.md` instead of being dropped by `mapTokenGroup`
+- [x] 7.12 Update `extract-design-system` Step 2A: write the canonical artifact, then emit — no styling-format call to the design source
 - [ ] 7.13 Retire or derive `.vortspec/figma-variables.json` per the merge rule, so exactly one canonical shape remains
+- [x] 7.14 Wire the pipeline to its callers — `ingestTokensFromProject` and `emitTokenFiles` have NO callers today, so nothing actually produces `token_file` and "derived artifact" is aspirational: emit at the end of both ingest paths (`syncVariablesToCache`, `ingestTokensFromProject`) per the emission-timing decision in `design.md`, add an on-demand route for a styling switch (asserting it makes no design-source read, per 7.9), surface the `diverged` and `read-only` outcomes as a user-facing choice rather than a silent no-op, and assert a Figma sync leaves `token_file` matching its ledger (i.e. a second emit reports `up-to-date`, never `diverged`)
+- [ ] 7.15 Stop `sync-tokens` writing `token_file` directly — it contradicts "the styling token file is a derived artifact" now that `extract-design-system` (7.12) emits it: depends on 7.14 for the machinery. Branch A step 5 collapses — a Figma variable with no code counterpart just means the artifact is stale, so re-ingest and the token appears — and Branch C/D/E step 3 ("create a token variable in the project token file") authors into `.vortspec/tokens.json` instead, since those sources have no live design tool to create it in and the artifact IS their source of truth; for Branch B (`library`, and `enterprise`) route the write to the durable overlay instead, since `token_file` there is the consumed source (7.10); update the skill's Tailwind note, which tells the agent the bridge reads a hand-maintained `tokens.css`
 
 ## 8. Close out
 

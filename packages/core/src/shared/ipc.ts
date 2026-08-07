@@ -76,6 +76,11 @@ import {
   figmaTokenStatusSchema,
   figmaSetTokenRequestSchema,
 } from "./figma";
+// The canonical token pipeline's on-demand routes (task 7.14).
+import { tokenEmitResultSchema } from "./token-emit-ledger";
+import { tokenIngestResultSchema } from "./canonical-ingest";
+export { tokenEmitResultSchema } from "./token-emit-ledger";
+export { tokenIngestResultSchema } from "./canonical-ingest";
 export {
   figmaConnectionSchema,
   figmaCliModeSchema,
@@ -465,6 +470,18 @@ export const ipcContract = {
   "figma:connect": { request: figmaConnectRequestSchema, response: figmaConnectionSchema },
   "figma:syncVariables": { request: figmaSyncRequestSchema, response: figmaSyncResultSchema },
   "figma:syncComponents": { request: figmaSyncRequestSchema, response: figmaSyncResultSchema },
+  // Re-emit `token_file` from `.vortspec/tokens.json` — the styling-switch route, which reads the
+  // artifact and never the design source. `onDivergence` is how a reported divergence is resolved.
+  "tokens:emit": {
+    request: z.object({
+      projectPath: z.string(),
+      onDivergence: z.enum(["overwrite", "keep"]).optional(),
+      tailwindVersion: z.union([z.literal(3), z.literal(4)]).optional(),
+    }),
+    response: tokenEmitResultSchema,
+  },
+  // Read the project's own token file as the design source, then emit (tasks 7.10 + 7.14).
+  "tokens:ingest": { request: z.object({ projectPath: z.string() }), response: tokenIngestResultSchema },
   "figma:selection": { request: z.void(), response: figmaSelectionSchema },
   "figma:checkHealth": { request: figmaHealthRequestSchema, response: figmaHealthSchema },
   "figma:tokenStatus": { request: z.void(), response: figmaTokenStatusSchema },

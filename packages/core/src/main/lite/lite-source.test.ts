@@ -13,8 +13,10 @@ describe("mapTokenGroup", () => {
     expect(mapTokenGroup("typography")).toBe("typography");
     expect(mapTokenGroup("radius")).toBe("radius");
   });
-  it("skips a non-visual type", () => {
-    expect(mapTokenGroup("other")).toBeNull();
+  it("files an unclassifiable type under `other` rather than dropping it (task 7.11)", () => {
+    // It used to return null and the token vanished from designer.md entirely. "I could not
+    // classify this" is not a reason to make a token the design system defines unreferenceable.
+    expect(mapTokenGroup("other")).toBe("other");
   });
 });
 
@@ -32,8 +34,8 @@ describe("buildDeriveInput — inspector shapes → derive input", () => {
   const tokens = [
     { name: "color-primary", type: "color", resolvedValue: "#c53434" },
     { name: "space-2", type: "spacing", resolvedValue: "0.5rem" },
-    { name: "misc-thing", type: "other", resolvedValue: "whatever" }, // dropped
-    { name: "empty", type: "color", resolvedValue: "" }, // dropped (no value)
+    { name: "misc-thing", type: "other", resolvedValue: "whatever" }, // kept, under `other`
+    { name: "empty", type: "color", resolvedValue: "" }, // dropped (no value to render)
   ];
   const components = [
     {
@@ -47,11 +49,13 @@ describe("buildDeriveInput — inspector shapes → derive input", () => {
     { name: "Header", level: "organism", props: [] },
   ];
 
-  it("keeps only visual tokens with a value, dual-keyed by name + resolved value", () => {
+  it("keeps every token with a value, dual-keyed by name + resolved value", () => {
     const input = buildDeriveInput("Acme", tokens, components);
     expect(input.tokens).toEqual([
       { name: "color-primary", value: "#c53434", group: "colors" },
       { name: "space-2", value: "0.5rem", group: "spacing" },
+      // Listed, not dropped — a light page can reference it even with no swatch to draw.
+      { name: "misc-thing", value: "whatever", group: "other" },
     ]);
   });
 
