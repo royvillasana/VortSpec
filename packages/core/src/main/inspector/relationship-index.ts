@@ -15,6 +15,7 @@ import { getInspectorComponents } from "./component-reader";
 import { getInspectorTokens } from "./token-parser";
 import { readProjectConfig } from "../workspace/config-manager";
 import { tiersPresent, writeQueryProtocols } from "./query-protocols";
+import { seedGovernance } from "./governance-store";
 
 /**
  * The fs half of the relationship index — OpenSpec change: agentic-design-system, task 2.6.
@@ -244,6 +245,11 @@ export async function buildRelationshipIndex(
       generatedAt,
     })),
   );
+  // Seeded, not rewritten (task 4.1). Once a project has a rules file it is the team's; overwriting
+  // it here would revert a deliberate `enabled: false` on the next routine rescan.
+  const seeded = await seedGovernance(projectPath);
+  if (seeded) written.push(seeded);
+
   return { graph, shadows, written, generatedAt };
 }
 

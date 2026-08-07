@@ -468,9 +468,26 @@ export const auditFindingSchema = z.object({
     "shadow-implementation",
     "styling-lost-token",
     "wrong-variant-for-context",
+    // Governance v2's intent kinds (task 4.2). These are ADDITIVE: every existence finding still
+    // exists and still means what it did, so an intent audit's output is a strict superset.
+    "hierarchy-inversion",
+    "elevation-drift",
+    "semantic-misuse",
+    "typography-split",
   ]),
   /** A human, one-line description with the fix. */
   message: z.string(),
+  /**
+   * The governance rule that produced this, e.g. `hierarchy/background-token-on-text` (task 4.2).
+   * Absent on an existence finding, which is not rule-driven — and on a legacy finding.
+   */
+  rule: z.string().optional(),
+  /**
+   * One line saying what to do INSTEAD. Separate from `message` because a message describes the
+   * problem and a correction is actionable; a finding carrying only the former leaves the fix to be
+   * invented, which is how "use a token" becomes a different wrong token.
+   */
+  correction: z.string().optional(),
 });
 export type AuditFinding = z.infer<typeof auditFindingSchema>;
 

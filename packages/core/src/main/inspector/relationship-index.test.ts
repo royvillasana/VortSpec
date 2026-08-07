@@ -16,6 +16,7 @@ import {
   readTokenIndex,
   tokensUsedByComponent,
 } from "./relationship-index";
+import { GOVERNANCE_PATH } from "./governance-store";
 
 /**
  * The three `.vortspec/ai/` artifacts — OpenSpec change: agentic-design-system, task 2.6.
@@ -85,6 +86,8 @@ describe("building the index artifacts (task 2.6)", () => {
       `${RULES_DIR}/deep-tracing.md`,
       `${RULES_DIR}/load-once.md`,
       `${RULES_DIR}/metadata-schema.md`,
+      // Seeded once, never rewritten — see governance-store (task 4.1).
+      GOVERNANCE_PATH,
     ]);
   });
 
@@ -182,7 +185,7 @@ describe("building the index artifacts (task 2.6)", () => {
     try {
       const result = await buildRelationshipIndex(bare, { generatedAt: STAMP });
       expect(result.graph.components).toEqual([]);
-      expect(result.written).toHaveLength(7);
+      expect(result.written).toHaveLength(8);
       // The rules are still written, and the hierarchy document tells the truth about a roster with
       // no tiers instead of teaching an order that does not apply here.
       const hierarchy = await readFile(join(bare, RULES_DIR, "atomic-hierarchy.md"), "utf8");

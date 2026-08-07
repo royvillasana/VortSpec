@@ -37,10 +37,10 @@
 
 ## 4. Governance v2 and reports
 
-- [ ] 4.1 Define the governance rule format and seed `.vortspec/ai/governance/` with defaults for hierarchy, elevation, semantic color and typography composites
-- [ ] 4.2 Extend `AuditFinding.kind` beyond `hardcoded-color | token-drift` with the intent kinds, keeping the existing severity model and adding the violated rule plus a one-line correction to each finding
-- [ ] 4.3 Implement deterministic evaluation of each rule against the token graph and resolved values; route only genuinely judgment-bound cases to a model
-- [ ] 4.4 Build the fixture with a syntactically valid but hierarchy-violating token reference and assert existence-only checks pass while intent checking flags it; assert intent findings are a strict superset of the existing findings
+- [x] 4.1 Define the governance rule format and seed `.vortspec/ai/governance/` with defaults for hierarchy, elevation, semantic color and typography composites
+- [x] 4.2 Extend `AuditFinding.kind` beyond `hardcoded-color | token-drift` with the intent kinds, keeping the existing severity model and adding the violated rule plus a one-line correction to each finding
+- [x] 4.3 Implement deterministic evaluation of each rule against the token graph and resolved values; route only genuinely judgment-bound cases to a model
+- [x] 4.4 Build the fixture with a syntactically valid but hierarchy-violating token reference and assert existence-only checks pass while intent checking flags it; assert intent findings are a strict superset of the existing findings
 - [ ] 4.5 Generate `.vortspec/ai/reports/adoption.md` from the group 2 index — utilization, unused components, efficiency, shadow implementations — with a `generatedAt` stamp
 - [ ] 4.6 Generate `.vortspec/ai/reports/token-violations.md` grouped by component
 - [ ] 4.7 Run report generation in the background on the cheapest capable model (Haiku), non-blocking, surfacing on completion

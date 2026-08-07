@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { RULE_SCOPES, enforceScope, ruleAppliesIn, rulesForScope, type ScopedRuleKind } from "./audit-scope";
+import { intentFindingKinds } from "./governance";
 
 /**
  * Audit scoping — OpenSpec change: agentic-design-system, task 2c.1.
@@ -100,5 +101,25 @@ describe("enforceScope is the runtime backstop (task 2c.1 VALIDATE)", () => {
   it("passes everything through in screen generation", () => {
     const findings = (rulesForScope("screen-generation") as string[]).map((kind) => ({ kind }));
     expect(enforceScope(findings, "screen-generation").dropped).toEqual([]);
+  });
+});
+
+describe("governance v2's intent kinds (task 4.2)", () => {
+  it("run in BOTH audits", () => {
+    // A token applied to the wrong property is wrong on a validation page and wrong on a screen —
+    // unlike `unused` or `shadow-implementation`, which need a screen to be meaningful. They are
+    // therefore absent from RULE_SCOPES by design, and this asserts that absence is deliberate
+    // rather than an omission someone should "fix" by adding a narrow scope.
+    for (const kind of intentFindingKinds) {
+      for (const scope of ["component-creation", "screen-generation"] as const) {
+        const { kept, dropped } = enforceScope([{ kind }], scope);
+        expect(kept, `${kind} was dropped from ${scope}`).toHaveLength(1);
+        expect(dropped).toHaveLength(0);
+      }
+    }
+  });
+
+  it("is not in the scope table at all", () => {
+    for (const kind of intentFindingKinds) expect(Object.keys(RULE_SCOPES)).not.toContain(kind);
   });
 });
