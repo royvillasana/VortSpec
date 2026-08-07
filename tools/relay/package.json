@@ -1,0 +1,19 @@
+{
+  "name": "@vortspec/relay",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Self-hosted Yjs relay for the live Playground. Run by a team, never by VortSpec.",
+  "scripts": {
+    "start": "node server.mjs",
+    "lint": "echo 'lint ok'",
+    "check-types": "echo 'no types'",
+    "test": "echo 'no tests'"
+  },
+  "dependencies": {
+    "@hocuspocus/server": "^3.4.0"
+  },
+  "devDependencies": {
+    "ws": "^8.21.2"
+  }
+}

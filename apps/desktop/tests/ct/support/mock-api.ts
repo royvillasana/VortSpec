@@ -842,7 +842,14 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
     liteReadiness: async () => [],
     litepagePrompt: async () => "",
     liteReadPage: async () => "",
-    litePages: async () => [],
+    // Live-session config (live-playground): no relay in a component test, which is the
+  // not-configured path the Playground must keep working on.
+  collabConfig: async () => ({ relayUrl: "" }),
+  collabSetConfig: async () => ({ relayUrl: "" }),
+  collabHasCredential: async () => false,
+  collabCredential: async () => "",
+  collabSetCredential: async () => undefined,
+  litePages: async () => [],
     liteWritePage: async () => undefined,
     canvasLoadGraph: async () => ({ schemaVersion: 1 as const, nodes: [], edges: [] }),
     canvasSaveGraph: async () => undefined,

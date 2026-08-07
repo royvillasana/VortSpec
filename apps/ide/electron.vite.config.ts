@@ -13,10 +13,15 @@ export default defineConfig({
     plugins: [externalizeDepsPlugin({ exclude: INTERNAL })],
   },
   preload: {
-    // Bundle `zod` (not just the internal packages) so the guest <webview>
+    // Bundle `zod` and `yjs` (not just the internal packages) so the guest <webview>
     // preload is self-contained — a file:// ESM preload can't reliably resolve
     // bare deps from node_modules (esp. packaged/asar). `electron` stays external.
-    plugins: [externalizeDepsPlugin({ exclude: [...INTERNAL, "zod"] })],
+    //
+    // `yjs` arrived with the live document (live-playground) and MUST be on this list: left
+    // external it builds cleanly and works in dev, then fails to resolve inside the packaged
+    // app — and because the guest preload is what instruments the canvas, that failure takes
+    // the whole inspector down with it, not just live editing.
+    plugins: [externalizeDepsPlugin({ exclude: [...INTERNAL, "zod", "yjs"] })],
     build: {
       rollupOptions: {
         input: {

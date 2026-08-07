@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { readoutForFocus } from "./focus-readout";
+import * as Y from "yjs";
+import { canAdoptLightHtml, loadLightHtml, PAGE_FRAGMENT } from "@vortspec/core/light-doc";
+import type { CursorAnchor } from "./live-presence";
 import {
   INSPECTOR_BRIDGE_CHANNEL,
   bridgeEventSchema,
@@ -157,6 +160,23 @@ export interface InspectorBridge {
   watchAnchors: (fingerprints: string[]) => void;
   /** Scroll the element for a comment anchor into view (jump-to-pin). */
   scrollToAnchor: (fingerprint: string) => void;
+  /**
+   * Live document (change: live-playground). `startLive` seeds a page's CRDT from the file's exact
+   * bytes and hands it to the guest; it returns false when the page cannot be modelled exactly, in
+   * which case nothing changes and the page keeps working as it does today.
+   */
+  startLive: (html: string, page: string) => boolean;
+  /** Seed the document if nobody else has, then hand it to the guest. See the implementation. */
+  settleLive: () => void;
+  stopLive: () => void;
+  /** Whether this page joined a live document, and why not when it did not. */
+  live: LiveState;
+  /** The host's replica of the page. Persistence writes from this rather than from a DOM snapshot. */
+  liveDoc: { current: Y.Doc | null };
+  /** This user's pointer in document terms (element + fraction), or null when off the page. */
+  localCursor: CursorAnchor | null;
+  /** Turn guest pointer reporting on or off; off unless a session is live. */
+  setCursorReporting: (on: boolean) => void;
   /** Capture a ~160px thumbnail of a guest rect (webview capturePage crop); "" if unavailable. */
   captureThumbnail: (rect: Rect) => Promise<string>;
   applyOverride: (id: string, css: Record<string, string>) => void;
@@ -182,6 +202,36 @@ export interface InspectorBridge {
   setLightMode: (on: boolean) => void;
 }
 
+/** Whether this page joined a live document, and why not when it did not. */
+export type LiveState = {
+  adopted: boolean;
+  reason: string | null;
+  /**
+   * A document exists and is waiting to be settled. This is a SIGNAL, not bookkeeping: settling is
+   * driven by session status, and the document becomes ready asynchronously afterwards. Without
+   * something to re-trigger on, the two wait for each other forever — the document never reaches the
+   * guest, so no session ever starts, so the status never changes, so nothing settles.
+   */
+  prepared: boolean;
+};
+
+/** Marks an update as having come from the guest, so it is not echoed back to it. */
+const GUEST_ORIGIN = "vs-guest";
+
+/** The bridge is a JSON channel, so Yjs's binary updates travel as base64. */
+const toBase64 = (bytes: Uint8Array): string => {
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary);
+};
+
+const fromBase64 = (text: string): Uint8Array => {
+  const binary = atob(text);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+};
+
 /**
  * Renderer side of the Run-Canvas inspector bridge (change: run-canvas-visual-editor).
  *
@@ -192,6 +242,26 @@ export interface InspectorBridge {
  */
 export function useInspectorBridge(): InspectorBridge {
   const webviewRef = useRef<WebviewEl | null>(null);
+  // ── Live document (change: live-playground, task 1.2b) ───────────────────────
+  // The host's replica of the page. It exists so persistence can write from converged state rather
+  // than from one snapshot of the DOM, and so a relay has something to attach to later. Kept in a
+  // ref, not state: it changes on every keystroke and nothing renders from its contents.
+  const liveDocRef = useRef<Y.Doc | null>(null);
+  const [live, setLive] = useState<LiveState>({ adopted: false, reason: null, prepared: false });
+  /** This user's pointer, as reported by the guest in document terms. Null when off the page. */
+  const [localCursor, setLocalCursor] = useState<CursorAnchor | null>(null);
+  /** The page's bytes, held until `settleLive` decides whether this client is the one that seeds. */
+  const pendingHtmlRef = useRef<string | null>(null);
+  const settledRef = useRef(false);
+  /**
+   * Which page the current document belongs to. `startLive` is called more than once per page open —
+   * the effect re-runs as the bridge becomes ready and the page name resolves — and building a fresh
+   * document each time is catastrophic rather than wasteful: every one gets seeded from the file and
+   * pushed into the same room, where documents with no shared history CONCATENATE. The room ends up
+   * holding two, then four copies of the page, each window editing a different one, and it looks
+   * exactly like sync being broken.
+   */
+  const liveDocPageRef = useRef<string | null>(null);
   // The element we've wired listeners onto. The <webview> REMOUNTS when its `src`/key changes
   // (e.g. opening a light page), so we must re-attach to each NEW element — a once-only boolean
   // guard would leave the remounted webview with no listeners (no "ready", no tree → uneditable
@@ -250,6 +320,21 @@ export function useInspectorBridge(): InspectorBridge {
         return;
       case "tree":
         setTree(event.tree);
+        return;
+      case "liveAdopted":
+        // `ok: false` is a normal outcome, not a failure to report as an error: the page keeps
+        // working exactly as it does today, it just cannot join a session.
+        setLive((prev) => ({ ...prev, adopted: event.ok, reason: event.reason ?? null }));
+        return;
+      case "cursor":
+        // Empty fingerprint = the pointer left the page. Cleared rather than frozen, so a cursor
+        // never lingers somewhere its owner is not.
+        setLocalCursor(event.fp ? { fp: event.fp, fx: event.fx, fy: event.fy } : null);
+        return;
+      case "liveUpdate":
+        if (liveDocRef.current) {
+          Y.applyUpdate(liveDocRef.current, fromBase64(event.update), GUEST_ORIGIN);
+        }
         return;
       case "readout": {
         const id = event.readout.nodeId;
@@ -612,6 +697,78 @@ export function useInspectorBridge(): InspectorBridge {
       /* webview not ready — the caller can retry */
     }
   }, []);
+  /**
+   * Seed a live session for a light page from the file's exact bytes and hand it to the guest.
+   * Returns false when the page cannot be modelled exactly, in which case nothing changes and the
+   * page stays on today's write path.
+   */
+  const startLive = useCallback(
+    (html: string, page: string): boolean => {
+      // Already have a document for this page: keep it. Re-seeding is what duplicates the room.
+      if (liveDocRef.current && liveDocPageRef.current === page) return true;
+      stopLive();
+      // NOT seeded here. Whoever opens the page first loads the file; everyone after that receives
+      // the document from the relay. Two peers seeding independently from identical bytes do not
+      // produce one page — they produce two, merged, because the documents share no history. So the
+      // document starts empty and `settleLive` decides, once the transport has had its say.
+      if (!canAdoptLightHtml(html)) {
+        setLive({ adopted: false, reason: "this page's markup cannot be modelled exactly", prepared: false });
+        return false;
+      }
+      const doc = new Y.Doc();
+      pendingHtmlRef.current = html;
+      settledRef.current = false;
+      // Forward the host's own changes to the guest, but never the ones that came from it.
+      doc.on("update", (update: Uint8Array, origin: unknown) => {
+        if (origin === GUEST_ORIGIN) return;
+        send({ t: "liveUpdate", update: toBase64(update) });
+      });
+      liveDocRef.current = doc;
+      liveDocPageRef.current = page;
+      setLive({ adopted: false, reason: null, prepared: true });
+      return true;
+    },
+    [send],
+  );
+
+  /**
+   * Settle the document and hand it to the guest. Called once the transport has had its chance:
+   * immediately when no relay is configured, or after the provider reports it is synced.
+   *
+   * Seeding only when the document is still empty is what makes "first one in loads the file, the
+   * rest receive it" true, and it is the same mechanism a late joiner needs — they arrive to a
+   * non-empty document and take it as it stands rather than overwriting it with the file on disk.
+   */
+  const settleLive = useCallback((): void => {
+    const doc = liveDocRef.current;
+    const html = pendingHtmlRef.current;
+    if (!doc || settledRef.current || html === null) return;
+    settledRef.current = true;
+    if (doc.getXmlFragment(PAGE_FRAGMENT).length === 0) loadLightHtml(doc, html);
+    send({ t: "liveInit", state: toBase64(Y.encodeStateAsUpdate(doc)) });
+  }, [send]);
+
+  const stopLive = useCallback((): void => {
+    pendingHtmlRef.current = null;
+    settledRef.current = false;
+    liveDocPageRef.current = null;
+    if (liveDocRef.current) {
+      liveDocRef.current.destroy();
+      liveDocRef.current = null;
+      send({ t: "liveStop" });
+    }
+    setLive({ adopted: false, reason: null, prepared: false });
+  }, [send]);
+
+  /** Ask the guest to report the pointer. Off by default — see the guest for why. */
+  const setCursorReporting = useCallback(
+    (on: boolean) => {
+      send({ t: "setCursorReporting", on });
+      if (!on) setLocalCursor(null);
+    },
+    [send],
+  );
+
   const serializeDom = useCallback(async (): Promise<string | null> => {
     const wv = webviewRef.current;
     if (!wv) return null;
@@ -707,5 +864,12 @@ export function useInspectorBridge(): InspectorBridge {
     loadUrl,
     serializeDom,
     setLightMode,
+    startLive,
+    settleLive,
+    stopLive,
+    live,
+    liveDoc: liveDocRef,
+    localCursor,
+    setCursorReporting,
   };
 }

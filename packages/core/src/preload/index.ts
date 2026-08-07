@@ -175,6 +175,11 @@ const api: VortSpecApi = {
     invoke("lite:pagePrompt", { projectPath, name, description }),
   liteReadPage: (projectPath: string, name: string) => invoke("lite:page", { projectPath, name }),
   litePages: (projectPath: string) => invoke("lite:pages", projectPath),
+  collabConfig: (projectPath: string) => invoke("collab:config", projectPath),
+  collabSetConfig: (projectPath: string, relayUrl: string) => invoke("collab:setConfig", { projectPath, relayUrl }),
+  collabHasCredential: (relayUrl: string) => invoke("collab:hasCredential", relayUrl),
+  collabCredential: (relayUrl: string) => invoke("collab:credential", relayUrl),
+  collabSetCredential: (relayUrl: string, secret: string) => invoke("collab:setCredential", { relayUrl, secret }),
   liteWritePage: (projectPath: string, name: string, html: string) =>
     invoke("lite:writePage", { projectPath, name, html }),
   canvasLoadGraph: (projectPath: string) => invoke("canvas:loadGraph", projectPath),

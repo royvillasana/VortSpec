@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { collabConfigSchema } from "./collab-config";
 import type { DrawGraph } from "./draw-graph";
 import { agentRunOptionsSchema, lastRunSchema } from "./run-events";
 import { usageResultSchema } from "./usage";
@@ -687,6 +688,14 @@ export const ipcContract = {
   // light page authoring (task 5.1): compose a page from the light design system, then read/list them.
   "lite:pagePrompt": { request: z.object({ projectPath: z.string(), name: z.string(), description: z.string() }), response: z.string() },
   "lite:page": { request: z.object({ projectPath: z.string(), name: z.string() }), response: z.string() },
+  // Live-session configuration (change: live-playground). The relay ADDRESS is per-project and
+  // committed; the CREDENTIAL is per-machine and never enters the repository. The renderer does
+  // receive it — it opens the socket — so the boundary here is git, not the process.
+  "collab:config": { request: z.string(), response: collabConfigSchema },
+  "collab:setConfig": { request: z.object({ projectPath: z.string(), relayUrl: z.string() }), response: collabConfigSchema },
+  "collab:hasCredential": { request: z.string(), response: z.boolean() },
+  "collab:credential": { request: z.string(), response: z.string() },
+  "collab:setCredential": { request: z.object({ relayUrl: z.string(), secret: z.string() }), response: z.void() },
   "lite:pages": { request: z.string(), response: z.array(z.string()) },
   "lite:writePage": { request: z.object({ projectPath: z.string(), name: z.string(), html: z.string() }), response: z.void() },
   // Draw tool (docs/draw-to-component-graph.md): persist the project's drawing graph + Excalidraw scene

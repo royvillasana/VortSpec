@@ -7,6 +7,9 @@ import { SpacingOverlay } from "./SpacingOverlay";
 import { CommentsLayer, type CommentsLayerProps } from "./CommentsLayer";
 import { AiSkeletonBlock, AiSkeletonPage, AiWorkingPill } from "./AiSkeleton";
 import { CanvasToolbar } from "./CanvasToolbar";
+import { RemoteCursors, type RemoteCursorsProps } from "./RemoteCursors";
+import { LiveParticipants } from "./LiveParticipants";
+import type { LiveSessionState } from "../../lib/useLiveSession";
 import { bridgeStatusMessage } from "./bridge-status";
 import { frameApplies, type Viewport, type ViewportId, type DeviceFrameKind } from "./viewports";
 
@@ -39,6 +42,9 @@ export function RunCanvas({
   figmaConnected,
   figmaMapped,
   comments,
+  liveCursors,
+  liveSession,
+  liveUnpersisted,
   skeleton,
   viewport,
   frame,
@@ -77,6 +83,15 @@ export function RunCanvas({
   figmaMapped?: boolean;
   /** Comment threads + handlers; the pins/composer render in comment mode. */
   comments?: Omit<CommentsLayerProps, "zoom">;
+  /**
+   * Other people's cursors (live-playground). Rendered inside the transformed box, where guest
+   * coordinates map 1:1 — the same reason the selection overlay needs no conversion.
+   */
+  liveCursors?: RemoteCursorsProps;
+  /** Session state for the toolbar's participant count. Absent when no session is configured. */
+  liveSession?: LiveSessionState;
+  /** The session holds edits not yet written to the project file. */
+  liveUnpersisted?: boolean;
   /** An "AI is working" placeholder over the preview: a shimmer block where a
    *  component is being built, or a full-page animated gradient for page work. */
   skeleton?: { mode: "page"; label?: string } | { mode: "block"; rect: Rect; label?: string } | null;
@@ -272,6 +287,10 @@ export function RunCanvas({
         </div>
       </Stage>
 
+      {/* Other people's cursors — in every mode, because someone else pointing at a thing is not
+          an editing affordance and disappearing on a mode switch would read as them leaving. */}
+      {liveCursors && liveCursors.peers.length > 0 && <RemoteCursors {...liveCursors} />}
+
       {/* Comment pins + composer/threads — screen-space so they stay a constant size. */}
       {mode === "comment" && comments && (
         <CommentsLayer {...comments} zoom={zoom} />
@@ -295,6 +314,17 @@ export function RunCanvas({
             >
               💬 Send to chat
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Who else is on this page. Sits above the toolbar rather than inside it: the toolbar is
+          about what YOU are doing, and this is about who else is here. Renders nothing at all when
+          no session is configured, which is almost every project. */}
+      {liveSession && (
+        <div className="pointer-events-none absolute right-3 top-3 z-40">
+          <div className="pointer-events-auto rounded-md bg-vs-bg-elevated/90 shadow-sm backdrop-blur">
+            <LiveParticipants session={liveSession} unpersisted={liveUnpersisted} />
           </div>
         </div>
       )}
