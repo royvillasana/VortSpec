@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import { RotateCw, RefreshCw } from "lucide-react";
-import type { Project } from "@vortspec/core/ipc";
+import type { Project, ReadinessAssessmentPayload } from "@vortspec/core/ipc";
 import { ViewHeader } from "@vortspec/ui/ViewHeader";
 import { api } from "../lib/api";
 import { Button, Spinner } from "@vortspec/ui/ui";
 import { useAgentRun } from "../lib/useAgentRun";
+import { ReadinessLadder } from "@vortspec/ui/ReadinessLadder";
 
 /**
  * The lightweight "design system" view (OpenSpec change: light-design-system, task 2.4). Renders the
@@ -44,6 +45,9 @@ export function DesignSystem({
   // Enterprise (Connect Enterprise Design System): re-reading the client's Storybook to refresh the
   // tokens + stand-ins ("Update snapshot") belongs HERE, on the design system, not in the Storybook view.
   const [isEnterprise, setIsEnterprise] = useState(false);
+  // The AI-readiness ladder (agentic-design-system, task 5.3). Recomputed on every load rather than
+  // cached, so it can never be the one thing on this screen disagreeing with everything beside it.
+  const [readiness, setReadiness] = useState<ReadinessAssessmentPayload | null>(null);
   // Theme-object personalization ("Customize theme") lives in the design-system editor in the Variables
   // sidebar now (change: design-system-token-editor) — beside the levers whose edits it applies. This view
   // is the palette; it only owns the enterprise Storybook snapshot.
@@ -52,6 +56,7 @@ export function DesignSystem({
   async function load(): Promise<void> {
     setLoading(true);
     setError(null);
+    void api.readinessLevel(project.path).then(setReadiness).catch(() => setReadiness(null));
     try {
       setHtml(await api.getLitePalette(project.path));
     } catch (e) {
@@ -136,6 +141,8 @@ export function DesignSystem({
           )}
         </div>
       </ViewHeader>
+
+      <ReadinessLadder readiness={readiness} />
 
       {/* Progress bar for the enterprise Storybook snapshot. */}
       {snapshot.running && (

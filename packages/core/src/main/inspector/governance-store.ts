@@ -25,14 +25,31 @@ export const GOVERNANCE_PATH = `${AI_DIR}/governance/rules.json`;
  * that refuses to run because someone mistyped a rule is worse than one that runs the defaults and
  * says so. The malformed file is left exactly as written, so the mistake is still there to fix.
  */
-export async function readGovernance(projectPath: string): Promise<{ config: GovernanceConfig; source: "project" | "defaults" | "malformed" }> {
+export async function readGovernance(projectPath: string): Promise<{
+  config: GovernanceConfig;
+  source: "project" | "defaults" | "malformed";
+  /**
+   * Whether the file differs from the seed — i.e. somebody actually decided these are the rules.
+   *
+   * Seeding WRITES the file, so "a rules file exists" cannot mean "the team adopted rules"; without
+   * this, every project would count as governed the instant its index was first built. Compared by
+   * content rather than by mtime, because a rewrite that changes nothing is not a decision either.
+   */
+  adopted: boolean;
+}> {
   const raw = await readFile(join(projectPath, GOVERNANCE_PATH), "utf8").catch(() => null);
-  if (raw === null) return { config: defaultGovernance(), source: "defaults" };
+  if (raw === null) return { config: defaultGovernance(), source: "defaults", adopted: false };
   try {
-    return { config: governanceConfigSchema.parse(JSON.parse(raw)), source: "project" };
+    const config = governanceConfigSchema.parse(JSON.parse(raw));
+    return { config, source: "project", adopted: !isSeedContent(raw) };
   } catch {
-    return { config: defaultGovernance(), source: "malformed" };
+    return { config: defaultGovernance(), source: "malformed", adopted: false };
   }
+}
+
+/** Whether the file is byte-for-byte what `seedGovernance` writes. */
+function isSeedContent(raw: string): boolean {
+  return raw === `${JSON.stringify(defaultGovernance(), null, 2)}\n`;
 }
 
 /**

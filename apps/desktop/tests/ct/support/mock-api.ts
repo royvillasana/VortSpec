@@ -680,6 +680,13 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
       rulesFrom: "defaults" as const,
       consumeSource: false,
     }),
+    readinessLevel: async () => ({
+      level: 1 as const,
+      levelName: "Libraries",
+      signals: [],
+      blocking: ["graph-connectedness"],
+      nextAction: "Build the index so relationships exist to read.",
+    }),
     tokensIngest: async () => ({
       ok: true,
       tokenFile: "src/styles/tokens.css",

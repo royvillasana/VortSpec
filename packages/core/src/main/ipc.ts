@@ -68,6 +68,7 @@ import { emitTokenFiles } from "./inspector/token-emit";
 import { ingestTokensFromProject } from "./inspector/token-ingest";
 import { buildRelationshipIndex, indexStaleness } from "./inspector/relationship-index";
 import { generateReports } from "./inspector/reports";
+import { projectReadiness } from "./inspector/readiness-level";
 import { writeTokenLink } from "./inspector/token-resolver";
 import { discoverRoutes } from "./routes/route-discovery";
 import { computePushPlan, computeOrphanPushPlan, VORTSPEC_COLLECTION } from "./inspector/figma-push";
@@ -340,6 +341,7 @@ const handlers: Record<IpcChannel, Handler> = {
   }) as Handler,
   "index:staleness": ((r: { projectPath: string }) => indexStaleness(r.projectPath)) as Handler,
   "reports:generate": ((r: { projectPath: string }) => generateReports(r.projectPath)) as Handler,
+  "readiness:level": ((r: { projectPath: string }) => projectReadiness(r.projectPath)) as Handler,
   "tokens:ingest": ((r: { projectPath: string }) =>
     ingestTokensFromProject(r.projectPath, { generatedAt: new Date().toISOString() })) as Handler,
   "figma:syncComponents": ((r: { projectPath: string }) =>

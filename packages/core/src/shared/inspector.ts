@@ -739,6 +739,33 @@ export const reportResultSchema = z.object({
 });
 export type ReportResultPayload = z.infer<typeof reportResultSchema>;
 
+/**
+ * The AI-readiness ladder (OpenSpec change: agentic-design-system, task 5.3).
+ *
+ * Every signal is returned, met or not: a signal that vanished once satisfied would leave the reader
+ * able to see what is holding the level back but not what is holding it up.
+ */
+export const readinessSignalSchema = z.object({
+  id: z.string(),
+  label: z.string(),
+  value: z.number(),
+  threshold: z.number(),
+  met: z.boolean(),
+  gates: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4), z.literal(5)]),
+  detail: z.string(),
+  action: z.string(),
+});
+
+export const readinessAssessmentSchema = z.object({
+  level: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4), z.literal(5)]),
+  levelName: z.string(),
+  signals: z.array(readinessSignalSchema).default([]),
+  blocking: z.array(z.string()).default([]),
+  /** Null at the top level — an encouraging sentence there would be noise, not an action. */
+  nextAction: z.string().nullable(),
+});
+export type ReadinessAssessmentPayload = z.infer<typeof readinessAssessmentSchema>;
+
 /** A captured file (project-relative path + content), for gated revert of a modify run. */
 export const fileSnapshotSchema = z.object({ path: z.string(), content: z.string() });
 export type FileSnapshot = z.infer<typeof fileSnapshotSchema>;

@@ -185,6 +185,10 @@
       "types": "./src/components/run-canvas/Sitemap.tsx",
       "default": "./src/components/run-canvas/Sitemap.tsx"
     },
+    "./ReadinessLadder": {
+      "types": "./src/components/ReadinessLadder.tsx",
+      "default": "./src/components/ReadinessLadder.tsx"
+    },
     "./AuditBanner": {
       "types": "./src/components/run-canvas/AuditBanner.tsx",
       "default": "./src/components/run-canvas/AuditBanner.tsx"

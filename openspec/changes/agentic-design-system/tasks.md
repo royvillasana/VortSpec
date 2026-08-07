@@ -49,11 +49,11 @@
 
 ## 5. AI-readiness level
 
-- [ ] 5.1 Add `main/inspector/readiness-level.ts` computing the five-point level from metadata coverage and completeness, token determinism, governance rule count, relationship density and violation rate
-- [ ] 5.2 Return the attributable signals and the specific next action that raises the level, phrased as the concrete gap rather than the level name; return no next action at the top level
-- [ ] 5.3 Surface the level in the design system workspace next to the existing readiness signals, visibly distinct from them
-- [ ] 5.4 Recompute the level when the index is rebuilt
-- [ ] 5.5 Test the level transitions: no metadata and no governance → Libraries; complete metadata plus encoded governance → a higher level with the responsible signals attributable
+- [x] 5.1 Add `main/inspector/readiness-level.ts` computing the five-point level from metadata coverage and completeness, token determinism, governance rule count, relationship density and violation rate
+- [x] 5.2 Return the attributable signals and the specific next action that raises the level, phrased as the concrete gap rather than the level name; return no next action at the top level
+- [x] 5.3 Surface the level in the design system workspace next to the existing readiness signals, visibly distinct from them
+- [x] 5.4 Recompute the level when the index is rebuilt
+- [x] 5.5 Test the level transitions: no metadata and no governance → Libraries; complete metadata plus encoded governance → a higher level with the responsible signals attributable
 
 ## 6. Deterministic component scaffold
 

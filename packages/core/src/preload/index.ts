@@ -280,6 +280,7 @@ const api: VortSpecApi = {
   /** Whether the index still describes the code, naming what changed (task 2.9). */
   indexStaleness: (projectPath: string) => invoke("index:staleness", { projectPath }),
   generateReports: (projectPath: string) => invoke("reports:generate", { projectPath }),
+  readinessLevel: (projectPath: string) => invoke("readiness:level", { projectPath }),
   figmaSyncComponents: (projectPath: string) => invoke("figma:syncComponents", { projectPath }),
   figmaSelection: () => invoke("figma:selection", undefined),
   checkFigmaHealth: (req) => invoke("figma:checkHealth", req),

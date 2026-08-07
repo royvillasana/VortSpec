@@ -405,6 +405,8 @@ export interface VortSpecApi {
    * scan; the renderer fires it and shows the result when it lands (task 4.7).
    */
   generateReports(projectPath: string): Promise<IpcResponse<"reports:generate">>;
+  /** The AI-readiness level, recomputed from the current artifacts on every call (task 5.4). */
+  readinessLevel(projectPath: string): Promise<IpcResponse<"readiness:level">>;
   /** Read design-system components from Figma into the reconcile cache (figma-cli primary). */
   figmaSyncComponents(projectPath: string): Promise<IpcResponse<"figma:syncComponents">>;
   /** Read the node(s) currently selected in Figma Desktop (figma-cli). */
