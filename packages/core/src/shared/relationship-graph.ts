@@ -250,6 +250,22 @@ export interface GraphFile {
   component?: string;
 }
 
+/**
+ * How adopted a component is — the PRIMARY signal, and the one consumers should branch on.
+ *
+ * Exists because `efficiency` alone cannot express the three states honestly. A component nothing
+ * imports has no ratio at all, and the obvious encodings both lie: `0` reports a brand-new component
+ * as the worst-adopted thing in the system, and `undefined` makes every consumer re-derive "absent
+ * means never imported, not zero" from a comment. Sorting a report by efficiency is exactly where
+ * that gets it wrong once and stays wrong.
+ *
+ *  • `unimported`             — nothing imports it. New, or dead; the graph cannot tell which, and
+ *                               says so rather than guessing.
+ *  • `imported-never-rendered` — imported somewhere and rendered nowhere. The drag case worth acting on.
+ *  • `adopted`                — rendered at least once.
+ */
+export type AdoptionState = "unimported" | "imported-never-rendered" | "adopted";
+
 export interface ComponentUsage {
   /** The component's own file. */
   path: string;
@@ -263,13 +279,13 @@ export interface ComponentUsage {
   importCount: number;
   /** How many times it is actually rendered, across every file. */
   instanceCount: number;
+  /** The state to branch on. `efficiency` is a detail of it, not a substitute for it. */
+  adoption: AdoptionState;
   /**
-   * `instanceCount / importCount`. Below 1 means a file imports it without rendering it.
-   * Undefined when nothing imports it at all — a ratio over zero says nothing.
+   * `instanceCount / importCount` — how much rendering each import buys. Present only when the
+   * component is imported at all, because a ratio over zero is not a low score, it is no score.
    */
   efficiency?: number;
-  /** Imported somewhere but never rendered anywhere. */
-  unused: boolean;
 }
 
 export interface RelationshipGraph {
@@ -308,7 +324,7 @@ export function buildRelationshipGraph(
       usedBy: [],
       importCount: 0,
       instanceCount: 0,
-      unused: false,
+      adoption: "unimported",
     });
 
   const neverRendered = new Map<string, string[]>();
@@ -357,7 +373,12 @@ export function buildRelationshipGraph(
     entry.uses.sort();
     entry.usedBy.sort();
     if (entry.importCount > 0) entry.efficiency = round(entry.instanceCount / entry.importCount);
-    entry.unused = entry.importCount > 0 && entry.instanceCount === 0;
+    entry.adoption =
+      entry.instanceCount > 0
+        ? "adopted"
+        : entry.importCount > 0
+          ? "imported-never-rendered"
+          : "unimported";
   }
 
   return {

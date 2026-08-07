@@ -184,18 +184,28 @@ describe("building the graph (tasks 2.1–2.4)", () => {
       { path: "src/pages/a.tsx", component: "A", source: `import { Badge } from "../components/Badge";\nexport default () => <div/>;` },
     ]);
     const badge = orphan.components.find((component) => component.name === "Badge")!;
-    expect(badge.unused).toBe(true);
+    expect(badge.adoption).toBe("imported-never-rendered");
     expect(badge.instanceCount).toBe(0);
+    expect(badge.efficiency).toBe(0); // imported, so the ratio is real — and it is zero
     expect(orphan.importedNeverRendered[0]).toEqual({ component: "Badge", files: ["src/pages/a.tsx"] });
   });
 
-  it("leaves efficiency undefined when nothing imports the component", () => {
-    // A ratio over zero says nothing; reporting 0 would read as "adopted badly" rather than "new".
+  it("distinguishes NEVER IMPORTED from imported-and-never-rendered", () => {
+    // The distinction `efficiency` alone cannot carry: 0 would report a brand-new component as the
+    // worst-adopted thing in the system, and a bare `undefined` makes every consumer re-derive why.
     const lonely = buildRelationshipGraph([
       { path: "src/components/New.tsx", component: "New", source: `export const New = () => <i/>;` },
     ]);
+    expect(lonely.components[0].adoption).toBe("unimported");
     expect(lonely.components[0].efficiency).toBeUndefined();
-    expect(lonely.components[0].unused).toBe(false);
+  });
+
+  it("gives every component exactly one adoption state", () => {
+    // A report sorts and filters on this, so the three states must partition the roster.
+    const states = graph.components.map((component) => component.adoption);
+    expect(states.every((state) => ["unimported", "imported-never-rendered", "adopted"].includes(state))).toBe(true);
+    expect(byName.get("Button")?.adoption).toBe("adopted");
+    expect(byName.get("Card")?.adoption).toBe("adopted"); // rendered once, imported twice
   });
 
   it("emits both directions of every edge", () => {
