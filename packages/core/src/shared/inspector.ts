@@ -456,7 +456,19 @@ export const auditFindingSchema = z.object({
   /** Project-relative file the finding points at, when known. */
   file: z.string().nullable(),
   severity: z.enum(["error", "warning"]),
-  kind: z.enum(["hardcoded-color", "token-drift"]),
+  /**
+   * Widened to the kinds `RULE_SCOPES` governs (task 2c.1). Without this the scope table named
+   * rules a finding could not carry — the declaration and the data disagreed, and a rule could be
+   * scoped without ever being emittable. Group 4 (task 4.2) adds the intent kinds on top.
+   */
+  kind: z.enum([
+    "hardcoded-color",
+    "token-drift",
+    "unused",
+    "shadow-implementation",
+    "styling-lost-token",
+    "wrong-variant-for-context",
+  ]),
   /** A human, one-line description with the fix. */
   message: z.string(),
 });
