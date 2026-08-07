@@ -13,11 +13,11 @@
 
 ## 2. Relationship graph and consumption measurement
 
-- [ ] 2.1 Add `packages/core/src/main/inspector/relationship-index.ts` building on the B2 scan cache and `FRAMEWORK_PROFILES`; key every entry on the full project-relative path
-- [ ] 2.2 Resolve imports per framework and emit `uses` / `usedBy` with recursive chain resolution; test the basename-collision case (`src/pages/index.*` vs `src/pages/skills/index.*`) explicitly
-- [ ] 2.3 Implement instance counting from template bodies — composition depth, conditionals, loops — with slot-nested instances de-duplicated; build the fixture set first and assert expected counts
-- [ ] 2.4 Compute `importCount`, `instanceCount` and `efficiency` per component; report imported-but-never-rendered components as unused
-- [ ] 2.5 Implement shadow-implementation detection (structure + token usage matching a component that is not imported), emitting `warning` severity findings that name the shadowed component and the file
+- [x] 2.1 Add `packages/core/src/main/inspector/relationship-index.ts` building on the B2 scan cache and `FRAMEWORK_PROFILES`; key every entry on the full project-relative path
+- [x] 2.2 Resolve imports per framework and emit `uses` / `usedBy` with recursive chain resolution; test the basename-collision case (`src/pages/index.*` vs `src/pages/skills/index.*`) explicitly
+- [x] 2.3 Implement instance counting from template bodies — composition depth, conditionals, loops — with slot-nested instances de-duplicated; build the fixture set first and assert expected counts
+- [x] 2.4 Compute `importCount`, `instanceCount` and `efficiency` per component; report imported-but-never-rendered components as unused
+- [x] 2.5 Implement shadow-implementation detection (structure + token usage matching a component that is not imported), emitting `warning` severity findings that name the shadowed component and the file
 - [ ] 2.6 Serialize `.vortspec/ai/{index,component-usage,design-tokens}.toon` with a `generatedAt` stamp; add a TOON writer with round-trip tests
 - [ ] 2.7 Add the token reverse index (token → consuming components) and verify it answers without scanning component sources
 - [ ] 2.8 Extend `buildIndexDigest` with a bounded relationship section plus an on-demand `uses`/`usedBy` lookup; regression-test digest size against a large fixture and assert truncation is stated, not silent

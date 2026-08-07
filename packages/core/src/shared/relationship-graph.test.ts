@@ -1,12 +1,15 @@
 import { describe, expect, it } from "vitest";
 import {
   buildRelationshipGraph,
+  describeShadow,
+  findShadowImplementations,
   countInstances,
   parseImports,
   resolveChain,
   resolveSpecifier,
   stripNonCode,
   type GraphFile,
+  type ShadowFinding,
 } from "./relationship-graph";
 
 /**
@@ -240,5 +243,177 @@ describe("building the graph (tasks 2.1–2.4)", () => {
     const modal = renamed.components.find((component) => component.name === "Modal")!;
     expect(modal.instanceCount).toBe(1);
     expect(modal.usedBy).toEqual(["App"]);
+  });
+});
+
+describe("shadow implementations (task 2.5)", () => {
+  /** A Button with a real token signature — five tokens and a `<button>` root. */
+  const BUTTON: GraphFile = {
+    path: "src/components/Button.tsx",
+    component: "Button",
+    designSystem: true,
+    source: `export const Button = () => (
+      <button className="bg-[var(--color-primary)] text-[var(--color-on-primary)] rounded-[var(--radius-md)] px-[var(--spacing-4)] shadow-[var(--shadow-sm)]" />
+    );`,
+  };
+
+  function shadows(extra: GraphFile[]): ShadowFinding[] {
+    const files = [BUTTON, ...extra];
+    return findShadowImplementations(files, buildRelationshipGraph(files));
+  }
+
+  it("finds a file that reproduces the signature without importing the component", () => {
+    // The quiet failure: nothing is broken, every value is a token, the audit passes — and the
+    // design system has forked.
+    const found = shadows([
+      {
+        path: "src/pages/Landing.tsx",
+        component: "Landing",
+        source: `export const Landing = () => (
+          <button className="bg-[var(--color-primary)] text-[var(--color-on-primary)] rounded-[var(--radius-md)] px-[var(--spacing-4)] shadow-[var(--shadow-sm)]" />
+        );`,
+      },
+    ]);
+    expect(found).toHaveLength(1);
+    expect(found[0]).toMatchObject({ component: "Button", file: "src/pages/Landing.tsx", element: "button" });
+    expect(found[0].sharedTokens).toContain("color-primary");
+    expect(describeShadow(found[0])).toContain("import Button instead of reimplementing it");
+  });
+
+  it("does NOT flag a file that imports the component and restyles it", () => {
+    // Importing and customising is use, not a fork. Flagging it would punish the correct behaviour.
+    const found = shadows([
+      {
+        path: "src/pages/Landing.tsx",
+        component: "Landing",
+        source: `import { Button } from "../components/Button";
+        export const Landing = () => (
+          <button className="bg-[var(--color-primary)] text-[var(--color-on-primary)] rounded-[var(--radius-md)] px-[var(--spacing-4)] shadow-[var(--shadow-sm)]">
+            <Button/>
+          </button>
+        );`,
+      },
+    ]);
+    expect(found).toEqual([]);
+  });
+
+  it("does NOT flag a different element that merely shares the palette", () => {
+    // A <div> with a button's colours is a card. This one check removes most of the false positives.
+    const found = shadows([
+      {
+        path: "src/components/Card.tsx",
+        component: "Card",
+        designSystem: true,
+        source: `export const Card = () => (
+          <div className="bg-[var(--color-primary)] text-[var(--color-on-primary)] rounded-[var(--radius-md)] px-[var(--spacing-4)] shadow-[var(--shadow-sm)]" />
+        );`,
+      },
+    ]);
+    expect(found).toEqual([]);
+  });
+
+  it("does NOT flag a file sharing only one or two common tokens", () => {
+    // Everything uses --color-text. A detector that fires on that is one people learn to ignore.
+    const found = shadows([
+      {
+        path: "src/pages/About.tsx",
+        component: "About",
+        source: `export const About = () => <button className="text-[var(--color-primary)]" />;`,
+      },
+    ]);
+    expect(found).toEqual([]);
+  });
+
+  it("does NOT flag a partial overlap below the threshold", () => {
+    const found = shadows([
+      {
+        path: "src/pages/Partial.tsx",
+        component: "Partial",
+        source: `export const Partial = () => (
+          <button className="bg-[var(--color-primary)] text-[var(--color-on-primary)] rounded-[var(--radius-md)]" />
+        );`,
+      },
+    ]);
+    // 3 of 5 tokens = 0.6 overlap, exactly at the threshold — included.
+    expect(found).toHaveLength(1);
+    expect(found[0].overlap).toBe(0.6);
+  });
+
+  it("ignores a component with too thin a signature to match on", () => {
+    // A component using one token would otherwise make every file in the project its shadow.
+    const thin: GraphFile = {
+      path: "src/components/Spacer.tsx",
+      component: "Spacer",
+      designSystem: true,
+      source: `export const Spacer = () => <div className="h-[var(--spacing-4)]" />;`,
+    };
+    const other: GraphFile = {
+      path: "src/pages/Any.tsx",
+      component: "Any",
+      source: `export const Any = () => <div className="h-[var(--spacing-4)]" />;`,
+    };
+    const files = [thin, other];
+    expect(findShadowImplementations(files, buildRelationshipGraph(files))).toEqual([]);
+  });
+
+  it("never flags the component's own file", () => {
+    expect(shadows([])).toEqual([]);
+  });
+});
+
+describe("shadow detection is directional (task 2.5)", () => {
+  it("reports the page reimplementing the component, never the reverse", () => {
+    // "This page reimplements Button" is a finding. "Button resembles this page" is noise — and
+    // reporting both would double the detector's own false-positive rate.
+    const files: GraphFile[] = [
+      {
+        path: "src/components/Button.tsx",
+        component: "Button",
+        designSystem: true,
+        source: `export const Button = () => <button className="bg-[var(--a)] text-[var(--b)] rounded-[var(--c)] p-[var(--d)]" />;`,
+      },
+      {
+        path: "src/pages/Landing.tsx",
+        component: "Landing",
+        source: `export const Landing = () => <button className="bg-[var(--a)] text-[var(--b)] rounded-[var(--c)] p-[var(--d)]" />;`,
+      },
+    ];
+    const found = findShadowImplementations(files, buildRelationshipGraph(files));
+    expect(found).toHaveLength(1);
+    expect(found[0].component).toBe("Button");
+    expect(found[0].file).toBe("src/pages/Landing.tsx");
+  });
+
+  it("still catches one design-system component shadowing another", () => {
+    // A real and worth-catching case: two atoms that quietly converged.
+    const files: GraphFile[] = [
+      {
+        path: "src/components/Button.tsx",
+        component: "Button",
+        designSystem: true,
+        source: `export const Button = () => <button className="bg-[var(--a)] text-[var(--b)] rounded-[var(--c)] p-[var(--d)]" />;`,
+      },
+      {
+        path: "src/components/CtaButton.tsx",
+        component: "CtaButton",
+        designSystem: true,
+        source: `export const CtaButton = () => <button className="bg-[var(--a)] text-[var(--b)] rounded-[var(--c)] p-[var(--d)]" />;`,
+      },
+    ];
+    const found = findShadowImplementations(files, buildRelationshipGraph(files));
+    expect(found.map((f) => `${f.file}→${f.component}`).sort()).toEqual([
+      "src/components/Button.tsx→CtaButton",
+      "src/components/CtaButton.tsx→Button",
+    ]);
+  });
+
+  it("reports nothing when the caller marks no design-system files", () => {
+    // A caller that does not know which files are the design system gets NO findings rather than a
+    // flood of reversed ones.
+    const files: GraphFile[] = [
+      { path: "a.tsx", component: "A", source: `<button className="bg-[var(--a)] text-[var(--b)] rounded-[var(--c)] p-[var(--d)]" />` },
+      { path: "b.tsx", component: "B", source: `<button className="bg-[var(--a)] text-[var(--b)] rounded-[var(--c)] p-[var(--d)]" />` },
+    ];
+    expect(findShadowImplementations(files, buildRelationshipGraph(files))).toEqual([]);
   });
 });

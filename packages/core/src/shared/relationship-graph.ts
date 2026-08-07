@@ -248,6 +248,17 @@ export interface GraphFile {
   source: string;
   /** The component this file defines, when it defines one. */
   component?: string;
+  /**
+   * Whether this file is part of the DESIGN SYSTEM (under `component_dir`) rather than a consumer
+   * of it — a page, a screen, a feature.
+   *
+   * Only used by shadow detection, where it supplies the direction. A shadow is not a symmetric
+   * relationship: "this page reimplements Button" is a finding, and "Button resembles this page" is
+   * noise. Without the distinction the detector reports both and doubles its own false-positive
+   * rate. Absent means "not a design-system component", so a caller that does not know simply gets
+   * no shadow findings rather than a flood of reversed ones.
+   */
+  designSystem?: boolean;
 }
 
 /**
@@ -418,4 +429,131 @@ export function resolveChain(graph: RelationshipGraph, name: string): string[] {
 export function isComponentFile(path: string): boolean {
   const base = path.split("/").pop() ?? "";
   return !ALL_NON_COMPONENT_SUFFIXES.some((suffix) => base.includes(`${suffix}.`));
+}
+
+// ── Shadow implementations (task 2.5) ────────────────────────────────
+
+/**
+ * A file that REIMPLEMENTS a component instead of importing it.
+ *
+ * The failure this catches is quiet and common: someone needs a button, does not find or does not
+ * reach for `Button`, and writes the markup inline with the right tokens. Nothing is broken, every
+ * value is a token, the audit passes — and the design system has silently forked. It shows up later
+ * as "why did the button radius change everywhere except this page".
+ *
+ * Reported at `warning`, never `error`. A shadow is a JUDGEMENT — sometimes the inline markup is
+ * genuinely a different thing that happens to share a palette — and an error would either be
+ * overridden or force someone to contort real code to silence it.
+ */
+export interface ShadowFinding {
+  /** The component being shadowed. */
+  component: string;
+  /** The file doing the shadowing. */
+  file: string;
+  /** The tokens both use — the evidence. */
+  sharedTokens: string[];
+  /** The element both build on (`button`, `input`), when they agree on one. */
+  element?: string;
+  /** 0–1: how much of the component's token signature the file reproduces. */
+  overlap: number;
+}
+
+/**
+ * Thresholds. Deliberately conservative, because the cost of the two errors is not symmetric: a
+ * missed shadow is a component that stays duplicated until someone notices, while a FALSE shadow
+ * tells a developer their working code is a mistake — and a detector that cries wolf is one people
+ * learn to ignore, which loses the true positives too.
+ */
+const SHADOW_MIN_SHARED_TOKENS = 3;
+const SHADOW_MIN_OVERLAP = 0.6;
+
+/** The HTML element a component is built on — its root tag, lowercased. */
+export function rootElement(source: string): string | undefined {
+  const match = stripLiterals(source).match(/<([a-z][a-z0-9]*)(?=[\s/>])/);
+  return match?.[1];
+}
+
+/** Design tokens a source references: `var(--x)`, `--x`, and `$x`. */
+export function tokensUsed(source: string): string[] {
+  const src = stripNonCode(source);
+  const out = new Set<string>();
+  for (const match of src.matchAll(/--([\w-]+)(?![\w-])/g)) out.add(match[1]);
+  for (const match of src.matchAll(/\$([a-zA-Z][\w-]*)/g)) out.add(match[1]);
+  return [...out].sort();
+}
+
+/**
+ * Find files that reproduce a component's token signature without importing it.
+ *
+ * Three conditions, all required:
+ *  1. the file does NOT import the component — importing and re-styling is customisation, not a fork;
+ *  2. it reuses at least `SHADOW_MIN_SHARED_TOKENS` of the component's tokens, so a shared
+ *     `--color-text` alone can never trigger it;
+ *  3. it reproduces at least `SHADOW_MIN_OVERLAP` of the component's whole signature.
+ *
+ * When both declare a root element they must AGREE on it. A `<div>` sharing a button's palette is a
+ * card, not a shadowed button, and that single check removes most of the noise this would otherwise
+ * produce.
+ */
+export function findShadowImplementations(
+  files: readonly GraphFile[],
+  graph: RelationshipGraph,
+  options: { aliases?: Record<string, string>; framework?: string } = {},
+): ShadowFinding[] {
+  const profile = profileFor(options.framework);
+  const extensions = profile?.sourceExts ?? [".tsx", ".ts", ".jsx", ".js", ".vue", ".svelte", ".astro"];
+  const paths = new Set(files.map((file) => file.path));
+  const context: ResolveContext = { files: paths, aliases: options.aliases, extensions };
+  const byPath = new Map(files.map((file) => [file.path, file]));
+
+  const signatures = new Map<string, { tokens: Set<string>; element?: string; path: string }>();
+  for (const component of graph.components) {
+    const file = byPath.get(component.path);
+    // Only a DESIGN-SYSTEM component can be shadowed — see `GraphFile.designSystem`. A page is not
+    // something another file should have imported instead.
+    if (!file || !file.designSystem) continue;
+    const tokens = new Set(tokensUsed(file.source));
+    // A component with almost no tokens has no signature to match, and treating it as one would
+    // make every file in the project look like its shadow.
+    if (tokens.size < SHADOW_MIN_SHARED_TOKENS) continue;
+    signatures.set(component.name, { tokens, element: rootElement(file.source), path: component.path });
+  }
+
+  const out: ShadowFinding[] = [];
+  for (const file of files) {
+    const imported = new Set(
+      parseImports(file.source)
+        .map((record) => resolveSpecifier(record.specifier, file.path, context))
+        .filter((path): path is string => !!path),
+    );
+    const fileTokens = new Set(tokensUsed(file.source));
+    const fileElement = rootElement(file.source);
+
+    for (const [name, signature] of signatures) {
+      if (file.path === signature.path) continue; // the component itself
+      if (imported.has(signature.path)) continue; // condition 1
+      const shared = [...signature.tokens].filter((token) => fileTokens.has(token));
+      if (shared.length < SHADOW_MIN_SHARED_TOKENS) continue; // condition 2
+      const overlap = shared.length / signature.tokens.size;
+      if (overlap < SHADOW_MIN_OVERLAP) continue; // condition 3
+      if (signature.element && fileElement && signature.element !== fileElement) continue;
+      out.push({
+        component: name,
+        file: file.path,
+        sharedTokens: shared.sort(),
+        ...(signature.element && fileElement === signature.element ? { element: signature.element } : {}),
+        overlap: round(overlap),
+      });
+    }
+  }
+  return out.sort((a, b) => a.file.localeCompare(b.file) || a.component.localeCompare(b.component));
+}
+
+/** A shadow finding → the one-line message a person reads, naming both sides and the fix. */
+export function describeShadow(finding: ShadowFinding): string {
+  return (
+    `${finding.file} reuses ${finding.sharedTokens.length} of ${finding.component}'s design tokens` +
+    `${finding.element ? ` on the same <${finding.element}>` : ""} without importing it` +
+    ` — import ${finding.component} instead of reimplementing it.`
+  );
 }
