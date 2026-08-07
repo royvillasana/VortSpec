@@ -124,10 +124,10 @@
 
 ## 8. Close out
 
-- [ ] 8.1 Run the full test suite and the CT suite; confirm no regression in the existing digest, audit, metadata and token paths
-- [ ] 8.2 Record the benchmark results (accuracy, variance, false negatives, token cost) in `docs/agentic-design-system-plan.md` against the §1.6 targets
-- [ ] 8.3 Resolve the design's open questions (configurable elevation scale; recompute-on-build vs on-demand; shadow detection scope for consume sources; CSS-modules recommendation; scaffold-replaces vs scaffold-precedes the cycle; whether push reads canonical) and fold the answers into the specs
-- [ ] 8.4 Run `/opsx:sync` to fold the delta specs into `openspec/specs/`
+- [x] 8.1 Run the full test suite and the CT suite; confirm no regression in the existing digest, audit, metadata and token paths
+- [x] 8.2 Record the benchmark results (accuracy, variance, false negatives, token cost) in `docs/agentic-design-system-plan.md` against the §1.6 targets
+- [x] 8.3 Resolve the design's open questions (configurable elevation scale; recompute-on-build vs on-demand; shadow detection scope for consume sources; CSS-modules recommendation; scaffold-replaces vs scaffold-precedes the cycle; whether push reads canonical) and fold the answers into the specs
+- [ ] 8.4 DEFERRED until groups 9/9b land — sync folds the delta specs into `openspec/specs/`, and doing that while tasks are outstanding would publish specs that do not match the change's final state. Run it last
 
 ## 9. Consume-source parity in the SDD-DE skills (adjacent scope — found during 7.15)
 

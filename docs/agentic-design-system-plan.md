@@ -255,7 +255,39 @@ digest is a large fraction of the work; exploration cost grows with repo size wh
 bounded, so the sign of the token difference may flip on a larger codebase. That is a caveat, not a
 claim — it has not been measured.
 
-**Still unmeasured, and why.** Accuracy, run-to-run variance, false negatives and speed each need N
+#### Our numbers against the board's targets (task 8.2)
+
+Same four questions, our own implementation, 10 trials (5 grounded / 5 exploring) on a 55-component
+React library. The board's figures come from 11 trials on an Astro portfolio, so these are two
+different systems measured the same way — comparable in direction, not in magnitude.
+
+| Metric | Board target | Ours | Verdict |
+|---|---|---|---|
+| Accuracy | 65% → 100% | 50% → **90%** | Direction confirmed; short of 100% for a reason (below) |
+| Run-to-run variance | 26.5% → 0.04% | Q4 spread 15–16 → **0** (18 every trial) | Met on the question that varied |
+| False negatives | 60% → 0% | Q4 undercounts 5/5 → **0/5** | Met |
+| Speed | 58% faster | **40% faster** (54.6s → 32.5s) | Direction confirmed, smaller margin |
+| Token cost | +3.5% | **+18%** (34.4k → 40.5k) | Worse than target; see below |
+
+**Accuracy fell short of 100% on ONE question, and the shortfall was our artifacts' fault, not the
+index's.** Q1 split 3–2 because the digest header and `index.toon` reported different component
+counts under the same word. Fixed (the header now names the population it counts and reports the
+scanned figure beside it), but the 90% is recorded as measured rather than re-run to a nicer number.
+Q2–Q4 were 15/15.
+
+**Token cost is worse than the board's +3.5%, and the reason is scale, not regression.** Our fixture
+is 55 components; the grounding block is prepaid whether the run needs it or not, so on a small
+library it is a large fraction of the total. Exploration cost grows with repo size while the digest
+stays bounded, so the gap should close and may invert on a bigger codebase — but that has not been
+measured, so it is stated as an expectation, not a result. What the +18% bought is measurable: −44%
+tool calls, −40% wall clock, and the only correct answers to the reuse question.
+
+**Two of the four questions did not discriminate.** Q2 and Q3 were 10/10 in both arms. The entry page
+is a single file, cheap to read either way, and against a per-tier validation page Q3 is Q2 by
+construction. They are kept for continuity with the board's protocol, but they carry no signal on
+this fixture and should not be quoted as evidence.
+
+**Superseded — this paragraph described the state before the trials ran.** Accuracy, run-to-run variance, false negatives and speed each needed N
 independent agent trials — the board used 11 — graded against the answer key `answersFromGraph`
 derives. No static analysis substitutes for one, and grading an agent against a key derived from the
 same index would be circular for accuracy. The harness prepares the trials; it does not fake them.

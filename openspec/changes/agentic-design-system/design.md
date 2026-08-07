@@ -368,19 +368,48 @@ readable by the old four-field parser only for the fields it knows, so a rollbac
 should be paired with regenerating records — noted rather than automated, because the situation is
 unlikely and the automation would be more dangerous than the manual step.
 
-## Open Questions
+## Open Questions — resolved (task 8.3)
 
-- Does the elevation rule need a project-configurable scale, or is the token file's shadow scale
-  always sufficient to derive it?
-- Should the AI-readiness level be recomputed on every index build, or only on demand? Recomputing
-  is cheap, but a level that moves without an explicit action may read as noise.
-- For consume sources, is shadow-implementation detection meaningful against a vendor library the
-  team cannot change, or should it be limited to the team's own application code?
-- Should token-based CSS modules become the recommended styling for extract sources, so governance
-  v2 has a surface to reason over? This would materially strengthen the audit and materially
-  constrain the project — it is deliberately left open rather than decided inside this change.
-- Does the canonical artifact become the input to `figma-push.ts` as well, making the sync-back
-  round trip symmetric, or does push keep reading the enriched cache until that change archives?
-- Does the scaffold replace the model-driven component step of the SDD cycle, or run ahead of it
-  (scaffold the files, then let the cycle fill them in)? The latter is less disruptive; the former
-  is what actually removes structural variance.
+Answered from what the implementation actually did, not from what was planned. One is still open and
+says so.
+
+**Does the elevation rule need a project-configurable scale?** No — resolved by building it. The
+deterministic rule only asks "is this token from the elevation family", and the family is decided by
+`vocabulary.elevation` in the project's own `.vortspec/ai/governance/rules.json`, which is already
+configurable. The question that WOULD need an ordered scale — is this surface at the right depth
+relative to that one — is `elevation/mixed-elevations-on-one-surface`, and it is marked `judgment`
+precisely because a regex cannot answer it. A configurable scale would not change that.
+
+**Recompute the AI-readiness level on every index build, or on demand?** On demand, and never
+cached. `projectReadiness` recomputes on read from artifacts other groups already produce. The worry
+that a level "moves without an explicit action" turns out to be backwards: a CACHED level is the one
+that misleads, because it can quietly disagree with the index, metadata and violation counts shown
+beside it on the same screen. Recomputation is cheap enough that the freshness is free.
+
+**Is shadow detection meaningful for consume sources?** Yes, and it is already scoped correctly
+without a special case. Detection is directional — `GraphFile.designSystem` marks the design system,
+and for a consume source that is the CONSUMED library, so a finding always names the team's own file
+as the shadower. "Your app reimplements the vendor's Button" is exactly the actionable finding; a
+shadow inside the vendor's tree could never be reported as one, because the vendor's files are the
+design-system side of the comparison. Task 4.9 already guarantees nothing is written into that tree.
+
+**Should token-based CSS modules become the recommended styling for extract sources?** No — and task
+6.7 is what changed the answer. The reason to recommend it was to give governance v2 a surface to
+reason over; instead, the audit now MEASURES the surface it has and reports reduced coverage where a
+theme-mapped utility hides a token. That gives a team the information without VortSpec imposing a
+styling decision on their project. Making the cost visible beats constraining the project.
+
+**Does the scaffold replace the model-driven component step, or run ahead of it?** It runs ahead
+(task 6.9), and it still gets the benefit the "replace" option was supposed to deliver. The variance
+being removed is STRUCTURAL — which files a component consists of — and that is removed by fixing the
+file set and forbidding the run from adding or deleting one, not by taking generation away from the
+model. The per-task SDD flow is untouched.
+
+### Still open
+
+**Does `figma-push` read the canonical artifact?** Not yet. Group 7 made the READ path canonical —
+`figma-cli.ts` writes `.vortspec/tokens.json` and projects variables from it — but
+`figma:computePushPlan` still composes its plan from `getInspectorTokens` plus the enriched
+`figma-variables.json` cache, so the round trip is asymmetric. Left as follow-up rather than folded
+in here: changing the push input is a behavioural change to the sync-back path, which deserves its
+own change with its own before/after evidence, not a quiet edit at the end of this one.
