@@ -8,15 +8,21 @@ import {
   type TokenDrift,
 } from "@vortspec/core/inspector";
 import { figmaComponentSchema, type FigmaComponent } from "@vortspec/core/figma";
+import { projectCanonicalToVariableModel } from "@vortspec/core/canonical-tokens";
+import { readDocumentExtension, type DesignTokenDocument } from "@vortspec/core/design-tokens";
+import { readCanonicalTokens } from "./canonical-tokens";
 
 /**
- * Figma-authoritative reconciliation. VortSpec never talks to Figma directly —
- * a scoped Claude Code run (the engine, with the user's own MCP) exports the
- * design variables to `.vortspec/figma-variables.json`. This module is the
- * cockpit half: read that cache and diff it against the parsed token file,
- * flagging drift. Pure file computation; no MCP client, no network.
+ * Figma-authoritative reconciliation: read the design source's variables and diff them against the
+ * parsed token file, flagging drift. Pure file computation; no MCP client, no network.
+ *
+ * The variables now come from the canonical artifact `.vortspec/tokens.json` (OpenSpec change:
+ * agentic-design-system, task 7.13), PROJECTED into the flat model this module and its consumers
+ * speak. `.vortspec/figma-variables.json` is the legacy cache: still read when a project has no
+ * artifact yet, never written any more, and carrying nothing the artifact does not.
  */
 
+/** @deprecated The legacy pre-canonical cache. Read as a fallback; never written (task 7.13). */
 export const FIGMA_VARS_PATH = ".vortspec/figma-variables.json";
 export const FIGMA_COMPONENTS_PATH = ".vortspec/figma-components.json";
 
@@ -115,6 +121,24 @@ export async function readFigmaVariables(projectPath: string): Promise<FigmaVari
 }
 
 /**
+ * The canonical artifact, but ONLY when it came from a design tool.
+ *
+ * This function is what every "is this project synced with Figma?" answer rests on — a null here is
+ * reported as "not synced", and the Inspector's drift column, `figmaOnly` list and push planner all
+ * key off it. Since task 7.10 the artifact can equally have been built from the project's OWN
+ * stylesheet, and projecting THAT would claim a Figma sync for a project that has never opened
+ * Figma: every code token would match itself, and the UI would report a design system in perfect
+ * sync with a design tool it is not connected to.
+ *
+ * The provenance stamp is exactly the discriminator for this, which is why ingest records it.
+ */
+async function readDesignToolArtifact(projectPath: string): Promise<DesignTokenDocument | null> {
+  const document = await readCanonicalTokens(projectPath);
+  if (!document) return null;
+  return readDocumentExtension(document)?.source === "figma" ? document : null;
+}
+
+/**
  * Read the full mode/group/alias-aware variable model. Detects the new object
  * shape (`{collections, variables}`) and parses it richly; wraps a legacy flat
  * array/map as one `Default`-mode collection with the path taken from each name.
@@ -123,6 +147,14 @@ export async function readFigmaVariables(projectPath: string): Promise<FigmaVari
 export async function readFigmaVariableModel(
   projectPath: string,
 ): Promise<FigmaVariableModel | null> {
+  // Canonical first (task 7.13). `.vortspec/figma-variables.json` is no longer written: everything it
+  // held — the variable rows, the collection registry, the per-mode values and aliases — is
+  // recoverable from `.vortspec/tokens.json`, so keeping it would be a second source of truth that
+  // can disagree with the first. The file is not deleted; it simply stops being read once an
+  // artifact exists, so a project that predates this change keeps working either way.
+  const canonical = await readDesignToolArtifact(projectPath);
+  if (canonical) return projectCanonicalToVariableModel(canonical);
+
   let raw: string;
   try {
     raw = await readFile(join(projectPath, FIGMA_VARS_PATH), "utf8");

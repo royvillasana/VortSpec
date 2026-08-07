@@ -4,6 +4,7 @@ import {
   figmaNameToDtcgPath,
   parseDesignTokenDocument,
   parseDtcgAlias,
+  readDocumentExtension,
   readTokenExtension,
   type DesignTokenDocument,
   type DesignTokenLeaf,
@@ -207,6 +208,32 @@ function projectLeaf(
     key: ext?.figma?.key,
     valuesByMode,
   };
+}
+
+/**
+ * Project the canonical artifact into the FULL mode/group/alias-aware model — what
+ * `.vortspec/figma-variables.json` used to hold, derived rather than stored (task 7.13).
+ *
+ * This is the second half of retiring that cache. `projectCanonicalToVariables` already produces the
+ * variable rows; the missing piece was the COLLECTION REGISTRY, which is what the Tokens panel's
+ * mode switcher, `pickActiveCollection` and `deriveModeMap` all read. It lives in the document-level
+ * `$extensions`, so the whole model is recoverable and the cache has nothing left that the artifact
+ * does not carry.
+ *
+ * Mode IDS are set to the mode NAME. The artifact deliberately does not keep Figma's internal mode
+ * ids — the `$extensions` contract keys modes by name because ids are unstable across a file rebuild
+ * and unreadable in a diff. Every consumer here compares an id only against `defaultModeId` from the
+ * same collection, so a name-as-id is self-consistent; nothing joins these ids back to Figma.
+ */
+export function projectCanonicalToVariableModel(doc: unknown): FigmaVariableModel {
+  const variables = projectCanonicalToVariables(doc);
+  const ext = readDocumentExtension(doc as DesignTokenDocument | undefined);
+  const collections = (ext?.collections ?? []).map((collection) => ({
+    name: collection.name,
+    modes: collection.modes.map((mode) => ({ id: mode, name: mode })),
+    ...(collection.defaultMode ? { defaultModeId: collection.defaultMode } : {}),
+  }));
+  return { collections, variables };
 }
 
 // ── Ingest: design source → canonical artifact (task 7.2) ────────────

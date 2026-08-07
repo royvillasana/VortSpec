@@ -4,7 +4,7 @@ import { existsSync } from "node:fs";
 import { readFile, writeFile, mkdir, rm } from "node:fs/promises";
 import { app } from "electron";
 import { execFileSafe } from "../util/exec";
-import { FIGMA_VARS_PATH, FIGMA_COMPONENTS_PATH } from "../inspector/figma-reconcile";
+import { FIGMA_COMPONENTS_PATH } from "../inspector/figma-reconcile";
 import { writeCanonicalTokens } from "../inspector/canonical-tokens";
 import { emitAfterIngest } from "../inspector/token-emit";
 import type { TokenEmitSummary } from "@vortspec/core/token-emit-ledger";
@@ -567,16 +567,16 @@ export function variableSyncMessage(opts: {
 
 /**
  * Step 1's PRIMARY reader: export the connected file's design variables through
- * figma-cli and write BOTH the canonical artifact `.vortspec/tokens.json` (W3C
- * DTCG, the group tree intact — OpenSpec change: agentic-design-system, task
- * 7.2) and `.vortspec/figma-variables.json` (the flat cache the Inspector still
- * reconciles against). Returns `source: null` when the CLI isn't available so
- * the caller can fall back to the scoped-Claude MCP export.
+ * figma-cli into the canonical artifact `.vortspec/tokens.json` (W3C DTCG, the
+ * group tree intact — OpenSpec change: agentic-design-system, task 7.2), then
+ * emit the project's token file from it (task 7.14). Returns `source: null` when
+ * the CLI isn't available so the caller can fall back to the scoped-Claude MCP
+ * export.
  *
- * Two files on purpose, for now: the canonical artifact is being adopted
- * ALONGSIDE the existing cache so a project that has only `figma-variables.json`
- * keeps working unchanged. Task 7.13 retires the cache once every reader has
- * moved to the projection.
+ * ONE artifact. The flat `.vortspec/figma-variables.json` cache is no longer
+ * written (task 7.13): every reader now projects the same data out of the
+ * canonical file, so there is nothing a second copy could add except the chance
+ * of disagreeing with the first.
  */
 export async function syncVariablesToCache(projectPath: string): Promise<FigmaSyncResult> {
   const conn = await ensureConnected();
@@ -605,7 +605,6 @@ export async function syncVariablesToCache(projectPath: string): Promise<FigmaSy
   const model = await fetchVariableModelViaEval();
   if (model) {
     await mkdir(join(projectPath, ".vortspec"), { recursive: true });
-    await writeFile(join(projectPath, FIGMA_VARS_PATH), `${JSON.stringify(model, null, 2)}\n`, "utf8");
     const { document, dropped } = canonicalFromVariableModel(model, {
       source: "figma",
       generatedAt: new Date().toISOString(),
@@ -675,7 +674,6 @@ export async function syncVariablesToCache(projectPath: string): Promise<FigmaSy
     const vars = projectCanonicalToVariables(document);
     await mkdir(join(projectPath, ".vortspec"), { recursive: true });
     await writeCanonicalTokens(projectPath, document);
-    await writeFile(join(projectPath, FIGMA_VARS_PATH), `${JSON.stringify(vars, null, 2)}\n`, "utf8");
     const emit = await emitAfterIngest(projectPath); // task 7.14, as above
     // The export is written whatever its shape — refusing it would leave the previous cache in place
     // and lose every valid token over one non-token branch. Structural problems are REPORTED here
