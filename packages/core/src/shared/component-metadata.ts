@@ -154,3 +154,53 @@ export function describeMetadataGap(gap: MetadataGap): string {
       return "an anti-pattern has no alternative — it warns without correcting";
   }
 }
+
+// ── Enrichment from the roster (task 1.8) ────────────────────────────
+
+/** The roster facts a record can be enriched with — a structural subset of `InspectorComponent`. */
+export interface RosterFacts {
+  name: string;
+  level?: string;
+  file?: string | null;
+  figmaKey?: string;
+  variants?: string[];
+  description?: string;
+}
+
+const TIERS = new Set(["atom", "molecule", "organism", "template"]);
+
+/**
+ * Fold what the roster already knows into a metadata record — OpenSpec change:
+ * agentic-design-system, task 1.8.
+ *
+ * The Figma reference is the case that motivated this. `.sdd-de/components.json` records each
+ * component's `figmaNodeId`/`componentKey` during extraction precisely so docs can be enriched later
+ * "without re-resolving", and the roster carries it through — but a metadata record is written by a
+ * MODEL, and asking it to copy an id across is a coin flip that fails silently. Merging the fact
+ * deterministically means the docs page and a grounded run read the same enriched record, which is
+ * the point of the task: one record, not a docs-only enrichment the model never sees.
+ *
+ * The record WINS every conflict. Enrichment fills blanks; it never overwrites something authored,
+ * because the author had a reason and the roster is a detection heuristic.
+ */
+export function enrichMetadataFromRoster(
+  metadata: ComponentMetadata,
+  roster: RosterFacts | undefined,
+): ComponentMetadata {
+  if (!roster) return metadata;
+  const identity = { ...metadata.identity };
+  if (!identity.figmaNode && roster.figmaKey) identity.figmaNode = roster.figmaKey;
+  if (!identity.category && roster.level && TIERS.has(roster.level))
+    identity.category = roster.level as NonNullable<ComponentMetadata["identity"]["category"]>;
+  if (!identity.description && roster.description) identity.description = roster.description;
+
+  // Variant AXES from the roster, for axes the record does not describe. The roster knows the axis
+  // exists; only the record can say what a value is FOR, so a filled-in axis carries an empty
+  // `purpose` — visibly incomplete rather than quietly absent.
+  const describedAxes = new Set(metadata.variants.map((variant) => variant.axis));
+  const variants = [...metadata.variants];
+  for (const axis of roster.variants ?? [])
+    if (!describedAxes.has(axis)) variants.push({ axis, value: "", purpose: "" });
+
+  return { ...metadata, identity, variants };
+}

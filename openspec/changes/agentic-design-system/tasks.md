@@ -7,7 +7,7 @@
 - [x] 1.5 Extend `metadataStatusSchema` coverage reporting to distinguish missing / incomplete / complete, and surface it where coverage is shown today
 - [x] 1.6 Route the full record for in-scope components and the `identity` view for the rest into grounded runs, through `safePromptField` and inside the data-not-instructions block; assert sanitation in a test
 - [ ] 1.7 Switch `.storybook/ComponentDocs` and the `/storybook` skill to read `.vortspec/metadata/*.json`; stop authoring `<Name>.metadata.ts` and remove the instruction to write one from `shared/compose-run.ts`
-- [ ] 1.8 Fold Figma doc enrichment into the metadata record so the docs page and grounded runs read the same enriched data
+- [x] 1.8 Fold Figma doc enrichment into the metadata record so the docs page and grounded runs read the same enriched data
 - [ ] 1.9 Rewrite `.sdd-de/docs/component-metadata-model.md` for the new ownership and update `.sdd-de/ai-specs/skills/storybook/SKILL.md`
 - [ ] 1.10 Verify: `ComponentDocs` renders equivalently from the new source, and a project with no Storybook has complete metadata
 

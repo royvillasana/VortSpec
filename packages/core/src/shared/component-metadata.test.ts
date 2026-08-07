@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { componentMetadataSchema, type ComponentMetadata } from "./inspector";
 import {
   describeMetadataGap,
+  enrichMetadataFromRoster,
   isLegacyMetadata,
   isMetadataComplete,
   metadataGaps,
@@ -160,5 +161,57 @@ describe("completeness is about what changes a model's output (task 1.2)", () =>
     for (const gap of metadataGaps(migrated)) {
       expect(describeMetadataGap(gap).length).toBeGreaterThan(10);
     }
+  });
+});
+
+describe("enrichment from the roster (task 1.8)", () => {
+  const roster = {
+    name: "Button",
+    level: "atom",
+    figmaKey: "CK_BUTTON",
+    variants: ["size", "variant"],
+    description: "Detected from source",
+  };
+
+  it("fills the Figma reference the model was never reliable at copying", () => {
+    const enriched = enrichMetadataFromRoster(authored(), roster);
+    expect(enriched.identity.figmaNode).toBe("CK_BUTTON");
+  });
+
+  it("never overwrites what the record already authored", () => {
+    const record = authored({
+      identity: { name: "Button", category: "molecule", description: "Authored", figmaNode: "AUTHORED" },
+    });
+    const enriched = enrichMetadataFromRoster(record, roster);
+    expect(enriched.identity.figmaNode).toBe("AUTHORED");
+    expect(enriched.identity.category).toBe("molecule");
+    expect(enriched.identity.description).toBe("Authored");
+  });
+
+  it("adds an undescribed variant axis with an EMPTY purpose, visibly incomplete", () => {
+    // The roster knows the axis exists; only the record can say what a value is FOR. A blank purpose
+    // shows the gap instead of hiding it behind an axis that looks documented.
+    const enriched = enrichMetadataFromRoster(authored(), roster);
+    const axes = enriched.variants.map((variant) => variant.axis);
+    expect(axes).toContain("size");
+    expect(enriched.variants.find((variant) => variant.axis === "size")?.purpose).toBe("");
+  });
+
+  it("does not duplicate an axis the record already describes", () => {
+    const record = authored({ variants: [{ axis: "size", value: "lg", purpose: "Touch targets" }] });
+    const enriched = enrichMetadataFromRoster(record, roster);
+    expect(enriched.variants.filter((variant) => variant.axis === "size")).toHaveLength(1);
+  });
+
+  it("is a no-op when the component is not on the roster", () => {
+    expect(enrichMetadataFromRoster(authored(), undefined)).toEqual(authored());
+  });
+
+  it("ignores a roster level that is not an atomic tier", () => {
+    const enriched = enrichMetadataFromRoster(authored({ identity: { name: "Button", description: "x" } }), {
+      name: "Button",
+      level: "weird",
+    });
+    expect(enriched.identity.category).toBeUndefined();
   });
 });

@@ -7,6 +7,7 @@ import {
   type MetadataPlan,
 } from "@vortspec/core/inspector";
 import {
+  enrichMetadataFromRoster,
   isMetadataComplete,
   metadataGaps,
   parseComponentMetadata,
@@ -72,12 +73,26 @@ export async function metadataDiscovery(projectPath: string): Promise<MetadataId
   return out;
 }
 
-/** Generated metadata for a known set of component names, keyed by normalized name. */
+/**
+ * Generated metadata for a known set of component names, keyed by normalized name.
+ *
+ * ENRICHED from the roster on the way out (task 1.8): the Figma reference, the atomic tier and any
+ * variant axis the record does not describe are merged in from what detection already knows. Doing
+ * it here — at the shared read boundary — is what makes "the docs page and grounded runs read the
+ * same enriched data" true by construction rather than by two code paths agreeing to do the same
+ * thing. The record always wins a conflict; enrichment only fills blanks.
+ */
 export async function readMetadataFor(projectPath: string, names: string[]): Promise<Map<string, ComponentMetadata>> {
+  const comps = await getInspectorComponents(projectPath).catch(() => null);
+  const roster = new Map(
+    (comps?.components ?? []).map((component) => [normComponentName(component.name), component]),
+  );
   const out = new Map<string, ComponentMetadata>();
   for (const name of names) {
-    const m = await readComponentMetadata(projectPath, name);
-    if (m) out.set(normComponentName(name), m);
+    const record = await readComponentMetadata(projectPath, name);
+    if (!record) continue;
+    const key = normComponentName(name);
+    out.set(key, enrichMetadataFromRoster(record, roster.get(key)));
   }
   return out;
 }
