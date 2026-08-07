@@ -107,6 +107,21 @@
 - [ ] 2b.4 Offer to keep it (committed, as a reviewable "whole design system rendered" artifact) and encourage the user to run the same audit against their own screens — the generated page is the floor, not the ceiling
 - [ ] 2b.5 Verify: a project with no screens produces a complete audit and a runnable benchmark; a component with no variants still appears; and the page is gone afterwards unless kept
 
+## 2c. Two audits: component creation and screen generation
+
+> Recorded as a decision in `design.md`. Validation happens TWICE — once when components are built
+> (against the generated validation pages) and once when a screen is generated into the chosen
+> framework and styling. They cannot share a rule set: "this component is unused" is noise in the
+> first (no screens exist yet) and one of the most valuable findings in the second, and "this markup
+> reimplements a component" is impossible in the first and is the shadow finding in the second.
+> Each task below is APPLY → TEST → VALIDATE.
+
+- [x] 2c.1 APPLY: add an `AuditScope` (`component-creation` | `screen-generation`) to `AuditFinding`, and make every rule DECLARE the scopes it is valid in; a rule evaluated outside its scope is a type error, not a runtime surprise. TEST: a scope-mismatched rule fails to compile and the audit refuses to emit it. VALIDATE: the component-creation audit on a project with no screens emits ZERO "unused" and ZERO shadow findings — an audit that cries wolf is one people scroll past
+- [ ] 2c.2 APPLY: the component-creation audit — subject is the generated per-tier validation pages (2b), question is "does this component implement its tokens correctly": hardcoded values, token-for-role, resolved value vs the canonical artifact. TEST: a component with a hardcoded hex is caught; one that references the right token is not. VALIDATE: run it on a project with components and NO screens and confirm it is complete, not partial
+- [ ] 2c.3 APPLY: the screen-generation audit — subject is the user's generated screens, question is "does this screen compose components correctly AND did the conversion preserve token discipline": shadow implementations, wrong variant for context, and the conversion-introduced failures audit A structurally cannot see. TEST: a screen that inlines a component's markup is flagged; the same screen importing it is not. VALIDATE: run it after a real light-page → framework conversion
+- [ ] 2c.4 APPLY: make the styling approach part of the screen audit, since the conversion's output differs by target — a Tailwind arbitrary value where a scale key existed is a token-discipline failure that a CSS-modules project cannot produce, and vice versa. TEST: per-styling fixtures. VALIDATE: the same screen converted to two stylings yields the findings appropriate to each and no cross-talk
+- [ ] 2c.5 APPLY: report both audits distinctly — which subject, which scope, and when each last ran. TEST: a generated-page finding is never presented as equal evidence to a real-screen one (2b.3). VALIDATE: a full cycle shows audit A after component creation and audit B after screen generation, and neither is mistaken for the other
+
 ## 8. Close out
 
 - [ ] 8.1 Run the full test suite and the CT suite; confirm no regression in the existing digest, audit, metadata and token paths

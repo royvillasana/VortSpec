@@ -422,7 +422,35 @@ export type InspectorComponentsResult = z.infer<typeof inspectorComponentsResult
  * token whose code value drifted from its Figma variable. Severity-ranked so the UI
  * can lead with the ones that break design consistency.
  */
+/**
+ * WHEN an audit runs, and therefore what it can meaningfully conclude (OpenSpec change:
+ * agentic-design-system, group 2c).
+ *
+ *  • `component-creation` — after components are built, before any screen exists. Subject: the
+ *    generated per-tier validation pages. Question: does this component implement its tokens
+ *    correctly?
+ *  • `screen-generation` — after a screen is generated into the chosen framework and styling.
+ *    Subject: the user's real screens. Question: does this screen compose components correctly, and
+ *    did the conversion preserve token discipline?
+ *
+ * The scopes exist because THE SAME FINDING IS MEANINGFUL IN ONE AND FALSE IN THE OTHER. At
+ * component creation every component is "unused" — there are no screens — so emitting that finding
+ * there is pure noise, and a report that cries wolf is one people learn to scroll past. Conversely a
+ * shadow implementation is impossible against a generated page, which always imports, and is one of
+ * the most valuable findings against a real screen.
+ */
+export const auditScopeSchema = z.enum(["component-creation", "screen-generation"]);
+export type AuditScope = z.infer<typeof auditScopeSchema>;
+
 export const auditFindingSchema = z.object({
+  /** Which audit produced this. Absent on a legacy finding written before scopes existed. */
+  scope: auditScopeSchema.optional(),
+  /**
+   * What the finding was measured against — a generated validation page or a real screen. Recorded
+   * because they are NOT equal evidence: a generated page proves a component renders and which
+   * tokens it resolves, never that it is used correctly in context (task 2b.3).
+   */
+  subject: z.enum(["validation-page", "user-screen", "component-source"]).optional(),
   /** The component the finding is in, or "(tokens)" for a token-level drift. */
   component: z.string(),
   /** Project-relative file the finding points at, when known. */

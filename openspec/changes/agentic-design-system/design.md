@@ -252,6 +252,44 @@ rejected because token RESOLUTION is what the audit is for, and a token's resolv
 the cascade a component actually renders in. Static analysis can say a component references
 `--color-primary`; only a render says what that resolved to.
 
+**There are TWO audits, not one, and they must not share a rule set.**
+Validation happens twice in the SDD-DE cycle, at two different moments, against two different
+subjects, and asking two different questions:
+
+| | **Audit A — component creation** | **Audit B — screen generation** |
+|---|---|---|
+| When | after components are built, before any screen exists | after a screen is generated into the chosen framework + styling |
+| Subject | the generated per-tier validation pages | the user's real screens, post-conversion |
+| Question | *does this component implement its tokens correctly?* | *does this screen compose components correctly, and did the conversion preserve token discipline?* |
+| Evidence | floor — renders, and resolves these token values | contextual — the component is used the way it was meant to be |
+
+The reason this cannot be one audit with one rule set is that **the same finding is meaningful in
+one and false in the other**:
+
+- *"This component is unused."* In audit A there are no screens yet, so EVERY component is unused —
+  the finding is noise, and reporting it would teach people to ignore the whole report. In audit B it
+  is one of the most valuable findings there is.
+- *"This markup reimplements a component instead of importing it."* In audit A it is impossible by
+  construction: the generated page always imports. In audit B it is the shadow-implementation finding
+  group 2 exists to surface, and the conversion from a light page is exactly where it gets introduced.
+- *"Hardcoded hex."* Critical in both, but the FIX differs: in A it belongs in the component's own
+  source; in B it is usually the conversion having inlined a value the light page had as a literal.
+
+Audit B also has failure modes audit A structurally cannot see, because they are created by the
+conversion itself: a styling approach whose output drops the token reference (a Tailwind arbitrary
+value where a scale key was available), a variant chosen that does not fit the context, a component
+substituted for one that merely looks similar. Those are properties of the GENERATED code, and there
+is no generated code at audit A.
+
+So each audit declares its SCOPE, findings carry the scope they were produced under, and a rule
+declares which scopes it is valid in. Running a rule outside its scope is a bug the type system can
+prevent, and it is worth preventing: an audit that cries wolf is one people learn to scroll past,
+which is the failure mode `apps/ide/tests/ct/README.md` already documents for the CT suite.
+
+*Alternative considered:* one audit run at screen time, covering both — rejected because it puts the
+first token check after the screens are built, which is the late-feedback problem group 2b exists to
+remove. Components are created before screens; that is when their token discipline is cheapest to fix.
+
 ## Risks / Trade-offs
 
 **Instance counting is the hardest part and the easiest to get quietly wrong** → Build it
