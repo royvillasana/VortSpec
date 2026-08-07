@@ -187,6 +187,35 @@ a real constraint on the benchmark: **it needs an application, not a component l
 what a page renders and Q4 asks what other pages reuse; a library has neither. A valid target needs
 a resolvable entry page plus at least two pages sharing a component.
 
+#### Second measurement — the benchmark actually runs (2026-08-07)
+
+Group 2b closed the gap the first measurement found. With a generated validation page as the entry
+page, all four questions have a subject on a project that has never had a screen:
+
+| | |
+|---|---|
+| Roster | 55 components (`packages/ui`) |
+| Entry page | `src/__vortspec_validation__/Atoms.tsx` (generated) |
+| Digest without index → with | 1,051 → 1,591 tokens (**+540**) |
+| Q1 — components | 66 |
+| Q2 — on the entry page | 55 |
+| Q3 — atoms among them | 55 *(see caveat)* |
+| Q4 — also used elsewhere | 43 |
+
+**Q4 is the interesting one.** 43 of the 55 are rendered somewhere other than the validation page —
+components rendering each other. That is real reuse signal, and it confirms the per-tier design
+decision: even before a user writes a screen, composition between components produces a
+non-degenerate answer to "what else uses this".
+
+**Caveat on Q3.** The 55 is an artifact of the harness, not a finding: the roster was generated for
+this measurement with every component labelled `atom`, so "atoms among them" is trivially all of
+them. A real extraction assigns real tiers. Q3 needs re-measuring against a project whose roster
+carries genuine levels before its number means anything.
+
+**Q1 exceeds the roster (66 vs 55)** because anything under `component_dir` counts as design system,
+including files the generated roster did not list. That is the graph being right and the harness
+roster being partial — worth knowing when reading the number.
+
 **Still unmeasured, and why.** Accuracy, run-to-run variance, false negatives and speed each need N
 independent agent trials — the board used 11 — graded against the answer key `answersFromGraph`
 derives. No static analysis substitutes for one, and grading an agent against a key derived from the
