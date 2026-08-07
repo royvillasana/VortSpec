@@ -151,3 +151,80 @@ describe("scope and subject are stamped on every finding", () => {
     expect((await buildScreenGenerationAudit(dir, { generatedAt: STAMP })).findings).toEqual([]);
   });
 });
+
+describe("token discipline is STYLING-SPECIFIC (task 2c.4)", () => {
+  /** The same project, converted to a given styling — the fixture the VALIDATE criterion needs. */
+  async function styledProject(styling: string, screen: string): Promise<void> {
+    await write(".sdd-de/project.yaml", `framework: react\nstyling: ${styling}\ntoken_file: src/tokens.css\ncomponent_dir: src/components\n`);
+    await write("src/tokens.css", ":root {\n  --color-primary: #1d4ed8;\n  --radius-md: 8px;\n}\n");
+    await write(".sdd-de/components.json", JSON.stringify([{ name: "Button", level: "atom" }]));
+    await write("src/components/Button.tsx", `export const Button = () => <button/>;`);
+    // The canonical artifact is what the Tailwind curator reads, so the suggestion is what the
+    // emitted config actually holds rather than a guess.
+    await write(
+      ".vortspec/tokens.json",
+      JSON.stringify({
+        $extensions: { "com.vortspec.tokens": { source: "figma", collections: [] } },
+        color: { primary: { $type: "color", $value: "#1d4ed8" } },
+        radius: { md: { $type: "dimension", $value: 8 } },
+      }),
+    );
+    await write("src/pages/Landing.tsx", screen);
+  }
+
+  const ARBITRARY = `import { Button } from "../components/Button";
+    export const Landing = () => <div className="bg-[var(--color-primary)]"><Button/></div>;`;
+
+  it("flags a Tailwind arbitrary value where the emitted theme publishes a scale key", async () => {
+    // It renders correctly, so nothing else catches it — and the project quietly grows two ways to
+    // say the same thing.
+    await styledProject("tailwind", ARBITRARY);
+
+    const audit = await buildScreenGenerationAudit(dir, { generatedAt: STAMP });
+    const violation = audit.findings.find((finding) => finding.kind === "styling-lost-token");
+
+    expect(violation?.message).toContain("bg-[var(--color-primary)] bypasses the theme");
+    expect(violation?.message).toContain("bg-primary");
+  });
+
+  it("does NOT flag the same screen when it uses the scale key", async () => {
+    await styledProject(
+      "tailwind",
+      `import { Button } from "../components/Button";\nexport const Landing = () => <div className="bg-primary"><Button/></div>;`,
+    );
+    const audit = await buildScreenGenerationAudit(dir, { generatedAt: STAMP });
+    expect(audit.findings.some((f) => f.kind === "styling-lost-token")).toBe(false);
+  });
+
+  it("NO CROSS-TALK: the identical screen under css-modules produces no Tailwind finding", async () => {
+    // The VALIDATE criterion. A CSS-modules project has no utility classes and cannot fail this way;
+    // reporting it would be a finding nobody can act on.
+    await styledProject("css-modules", ARBITRARY);
+
+    const audit = await buildScreenGenerationAudit(dir, { generatedAt: STAMP });
+
+    expect(audit.findings.some((f) => f.kind === "styling-lost-token")).toBe(false);
+  });
+
+  it("flags a CSS-in-JS literal, and suggests the THEME idiom rather than var()", async () => {
+    // A different fix from the plain-CSS one — a message suggesting the wrong idiom is ignored.
+    await styledProject(
+      "styled-components",
+      `import { Button } from "../components/Button";
+       const Wrap = styled.div\`background: #1d4ed8;\`;
+       export const Landing = () => <Wrap><Button/></Wrap>;`,
+    );
+
+    const audit = await buildScreenGenerationAudit(dir, { generatedAt: STAMP });
+    const violation = audit.findings.find((finding) => finding.kind === "styling-lost-token");
+
+    expect(violation?.message).toContain("read it from the theme (color-primary)");
+    expect(violation?.message).not.toContain("var(--");
+  });
+
+  it("a styling with no rule of its own produces none, rather than borrowing another's", async () => {
+    await styledProject("scss", ARBITRARY);
+    const audit = await buildScreenGenerationAudit(dir, { generatedAt: STAMP });
+    expect(audit.findings.some((f) => f.kind === "styling-lost-token")).toBe(false);
+  });
+});

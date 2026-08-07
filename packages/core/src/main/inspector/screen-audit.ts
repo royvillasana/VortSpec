@@ -7,6 +7,13 @@ import { getInspectorTokens } from "./token-parser";
 import { stripComments } from "./component-reader";
 import { normValue } from "./figma-reconcile";
 import { buildRelationshipIndex } from "./relationship-index";
+import {
+  findCssInJsViolations,
+  findTailwindViolations,
+  stylingHasRule,
+} from "@vortspec/core/styling-audit";
+import { readCanonicalTokens } from "./canonical-tokens";
+import { readProjectConfig } from "../workspace/config-manager";
 
 /**
  * AUDIT B — the screen-generation audit (OpenSpec change: agentic-design-system, task 2c.3).
@@ -50,9 +57,11 @@ export async function buildScreenGenerationAudit(
   projectPath: string,
   options: { generatedAt?: string } = {},
 ): Promise<ScreenAuditResult> {
-  const [{ graph, shadows }, toks] = await Promise.all([
+  const [{ graph, shadows }, toks, config, canonical] = await Promise.all([
     buildRelationshipIndex(projectPath, options),
     getInspectorTokens(projectPath).catch(() => null),
+    readProjectConfig(projectPath).catch(() => null),
+    readCanonicalTokens(projectPath).catch(() => null),
   ]);
 
   const tokens = toks?.tokens ?? [];
@@ -120,6 +129,43 @@ export async function buildScreenGenerationAudit(
         message: `the generated screen hardcodes ${match[0]} — use var(--${token}); the conversion inlined a value the design system already names`,
       });
       if (findings.length >= MAX_FINDINGS) break;
+    }
+  }
+
+  // 4. STYLING-SPECIFIC failures (task 2c.4). The conversion's output fails differently per target,
+  //    and each rule below describes a failure the other stylings cannot physically produce. A
+  //    styling with no rule of its own gets NONE — borrowing another's produces findings that
+  //    cannot be acted on, which is worse than silence.
+  if (stylingHasRule(config?.styling)) {
+    const styling = (config?.styling ?? "").toLowerCase();
+    const valueToToken = new Map<string, string>();
+    for (const token of tokens) {
+      const value = token.resolvedValue.trim().toLowerCase();
+      if (value && !valueToToken.has(value)) valueToToken.set(value, token.name);
+    }
+
+    for (const screen of screens) {
+      if (findings.length >= MAX_FINDINGS) break;
+      const source = await readFile(join(projectPath, screen.path), "utf8").catch(() => "");
+      const violations =
+        styling === "tailwind" || styling === "tailwindcss"
+          ? canonical
+            ? findTailwindViolations(source, canonical)
+            : []
+          : findCssInJsViolations(source, valueToToken);
+
+      for (const violation of violations) {
+        findings.push({
+          scope: "screen-generation",
+          subject: "user-screen",
+          component: screen.name,
+          file: screen.path,
+          severity: "warning",
+          kind: "styling-lost-token",
+          message: violation.message,
+        });
+        if (findings.length >= MAX_FINDINGS) break;
+      }
     }
   }
 
