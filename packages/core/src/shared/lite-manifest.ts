@@ -100,6 +100,28 @@ export interface StandIn {
 export type ComponentTier = "atom" | "molecule" | "organism" | "template";
 export type Readiness = "light-only" | "framework-ready";
 
+/**
+ * The framework-free slice of a component's metadata that a light-authoring run needs
+ * (OpenSpec change: agentic-design-system, task 3.4).
+ *
+ * Deliberately NOT the whole record. `usage.commonPatterns[].code` is real JSX and
+ * `identity.importPath` is a module path — either one in `designer.md` is precisely the framework
+ * coupling the manifest exists to keep out, and `serializeLiteManifest` would (correctly) throw. What
+ * survives the trip is the reasoning: when to reach for this, why a variant exists, what not to do.
+ */
+export interface LiteHints {
+  /** `aiHints.selectionCriteria` — when this component is the right choice over its siblings. */
+  selectionCriteria?: string[];
+  /** `variants[].purpose` — why to pick a value, which the value name never says. */
+  variantPurpose?: { variant: string; purpose: string }[];
+  /**
+   * `usage.antiPatterns`, reduced to the two fields that change what gets generated. The `reason` is
+   * dropped on purpose: it explains the rule to a person, and this block is read by a composer that
+   * needs to know what to do instead.
+   */
+  avoid?: { scenario: string; instead: string }[];
+}
+
 export interface LiteComponent {
   name: string;
   tier: ComponentTier;
@@ -107,6 +129,8 @@ export interface LiteComponent {
   props?: { name: string; type: string; default?: string }[];
   readiness: Readiness;
   standIns: StandIn[];
+  /** Optional — a component with no metadata record still belongs in the manifest (task 3.6). */
+  hints?: LiteHints;
 }
 
 export interface LiteManifest {
@@ -134,6 +158,7 @@ export interface DeriveInput {
     variants: string[];
     props?: { name: string; type: string; default?: string }[];
     readiness?: Readiness;
+    hints?: LiteHints;
   }[];
   /** Stand-ins keyed by component name (harvested real renders or placeholders). */
   standIns?: Record<string, StandIn[]>;
@@ -192,7 +217,17 @@ export function deriveLiteManifest(input: DeriveInput): LiteManifest {
     // A component is framework-ready only when explicitly marked AND its stand-ins are harvested.
     const harvested = standIns.length > 0 && standIns.every((s) => s.source === "harvested");
     const readiness: Readiness = c.readiness === "framework-ready" && harvested ? "framework-ready" : "light-only";
-    return { name: c.name, tier: c.tier, variants: c.variants, props: c.props, readiness, standIns };
+    return {
+      name: c.name,
+      tier: c.tier,
+      variants: c.variants,
+      props: c.props,
+      readiness,
+      standIns,
+      // Spread rather than assigned, so a component with no metadata record carries no `hints` key
+      // at all instead of an empty one (task 3.6) — the manifest never implies a gap is a green light.
+      ...(c.hints ? { hints: c.hints } : {}),
+    };
   });
 
   return {
@@ -246,6 +281,35 @@ export function findFrameworkPointers(text: string): string[] {
  * component index) + a Markdown body of HTML stand-in sections. Throws if any framework pointer would
  * leak (e.g. a harvested stand-in carrying a real import), so a bad manifest never reaches the LLM.
  */
+/**
+ * Serialize a component's hints into the frontmatter, omitting anything empty.
+ *
+ * An empty `hints: {}` would be worse than absent: a composer reading it cannot tell "this component
+ * has no selection criteria recorded" from "this component may be used anywhere".
+ */
+function pushHints(lines: string[], hints: LiteHints | undefined): void {
+  if (!hints) return;
+  const criteria = hints.selectionCriteria?.filter((c) => c.trim()) ?? [];
+  const purposes = hints.variantPurpose?.filter((v) => v.variant.trim() && v.purpose.trim()) ?? [];
+  const avoid = hints.avoid?.filter((a) => a.scenario.trim() && a.instead.trim()) ?? [];
+  if (!criteria.length && !purposes.length && !avoid.length) return;
+  lines.push("    hints:");
+  if (criteria.length) {
+    lines.push("      selectionCriteria:");
+    for (const c of criteria) lines.push(`        - ${yamlStr(c)}`);
+  }
+  if (purposes.length) {
+    lines.push("      variantPurpose:");
+    for (const v of purposes)
+      lines.push(`        - { variant: ${yamlStr(v.variant)}, purpose: ${yamlStr(v.purpose)} }`);
+  }
+  if (avoid.length) {
+    lines.push("      avoid:");
+    for (const a of avoid)
+      lines.push(`        - { scenario: ${yamlStr(a.scenario)}, instead: ${yamlStr(a.instead)} }`);
+  }
+}
+
 export function serializeLiteManifest(m: LiteManifest): string {
   const lines: string[] = [];
   lines.push("---");
@@ -276,6 +340,7 @@ export function serializeLiteManifest(m: LiteManifest): string {
         lines.push(`      - { name: ${yamlStr(p.name)}, type: ${yamlStr(p.type)}${def} }`);
       }
     }
+    pushHints(lines, c.hints);
   }
   lines.push("---");
   lines.push("");

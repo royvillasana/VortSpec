@@ -29,9 +29,9 @@
 - [x] 3.1 Generate `.vortspec/ai/rules/{metadata-schema,atomic-hierarchy,deep-tracing,load-once}.md` as part of the index build
 - [x] 3.2 Reference the rule documents from grounded runs alongside the digest
 - [x] 3.3 Wire `ai-ds-composer` into compose and light-page runs as the selection method, and `ai-component-metadata` behind the group 1 generation prompt
-- [ ] 3.4 Extend `LiteComponent` in `shared/lite-manifest.ts` with an optional framework-free `hints` block (`selectionCriteria`, variant `purpose`, anti-pattern scenarios) and serialize it into `designer.md`; assert `findFrameworkPointers` still finds nothing and that serialization throws on a leak
-- [ ] 3.5 Carry selection criteria and anti-patterns for in-scope components in `buildLightPagePrompt`; assert every `data-component` the prompt permits has its criteria present
-- [ ] 3.6 Confirm a component with no metadata still appears in `designer.md` with its stand-in and does not block light-page composition
+- [x] 3.4 Extend `LiteComponent` in `shared/lite-manifest.ts` with an optional framework-free `hints` block (`selectionCriteria`, variant `purpose`, anti-pattern scenarios) and serialize it into `designer.md`; assert `findFrameworkPointers` still finds nothing and that serialization throws on a leak
+- [x] 3.5 Carry selection criteria and anti-patterns into light-page composition. DEVIATION: the criteria are carried in `designer.md`'s `hints` block (3.4) and `buildLightPagePrompt` carries the METHOD that makes them binding, rather than a second copy of the data. `designer.md` is already the prompt's component context; inlining every component's criteria as well would pay for the same text twice and let the two disagree. The coverage assertion therefore runs against the serialized manifest — every `data-component` name the prompt permits has its criteria present there
+- [x] 3.6 Confirm a component with no metadata still appears in `designer.md` with its stand-in and does not block light-page composition
 - [ ] 3.7 Replace the `DESIGN.md` `.slice(0, 4000)` in `shared/compose-run.ts:295` with the structured digest plus in-scope metadata records
 - [ ] 3.8 Verify: re-run the benchmark questions with rules present and compare against the group 2 baseline
 

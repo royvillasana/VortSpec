@@ -16,6 +16,7 @@ import { getInspectorComponents } from "../inspector/component-reader";
 import { readFigmaComponents } from "../inspector/figma-reconcile";
 import {
   deriveLiteManifest,
+  type LiteHints,
   serializeLiteManifest,
   findFrameworkPointers,
   type DeriveInput,
@@ -34,6 +35,8 @@ import { LIGHT_HTML_DIR, normSegment, buildLightStandInPrompt, type StandInTarge
 import { buildTwoTrackBuildPrompt } from "../../shared/two-track";
 import { readProjectConfig } from "../workspace/config-manager";
 import { LIGHT_PAGES_DIR, buildLightPagePrompt, buildGenerateCodePrompt } from "../../shared/light-page";
+import { readAllMetadata } from "../inspector/component-metadata";
+import type { ComponentMetadata } from "@vortspec/core/inspector";
 import { detectedComponentsSchema } from "../../shared/flow";
 
 /**
@@ -124,10 +127,40 @@ function variantsOf(props: PropLike[]): string[] {
  * tokens remain the fallback for a project that has not been scanned into an artifact yet, so this
  * never regresses a working project to an empty manifest.
  */
+/**
+ * The framework-free slice of a metadata record that `designer.md` may carry (task 3.4).
+ *
+ * Reducing rather than passing through is the point. A record's `usage.commonPatterns[].code` is real
+ * JSX and `identity.importPath` is a module path; either in `designer.md` is the framework coupling
+ * the light manifest exists to prevent, and `serializeLiteManifest` would throw on it. Only the
+ * reasoning crosses over — when to reach for this, why a variant exists, what to do instead.
+ *
+ * Returns undefined when the record carries none of it, so a component with a hollow record is
+ * indistinguishable from one with no record: both simply have no hints, which is the truth.
+ */
+export function liteHintsFrom(metadata: ComponentMetadata | undefined): LiteHints | undefined {
+  if (!metadata) return undefined;
+  const selectionCriteria = (metadata.aiHints?.selectionCriteria ?? []).filter((c) => c.trim());
+  const variantPurpose = (metadata.variants ?? [])
+    .filter((v) => v.value?.trim() && v.purpose?.trim())
+    .map((v) => ({ variant: v.value, purpose: v.purpose }));
+  // An anti-pattern without an `alternative` is dropped: it is the field that changes what gets
+  // generated, and a bare "do not do X" in a composition prompt leaves the model to invent the Y.
+  const avoid = (metadata.usage?.antiPatterns ?? [])
+    .filter((a) => a.scenario?.trim() && a.alternative?.trim())
+    .map((a) => ({ scenario: a.scenario, instead: a.alternative }));
+  if (!selectionCriteria.length && !variantPurpose.length && !avoid.length) return undefined;
+  return {
+    ...(selectionCriteria.length ? { selectionCriteria } : {}),
+    ...(variantPurpose.length ? { variantPurpose } : {}),
+    ...(avoid.length ? { avoid } : {}),
+  };
+}
+
 export function buildDeriveInput(
   projectName: string,
   tokens: { name: string; type: string; resolvedValue: string }[],
-  components: { name: string; level?: string; props: PropLike[]; readiness?: Readiness }[],
+  components: { name: string; level?: string; props: PropLike[]; readiness?: Readiness; hints?: LiteHints }[],
   canonical?: DesignTokenDocument | null,
 ): DeriveInput {
   const fromCanonical = canonical ? canonicalDeriveTokens(canonical) : [];
@@ -147,6 +180,7 @@ export function buildDeriveInput(
       // Coded components are framework-ready CANDIDATES; deriveLiteManifest confirms it only when every
       // stand-in is also harvested (a real render), else it stays light-only (no false convergence).
       readiness: c.readiness,
+      ...(c.hints ? { hints: c.hints } : {}),
     })),
   };
 }
@@ -234,19 +268,30 @@ export async function listComponentReadiness(projectPath: string): Promise<Array
 
 /** Read the real project sources and derive the in-memory lite manifest (with Figma stand-ins if present). */
 export async function deriveProjectLiteManifest(projectPath: string): Promise<LiteManifest> {
-  const [tokensResult, componentsResult, figmaStandIns, canonical] = await Promise.all([
+  const [tokensResult, componentsResult, figmaStandIns, canonical, metadata] = await Promise.all([
     getInspectorTokens(projectPath),
     getInspectorComponents(projectPath),
     readFigmaStandIns(projectPath),
     // The canonical artifact when the project has one — null degrades to the inspector tokens.
     readCanonicalTokens(projectPath),
+    // Best effort: a project with no metadata records still gets a full manifest, just without hints.
+    readAllMetadata(projectPath).catch(() => new Map<string, ComponentMetadata>()),
   ]);
   // A light-first design system shows ALL designed components — include Figma components that aren't
   // coded yet (`figmaOnly`) alongside the code roster, so the palette reflects the whole design system.
   // Coded components exist in the framework track → framework-ready CANDIDATES (confirmed only when their
   // stand-ins are harvested). Figma-only components are designed but not built → always light-only.
-  const coded = componentsResult.components.map((c) => ({ ...c, readiness: "framework-ready" as Readiness }));
-  const figmaOnly = componentsResult.figmaOnly.map((f) => ({ name: f.name, props: [] as { key: string; kind: string; options: string[]; defaultValue?: string }[], readiness: "light-only" as Readiness }));
+  const coded = componentsResult.components.map((c) => ({
+    ...c,
+    readiness: "framework-ready" as Readiness,
+    ...(liteHintsFrom(metadata.get(c.name)) ? { hints: liteHintsFrom(metadata.get(c.name))! } : {}),
+  }));
+  const figmaOnly = componentsResult.figmaOnly.map((f) => ({
+    name: f.name,
+    props: [] as { key: string; kind: string; options: string[]; defaultValue?: string }[],
+    readiness: "light-only" as Readiness,
+    ...(liteHintsFrom(metadata.get(f.name)) ? { hints: liteHintsFrom(metadata.get(f.name))! } : {}),
+  }));
   const components = [...coded, ...figmaOnly];
   const input = buildDeriveInput(
     basename(projectPath) || "Project",

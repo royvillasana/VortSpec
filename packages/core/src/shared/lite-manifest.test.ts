@@ -5,6 +5,7 @@ import {
   findFrameworkPointers,
   type DeriveInput,
   type StandIn,
+  type LiteHints,
 } from "./lite-manifest";
 
 const BASE: DeriveInput = {
@@ -105,5 +106,121 @@ describe("findFrameworkPointers — the verify gate", () => {
 
   it("passes clean light HTML with resolved values", () => {
     expect(findFrameworkPointers(`<button style="background:#c53434; padding:0.5rem 1rem;">Go</button>`)).toEqual([]);
+  });
+});
+
+describe("component hints in designer.md (task 3.4)", () => {
+  const withHints = (hints: LiteHints | undefined) =>
+    deriveLiteManifest({
+      projectName: "Acme",
+      tokens: [{ name: "color-primary", value: "#1d4ed8", group: "colors" }],
+      components: [{ name: "Button", tier: "atom", variants: ["primary", "ghost"], hints }],
+    });
+
+  it("serializes selection criteria, variant purpose and what to avoid", () => {
+    const text = serializeLiteManifest(
+      withHints({
+        selectionCriteria: ["the main action a user should take on a section"],
+        variantPurpose: [{ variant: "ghost", purpose: "tertiary actions with minimal weight" }],
+        avoid: [{ scenario: "using it to navigate", instead: "use the link stand-in" }],
+      }),
+    );
+    expect(text).toContain("hints:");
+    expect(text).toContain("the main action a user should take on a section");
+    expect(text).toContain("tertiary actions with minimal weight");
+    expect(text).toContain("use the link stand-in");
+  });
+
+  it("stays framework-free with hints present", () => {
+    const text = serializeLiteManifest(
+      withHints({ selectionCriteria: ["primary call to action"], avoid: [{ scenario: "x", instead: "y" }] }),
+    );
+    expect(findFrameworkPointers(text)).toEqual([]);
+  });
+
+  it("THROWS rather than emitting a hint that carries framework code", () => {
+    // This is the reason `commonPatterns[].code` and `importPath` are not part of `LiteHints`: a
+    // record's most useful-looking field is real JSX, and one of those in designer.md is the exact
+    // coupling the light manifest exists to prevent. The guard must catch it if it ever leaks in.
+    expect(() =>
+      serializeLiteManifest(
+        withHints({ avoid: [{ scenario: "raw markup", instead: 'import { Button } from "@/components/Button"' }] }),
+      ),
+    ).toThrow(/framework pointers/);
+  });
+
+  it("omits the block entirely when a component has no metadata record", () => {
+    // Task 3.6: an empty `hints: {}` reads as "no constraints" rather than "nothing recorded".
+    expect(serializeLiteManifest(withHints(undefined))).not.toContain("hints:");
+  });
+
+  it("omits the block when every hint is blank", () => {
+    const text = serializeLiteManifest(
+      withHints({ selectionCriteria: ["  "], variantPurpose: [{ variant: "", purpose: "" }], avoid: [] }),
+    );
+    expect(text).not.toContain("hints:");
+  });
+
+  it("still lists the component itself when it has no hints", () => {
+    const text = serializeLiteManifest(withHints(undefined));
+    expect(text).toContain('name: "Button"');
+    expect(text).toContain("## Button");
+  });
+});
+
+describe("every permitted component's reasoning is reachable (tasks 3.5, 3.6)", () => {
+  /**
+   * `designer.md` IS the light-page prompt's component context — the prompt names it as the library
+   * and the selection method points at its `hints`. So the coverage assertion belongs here, on the
+   * artifact, rather than on the prompt string: duplicating every component's criteria into the
+   * prompt as well would pay for the same text twice and let the two disagree.
+   */
+  const manifest = (components: DeriveInput["components"]) =>
+    serializeLiteManifest(
+      deriveLiteManifest({
+        projectName: "Acme",
+        tokens: [{ name: "color-primary", value: "#1d4ed8", group: "colors" }],
+        components,
+      }),
+    );
+
+  it("carries criteria for every data-component name the page may place", () => {
+    const text = manifest([
+      {
+        name: "Button",
+        tier: "atom",
+        variants: ["primary"],
+        hints: { selectionCriteria: ["the main action in a section"] },
+      },
+      {
+        name: "Card",
+        tier: "molecule",
+        variants: [],
+        hints: { selectionCriteria: ["grouping related content with its own surface"] },
+      },
+    ]);
+    // The names the prompt permits are exactly the frontmatter component names.
+    for (const [name, criterion] of [
+      ["Button", "the main action in a section"],
+      ["Card", "grouping related content with its own surface"],
+    ]) {
+      expect(text).toContain(`name: "${name}"`);
+      expect(text).toContain(criterion);
+    }
+  });
+
+  it("still permits a component whose metadata was never written (task 3.6)", () => {
+    // The soft gate: a missing record must not remove a component from the light library. It composes
+    // on its stand-in and its description, and the selection method says to declare that it did.
+    const text = manifest([
+      { name: "Button", tier: "atom", variants: ["primary"], hints: { selectionCriteria: ["main action"] } },
+      { name: "Badge", tier: "atom", variants: [] },
+    ]);
+    expect(text).toContain('name: "Badge"');
+    expect(text).toContain("## Badge");
+    expect(findFrameworkPointers(text)).toEqual([]);
+    // And it is visibly the one without reasoning, rather than silently equal to the documented one.
+    const badgeBlock = text.slice(text.indexOf('name: "Badge"'), text.indexOf("---", text.indexOf('name: "Badge"')));
+    expect(badgeBlock).not.toContain("hints:");
   });
 });

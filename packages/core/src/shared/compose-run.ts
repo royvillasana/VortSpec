@@ -293,7 +293,11 @@ export function buildComposePrompt(input: ComposePromptInput): string {
     // The selection METHOD (task 3.3). The roster above says what is available; this says how to
     // choose among it. Light-first runs build a missing piece and name it; framework runs report it,
     // matching what each path is already told to do further down.
-    selectionProtocol(lightNative ? "build-and-name" : "report"),
+    selectionProtocol(
+      lightNative
+        ? { gapPolicy: "build-and-name", source: "designer" }
+        : { gapPolicy: "report", source: "metadata" },
+    ),
     "",
     input.tokens.length
       ? `Ground every value in the project's design tokens (${input.tokens.slice(0, 40).join(", ")}${

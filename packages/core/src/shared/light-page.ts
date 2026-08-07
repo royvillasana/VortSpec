@@ -51,7 +51,7 @@ export function buildLightPagePrompt(name: string, description: string): string 
     // The selection METHOD (task 3.3). `designer.md` says what exists; this says how to choose among
     // it. `build-and-name` because a light page is the deliverable — stopping on a gap here would
     // contradict the light-first contract this whole prompt is built around.
-    ...selectionProtocol("build-and-name")
+    ...selectionProtocol({ gapPolicy: "build-and-name", source: "designer" })
       .split("\n")
       .map((line) => `   ${line}`),
     "   TOKENS — style every design-system property as `var(--<token-name>, <resolved value>)`, e.g.",
