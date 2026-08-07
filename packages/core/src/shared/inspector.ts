@@ -731,6 +731,11 @@ export const reportResultSchema = z.object({
   deferred: z.number(),
   rulesFrom: z.enum(["project", "defaults", "malformed"]),
   consumeSource: z.boolean(),
+  /**
+   * The violations themselves, so the Issues view can show them without reading the report file
+   * back and re-parsing markdown it just wrote (task 4.8).
+   */
+  findings: z.array(auditFindingSchema).default([]),
 });
 export type ReportResultPayload = z.infer<typeof reportResultSchema>;
 

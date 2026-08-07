@@ -674,6 +674,7 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
     }),
     generateReports: async () => ({
       written: [],
+      findings: [],
       violations: 0,
       deferred: 0,
       rulesFrom: "defaults" as const,

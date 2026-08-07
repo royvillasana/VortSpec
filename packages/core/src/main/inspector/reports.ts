@@ -3,6 +3,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { adoptionReport, tokenViolationReport } from "@vortspec/core/reports";
 import { evaluateGovernance, type GovernanceSubject } from "@vortspec/core/governance-eval";
 import { isConsumeSource } from "@vortspec/core/setup";
+import type { AuditFinding } from "@vortspec/core/inspector";
 import { AI_DIR } from "@vortspec/core/artifact-paths";
 import { buildRelationshipIndex } from "./relationship-index";
 import { readGovernance } from "./governance-store";
@@ -22,6 +23,8 @@ export const VIOLATIONS_REPORT = `${REPORTS_DIR}/token-violations.md`;
 
 export interface ReportResult {
   written: string[];
+  /** The violations as findings, for the Issues view (task 4.8). */
+  findings: AuditFinding[];
   violations: number;
   deferred: number;
   /** Which rule set was used — a malformed project file falls back and says so. */
@@ -93,5 +96,24 @@ export async function generateReports(
     written.push(relative);
   }
 
-  return { written, violations: violations.length, deferred: deferred.length, rulesFrom, consumeSource };
+  return {
+    written,
+    findings: violations.map((violation) => ({
+      // Governance findings are always component-creation subjects: the subject list above is the
+      // design-system sources, deliberately excluding pages (that is audit B's territory).
+      scope: "component-creation" as const,
+      subject: "component-source" as const,
+      component: violation.component,
+      file: violation.file,
+      severity: violation.severity,
+      kind: violation.kind,
+      message: violation.message,
+      rule: violation.rule,
+      correction: violation.correction,
+    })),
+    violations: violations.length,
+    deferred: deferred.length,
+    rulesFrom,
+    consumeSource,
+  };
 }

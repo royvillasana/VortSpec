@@ -15,7 +15,7 @@ import type {
   TokenType,
   TokenUsage,
   DesignAudit,
-  MetadataPlan,
+  MetadataPlan, ReportResultPayload,
 } from "@vortspec/core/ipc";
 import { api } from "../lib/api";
 import { ViewHeader } from "../components/ViewHeader";
@@ -275,6 +275,10 @@ export function Inspector({
   const [sanitation, setSanitation] = useState<TokenSanitation | null>(null);
   const [sanOpen, setSanOpen] = useState(false);
   const [audit, setAudit] = useState<DesignAudit | null>(null);
+  // Governance v2's report run (task 4.8). Fired alongside the audit and never awaited by the token
+  // load: it walks the component sources, so blocking the inspector on it would make opening the
+  // panel feel slower for a result that is supplementary.
+  const [reportRun, setReportRun] = useState<ReportResultPayload | null>(null);
 
   async function reloadTokens(preferredCollection?: string): Promise<void> {
     const r = await api.inspectorTokens(project.path, preferredCollection);
@@ -289,6 +293,7 @@ export function Inspector({
     setActiveMode(r.activeMode);
     void api.getSanitation(project.path).then(setSanitation).catch(() => undefined);
     void api.designAudit(project.path).then(setAudit).catch(() => undefined);
+    void api.generateReports(project.path).then(setReportRun).catch(() => undefined);
     void api.metadataPlan(project.path).then(setMetaPlan).catch(() => undefined);
   }
 
@@ -951,7 +956,13 @@ export function Inspector({
           </div>
         </div>
 
-        <AuditBanner audit={audit} />
+        <AuditBanner
+          audit={audit}
+          governance={reportRun?.findings ?? []}
+          deferred={reportRun?.deferred ?? 0}
+          reports={reportRun?.written ?? []}
+          onOpenReport={(path) => void api.revealPath(project.path, path).catch(() => undefined)}
+        />
         <MetadataStatus plan={metaPlan} running={metaRun.running} onGenerate={() => void generateMetadata()} />
 
         <div className="flex-1 overflow-x-hidden overflow-y-auto">

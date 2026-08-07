@@ -83,6 +83,7 @@ import { indexStalenessSchema, reportResultSchema } from "./inspector";
 export { tokenEmitResultSchema } from "./token-emit-ledger";
 export { tokenIngestResultSchema } from "./canonical-ingest";
 export { indexStalenessSchema, reportResultSchema } from "./inspector";
+export type { ReportResultPayload } from "./inspector";
 export {
   figmaConnectionSchema,
   figmaCliModeSchema,
