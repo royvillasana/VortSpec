@@ -8,7 +8,10 @@ import {
   TOKENS_PATH,
   USAGE_PATH,
   buildRelationshipIndex,
+  componentsUsingToken,
   readIndexStamp,
+  readTokenIndex,
+  tokensUsedByComponent,
 } from "./relationship-index";
 
 /**
@@ -203,5 +206,84 @@ describe("pages are nodes, but are not counted as components (task 2.6)", () => 
     await buildRelationshipIndex(dir, { generatedAt: STAMP });
     const components = (await artifact(INDEX_PATH)).components as Record<string, ToonValue>[];
     expect(components.find((c) => c.name === "Card")?.adoption).toBe("unimported");
+  });
+});
+
+describe("the token reverse index answers without scanning component sources (task 2.7)", () => {
+  /**
+   * The proof is destructive on purpose: build the index, then DELETE every component source and
+   * the token file, and ask again. If any answer changed, the read path was quietly falling back to
+   * a scan — which is the one thing this artifact exists to make unnecessary, and the one thing a
+   * non-destructive test cannot rule out.
+   */
+  async function deleteAllSources(): Promise<void> {
+    await rm(join(dir, "src"), { recursive: true, force: true });
+    await rm(join(dir, ".sdd-de/components.json"), { force: true });
+  }
+
+  it("answers token → components after every source file is gone", async () => {
+    await buildRelationshipIndex(dir, { generatedAt: STAMP });
+    const before = await componentsUsingToken(dir, "radius-md");
+    expect(before).toEqual(["Button", "Card"]);
+
+    await deleteAllSources();
+
+    expect(await componentsUsingToken(dir, "radius-md")).toEqual(before);
+    expect(await componentsUsingToken(dir, "color-primary")).toEqual(["Button"]);
+  });
+
+  it("answers component → tokens from the same file, with no second index to drift", async () => {
+    // Derived by inverting the reverse index rather than stored separately: two copies of one
+    // relationship disagree the moment either is regenerated alone.
+    await buildRelationshipIndex(dir, { generatedAt: STAMP });
+    await deleteAllSources();
+
+    expect(await tokensUsedByComponent(dir, "Button")).toEqual(["color-primary", "radius-md", "spacing-4"]);
+    expect(await tokensUsedByComponent(dir, "Card")).toEqual(["radius-md"]);
+  });
+
+  it("accepts a token name with or without the -- prefix", async () => {
+    await buildRelationshipIndex(dir, { generatedAt: STAMP });
+    expect(await componentsUsingToken(dir, "--radius-md")).toEqual(["Button", "Card"]);
+  });
+
+  it("returns an empty list for a token nothing consumes, and for an unknown one", async () => {
+    await buildRelationshipIndex(dir, { generatedAt: STAMP });
+    expect(await componentsUsingToken(dir, "no-such-token")).toEqual([]);
+    const index = await readTokenIndex(dir);
+    expect(index?.find((row) => row.token === "spacing-4")?.usedBy).toEqual(["Button"]);
+  });
+
+  it("returns null — not an empty answer — when the index has not been built", async () => {
+    // "Nothing uses this token" and "we never looked" are different facts, and collapsing them
+    // would let a caller report a token as safe to delete because the index was missing.
+    const bare = await mkdtemp(join(tmpdir(), "vortspec-no-index-"));
+    try {
+      expect(await readTokenIndex(bare)).toBeNull();
+      expect(await componentsUsingToken(bare, "radius-md")).toBeNull();
+      expect(await tokensUsedByComponent(bare, "Button")).toBeNull();
+    } finally {
+      await rm(bare, { recursive: true, force: true });
+    }
+  });
+
+  it("reads a corrupt artifact as 'not built' rather than as 'no tokens'", async () => {
+    await buildRelationshipIndex(dir, { generatedAt: STAMP });
+    await writeFile(join(dir, TOKENS_PATH), "this is not toon\n", "utf8");
+    expect(await readTokenIndex(dir)).toBeNull();
+  });
+
+  it("does not rebuild on read — a stale index answers stale, visibly", async () => {
+    // A silent rebuild inside a read would hide staleness behind an answer that looks fresh, which
+    // is precisely what task 2.9's staleness check exists to surface.
+    await buildRelationshipIndex(dir, { generatedAt: STAMP });
+    await write(
+      "src/components/Card.tsx",
+      `export const Card = () => <div className="bg-[var(--color-primary)]" />;`,
+    );
+
+    // The source now uses --color-primary, but the index still says it does not.
+    expect(await componentsUsingToken(dir, "color-primary")).toEqual(["Button"]);
+    expect(await readIndexStamp(dir)).toBe(STAMP);
   });
 });

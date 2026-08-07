@@ -9,7 +9,7 @@ import {
   type RelationshipGraph,
   type ShadowFinding,
 } from "@vortspec/core/relationship-graph";
-import { writeToon, type ToonValue } from "@vortspec/core/toon";
+import { parseToon, writeToon, type ToonValue } from "@vortspec/core/toon";
 import { ALL_SOURCE_EXTS } from "@vortspec/core/framework-profiles";
 import { getInspectorComponents } from "./component-reader";
 import { getInspectorTokens } from "./token-parser";
@@ -284,3 +284,80 @@ export async function readIndexStamp(projectPath: string): Promise<string | null
 }
 
 export type { ToonValue };
+
+// ── Reading the index back (task 2.7) ────────────────────────────────
+
+/** One token's row in the reverse index. */
+export interface TokenConsumers {
+  token: string;
+  value: string;
+  type: string;
+  /** Components that reference this token. */
+  usedBy: string[];
+}
+
+/**
+ * The token → components reverse index, read from `design-tokens.toon`.
+ *
+ * ANSWERS WITHOUT SCANNING COMPONENT SOURCES — which is the property task 2.7 asks to verify, and
+ * the reason the artifact exists at all. "What breaks if I change `--radius-md`?" is otherwise a
+ * full re-read of every component in the project, on every ask; here it is one file. The test for
+ * this deletes the component sources after building the index and asserts the answer is unchanged,
+ * because that is the only way to prove a read path is not quietly falling back to a scan.
+ *
+ * Returns null when the index has not been built. Null rather than building it on demand: a silent
+ * rebuild inside a read would hide staleness (task 2.9) behind an answer that looks fresh.
+ */
+export async function readTokenIndex(projectPath: string): Promise<TokenConsumers[] | null> {
+  const raw = await readFile(join(projectPath, TOKENS_PATH), "utf8").catch(() => null);
+  if (raw === null) return null;
+  let parsed: Record<string, ToonValue>;
+  try {
+    parsed = parseToon(raw);
+  } catch {
+    return null; // a corrupt artifact reads as "not built", never as "no tokens"
+  }
+  const rows = Array.isArray(parsed.tokens) ? (parsed.tokens as Record<string, ToonValue>[]) : [];
+  return rows.map((row) => ({
+    token: String(row.name ?? ""),
+    value: String(row.value ?? ""),
+    type: String(row.type ?? ""),
+    usedBy: splitList(row.usedBy),
+  }));
+}
+
+/** Which components consume a token. Empty when nothing does; null when the index is absent. */
+export async function componentsUsingToken(
+  projectPath: string,
+  token: string,
+): Promise<string[] | null> {
+  const index = await readTokenIndex(projectPath);
+  if (!index) return null;
+  const bare = token.replace(/^--/, "");
+  return index.find((row) => row.token === bare)?.usedBy ?? [];
+}
+
+/**
+ * The FORWARD direction, derived from the same file: which tokens a component consumes.
+ *
+ * Derived rather than stored. Two copies of one relationship can disagree the moment either is
+ * regenerated alone, and the reverse index already contains every pair — inverting it costs one
+ * pass over a file we have just read.
+ */
+export async function tokensUsedByComponent(
+  projectPath: string,
+  component: string,
+): Promise<string[] | null> {
+  const index = await readTokenIndex(projectPath);
+  if (!index) return null;
+  return index
+    .filter((row) => row.usedBy.includes(component))
+    .map((row) => row.token)
+    .sort();
+}
+
+/** A `|`-joined cell → its list. Empty string means an empty list, not a one-item list of "". */
+function splitList(value: ToonValue): string[] {
+  const text = typeof value === "string" ? value : "";
+  return text ? text.split("|") : [];
+}
