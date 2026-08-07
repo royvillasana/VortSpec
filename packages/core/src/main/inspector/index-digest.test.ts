@@ -363,3 +363,44 @@ describe("query protocols reach a grounded run (task 3.2)", () => {
     expect(plain.appendSystemPrompt).toBeUndefined();
   });
 });
+
+describe("the two component counts are distinguished (2.10/3.8 trial finding)", () => {
+  let dir: string;
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), "vortspec-digest-counts-"));
+    await scaffold(dir);
+  });
+  afterEach(async () => {
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  it("says the roster count is the roster count, not bare 'Components (N)'", async () => {
+    // Five agents asked "how many components do we have" split 3-2 purely on which artifact they
+    // opened: the digest said "Components (55)" and index.toon said stats.components 66. Both were
+    // right about different populations; the bare word is what made it a coin flip.
+    const digest = await buildIndexDigest(dir, {});
+    expect(digest).toContain("declared on the roster");
+    expect(digest).not.toMatch(/## Components \(\d+\)/);
+  });
+
+  it("names the scanned figure and the gap when the two differ", async () => {
+    // An undeclared component file under component_dir: on disk, absent from components.json.
+    await writeFile(
+      join(dir, "src/components/Undeclared.tsx"),
+      "export const Undeclared = () => <span/>;\n",
+      "utf8",
+    );
+    await buildRelationshipIndex(dir, { generatedAt: "2026-08-07T12:00:00.000Z" });
+    const digest = await buildIndexDigest(dir, {});
+    expect(digest).toMatch(/\d+ component files found under the component directory/);
+    expect(digest).toContain("not on the roster");
+    expect(digest).toContain("index.toon stats.components");
+  });
+
+  it("states only the roster count when no index has been built", async () => {
+    // Nothing to reconcile against, and inventing a second figure would be worse than one.
+    const digest = await buildIndexDigest(dir, {});
+    expect(digest).toContain("declared on the roster");
+    expect(digest).not.toContain("component files found under");
+  });
+});

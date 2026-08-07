@@ -87,6 +87,31 @@ function describeRecord(meta: ComponentMetadata): string[] {
  * interpolated field is sanitized (`safePromptField`) — the content is untrusted project
  * data going into a `--dangerously-skip-permissions` run.
  */
+/**
+ * How many component files the SCAN found under `component_dir` — the figure `index.toon` reports as
+ * `stats.components`, read back rather than recomputed so the two can never disagree.
+ *
+ * Null when the index has not been built; the digest then states only the roster count, which is the
+ * only population it actually knows about.
+ */
+async function scannedComponentCount(projectPath: string): Promise<number | null> {
+  const { readFile } = await import("node:fs/promises");
+  const { join } = await import("node:path");
+  const { parseToon } = await import("@vortspec/core/toon");
+  const { INDEX_PATH } = await import("@vortspec/core/artifact-paths");
+
+  const raw = await readFile(join(projectPath, INDEX_PATH), "utf8").catch(() => null);
+  if (raw === null) return null;
+  try {
+    const parsed = parseToon(raw) as Record<string, unknown>;
+    const stats = parsed.stats as Record<string, unknown> | undefined;
+    const count = stats?.components;
+    return typeof count === "number" ? count : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function buildIndexDigest(
   projectPath: string,
   options: IndexDigestOptions = {},
@@ -116,7 +141,24 @@ export async function buildIndexDigest(
 
   if (components.length) {
     const shown = components.slice(0, MAX_COMPONENTS);
-    lines.push("", `## Components (${components.length}) — name [level] · file · deps · figma · summary`);
+    // The header says WHICH population it counts, and names the other one when they differ.
+    //
+    // Found by the 2.10/3.8 trials: the digest said "Components (55)" while `index.toon` reported
+    // `stats.components: 66`, so five agents asked "how many components do we have" split 3–2 purely
+    // on which artifact they happened to open. Both numbers were right about different things — the
+    // roster is what the design system DECLARES, the scan is what is on disk under `component_dir` —
+    // and the gap between them is a finding, not noise. Presenting either alone under the bare word
+    // "components" is what made the answer a coin flip.
+    const scanned = await scannedComponentCount(projectPath).catch(() => null);
+    const undeclared = scanned !== null && scanned > components.length ? scanned - components.length : 0;
+    lines.push(
+      "",
+      `## Components — ${components.length} declared on the roster${
+        undeclared
+          ? ` · ${scanned} component files found under the component directory (${undeclared} not on the roster; index.toon stats.components reports the scanned figure)`
+          : ""
+      } — name [level] · file · deps · figma · summary`,
+    );
     if (metadata.size) lines.push("Full records live in .vortspec/metadata/<name>.json — read one before composing with a component not detailed below.");
     for (const c of shown) {
       const bits = [safePromptField(c.file ?? "(unbuilt)", 120)];

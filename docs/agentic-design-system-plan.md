@@ -216,6 +216,45 @@ carries genuine levels before its number means anything.
 including files the generated roster did not list. That is the graph being right and the harness
 roster being partial — worth knowing when reading the number.
 
+#### The trials (2026-08-07) — 10 agents, 5 grounded / 5 exploring
+
+Same 55-component fixture, two copies: the grounded arm got the digest + query protocols, the
+ungrounded arm got the same code with `.vortspec/` deleted. Both graded against `answersFromGraph`.
+
+| | Grounded | Exploring |
+|---|---|---|
+| Overall | **18/20 (90%)** | 10/20 (50%) |
+| Q1 components | 3/5 — answered 66,55,66,55,66 | 0/5 — answered 55 five times |
+| Q2 on entry page | 5/5 | 5/5 |
+| Q3 atoms | 5/5 | 5/5 |
+| Q4 reused elsewhere | **5/5, all exactly 18** | 0/5 — 15,15,15,15,16 |
+| Tool calls | 4.6 mean | 8.2 mean |
+| Duration | 32.5s mean | 54.6s mean |
+| Tokens | 40.5k mean | 34.4k mean |
+
+**Q4 is the result.** Every grounded trial answered 18 exactly; no exploring trial got it right, and
+they disagreed with each other (15 four times, 16 once). The errors are all UNDERCOUNTS — reuse the
+grep missed. That is the failure mode that matters, because a model that thinks a component is unused
+builds a second one.
+
+**Q1 exposed a defect in our own artifacts, and the split IS the finding.** The digest header said
+`Components (55)` while `index.toon` reported `stats.components: 66`, so grounded agents answered
+whichever they happened to open. Both numbers were right about different populations — 55 is what the
+roster DECLARES, 66 is what the scan found under `component_dir`, and the 11-file gap is itself worth
+surfacing. Fixed: the header now names the population it counts and reports the scanned figure and the
+gap alongside it. The 3/5 score is therefore not a measure of the index; it is a measure of a
+question our artifacts answered two ways.
+
+**Q2 and Q3 did not discriminate** — 10/10 both arms. The entry page is one file, so reading it is
+cheap either way, and for a per-tier validation page Q3 is Q2 by construction. Neither is a useful
+benchmark question against this fixture.
+
+**Grounding cost MORE tokens and less of everything else.** +18% tokens (the block is prepaid whether
+or not the run needs it), against −44% tool calls and −40% wall clock. On a 55-component project the
+digest is a large fraction of the work; exploration cost grows with repo size while the digest stays
+bounded, so the sign of the token difference may flip on a larger codebase. That is a caveat, not a
+claim — it has not been measured.
+
 **Still unmeasured, and why.** Accuracy, run-to-run variance, false negatives and speed each need N
 independent agent trials — the board used 11 — graded against the answer key `answersFromGraph`
 derives. No static analysis substitutes for one, and grading an agent against a key derived from the
