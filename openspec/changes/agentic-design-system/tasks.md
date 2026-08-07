@@ -20,7 +20,7 @@
 - [x] 2.5 Implement shadow-implementation detection (structure + token usage matching a component that is not imported), emitting `warning` severity findings that name the shadowed component and the file
 - [x] 2.6 Serialize `.vortspec/ai/{index,component-usage,design-tokens}.toon` with a `generatedAt` stamp; add a TOON writer with round-trip tests
 - [x] 2.7 Add the token reverse index (token → consuming components) and verify it answers without scanning component sources
-- [ ] 2.8 Extend `buildIndexDigest` with a bounded relationship section plus an on-demand `uses`/`usedBy` lookup; regression-test digest size against a large fixture and assert truncation is stated, not silent
+- [x] 2.8 Extend `buildIndexDigest` with a bounded relationship section plus an on-demand `uses`/`usedBy` lookup; regression-test digest size against a large fixture and assert truncation is stated, not silent
 - [ ] 2.9 Add staleness detection (component dir mtime vs `generatedAt`), expose it to the UI, and add the CI check that fails on a stale index naming the missing components
 - [ ] 2.10 Verify: run the four benchmark questions (now recorded in §1.6) against a real project with and without the index, IN SEQUENCE in one session — Q3/Q4 depend on Q2's answer, and running them independently measures something easier than what was claimed; parameterize Q2's entry page per framework rather than hardcoding `index.astro`; token cost is measurable deterministically from the digest, while accuracy/variance/false-negatives need repeated trials (the board used 11)
 

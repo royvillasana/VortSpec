@@ -353,6 +353,7 @@ export function buildRelationshipGraph(
   for (const file of files) {
     // Which components this file imports, and under what local name.
     const localToComponent = new Map<string, string>();
+    const importedNames = new Set<string>();
     for (const record of parseImports(file.source)) {
       const target = resolveSpecifier(record.specifier, file.path, context);
       if (!target) continue; // package import — outside this graph, deliberately
@@ -366,18 +367,40 @@ export function buildRelationshipGraph(
             : targetFile?.component;
         if (!component) continue;
         localToComponent.set(local, component);
+        importedNames.add(local);
       }
+    }
+
+    // A rendered tag whose name matches a known component, with NO import to explain it.
+    //
+    // Requiring an import would be React-centric and would lose real edges: an Angular template
+    // renders a component declared in its module, and a globally-registered Vue component needs no
+    // import either. The tag name matching a defined component IS the signal; the import only tells
+    // us the LOCAL alias when there is one. So these are counted as instances and as edges, but NOT
+    // as imports — `importCount` stays honestly about imports, which is what makes `efficiency`
+    // mean something.
+    const importedComponents = new Set(localToComponent.values());
+    for (const [name] of definitionOf) {
+      if (importedComponents.has(name)) continue;
+      if (definitionOf.get(name) === file.path) continue; // a component is not its own instance
+      if (countInstances(file.source, name).count === 0) continue;
+      localToComponent.set(name, name);
     }
 
     for (const [local, component] of localToComponent) {
       const entry = usage.get(component);
       if (!entry) continue;
-      entry.importCount++;
-      if (!entry.importedBy.includes(file.path)) entry.importedBy.push(file.path);
+      // `local === component` with no matching import means the tag was found without one — see
+      // above. Such a render must not inflate the import count.
+      const wasImported = importedNames.has(local);
+      if (wasImported) {
+        entry.importCount++;
+        if (!entry.importedBy.includes(file.path)) entry.importedBy.push(file.path);
+      }
 
       const instances = countInstances(file.source, local);
       entry.instanceCount += instances.count;
-      if (instances.count === 0) {
+      if (instances.count === 0 && wasImported) {
         // The bug the series names: an import is not adoption. Recorded per component AND per file,
         // because "Button is unused" and "this file forgot to delete an import" are different fixes.
         neverRendered.set(component, [...(neverRendered.get(component) ?? []), file.path]);

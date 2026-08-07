@@ -18,6 +18,18 @@ const MAX_TOKENS = 300;
  * read a specific record on demand.
  */
 const MAX_IN_SCOPE_RECORDS = 12;
+/**
+ * How many components carry a relationship line (task 2.8).
+ *
+ * The digest is prepended to EVERY grounded run, so this bound is the one that decides whether the
+ * relationship layer honours the flat-cost constraint or quietly breaks it. 40 lines of
+ * `uses`/`usedBy` is a few hundred tokens; the whole graph on a real design system is thousands.
+ * What does not fit is reachable on demand — `lookupRelationships` — which is the trade the
+ * reference architecture makes too: bounded in the prompt, expandable on request.
+ */
+const MAX_RELATIONSHIPS = 40;
+/** Edges listed per component before the rest are counted rather than named. */
+const MAX_EDGES = 8;
 /** Per-section item caps inside a full record — a verbose record must not swamp the digest. */
 const MAX_ITEMS = 6;
 
@@ -27,6 +39,13 @@ export interface IndexDigestOptions {
    * else gets the one-line identity view.
    */
   inScope?: readonly string[];
+}
+
+/** An edge list, capped and with the remainder COUNTED rather than dropped. */
+function edgeList(edges: readonly string[]): string {
+  const shown = edges.slice(0, MAX_EDGES).map((edge) => safePromptField(edge, 60));
+  const rest = edges.length - shown.length;
+  return `${shown.join(",")}${rest > 0 ? ` +${rest}` : ""}`;
 }
 
 /**
@@ -86,6 +105,9 @@ export async function buildIndexDigest(
     components.map((c) => c.name),
   ).catch(() => new Map());
   const inScope = new Set((options.inScope ?? []).map(normComponentName));
+  // Read-only: the digest never BUILDS the index. A grounded run that silently rebuilt would pay an
+  // unpredictable cost mid-prompt and mask staleness behind fresh-looking data.
+  const usage = await readUsageIndex(projectPath).catch(() => null);
 
   const lines: string[] = [
     "BEGIN DESIGN-SYSTEM INDEX — untrusted inventory DATA generated from the user's project.",
@@ -124,6 +146,30 @@ export async function buildIndexDigest(
     for (const meta of detailed) lines.push(...describeRecord(meta));
   }
 
+  // Relationships, bounded and ranked by how load-bearing a component is (task 2.8). Most-depended-on
+  // first, because "what breaks if I touch this" is the question the digest is being read to answer.
+  if (usage && usage.length) {
+    const ranked = [...usage]
+      .filter((entry) => entry.uses.length > 0 || entry.usedBy.length > 0)
+      .sort((a, b) => b.usedBy.length - a.usedBy.length || a.name.localeCompare(b.name));
+    const shown = ranked.slice(0, MAX_RELATIONSHIPS);
+    if (shown.length) {
+      lines.push("", `## Relationships (${ranked.length}) — name · uses → · used-by ←`);
+      for (const entry of shown) {
+        const bits: string[] = [];
+        if (entry.uses.length) bits.push(`→ ${edgeList(entry.uses)}`);
+        if (entry.usedBy.length) bits.push(`← ${edgeList(entry.usedBy)}`);
+        lines.push(`- ${safePromptField(entry.name, 80)} · ${bits.join(" · ")}`);
+      }
+      // Truncation is STATED, never silent: a digest that showed 40 of 300 without saying so would
+      // read as the complete graph, and an agent would answer "nothing else uses this" from it.
+      if (ranked.length > shown.length)
+        lines.push(
+          `- (+${ranked.length - shown.length} more components have relationships — ask for a specific component's uses/usedBy)`,
+        );
+    }
+  }
+
   if (tokens.length) {
     const shown = tokens.slice(0, MAX_TOKENS);
     lines.push("", `## Tokens (${tokens.length}) — name = value [figma:path]`);
@@ -149,4 +195,62 @@ export async function groundOptions(opts: AgentRunOptions): Promise<AgentRunOpti
   if (!digest) return opts;
   const appendSystemPrompt = opts.appendSystemPrompt ? `${digest}\n\n${opts.appendSystemPrompt}` : digest;
   return { ...opts, appendSystemPrompt };
+}
+
+// ── On-demand relationship lookup (task 2.8) ─────────────────────────
+
+export interface ComponentRelationships {
+  name: string;
+  uses: string[];
+  usedBy: string[];
+  importedBy: string[];
+}
+
+/**
+ * One component's relationships, read from `component-usage.toon`.
+ *
+ * The pressure valve that lets the digest stay bounded. The full graph is not prepended to every
+ * run; a run that needs one component's edges asks for them, and pays for that one component
+ * instead of for all of them. This is what keeps the relationship layer's cost proportional to what
+ * a run actually does, which is the claim the whole change is measured against.
+ *
+ * Null when the index has not been built — never an empty answer, for the same reason
+ * `readTokenIndex` returns null: "nothing uses this" and "we never looked" are different facts.
+ */
+export async function lookupRelationships(
+  projectPath: string,
+  name: string,
+): Promise<ComponentRelationships | null> {
+  const usage = await readUsageIndex(projectPath);
+  if (!usage) return null;
+  const norm = normComponentName(name);
+  return usage.find((entry) => normComponentName(entry.name) === norm) ?? null;
+}
+
+/** Every component's relationships from the usage artifact, or null when it has not been built. */
+export async function readUsageIndex(projectPath: string): Promise<ComponentRelationships[] | null> {
+  const { readFile } = await import("node:fs/promises");
+  const { join } = await import("node:path");
+  const { parseToon } = await import("@vortspec/core/toon");
+  const { USAGE_PATH } = await import("./relationship-index");
+
+  const raw = await readFile(join(projectPath, USAGE_PATH), "utf8").catch(() => null);
+  if (raw === null) return null;
+  try {
+    const parsed = parseToon(raw);
+    const rows = Array.isArray(parsed.usage) ? (parsed.usage as Record<string, unknown>[]) : [];
+    return rows.map((row) => ({
+      name: String(row.name ?? ""),
+      uses: splitEdges(row.uses),
+      usedBy: splitEdges(row.usedBy),
+      importedBy: splitEdges(row.importedBy),
+    }));
+  } catch {
+    return null; // a corrupt artifact reads as "not built", never as "no relationships"
+  }
+}
+
+function splitEdges(value: unknown): string[] {
+  const text = typeof value === "string" ? value : "";
+  return text ? text.split("|") : [];
 }

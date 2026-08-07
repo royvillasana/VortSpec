@@ -417,3 +417,31 @@ describe("shadow detection is directional (task 2.5)", () => {
     expect(findShadowImplementations(files, buildRelationshipGraph(files))).toEqual([]);
   });
 });
+
+describe("a render without an import is still an edge (task 2.8)", () => {
+  // Requiring an import would be React-centric and would lose real edges: an Angular template
+  // renders a component declared in its module, and a globally-registered Vue component needs no
+  // import either. The tag name matching a defined component IS the signal.
+  const files: GraphFile[] = [
+    { path: "src/components/Button.tsx", component: "Button", designSystem: true, source: `export const Button = () => <button/>;` },
+    { path: "src/pages/Home.tsx", component: "Home", source: `export const Home = () => <div><Button/><Button/></div>;` },
+  ];
+  const graph = buildRelationshipGraph(files);
+  const button = graph.components.find((component) => component.name === "Button")!;
+
+  it("counts the instances and both edge directions", () => {
+    expect(button.instanceCount).toBe(2);
+    expect(button.usedBy).toEqual(["Home"]);
+  });
+
+  it("does NOT inflate the import count — that is what keeps efficiency meaningful", () => {
+    expect(button.importCount).toBe(0);
+    expect(button.efficiency).toBeUndefined();
+    // Rendered, so adopted — even though nothing imported it in a way we could resolve.
+    expect(button.adoption).toBe("adopted");
+  });
+
+  it("never treats a component's own file as an instance of itself", () => {
+    expect(button.usedBy).not.toContain("Button");
+  });
+});
