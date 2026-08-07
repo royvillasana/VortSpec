@@ -221,10 +221,12 @@ export function buildPromoteComponentPrompt(opts: {
     "   hardcoded hex or px).",
     "2. Replace the inline composition at the insertion site with a usage of the new component (keep its",
     "   `data-component` marker so the inspector still recognizes it).",
-    "3. Generate a Storybook story (`<Component>.stories.*`) and a `<Component>.metadata.ts` for it, following",
-    "   the project's /storybook conventions — variants and states as stories, the a11y addon, design tokens.",
+    "3. Generate a Storybook story (`<Component>.stories.*`) following the project's /storybook conventions —",
+    "   variants and states as stories, the a11y addon, design tokens.",
+    "4. Write its metadata record to `.vortspec/metadata/<lowercased-name>.json` (VortSpec-owned — never a",
+    "   `.metadata.ts` beside the component). Storybook's docs page reads that file too, so there is one record.",
     "",
-    "Do not touch unrelated files. End with: the component (plus any variant file its framework contract calls for), the story + metadata, and the call site updated to use it.",
+    "Do not touch unrelated files. End with: the component (plus any variant file its framework contract calls for), the story, the metadata record, and the call site updated to use it.",
   ].join("\n");
 }
 

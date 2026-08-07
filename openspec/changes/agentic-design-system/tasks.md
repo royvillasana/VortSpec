@@ -1,11 +1,11 @@
 ## 1. One metadata schema, VortSpec-owned
 
-- [ ] 1.1 Widen `componentMetadataSchema` in `packages/core/src/shared/inspector.ts` to the nine sections (`identity`, `usage`, `variants`, `aiHints`, `composition`, `behavior`, `props`, `accessibility`, `designTokens`), with `usage.antiPatterns` typed as a `{scenario, reason, alternative}` triplet that rejects bare strings
-- [ ] 1.2 Add the read-time legacy migration (four fields → nine sections) and an `isComplete` derivation that reports a migrated or purpose-less record as incomplete; unit-test both directions
-- [ ] 1.3 Add a discovery view to `main/inspector/component-metadata.ts` returning only `identity` for the whole roster, plus a full-record read for named components
-- [ ] 1.4 Rewrite `buildMetadataPrompt` to fill the nine sections as a transform of the Component/Interaction Specs, delegating only the analysis-derived sections (`aiHints`, `commonPatterns`, `antiPatterns`) to the `ai-component-metadata` skill; resolve `designTokens` values from `token_file` at generation time
-- [ ] 1.5 Extend `metadataStatusSchema` coverage reporting to distinguish missing / incomplete / complete, and surface it where coverage is shown today
-- [ ] 1.6 Route the full record for in-scope components and the `identity` view for the rest into grounded runs, through `safePromptField` and inside the data-not-instructions block; assert sanitation in a test
+- [x] 1.1 Widen `componentMetadataSchema` in `packages/core/src/shared/inspector.ts` to the nine sections (`identity`, `usage`, `variants`, `aiHints`, `composition`, `behavior`, `props`, `accessibility`, `designTokens`), with `usage.antiPatterns` typed as a `{scenario, reason, alternative}` triplet that rejects bare strings
+- [x] 1.2 Add the read-time legacy migration (four fields → nine sections) and an `isComplete` derivation that reports a migrated or purpose-less record as incomplete; unit-test both directions
+- [x] 1.3 Add a discovery view to `main/inspector/component-metadata.ts` returning only `identity` for the whole roster, plus a full-record read for named components
+- [x] 1.4 Rewrite `buildMetadataPrompt` to fill the nine sections as a transform of the Component/Interaction Specs, delegating only the analysis-derived sections (`aiHints`, `commonPatterns`, `antiPatterns`) to the `ai-component-metadata` skill; resolve `designTokens` values from `token_file` at generation time
+- [x] 1.5 Extend `metadataStatusSchema` coverage reporting to distinguish missing / incomplete / complete, and surface it where coverage is shown today
+- [x] 1.6 Route the full record for in-scope components and the `identity` view for the rest into grounded runs, through `safePromptField` and inside the data-not-instructions block; assert sanitation in a test
 - [ ] 1.7 Switch `.storybook/ComponentDocs` and the `/storybook` skill to read `.vortspec/metadata/*.json`; stop authoring `<Name>.metadata.ts` and remove the instruction to write one from `shared/compose-run.ts`
 - [ ] 1.8 Fold Figma doc enrichment into the metadata record so the docs page and grounded runs read the same enriched data
 - [ ] 1.9 Rewrite `.sdd-de/docs/component-metadata-model.md` for the new ownership and update `.sdd-de/ai-specs/skills/storybook/SKILL.md`

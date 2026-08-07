@@ -1,11 +1,16 @@
 import { join } from "node:path";
 import { readFile } from "node:fs/promises";
 import {
-  componentMetadataSchema,
   type ComponentMetadata,
+  type MetadataIdentity,
   type MetadataStatus,
   type MetadataPlan,
 } from "@vortspec/core/inspector";
+import {
+  isMetadataComplete,
+  metadataGaps,
+  parseComponentMetadata,
+} from "@vortspec/core/component-metadata";
 import { getInspectorComponents } from "./component-reader";
 import { normComponentName } from "./figma-reconcile";
 import { safePromptField } from "./prompt-safe";
@@ -24,15 +29,47 @@ export function metadataFileName(name: string): string {
   return `${normComponentName(name)}.json`;
 }
 
-/** Read one component's metadata, or null when it hasn't been generated. */
+/**
+ * Read one component's metadata, or null when it hasn't been generated.
+ *
+ * Goes through `parseComponentMetadata`, so a legacy four-field record on disk is widened HERE, in
+ * memory, and every caller downstream sees the nine-section shape (task 1.2). The file itself is
+ * never rewritten — see the note in `shared/component-metadata.ts` for why.
+ */
 export async function readComponentMetadata(projectPath: string, name: string): Promise<ComponentMetadata | null> {
   try {
     const raw = await readFile(join(projectPath, DIR, metadataFileName(name)), "utf8");
-    const parsed = componentMetadataSchema.safeParse(JSON.parse(raw));
-    return parsed.success ? parsed.data : null;
+    return parseComponentMetadata(JSON.parse(raw));
   } catch {
     return null;
   }
+}
+
+/**
+ * The DISCOVERY view: `identity` only, for the whole roster (task 1.3).
+ *
+ * The read that makes a large design system affordable to reason about. A grounded run needs to know
+ * WHAT EXISTS before it can know which components matter, and paying for nine sections × the whole
+ * roster to answer that would blow the token budget this change is measured against — the constraint
+ * is roughly flat interactive cost. So discovery is cheap and wide; the full record is a second,
+ * narrow read for the components a run actually touches (`readMetadataFor`).
+ */
+export async function metadataDiscovery(projectPath: string): Promise<MetadataIdentity[]> {
+  const comps = await getInspectorComponents(projectPath).catch(() => null);
+  const out: MetadataIdentity[] = [];
+  for (const component of comps?.components ?? []) {
+    const record = await readComponentMetadata(projectPath, component.name);
+    // A component with no record still appears — its absence is the useful fact, and omitting it
+    // would make the roster look smaller than it is.
+    out.push(
+      record?.identity ?? {
+        name: component.name,
+        description: "",
+        ...(component.level ? { category: component.level as MetadataIdentity["category"] } : {}),
+      },
+    );
+  }
+  return out;
 }
 
 /** Generated metadata for a known set of component names, keyed by normalized name. */
@@ -51,42 +88,61 @@ export async function readAllMetadata(projectPath: string): Promise<Map<string, 
   return readMetadataFor(projectPath, (comps?.components ?? []).map((c) => c.name));
 }
 
-/** Coverage of metadata across the roster — which components still lack it. */
+/**
+ * Coverage of metadata across the roster — missing / incomplete / complete (task 1.5).
+ *
+ * The three-way split is the point. A migrated legacy record has a file and cannot say when to reach
+ * for its component; counting it as covered reports a design system as ready while what reaches the
+ * model is hollow.
+ */
 export async function metadataStatus(projectPath: string): Promise<MetadataStatus> {
   const comps = await getInspectorComponents(projectPath).catch(() => null);
   const names = (comps?.components ?? []).map((c) => c.name);
   const missing: string[] = [];
-  let withMetadata = 0;
+  const incomplete: { name: string; gaps: string[] }[] = [];
+  let complete = 0;
   for (const name of names) {
-    if (await readComponentMetadata(projectPath, name)) withMetadata++;
-    else missing.push(name);
+    const record = await readComponentMetadata(projectPath, name);
+    if (!record) missing.push(name);
+    else if (isMetadataComplete(record)) complete++;
+    else incomplete.push({ name, gaps: metadataGaps(record) });
   }
-  return { total: names.length, withMetadata, missing };
+  return { total: names.length, complete, incomplete, missing, withMetadata: complete + incomplete.length };
 }
 
 /**
- * Metadata coverage plus the ready-to-run generation prompt for the components still
- * missing it — what the UI needs to show a "generate" affordance and launch the run.
+ * Metadata coverage plus the ready-to-run generation prompt — what the UI needs to show a "generate"
+ * affordance and launch the run.
+ *
+ * The prompt covers the INCOMPLETE records as well as the missing ones. A migrated record is
+ * precisely what needs regenerating, and leaving it out would make the affordance disappear at the
+ * moment the gap it exists to close is the only one left.
  */
 export async function metadataPlan(projectPath: string): Promise<MetadataPlan> {
   const comps = await getInspectorComponents(projectPath).catch(() => null);
   const roster = comps?.components ?? [];
-  const missingComps: { name: string; file: string | null }[] = [];
-  for (const c of roster) {
-    if (!(await readComponentMetadata(projectPath, c.name))) missingComps.push({ name: c.name, file: c.file });
-  }
+  const status = await metadataStatus(projectPath);
+  const needsWork = new Set([...status.missing, ...status.incomplete.map((entry) => entry.name)]);
+  const targets = roster
+    .filter((component) => needsWork.has(component.name))
+    .map((component) => ({ name: component.name, file: component.file }));
   return {
-    total: roster.length,
-    withMetadata: roster.length - missingComps.length,
-    missing: missingComps.map((c) => c.name),
-    prompt: missingComps.length ? buildMetadataPrompt(missingComps) : "",
+    ...status,
+    prompt: targets.length ? buildMetadataPrompt(targets) : "",
   };
 }
 
 /**
- * The gated-run prompt that generates metadata for the given components. Deterministic
- * (no timestamps) so it's cache-stable. Each component gets an explicit target path so
- * the files match what `readComponentMetadata` expects.
+ * The gated-run prompt that generates metadata for the given components (task 1.4).
+ *
+ * Framed as a TRANSFORM OF THE SPECS, not a fresh analysis. The Component and Interaction Specs
+ * already capture variants, states, props, ARIA/keyboard/WCAG, token usage, patterns and
+ * anti-patterns — so asking a model to re-derive them from source is both more expensive and less
+ * accurate than asking it to carry across what a person already decided. Only the three
+ * analysis-derived sections (`aiHints`, `usage.commonPatterns`, `usage.antiPatterns`) are genuinely
+ * new work, and those are the ones delegated to the `ai-component-metadata` skill.
+ *
+ * Deterministic (no timestamps) so it stays cache-stable.
  */
 export function buildMetadataPrompt(components: { name: string; file: string | null }[]): string {
   // The component NAME and FILE are untrusted project data; sanitize before embedding in
@@ -98,13 +154,52 @@ export function buildMetadataPrompt(components: { name: string; file: string | n
   return [
     "Generate AI-ready metadata for these design-system components so future runs use each one as intended.",
     "",
-    "For EACH component: read its source (and any `.variants` sibling), then write a JSON file at the target path below with EXACTLY this shape:",
-    '  { "name": "<ComponentName>", "summary": "<one line: what it is for>", "usage": ["<when/how to use>", ...], "patterns": ["<recommended composition>", ...], "antiPatterns": ["<misuse to avoid>", ...] }',
+    "This is mostly a TRANSFORM of what already exists, not a fresh analysis. For each component, read in this order:",
+    "  1. its Component Spec and Interaction Spec under `specs/` — the authoritative source for props, variants, states, accessibility and tokens;",
+    "  2. its source and any `.variants` sibling, to confirm the spec matches what was built;",
+    "  3. `.vortspec/tokens.json` (the canonical token artifact) to resolve each token NAME to its value.",
+    "Where the spec and the source disagree, follow the SOURCE and note it in `aiHints.context`.",
     "",
-    "Rules:",
-    "- Base every field on the component's REAL props, variants, and how it is used across the codebase — be concrete, not generic.",
-    "- Keep each array to 2–5 tight bullets. `summary` is one sentence.",
-    "- Create the `.vortspec/metadata/` directory if needed. Write ONLY these JSON files — do NOT modify any component source.",
+    "Write a JSON file at each target path below with this shape (omit a section you have nothing real for — never pad it):",
+    JSON.stringify(
+      {
+        name: "<ComponentName>",
+        identity: {
+          name: "<ComponentName>",
+          category: "atom | molecule | organism | template",
+          type: "interactive | display | input | container | navigation",
+          description: "<one line: what it is for>",
+          importPath: "<how it is imported>",
+        },
+        usage: {
+          useCases: ["<when to reach for it>"],
+          commonPatterns: [{ name: "<pattern>", description: "<why>", code: "<runnable JSX>" }],
+          antiPatterns: [{ scenario: "<what someone will try>", reason: "<why it is wrong>", alternative: "<what to do instead>" }],
+        },
+        variants: [{ axis: "variant", value: "primary", purpose: "<when this value is the right one>" }],
+        props: [{ name: "<prop>", type: "<ts type>", default: "<default>", description: "<what it does>", required: false }],
+        composition: {
+          itemShape: [{ field: "<field>", type: "<ts type>", required: true, description: "<what it is>" }],
+          slots: [{ name: "<slot>", description: "<what goes here>" }],
+          worksWith: ["<component it is normally used with>"],
+        },
+        behavior: { states: [{ state: "<state>", description: "<what triggers it>" }], interactions: ["<interaction>"] },
+        accessibility: { role: "<aria role>", keyboard: "<key handling>", screenReader: "<announcement>", wcag: "<criterion>", notes: [] },
+        designTokens: { colors: [{ role: "background", token: "<token name>", value: "<resolved value>" }], typography: [], spacing: [], shadows: [], radius: [] },
+        aiHints: { context: "<anything a generator must know>", selectionCriteria: ["<reach for this when …>"], keywords: ["<search term>"], generationRules: ["<rule>"] },
+      },
+      null,
+      2,
+    ),
+    "",
+    "Rules that decide whether this record is worth its tokens:",
+    "- `usage.antiPatterns` MUST be triplets. A bare warning is rejected: `alternative` is the field that changes generated code, so an anti-pattern without one is not worth recording.",
+    "- `aiHints.selectionCriteria` is what a composer reads FIRST — say what makes this component the right choice OVER ITS SIBLINGS, not what it does.",
+    "- `variants[].purpose` is the point of the variants section. The enum values are already in the source; why to pick one is not.",
+    "- `commonPatterns[].code` must be real, copy-pasteable JSX using the component's actual API.",
+    "- Resolve `designTokens` values from the canonical artifact at generation time — embed the real hex/rem, not the token name alone.",
+    "- Be concrete and specific to THIS component. A description that would fit any button is worse than none: it costs tokens on every run and tells the model nothing.",
+    "- Create `.vortspec/metadata/` if needed. Write ONLY these JSON files — do NOT modify any component source.",
     "",
     "Components and their target files:",
     list,

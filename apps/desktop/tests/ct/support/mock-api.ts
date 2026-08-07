@@ -723,7 +723,9 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
     // above), so every one of these must exist even when a test doesn't exercise it.
     getSanitation: async () => cfg.sanitation ?? { orphans: [], duplicates: [] },
     designAudit: async () => cfg.designAudit ?? { findings: [], summary: { components: 0, findings: 0, drifted: 0 } },
-    metadataPlan: async () => cfg.metadataPlan ?? { total: 0, withMetadata: 0, missing: [], prompt: "" },
+    // Coverage is three-way now (task 1.5): missing / incomplete / complete.
+    metadataPlan: async () =>
+      cfg.metadataPlan ?? { total: 0, complete: 0, incomplete: [], missing: [], withMetadata: 0, prompt: "" },
     collapseToken: async () => cfg.tokens ?? EMPTY_TOKENS,
     createToken: async (_p: string, name: string, value: string) => {
       // Really adds the row, so a test can assert the OUTCOME (the token is now part of the design

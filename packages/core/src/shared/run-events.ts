@@ -141,6 +141,16 @@ export const agentRunOptionsSchema = z.object({
    */
   groundWithIndex: z.boolean().optional(),
   /**
+   * Components this run is expected to touch (OpenSpec change: agentic-design-system, task 1.6).
+   * Each one gets its FULL metadata record in the digest — selection criteria, variant purposes,
+   * anti-pattern corrections — while the rest of the roster stays a one-line identity view.
+   *
+   * Opt-in per run rather than always-on: nine sections across a whole design system is what would
+   * break the flat-cost constraint this change is measured against. A caller that does not know its
+   * scope simply omits this and gets today's digest.
+   */
+  inScopeComponents: z.array(z.string()).optional(),
+  /**
    * Renderer-supplied labels persisted with the run so an interrupted run can be
    * resumed later with its original stage view (kind) and scope (total). Opaque
    * to the main process except for persistence.
