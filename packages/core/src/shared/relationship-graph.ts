@@ -293,6 +293,15 @@ export interface ComponentUsage {
   /** The state to branch on. `efficiency` is a detail of it, not a substitute for it. */
   adoption: AdoptionState;
   /**
+   * Whether this node is a DESIGN-SYSTEM component rather than a consumer of one.
+   *
+   * Pages are nodes too, and have to be: "list the components used on the entry page" and "how many
+   * of these are used on other pages" — two of the four benchmark questions — are questions ABOUT
+   * pages, and a graph containing only design-system components cannot answer either. The flag is
+   * what keeps "how many components do we have" from counting them.
+   */
+  designSystem: boolean;
+  /**
    * `instanceCount / importCount` — how much rendering each import buys. Present only when the
    * component is imported at all, because a ratio over zero is not a low score, it is no score.
    */
@@ -336,6 +345,7 @@ export function buildRelationshipGraph(
       importCount: 0,
       instanceCount: 0,
       adoption: "unimported",
+      designSystem: byPath.get(path)?.designSystem === true,
     });
 
   const neverRendered = new Map<string, string[]>();
@@ -393,6 +403,9 @@ export function buildRelationshipGraph(
   }
 
   return {
+    // Everything the caller passed is reported. Deciding what is WORTH WRITING is the artifact's
+    // job, not the graph's — the graph does not know which files are the design system unless it
+    // was told, and a pure function that silently dropped nodes would make its own tests lie.
     components: [...usage.values()].sort((a, b) => a.name.localeCompare(b.name)),
     importedNeverRendered: [...neverRendered.entries()]
       .map(([component, list]) => ({ component, files: [...new Set(list)].sort() }))

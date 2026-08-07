@@ -1,0 +1,286 @@
+import { join } from "node:path";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import {
+  buildRelationshipGraph,
+  findShadowImplementations,
+  isComponentFile,
+  tokensUsed,
+  type GraphFile,
+  type RelationshipGraph,
+  type ShadowFinding,
+} from "@vortspec/core/relationship-graph";
+import { writeToon, type ToonValue } from "@vortspec/core/toon";
+import { ALL_SOURCE_EXTS } from "@vortspec/core/framework-profiles";
+import { getInspectorComponents } from "./component-reader";
+import { getInspectorTokens } from "./token-parser";
+import { readProjectConfig } from "../workspace/config-manager";
+
+/**
+ * The fs half of the relationship index — OpenSpec change: agentic-design-system, task 2.6.
+ *
+ * Reads the project's sources, builds the graph (`shared/relationship-graph.ts` owns every decision
+ * about WHAT a relationship is), and writes the three artifacts the reference architecture names:
+ *
+ *   .vortspec/ai/index.toon           — what exists
+ *   .vortspec/ai/component-usage.toon — how components relate to each other
+ *   .vortspec/ai/design-tokens.toon   — how components relate to tokens
+ *
+ * They are TOON and they are COMMITTED, so a change to the design system's shape shows up in a diff
+ * a person can read. That is also why the writer is byte-stable: an artifact that reordered itself
+ * on every build would show a change every time and train everyone to skip it.
+ */
+
+export const AI_DIR = ".vortspec/ai";
+export const INDEX_PATH = `${AI_DIR}/index.toon`;
+export const USAGE_PATH = `${AI_DIR}/component-usage.toon`;
+export const TOKENS_PATH = `${AI_DIR}/design-tokens.toon`;
+
+export interface RelationshipIndexResult {
+  graph: RelationshipGraph;
+  shadows: ShadowFinding[];
+  /** Project-relative paths written. */
+  written: string[];
+  generatedAt: string;
+}
+
+/**
+ * Read every source file the graph needs, marking which are design-system components.
+ *
+ * `designSystem` comes from `component_dir` — the one place VortSpec already knows the difference
+ * between "our design system" and "code that uses it". Shadow detection needs that direction, and
+ * without it reports nothing rather than guessing (see `GraphFile.designSystem`).
+ */
+async function collectGraphFiles(projectPath: string): Promise<GraphFile[]> {
+  const [config, components] = await Promise.all([
+    readProjectConfig(projectPath),
+    getInspectorComponents(projectPath).catch(() => null),
+  ]);
+  const componentDir = config?.componentDir ? normalize(config.componentDir) : null;
+  const byPath = new Map<string, string>();
+  for (const component of components?.components ?? [])
+    if (component.file) byPath.set(normalize(component.file), component.name);
+
+  const files: GraphFile[] = [];
+  const seen = new Set<string>();
+  const paths = [...byPath.keys()];
+  // Component sources first, then any other source file that could RENDER one — a page that
+  // imports Button is not on the component roster but is exactly where instances live.
+  for (const relative of paths) await push(relative);
+  for (const relative of await listSourceFiles(projectPath, config?.componentDir)) await push(relative);
+
+  async function push(relative: string): Promise<void> {
+    if (seen.has(relative) || !isComponentFile(relative)) return;
+    seen.add(relative);
+    const source = await readFile(join(projectPath, relative), "utf8").catch(() => null);
+    if (source === null) return;
+    // Every scanned file gets a node NAME, not just roster components. A page is where instances
+    // live, and two of the four benchmark questions are about pages — a graph that contains only
+    // design-system components cannot answer either. `buildRelationshipGraph` prunes the files that
+    // turn out to be connected to nothing, so a `utils.ts` swept up here never reaches the index.
+    const component = byPath.get(relative) ?? nodeNameFor(relative);
+    files.push({
+      path: relative,
+      source,
+      component,
+      ...(componentDir && relative.startsWith(`${componentDir}/`) ? { designSystem: true } : {}),
+    });
+  }
+  return files;
+}
+
+/** Source files under `src/` (or the project root), excluding dependencies and build output. */
+async function listSourceFiles(projectPath: string, componentDir?: string | null): Promise<string[]> {
+  const { readdir } = await import("node:fs/promises");
+  const skip = new Set(["node_modules", ".git", "dist", "build", "out", ".next", ".turbo", "coverage", ".vortspec", ".sdd-de"]);
+  const roots = ["src", componentDir ?? ""].filter(Boolean);
+  const out: string[] = [];
+  const walk = async (relative: string, depth: number): Promise<void> => {
+    if (depth > 12 || out.length > MAX_FILES) return;
+    let entries;
+    try {
+      entries = await readdir(join(projectPath, relative), { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      if (skip.has(entry.name)) continue;
+      const here = relative ? `${relative}/${entry.name}` : entry.name;
+      if (entry.isDirectory()) await walk(here, depth + 1);
+      else if (ALL_SOURCE_EXTS.some((extension) => entry.name.endsWith(extension))) out.push(here);
+    }
+  };
+  for (const root of [...new Set(roots.map(normalize))]) await walk(root, 0);
+  return out;
+}
+
+/**
+ * The node name for a file that is not on the component roster — its stem, PascalCased.
+ *
+ * `src/pages/index.tsx` → `Index`. Two files can produce the same NAME (the documented
+ * `index.tsx` collision), which is exactly why every lookup in the graph is keyed on the PATH and
+ * the name is only a label.
+ */
+function nodeNameFor(relative: string): string {
+  const stem = (relative.split("/").pop() ?? "").replace(/\.[^.]+$/, "");
+  return stem
+    .split(/[-_.]/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join("");
+}
+
+/** A backstop so a pathological repo cannot stall an index build. Reported, never silent. */
+const MAX_FILES = 4000;
+
+function normalize(path: string): string {
+  return path.replace(/\\/g, "/").replace(/^\.\//, "").replace(/\/$/, "");
+}
+
+/**
+ * Build the graph and write the three artifacts.
+ *
+ * `generatedAt` is supplied by the caller so the build stays deterministic under test — the same
+ * project and the same stamp produce byte-identical files, which is what makes the committed
+ * artifacts reviewable.
+ */
+export async function buildRelationshipIndex(
+  projectPath: string,
+  options: { generatedAt?: string } = {},
+): Promise<RelationshipIndexResult> {
+  const generatedAt = options.generatedAt ?? new Date().toISOString();
+  const [config, files, tokensResult] = await Promise.all([
+    readProjectConfig(projectPath),
+    collectGraphFiles(projectPath),
+    getInspectorTokens(projectPath).catch(() => null),
+  ]);
+
+  const graph = buildRelationshipGraph(files, { framework: config?.framework ?? undefined });
+  const shadows = findShadowImplementations(files, graph, { framework: config?.framework ?? undefined });
+
+  const written: string[] = [];
+  await mkdir(join(projectPath, AI_DIR), { recursive: true });
+  for (const [path, content] of [
+    [INDEX_PATH, indexArtifact(graph, shadows, generatedAt, files.length)],
+    [USAGE_PATH, usageArtifact(graph, shadows, generatedAt)],
+    [TOKENS_PATH, tokenArtifact(files, tokensResult?.tokens ?? [], generatedAt)],
+  ] as const) {
+    await writeFile(join(projectPath, path), content, "utf8");
+    written.push(path);
+  }
+  return { graph, shadows, written, generatedAt };
+}
+
+/**
+ * The nodes worth writing to an artifact.
+ *
+ * A `utils.ts` swept up by the scan is not a graph node, and leaving it in would inflate every count
+ * the index reports. A page that renders nothing is likewise not a relationship. A design-system
+ * component with no edges IS kept, because "nothing uses this" is the finding, not the absence of one.
+ *
+ * Done here rather than in `buildRelationshipGraph` because this is the layer that knows which files
+ * are the design system; the pure graph reports everything it was given.
+ */
+function connectedNodes(graph: RelationshipGraph) {
+  return graph.components.filter(
+    (component) => component.designSystem || component.uses.length > 0 || component.importCount > 0,
+  );
+}
+
+/** `index.toon` — what exists. The first thing a run reads. */
+export function indexArtifact(
+  graph: RelationshipGraph,
+  shadows: ShadowFinding[],
+  generatedAt: string,
+  filesScanned: number,
+): string {
+  return writeToon({
+    generatedAt,
+    stats: {
+      // "How many components do we have" counts the DESIGN SYSTEM, not the pages that consume it.
+      components: connectedNodes(graph).filter((component) => component.designSystem).length,
+      nodes: connectedNodes(graph).length,
+      adopted: graph.components.filter((component) => component.adoption === "adopted").length,
+      importedNeverRendered: graph.components.filter((c) => c.adoption === "imported-never-rendered").length,
+      unimported: graph.components.filter((component) => component.adoption === "unimported").length,
+      shadows: shadows.length,
+      filesScanned,
+      // Stated, not silent: a truncated scan that reported a component count would be a lie.
+      truncated: filesScanned >= MAX_FILES,
+    },
+    components: connectedNodes(graph).map((component) => ({
+      name: component.name,
+      path: component.path,
+      kind: component.designSystem ? "component" : "page",
+      adoption: component.adoption,
+      imports: component.importCount,
+      instances: component.instanceCount,
+      efficiency: component.efficiency ?? null,
+    })),
+  });
+}
+
+/** `component-usage.toon` — how components relate to each other, and where they were duplicated. */
+export function usageArtifact(
+  graph: RelationshipGraph,
+  shadows: ShadowFinding[],
+  generatedAt: string,
+): string {
+  return writeToon({
+    generatedAt,
+    usage: connectedNodes(graph).map((component) => ({
+      name: component.name,
+      // Joined with `|` so a list stays ONE cell: `,` is the row delimiter, and a list written with
+      // it would silently become extra columns.
+      uses: component.uses.join("|"),
+      usedBy: component.usedBy.join("|"),
+      importedBy: component.importedBy.join("|"),
+    })),
+    importedNeverRendered: graph.importedNeverRendered.map((entry) => ({
+      component: entry.component,
+      files: entry.files.join("|"),
+    })),
+    shadows: shadows.map((shadow) => ({
+      component: shadow.component,
+      file: shadow.file,
+      overlap: shadow.overlap,
+      sharedTokens: shadow.sharedTokens.join("|"),
+    })),
+  });
+}
+
+/** `design-tokens.toon` — the token↔component relationship, both directions (task 2.7 reads this). */
+export function tokenArtifact(
+  files: readonly GraphFile[],
+  tokens: readonly { name: string; resolvedValue: string; type?: string }[],
+  generatedAt: string,
+): string {
+  const known = new Set(tokens.map((token) => token.name));
+  const consumers = new Map<string, Set<string>>();
+  for (const file of files) {
+    if (!file.component) continue;
+    for (const token of tokensUsed(file.source)) {
+      if (!known.has(token)) continue;
+      (consumers.get(token) ?? consumers.set(token, new Set()).get(token)!).add(file.component);
+    }
+  }
+  return writeToon({
+    generatedAt,
+    tokens: tokens.map((token) => ({
+      name: token.name,
+      value: token.resolvedValue,
+      type: token.type ?? "",
+      // The REVERSE index: token → the components that consume it. Answers "what breaks if I change
+      // this token" without scanning a single component source.
+      usedBy: [...(consumers.get(token.name) ?? [])].sort().join("|"),
+      uses: (consumers.get(token.name) ?? new Set()).size,
+    })),
+  });
+}
+
+/** Read an artifact's `generatedAt`, or null when it has not been built. */
+export async function readIndexStamp(projectPath: string): Promise<string | null> {
+  const raw = await readFile(join(projectPath, INDEX_PATH), "utf8").catch(() => null);
+  return raw?.match(/^generatedAt: (.+)$/m)?.[1]?.trim() ?? null;
+}
+
+export type { ToonValue };

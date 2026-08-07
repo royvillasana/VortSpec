@@ -18,7 +18,7 @@
 - [x] 2.3 Implement instance counting from template bodies — composition depth, conditionals, loops — with slot-nested instances de-duplicated; build the fixture set first and assert expected counts
 - [x] 2.4 Compute `importCount`, `instanceCount` and `efficiency` per component; report imported-but-never-rendered components as unused
 - [x] 2.5 Implement shadow-implementation detection (structure + token usage matching a component that is not imported), emitting `warning` severity findings that name the shadowed component and the file
-- [ ] 2.6 Serialize `.vortspec/ai/{index,component-usage,design-tokens}.toon` with a `generatedAt` stamp; add a TOON writer with round-trip tests
+- [x] 2.6 Serialize `.vortspec/ai/{index,component-usage,design-tokens}.toon` with a `generatedAt` stamp; add a TOON writer with round-trip tests
 - [ ] 2.7 Add the token reverse index (token → consuming components) and verify it answers without scanning component sources
 - [ ] 2.8 Extend `buildIndexDigest` with a bounded relationship section plus an on-demand `uses`/`usedBy` lookup; regression-test digest size against a large fixture and assert truncation is stated, not silent
 - [ ] 2.9 Add staleness detection (component dir mtime vs `generatedAt`), expose it to the UI, and add the CI check that fails on a stale index naming the missing components
