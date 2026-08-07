@@ -9,6 +9,7 @@
  * writes the page; VortSpec never authors framework code here.
  */
 import { frameworkIdiomClause, isGeneratableFramework } from "./framework-profiles";
+import { selectionProtocol } from "./selection-protocol";
 import { normSegment } from "./light-standin";
 import type { CompileResult } from "./compile";
 
@@ -47,6 +48,12 @@ export function buildLightPagePrompt(name: string, description: string): string 
     "   per component. Compose ONLY from these; do not invent off-system components.",
     "2. COMPOSE the page by arranging those light components per the description. Respect the hierarchy:",
     "   a main container → sections → rows/columns → content.",
+    // The selection METHOD (task 3.3). `designer.md` says what exists; this says how to choose among
+    // it. `build-and-name` because a light page is the deliverable — stopping on a gap here would
+    // contradict the light-first contract this whole prompt is built around.
+    ...selectionProtocol("build-and-name")
+      .split("\n")
+      .map((line) => `   ${line}`),
     "   TOKENS — style every design-system property as `var(--<token-name>, <resolved value>)`, e.g.",
     "   `background: var(--color-accent, #5433eb)`. BOTH halves matter: the reference is what binds the page",
     "   to the design system, and the fallback is what keeps it rendering standalone with no token runtime.",

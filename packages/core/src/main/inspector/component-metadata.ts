@@ -207,6 +207,12 @@ export function buildMetadataPrompt(components: { name: string; file: string | n
       2,
     ),
     "",
+    // The skill is NAMED here, not merely mentioned in a code comment (task 3.3). Its own schema is a
+    // different shape — `component: { … }` with a PLURAL category — so the bridge has to be stated or
+    // the run writes a record VortSpec cannot read. `/storybook` documents the same mapping.
+    "Use the `ai-component-metadata` skill for the three analysis-derived sections — `usage.commonPatterns`, `usage.antiPatterns` and `aiHints`. The rest is a transform of the specs and does not need it.",
+    "That skill emits `component: { … }` with a PLURAL category (`atoms`/`molecules`/`organisms`). This project's shape is `identity: { … }` with a SINGULAR one (`atom`/`molecule`/`organism`/`template`) — map and singularize it before writing, or the record will not be read.",
+    "",
     "Rules that decide whether this record is worth its tokens:",
     "- `usage.antiPatterns` MUST be triplets. A bare warning is rejected: `alternative` is the field that changes generated code, so an anti-pattern without one is not worth recording.",
     "- `aiHints.selectionCriteria` is what a composer reads FIRST — say what makes this component the right choice OVER ITS SIBLINGS, not what it does.",

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { selectionProtocol } from "./selection-protocol";
 import { frameworkIdiomClause } from "./framework-profiles";
 import type { InspectorComponent } from "./inspector";
 import { SCAFFOLD_SENTINEL, scaffoldBegin, scaffoldEnd } from "./compose-scaffold";
@@ -288,6 +289,11 @@ export function buildComposePrompt(input: ComposePromptInput): string {
     input.preferredComponents && input.preferredComponents.length
       ? `The user specifically chose these components to build this from: ${input.preferredComponents.join(", ")}. Compose PRIMARILY from them; reach for other roster components only if the intent genuinely needs one.`
       : "",
+    "",
+    // The selection METHOD (task 3.3). The roster above says what is available; this says how to
+    // choose among it. Light-first runs build a missing piece and name it; framework runs report it,
+    // matching what each path is already told to do further down.
+    selectionProtocol(lightNative ? "build-and-name" : "report"),
     "",
     input.tokens.length
       ? `Ground every value in the project's design tokens (${input.tokens.slice(0, 40).join(", ")}${

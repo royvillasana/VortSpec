@@ -28,7 +28,7 @@
 
 - [x] 3.1 Generate `.vortspec/ai/rules/{metadata-schema,atomic-hierarchy,deep-tracing,load-once}.md` as part of the index build
 - [x] 3.2 Reference the rule documents from grounded runs alongside the digest
-- [ ] 3.3 Wire `ai-ds-composer` into compose and light-page runs as the selection method, and `ai-component-metadata` behind the group 1 generation prompt
+- [x] 3.3 Wire `ai-ds-composer` into compose and light-page runs as the selection method, and `ai-component-metadata` behind the group 1 generation prompt
 - [ ] 3.4 Extend `LiteComponent` in `shared/lite-manifest.ts` with an optional framework-free `hints` block (`selectionCriteria`, variant `purpose`, anti-pattern scenarios) and serialize it into `designer.md`; assert `findFrameworkPointers` still finds nothing and that serialization throws on a leak
 - [ ] 3.5 Carry selection criteria and anti-patterns for in-scope components in `buildLightPagePrompt`; assert every `data-component` the prompt permits has its criteria present
 - [ ] 3.6 Confirm a component with no metadata still appears in `designer.md` with its stand-in and does not block light-page composition
