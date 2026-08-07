@@ -143,7 +143,12 @@ export interface BenchmarkAnswers {
  * trials; what this key legitimately proves is the prerequisite — that the four questions are
  * answerable from the index at all, and with what content.
  */
-export function answersFromGraph(graph: RelationshipGraph, entryPage: string): BenchmarkAnswers {
+export function answersFromGraph(
+  graph: RelationshipGraph,
+  entryPage: string,
+  /** Size of the curated roster, when the project has one. */
+  rosterCount?: number,
+): BenchmarkAnswers {
   const byName = new Map(graph.components.map((component) => [component.name, component]));
   const entry = graph.components.find((component) => component.path === entryPage);
 
@@ -160,8 +165,19 @@ export function answersFromGraph(graph: RelationshipGraph, entryPage: string): B
     .filter((entryRow) => entryRow.otherPages.length > 0);
 
   return {
-    // Q1 counts the DESIGN SYSTEM. Counting pages too is the wrong answer in a way nobody notices.
-    componentCount: graph.components.filter((component) => component.designSystem).length,
+    // Q1 counts the DESIGN SYSTEM — the curated roster when one is known, NOT every component-shaped
+    // file under `component_dir`.
+    //
+    // Corrected after the first trial round (task 8.2). The key used the scan, and on a real library
+    // the scan sweeps in internals — `AutoPersist`, `BridgeStatus`, `AiSkeleton` — that nobody would
+    // call design-system components. Two trials that answered the roster count were marked wrong for
+    // giving the better answer. The roster is also what the readiness ladder counts, so this removes
+    // a disagreement between two surfaces rather than creating one.
+    //
+    // Falls back to the scan when no roster is known: a project with no `components.json` has no
+    // curated set, and the scan is then the only answer available.
+    componentCount:
+      rosterCount ?? graph.components.filter((component) => component.designSystem).length,
     entryPage,
     onEntryPage,
     atomsOnEntryPage: atoms,

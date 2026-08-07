@@ -11,6 +11,7 @@ import {
 import { buildIndexDigest } from "./index-digest";
 import { AI_DIR, buildRelationshipIndex } from "./relationship-index";
 import { readProjectConfig } from "../workspace/config-manager";
+import { getInspectorComponents } from "./component-reader";
 
 /**
  * The §1.6 benchmark harness — OpenSpec change: agentic-design-system, task 2.10.
@@ -76,6 +77,9 @@ export async function prepareBenchmark(projectPath: string): Promise<BenchmarkPr
   const withoutIndex = approxTokens(await buildIndexDigest(projectPath).catch(() => ""));
 
   const { graph } = await buildRelationshipIndex(projectPath);
+  // The curated roster is Q1's answer where one exists (see `answersFromGraph`). Best-effort: a
+  // project with no `components.json` falls back to the scan, which is then the only answer there is.
+  const roster = await getInspectorComponents(projectPath).catch(() => null);
   const withIndex = approxTokens(await buildIndexDigest(projectPath).catch(() => ""));
 
   const entryPage = resolveEntryPage(config?.framework ?? undefined, graph.components.map((c) => c.path));
@@ -106,7 +110,7 @@ export async function prepareBenchmark(projectPath: string): Promise<BenchmarkPr
     ok: true,
     entryPage,
     questions: poseQuestions(entryPage),
-    answerKey: answersFromGraph(graph, entryPage),
+    answerKey: answersFromGraph(graph, entryPage, roster?.components.length),
     tokenCost,
     requiresTrials: REQUIRES_TRIALS,
     message:

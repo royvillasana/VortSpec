@@ -364,7 +364,7 @@ describe("query protocols reach a grounded run (task 3.2)", () => {
   });
 });
 
-describe("the two component counts are distinguished (2.10/3.8 trial finding)", () => {
+describe("ONE headline component count (2.10/3.8 trial finding)", () => {
   let dir: string;
   beforeEach(async () => {
     dir = await mkdtemp(join(tmpdir(), "vortspec-digest-counts-"));
@@ -374,17 +374,17 @@ describe("the two component counts are distinguished (2.10/3.8 trial finding)", 
     await rm(dir, { recursive: true, force: true });
   });
 
-  it("says the roster count is the roster count, not bare 'Components (N)'", async () => {
-    // Five agents asked "how many components do we have" split 3-2 purely on which artifact they
-    // opened: the digest said "Components (55)" and index.toon said stats.components 66. Both were
-    // right about different populations; the bare word is what made it a coin flip.
+  it("gives the roster count and SAYS it is the answer", async () => {
+    // Stating both populations in one sentence was the first fix and it does not work: the agent
+    // still has to choose, so the 3-2 coin flip survives. One headline, one answer.
     const digest = await buildIndexDigest(dir, {});
-    expect(digest).toContain("declared on the roster");
-    expect(digest).not.toMatch(/## Components \(\d+\)/);
+    expect(digest).toMatch(/## Components \(\d+\)/);
+    expect(digest).toContain('It is the answer to "how many components do we have"');
   });
 
-  it("names the scanned figure and the gap when the two differ", async () => {
-    // An undeclared component file under component_dir: on disk, absent from components.json.
+  it("reports undeclared files as a FINDING, not as more components", async () => {
+    // The scan counts every component-shaped file under component_dir, which on a real library
+    // sweeps in internals nobody would call design-system components.
     await writeFile(
       join(dir, "src/components/Undeclared.tsx"),
       "export const Undeclared = () => <span/>;\n",
@@ -392,15 +392,14 @@ describe("the two component counts are distinguished (2.10/3.8 trial finding)", 
     );
     await buildRelationshipIndex(dir, { generatedAt: "2026-08-07T12:00:00.000Z" });
     const digest = await buildIndexDigest(dir, {});
-    expect(digest).toMatch(/\d+ component files found under the component directory/);
-    expect(digest).toContain("not on the roster");
-    expect(digest).toContain("index.toon stats.components");
+    expect(digest).toContain("NOT on the roster");
+    expect(digest).toContain("undeclared, not additional components");
+    // The headline still reports the roster, not the roster plus the stray file.
+    expect(digest).toMatch(/## Components \(2\)/);
   });
 
-  it("states only the roster count when no index has been built", async () => {
-    // Nothing to reconcile against, and inventing a second figure would be worse than one.
+  it("says nothing about a gap when there is none", async () => {
     const digest = await buildIndexDigest(dir, {});
-    expect(digest).toContain("declared on the roster");
-    expect(digest).not.toContain("component files found under");
+    expect(digest).not.toContain("NOT on the roster");
   });
 });

@@ -141,24 +141,31 @@ export async function buildIndexDigest(
 
   if (components.length) {
     const shown = components.slice(0, MAX_COMPONENTS);
-    // The header says WHICH population it counts, and names the other one when they differ.
+    // ONE headline number, with the other population labelled as the derived detail it is.
     //
-    // Found by the 2.10/3.8 trials: the digest said "Components (55)" while `index.toon` reported
-    // `stats.components: 66`, so five agents asked "how many components do we have" split 3–2 purely
-    // on which artifact they happened to open. Both numbers were right about different things — the
-    // roster is what the design system DECLARES, the scan is what is on disk under `component_dir` —
-    // and the gap between them is a finding, not noise. Presenting either alone under the bare word
-    // "components" is what made the answer a coin flip.
+    // Found by the 2.10/3.8 trials, then re-diagnosed. The digest said "Components (55)" while
+    // `index.toon` reported `stats.components: 66`, and five agents asked "how many components do we
+    // have" split 3–2 purely on which artifact they opened. The first fix stated both numbers in one
+    // sentence, which does not help: the agent still has to choose, so the coin flip survives.
+    //
+    // The headline is the ROSTER, and that is a product decision rather than a scoring one. The
+    // roster is the CURATED design system; the scan counts every component-shaped file under
+    // `component_dir`, which on a real project sweeps in internals (`AutoPersist`, `BridgeStatus`)
+    // that no one would call design-system components. The readiness ladder already counts the roster,
+    // so this also removes a disagreement between two surfaces.
+    //
+    // The scan delta is not discarded — it is a FINDING, and it is labelled as one: component files
+    // nobody declared are invisible to metadata coverage and to every rule keyed on the roster.
     const scanned = await scannedComponentCount(projectPath).catch(() => null);
     const undeclared = scanned !== null && scanned > components.length ? scanned - components.length : 0;
+    lines.push("", `## Components (${components.length}) — name [level] · file · deps · figma · summary`);
     lines.push(
-      "",
-      `## Components — ${components.length} declared on the roster${
-        undeclared
-          ? ` · ${scanned} component files found under the component directory (${undeclared} not on the roster; index.toon stats.components reports the scanned figure)`
-          : ""
-      } — name [level] · file · deps · figma · summary`,
+      `This is the design system: ${components.length} components on the roster. It is the answer to "how many components do we have".`,
     );
+    if (undeclared)
+      lines.push(
+        `Separately, ${undeclared} component-shaped file(s) under the component directory are NOT on the roster (${scanned} scanned in total). They are undeclared, not additional components — re-run detection to declare any that belong.`,
+      );
     if (metadata.size) lines.push("Full records live in .vortspec/metadata/<name>.json — read one before composing with a component not detailed below.");
     for (const c of shown) {
       const bits = [safePromptField(c.file ?? "(unbuilt)", 120)];

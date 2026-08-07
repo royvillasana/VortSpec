@@ -255,6 +255,50 @@ digest is a large fraction of the work; exploration cost grows with repo size wh
 bounded, so the sign of the token difference may flip on a larger codebase. That is a caveat, not a
 claim — it has not been measured.
 
+#### Re-run after correcting Q1 — 100% (2026-08-07)
+
+The first round scored 90%, and every miss was Q1. Investigating it showed the ANSWER KEY was wrong,
+not the agents: `componentCount` came from the graph's design-system nodes, which counts every
+component-shaped file under `component_dir`. On `packages/ui` that sweeps in `AutoPersist`,
+`BridgeStatus`, `AiSkeleton` — internals nobody would call design-system components. The two trials
+marked wrong for answering the roster count had given the better answer.
+
+Two changes, both product decisions rather than scoring ones:
+
+1. **The key is the curated roster** when a project has one, falling back to the scan when it does
+   not. This also agrees with the readiness ladder, which already counted the roster — so it removes
+   a disagreement between two surfaces instead of creating one.
+2. **The digest gives ONE headline number** and says it is the answer. Stating both populations in a
+   single sentence — the first fix — does not help: the agent still has to choose, so the coin flip
+   survives. The scan delta is now a labelled finding: *"11 component-shaped files are NOT on the
+   roster … undeclared, not additional components."*
+
+Re-run, same fixture, 5 grounded / 5 exploring:
+
+| | Grounded | Exploring |
+|---|---|---|
+| Overall | **20/20 (100%)** | 15/20 (75%) |
+| Q1 | 5/5 — 56 every trial | 5/5 |
+| Q2 · Q3 | 5/5 · 5/5 | 5/5 · 5/5 |
+| Q4 | **5/5, all exactly 19** | 0/5 — 16,17,16,16,17 |
+| Tool calls | 3.0 | 6.6 |
+| Duration | 25.0s | 52.6s |
+| Tokens | 36.3k | 33.8k |
+
+**The control improved too, and that is the honest part.** Fixing the key raised the exploring arm
+from 50% to 75%, because those agents had been reading the roster all along. The gap narrowed from
+40 points to 25 — a smaller claim than the first round's, and the true one. Reporting the new
+grounded number against the old control would have manufactured a 50-point gap that never existed.
+
+**Q4 is the whole remaining difference.** Grounded: 19, five times out of five. Exploring: wrong every
+time, and inconsistent with itself (16 or 17). Every error is an undercount — reuse the grep missed —
+which is the failure that makes a model build a second copy of a component it thinks is unused.
+
+**What this does and does not show.** 100% on this fixture means the four questions are answerable
+from the artifacts without ambiguity; it does not mean the index is always right, and Q2/Q3 still do
+not discriminate (10/10 in both arms). The result that carries weight is Q4's 5/5 versus 0/5 with the
+control disagreeing with itself.
+
 #### Our numbers against the board's targets (task 8.2)
 
 Same four questions, our own implementation, 10 trials (5 grounded / 5 exploring) on a 55-component
@@ -263,21 +307,21 @@ different systems measured the same way — comparable in direction, not in magn
 
 | Metric | Board target | Ours | Verdict |
 |---|---|---|---|
-| Accuracy | 65% → 100% | 50% → **90%** | Direction confirmed; short of 100% for a reason (below) |
-| Run-to-run variance | 26.5% → 0.04% | Q4 spread 15–16 → **0** (18 every trial) | Met on the question that varied |
+| Accuracy | 65% → 100% | 75% → **100%** | Met, after correcting the Q1 key (see the re-run above) |
+| Run-to-run variance | 26.5% → 0.04% | Q4 spread 16–17 → **0** (19 every trial) | Met on the question that varied |
 | False negatives | 60% → 0% | Q4 undercounts 5/5 → **0/5** | Met |
-| Speed | 58% faster | **40% faster** (54.6s → 32.5s) | Direction confirmed, smaller margin |
-| Token cost | +3.5% | **+18%** (34.4k → 40.5k) | Worse than target; see below |
+| Speed | 58% faster | **52% faster** (52.6s → 25.0s) | Direction confirmed |
+| Token cost | +3.5% | **+7%** (33.8k → 36.3k) | Closer than the first round measured |
 
-**Accuracy fell short of 100% on ONE question, and the shortfall was our artifacts' fault, not the
-index's.** Q1 split 3–2 because the digest header and `index.toon` reported different component
-counts under the same word. Fixed (the header now names the population it counts and reports the
-scanned figure beside it), but the 90% is recorded as measured rather than re-run to a nicer number.
+**The first round measured 90%, and the re-run above measured 100% after the Q1 key was corrected.**
+Both numbers are kept: the 90% is what the system scored before the defect its own benchmark found
+was fixed, and deleting it would hide the finding that produced the fix.
 Q2–Q4 were 15/15.
 
-**Token cost is worse than the board's +3.5%, and the reason is scale, not regression.** Our fixture
-is 55 components; the grounding block is prepaid whether the run needs it or not, so on a small
-library it is a large fraction of the total. Exploration cost grows with repo size while the digest
+**Token cost.** The first round measured +18%; the re-run measured +7%, the difference being that
+grounded agents opened fewer files once the headline was unambiguous. Our fixture is small — the
+grounding block is prepaid whether the run needs it or not, so on a 56-component library it is a
+large fraction of the total. Exploration cost grows with repo size while the digest
 stays bounded, so the gap should close and may invert on a bigger codebase — but that has not been
 measured, so it is stated as an expectation, not a result. What the +18% bought is measurable: −44%
 tool calls, −40% wall clock, and the only correct answers to the reuse question.
