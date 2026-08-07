@@ -37,6 +37,14 @@ exploration into analysis rather than adding spend.
   wrong position, plus adoption and token-violation reports.
 - **AI-readiness level as a product surface.** A computed 1–5 maturity level with the specific next
   action that raises it.
+- **One token scan, many emits.** Today the design source is read twice for one outcome: once as a
+  DTCG export that `dtcgToVariables` flattens away on ingest, and again via
+  `figma_export_tokens { format: … }` to write the styling-specific file. The canonical form never
+  reaches disk, so changing the project's styling means re-reading the design source. Adds a
+  canonical `.vortspec/tokens.json` in W3C DTCG form — modes, collections and durable keys carried
+  in `$extensions` so it stays valid DTCG — and makes `token_file` a derived, idempotent emission
+  from it. This also feeds the light manifest, so token types outside its five visual groups
+  (duration, dimension) stop being silently dropped.
 - **Components are scaffolded, not instructed into existence.** Today a component's file set is
   produced by a model following the standards docs; the reference architecture writes it with a
   deterministic scaffold and lets the model supply only the content. That difference is where
@@ -60,6 +68,8 @@ exploration into analysis rather than adding spend.
 - `design-governance`: intent-level design rules, the violations they produce, and the adoption /
   token-violation reports generated from the index.
 - `ai-readiness-level`: the computed maturity level and the next action that raises it.
+- `design-token-pipeline`: the canonical DTCG token artifact, the one-scan-many-emits property, the
+  per-styling emitters, and the guarantee that every design source lands in the same shape.
 - `component-scaffold`: deterministic creation of a component's full file set — implementation,
   variants, test, barrel/registration, and its metadata record — with the styling surface each
   component exposes to the audit declared rather than assumed.
@@ -84,6 +94,16 @@ exploration into analysis rather than adding spend.
 - `packages/core/src/shared/compose-run.ts:295` — drop the `DESIGN.md` `.slice(0, 4000)`.
 - `packages/ui/src/views/` — Design System / Inspector Issues surfaces for reports and the readiness
   level.
+
+**Token pipeline**
+- `packages/core/src/main/figma/figma-cli.ts` — stop flattening in `dtcgToVariables` on ingest;
+  persist the DTCG tree and flatten on read.
+- New emitters in `packages/core/src/shared/` alongside `token-writers.ts` (which patches values
+  today and gains whole-file generation from canonical).
+- `.sdd-de/ai-specs/skills/extract-design-system/SKILL.md` — Step 2A stops calling
+  `figma_export_tokens` with a styling format; it writes the canonical artifact and emission follows.
+- Overlaps `figma-native-token-model` (unarchived) — semantics stay there, artifact lands here; see
+  the merge rule in `design.md`.
 
 **Toolkit**
 - `.sdd-de/docs/component-metadata-model.md` — rewritten for the new ownership.

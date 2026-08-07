@@ -68,9 +68,25 @@
 - [ ] 6.9 Wire the scaffold into the component-creation path so the model supplies content into an existing file set instead of deciding which files exist; keep the SDD cycle's per-task flow intact
 - [ ] 6.10 Verify: metadata coverage for a project whose components were all scaffolded reports zero missing records
 
-## 7. Close out
+## 7. Canonical token pipeline
 
-- [ ] 7.1 Run the full test suite and the CT suite; confirm no regression in the existing digest, audit and metadata paths
-- [ ] 7.2 Record the benchmark results (accuracy, variance, false negatives, token cost) in `docs/agentic-design-system-plan.md` against the §1.6 targets
-- [ ] 7.3 Resolve the design's open questions (configurable elevation scale; recompute-on-build vs on-demand; shadow detection scope for consume sources; CSS-modules recommendation; scaffold-replaces vs scaffold-precedes the cycle) and fold the answers into the specs
-- [ ] 7.4 Run `/opsx:sync` to fold the delta specs into `openspec/specs/`
+- [ ] 7.1 Agree the `$extensions` payload shape with `figma-native-token-model` (collections, modes, per-mode values, alias refs, durable variable keys) before writing either side — this is the merge point named in `design.md`
+- [ ] 7.2 Stop flattening on ingest: persist the `figma-cli export dtcg` tree to `.vortspec/tokens.json` unmodified, with group nesting and DTCG aliases intact
+- [ ] 7.3 Move `dtcgToVariables` (`figma-cli.ts:355`) to a read-time projection over the canonical artifact; keep its output shape so existing consumers don't change yet
+- [ ] 7.4 Assert the artifact validates as DTCG and that no design-source-specific field appears outside `$extensions`
+- [ ] 7.5 Add whole-file emitters from canonical for each supported styling: css-vars, scss, tailwind v3 config, tailwind v4 `@theme`, ts theme — modelled on the existing per-format writers in `token-writers.ts`
+- [ ] 7.6 Make the Tailwind emitter produce the curated semantic mapping the `extract-design-system` skill prescribes (scale names → tokens), never a raw arbitrary-value dump; assert standard utilities resolve to project tokens
+- [ ] 7.7 Fail loudly on a styling approach with no emitter — never fall back to a format the project cannot consume
+- [ ] 7.8 Make `token_file` a derived artifact: emission is idempotent (byte-identical on re-run), and a token file that diverged from its last emission is reported rather than overwritten
+- [ ] 7.9 Assert one-scan-many-emits: read the design source once, emit every supported format, and verify the source was read exactly once; verify a styling switch makes no design-source request
+- [ ] 7.10 Add the non-design-tool ingest path (CSS custom properties / theme object / consumed library token file) producing the same canonical artifact; for consume sources assert it is a read-only projection
+- [ ] 7.11 Feed `buildDeriveInput` (`lite-source.ts:86`) from the canonical artifact so `$type` values outside the five visual groups (duration, dimension) reach `designer.md` instead of being dropped by `mapTokenGroup`
+- [ ] 7.12 Update `extract-design-system` Step 2A: write the canonical artifact, then emit — no styling-format call to the design source
+- [ ] 7.13 Retire or derive `.vortspec/figma-variables.json` per the merge rule, so exactly one canonical shape remains
+
+## 8. Close out
+
+- [ ] 8.1 Run the full test suite and the CT suite; confirm no regression in the existing digest, audit, metadata and token paths
+- [ ] 8.2 Record the benchmark results (accuracy, variance, false negatives, token cost) in `docs/agentic-design-system-plan.md` against the §1.6 targets
+- [ ] 8.3 Resolve the design's open questions (configurable elevation scale; recompute-on-build vs on-demand; shadow detection scope for consume sources; CSS-modules recommendation; scaffold-replaces vs scaffold-precedes the cycle; whether push reads canonical) and fold the answers into the specs
+- [ ] 8.4 Run `/opsx:sync` to fold the delta specs into `openspec/specs/`

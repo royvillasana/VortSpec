@@ -113,6 +113,54 @@ survive `findFrameworkPointers`, so hints carry no import paths, no module alias
 are prose about intent, which is naturally framework-free. Serialization already throws on a leak;
 that guard is the enforcement.
 
+**The canonical token artifact is DTCG, and Figma's extra structure lives in `$extensions`.**
+The reference architecture's tokenization layer is `tokens.json` in W3C DTCG form, emitted to
+platforms by Style Dictionary, with a sync-back arrow to Figma variables. VortSpec already reads
+the same source through the same tool — `figma-cli.ts` drives `silships/figma-cli`, the CLI the
+board names — and already asks it for a DTCG export. It then throws the tree away:
+`dtcgToVariables` (`figma-cli.ts:355`) flattens it into rows on ingest, and the styling-specific
+token file is fetched *separately* via `figma_export_tokens { format: … }`. So a styling change
+costs a second read of the design source, and the canonical form never exists on disk.
+
+DTCG natively models what we need except one thing: it has group nesting, `$type`/`$value`, and
+alias references, but **no concept of modes**. That single gap is why a bespoke shape is tempting.
+The resolution is to stay in the format and use its own escape hatch: modes, collections, and
+durable variable keys go in `$extensions`, which keeps the artifact valid DTCG and loses nothing.
+*Alternative considered:* a VortSpec-native token shape carrying modes as first-class fields —
+rejected because it forfeits every existing DTCG tool and re-litigates a format that already
+solved 90% of the problem.
+
+**Resolving the overlap with `figma-native-token-model`.**
+That change (unarchived) argues the same core point — the current model is "flat and mode-blind"
+and flattening produces false drift — but answers it by enriching `.vortspec/figma-variables.json`
+into a Figma-shaped cache with `collection`, `path`, `valuesByMode` and alias info. Two changes,
+two canonical shapes, same problem. They must not both ship.
+
+The split: **`figma-native-token-model` owns the *semantics*** — mode-aware reconcile, path-
+preserving matching, per-mode push, the mode↔code-context mapping, and the Tokens panel's tree and
+mode switcher. Its analysis of Figma's model is the better one and is not superseded.
+**This change owns the *artifact and its emission*** — the canonical DTCG file and the one-scan-
+many-emits property. Concretely, that change's `valuesByMode` / `collection` / alias payload becomes
+the `$extensions` content of `.vortspec/tokens.json` rather than the schema of a separate
+`figma-variables.json`.
+
+Merge rule, so whichever lands first does not block the other: if `figma-native-token-model` lands
+first, `figma-variables.json` keeps its enriched shape and this change adds the canonical artifact
+alongside it, then migrates readers and retires it. If this change lands first, that change targets
+`$extensions` instead of a new cache schema. Either way the end state is one canonical file, and
+`figma-variables.json` is derived or gone — not a second source of truth.
+
+**Own the emitters rather than adopting Style Dictionary.**
+The board emits with Style Dictionary. VortSpec should not, for one specific reason: this project's
+own `extract-design-system` skill states that a raw token dump is the single biggest driver of *poor*
+component fidelity under Tailwind — it forces `bg-[var(--brand-primary-100)]` and leaves `p-4`,
+`rounded` and `shadow-md` resolving to the framework's built-in defaults instead of project tokens.
+The skill already prescribes a curated semantic mapping instead. Style Dictionary's default utility
+output is exactly the dump the skill warns against, so adopting it would regress the project's
+strongest existing fidelity rule to gain a dependency. `token-writers.ts` already has per-format
+writers to model the emitters on. *Alternative considered:* Style Dictionary with custom formatters
+— rejected as the same amount of work plus a dependency and its config model.
+
 **Components are scaffolded deterministically; the model supplies content, not structure.**
 The reference architecture writes a component's file set with a `scaffold-component` skill —
 implementation, style module, metadata, test, barrel — so the structure is identical every time.
@@ -170,6 +218,21 @@ serialize exactly as they do today, so the two changes can land in either order.
 diff of what the agent will read is the point, and it is what makes staleness visible in code review
 rather than only in CI.
 
+**Making `token_file` a derived artifact could destroy hand edits** → Emission is idempotent and a
+token file that diverged from its last emission is reported, not overwritten. The failure mode to
+avoid is a user's hand-tuned Tailwind theme vanishing on a styling re-emit; the spec makes that an
+explicit choice rather than a side effect.
+
+**Two changes could ship two canonical token shapes** → The split and merge rule above assign
+semantics to `figma-native-token-model` and the artifact to this change. The end state is one file;
+if both land without coordination the result is two sources of truth, which is worse than either
+alone. Whichever lands second is responsible for the retirement step.
+
+**DTCG has no mode concept, so `$extensions` carries load-bearing data** → Anything in
+`$extensions` is invisible to generic DTCG tooling. Accepted: the alternative is leaving the format
+entirely. The emitters are ours and read `$extensions` directly, so no capability is lost inside
+VortSpec; only third-party DTCG consumers would see the default mode only.
+
 **Governance v2 is materially weaker under utility-class styling than under token-based CSS
 modules** → Declare each component's styling surface at scaffold time and report reduced audit
 coverage explicitly. The risk is not that some components go unchecked — it is that they are
@@ -216,6 +279,8 @@ unlikely and the automation would be more dangerous than the manual step.
 - Should token-based CSS modules become the recommended styling for extract sources, so governance
   v2 has a surface to reason over? This would materially strengthen the audit and materially
   constrain the project — it is deliberately left open rather than decided inside this change.
+- Does the canonical artifact become the input to `figma-push.ts` as well, making the sync-back
+  round trip symmetric, or does push keep reading the enriched cache until that change archives?
 - Does the scaffold replace the model-driven component step of the SDD cycle, or run ahead of it
   (scaffold the files, then let the cycle fill them in)? The latter is less disruptive; the former
   is what actually removes structural variance.
