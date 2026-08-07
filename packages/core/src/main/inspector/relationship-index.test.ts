@@ -408,28 +408,77 @@ describe("staleness (task 2.9)", () => {
 });
 
 describe("folded in from the reference script (task 2.9)", () => {
-  it("walks the framework's own directories, not just src and component_dir", async () => {
-    // An Astro project keeps layouts in `src/layouts`; walking only `component_dir` misses every
-    // instance they render, which silently understates adoption.
-    const astro = await mkdtemp(join(tmpdir(), "vortspec-astro-"));
-    const put = async (rel: string, body: string) => {
-      await mkdir(dirname(join(astro, rel)), { recursive: true });
-      await writeFile(join(astro, rel), body, "utf8");
-    };
-    try {
-      await put(".sdd-de/project.yaml", "framework: astro\ncomponent_dir: src/components\ntoken_file: src/t.css\n");
-      await put("src/t.css", ":root { --a: 1px; }");
-      await put(".sdd-de/components.json", JSON.stringify([{ name: "Button", level: "atom" }]));
-      await put("src/components/Button.astro", `<button/>`);
-      await put("src/layouts/Base.astro", `---\nimport Button from "../components/Button.astro";\n---\n<Button/><Button/>`);
+  /**
+   * `scanDirs` only does work for directories OUTSIDE `src`, because `src` is always walked
+   * recursively. Across the nine profiles that is: React (`components`, `app`), Next (`components`,
+   * `app`, `pages`), Nuxt, and vanilla (`components`). For Vue, Svelte, SvelteKit, Angular and Astro
+   * every entry is under `src`, so `scanDirs` is a deliberate no-op there — the list documents the
+   * convention and costs nothing.
+   *
+   * The test therefore uses NEXT with a root-level `app/`, which is the case that genuinely fails
+   * without the change — and the one that matters most, since the app router is where a React/Next
+   * project keeps its pages.
+   */
+  async function project(framework: string, files: Record<string, string>): Promise<string> {
+    const root = await mkdtemp(join(tmpdir(), `vortspec-${framework}-`));
+    for (const [rel, body] of Object.entries(files)) {
+      await mkdir(dirname(join(root, rel)), { recursive: true });
+      await writeFile(join(root, rel), body, "utf8");
+    }
+    return root;
+  }
 
-      const result = await buildRelationshipIndex(astro, { generatedAt: STAMP });
+  it("finds a Next app-router page OUTSIDE src — the case scanDirs exists for", async () => {
+    const next = await project("next", {
+      ".sdd-de/project.yaml": "framework: next\ncomponent_dir: components\ntoken_file: app/t.css\n",
+      "app/t.css": ":root { --a: 1px; }",
+      ".sdd-de/components.json": JSON.stringify([{ name: "Button", level: "atom" }]),
+      "components/Button.tsx": `export const Button = () => <button/>;`,
+      // Root-level `app/` — never reached by walking `src` or `component_dir`.
+      "app/page.tsx": `import { Button } from "../components/Button";\nexport default () => <div><Button/><Button/></div>;`,
+    });
+    try {
+      const result = await buildRelationshipIndex(next, { generatedAt: STAMP });
       const button = result.graph.components.find((component) => component.name === "Button")!;
 
+      // Without scanDirs this is 0 instances and no edges: the page is invisible, and adoption is
+      // silently understated for every component the app router renders.
       expect(button.instanceCount).toBe(2);
-      expect(button.usedBy).toEqual(["Base"]);
+      expect(button.usedBy).toEqual(["Page"]);
     } finally {
-      await rm(astro, { recursive: true, force: true });
+      await rm(next, { recursive: true, force: true });
+    }
+  });
+
+  it("finds a root-level components/ dir for a plain React project", async () => {
+    const react = await project("react", {
+      ".sdd-de/project.yaml": "framework: react\ncomponent_dir: components\ntoken_file: components/t.css\n",
+      "components/t.css": ":root { --a: 1px; }",
+      ".sdd-de/components.json": JSON.stringify([{ name: "Badge", level: "atom" }]),
+      "components/Badge.tsx": `export const Badge = () => <span/>;`,
+      "app/Home.tsx": `import { Badge } from "../components/Badge";\nexport const Home = () => <Badge/>;`,
+    });
+    try {
+      const result = await buildRelationshipIndex(react, { generatedAt: STAMP });
+      expect(result.graph.components.find((c) => c.name === "Badge")?.instanceCount).toBe(1);
+    } finally {
+      await rm(react, { recursive: true, force: true });
+    }
+  });
+
+  it("is a documented no-op for the frameworks whose dirs all live under src", async () => {
+    // Astro/Vue/Svelte/Angular keep everything under `src`, which is walked recursively regardless.
+    // Asserting this stops someone "fixing" a passing Astro test by adding a root dir that would
+    // then be scanned on every project.
+    const { profileFor } = await import("@vortspec/core/framework-profiles");
+    for (const framework of ["astro", "vue", "svelte", "sveltekit", "angular"]) {
+      const dirs = profileFor(framework)?.scanDirs ?? [];
+      expect(dirs.every((dir) => dir.startsWith("src")), `${framework} should stay inside src`).toBe(true);
+    }
+    // …and the ones that genuinely add a root directory.
+    for (const framework of ["react", "next", "nuxt", "vanilla"]) {
+      const dirs = profileFor(framework)?.scanDirs ?? [];
+      expect(dirs.some((dir) => !dir.startsWith("src")), `${framework} should add a root dir`).toBe(true);
     }
   });
 
