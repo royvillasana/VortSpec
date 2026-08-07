@@ -164,6 +164,34 @@ instructions that tell the agent to query rather than explore.
 weighing this against the cost/token-optimization priority: this is not a spend increase, it is a
 spend reallocation with a large accuracy return.
 
+#### First measurement (task 2.10, 2026-08-07)
+
+Measured with `prepareBenchmark` against this repo's own `packages/ui` (55 component files, roster
+generated the way extraction would):
+
+| | Tokens |
+|---|---|
+| Digest without the index | 1,045 |
+| Digest with the index | 1,538 |
+| **Added by the relationship layer** | **+493** |
+
+**How to read that against §1.6's +3.5%.** The board's 27,211 → 28,166 is a WHOLE RUN, exploration
+included. Ours is the digest alone, so the two percentages are not comparable: +493 on a 1,045-token
+digest is +47%, and the same +493 against a run the size of the board's control is **+1.8%**. The
+honest statement is the absolute one — *the relationship layer adds roughly 500 tokens to a run's
+prompt, bounded by `MAX_RELATIONSHIPS`* — and that is consistent with the flat-cost constraint.
+
+**A finding about the target.** `packages/ui` resolves NO entry page, so Q2–Q4 cannot run against it.
+That is correct behaviour rather than a bug (the harness reports it instead of guessing), and it is
+a real constraint on the benchmark: **it needs an application, not a component library.** Q2 asks
+what a page renders and Q4 asks what other pages reuse; a library has neither. A valid target needs
+a resolvable entry page plus at least two pages sharing a component.
+
+**Still unmeasured, and why.** Accuracy, run-to-run variance, false negatives and speed each need N
+independent agent trials — the board used 11 — graded against the answer key `answersFromGraph`
+derives. No static analysis substitutes for one, and grading an agent against a key derived from the
+same index would be circular for accuracy. The harness prepares the trials; it does not fake them.
+
 ### 1.7 The AI-readiness maturity ladder (board, Frame 234)
 
 Worth adopting verbatim as a product surface — it is a scoreboard VortSpec could compute:
