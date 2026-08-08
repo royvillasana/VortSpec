@@ -17,3 +17,10 @@ export { ensureManagedRuntime } from "./environment/runtime-manager";
 // Recent-projects list — the IDE reads it to populate the native File menu's
 // "Open Recent Projects" submenu (same store the welcome screen uses).
 export { listProjects } from "./workspace/workspace-manager";
+// The design-system relationship index (OpenSpec change: agentic-design-system, group 2). Exported
+// so CI can gate on a stale index without booting Electron — see `scripts/check-index-freshness.mjs`.
+export {
+  buildRelationshipIndex,
+  checkIndexFreshness,
+  indexStaleness,
+} from "./inspector/relationship-index";

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { isConsumeSource } from "@vortspec/core/setup";
 import type { JSX, CSSProperties } from "react";
 import type { Project, Profile as ProfileT, UpdateInfo } from "@vortspec/core/ipc";
 import type { IdeState } from "@vortspec/core/ide-mcp";
@@ -308,11 +309,16 @@ export default function App(): JSX.Element {
     };
   }, [workspace?.path]);
 
-  // A consumed-library project has no VortSpec Storybook — if the view is somehow on it, redirect to the
+  // A CONSUMED design system has no VortSpec Storybook — if the view is somehow on it, redirect to the
   // Design tokens workspace and land on its Design System tab, which IS that project's component surface
   // and (change: design-system-token-editor) its curated token editor.
+  //
+  // Keyed on `isConsumeSource`, not on `library` alone (agentic-design-system, task 9.2). Both consume
+  // sources are in exactly this position — VortSpec builds no Storybook for either — so testing one of
+  // them left an `enterprise` project, created by the app's OWN enterprise flow, showing a Storybook tab
+  // that will never have anything in it.
   useEffect(() => {
-    if (designSource !== "library") return;
+    if (!isConsumeSource(designSource)) return;
     // Storybook and the Design manifest are both hidden for a consumed library — if the view is somehow
     // on either, land on the Design tokens workspace, whose Design System tab IS that project's surface.
     if (layout.activity === "play" || layout.activity === "manifest") {
@@ -732,12 +738,12 @@ export default function App(): JSX.Element {
               {tokensTab === "tokens" ? (
                 <Inspector project={p} hideRail sidebarSlot={sectionSlot} onBack={go("explorer")} onOpenPreview={go("explorer")} onOpenRun={go("run")} onOpenHistory={go("explorer")} onOpenManifest={go("manifest")} onOpenFile={(path) => { void wf.openFile(path); dispatch({ type: "setActivity", activity: "explorer" }); }} />
               ) : (
-                <DesignSystem project={p} hideRail onBack={() => setTokensTab("tokens")} extracting={autoFoundation.extracting} reloadSignal={autoFoundation.justFinished + autoBuild.justFinished + leverEdits} />
+                <DesignSystem project={p} hideRail onBack={() => setTokensTab("tokens")} extracting={autoFoundation.extracting} foundationOutcome={autoFoundation.outcome} reloadSignal={autoFoundation.justFinished + autoBuild.justFinished + leverEdits} />
               )}
             </div>
           </div>
         ) : (
-          <DesignSystem project={p} hideRail onBack={go("explorer")} extracting={autoFoundation.extracting} reloadSignal={autoFoundation.justFinished + autoBuild.justFinished + leverEdits} />
+          <DesignSystem project={p} hideRail onBack={go("explorer")} extracting={autoFoundation.extracting} foundationOutcome={autoFoundation.outcome} reloadSignal={autoFoundation.justFinished + autoBuild.justFinished + leverEdits} />
         )
       ) : a === "tasks" ? (
         <Tasks project={p} hideRail onBack={go("explorer")} onFlow={go("flow")} onRun={go("run")} onPlayground={go("explorer")} onTokens={go("tokens")} onManifest={go("manifest")} onHistory={go("explorer")} onSource={go("source")} />
@@ -817,7 +823,7 @@ export default function App(): JSX.Element {
         <ToolkitUpdateBanner project={workspace} onUpdated={setWorkspace} />
 
         <div className="flex min-h-0 flex-1 overflow-hidden">
-          <ActivityBar active={layout.activity} seamless hideStorybook={designSource === "library"} hideManifest={designSource === "library"} onSelect={(a) => (a === "home" ? setWorkspace(null) : dispatch({ type: "setActivity", activity: a }))} />
+          <ActivityBar active={layout.activity} seamless hideStorybook={isConsumeSource(designSource)} hideManifest={isConsumeSource(designSource)} onSelect={(a) => (a === "home" ? setWorkspace(null) : dispatch({ type: "setActivity", activity: a }))} />
 
           {/* The ONE left sidebar: the current view's Section sidebar + the persistent Chat.
               The right assistant sidebar is gone — the chat lives here now, mounted once so

@@ -7,10 +7,23 @@
       frame-src allows embedding the user's local dev server (the live preview
       pane) — ports are dynamic, so loopback hosts are wildcarded by port.
       Everything else stays locked to 'self'.
+
+      connect-src (change: live-playground) allows the collaboration relay's WebSocket. Without it
+      the socket is blocked by the default-src fallback, and blocked SILENTLY — the provider reports
+      "connecting" forever while nothing ever leaves the renderer, which is a genuinely hard failure
+      to read.
+
+      The loopback entries cover a relay run on the same machine. The bare `wss:` is the honest cost
+      of the relay being the TEAM's: its address is user-configured, so it cannot be enumerated here,
+      and any secure WebSocket host must be reachable. Plain `ws:` is deliberately NOT allowed beyond
+      loopback — an unencrypted socket to a remote host would carry page content in the clear.
+
+      If this is judged too wide, the alternative is to hold the socket in the main process and relay
+      it over IPC, which keeps the renderer locked to 'self' at the cost of a proxy layer.
     -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; frame-src 'self' http://localhost:* http://127.0.0.1:* https://localhost:* https://127.0.0.1:*;"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; frame-src 'self' http://localhost:* http://127.0.0.1:* https://localhost:* https://127.0.0.1:*; connect-src 'self' ws://localhost:* ws://127.0.0.1:* wss://localhost:* wss://127.0.0.1:* wss:;"
     />
     <title>VortSpec IDE</title>
   </head>

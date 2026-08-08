@@ -1,0 +1,516 @@
+<!doctype html>
+<html lang="es"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>El Corte Extremo — Deportes Extremos</title>
+<style>
+  :root {
+    /* Dual-keyed tokens (resolved from designer.md) */
+    --brand-primary-100:#E6F2F4; --brand-primary-500:#087990; --brand-primary-600:#066173; --brand-primary-700:#054956; --brand-primary-900:#02181D;
+    --brand-secondary-100:#FCF2EB; --brand-secondary-500:#E07B39; --brand-secondary-600:#B3622E;
+    --neutral-100:#F8F9FA; --neutral-300:#DEE2E6; --neutral-600:#6C757D; --neutral-900:#212529; --neutral-950:#1A1E21;
+    --white:#FFFFFF; --success:#198754; --danger:#DC3545; --warning:#FFC107;
+    --radius-6:6px; --radius-8:8px;
+    --font-base:'Roboto',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  }
+  * { box-sizing:border-box; }
+  html,body { margin:0; padding:0; }
+  body {
+    font-family:var(--font-base);
+    color:var(--neutral-900);
+    background:var(--neutral-100);
+    font-size:16px;
+    line-height:1.5;
+  }
+  a { color:inherit; }
+  .lp-wrap { width:100%; max-width:1200px; margin:0 auto; padding:0 24px; }
+  .lp-section { padding:40px 0; }
+  .lp-h2 { font-size:32px; line-height:1.2; font-weight:700; margin:0 0 4px; color:var(--neutral-900); }
+  .lp-lead { font-size:20px; line-height:1.5; color:var(--neutral-600); margin:0 0 24px; }
+  .lp-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:24px; }
+  @media (max-width:980px){ .lp-grid{ grid-template-columns:repeat(2,1fr);} }
+  @media (max-width:560px){ .lp-grid{ grid-template-columns:1fr;} }
+</style>
+</head>
+<body style="">
+
+  <!-- ============================ TOP UTILITY BAR ============================ -->
+  <div style="width:100%;background:var(--brand-primary-900);color:var(--white);font-size:14px;">
+    <div class="lp-wrap" style="display:flex;align-items:center;justify-content:space-between;padding-top:8px;padding-bottom:8px;">
+      <span style="opacity:.9;">Envío GRATIS en pedidos superiores a 50€ · Entrega en 24h</span>
+      <span style="display:flex;gap:16px;align-items:center;">
+        <a href="#" style="text-decoration:none;opacity:.9;">Ayuda</a>
+        <a href="#" style="text-decoration:none;opacity:.9;">Tiendas</a>
+        <a href="#" style="text-decoration:none;opacity:.9;">Mi cuenta</a>
+      </span>
+    </div>
+  </div>
+
+  <!-- ============================ NAVBAR ============================ -->
+  <header data-component="navbar" style="width:100%;box-sizing:border-box;display:flex;align-items:center;gap:16px;
+              padding:12px 24px;background:var(--white);border-bottom:1px solid var(--neutral-300);font-family:var(--font-base);">
+    <div style="max-width:1200px;margin:0 auto;width:100%;display:flex;align-items:center;gap:16px;">
+      <!-- brand -->
+      <div style="flex-shrink:0;display:flex;align-items:center;gap:10px;">
+        <span style="display:inline-flex;align-items:center;justify-content:center;width:38px;height:38px;background:var(--brand-secondary-500);border-radius:var(--radius-8);color:var(--white);">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 18l5-9 4 6 3-4 6 7z"></path><circle cx="7" cy="6" r="2"></circle></svg>
+        </span>
+        <span style="font-size:20px;line-height:1.2;font-weight:700;color:var(--brand-primary-500);white-space:nowrap;">El Corte <span style="color:var(--brand-secondary-500);">Extremo</span></span>
+      </div>
+      <!-- nav -->
+      <nav style="display:flex;align-items:center;flex:1 1 0;min-width:0;gap:2px;flex-wrap:wrap;">
+        <a href="#" style="padding:6px 12px;font-size:16px;line-height:1.5;color:var(--neutral-900);font-weight:700;text-decoration:none;white-space:nowrap;">Surf</a>
+        <a href="#" style="padding:6px 12px;font-size:16px;line-height:1.5;color:var(--brand-primary-500);text-decoration:none;white-space:nowrap;">Escalada</a>
+        <a href="#" style="padding:6px 12px;font-size:16px;line-height:1.5;color:var(--brand-primary-500);text-decoration:none;white-space:nowrap;">Ciclismo</a>
+        <a href="#" style="padding:6px 12px;font-size:16px;line-height:1.5;color:var(--brand-primary-500);text-decoration:none;white-space:nowrap;">Nieve</a>
+        <a href="#" style="padding:6px 12px;font-size:16px;line-height:1.5;color:var(--brand-secondary-500);text-decoration:none;white-space:nowrap;font-weight:700;">Ofertas</a>
+      </nav>
+      <!-- search-box -->
+      <div data-component="search-box" style="display:inline-flex;align-items:stretch;max-width:100%;font-family:var(--font-base);flex-shrink:0;">
+        <input type="search" placeholder="Buscar material..." aria-label="Buscar" style="box-sizing:border-box;flex:1 1 auto;min-width:0;width:200px;height:38px;padding:7px 13px;
+                 background:var(--white);border:1px solid #ced4da;border-right:none;
+                 border-radius:6px 0 0 6px;font-family:var(--font-base);font-size:16px;line-height:1.5;color:var(--neutral-900);outline:none;">
+        <button type="button" aria-label="Buscar" style="display:inline-flex;align-items:center;justify-content:center;height:38px;width:42px;padding:7px 13px;
+                 background:var(--brand-primary-500);border:1px solid var(--brand-primary-500);border-radius:0 8px 8px 0;cursor:pointer;">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <circle cx="7" cy="7" r="5" stroke="#ffffff" stroke-width="1.5"></circle>
+            <line x1="11" y1="11" x2="14.5" y2="14.5" stroke="#ffffff" stroke-width="1.5"></line>
+          </svg>
+        </button>
+      </div>
+      <!-- cart -->
+      <button data-component="button" type="button" style="display:inline-flex;align-items:center;gap:8px;padding:7px 13px;
+              background:var(--brand-secondary-500);border:1px solid var(--brand-secondary-500);border-radius:var(--radius-8);
+              color:var(--white);font-size:16px;line-height:1.5;font-family:var(--font-base);cursor:pointer;white-space:nowrap;flex-shrink:0;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="21" r="1"></circle><circle cx="20" cy="21" r="1"></circle><path d="M1 1h4l2.7 13.4a2 2 0 0 0 2 1.6h9.7a2 2 0 0 0 2-1.6L23 6H6"></path></svg>
+        Cesta
+      </button>
+    </div>
+  </header>
+
+  <!-- ============================ BREADCRUMB ============================ -->
+  <div class="lp-wrap" style="padding-top: var(--spacing-0); padding-bottom: 16px; margin-left: var(--spacing-0); margin-right: var(--spacing-0); height: fit-content; width: 100%;">
+    
+  </div>
+
+  <!-- ============================ HERO ============================ -->
+  <div class="lp-wrap" style="height: fit-content;">
+    
+  </div>
+
+  <!-- ============================ CATEGORY TILES ============================ -->
+  <div class="lp-wrap lp-section">
+    <nav data-component="breadcrumb" aria-label="breadcrumb" style="font-family: var(--font-base); font-size: 16px; line-height: 1.5; max-width: 100%; margin-bottom: var(--spacing-16);">
+      <ol style="list-style:none;display:flex;flex-wrap:wrap;align-items:center;margin:0;padding:0;">
+        <li style="display:flex;align-items:center;gap:4px;">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="#087990" aria-hidden="true"><path d="M6.5 14.5v-3.505c0-.245.25-.495.5-.495h2c.25 0 .5.25.5.5v3.5a.5.5 0 0 0 .5.5h4a.5.5 0 0 0 .5-.5v-7a.5.5 0 0 0-.146-.354L13 5.793V2.5a.5.5 0 0 0-.5-.5h-1a.5.5 0 0 0-.5.5v1.293L8.354 1.146a.5.5 0 0 0-.708 0l-6 6A.5.5 0 0 0 1.5 7.5v7a.5.5 0 0 0 .5.5h4a.5.5 0 0 0 .5-.5z"></path></svg>
+          <a href="#" style="color:var(--brand-primary-500);text-decoration:underline;">Inicio</a>
+        </li>
+        <li aria-hidden="true" style="padding:0 8px;color:var(--brand-secondary-500);">&gt;</li>
+        <li><a href="#" style="color:var(--brand-primary-500);text-decoration:underline;">Deportes Extremos</a></li>
+        <li aria-hidden="true" style="padding:0 8px;color:var(--brand-secondary-500);">&gt;</li>
+        <li aria-current="page" style="color:var(--brand-secondary-500);">Destacados</li>
+      </ol>
+    </nav><section data-component="card" style="position: relative; box-sizing: border-box; width: 100%; border: 1px solid var(--neutral-300); border-radius: var(--radius-8); overflow: hidden; background: var(--neutral-900); min-height: 420px; display: flex; align-items: flex-end;">
+      <div data-component="image" style="position: absolute; inset: 0px;">
+        <img src="https://images.unsplash.com/photo-1502680390469-be75c86b636f?auto=format&amp;fit=crop&amp;w=1600&amp;q=80" alt="Surfista sobre una gran ola" style="width:100%;height:100%;object-fit:cover;display:block;">
+        <div style="position:absolute;inset:0;background:linear-gradient(90deg,rgba(2,24,29,.82) 0%,rgba(2,24,29,.45) 45%,rgba(2,24,29,0) 75%);"></div>
+      </div>
+      <div style="position:relative;padding:48px;max-width:620px;">
+        <span data-component="badge" style="display:inline-flex;align-items:center;justify-content:center;padding:4.2px 12px;background:var(--brand-secondary-500);border-radius:100px;color:var(--white);font-size:14px;line-height:1;font-weight:700;white-space:nowrap;margin-bottom:16px;">TEMPORADA 2026</span>
+        <h1 style="font-size:48px;line-height:1.1;font-weight:700;color:var(--white);margin:0 0 12px;">Supera tus límites</h1>
+        <p style="font-size:20px;line-height:1.5;color:rgba(255,255,255,.88);margin:0 0 28px;">
+          Todo el equipamiento para surf, escalada, nieve y ciclismo de montaña. Marcas líderes, envío en 24h y devolución gratuita.
+        </p>
+        <div style="display:flex;gap:12px;flex-wrap:wrap;">
+          <button data-component="button" type="button" style="display:inline-flex;align-items:center;gap:8px;padding:10px 20px;
+                  background:var(--brand-secondary-500);border:1px solid var(--brand-secondary-500);border-radius:var(--radius-8);
+                  color:var(--white);font-size:16px;line-height:1.5;font-weight:700;font-family:var(--font-base);cursor:pointer;">Ver ofertas</button>
+          <button data-component="button" type="button" style="display:inline-flex;align-items:center;gap:8px;padding:10px 20px;
+                  background:transparent;border:1px solid var(--white);border-radius:var(--radius-8);
+                  color:var(--white);font-size:16px;line-height:1.5;font-family:var(--font-base);cursor:pointer;">Explorar catálogo</button>
+        </div>
+      </div>
+    </section>
+    
+    <p class="lp-lead">Encuentra tu deporte y equípate como un profesional.</p><h2 class="lp-h2" style="margin-top: var(--spacing-4);">Compra por disciplinas</h2><div class="lp-grid">
+      <a href="#" data-component="card" style="position:relative;display:block;text-decoration:none;box-sizing:border-box;border:1px solid var(--neutral-300);border-radius:var(--radius-8);overflow:hidden;background:var(--white);">
+        <div data-component="image" style="width:100%;aspect-ratio:4/3;overflow:hidden;">
+          <img src="https://images.unsplash.com/photo-1522163182402-834f871fd851?auto=format&amp;fit=crop&amp;w=600&amp;q=80" alt="Escalada en roca" style="width:100%;height:100%;object-fit:cover;display:block;">
+        </div>
+        <div style="padding:16px;display:flex;align-items:center;justify-content:space-between;">
+          <span style="font-size:20px;line-height:1.2;font-weight:700;color:var(--neutral-900);">Escalada</span>
+          <span style="color:var(--brand-secondary-500);font-size:20px;">→</span>
+        </div>
+      </a>
+      <a href="#" data-component="card" style="position:relative;display:block;text-decoration:none;box-sizing:border-box;border:1px solid var(--neutral-300);border-radius:var(--radius-8);overflow:hidden;background:var(--white);">
+        <div data-component="image" style="width:100%;aspect-ratio:4/3;overflow:hidden;">
+          <img src="https://images.unsplash.com/photo-1541625602330-2277a4c46182?auto=format&amp;fit=crop&amp;w=600&amp;q=80" alt="Ciclismo de montaña" style="width:100%;height:100%;object-fit:cover;display:block;">
+        </div>
+        <div style="padding:16px;display:flex;align-items:center;justify-content:space-between;">
+          <span style="font-size:20px;line-height:1.2;font-weight:700;color:var(--neutral-900);">Ciclismo</span>
+          <span style="color:var(--brand-secondary-500);font-size:20px;">→</span>
+        </div>
+      </a>
+      <a href="#" data-component="card" style="position: relative; display: block; text-decoration: none; box-sizing: border-box; border: 1px solid var(--neutral-300); border-radius: var(--radius-8); overflow: hidden; background: var(--white); height: 100%; width: 100%;">
+        <div data-component="image" style="width:100%;aspect-ratio:4/3;overflow:hidden;">
+          <img src="https://images.unsplash.com/photo-1522056615691-da7b8106c665?auto=format&amp;fit=crop&amp;w=600&amp;q=80" alt="Snowboard en la nieve" style="width:100%;height:100%;object-fit:cover;display:block;">
+        </div>
+        <div style="padding:16px;display:flex;align-items:center;justify-content:space-between;">
+          <span style="font-size:20px;line-height:1.2;font-weight:700;color:var(--neutral-900);">Nieve</span>
+          <span style="color:var(--brand-secondary-500);font-size:20px;">→</span>
+        </div>
+      </a>
+      <a href="#" data-component="card" style="position:relative;display:block;text-decoration:none;box-sizing:border-box;border:1px solid var(--neutral-300);border-radius:var(--radius-8);overflow:hidden;background:var(--white);">
+        <div data-component="image" style="width:100%;aspect-ratio:4/3;overflow:hidden;">
+          <img src="https://images.unsplash.com/photo-1520045892732-304bc3ac5d8e?auto=format&amp;fit=crop&amp;w=600&amp;q=80" alt="Skateboarding" style="width:100%;height:100%;object-fit:cover;display:block;">
+        </div>
+        <div style="padding:16px;display:flex;align-items:center;justify-content:space-between;">
+          <span style="font-size:20px;line-height:1.2;font-weight:700;color:var(--neutral-900);">Skate</span>
+          <span style="color:var(--brand-secondary-500);font-size:20px;">→</span>
+        </div>
+      </a>
+    </div>
+  </div>
+
+  <!-- ============================ PROMO ALERT ============================ -->
+  <div class="lp-wrap">
+    
+  </div>
+
+  <!-- ============================ PRODUCT LISTING ============================ -->
+  <div class="lp-wrap lp-section" style="padding-top: var(--spacing-0); padding-bottom: var(--spacing-0); margin-top: var(--spacing-20); margin-bottom: var(--spacing-20);">
+    
+    <div data-component="alert" role="alert" style="box-sizing: border-box; display: flex; align-items: center; gap: 12px; width: 100%; padding: 16px; border-radius: var(--radius-8); background: var(--brand-primary-100); border: 1px solid rgb(156, 201, 211); color: var(--brand-primary-700); font-family: var(--font-base); font-size: 16px; line-height: 1.5; margin-bottom: var(--spacing-24); justify-content: center;">
+      <svg width="22" height="22" viewBox="0 0 16 16" fill="currentColor" style="flex:none;" aria-hidden="true"><path d="M8 15A7 7 0 1 0 8 1a7 7 0 0 0 0 14zm.93-9.412-1 4.705c-.07.34.029.533.304.533.194 0 .487-.07.686-.246l-.088.416c-.287.346-.92.598-1.465.598-.703 0-1.002-.422-.808-1.319l.738-3.468c.064-.293.006-.399-.287-.47l-.451-.081.082-.381 2.29-.287zM8 5.5a1 1 0 1 1 0-2 1 1 0 0 1 0 2z"></path></svg>
+      <div style="flex: 0 0 auto; min-width: 0px; width: fit-content;">
+        <strong>Semana del Aventurero.</strong> Hasta <strong>-40%</strong> en material seleccionado de escalada y montaña. Solo hasta el domingo.
+      </div>
+    </div><h2 class="lp-h2" style="margin-top: var(--spacing-20);">Material destacado</h2><p class="lp-lead">Lo más vendido esta temporada entre los amantes de la adrenalina.</p>
+
+    <!-- filter tabs -->
+    <div data-component="tabs" style="font-family:var(--font-base);max-width:100%;width:100%;box-sizing:border-box;margin-bottom:24px;">
+      <div style="display:flex;align-items:flex-end;border-bottom:1px solid var(--neutral-300);flex-wrap:wrap;">
+        <div style="display:flex;align-items:center;gap:4px;background:var(--white);border:1px solid var(--neutral-300);border-bottom-color:var(--white);border-top-left-radius:4px;border-top-right-radius:4px;padding:9px 17px;margin-bottom:-1px;">
+          <span style="font-size:16px;line-height:1.5;color:var(--neutral-900);font-weight:700;">Todos</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:4px;background:transparent;border:1px solid transparent;border-top-left-radius:4px;border-top-right-radius:4px;padding:9px 17px;">
+          <span style="font-size:16px;line-height:1.5;color:var(--brand-primary-500);">Novedades</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:4px;background:transparent;border:1px solid transparent;border-top-left-radius:4px;border-top-right-radius:4px;padding:9px 17px;">
+          <span style="font-size:16px;line-height:1.5;color:var(--brand-primary-500);">Ofertas</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:4px;background:transparent;border:1px solid transparent;border-top-left-radius:4px;border-top-right-radius:4px;padding:9px 17px;">
+          <span style="font-size:16px;line-height:1.5;color:var(--brand-primary-500);">Top ventas</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- product grid -->
+    <div class="lp-grid">
+
+      <!-- CARD 1 -->
+      <article data-component="card" style="box-sizing:border-box;display:flex;flex-direction:column;width:100%;background:var(--white);border:1px solid var(--neutral-300);border-radius:var(--radius-6);overflow:hidden;font-family:var(--font-base);color:var(--neutral-900);">
+        <div style="position:relative;">
+          <div data-component="image" style="width:100%;aspect-ratio:1/1;overflow:hidden;background:var(--neutral-100);">
+            <img src="https://images.unsplash.com/photo-1502680390469-be75c86b636f?auto=format&amp;fit=crop&amp;w=500&amp;q=80" alt="Tabla de surf" style="width:100%;height:100%;object-fit:cover;display:block;">
+          </div>
+          <span data-component="badge" style="position:absolute;top:10px;left:10px;display:inline-flex;align-items:center;justify-content:center;padding:4.2px 9px;background:var(--danger);border-radius:6px;color:var(--white);font-size:12px;line-height:1;font-weight:700;white-space:nowrap;">-19%</span>
+        </div>
+        <div style="padding:16px;display:flex;flex-direction:column;flex:1 0 0;gap:8px;">
+          <span data-component="tag" style="align-self:flex-start;display:inline-flex;align-items:center;gap:4px;padding:1px 8px;background:var(--neutral-100);border:1px solid #ced4da;border-radius:4px;color:var(--neutral-600);font-size:14px;line-height:1.5;">Surf</span>
+          <h3 style="font-size:20px;line-height:1.2;font-weight:700;margin:0;">Tabla de Surf Pro 6'2"</h3>
+          <div data-component="rate" role="img" aria-label="Valorada 5 de 5" style="display:inline-flex;align-items:center;gap:4px;">
+            <svg width="18" height="18" viewBox="0 0 20 20" fill="#ffda6a" aria-hidden="true"><path d="M10 1l2.6 5.3 5.9.9-4.3 4.1 1 5.8L10 14.9 4.8 17.6l1-5.8L1.5 7.7l5.9-.9z"></path></svg>
+            <svg width="18" height="18" viewBox="0 0 20 20" fill="#ffda6a" aria-hidden="true"><path d="M10 1l2.6 5.3 5.9.9-4.3 4.1 1 5.8L10 14.9 4.8 17.6l1-5.8L1.5 7.7l5.9-.9z"></path></svg>
+            <svg width="18" height="18" viewBox="0 0 20 20" fill="#ffda6a" aria-hidden="true"><path d="M10 1l2.6 5.3 5.9.9-4.3 4.1 1 5.8L10 14.9 4.8 17.6l1-5.8L1.5 7.7l5.9-.9z"></path></svg>
+            <svg width="18" height="18" viewBox="0 0 20 20" fill="#ffda6a" aria-hidden="true"><path d="M10 1l2.6 5.3 5.9.9-4.3 4.1 1 5.8L10 14.9 4.8 17.6l1-5.8L1.5 7.7l5.9-.9z"></path></svg>
+            <svg width="18" height="18" viewBox="0 0 20 20" fill="#ffda6a" aria-hidden="true"><path d="M10 1l2.6 5.3 5.9.9-4.3 4.1 1 5.8L10 14.9 4.8 17.6l1-5.8L1.5 7.7l5.9-.9z"></path></svg>
+            <span style="font-size:14px;color:var(--neutral-600);margin-left:4px;">(128)</span>
+          </div>
+          <div style="margin-top:auto;display:flex;align-items:baseline;gap:8px;">
+            <span style="font-size:24px;font-weight:700;color:var(--brand-primary-500);">349€</span>
+            <span style="font-size:16px;color:var(--neutral-600);text-decoration:line-through;">429€</span>
+          </div>
+          <button data-component="button" type="button" style="margin-top:4px;display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:7px 13px;background:var(--brand-primary-500);border:1px solid var(--brand-primary-500);border-radius:var(--radius-8);color:var(--white);font-size:16px;line-height:1.5;font-weight:700;font-family:var(--font-base);cursor:pointer;">Añadir a la cesta</button>
+        </div>
+      </article>
+
+      <!-- CARD 2 -->
+      <article data-component="card" style="box-sizing:border-box;display:flex;flex-direction:column;width:100%;background:var(--white);border:1px solid var(--neutral-300);border-radius:var(--radius-6);overflow:hidden;font-family:var(--font-base);color:var(--neutral-900);">
+        <div style="position:relative;">
+          <div data-component="image" style="width:100%;aspect-ratio:1/1;overflow:hidden;background:var(--neutral-100);">
+            <img src="https://images.unsplash.com/photo-1522163182402-834f871fd851?auto=format&amp;fit=crop&amp;w=500&amp;q=80" alt="Equipo de escalada" style="width:100%;height:100%;object-fit:cover;display:block;">
+          </div>
+          <span data-component="badge" style="position:absolute;top:10px;left:10px;display:inline-flex;align-items:center;justify-content:center;padding:4.2px 9px;background:var(--success);border-radius:6px;color:var(--white);font-size:12px;line-height:1;font-weight:700;white-space:nowrap;">Nuevo</span>
+        </div>
+        <div style="padding:16px;display:flex;flex-direction:column;flex:1 0 0;gap:8px;">
+          <span data-component="tag" style="align-self:flex-start;display:inline-flex;align-items:center;gap:4px;padding:1px 8px;background:var(--neutral-100);border:1px solid #ced4da;border-radius:4px;color:var(--neutral-600);font-size:14px;line-height:1.5;">Escalada</span>
+          <h3 style="font-size:20px;line-height:1.2;font-weight:700;margin:0;">Casco de Escalada Alpine</h3>
+          <div data-component="rate" role="img" aria-label="Valorada 4 de 5" style="display:inline-flex;align-items:center;gap:4px;">
+            <svg width="18" height="18" viewBox="0 0 20 20" fill="#ffda6a" aria-hidden="true"><path d="M10 1l2.6 5.3 5.9.9-4.3 4.1 1 5.8L10 14.9 4.8 17.6l1-5.8L1.5 7.7l5.9-.9z"></path></svg>
+            <svg width="18" height="18" viewBox="0 0 20 20" fill="#ffda6a" aria-hidden="true"><path d="M10 1l2.6 5.3 5.9.9-4.3 4.1 1 5.8L10 14.9 4.8 17.6l1-5.8L1.5 7.7l5.9-.9z"></path></svg>
+            <svg width="18" height="18" viewBox="0 0 20 20" fill="#ffda6a" aria-hidden="true"><path d="M10 1l2.6 5.3 5.9.9-4.3 4.1 1 5.8L10 14.9 4.8 17.6l1-5.8L1.5 7.7l5.9-.9z"></path></svg>
+            <svg width="18" height="18" viewBox="0 0 20 20" fill="#ffda6a" aria-hidden="true"><path d="M10 1l2.6 5.3 5.9.9-4.3 4.1 1 5.8L10 14.9 4.8 17.6l1-5.8L1.5 7.7l5.9-.9z"></path></svg>
+            <svg width="18" height="18" viewBox="0 0 20 20" fill="#dee2e6" aria-hidden="true"><path d="M10 1l2.6 5.3 5.9.9-4.3 4.1 1 5.8L10 14.9 4.8 17.6l1-5.8L1.5 7.7l5.9-.9z"></path></svg>
+            <span style="font-size:14px;color:var(--neutral-600);margin-left:4px;">(74)</span>
+          </div>
+          <div style="margin-top:auto;display:flex;align-items:baseline;gap:8px;">
+            <span style="font-size:24px;font-weight:700;color:var(--brand-primary-500);">89€</span>
+          </div>
+          <button data-component="button" type="button" style="margin-top:4px;display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:7px 13px;background:var(--brand-primary-500);border:1px solid var(--brand-primary-500);border-radius:var(--radius-8);color:var(--white);font-size:16px;line-height:1.5;font-weight:700;font-family:var(--font-base);cursor:pointer;">Añadir a la cesta</button>
+        </div>
+      </article>
+
+      <!-- CARD 3 -->
+      <article data-component="card" style="box-sizing:border-box;display:flex;flex-direction:column;width:100%;background:var(--white);border:1px solid var(--neutral-300);border-radius:var(--radius-6);overflow:hidden;font-family:var(--font-base);color:var(--neutral-900);">
+        <div style="position:relative;">
+          <div data-component="image" style="width:100%;aspect-ratio:1/1;overflow:hidden;background:var(--neutral-100);">
+            <img src="https://images.unsplash.com/photo-1541625602330-2277a4c46182?auto=format&amp;fit=crop&amp;w=500&amp;q=80" alt="Bicicleta de montaña" style="width:100%;height:100%;object-fit:cover;display:block;">
+          </div>
+          <span data-component="badge" style="position:absolute;top:10px;left:10px;display:inline-flex;align-items:center;justify-content:center;padding:4.2px 9px;background:var(--danger);border-radius:6px;color:var(--white);font-size:12px;line-height:1;font-weight:700;white-space:nowrap;">-13%</span>
+        </div>
+        <div style="padding:16px;display:flex;flex-direction:column;flex:1 0 0;gap:8px;">
+          <span data-component="tag" style="align-self:flex-start;display:inline-flex;align-items:center;gap:4px;padding:1px 8px;background:var(--neutral-100);border:1px solid #ced4da;border-radius:4px;color:var(--neutral-600);font-size:14px;line-height:1.5;">Ciclismo</span>
+          <h3 style="font-size:20px;line-height:1.2;font-weight:700;margin:0;">Bicicleta Enduro 29"</h3>
+          <div data-component="rate" role="img" aria-label="Valorada 5 de 5" style="display:inline-flex;align-items:center;gap:4px;">
+            <svg width="18" height="18" viewBox="0 0 20 20" fill="#ffda6a" aria-hidden="true"><path d="M10 1l2.6 5.3 5.9.9-4.3 4.1 1 5.8L10 14.9 4.8 17.6l1-5.8L1.5 7.7l5.9-.9z"></path></svg>
+            <svg width="18" height="18" viewBox="0 0 20 20" fill="#ffda6a" aria-hidden="true"><path d="M10 1l2.6 5.3 5.9.9-4.3 4.1 1 5.8L10 14.9 4.8 17.6l1-5.8L1.5 7.7l5.9-.9z"></path></svg>
+            <svg width="18" height="18" viewBox="0 0 20 20" fill="#ffda6a" aria-hidden="true"><path d="M10 1l2.6 5.3 5.9.9-4.3 4.1 1 5.8L10 14.9 4.8 17.6l1-5.8L1.5 7.7l5.9-.9z"></path></svg>
+            <svg width="18" height="18" viewBox="0 0 20 20" fill="#ffda6a" aria-hidden="true"><path d="M10 1l2.6 5.3 5.9.9-4.3 4.1 1 5.8L10 14.9 4.8 17.6l1-5.8L1.5 7.7l5.9-.9z"></path></svg>
+            <svg width="18" height="18" viewBox="0 0 20 20" fill="#ffda6a" aria-hidden="true"><path d="M10 1l2.6 5.3 5.9.9-4.3 4.1 1 5.8L10 14.9 4.8 17.6l1-5.8L1.5 7.7l5.9-.9z"></path></svg>
+            <span style="font-size:14px;color:var(--neutral-600);margin-left:4px;">(203)</span>
+          </div>
+          <div style="margin-top:auto;display:flex;align-items:baseline;gap:8px;">
+            <span style="font-size:24px;font-weight:700;color:var(--brand-primary-500);">1.299€</span>
+            <span style="font-size:16px;color:var(--neutral-600);text-decoration:line-through;">1.499€</span>
+          </div>
+          <button data-component="button" type="button" style="margin-top:4px;display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:7px 13px;background:var(--brand-primary-500);border:1px solid var(--brand-primary-500);border-radius:var(--radius-8);color:var(--white);font-size:16px;line-height:1.5;font-weight:700;font-family:var(--font-base);cursor:pointer;">Añadir a la cesta</button>
+        </div>
+      </article>
+
+      <!-- CARD 4 -->
+      <article data-component="card" style="box-sizing:border-box;display:flex;flex-direction:column;width:100%;background:var(--white);border:1px solid var(--neutral-300);border-radius:var(--radius-6);overflow:hidden;font-family:var(--font-base);color:var(--neutral-900);">
+        <div style="position:relative;">
+          <div data-component="image" style="width:100%;aspect-ratio:1/1;overflow:hidden;background:var(--neutral-100);">
+            <img src="https://images.unsplash.com/photo-1522056615691-da7b8106c665?auto=format&amp;fit=crop&amp;w=500&amp;q=80" alt="Snowboard" style="width:100%;height:100%;object-fit:cover;display:block;">
+          </div>
+          <span data-component="badge" style="position:absolute;top:10px;left:10px;display:inline-flex;align-items:center;justify-content:center;padding:4.2px 9px;background:var(--brand-secondary-500);border-radius:6px;color:var(--white);font-size:12px;line-height:1;font-weight:700;white-space:nowrap;">Top</span>
+        </div>
+        <div style="padding:16px;display:flex;flex-direction:column;flex:1 0 0;gap:8px;">
+          <span data-component="tag" style="align-self:flex-start;display:inline-flex;align-items:center;gap:4px;padding:1px 8px;background:var(--neutral-100);border:1px solid #ced4da;border-radius:4px;color:var(--neutral-600);font-size:14px;line-height:1.5;">Nieve</span>
+          <h3 style="font-size:20px;line-height:1.2;font-weight:700;margin:0;">Snowboard Freeride 158</h3>
+          <div data-component="rate" role="img" aria-label="Valorada 4 de 5" style="display:inline-flex;align-items:center;gap:4px;">
+            <svg width="18" height="18" viewBox="0 0 20 20" fill="#ffda6a" aria-hidden="true"><path d="M10 1l2.6 5.3 5.9.9-4.3 4.1 1 5.8L10 14.9 4.8 17.6l1-5.8L1.5 7.7l5.9-.9z"></path></svg>
+            <svg width="18" height="18" viewBox="0 0 20 20" fill="#ffda6a" aria-hidden="true"><path d="M10 1l2.6 5.3 5.9.9-4.3 4.1 1 5.8L10 14.9 4.8 17.6l1-5.8L1.5 7.7l5.9-.9z"></path></svg>
+            <svg width="18" height="18" viewBox="0 0 20 20" fill="#ffda6a" aria-hidden="true"><path d="M10 1l2.6 5.3 5.9.9-4.3 4.1 1 5.8L10 14.9 4.8 17.6l1-5.8L1.5 7.7l5.9-.9z"></path></svg>
+            <svg width="18" height="18" viewBox="0 0 20 20" fill="#ffda6a" aria-hidden="true"><path d="M10 1l2.6 5.3 5.9.9-4.3 4.1 1 5.8L10 14.9 4.8 17.6l1-5.8L1.5 7.7l5.9-.9z"></path></svg>
+            <svg width="18" height="18" viewBox="0 0 20 20" fill="#dee2e6" aria-hidden="true"><path d="M10 1l2.6 5.3 5.9.9-4.3 4.1 1 5.8L10 14.9 4.8 17.6l1-5.8L1.5 7.7l5.9-.9z"></path></svg>
+            <span style="font-size:14px;color:var(--neutral-600);margin-left:4px;">(96)</span>
+          </div>
+          <div style="margin-top:auto;display:flex;align-items:baseline;gap:8px;">
+            <span style="font-size:24px;font-weight:700;color:var(--brand-primary-500);">459€</span>
+          </div>
+          <button data-component="button" type="button" style="margin-top:4px;display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:7px 13px;background:var(--brand-primary-500);border:1px solid var(--brand-primary-500);border-radius:var(--radius-8);color:var(--white);font-size:16px;line-height:1.5;font-weight:700;font-family:var(--font-base);cursor:pointer;">Añadir a la cesta</button>
+        </div>
+      </article>
+
+      <!-- CARD 5 -->
+      <article data-component="card" style="box-sizing:border-box;display:flex;flex-direction:column;width:100%;background:var(--white);border:1px solid var(--neutral-300);border-radius:var(--radius-6);overflow:hidden;font-family:var(--font-base);color:var(--neutral-900);">
+        <div style="position:relative;">
+          <div data-component="image" style="width:100%;aspect-ratio:1/1;overflow:hidden;background:var(--neutral-100);">
+            <img src="https://images.unsplash.com/photo-1520045892732-304bc3ac5d8e?auto=format&amp;fit=crop&amp;w=500&amp;q=80" alt="Skate" style="width:100%;height:100%;object-fit:cover;display:block;">
+          </div>
+          <span data-component="badge" style="position:absolute;top:10px;left:10px;display:inline-flex;align-items:center;justify-content:center;padding:4.2px 9px;background:var(--danger);border-radius:6px;color:var(--white);font-size:12px;line-height:1;font-weight:700;white-space:nowrap;">-25%</span>
+        </div>
+        <div style="padding:16px;display:flex;flex-direction:column;flex:1 0 0;gap:8px;">
+          <span data-component="tag" style="align-self:flex-start;display:inline-flex;align-items:center;gap:4px;padding:1px 8px;background:var(--neutral-100);border:1px solid #ced4da;border-radius:4px;color:var(--neutral-600);font-size:14px;line-height:1.5;">Skate</span>
+          <h3 style="font-size:20px;line-height:1.2;font-weight:700;margin:0;">Skate Completo Street</h3>
+          <div data-component="rate" role="img" aria-label="Valorada 4 de 5" style="display:inline-flex;align-items:center;gap:4px;">
+            <svg width="18" height="18" viewBox="0 0 20 20" fill="#ffda6a" aria-hidden="true"><path d="M10 1l2.6 5.3 5.9.9-4.3 4.1 1 5.8L10 14.9 4.8 17.6l1-5.8L1.5 7.7l5.9-.9z"></path></svg>
+            <svg width="18" height="18" viewBox="0 0 20 20" fill="#ffda6a" aria-hidden="true"><path d="M10 1l2.6 5.3 5.9.9-4.3 4.1 1 5.8L10 14.9 4.8 17.6l1-5.8L1.5 7.7l5.9-.9z"></path></svg>
+            <svg width="18" height="18" viewBox="0 0 20 20" fill="#ffda6a" aria-hidden="true"><path d="M10 1l2.6 5.3 5.9.9-4.3 4.1 1 5.8L10 14.9 4.8 17.6l1-5.8L1.5 7.7l5.9-.9z"></path></svg>
+            <svg width="18" height="18" viewBox="0 0 20 20" fill="#ffda6a" aria-hidden="true"><path d="M10 1l2.6 5.3 5.9.9-4.3 4.1 1 5.8L10 14.9 4.8 17.6l1-5.8L1.5 7.7l5.9-.9z"></path></svg>
+            <svg width="18" height="18" viewBox="0 0 20 20" fill="#dee2e6" aria-hidden="true"><path d="M10 1l2.6 5.3 5.9.9-4.3 4.1 1 5.8L10 14.9 4.8 17.6l1-5.8L1.5 7.7l5.9-.9z"></path></svg>
+            <span style="font-size:14px;color:var(--neutral-600);margin-left:4px;">(311)</span>
+          </div>
+          <div style="margin-top:auto;display:flex;align-items:baseline;gap:8px;">
+            <span style="font-size:24px;font-weight:700;color:var(--brand-primary-500);">89€</span>
+            <span style="font-size:16px;color:var(--neutral-600);text-decoration:line-through;">119€</span>
+          </div>
+          <button data-component="button" type="button" style="margin-top:4px;display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:7px 13px;background:var(--brand-primary-500);border:1px solid var(--brand-primary-500);border-radius:var(--radius-8);color:var(--white);font-size:16px;line-height:1.5;font-weight:700;font-family:var(--font-base);cursor:pointer;">Añadir a la cesta</button>
+        </div>
+      </article>
+
+      <!-- CARD 6 -->
+      <article data-component="card" style="box-sizing:border-box;display:flex;flex-direction:column;width:100%;background:var(--white);border:1px solid var(--neutral-300);border-radius:var(--radius-6);overflow:hidden;font-family:var(--font-base);color:var(--neutral-900);">
+        <div style="position:relative;">
+          <div data-component="image" style="width:100%;aspect-ratio:1/1;overflow:hidden;background:var(--neutral-100);">
+            <img src="https://images.unsplash.com/photo-1550537687-c91072c4792d?auto=format&amp;fit=crop&amp;w=500&amp;q=80" alt="Kayak en aguas bravas" style="width:100%;height:100%;object-fit:cover;display:block;">
+          </div>
+          <span data-component="badge" style="position:absolute;top:10px;left:10px;display:inline-flex;align-items:center;justify-content:center;padding:4.2px 9px;background:var(--success);border-radius:6px;color:var(--white);font-size:12px;line-height:1;font-weight:700;white-space:nowrap;">Nuevo</span>
+        </div>
+        <div style="padding:16px;display:flex;flex-direction:column;flex:1 0 0;gap:8px;">
+          <span data-component="tag" style="align-self:flex-start;display:inline-flex;align-items:center;gap:4px;padding:1px 8px;background:var(--neutral-100);border:1px solid #ced4da;border-radius:4px;color:var(--neutral-600);font-size:14px;line-height:1.5;">Aguas bravas</span>
+          <h3 style="font-size:20px;line-height:1.2;font-weight:700;margin:0;">Kayak Whitewater 8'</h3>
+          <div data-component="rate" role="img" aria-label="Valorada 5 de 5" style="display:inline-flex;align-items:center;gap:4px;">
+            <svg width="18" height="18" viewBox="0 0 20 20" fill="#ffda6a" aria-hidden="true"><path d="M10 1l2.6 5.3 5.9.9-4.3 4.1 1 5.8L10 14.9 4.8 17.6l1-5.8L1.5 7.7l5.9-.9z"></path></svg>
+            <svg width="18" height="18" viewBox="0 0 20 20" fill="#ffda6a" aria-hidden="true"><path d="M10 1l2.6 5.3 5.9.9-4.3 4.1 1 5.8L10 14.9 4.8 17.6l1-5.8L1.5 7.7l5.9-.9z"></path></svg>
+            <svg width="18" height="18" viewBox="0 0 20 20" fill="#ffda6a" aria-hidden="true"><path d="M10 1l2.6 5.3 5.9.9-4.3 4.1 1 5.8L10 14.9 4.8 17.6l1-5.8L1.5 7.7l5.9-.9z"></path></svg>
+            <svg width="18" height="18" viewBox="0 0 20 20" fill="#ffda6a" aria-hidden="true"><path d="M10 1l2.6 5.3 5.9.9-4.3 4.1 1 5.8L10 14.9 4.8 17.6l1-5.8L1.5 7.7l5.9-.9z"></path></svg>
+            <svg width="18" height="18" viewBox="0 0 20 20" fill="#ffda6a" aria-hidden="true"><path d="M10 1l2.6 5.3 5.9.9-4.3 4.1 1 5.8L10 14.9 4.8 17.6l1-5.8L1.5 7.7l5.9-.9z"></path></svg>
+            <span style="font-size:14px;color:var(--neutral-600);margin-left:4px;">(52)</span>
+          </div>
+          <div style="margin-top:auto;display:flex;align-items:baseline;gap:8px;">
+            <span style="font-size:24px;font-weight:700;color:var(--brand-primary-500);">699€</span>
+          </div>
+          <button data-component="button" type="button" style="margin-top:4px;display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:7px 13px;background:var(--brand-primary-500);border:1px solid var(--brand-primary-500);border-radius:var(--radius-8);color:var(--white);font-size:16px;line-height:1.5;font-weight:700;font-family:var(--font-base);cursor:pointer;">Añadir a la cesta</button>
+        </div>
+      </article>
+
+      <!-- CARD 7 -->
+      <article data-component="card" style="box-sizing:border-box;display:flex;flex-direction:column;width:100%;background:var(--white);border:1px solid var(--neutral-300);border-radius:var(--radius-6);overflow:hidden;font-family:var(--font-base);color:var(--neutral-900);">
+        <div style="position:relative;">
+          <div data-component="image" style="width:100%;aspect-ratio:1/1;overflow:hidden;background:var(--neutral-100);">
+            <img src="https://images.unsplash.com/photo-1521673252667-e05da380b252?auto=format&amp;fit=crop&amp;w=500&amp;q=80" alt="Paracaidismo" style="width:100%;height:100%;object-fit:cover;display:block;">
+          </div>
+          <span data-component="badge" style="position:absolute;top:10px;left:10px;display:inline-flex;align-items:center;justify-content:center;padding:4.2px 9px;background:var(--brand-secondary-500);border-radius:6px;color:var(--white);font-size:12px;line-height:1;font-weight:700;white-space:nowrap;">Top</span>
+        </div>
+        <div style="padding:16px;display:flex;flex-direction:column;flex:1 0 0;gap:8px;">
+          <span data-component="tag" style="align-self:flex-start;display:inline-flex;align-items:center;gap:4px;padding:1px 8px;background:var(--neutral-100);border:1px solid #ced4da;border-radius:4px;color:var(--neutral-600);font-size:14px;line-height:1.5;">Aéreo</span>
+          <h3 style="font-size:20px;line-height:1.2;font-weight:700;margin:0;">Arnés de Paracaidismo</h3>
+          <div data-component="rate" role="img" aria-label="Valorada 4 de 5" style="display:inline-flex;align-items:center;gap:4px;">
+            <svg width="18" height="18" viewBox="0 0 20 20" fill="#ffda6a" aria-hidden="true"><path d="M10 1l2.6 5.3 5.9.9-4.3 4.1 1 5.8L10 14.9 4.8 17.6l1-5.8L1.5 7.7l5.9-.9z"></path></svg>
+            <svg width="18" height="18" viewBox="0 0 20 20" fill="#ffda6a" aria-hidden="true"><path d="M10 1l2.6 5.3 5.9.9-4.3 4.1 1 5.8L10 14.9 4.8 17.6l1-5.8L1.5 7.7l5.9-.9z"></path></svg>
+            <svg width="18" height="18" viewBox="0 0 20 20" fill="#ffda6a" aria-hidden="true"><path d="M10 1l2.6 5.3 5.9.9-4.3 4.1 1 5.8L10 14.9 4.8 17.6l1-5.8L1.5 7.7l5.9-.9z"></path></svg>
+            <svg width="18" height="18" viewBox="0 0 20 20" fill="#ffda6a" aria-hidden="true"><path d="M10 1l2.6 5.3 5.9.9-4.3 4.1 1 5.8L10 14.9 4.8 17.6l1-5.8L1.5 7.7l5.9-.9z"></path></svg>
+            <svg width="18" height="18" viewBox="0 0 20 20" fill="#dee2e6" aria-hidden="true"><path d="M10 1l2.6 5.3 5.9.9-4.3 4.1 1 5.8L10 14.9 4.8 17.6l1-5.8L1.5 7.7l5.9-.9z"></path></svg>
+            <span style="font-size:14px;color:var(--neutral-600);margin-left:4px;">(41)</span>
+          </div>
+          <div style="margin-top:auto;display:flex;align-items:baseline;gap:8px;">
+            <span style="font-size:24px;font-weight:700;color:var(--brand-primary-500);">540€</span>
+          </div>
+          <button data-component="button" type="button" style="margin-top:4px;display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:7px 13px;background:var(--brand-primary-500);border:1px solid var(--brand-primary-500);border-radius:var(--radius-8);color:var(--white);font-size:16px;line-height:1.5;font-weight:700;font-family:var(--font-base);cursor:pointer;">Añadir a la cesta</button>
+        </div>
+      </article>
+
+      <!-- CARD 8 -->
+      <article data-component="card" style="box-sizing:border-box;display:flex;flex-direction:column;width:100%;background:var(--white);border:1px solid var(--neutral-300);border-radius:var(--radius-6);overflow:hidden;font-family:var(--font-base);color:var(--neutral-900);">
+        <div style="position:relative;">
+          <div data-component="image" style="width:100%;aspect-ratio:1/1;overflow:hidden;background:var(--neutral-100);">
+            <img src="https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&amp;fit=crop&amp;w=500&amp;q=80" alt="Cuerda de escalada en montaña" style="width:100%;height:100%;object-fit:cover;display:block;">
+          </div>
+          <span data-component="badge" style="position:absolute;top:10px;left:10px;display:inline-flex;align-items:center;justify-content:center;padding:4.2px 9px;background:var(--danger);border-radius:6px;color:var(--white);font-size:12px;line-height:1;font-weight:700;white-space:nowrap;">-30%</span>
+        </div>
+        <div style="padding:16px;display:flex;flex-direction:column;flex:1 0 0;gap:8px;">
+          <span data-component="tag" style="align-self:flex-start;display:inline-flex;align-items:center;gap:4px;padding:1px 8px;background:var(--neutral-100);border:1px solid #ced4da;border-radius:4px;color:var(--neutral-600);font-size:14px;line-height:1.5;">Escalada</span>
+          <h3 style="font-size:20px;line-height:1.2;font-weight:700;margin:0;">Cuerda Dinámica 70m</h3>
+          <div data-component="rate" role="img" aria-label="Valorada 5 de 5" style="display:inline-flex;align-items:center;gap:4px;">
+            <svg width="18" height="18" viewBox="0 0 20 20" fill="#ffda6a" aria-hidden="true"><path d="M10 1l2.6 5.3 5.9.9-4.3 4.1 1 5.8L10 14.9 4.8 17.6l1-5.8L1.5 7.7l5.9-.9z"></path></svg>
+            <svg width="18" height="18" viewBox="0 0 20 20" fill="#ffda6a" aria-hidden="true"><path d="M10 1l2.6 5.3 5.9.9-4.3 4.1 1 5.8L10 14.9 4.8 17.6l1-5.8L1.5 7.7l5.9-.9z"></path></svg>
+            <svg width="18" height="18" viewBox="0 0 20 20" fill="#ffda6a" aria-hidden="true"><path d="M10 1l2.6 5.3 5.9.9-4.3 4.1 1 5.8L10 14.9 4.8 17.6l1-5.8L1.5 7.7l5.9-.9z"></path></svg>
+            <svg width="18" height="18" viewBox="0 0 20 20" fill="#ffda6a" aria-hidden="true"><path d="M10 1l2.6 5.3 5.9.9-4.3 4.1 1 5.8L10 14.9 4.8 17.6l1-5.8L1.5 7.7l5.9-.9z"></path></svg>
+            <svg width="18" height="18" viewBox="0 0 20 20" fill="#ffda6a" aria-hidden="true"><path d="M10 1l2.6 5.3 5.9.9-4.3 4.1 1 5.8L10 14.9 4.8 17.6l1-5.8L1.5 7.7l5.9-.9z"></path></svg>
+            <span style="font-size:14px;color:var(--neutral-600);margin-left:4px;">(187)</span>
+          </div>
+          <div style="margin-top:auto;display:flex;align-items:baseline;gap:8px;">
+            <span style="font-size:24px;font-weight:700;color:var(--brand-primary-500);">111€</span>
+            <span style="font-size:16px;color:var(--neutral-600);text-decoration:line-through;">159€</span>
+          </div>
+          <button data-component="button" type="button" style="margin-top:4px;display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:7px 13px;background:var(--brand-primary-500);border:1px solid var(--brand-primary-500);border-radius:var(--radius-8);color:var(--white);font-size:16px;line-height:1.5;font-weight:700;font-family:var(--font-base);cursor:pointer;">Añadir a la cesta</button>
+        </div>
+      </article>
+
+    </div>
+
+    <!-- pagination -->
+    <div style="display:flex;justify-content:center;margin-top:40px;">
+      <nav data-component="pagination" aria-label="Navegación de páginas" style="max-width:100%;font-family:var(--font-base);">
+        <ul style="list-style:none;display:inline-flex;margin:0;padding:0;">
+          <li><a href="#" style="display:block;padding:6px 12px;background:var(--white);border:1px solid var(--neutral-300);color:var(--brand-primary-500);font-size:16px;line-height:1.5;text-decoration:none;border-radius:8px 0 0 8px;margin-right:-1px;">Anterior</a></li>
+          <li><a href="#" aria-current="page" style="display:block;padding:6px 12px;background:var(--brand-primary-500);border:1px solid var(--brand-primary-500);color:var(--white);font-size:16px;line-height:1.5;text-decoration:none;margin-right:-1px;">1</a></li>
+          <li><a href="#" style="display:block;padding:6px 12px;background:var(--white);border:1px solid var(--neutral-300);color:var(--brand-primary-500);font-size:16px;line-height:1.5;text-decoration:none;margin-right:-1px;">2</a></li>
+          <li><a href="#" style="display:block;padding:6px 12px;background:var(--white);border:1px solid var(--neutral-300);color:var(--brand-primary-500);font-size:16px;line-height:1.5;text-decoration:none;margin-right:-1px;">3</a></li>
+          <li><a href="#" style="display:block;padding:6px 12px;background:var(--white);border:1px solid var(--neutral-300);color:var(--brand-primary-500);font-size:16px;line-height:1.5;text-decoration:none;border-radius:0 8px 8px 0;">Siguiente</a></li>
+        </ul>
+      </nav>
+    </div>
+  </div>
+
+  <!-- ============================ NEWSLETTER BANNER ============================ -->
+  <div style="width:100%;background:var(--brand-primary-500);">
+    <div class="lp-wrap" style="padding-top:40px;padding-bottom:40px;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:24px;">
+      <div style="flex:1 1 320px;min-width:0;">
+        <h2 style="font-size:28px;line-height:1.2;font-weight:700;color:var(--white);margin:0 0 8px;">Únete al Club Aventura</h2>
+        <p style="font-size:16px;line-height:1.5;color:rgba(255,255,255,.9);margin:0;">Recibe ofertas exclusivas, guías de equipo y un 10% de descuento en tu primera compra.</p>
+      </div>
+      <div data-component="search-box" style="display:inline-flex;align-items:stretch;max-width:100%;font-family:var(--font-base);flex:1 1 320px;">
+        <input type="email" placeholder="tu@email.com" aria-label="Correo electrónico" style="box-sizing:border-box;flex:1 1 auto;min-width:0;height:44px;padding:7px 13px;
+                 background:var(--white);border:1px solid #ced4da;border-right:none;
+                 border-radius:6px 0 0 6px;font-family:var(--font-base);font-size:16px;line-height:1.5;color:var(--neutral-900);outline:none;">
+        <button type="button" style="display:inline-flex;align-items:center;gap:8px;height:44px;padding:7px 20px;
+               background:var(--brand-secondary-500);border:1px solid var(--brand-secondary-500);border-radius:0 8px 8px 0;color:var(--white);
+               font-family:var(--font-base);font-size:16px;line-height:1.5;font-weight:700;cursor:pointer;white-space:nowrap;">Suscribirme</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================ FOOTER ============================ -->
+  <footer style="width:100%;background:var(--neutral-950);color:rgba(255,255,255,.75);font-family:var(--font-base);">
+    <div class="lp-wrap" style="padding-top:48px;padding-bottom:32px;">
+      <div style="display:grid;grid-template-columns:1.5fr 1fr 1fr 1fr;gap:32px;">
+        <div>
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
+            <span style="display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;background:var(--brand-secondary-500);border-radius:var(--radius-8);color:var(--white);">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 18l5-9 4 6 3-4 6 7z"></path><circle cx="7" cy="6" r="2"></circle></svg>
+            </span>
+            <span style="font-size:18px;font-weight:700;color:var(--white);">El Corte Extremo</span>
+          </div>
+          <p style="font-size:14px;line-height:1.5;margin:0;max-width:280px;">Tu tienda de deportes extremos. Equipo profesional para surf, escalada, nieve, ciclismo y mucho más.</p>
+        </div>
+        <div>
+          <div style="font-size:16px;font-weight:700;color:var(--white);margin-bottom:12px;">Disciplinas</div>
+          <ul data-component="list-group" style="box-sizing:border-box;list-style:none;margin:0;padding:0;font-family:var(--font-base);">
+            <li style="padding:6px 0;font-size:14px;line-height:1.5;"><a href="#" style="color:rgba(255,255,255,.75);text-decoration:none;">Surf &amp; Bodyboard</a></li>
+            <li style="padding:6px 0;font-size:14px;line-height:1.5;"><a href="#" style="color:rgba(255,255,255,.75);text-decoration:none;">Escalada</a></li>
+            <li style="padding:6px 0;font-size:14px;line-height:1.5;"><a href="#" style="color:rgba(255,255,255,.75);text-decoration:none;">Ciclismo de montaña</a></li>
+            <li style="padding:6px 0;font-size:14px;line-height:1.5;"><a href="#" style="color:rgba(255,255,255,.75);text-decoration:none;">Snow &amp; Ski</a></li>
+          </ul>
+        </div>
+        <div>
+          <div style="font-size:16px;font-weight:700;color:var(--white);margin-bottom:12px;">Ayuda</div>
+          <ul data-component="list-group" style="box-sizing:border-box;list-style:none;margin:0;padding:0;font-family:var(--font-base);">
+            <li style="padding:6px 0;font-size:14px;line-height:1.5;"><a href="#" style="color:rgba(255,255,255,.75);text-decoration:none;">Envíos y entregas</a></li>
+            <li style="padding:6px 0;font-size:14px;line-height:1.5;"><a href="#" style="color:rgba(255,255,255,.75);text-decoration:none;">Devoluciones</a></li>
+            <li style="padding:6px 0;font-size:14px;line-height:1.5;"><a href="#" style="color:rgba(255,255,255,.75);text-decoration:none;">Guía de tallas</a></li>
+            <li style="padding:6px 0;font-size:14px;line-height:1.5;"><a href="#" style="color:rgba(255,255,255,.75);text-decoration:none;">Contacto</a></li>
+          </ul>
+        </div>
+        <div>
+          <div style="font-size:16px;font-weight:700;color:var(--white);margin-bottom:12px;">Empresa</div>
+          <ul data-component="list-group" style="box-sizing:border-box;list-style:none;margin:0;padding:0;font-family:var(--font-base);">
+            <li style="padding:6px 0;font-size:14px;line-height:1.5;"><a href="#" style="color:rgba(255,255,255,.75);text-decoration:none;">Sobre nosotros</a></li>
+            <li style="padding:6px 0;font-size:14px;line-height:1.5;"><a href="#" style="color:rgba(255,255,255,.75);text-decoration:none;">Tiendas físicas</a></li>
+            <li style="padding:6px 0;font-size:14px;line-height:1.5;"><a href="#" style="color:rgba(255,255,255,.75);text-decoration:none;">Trabaja con nosotros</a></li>
+            <li style="padding:6px 0;font-size:14px;line-height:1.5;"><a href="#" style="color:rgba(255,255,255,.75);text-decoration:none;">Sostenibilidad</a></li>
+          </ul>
+        </div>
+      </div>
+
+      <div data-component="divider" style="width:100%;margin:32px 0 20px;">
+        <hr style="border:none;border-top:1px solid rgba(255,255,255,.15);margin:0;">
+      </div>
+
+      <div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;font-size:14px;">
+        <span>© 2026 El Corte Extremo. Todos los derechos reservados.</span>
+        <span style="display:flex;gap:16px;">
+          <a href="#" style="color:rgba(255,255,255,.75);text-decoration:none;">Privacidad</a>
+          <a href="#" style="color:rgba(255,255,255,.75);text-decoration:none;">Cookies</a>
+          <a href="#" style="color:rgba(255,255,255,.75);text-decoration:none;">Términos</a>
+        </span>
+      </div>
+    </div>
+  </footer>
+
+
+</body></html>

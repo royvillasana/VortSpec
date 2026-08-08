@@ -78,6 +78,15 @@ export function makeBridge(overrides: Partial<InspectorBridge> = {}): InspectorB
     loadUrl: noop,
     serializeDom: async () => null,
     setLightMode: noop,
+    // Live document (live-playground): a component test has no guest to pair with, so no page is
+    // ever live here — which is exactly the not-configured path the Playground must keep working on.
+    localCursor: null,
+    setCursorReporting: noop,
+    startLive: () => false,
+    settleLive: noop,
+    stopLive: noop,
+    live: { adopted: false, reason: null, prepared: false },
+    liveDoc: { current: null },
     ...overrides,
   };
 }

@@ -1,0 +1,1448 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>shopdev — clothes &amp; gear for developers and designers</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet">
+<style>
+  /* ── Tokens ───────────────────────────────────────────────────────────
+     Design-system tokens (Astryx --color-* / --radius-* / --font-*) with
+     page-level brand additions. Every value below is referenced, never
+     hardcoded, at the point of use. */
+  :root {
+    --font-family-body: Figtree, -apple-system, system-ui, sans-serif;
+    --font-size-base: 14px;
+
+    --color-text-primary: #171717;
+    --color-text-secondary: #737373;
+    --color-background-surface: #ffffff;
+    --color-background-subtle: #f5f5f5;
+    --color-background-sunken: #fafafa;
+    --color-border: rgba(0, 0, 0, 0.09);
+    --color-border-strong: rgba(0, 0, 0, 0.16);
+    --color-accent: #5433eb;
+    --color-accent-hover: #4526d4;
+    --color-accent-subtle: #efeaff;
+    --color-accent-ink: #2c1a86;
+    --color-positive: #157a4d;
+    --color-positive-subtle: #e4f6ec;
+    --color-critical: #c02b2b;
+    --color-critical-subtle: #fdeaea;
+
+    --radius-element: 10px;
+    --radius-container: 12px;
+    --radius-card: 20px;
+    --space-4: 16px;
+    --space-8: 72px;
+
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, .05);
+    --shadow-md: 0 6px 20px rgba(0, 0, 0, .08);
+    --shadow-lg: 0 18px 50px rgba(23, 23, 23, .16);
+
+    --duration-fast: 140ms;
+    --duration-base: 240ms;
+    --ease: cubic-bezier(.2, .7, .3, 1);
+
+    --page-max: 1200px;
+    --header-h: 68px;
+  }
+
+  * { box-sizing: border-box; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    margin: 0;
+    font-family: var(--font-family-body);
+    font-size: var(--font-size-base);
+    color: var(--color-text-primary);
+    background: var(--color-background-surface, #ffffff);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  img { display: block; max-width: 100%; }
+  a { color: inherit; text-decoration: none; }
+  button { font: inherit; }
+
+  :focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+    border-radius: var(--radius-element);
+  }
+
+  .wrap {
+    width: 100%;
+    max-width: var(--page-max);
+    margin-inline: auto;
+    padding-inline: var(--spacing-6, 24px);
+  }
+
+  .sr-only {
+    position: absolute; width: 1px; height: 1px;
+    padding: 0; margin: -1px; overflow: hidden;
+    clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+  }
+
+  /* ── Design-system primitives ──────────────────────────────────────── */
+  [data-component="Button"] {
+    display: inline-flex; align-items: center; justify-content: center;
+    gap: var(--spacing-2, 8px);
+    padding: 10px 18px;
+    border: 0;
+    border-radius: var(--radius-full, 999px);
+    background: var(--color-accent);
+    color: var(--color-on-accent, #ffffff);
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background var(--duration-fast) var(--ease), transform var(--duration-fast) var(--ease);
+  }
+  [data-component="Button"]:hover { background: var(--color-accent-hover); }
+  [data-component="Button"]:active { transform: scale(.97); }
+  [data-component="Button"][data-variant="secondary"] {
+    background: var(--color-background-subtle);
+    color: var(--color-text-primary);
+  }
+  [data-component="Button"][data-variant="secondary"]:hover { background: var(--color-border); }
+  [data-component="Button"][data-variant="outline"] {
+    background: var(--color-background-surface);
+    color: var(--color-text-primary);
+    box-shadow: inset 0 0 0 1px var(--color-border-strong);
+  }
+  [data-component="Button"][data-variant="outline"]:hover { background: var(--color-background-subtle); }
+  [data-component="Button"][data-size="lg"] { padding: 14px 26px; font-size: 15px; }
+  [data-component="Button"][data-size="sm"] { padding: 7px 14px; font-size: 13px; }
+
+  [data-component="IconButton"] {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 40px; height: 40px;
+    border: 0;
+    border-radius: var(--radius-full, 999px);
+    background: var(--color-background-subtle);
+    color: var(--color-text-primary);
+    cursor: pointer;
+    position: relative;
+    transition: background var(--duration-fast) var(--ease);
+  }
+  [data-component="IconButton"]:hover { background: var(--color-border); }
+  [data-component="IconButton"][data-variant="ghost"] { background: transparent; }
+  [data-component="IconButton"][data-variant="ghost"]:hover { background: var(--color-background-subtle); }
+
+  [data-component="Badge"] {
+    display: inline-flex; align-items: center; gap: var(--spacing-1, 4px);
+    padding: 3px 10px;
+    border-radius: var(--radius-full, 999px);
+    background: var(--color-background-subtle);
+    color: var(--color-text-primary);
+    font-size: 12px; font-weight: 600;
+    line-height: 1.5;
+  }
+  [data-component="Badge"][data-tone="accent"] { background: var(--color-accent-subtle); color: var(--color-accent-ink); }
+  [data-component="Badge"][data-tone="positive"] { background: var(--color-positive-subtle); color: var(--color-positive); }
+  [data-component="Badge"][data-tone="critical"] { background: var(--color-critical-subtle); color: var(--color-critical); }
+  [data-component="Badge"][data-tone="inverse"] { background: var(--color-text-primary); color: var(--color-on-accent, #ffffff); }
+
+  [data-component="TextInput"] { display: flex; }
+  [data-component="TextInput"] > .field {
+    display: flex; align-items: center; gap: var(--spacing-2, 8px);
+    width: 100%;
+    padding: 10px var(--space-4);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-full, 999px);
+    background: var(--color-background-subtle);
+    transition: border-color var(--duration-fast) var(--ease), background var(--duration-fast) var(--ease);
+  }
+  [data-component="TextInput"] > .field:focus-within {
+    background: var(--color-background-surface);
+    border-color: var(--color-accent);
+  }
+  [data-component="TextInput"] input {
+    flex: 1; min-width: 0;
+    border: 0; outline: 0; background: transparent;
+    font: inherit; color: var(--color-text-primary);
+  }
+  [data-component="TextInput"] input::placeholder { color: var(--color-text-secondary); }
+
+  [data-component="Card"] {
+    display: flex; flex-direction: column;
+    border-radius: var(--radius-card);
+    background: var(--color-background-surface);
+    overflow: hidden;
+  }
+
+  [data-component="Avatar"] {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 36px; height: 36px;
+    border-radius: var(--radius-full, 999px);
+    background: var(--color-accent);
+    color: var(--color-on-accent, #ffffff);
+    font-size: 13px; font-weight: 700;
+    flex: none;
+  }
+  [data-component="Avatar"][data-size="sm"] { width: 28px; height: 28px; font-size: 11px; }
+  [data-component="Avatar"] img { width: 100%; height: 100%; object-fit: cover; border-radius: inherit; }
+
+  [data-component="Selector"] {
+    display: inline-flex; align-items: center; justify-content: space-between;
+    gap: var(--spacing-2, 8px);
+    padding: 9px var(--spacing-3, 12px);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-full, 999px);
+    background: var(--color-background-surface);
+    color: var(--color-text-primary);
+    cursor: pointer;
+  }
+
+  [data-component="Icon"] { display: inline-flex; color: currentColor; flex: none; }
+  [data-component="Icon"] svg { display: block; }
+
+  /* ── Announcement ─────────────────────────────────────────────────── */
+  .announce {
+    display: flex; align-items: center; justify-content: center; gap: var(--spacing-3, 12px);
+    padding: var(--spacing-2, 8px) var(--spacing-6, 24px);
+    background: var(--color-text-primary);
+    color: var(--color-on-accent, #ffffff);
+    font-size: 13px;
+  }
+  .announce[hidden] { display: none; }
+  .announce b { font-weight: 700; }
+  .announce .close {
+    position: absolute; right: var(--space-4);
+    background: transparent; border: 0; color: inherit;
+    opacity: .7; cursor: pointer; padding: var(--spacing-1, 4px);
+  }
+  .announce .close:hover { opacity: 1; }
+  .announce-wrap { position: relative; }
+
+  /* ── Header ───────────────────────────────────────────────────────── */
+  .header {
+    position: sticky; top: 0; z-index: 40;
+    background: color-mix(in srgb, var(--color-background-surface) 88%, transparent);
+    backdrop-filter: saturate(180%) blur(14px);
+    border-bottom: 1px solid var(--color-border);
+  }
+  .header-inner {
+    height: var(--header-h);
+    display: flex; align-items: center; gap: var(--spacing-6, 24px);
+  }
+  .logo { display: inline-flex; align-items: center; gap: var(--spacing-2, 8px); font-weight: 800; font-size: 17px; letter-spacing: -.02em; flex: none; }
+  .logo-mark {
+    width: 30px; height: 30px; border-radius: 9px;
+    background: var(--color-accent); color: var(--color-on-accent, #ffffff);
+    display: grid; place-items: center;
+  }
+  .nav { display: flex; align-items: center; gap: var(--spacing-6, 24px); font-weight: 500; color: var(--color-text-secondary); }
+  .nav a { transition: color var(--duration-fast) var(--ease); }
+  .nav a:hover, .nav a[aria-current="page"] { color: var(--color-text-primary); }
+  .header-search { flex: 1; max-width: 420px; }
+  .header-actions { display: flex; align-items: center; gap: var(--spacing-2, 8px); margin-left: auto; }
+  .cart-count {
+    position: absolute; top: -2px; right: -2px;
+    min-width: 18px; height: 18px; padding: 0 5px;
+    border-radius: var(--radius-full, 999px);
+    background: var(--color-accent); color: var(--color-on-accent, #ffffff);
+    font-size: 11px; font-weight: 700;
+    display: grid; place-items: center;
+    border: 2px solid var(--color-background-surface);
+  }
+  .cart-count[data-empty="true"] { display: none; }
+
+  /* ── Hero ─────────────────────────────────────────────────────────── */
+  .hero { padding: var(--spacing-12, 48px) 0 var(--spacing-8, 32px); }
+  .hero-grid {
+    display: grid; grid-template-columns: 1.05fr .95fr; gap: var(--spacing-8, 32px);
+    align-items: center;
+  }
+  .hero-copy h1 {
+    margin: var(--space-4) 0 var(--spacing-3, 12px);
+    font-size: clamp(38px, 5vw, 58px);
+    line-height: 1.02; letter-spacing: -.035em; font-weight: 800;
+  }
+  .hero-copy h1 em { font-style: normal; color: var(--color-accent); }
+  .hero-copy p {
+    margin: 0 0 var(--spacing-6, 24px);
+    font-size: 17px; line-height: 1.55;
+    color: var(--color-text-secondary);
+    max-width: 46ch;
+  }
+  .hero-cta { display: flex; flex-wrap: wrap; gap: var(--spacing-3, 12px); align-items: center; }
+  .hero-proof { display: flex; align-items: center; gap: var(--spacing-3, 12px); margin-top: var(--spacing-8, 32px); color: var(--color-text-secondary); font-size: 13px; }
+  .avatar-stack { display: flex; }
+  .avatar-stack [data-component="Avatar"] { margin-left: -10px; box-shadow: 0 0 0 2px var(--color-background-surface); }
+  .avatar-stack [data-component="Avatar"]:first-child { margin-left: 0; }
+
+  .hero-art {
+    position: relative;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 1fr 1fr;
+    gap: var(--spacing-3, 12px);
+    height: 460px;
+  }
+  .hero-art .shot { border-radius: var(--radius-card); overflow: hidden; background: var(--color-background-subtle); position: relative; }
+  .hero-art .shot img { width: 100%; height: 100%; object-fit: cover; }
+  .hero-art .shot:nth-child(1) { grid-row: span 2; }
+  .hero-art .shot:nth-child(3) { grid-column: 2; }
+  .hero-float {
+    position: absolute; left: 50%; bottom: var(--spacing-6, 24px); transform: translateX(-50%);
+    display: flex; align-items: center; gap: var(--spacing-3, 12px);
+    padding: var(--spacing-3, 12px) var(--space-4);
+    border-radius: var(--radius-full, 999px);
+    background: var(--color-background-surface);
+    box-shadow: var(--shadow-lg);
+    white-space: nowrap;
+  }
+  .hero-float .price { font-weight: 700; }
+  .hero-float .label { color: var(--color-text-secondary); font-size: 13px; }
+
+  /* ── Section chrome ───────────────────────────────────────────────── */
+  .section { padding: var(--spacing-12, 48px) 0; }
+  .section-head {
+    display: flex; align-items: flex-end; justify-content: space-between;
+    gap: var(--space-4); margin-bottom: var(--spacing-6, 24px);
+  }
+  .section-head h2 { margin: 0; font-size: 26px; letter-spacing: -.025em; font-weight: 700; }
+  .section-head p { margin: var(--spacing-1, 4px) 0 0; color: var(--color-text-secondary); }
+  .link-more { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; color: var(--color-accent); }
+
+  /* ── Category rail ────────────────────────────────────────────────── */
+  .rail { display: flex; gap: var(--spacing-2, 8px); overflow-x: auto; padding-bottom: var(--spacing-2, 8px); scrollbar-width: none; }
+  .rail::-webkit-scrollbar { display: none; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 7px;
+    padding: 9px var(--space-4);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-full, 999px);
+    background: var(--color-background-surface);
+    color: var(--color-text-primary);
+    font-weight: 600; white-space: nowrap; cursor: pointer;
+    transition: all var(--duration-fast) var(--ease);
+  }
+  .chip:hover { border-color: var(--color-border-strong); }
+  .chip[aria-pressed="true"] {
+    background: var(--color-text-primary);
+    border-color: var(--color-text-primary);
+    color: var(--color-on-accent, #ffffff);
+  }
+
+  /* ── Product grid ─────────────────────────────────────────────────── */
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: var(--spacing-6, 24px) var(--space-4);
+  }
+  .product { position: relative; }
+  .product[hidden] { display: none; }
+  .product-media {
+    position: relative;
+    aspect-ratio: 4 / 5;
+    border-radius: var(--radius-card);
+    overflow: hidden;
+    background: linear-gradient(135deg, var(--color-background-subtle), var(--color-accent-subtle));
+  }
+  .product-media img {
+    width: 100%; height: 100%; object-fit: cover;
+    transition: transform var(--duration-base) var(--ease);
+  }
+  .product:hover .product-media img { transform: scale(1.045); }
+  .product-flags { position: absolute; top: var(--spacing-3, 12px); left: var(--spacing-3, 12px); display: flex; gap: 6px; }
+  .wish {
+    position: absolute; top: var(--spacing-3, 12px); right: var(--spacing-3, 12px);
+    width: 34px; height: 34px;
+    background: color-mix(in srgb, var(--color-background-surface) 82%, transparent);
+    backdrop-filter: blur(6px);
+    color: var(--color-text-primary);
+  }
+  .wish[aria-pressed="true"] { color: var(--color-critical); }
+  .wish[aria-pressed="true"] svg { fill: currentColor; }
+  .quick-add {
+    position: absolute; left: var(--spacing-3, 12px); right: var(--spacing-3, 12px); bottom: var(--spacing-3, 12px);
+    width: calc(100% - var(--spacing-3, 12px) * 2);
+    opacity: 0; transform: translateY(6px);
+    transition: opacity var(--duration-base) var(--ease), transform var(--duration-base) var(--ease);
+  }
+  .product:hover .quick-add, .product:focus-within .quick-add { opacity: 1; transform: translateY(0); }
+  .product-body { padding: var(--spacing-3, 12px) var(--spacing-1, 4px) 0; display: flex; flex-direction: column; gap: 3px; }
+  .product-brand { font-size: 12px; color: var(--color-text-secondary); font-weight: 600; letter-spacing: .01em; }
+  .product-name { font-size: 14px; font-weight: 600; line-height: 1.35; }
+  .product-price { display: flex; align-items: baseline; gap: var(--spacing-2, 8px); margin-top: 2px; }
+  .product-price strong { font-size: 15px; font-weight: 700; }
+  .product-price s { color: var(--color-text-secondary); font-size: 13px; }
+  .product-meta { display: flex; align-items: center; gap: var(--spacing-1, 4px); font-size: 12px; color: var(--color-text-secondary); margin-top: 2px; }
+  .stars { color: var(--color-text-primary); font-weight: 600; display: inline-flex; align-items: center; gap: 3px; }
+
+  .empty-state {
+    display: none;
+    padding: var(--space-8) var(--spacing-6, 24px);
+    text-align: center;
+    border: 1px dashed var(--color-border-strong);
+    border-radius: var(--radius-card);
+    color: var(--color-text-secondary);
+  }
+  .empty-state[data-visible="true"] { display: block; }
+
+  /* ── Brands ───────────────────────────────────────────────────────── */
+  .brands { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: var(--spacing-3, 12px); }
+  .brand {
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--spacing-2, 8px);
+    padding: var(--spacing-6, 24px) var(--spacing-3, 12px);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-container);
+    background: var(--color-background-surface);
+    transition: border-color var(--duration-fast) var(--ease), transform var(--duration-fast) var(--ease);
+  }
+  .brand:hover { border-color: var(--color-border-strong); transform: translateY(-2px); }
+  .brand-mark {
+    width: 38px; height: 38px; border-radius: var(--radius-container);
+    display: grid; place-items: center;
+    background: var(--color-background-subtle);
+    font-weight: 800; font-size: 15px;
+  }
+  .brand span { font-size: 12px; font-weight: 600; color: var(--color-text-secondary); }
+
+  /* ── Editorial ────────────────────────────────────────────────────── */
+  .editorial { display: grid; grid-template-columns: 1.6fr 1fr; gap: var(--space-4); }
+  .promo {
+    position: relative; min-height: 320px;
+    border-radius: var(--radius-card); overflow: hidden;
+    display: flex; align-items: flex-end;
+    color: var(--color-on-accent, #ffffff);
+    background: var(--color-text-primary);
+  }
+  .promo img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: .62; }
+  .promo-body { position: relative; padding: var(--spacing-8, 32px); display: flex; flex-direction: column; gap: var(--spacing-3, 12px); max-width: 44ch; }
+  .promo-body h3 { margin: 0; font-size: 30px; letter-spacing: -.03em; line-height: 1.1; }
+  .promo-body p { margin: 0; opacity: .85; line-height: 1.5; }
+  .promo::after {
+    content: ""; position: absolute; inset: 0;
+    background: linear-gradient(to top, rgba(0,0,0,.72), rgba(0,0,0,.05) 62%);
+  }
+  .promo-body, .promo .promo-body { z-index: 1; }
+
+  /* ── Perks ────────────────────────────────────────────────────────── */
+  .perks { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-4); }
+  .perk {
+    padding: var(--spacing-6, 24px);
+    border-radius: var(--radius-container);
+    background: var(--color-background-sunken);
+    display: flex; flex-direction: column; gap: var(--spacing-2, 8px);
+  }
+  .perk h4 { margin: 0; font-size: 15px; font-weight: 700; }
+  .perk p { margin: 0; color: var(--color-text-secondary); line-height: 1.5; }
+  .perk-icon { width: 38px; height: 38px; border-radius: var(--radius-container); background: var(--color-accent-subtle); color: var(--color-accent-ink); display: grid; place-items: center; }
+
+  /* ── Reviews ──────────────────────────────────────────────────────── */
+  .reviews { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-4); }
+  .review {
+    padding: var(--spacing-6, 24px);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-container);
+    display: flex; flex-direction: column; gap: var(--spacing-3, 12px);
+  }
+  .review p { margin: 0; line-height: 1.6; font-size: 15px; }
+  .review-who { display: flex; align-items: center; gap: var(--spacing-3, 12px); margin-top: auto; }
+  .review-who b { display: block; font-size: 13px; }
+  .review-who span { font-size: 12px; color: var(--color-text-secondary); }
+
+  /* ── Newsletter ───────────────────────────────────────────────────── */
+  .newsletter {
+    border-radius: var(--radius-card);
+    background: var(--color-accent-subtle);
+    padding: var(--space-8) var(--spacing-8, 32px);
+    text-align: center;
+    display: flex; flex-direction: column; align-items: center; gap: var(--space-4);
+  }
+  .newsletter h2 { margin: 0; font-size: 30px; letter-spacing: -.03em; }
+  .newsletter p { margin: 0; color: var(--color-accent-ink); opacity: .8; max-width: 48ch; line-height: 1.55; }
+  .newsletter form { display: flex; gap: var(--spacing-2, 8px); width: min(440px, 100%); }
+  .newsletter [data-component="TextInput"] { flex: 1; }
+  .newsletter [data-component="TextInput"] > .field { background: var(--color-background-surface); border-color: transparent; }
+
+  /* ── Footer ───────────────────────────────────────────────────────── */
+  .footer { border-top: 1px solid var(--color-border); margin-top: var(--space-8); padding: var(--spacing-12, 48px) 0 var(--spacing-8, 32px); }
+  .footer-grid { display: grid; grid-template-columns: 1.6fr repeat(4, 1fr); gap: var(--spacing-6, 24px); }
+  .footer h5 { margin: 0 0 var(--spacing-3, 12px); font-size: 13px; font-weight: 700; }
+  .footer ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--spacing-2, 8px); }
+  .footer li a { color: var(--color-text-secondary); font-size: 13px; }
+  .footer li a:hover { color: var(--color-text-primary); }
+  .footer-about p { color: var(--color-text-secondary); line-height: 1.55; max-width: 34ch; margin: var(--spacing-3, 12px) 0 var(--space-4); }
+  .footer-bottom {
+    display: flex; align-items: center; justify-content: space-between; gap: var(--space-4);
+    margin-top: var(--spacing-12, 48px); padding-top: var(--space-4);
+    border-top: 1px solid var(--color-border);
+    color: var(--color-text-secondary); font-size: 12px;
+  }
+  .socials { display: flex; gap: var(--spacing-2, 8px); }
+
+  /* ── Cart drawer ──────────────────────────────────────────────────── */
+  .scrim {
+    position: fixed; inset: 0; z-index: 60;
+    background: rgba(23, 23, 23, .38);
+    opacity: 0; pointer-events: none;
+    transition: opacity var(--duration-base) var(--ease);
+  }
+  .scrim[data-open="true"] { opacity: 1; pointer-events: auto; }
+  .drawer {
+    position: fixed; top: 0; right: 0; bottom: 0; z-index: 61;
+    width: min(400px, 100%);
+    background: var(--color-background-surface);
+    box-shadow: var(--shadow-lg);
+    transform: translateX(100%);
+    transition: transform var(--duration-base) var(--ease);
+    display: flex; flex-direction: column;
+  }
+  .drawer[data-open="true"] { transform: translateX(0); }
+  .drawer-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: var(--space-4) var(--spacing-6, 24px);
+    border-bottom: 1px solid var(--color-border);
+  }
+  .drawer-head h3 { margin: 0; font-size: 16px; }
+  .drawer-body { flex: 1; overflow-y: auto; padding: var(--space-4) var(--spacing-6, 24px); display: flex; flex-direction: column; gap: var(--space-4); }
+  .drawer-foot { border-top: 1px solid var(--color-border); padding: var(--space-4) var(--spacing-6, 24px); display: flex; flex-direction: column; gap: var(--spacing-3, 12px); }
+  .line { display: flex; gap: var(--spacing-3, 12px); align-items: center; }
+  .line-thumb { width: 60px; height: 72px; border-radius: var(--radius-element); object-fit: cover; background: var(--color-background-subtle); flex: none; }
+  .line-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+  .line-info b { font-size: 13px; font-weight: 600; }
+  .line-info span { font-size: 12px; color: var(--color-text-secondary); }
+  .qty { display: inline-flex; align-items: center; gap: var(--spacing-2, 8px); border: 1px solid var(--color-border); border-radius: var(--radius-full, 999px); padding: 3px 8px; align-self: flex-start; margin-top: var(--spacing-1, 4px); }
+  .qty button { border: 0; background: transparent; cursor: pointer; color: var(--color-text-secondary); line-height: 1; padding: 2px 4px; }
+  .qty button:hover { color: var(--color-text-primary); }
+  .qty output { font-size: 13px; font-weight: 600; min-width: 14px; text-align: center; }
+  .line-price { font-size: 13px; font-weight: 700; }
+  .cart-empty { color: var(--color-text-secondary); text-align: center; padding: var(--space-8) 0; }
+  .totals { display: flex; align-items: center; justify-content: space-between; font-weight: 700; }
+  .totals span:last-child { font-size: 17px; }
+  .totals-note { display: flex; align-items: center; justify-content: space-between; color: var(--color-text-secondary); font-size: 13px; font-weight: 500; }
+
+  /* ── Toast ────────────────────────────────────────────────────────── */
+  .toast {
+    position: fixed; left: 50%; bottom: var(--spacing-6, 24px); z-index: 70;
+    transform: translate(-50%, 20px);
+    display: flex; align-items: center; gap: var(--spacing-2, 8px);
+    padding: var(--spacing-3, 12px) var(--spacing-6, 24px);
+    border-radius: var(--radius-full, 999px);
+    background: var(--color-text-primary);
+    color: var(--color-on-accent, #ffffff);
+    font-weight: 600; font-size: 13px;
+    box-shadow: var(--shadow-lg);
+    opacity: 0; pointer-events: none;
+    transition: opacity var(--duration-base) var(--ease), transform var(--duration-base) var(--ease);
+  }
+  .toast[data-open="true"] { opacity: 1; transform: translate(-50%, 0); }
+
+  /* ── Responsive ───────────────────────────────────────────────────── */
+  @media (max-width: 1080px) {
+    .grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .brands { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .perks { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .footer-grid { grid-template-columns: 1fr 1fr 1fr; }
+  }
+  @media (max-width: 900px) {
+    .nav, .header-search { display: none; }
+    .hero-grid { grid-template-columns: 1fr; }
+    .hero-art { height: 340px; }
+    .editorial { grid-template-columns: 1fr; }
+    .reviews { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 640px) {
+    .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .perks, .footer-grid { grid-template-columns: 1fr 1fr; }
+    .section { padding: var(--spacing-8, 32px) 0; }
+    .newsletter form { flex-direction: column; }
+    .quick-add { opacity: 1; transform: none; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { animation-duration: .001ms !important; transition-duration: .001ms !important; }
+    html { scroll-behavior: auto; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ══ Announcement (island: dismiss) ══════════════════════════════════ -->
+<div class="announce-wrap">
+  <div class="announce" id="announce">
+    <span>🚚 <b>Free shipping</b> on orders over $75 — plus free embroidery on every hoodie</span>
+    <button class="close" type="button" data-close-announce="" aria-label="Dismiss announcement">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"></path></svg>
+    </button>
+  </div>
+</div>
+<script data-island="">
+  (() => {
+    const bar = document.getElementById('announce');
+    bar?.querySelector('[data-close-announce]')?.addEventListener('click', () => { bar.hidden = true; });
+  })();
+</script>
+
+<!-- ══ Header ═════════════════════════════════════════════════════════ -->
+<header class="header">
+  <div class="wrap header-inner">
+    <a class="logo" href="#top">
+      <span class="logo-mark" aria-hidden="true">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path><path d="M3 6h18"></path><path d="M16 10a4 4 0 0 1-8 0"></path>
+        </svg>
+      </span>
+      shopdev
+    </a>
+
+    <nav class="nav" aria-label="Primary">
+      <a href="#products" aria-current="page">Shop</a>
+      <a href="#categories">Categories</a>
+      <a href="#brands">Brands</a>
+      <a href="#deals">Deals</a>
+    </nav>
+
+    <div class="header-search" data-component="TextInput">
+      <label class="field">
+        <span class="sr-only">Search products</span>
+        <span data-component="Icon" style="color:var(--color-text-secondary)">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.2-3.2"></path></svg>
+        </span>
+        <input type="search" id="search" placeholder="Search hoodies, keycaps, deskmats…" autocomplete="off">
+      </label>
+    </div>
+
+    <div class="header-actions">
+      <button data-component="IconButton" data-variant="ghost" type="button" aria-label="Saved items">
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 5.6a5 5 0 0 0-7.1 0L12 7.3l-1.7-1.7a5 5 0 1 0-7.1 7.1l8.8 8.8 8.8-8.8a5 5 0 0 0 0-7.1z"></path></svg>
+      </button>
+      <button data-component="IconButton" data-variant="ghost" type="button" aria-label="Open cart" data-open-cart="">
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="20" r="1.4"></circle><circle cx="18" cy="20" r="1.4"></circle><path d="M2 3h2.2l2.4 12.4a2 2 0 0 0 2 1.6h8.6a2 2 0 0 0 2-1.6L21 7H5"></path></svg>
+        <span class="cart-count" data-cart-count="" data-empty="true">0</span>
+      </button>
+      <span data-component="Avatar" title="Roy Villasana">RV</span>
+    </div>
+  </div>
+</header>
+
+<main id="top">
+
+  <!-- ══ Hero ═════════════════════════════════════════════════════════ -->
+  <section class="hero">
+    <div class="wrap hero-grid">
+      <div class="hero-copy">
+        <span data-component="Badge" data-tone="accent">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="m12 2 2.6 6.6L21 11l-6.4 2.4L12 20l-2.6-6.6L3 11l6.4-2.4z"></path></svg>
+          New — Autumn 2026 drop
+        </span>
+        <h1>Wearables for people who <em>ship</em>.</h1>
+        <p>Clothing and desk gear designed for developers and designers. Heavyweight cotton, honest typography, zero stock-photo energy.</p>
+        <div class="hero-cta">
+          <a href="#products"><button data-component="Button" data-size="lg" type="button">Shop the drop</button></a>
+          <a href="#deals"><button data-component="Button" data-variant="outline" data-size="lg" type="button">
+            See deals
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"></path></svg>
+          </button></a>
+        </div>
+        <div class="hero-proof">
+          <span class="avatar-stack">
+            <span data-component="Avatar" data-size="sm">JD</span>
+            <span data-component="Avatar" data-size="sm" style="background:var(--color-text-primary)">MK</span>
+            <span data-component="Avatar" data-size="sm" style="background:var(--color-positive)">AR</span>
+            <span data-component="Avatar" data-size="sm" style="background:var(--color-text-secondary)">+9k</span>
+          </span>
+          <span><b style="color:var(--color-text-primary)">4.9/5</b> from 9,240 makers who wear it to standup</span>
+        </div>
+      </div>
+
+      <div class="hero-art">
+        <div class="shot">
+          <img src="https://images.unsplash.com/photo-1556821840-3a63f95609a7?w=900&amp;q=80&amp;auto=format&amp;fit=crop" alt="Person wearing a grey heavyweight hoodie, seen from behind" loading="eager">
+        </div>
+        <div class="shot">
+          <img src="https://images.unsplash.com/photo-1618384887929-16ec33fab9ef?w=700&amp;q=80&amp;auto=format&amp;fit=crop" alt="Mechanical keyboard with custom keycaps" loading="eager">
+        </div>
+        <div class="shot">
+          <img src="https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=700&amp;q=80&amp;auto=format&amp;fit=crop" alt="Model wearing a plain white cotton tee" loading="eager">
+        </div>
+        <div class="hero-float">
+          <span data-component="Badge" data-tone="positive">In stock</span>
+          <span class="label">Dark Mode Hoodie</span>
+          <span class="price">$78</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══ Perks ════════════════════════════════════════════════════════ -->
+  <section class="section" style="padding-top:0">
+    <div class="wrap perks">
+      <div class="perk">
+        <span class="perk-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7h11v10H3zM14 10h4l3 3v4h-7z"></path><circle cx="7" cy="18" r="1.6"></circle><circle cx="17" cy="18" r="1.6"></circle></svg></span>
+        <h4>Free shipping over $75</h4>
+        <p>Ships in 48h from Berlin and Austin.</p>
+      </div>
+      <div class="perk">
+        <span class="perk-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"></path><path d="M3 4v5h5"></path></svg></span>
+        <h4>90-day returns</h4>
+        <p>Wrong size? Send it back, no ticket needed.</p>
+      </div>
+      <div class="perk">
+        <span class="perk-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 4 6v6c0 5 3.4 8.4 8 9 4.6-.6 8-4 8-9V6z"></path><path d="m9 12 2 2 4-4"></path></svg></span>
+        <h4>Ethically made</h4>
+        <p>GOTS-certified cotton, audited factories.</p>
+      </div>
+      <div class="perk">
+        <span class="perk-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"></path></svg></span>
+        <h4>One-tap checkout</h4>
+        <p>Pay in two clicks, track every order in-app.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══ Categories + Products (island: filter, wishlist, add to cart) ═ -->
+  <section class="section" id="categories">
+    <div class="wrap">
+      <div class="section-head">
+        <div>
+          <h2>Shop by category</h2>
+          <p>Everything a build session needs — from the shirt to the keycaps.</p>
+        </div>
+        <a class="link-more" href="#products">
+          View all
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"></path></svg>
+        </a>
+      </div>
+
+      <div class="rail" role="group" aria-label="Filter products by category">
+        <button class="chip" type="button" data-filter="all" aria-pressed="true">All products</button>
+        <button class="chip" type="button" data-filter="tees" aria-pressed="false">Tees</button>
+        <button class="chip" type="button" data-filter="hoodies" aria-pressed="false">Hoodies &amp; knits</button>
+        <button class="chip" type="button" data-filter="caps" aria-pressed="false">Caps &amp; beanies</button>
+        <button class="chip" type="button" data-filter="accessories" aria-pressed="false">Accessories</button>
+        <button class="chip" type="button" data-filter="desk" aria-pressed="false">Desk gear</button>
+        <button class="chip" type="button" data-filter="drinkware" aria-pressed="false">Drinkware</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="products" style="padding-top:0">
+    <div class="wrap">
+      <div class="section-head">
+        <div>
+          <h2>Trending this week</h2>
+          <p><span data-count-label="">16</span> products</p>
+        </div>
+        <span data-component="Selector" role="button" tabindex="0">
+          <span>Sort: Most popular</span>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--color-text-secondary)" stroke-width="2" stroke-linecap="round"><path d="m6 9 6 6 6-6"></path></svg>
+        </span>
+      </div>
+
+      <div class="grid" data-product-grid="">
+
+        <article class="product" data-component="Card" data-category="tees" data-name="git commit -m 'fix' tee" data-price="32" data-img="https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=400&amp;q=80&amp;auto=format&amp;fit=crop">
+          <div class="product-media">
+            <img src="https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=700&amp;q=80&amp;auto=format&amp;fit=crop" alt="Model wearing a plain white cotton tee" loading="lazy">
+            <div class="product-flags"><span data-component="Badge" data-tone="inverse">Bestseller</span></div>
+            <button class="wish" data-component="IconButton" type="button" aria-pressed="false" aria-label="Save git commit tee">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 5.6a5 5 0 0 0-7.1 0L12 7.3l-1.7-1.7a5 5 0 1 0-7.1 7.1l8.8 8.8 8.8-8.8a5 5 0 0 0 0-7.1z"></path></svg>
+            </button>
+            <button class="quick-add" data-component="Button" data-size="sm" type="button" data-add="">Add to cart</button>
+          </div>
+          <div class="product-body">
+            <span class="product-brand">Mainline</span>
+            <span class="product-name">“git commit -m 'fix'” heavyweight tee</span>
+            <span class="product-price"><strong>$32</strong><s>$38</s></span>
+            <span class="product-meta"><span class="stars">★ 4.9</span> · 1,204 reviews</span>
+          </div>
+        </article>
+
+        <article class="product" data-component="Card" data-category="hoodies" data-name="Dark Mode Hoodie" data-price="78" data-img="https://images.unsplash.com/photo-1556821840-3a63f95609a7?w=400&amp;q=80&amp;auto=format&amp;fit=crop">
+          <div class="product-media">
+            <img src="https://images.unsplash.com/photo-1556821840-3a63f95609a7?w=700&amp;q=80&amp;auto=format&amp;fit=crop" alt="Person wearing a grey heavyweight hoodie outdoors" loading="lazy">
+            <div class="product-flags"><span data-component="Badge" data-tone="accent">Editor's pick</span></div>
+            <button class="wish" data-component="IconButton" type="button" aria-pressed="false" aria-label="Save Dark Mode Hoodie">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 5.6a5 5 0 0 0-7.1 0L12 7.3l-1.7-1.7a5 5 0 1 0-7.1 7.1l8.8 8.8 8.8-8.8a5 5 0 0 0 0-7.1z"></path></svg>
+            </button>
+            <button class="quick-add" data-component="Button" data-size="sm" type="button" data-add="">Add to cart</button>
+          </div>
+          <div class="product-body">
+            <span class="product-brand">Nightshift</span>
+            <span class="product-name">Dark Mode heavyweight hoodie</span>
+            <span class="product-price"><strong>$78</strong></span>
+            <span class="product-meta"><span class="stars">★ 4.8</span> · 862 reviews</span>
+          </div>
+        </article>
+
+        <article class="product" data-component="Card" data-category="desk" data-name="Nord Keycap Set" data-price="59" data-img="https://images.unsplash.com/photo-1618384887929-16ec33fab9ef?w=400&amp;q=80&amp;auto=format&amp;fit=crop">
+          <div class="product-media">
+            <img src="https://images.unsplash.com/photo-1618384887929-16ec33fab9ef?w=700&amp;q=80&amp;auto=format&amp;fit=crop" alt="Mechanical keyboard with muted keycaps" loading="lazy">
+            <div class="product-flags"><span data-component="Badge" data-tone="critical">Low stock</span></div>
+            <button class="wish" data-component="IconButton" type="button" aria-pressed="false" aria-label="Save Nord Keycap Set">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 5.6a5 5 0 0 0-7.1 0L12 7.3l-1.7-1.7a5 5 0 1 0-7.1 7.1l8.8 8.8 8.8-8.8a5 5 0 0 0 0-7.1z"></path></svg>
+            </button>
+            <button class="quick-add" data-component="Button" data-size="sm" type="button" data-add="">Add to cart</button>
+          </div>
+          <div class="product-body">
+            <span class="product-brand">Keycult</span>
+            <span class="product-name">“Nord” PBT keycap set — 104 keys</span>
+            <span class="product-price"><strong>$59</strong><s>$72</s></span>
+            <span class="product-meta"><span class="stars">★ 4.9</span> · 418 reviews</span>
+          </div>
+        </article>
+
+        <article class="product" data-component="Card" data-category="accessories" data-name="Bezier Curve Tote" data-price="24" data-img="https://images.unsplash.com/photo-1544816155-12df9643f363?w=400&amp;q=80&amp;auto=format&amp;fit=crop">
+          <div class="product-media">
+            <img src="https://images.unsplash.com/photo-1544816155-12df9643f363?w=700&amp;q=80&amp;auto=format&amp;fit=crop" alt="Natural canvas tote bag" loading="lazy">
+            <button class="wish" data-component="IconButton" type="button" aria-pressed="false" aria-label="Save Bezier Curve Tote">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 5.6a5 5 0 0 0-7.1 0L12 7.3l-1.7-1.7a5 5 0 1 0-7.1 7.1l8.8 8.8 8.8-8.8a5 5 0 0 0 0-7.1z"></path></svg>
+            </button>
+            <button class="quick-add" data-component="Button" data-size="sm" type="button" data-add="">Add to cart</button>
+          </div>
+          <div class="product-body">
+            <span class="product-brand">Studio Supply</span>
+            <span class="product-name">Bézier curve canvas tote</span>
+            <span class="product-price"><strong>$24</strong></span>
+            <span class="product-meta"><span class="stars">★ 4.7</span> · 331 reviews</span>
+          </div>
+        </article>
+
+        <article class="product" data-component="Card" data-category="tees" data-name="404 Not Found Tee" data-price="32" data-img="https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=400&amp;q=80&amp;auto=format&amp;fit=crop">
+          <div class="product-media">
+            <img src="https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=700&amp;q=80&amp;auto=format&amp;fit=crop" alt="Black t-shirt laid flat" loading="lazy">
+            <button class="wish" data-component="IconButton" type="button" aria-pressed="false" aria-label="Save 404 Not Found Tee">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 5.6a5 5 0 0 0-7.1 0L12 7.3l-1.7-1.7a5 5 0 1 0-7.1 7.1l8.8 8.8 8.8-8.8a5 5 0 0 0 0-7.1z"></path></svg>
+            </button>
+            <button class="quick-add" data-component="Button" data-size="sm" type="button" data-add="">Add to cart</button>
+          </div>
+          <div class="product-body">
+            <span class="product-brand">Mainline</span>
+            <span class="product-name">404 Not Found boxy tee</span>
+            <span class="product-price"><strong>$32</strong></span>
+            <span class="product-meta"><span class="stars">★ 4.6</span> · 517 reviews</span>
+          </div>
+        </article>
+
+        <article class="product" data-component="Card" data-category="caps" data-name="Kerning Cap" data-price="28" data-img="https://images.unsplash.com/photo-1588850561407-ed78c282e89b?w=400&amp;q=80&amp;auto=format&amp;fit=crop">
+          <div class="product-media">
+            <img src="https://images.unsplash.com/photo-1588850561407-ed78c282e89b?w=700&amp;q=80&amp;auto=format&amp;fit=crop" alt="Six-panel cap on a plain background" loading="lazy">
+            <button class="wish" data-component="IconButton" type="button" aria-pressed="false" aria-label="Save Kerning Cap">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 5.6a5 5 0 0 0-7.1 0L12 7.3l-1.7-1.7a5 5 0 1 0-7.1 7.1l8.8 8.8 8.8-8.8a5 5 0 0 0 0-7.1z"></path></svg>
+            </button>
+            <button class="quick-add" data-component="Button" data-size="sm" type="button" data-add="">Add to cart</button>
+          </div>
+          <div class="product-body">
+            <span class="product-brand">Typeface Club</span>
+            <span class="product-name">“Bad Kerning” embroidered cap</span>
+            <span class="product-price"><strong>$28</strong></span>
+            <span class="product-meta"><span class="stars">★ 4.8</span> · 209 reviews</span>
+          </div>
+        </article>
+
+        <article class="product" data-component="Card" data-category="desk" data-name="Grid System Deskmat" data-price="34" data-img="https://images.unsplash.com/photo-1499951360447-b19be8fe80f5?w=400&amp;q=80&amp;auto=format&amp;fit=crop">
+          <div class="product-media">
+            <img src="https://images.unsplash.com/photo-1499951360447-b19be8fe80f5?w=700&amp;q=80&amp;auto=format&amp;fit=crop" alt="Tidy desk setup with a large leather deskmat" loading="lazy">
+            <button class="wish" data-component="IconButton" type="button" aria-pressed="false" aria-label="Save Grid System Deskmat">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 5.6a5 5 0 0 0-7.1 0L12 7.3l-1.7-1.7a5 5 0 1 0-7.1 7.1l8.8 8.8 8.8-8.8a5 5 0 0 0 0-7.1z"></path></svg>
+            </button>
+            <button class="quick-add" data-component="Button" data-size="sm" type="button" data-add="">Add to cart</button>
+          </div>
+          <div class="product-body">
+            <span class="product-brand">Studio Supply</span>
+            <span class="product-name">8-pt Grid System deskmat (XL)</span><!-- Grid System Deskmat -->
+            <span class="product-price"><strong>$34</strong></span>
+            <span class="product-meta"><span class="stars">★ 4.9</span> · 640 reviews</span>
+          </div>
+        </article>
+
+        <article class="product" data-component="Card" data-category="drinkware" data-name="Standup Insulated Bottle" data-price="28" data-img="https://images.unsplash.com/photo-1602143407151-7111542de6e8?w=400&amp;q=80&amp;auto=format&amp;fit=crop">
+          <div class="product-media">
+            <img src="https://images.unsplash.com/photo-1602143407151-7111542de6e8?w=700&amp;q=80&amp;auto=format&amp;fit=crop" alt="Matte green insulated water bottle" loading="lazy">
+            <div class="product-flags"><span data-component="Badge" data-tone="positive">Free engraving</span></div>
+            <button class="wish" data-component="IconButton" type="button" aria-pressed="false" aria-label="Save Standup Insulated Bottle">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 5.6a5 5 0 0 0-7.1 0L12 7.3l-1.7-1.7a5 5 0 1 0-7.1 7.1l8.8 8.8 8.8-8.8a5 5 0 0 0 0-7.1z"></path></svg>
+            </button>
+            <button class="quick-add" data-component="Button" data-size="sm" type="button" data-add="">Add to cart</button>
+          </div>
+          <div class="product-body">
+            <span class="product-brand">Sidequest</span>
+            <span class="product-name">Standup insulated bottle — 600ml</span>
+            <span class="product-price"><strong>$28</strong></span>
+            <span class="product-meta"><span class="stars">★ 4.9</span> · 1,880 reviews</span>
+          </div>
+        </article>
+
+        <article class="product" data-component="Card" data-category="hoodies" data-name="Blank Canvas Crewneck" data-price="68" data-img="https://images.unsplash.com/photo-1620799140408-edc6dcb6d633?w=400&amp;q=80&amp;auto=format&amp;fit=crop">
+          <div class="product-media">
+            <img src="https://images.unsplash.com/photo-1620799140408-edc6dcb6d633?w=700&amp;q=80&amp;auto=format&amp;fit=crop" alt="Off-white crewneck sweatshirt laid flat" loading="lazy">
+            <button class="wish" data-component="IconButton" type="button" aria-pressed="false" aria-label="Save Blank Canvas Crewneck">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 5.6a5 5 0 0 0-7.1 0L12 7.3l-1.7-1.7a5 5 0 1 0-7.1 7.1l8.8 8.8 8.8-8.8a5 5 0 0 0 0-7.1z"></path></svg>
+            </button>
+            <button class="quick-add" data-component="Button" data-size="sm" type="button" data-add="">Add to cart</button>
+          </div>
+          <div class="product-body">
+            <span class="product-brand">Nightshift</span>
+            <span class="product-name">Blank Canvas heavyweight crewneck</span>
+            <span class="product-price"><strong>$68</strong></span>
+            <span class="product-meta"><span class="stars">★ 4.7</span> · 294 reviews</span>
+          </div>
+        </article>
+
+        <article class="product" data-component="Card" data-category="accessories" data-name="Semantic HTML Socks" data-price="14" data-img="https://images.unsplash.com/photo-1586350977771-b3b0abd50c82?w=400&amp;q=80&amp;auto=format&amp;fit=crop">
+          <div class="product-media">
+            <img src="https://images.unsplash.com/photo-1586350977771-b3b0abd50c82?w=700&amp;q=80&amp;auto=format&amp;fit=crop" alt="Pair of patterned socks" loading="lazy">
+            <button class="wish" data-component="IconButton" type="button" aria-pressed="false" aria-label="Save Semantic HTML Socks">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 5.6a5 5 0 0 0-7.1 0L12 7.3l-1.7-1.7a5 5 0 1 0-7.1 7.1l8.8 8.8 8.8-8.8a5 5 0 0 0 0-7.1z"></path></svg>
+            </button>
+            <button class="quick-add" data-component="Button" data-size="sm" type="button" data-add="">Add to cart</button>
+          </div>
+          <div class="product-body">
+            <span class="product-brand">Sidequest</span>
+            <span class="product-name">&lt;semantic&gt; ribbed crew socks</span>
+            <span class="product-price"><strong>$14</strong></span>
+            <span class="product-meta"><span class="stars">★ 4.5</span> · 156 reviews</span>
+          </div>
+        </article>
+
+        <article class="product" data-component="Card" data-category="drinkware" data-name="Rubber Duck Debug Mug" data-price="18" data-img="https://images.unsplash.com/photo-1514228742587-6b1558fcca3d?w=400&amp;q=80&amp;auto=format&amp;fit=crop">
+          <div class="product-media">
+            <img src="https://images.unsplash.com/photo-1514228742587-6b1558fcca3d?w=700&amp;q=80&amp;auto=format&amp;fit=crop" alt="Ceramic mug on a desk" loading="lazy">
+            <button class="wish" data-component="IconButton" type="button" aria-pressed="false" aria-label="Save Rubber Duck Debug Mug">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 5.6a5 5 0 0 0-7.1 0L12 7.3l-1.7-1.7a5 5 0 1 0-7.1 7.1l8.8 8.8 8.8-8.8a5 5 0 0 0 0-7.1z"></path></svg>
+            </button>
+            <button class="quick-add" data-component="Button" data-size="sm" type="button" data-add="">Add to cart</button>
+          </div>
+          <div class="product-body">
+            <span class="product-brand">Sidequest</span>
+            <span class="product-name">Rubber-duck debugging mug — 350ml</span>
+            <span class="product-price"><strong>$18</strong></span>
+            <span class="product-meta"><span class="stars">★ 4.8</span> · 722 reviews</span>
+          </div>
+        </article>
+
+        <article class="product" data-component="Card" data-category="caps" data-name="Merge Conflict Beanie" data-price="26" data-img="https://images.unsplash.com/photo-1510598969022-c4c6c5d05769?w=400&amp;q=80&amp;auto=format&amp;fit=crop">
+          <div class="product-media">
+            <img src="https://images.unsplash.com/photo-1510598969022-c4c6c5d05769?w=700&amp;q=80&amp;auto=format&amp;fit=crop" alt="Person wearing a green ribbed knit beanie" loading="lazy">
+            <button class="wish" data-component="IconButton" type="button" aria-pressed="false" aria-label="Save Merge Conflict Beanie">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 5.6a5 5 0 0 0-7.1 0L12 7.3l-1.7-1.7a5 5 0 1 0-7.1 7.1l8.8 8.8 8.8-8.8a5 5 0 0 0 0-7.1z"></path></svg>
+            </button>
+            <button class="quick-add" data-component="Button" data-size="sm" type="button" data-add="">Add to cart</button>
+          </div>
+          <div class="product-body">
+            <span class="product-brand">Typeface Club</span>
+            <span class="product-name">Merge Conflict ribbed beanie</span>
+            <span class="product-price"><strong>$26</strong></span>
+            <span class="product-meta"><span class="stars">★ 4.6</span> · 188 reviews</span>
+          </div>
+        </article>
+
+        <article class="product" data-component="Card" data-category="tees" data-name="Ctrl+Z Graphic Tee" data-price="42" data-img="https://images.unsplash.com/photo-1503341504253-dff4815485f1?w=400&amp;q=80&amp;auto=format&amp;fit=crop">
+          <div class="product-media">
+            <img src="https://images.unsplash.com/photo-1503341504253-dff4815485f1?w=700&amp;q=80&amp;auto=format&amp;fit=crop" alt="Model wearing a black graphic tee" loading="lazy">
+            <div class="product-flags"><span data-component="Badge" data-tone="accent">New</span></div>
+            <button class="wish" data-component="IconButton" type="button" aria-pressed="false" aria-label="Save Ctrl+Z Graphic Tee">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 5.6a5 5 0 0 0-7.1 0L12 7.3l-1.7-1.7a5 5 0 1 0-7.1 7.1l8.8 8.8 8.8-8.8a5 5 0 0 0 0-7.1z"></path></svg>
+            </button>
+            <button class="quick-add" data-component="Button" data-size="sm" type="button" data-add="">Add to cart</button>
+          </div>
+          <div class="product-body">
+            <span class="product-brand">Studio Supply</span>
+            <span class="product-name">Auto-Layout longsleeve</span>
+            <span class="product-price"><strong>$42</strong></span>
+            <span class="product-meta"><span class="stars">★ 4.7</span> · 143 reviews</span>
+          </div>
+        </article>
+
+        <article class="product" data-component="Card" data-category="desk" data-name="Silent-Click Wireless Mouse" data-price="46" data-img="https://images.unsplash.com/photo-1527864550417-7fd91fc51a46?w=400&amp;q=80&amp;auto=format&amp;fit=crop">
+          <div class="product-media">
+            <img src="https://images.unsplash.com/photo-1527864550417-7fd91fc51a46?w=700&amp;q=80&amp;auto=format&amp;fit=crop" alt="Ergonomic wireless mouse on a white surface" loading="lazy">
+            <button class="wish" data-component="IconButton" type="button" aria-pressed="false" aria-label="Save Silent-Click Wireless Mouse">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 5.6a5 5 0 0 0-7.1 0L12 7.3l-1.7-1.7a5 5 0 1 0-7.1 7.1l8.8 8.8 8.8-8.8a5 5 0 0 0 0-7.1z"></path></svg>
+            </button>
+            <button class="quick-add" data-component="Button" data-size="sm" type="button" data-add="">Add to cart</button>
+          </div>
+          <div class="product-body">
+            <span class="product-brand">Keycult</span>
+            <span class="product-name">Silent-click wireless mouse</span>
+            <span class="product-price"><strong>$46</strong></span>
+            <span class="product-meta"><span class="stars">★ 4.8</span> · 97 reviews</span>
+          </div>
+        </article>
+
+        <article class="product" data-component="Card" data-category="hoodies" data-name="Ship It Hoodie" data-price="92" data-img="https://images.unsplash.com/photo-1578768079052-aa76e52ff62e?w=400&amp;q=80&amp;auto=format&amp;fit=crop">
+          <div class="product-media">
+            <img src="https://images.unsplash.com/photo-1578768079052-aa76e52ff62e?w=700&amp;q=80&amp;auto=format&amp;fit=crop" alt="Person wearing a rust-coloured hoodie" loading="lazy">
+            <button class="wish" data-component="IconButton" type="button" aria-pressed="false" aria-label="Save Ship It Hoodie">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 5.6a5 5 0 0 0-7.1 0L12 7.3l-1.7-1.7a5 5 0 1 0-7.1 7.1l8.8 8.8 8.8-8.8a5 5 0 0 0 0-7.1z"></path></svg>
+            </button>
+            <button class="quick-add" data-component="Button" data-size="sm" type="button" data-add="">Add to cart</button>
+          </div>
+          <div class="product-body">
+            <span class="product-brand">Nightshift</span>
+            <span class="product-name">“Ship It” pullover hoodie</span>
+            <span class="product-price"><strong>$92</strong><s>$110</s></span>
+            <span class="product-meta"><span class="stars">★ 4.9</span> · 402 reviews</span>
+          </div>
+        </article>
+
+        <article class="product" data-component="Card" data-category="desk" data-name="Whitespace Notebook" data-price="22" data-img="https://images.unsplash.com/photo-1531346878377-a5be20888e57?w=400&amp;q=80&amp;auto=format&amp;fit=crop">
+          <div class="product-media">
+            <img src="https://images.unsplash.com/photo-1531346878377-a5be20888e57?w=700&amp;q=80&amp;auto=format&amp;fit=crop" alt="Minimal notebook and pen" loading="lazy">
+            <button class="wish" data-component="IconButton" type="button" aria-pressed="false" aria-label="Save Whitespace Notebook">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 5.6a5 5 0 0 0-7.1 0L12 7.3l-1.7-1.7a5 5 0 1 0-7.1 7.1l8.8 8.8 8.8-8.8a5 5 0 0 0 0-7.1z"></path></svg>
+            </button>
+            <button class="quick-add" data-component="Button" data-size="sm" type="button" data-add="">Add to cart</button>
+          </div>
+          <div class="product-body">
+            <span class="product-brand">Studio Supply</span>
+            <span class="product-name">Whitespace dot-grid notebook (A5)</span>
+            <span class="product-price"><strong>$22</strong></span>
+            <span class="product-meta"><span class="stars">★ 4.6</span> · 265 reviews</span>
+          </div>
+        </article>
+
+      </div>
+
+      <div class="empty-state" data-empty-state="" data-visible="false">
+        <strong style="display:block;color:var(--color-text-primary);margin-bottom:var(--spacing-2, 8px)">Nothing matches that yet</strong>
+        Try another category, or clear your search to see every product.
+      </div>
+    </div>
+  </section>
+
+  <!-- ══ Brands ═══════════════════════════════════════════════════════ -->
+  <section class="section" id="brands" style="padding-top:0">
+    <div class="wrap">
+      <div class="section-head">
+        <div>
+          <h2>Brands makers trust</h2>
+          <p>Independent studios, small batches, no drop-shipping.</p>
+        </div>
+      </div>
+      <div class="brands">
+        <a class="brand" href="#products"><span class="brand-mark">Ml</span><span>Mainline</span></a>
+        <a class="brand" href="#products"><span class="brand-mark" style="background:var(--color-text-primary);color:var(--color-on-accent, #ffffff)">Ns</span><span>Nightshift</span></a>
+        <a class="brand" href="#products"><span class="brand-mark" style="background:var(--color-accent-subtle);color:var(--color-accent-ink)">Ss</span><span>Studio Supply</span></a>
+        <a class="brand" href="#products"><span class="brand-mark">Kc</span><span>Keycult</span></a>
+        <a class="brand" href="#products"><span class="brand-mark" style="background:var(--color-positive-subtle);color:var(--color-positive)">Tc</span><span>Typeface Club</span></a>
+        <a class="brand" href="#products"><span class="brand-mark">Sq</span><span>Sidequest</span></a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══ Editorial / deals ════════════════════════════════════════════ -->
+  <section class="section" id="deals" style="padding-top:0">
+    <div class="wrap">
+      <div class="section-head">
+        <div>
+          <h2>This week's deals</h2>
+          <p>Bundles built for the people who read the changelog.</p>
+        </div>
+      </div>
+      <div class="editorial">
+        <article class="promo">
+          <img src="https://images.unsplash.com/photo-1523381210434-271e8be1f52b?w=1200&amp;q=80&amp;auto=format&amp;fit=crop" alt="Rack of neatly hung clothing" loading="lazy">
+          <div class="promo-body">
+            <span data-component="Badge" data-tone="inverse">Bundle · save 25%</span>
+            <h3>The Standup Kit</h3>
+            <p>One heavyweight hoodie, one tee, one embroidered cap. Everything you need to look employed on camera.</p>
+            <div><button data-component="Button" type="button" data-add="" data-bundle-name="The Standup Kit" data-bundle-price="98">Add bundle — $98</button></div>
+          </div>
+        </article>
+        <article class="promo">
+          <img src="https://images.unsplash.com/photo-1595225476474-87563907a212?w=800&amp;q=80&amp;auto=format&amp;fit=crop" alt="Keyboard and desk accessories" loading="lazy">
+          <div class="promo-body">
+            <span data-component="Badge" data-tone="inverse">Desk drop</span>
+            <h3>Keycaps &amp; mats</h3>
+            <p>Muted palettes tuned to your editor theme.</p>
+            <div><a href="#products"><button data-component="Button" data-variant="outline" type="button">Browse desk gear</button></a></div>
+          </div>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══ Reviews ══════════════════════════════════════════════════════ -->
+  <section class="section" style="padding-top:0">
+    <div class="wrap">
+      <div class="section-head">
+        <div>
+          <h2>What people say</h2>
+          <p>9,240 reviews · 4.9 average</p>
+        </div>
+      </div>
+      <div class="reviews">
+        <article class="review">
+          <span class="stars">★★★★★</span>
+          <p>“The Dark Mode hoodie is the only thing in my closet with better contrast ratios than our production app.”</p>
+          <div class="review-who">
+            <span data-component="Avatar" data-size="sm">JD</span>
+            <div><b>Jamie D.</b><span>Staff engineer, Lisbon</span></div>
+          </div>
+        </article>
+        <article class="review">
+          <span class="stars">★★★★★</span>
+          <p>“Bought the deskmat for the grid. Stayed for the fact that it survived three coffee incidents in one sprint.”</p>
+          <div class="review-who">
+            <span data-component="Avatar" data-size="sm" style="background:var(--color-text-primary)">MK</span>
+            <div><b>Mira K.</b><span>Product designer, Berlin</span></div>
+          </div>
+        </article>
+        <article class="review">
+          <span class="stars">★★★★☆</span>
+          <p>“Shipping was two days. Sizing runs true. My whole team now shows up in the same tee, which is either culture or a bug.”</p>
+          <div class="review-who">
+            <span data-component="Avatar" data-size="sm" style="background:var(--color-positive)">AR</span>
+            <div><b>Andre R.</b><span>Design engineer, Austin</span></div>
+          </div>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══ Newsletter ═══════════════════════════════════════════════════ -->
+  <section class="section" style="padding-top:0">
+    <div class="wrap">
+      <div class="newsletter">
+        <span data-component="Badge">Drops every 6 weeks</span>
+        <h2>Get the next drop before it sells out</h2>
+        <p>One email per drop. Early access, no dark patterns, unsubscribe in a click.</p>
+        <form data-newsletter="">
+          <div data-component="TextInput">
+            <label class="field">
+              <span class="sr-only">Email address</span>
+              <input type="email" name="email" placeholder="you@example.com" required="">
+            </label>
+          </div>
+          <button data-component="Button" type="submit">Notify me</button>
+        </form>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- ══ Footer ═══════════════════════════════════════════════════════ -->
+<footer class="footer">
+  <div class="wrap">
+    <div class="footer-grid">
+      <div class="footer-about">
+        <a class="logo" href="#top">
+          <span class="logo-mark" aria-hidden="true">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path><path d="M3 6h18"></path><path d="M16 10a4 4 0 0 1-8 0"></path></svg>
+          </span>
+          shopdev
+        </a>
+        <p>Clothes and desk gear for developers and designers. Made in small batches, shipped from Berlin and Austin.</p>
+        <div class="socials">
+          <button data-component="IconButton" data-variant="ghost" type="button" aria-label="shopdev on X">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M18.2 2h3.3l-7.2 8.2L22.7 22h-6.6l-5.2-6.8L4.9 22H1.6l7.7-8.8L1.3 2h6.8l4.7 6.2zm-1.2 18h1.8L7.1 3.9H5.2z"></path></svg>
+          </button>
+          <button data-component="IconButton" data-variant="ghost" type="button" aria-label="shopdev on Instagram">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="5"></rect><circle cx="12" cy="12" r="4"></circle><circle cx="17.2" cy="6.8" r="1"></circle></svg>
+          </button>
+          <button data-component="IconButton" data-variant="ghost" type="button" aria-label="shopdev on GitHub">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 0 0-3.2 19.5c.5.1.7-.2.7-.5v-1.8c-2.8.6-3.4-1.3-3.4-1.3-.4-1.2-1.1-1.5-1.1-1.5-.9-.6.1-.6.1-.6 1 .1 1.5 1 1.5 1 .9 1.6 2.4 1.1 3 .9.1-.7.4-1.1.6-1.4-2.2-.3-4.6-1.1-4.6-5 0-1.1.4-2 1-2.7-.1-.3-.4-1.3.1-2.7 0 0 .8-.3 2.7 1a9.4 9.4 0 0 1 5 0c1.9-1.3 2.7-1 2.7-1 .5 1.4.2 2.4.1 2.7.6.7 1 1.6 1 2.7 0 3.9-2.4 4.7-4.6 5 .4.3.7.9.7 1.9v2.8c0 .3.2.6.7.5A10 10 0 0 0 12 2z"></path></svg>
+          </button>
+        </div>
+      </div>
+      <div>
+        <h5>Shop</h5>
+        <ul>
+          <li><a href="#products">Tees</a></li>
+          <li><a href="#products">Hoodies &amp; knits</a></li>
+          <li><a href="#products">Caps &amp; beanies</a></li>
+          <li><a href="#products">Desk gear</a></li>
+          <li><a href="#products">Drinkware</a></li>
+        </ul>
+      </div>
+      <div>
+        <h5>Help</h5>
+        <ul>
+          <li><a href="#top">Shipping</a></li>
+          <li><a href="#top">Returns &amp; exchanges</a></li>
+          <li><a href="#top">Size guide</a></li>
+          <li><a href="#top">Track an order</a></li>
+        </ul>
+      </div>
+      <div>
+        <h5>Company</h5>
+        <ul>
+          <li><a href="#top">About us</a></li>
+          <li><a href="#top">Materials</a></li>
+          <li><a href="#top">Factories</a></li>
+          <li><a href="#top">Careers</a></li>
+        </ul>
+      </div>
+      <div>
+        <h5>Legal</h5>
+        <ul>
+          <li><a href="#top">Privacy</a></li>
+          <li><a href="#top">Terms</a></li>
+          <li><a href="#top">Cookies</a></li>
+          <li><a href="#top">Accessibility</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>© 2026 shopdev. All rights reserved.</span>
+      <span>Prices in USD · Free returns for 90 days</span>
+    </div>
+  </div>
+</footer>
+
+<!-- ══ Cart drawer ══════════════════════════════════════════════════ -->
+<div class="scrim" data-scrim="" hidden=""></div>
+<aside class="drawer" data-drawer="" role="dialog" aria-modal="true" aria-label="Shopping cart" aria-hidden="true">
+  <div class="drawer-head">
+    <h3>Your cart</h3>
+    <button data-component="IconButton" data-variant="ghost" type="button" aria-label="Close cart" data-close-cart="">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"></path></svg>
+    </button>
+  </div>
+  <div class="drawer-body" data-cart-lines="">
+    <p class="cart-empty" data-cart-empty="">Your cart is empty — pick something from the drop.</p>
+  </div>
+  <div class="drawer-foot">
+    <div class="totals-note"><span>Shipping</span><span data-shipping="">Calculated at checkout</span></div>
+    <div class="totals"><span>Subtotal</span><span data-subtotal="">$0</span></div>
+    <button data-component="Button" data-size="lg" type="button" style="width:100%">Checkout</button>
+  </div>
+</aside>
+
+<div class="toast" data-toast="" role="status" aria-live="polite">
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"></path></svg>
+  <span data-toast-text="">Added to cart</span>
+</div>
+
+<!-- ══ Island: image fallback ═══════════════════════════════════════ -->
+<script data-island="">
+  (() => {
+    const fallback = (img) => {
+      img.style.display = 'none';
+      const host = img.parentElement;
+      if (host && !host.dataset.fallback) {
+        host.dataset.fallback = 'true';
+        host.style.background =
+          'linear-gradient(135deg, var(--color-background-subtle), var(--color-accent-subtle))';
+      }
+    };
+    document.querySelectorAll('img').forEach((img) => {
+      img.addEventListener('error', () => fallback(img), { once: true });
+    });
+  })();
+</script>
+
+<!-- ══ Island: category + search filtering ══════════════════════════ -->
+<script data-island="">
+  (() => {
+    const chips = [...document.querySelectorAll('.chip[data-filter]')];
+    const products = [...document.querySelectorAll('[data-product-grid] .product')];
+    const search = document.getElementById('search');
+    const countLabel = document.querySelector('[data-count-label]');
+    const empty = document.querySelector('[data-empty-state]');
+    let category = 'all';
+
+    const apply = () => {
+      const q = (search?.value || '').trim().toLowerCase();
+      let shown = 0;
+      products.forEach((p) => {
+        const matchCat = category === 'all' || p.dataset.category === category;
+        const haystack = (p.dataset.name + ' ' + p.textContent).toLowerCase();
+        const matchQuery = !q || haystack.includes(q);
+        const visible = matchCat && matchQuery;
+        p.hidden = !visible;
+        if (visible) shown++;
+      });
+      if (countLabel) countLabel.textContent = String(shown);
+      if (empty) empty.dataset.visible = String(shown === 0);
+    };
+
+    chips.forEach((chip) => {
+      chip.addEventListener('click', () => {
+        chips.forEach((c) => c.setAttribute('aria-pressed', String(c === chip)));
+        category = chip.dataset.filter;
+        apply();
+      });
+    });
+
+    search?.addEventListener('input', apply);
+    apply();
+  })();
+</script>
+
+<!-- ══ Island: wishlist toggles ═════════════════════════════════════ -->
+<script data-island="">
+  (() => {
+    document.querySelectorAll('.wish').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const next = btn.getAttribute('aria-pressed') !== 'true';
+        btn.setAttribute('aria-pressed', String(next));
+      });
+    });
+  })();
+</script>
+
+<!-- ══ Island: cart (add, quantity, drawer, toast) ══════════════════ -->
+<script data-island="">
+  (() => {
+    const drawer = document.querySelector('[data-drawer]');
+    const scrim = document.querySelector('[data-scrim]');
+    const linesHost = document.querySelector('[data-cart-lines]');
+    const emptyMsg = document.querySelector('[data-cart-empty]');
+    const countEl = document.querySelector('[data-cart-count]');
+    const subtotalEl = document.querySelector('[data-subtotal]');
+    const shippingEl = document.querySelector('[data-shipping]');
+    const toast = document.querySelector('[data-toast]');
+    const toastText = document.querySelector('[data-toast-text]');
+    const FREE_SHIPPING_AT = 75;
+    const cart = new Map();
+    let toastTimer;
+    let lastFocused = null;
+
+    const money = (n) => '$' + n.toLocaleString('en-US');
+
+    const openCart = () => {
+      lastFocused = document.activeElement;
+      scrim.hidden = false;
+      requestAnimationFrame(() => {
+        scrim.dataset.open = 'true';
+        drawer.dataset.open = 'true';
+      });
+      drawer.setAttribute('aria-hidden', 'false');
+      drawer.querySelector('[data-close-cart]')?.focus();
+    };
+
+    const closeCart = () => {
+      scrim.dataset.open = 'false';
+      drawer.dataset.open = 'false';
+      drawer.setAttribute('aria-hidden', 'true');
+      setTimeout(() => { scrim.hidden = true; }, 240);
+      lastFocused?.focus?.();
+    };
+
+    const showToast = (msg) => {
+      toastText.textContent = msg;
+      toast.dataset.open = 'true';
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => { toast.dataset.open = 'false'; }, 2200);
+    };
+
+    const render = () => {
+      linesHost.querySelectorAll('.line').forEach((n) => n.remove());
+      let count = 0;
+      let subtotal = 0;
+
+      cart.forEach((item, id) => {
+        count += item.qty;
+        subtotal += item.qty * item.price;
+
+        const line = document.createElement('div');
+        line.className = 'line';
+
+        const thumb = document.createElement('img');
+        thumb.className = 'line-thumb';
+        thumb.src = item.img || '';
+        thumb.alt = '';
+        thumb.addEventListener('error', () => { thumb.removeAttribute('src'); }, { once: true });
+
+        const info = document.createElement('div');
+        info.className = 'line-info';
+        const name = document.createElement('b');
+        name.textContent = item.name;
+        const unit = document.createElement('span');
+        unit.textContent = money(item.price) + ' each';
+        const qty = document.createElement('div');
+        qty.className = 'qty';
+
+        const dec = document.createElement('button');
+        dec.type = 'button';
+        dec.setAttribute('aria-label', 'Decrease quantity of ' + item.name);
+        dec.textContent = '−';
+        dec.addEventListener('click', () => {
+          item.qty -= 1;
+          if (item.qty <= 0) cart.delete(id);
+          render();
+        });
+
+        const out = document.createElement('output');
+        out.textContent = String(item.qty);
+
+        const inc = document.createElement('button');
+        inc.type = 'button';
+        inc.setAttribute('aria-label', 'Increase quantity of ' + item.name);
+        inc.textContent = '+';
+        inc.addEventListener('click', () => { item.qty += 1; render(); });
+
+        qty.append(dec, out, inc);
+        info.append(name, unit, qty);
+
+        const price = document.createElement('span');
+        price.className = 'line-price';
+        price.textContent = money(item.qty * item.price);
+
+        line.append(thumb, info, price);
+        linesHost.append(line);
+      });
+
+      emptyMsg.style.display = cart.size ? 'none' : '';
+      countEl.textContent = String(count);
+      countEl.dataset.empty = String(count === 0);
+      subtotalEl.textContent = money(subtotal);
+      shippingEl.textContent = subtotal >= FREE_SHIPPING_AT
+        ? 'Free'
+        : (subtotal > 0 ? money(FREE_SHIPPING_AT - subtotal) + ' to free shipping' : 'Calculated at checkout');
+    };
+
+    const add = (id, item) => {
+      const existing = cart.get(id);
+      if (existing) existing.qty += 1;
+      else cart.set(id, { ...item, qty: 1 });
+      render();
+      showToast(item.name + ' added');
+    };
+
+    document.querySelectorAll('[data-add]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const card = btn.closest('.product');
+        if (card) {
+          add(card.dataset.name, {
+            name: card.dataset.name,
+            price: Number(card.dataset.price),
+            img: card.dataset.img,
+          });
+        } else if (btn.dataset.bundleName) {
+          add(btn.dataset.bundleName, {
+            name: btn.dataset.bundleName,
+            price: Number(btn.dataset.bundlePrice),
+            img: '',
+          });
+        }
+      });
+    });
+
+    document.querySelector('[data-open-cart]')?.addEventListener('click', openCart);
+    document.querySelector('[data-close-cart]')?.addEventListener('click', closeCart);
+    scrim?.addEventListener('click', closeCart);
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && drawer.dataset.open === 'true') closeCart();
+    });
+
+    render();
+  })();
+</script>
+
+<!-- ══ Island: newsletter ═══════════════════════════════════════════ -->
+<script data-island="">
+  (() => {
+    const form = document.querySelector('[data-newsletter]');
+    form?.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const btn = form.querySelector('button[type="submit"]');
+      if (!btn) return;
+      btn.textContent = "You're on the list ✓";
+      btn.disabled = true;
+      btn.style.opacity = '.75';
+    });
+  })();
+</script>
+
+
+
+</body></html>

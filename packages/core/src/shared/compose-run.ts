@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { selectionProtocol } from "./selection-protocol";
 import { frameworkIdiomClause } from "./framework-profiles";
 import type { InspectorComponent } from "./inspector";
 import { SCAFFOLD_SENTINEL, scaffoldBegin, scaffoldEnd } from "./compose-scaffold";
@@ -221,11 +222,29 @@ export function buildPromoteComponentPrompt(opts: {
     "   hardcoded hex or px).",
     "2. Replace the inline composition at the insertion site with a usage of the new component (keep its",
     "   `data-component` marker so the inspector still recognizes it).",
-    "3. Generate a Storybook story (`<Component>.stories.*`) and a `<Component>.metadata.ts` for it, following",
-    "   the project's /storybook conventions — variants and states as stories, the a11y addon, design tokens.",
+    "3. Generate a Storybook story (`<Component>.stories.*`) following the project's /storybook conventions —",
+    "   variants and states as stories, the a11y addon, design tokens.",
+    "4. Write its metadata record to `.vortspec/metadata/<lowercased-name>.json` (VortSpec-owned — never a",
+    "   `.metadata.ts` beside the component). Storybook's docs page reads that file too, so there is one record.",
     "",
-    "Do not touch unrelated files. End with: the component (plus any variant file its framework contract calls for), the story + metadata, and the call site updated to use it.",
+    "Do not touch unrelated files. End with: the component (plus any variant file its framework contract calls for), the story, the metadata record, and the call site updated to use it.",
   ].join("\n");
+}
+
+/**
+ * DESIGN.md prose, kept for a caller that still supplies it — truncated at a SECTION boundary and
+ * told when it was cut.
+ *
+ * The structured digest is the real hand-off now. This exists so a caller passing prose does not get
+ * a silent mid-sentence cut, which reads to the model as a complete document that simply ends.
+ */
+function designMdHandoff(designMd: string): string {
+  const LIMIT = 4000;
+  if (designMd.length <= LIMIT) return `\nDESIGN.md hand-off (follow it):\n${designMd}`;
+  const head = designMd.slice(0, LIMIT);
+  const lastHeading = head.lastIndexOf("\n#");
+  const kept = lastHeading > 0 ? head.slice(0, lastHeading) : head;
+  return `\nDESIGN.md hand-off (follow it) — TRUNCATED, ${designMd.length - kept.length} characters of later sections are not shown:\n${kept}`;
 }
 
 export function buildComposePrompt(input: ComposePromptInput): string {
@@ -287,12 +306,27 @@ export function buildComposePrompt(input: ComposePromptInput): string {
       ? `The user specifically chose these components to build this from: ${input.preferredComponents.join(", ")}. Compose PRIMARILY from them; reach for other roster components only if the intent genuinely needs one.`
       : "",
     "",
+    // The selection METHOD (task 3.3). The roster above says what is available; this says how to
+    // choose among it. Light-first runs build a missing piece and name it; framework runs report it,
+    // matching what each path is already told to do further down.
+    selectionProtocol(
+      lightNative
+        ? { gapPolicy: "build-and-name", source: "designer" }
+        : { gapPolicy: "report", source: "metadata" },
+    ),
+    "",
     input.tokens.length
       ? `Ground every value in the project's design tokens (${input.tokens.slice(0, 40).join(", ")}${
           input.tokens.length > 40 ? ", …" : ""
         }). Do NOT introduce a hardcoded hex or px value where a token exists.`
       : "Ground every value in the project's design tokens. Do NOT hardcode hex or px where a token exists.",
-    input.designMd ? `\nDESIGN.md hand-off (follow it):\n${input.designMd.slice(0, 4000)}` : "",
+    // DESIGN.md's prose used to be spliced in here, byte-truncated at 4,000 characters (task 3.7).
+    // Cutting markdown at an arbitrary offset is the worst possible way to spend those tokens: it
+    // lands mid-sentence, drops whatever came after, and says nothing about what was lost. The
+    // structured digest replaces it — the run now sets `groundWithIndex`, so the main process
+    // prepends the roster, relationships, tokens and the in-scope metadata records as a bounded,
+    // self-describing block, with the query protocols that say how to read it.
+    input.designMd ? designMdHandoff(input.designMd) : "",
     "",
     DISTINCTNESS_CLAUSE,
     "",

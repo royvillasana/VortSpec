@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { mapTokenGroup, mapTier, buildDeriveInput, liteGenerationStatus, markPageGenerated } from "./lite-source";
+import { dirname, join } from "node:path";
+import { mapTokenGroup, mapTier, buildDeriveInput, liteGenerationStatus, markPageGenerated , deriveProjectLiteManifest } from "./lite-source";
 import { deriveLiteManifest } from "../../shared/lite-manifest";
 
 describe("mapTokenGroup", () => {
@@ -13,8 +13,10 @@ describe("mapTokenGroup", () => {
     expect(mapTokenGroup("typography")).toBe("typography");
     expect(mapTokenGroup("radius")).toBe("radius");
   });
-  it("skips a non-visual type", () => {
-    expect(mapTokenGroup("other")).toBeNull();
+  it("files an unclassifiable type under `other` rather than dropping it (task 7.11)", () => {
+    // It used to return null and the token vanished from designer.md entirely. "I could not
+    // classify this" is not a reason to make a token the design system defines unreferenceable.
+    expect(mapTokenGroup("other")).toBe("other");
   });
 });
 
@@ -32,8 +34,8 @@ describe("buildDeriveInput — inspector shapes → derive input", () => {
   const tokens = [
     { name: "color-primary", type: "color", resolvedValue: "#c53434" },
     { name: "space-2", type: "spacing", resolvedValue: "0.5rem" },
-    { name: "misc-thing", type: "other", resolvedValue: "whatever" }, // dropped
-    { name: "empty", type: "color", resolvedValue: "" }, // dropped (no value)
+    { name: "misc-thing", type: "other", resolvedValue: "whatever" }, // kept, under `other`
+    { name: "empty", type: "color", resolvedValue: "" }, // dropped (no value to render)
   ];
   const components = [
     {
@@ -47,11 +49,13 @@ describe("buildDeriveInput — inspector shapes → derive input", () => {
     { name: "Header", level: "organism", props: [] },
   ];
 
-  it("keeps only visual tokens with a value, dual-keyed by name + resolved value", () => {
+  it("keeps every token with a value, dual-keyed by name + resolved value", () => {
     const input = buildDeriveInput("Acme", tokens, components);
     expect(input.tokens).toEqual([
       { name: "color-primary", value: "#c53434", group: "colors" },
       { name: "space-2", value: "0.5rem", group: "spacing" },
+      // Listed, not dropped — a light page can reference it even with no swatch to draw.
+      { name: "misc-thing", value: "whatever", group: "other" },
     ]);
   });
 
@@ -135,4 +139,40 @@ describe("per-page framework-generation status", () => {
       { name: "Home", generated: true, stale: false },
     ]);
   });
+});
+
+describe("component hints reach designer.md (task 3.4 regression)", () => {
+  it("finds a metadata record whose name is NOT lowercase", async () => {
+    // The bug this pins: `readMetadataFor` keys its map by `normComponentName(name)`, so looking up
+    // the raw roster name found nothing for every PascalCase component — which is all of them. The
+    // hints block was inert from task 3.4 until the props glossary's fixture exposed it.
+    const dir = await mkdtemp(join(tmpdir(), "vortspec-hints-"));
+    try {
+      const w = async (rel: string, content: string) => {
+        await mkdir(dirname(join(dir, rel)), { recursive: true });
+        await writeFile(join(dir, rel), content, "utf8");
+      };
+      await w(
+        ".sdd-de/project.yaml",
+        "framework: react\nlanguage: typescript\nstyling: css\ntoken_file: src/tokens.css\ncomponent_dir: src/components\n",
+      );
+      await w("src/tokens.css", ":root { --color-primary: #1d4ed8; }\n");
+      await w(".sdd-de/components.json", JSON.stringify([{ name: "Callout", level: "molecule" }]));
+      await w("src/components/Callout.tsx", "export const Callout = () => <div/>;");
+      await w(
+        ".vortspec/metadata/callout.json",
+        JSON.stringify({
+          name: "Callout",
+          identity: { name: "Callout", category: "molecule", type: "display", description: "", importPath: "" },
+          aiHints: { context: "", selectionCriteria: ["the main callout in a section"], keywords: [], generationRules: [] },
+        }),
+      );
+
+      const manifest = await deriveProjectLiteManifest(dir);
+      const callout = manifest.components.find((c) => c.name === "Callout");
+      expect(callout?.hints?.selectionCriteria).toEqual(["the main callout in a section"]);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  }, 60000);
 });

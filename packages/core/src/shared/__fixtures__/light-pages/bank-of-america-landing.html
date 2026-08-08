@@ -1,0 +1,2393 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bank of America — Banking, Credit Cards, Home Loans and Auto Loans</title>
+<style>
+  /* ══════════════════════════════════════════════════════════════
+     Design-system tokens (mirrored from tokens.css / designer.md)
+     ══════════════════════════════════════════════════════════════ */
+  :root {
+    /* Neutrals */
+    --color-white: #ffffff;
+    --color-body: #212529;
+    --color-text-muted: #6c757d;
+    --color-border: #dee2e6;
+    --color-input-border: #ced4da;
+    --color-gray-100: #f8f9fa;
+    --color-gray-200: #e9ecef;
+    --color-gray-300: #dee2e6;
+    --color-gray-400: #ced4da;
+    --color-gray-500: #adb5bd;
+    --color-gray-600: #6c757d;
+    --color-gray-700: #495057;
+    --color-gray-800: #343a40;
+    --color-gray-900: #212529;
+    --color-success-500: #198754;
+
+    /* Typography */
+    --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --font-size-xs: 0.75rem;
+    --font-size-sm: 0.875rem;
+    --font-size-base: 1rem;
+    --font-size-18: 1.125rem;
+    --font-size-lg: 1.25rem;
+    --font-size-lead: 1.25rem;
+    --font-size-h6: 1rem;
+    --font-size-h5: 1.25rem;
+    --font-size-h4: 1.5rem;
+    --font-size-h3: 1.75rem;
+    --font-size-h2: 2rem;
+    --font-size-h1: 2.5rem;
+    --font-size-display-6: 2.5rem;
+    --font-size-display-5: 3rem;
+    --font-size-display-4: 3.5rem;
+    --font-weight-normal: 400;
+    --font-weight-medium: 500;
+    --font-weight-semibold: 600;
+    --font-weight-bold: 700;
+    --line-height-tight: 1.2;
+    --line-height-snug: 1.35;
+    --line-height-base: 1.5;
+    --line-height-relaxed: 1.625;
+
+    /* Spacing */
+    --spacing-px-2: 0.125rem;
+    --spacing-px-4: 0.25rem;
+    --spacing-px-6: 0.375rem;
+    --spacing-px-8: 0.5rem;
+    --spacing-px-10: 0.625rem;
+    --spacing-px-12: 0.75rem;
+    --spacing-px-16: 1rem;
+    --spacing-px-20: 1.25rem;
+    --spacing-px-24: 1.5rem;
+    --spacing-px-32: 2rem;
+    --spacing-px-40: 2.5rem;
+    --spacing-px-48: 3rem;
+    --spacing-px-56: 3.5rem;
+    --spacing-px-64: 4rem;
+    --spacing-px-80: 5rem;
+
+    /* Radius */
+    --radius-sm: 0.25rem;
+    --radius-base: 0.375rem;
+    --radius-lg: 0.5rem;
+    --radius-xl: 0.875rem;
+    --radius-pill: 50rem;
+    --radius-circle: 50%;
+
+    /* Shadow */
+    --shadow-sm: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+    --shadow-base: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+    --shadow-lg: 0 1rem 3rem rgba(0, 0, 0, 0.175);
+  }
+
+  /* ══════════════════════════════════════════════════════════════
+     Page-scoped brand tokens
+     The DS palette is Bootstrap-derived (primary = #0d6efd), which does not
+     carry the Bank of America brand. These page tokens layer the brand hues on
+     top of the DS scale so markup below stays fully token-referenced. Promote
+     them into tokens.css if this becomes a real theme.
+     ══════════════════════════════════════════════════════════════ */
+  :root {
+    --brand-red: #e31837;
+    --brand-red-hover: #c2132e;
+    --brand-red-active: #a30f26;
+    --brand-navy: #012169;
+    --brand-navy-hover: #011a52;
+    --brand-navy-deep: #00133d;
+    --brand-navy-tint: #e8ecf5;
+    --brand-blue: #0073cf;
+    --brand-blue-hover: #005ea8;
+    --brand-blue-tint: #e6f2fb;
+    --brand-surface: var(--color-gray-100);
+    --brand-surface-alt: #eef1f4;
+    --brand-on-brand: var(--color-white);
+    --brand-focus-ring: rgba(1, 33, 105, 0.45);
+
+    /* Layout */
+    --page-max-width: 78rem;
+    --page-gutter: var(--spacing-px-24);
+    --section-pad-y: var(--spacing-px-80);
+    --header-height: 4.5rem;
+  }
+
+  /* ── Reset / base ─────────────────────────────────────── */
+  *, *::before, *::after { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    font-family: var(--font-sans);
+    font-size: var(--font-size-base);
+    line-height: var(--line-height-base);
+    color: var(--color-body);
+    background: var(--color-white);
+    -webkit-font-smoothing: antialiased;
+  }
+  h1, h2, h3, h4, p { margin: 0; }
+  ul, ol { margin: 0; padding: 0; list-style: none; }
+  a { color: var(--brand-blue-hover); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  img, svg { display: block; }
+  button { font: inherit; }
+  :focus-visible {
+    outline: 3px solid var(--brand-focus-ring);
+    outline-offset: 2px;
+    border-radius: var(--radius-sm);
+  }
+
+  .container {
+    width: 100%;
+    max-width: var(--page-max-width);
+    margin-inline: auto;
+    padding-inline: var(--page-gutter);
+  }
+  .skip-link {
+    position: absolute;
+    top: -100%;
+    inset-inline-start: var(--spacing-px-8);
+    z-index: 100;
+    background: var(--brand-navy);
+    color: var(--brand-on-brand);
+    padding: var(--spacing-px-12) var(--spacing-px-16);
+    border-radius: var(--radius-base);
+  }
+  .skip-link:focus { top: var(--spacing-px-8); }
+  .visually-hidden {
+    position: absolute; width: 1px; height: 1px;
+    padding: 0; margin: -1px; overflow: hidden;
+    clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+  }
+
+  /* ── Button ───────────────────────────────────────────── */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--spacing-px-8);
+    padding: var(--spacing-px-12) var(--spacing-px-24);
+    border: 1px solid transparent;
+    border-radius: var(--radius-pill);
+    font-size: var(--font-size-base);
+    font-weight: var(--font-weight-semibold);
+    line-height: var(--line-height-base);
+    cursor: pointer;
+    transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  }
+  .btn:hover { text-decoration: none; }
+  .btn svg { width: 1.125rem; height: 1.125rem; }
+  .btn--primary {
+    background: var(--brand-red);
+    border-color: var(--brand-red);
+    color: var(--brand-on-brand);
+  }
+  .btn--primary:hover { background: var(--brand-red-hover); border-color: var(--brand-red-hover); }
+  .btn--primary:active { background: var(--brand-red-active); border-color: var(--brand-red-active); }
+  .btn--navy {
+    background: var(--brand-navy);
+    border-color: var(--brand-navy);
+    color: var(--brand-on-brand);
+  }
+  .btn--navy:hover { background: var(--brand-navy-hover); border-color: var(--brand-navy-hover); }
+  .btn--outline {
+    background: transparent;
+    border-color: var(--brand-navy);
+    color: var(--brand-navy);
+  }
+  .btn--outline:hover { background: var(--brand-navy); color: var(--brand-on-brand); }
+  .btn--outline-light {
+    background: transparent;
+    border-color: var(--color-white);
+    color: var(--color-white);
+  }
+  .btn--outline-light:hover { background: var(--color-white); color: var(--brand-navy); }
+  .btn--block { width: 100%; }
+  .btn--sm { padding: var(--spacing-px-8) var(--spacing-px-16); font-size: var(--font-size-sm); }
+
+  /* ── Link with chevron ────────────────────────────────── */
+  .link-arrow {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-px-6);
+    font-weight: var(--font-weight-semibold);
+    color: var(--brand-navy);
+  }
+  .link-arrow svg { width: 1rem; height: 1rem; transition: transform 0.15s ease; }
+  .link-arrow:hover svg { transform: translateX(0.1875rem); }
+
+  /* ── Utility bar ──────────────────────────────────────── */
+  .utility-bar {
+    background: var(--brand-navy-deep);
+    color: var(--brand-on-brand);
+    font-size: var(--font-size-xs);
+  }
+  .utility-bar__inner {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--spacing-px-20);
+    min-height: 2.25rem;
+    flex-wrap: wrap;
+  }
+  .utility-bar a { color: var(--brand-on-brand); display: inline-flex; align-items: center; gap: var(--spacing-px-6); }
+  .utility-bar svg { width: 0.875rem; height: 0.875rem; }
+  .utility-bar__privacy svg { width: 1.5rem; height: 0.875rem; }
+
+  /* ── Navbar ───────────────────────────────────────────── */
+  .navbar {
+    background: var(--color-white);
+    border-bottom: 1px solid var(--color-border);
+    position: sticky;
+    top: 0;
+    z-index: 30;
+  }
+  .navbar__inner {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-px-16);
+    min-height: var(--header-height);
+  }
+  .brand { display: flex; align-items: center; gap: var(--spacing-px-12); }
+  .brand:hover { text-decoration: none; }
+  .brand__mark { width: 2.25rem; height: 2.25rem; flex: 0 0 auto; }
+  .brand__name {
+    font-size: var(--font-size-18);
+    font-weight: var(--font-weight-bold);
+    color: var(--brand-navy);
+    letter-spacing: -0.01em;
+    white-space: nowrap;
+  }
+  .navbar__nav { display: flex; align-items: center; gap: var(--spacing-px-2); margin-inline-start: auto; }
+  .navbar__link {
+    display: inline-block;
+    padding: var(--spacing-px-8) var(--spacing-px-10);
+    border-radius: var(--radius-base);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
+    color: var(--color-gray-800);
+    white-space: nowrap;
+  }
+  .navbar__link:hover { background: var(--brand-surface); color: var(--brand-navy); text-decoration: none; }
+  .navbar__actions { display: flex; align-items: center; gap: var(--spacing-px-8); margin-inline-start: var(--spacing-px-8); }
+  .icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.5rem;
+    height: 2.5rem;
+    border: 0;
+    border-radius: var(--radius-circle);
+    background: transparent;
+    color: var(--color-gray-700);
+    cursor: pointer;
+    transition: background-color 0.15s ease, color 0.15s ease;
+  }
+  .icon-btn:hover { background: var(--brand-surface); color: var(--brand-navy); }
+  .icon-btn svg { width: 1.25rem; height: 1.25rem; }
+  .navbar__toggle { display: none; }
+
+  /* ── Hero (video background — the one element carried over) ── */
+  .hero {
+    position: relative;
+    overflow: hidden;
+    background: var(--brand-navy);
+    color: var(--brand-on-brand);
+    isolation: isolate;
+  }
+  .hero__media { position: absolute; inset: 0; z-index: 0; }
+  .hero__video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    filter: saturate(1.05);
+  }
+  .hero::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    background:
+      linear-gradient(100deg,
+        rgba(0, 12, 41, 0.9) 0%,
+        rgba(0, 12, 41, 0.72) 42%,
+        rgba(0, 12, 41, 0.32) 72%,
+        rgba(0, 12, 41, 0.5) 100%);
+    pointer-events: none;
+  }
+  .hero__inner {
+    position: relative;
+    z-index: 2;
+    display: grid;
+    grid-template-columns: minmax(0, 1.15fr) 22.5rem;
+    gap: var(--spacing-px-48);
+    align-items: center;
+    padding-block: var(--spacing-px-80);
+    min-height: 33rem;
+  }
+  .hero__eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-px-8);
+    padding: var(--spacing-px-6) var(--spacing-px-12);
+    border: 1px solid rgba(255, 255, 255, 0.4);
+    border-radius: var(--radius-pill);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-semibold);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: var(--spacing-px-24);
+  }
+  .hero__title {
+    font-size: var(--font-size-display-4);
+    font-weight: var(--font-weight-bold);
+    line-height: var(--line-height-tight);
+    letter-spacing: -0.02em;
+    max-width: 16ch;
+  }
+  .hero__text {
+    font-size: var(--font-size-lead);
+    line-height: var(--line-height-relaxed);
+    color: rgba(255, 255, 255, 0.9);
+    max-width: 46ch;
+    margin-top: var(--spacing-px-20);
+  }
+  .hero__ctas { display: flex; flex-wrap: wrap; gap: var(--spacing-px-12); margin-top: var(--spacing-px-32); }
+  .hero__note { font-size: var(--font-size-sm); color: rgba(255, 255, 255, 0.75); margin-top: var(--spacing-px-20); }
+  .hero__motion {
+    position: absolute;
+    z-index: 3;
+    inset-block-end: var(--spacing-px-20);
+    inset-inline-start: 50%;
+    transform: translateX(-50%);
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-px-8);
+    padding: var(--spacing-px-8) var(--spacing-px-16);
+    border: 1px solid rgba(255, 255, 255, 0.45);
+    border-radius: var(--radius-pill);
+    background: rgba(0, 12, 41, 0.5);
+    color: var(--color-white);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-semibold);
+    cursor: pointer;
+    backdrop-filter: blur(0.25rem);
+  }
+  .hero__motion:hover { background: var(--color-white); color: var(--brand-navy); }
+  .hero__motion svg { width: 0.75rem; height: 0.75rem; }
+  .hero__motion svg[hidden] { display: none; }
+
+  /* ── Sign-in card ─────────────────────────────────────── */
+  .signin-card {
+    background: var(--color-white);
+    color: var(--color-body);
+    border-radius: var(--radius-xl);
+    padding: var(--spacing-px-32);
+    box-shadow: var(--shadow-lg);
+  }
+  .signin-card__title {
+    font-size: var(--font-size-h5);
+    font-weight: var(--font-weight-bold);
+    color: var(--brand-navy);
+    margin-bottom: var(--spacing-px-20);
+  }
+  .field { margin-bottom: var(--spacing-px-16); }
+  .field__label {
+    display: block;
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    color: var(--color-gray-800);
+    margin-bottom: var(--spacing-px-6);
+  }
+  .field__hint { font-size: var(--font-size-xs); color: var(--color-text-muted); margin-top: var(--spacing-px-4); }
+  .input {
+    width: 100%;
+    padding: var(--spacing-px-12) var(--spacing-px-16);
+    border: 1px solid var(--color-input-border);
+    border-radius: var(--radius-base);
+    font-size: var(--font-size-base);
+    color: var(--color-body);
+    background: var(--color-white);
+  }
+  .input:focus { border-color: var(--brand-blue); outline-color: var(--brand-focus-ring); }
+  .check-row {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-px-8);
+    font-size: var(--font-size-sm);
+    color: var(--color-gray-700);
+    margin-bottom: var(--spacing-px-20);
+  }
+  .signin-card__links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacing-px-4) var(--spacing-px-16);
+    font-size: var(--font-size-sm);
+    margin-top: var(--spacing-px-16);
+    padding-top: var(--spacing-px-16);
+    border-top: 1px solid var(--color-border);
+  }
+
+  /* ── Quick links ──────────────────────────────────────── */
+  .quicklinks { background: var(--color-white); border-bottom: 1px solid var(--color-border); }
+  .quicklinks__grid {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: var(--spacing-px-12);
+    padding-block: var(--spacing-px-40);
+  }
+  .quicklink {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--spacing-px-12);
+    height: 100%;
+    padding: var(--spacing-px-20) var(--spacing-px-12);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    text-align: center;
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    color: var(--brand-navy);
+    background: var(--color-white);
+    transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+  }
+  .quicklink:hover {
+    text-decoration: none;
+    border-color: var(--brand-navy);
+    box-shadow: var(--shadow-sm);
+    transform: translateY(-0.125rem);
+  }
+  .quicklink__icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.75rem;
+    height: 2.75rem;
+    border-radius: var(--radius-circle);
+    background: var(--brand-navy-tint);
+    color: var(--brand-navy);
+  }
+  .quicklink__icon svg { width: 1.375rem; height: 1.375rem; }
+
+  /* ── Section shell ────────────────────────────────────── */
+  .section { padding-block: var(--section-pad-y); }
+  .section--tint { background: var(--brand-surface); }
+  .section--navy { background: var(--brand-navy); color: var(--brand-on-brand); }
+  .section__head { max-width: 46rem; margin-bottom: var(--spacing-px-40); }
+  .section__head--center { margin-inline: auto; text-align: center; }
+  .section__eyebrow {
+    display: block;
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-bold);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--brand-red);
+    margin-bottom: var(--spacing-px-12);
+  }
+  .section--navy .section__eyebrow { color: var(--color-white); }
+  .section__title {
+    font-size: var(--font-size-h2);
+    font-weight: var(--font-weight-bold);
+    line-height: var(--line-height-snug);
+    letter-spacing: -0.015em;
+    color: var(--brand-navy);
+  }
+  .section--navy .section__title { color: var(--brand-on-brand); }
+  .section__text {
+    font-size: var(--font-size-18);
+    line-height: var(--line-height-relaxed);
+    color: var(--color-gray-700);
+    margin-top: var(--spacing-px-16);
+  }
+  .section--navy .section__text { color: rgba(255, 255, 255, 0.85); }
+  .section__foot { margin-top: var(--spacing-px-40); }
+
+  /* ── Card ─────────────────────────────────────────────── */
+  .card-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: var(--spacing-px-24);
+  }
+  .card {
+    display: flex;
+    flex-direction: column;
+    background: var(--color-white);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    height: 100%;
+    transition: box-shadow 0.15s ease, transform 0.15s ease;
+  }
+  .card:hover { box-shadow: var(--shadow-base); transform: translateY(-0.1875rem); }
+  .card__media {
+    aspect-ratio: 16 / 9;
+    background: linear-gradient(135deg, var(--brand-navy), var(--brand-blue));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--brand-on-brand);
+  }
+  .card__media--red { background: linear-gradient(135deg, var(--brand-red), var(--brand-navy)); }
+  .card__media--tint { background: linear-gradient(135deg, var(--brand-blue), var(--brand-navy-tint)); }
+  .card__media--deep { background: linear-gradient(135deg, var(--brand-navy-deep), var(--brand-blue-hover)); }
+  .card__media svg { width: 3rem; height: 3rem; opacity: 0.9; }
+  .card__body {
+    padding: var(--spacing-px-24);
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-px-12);
+    flex: 1 1 auto;
+  }
+  .card__title {
+    font-size: var(--font-size-18);
+    font-weight: var(--font-weight-semibold);
+    line-height: var(--line-height-snug);
+    color: var(--brand-navy);
+  }
+  .card__text { color: var(--color-gray-700); font-size: var(--font-size-sm); line-height: var(--line-height-relaxed); }
+  .card__foot { margin-top: auto; padding-top: var(--spacing-px-8); }
+
+  /* ── Badge / Tag ──────────────────────────────────────── */
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-px-6);
+    padding: var(--spacing-px-4) var(--spacing-px-10);
+    border-radius: var(--radius-pill);
+    background: var(--brand-navy-tint);
+    color: var(--brand-navy);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-semibold);
+    align-self: flex-start;
+  }
+  .badge--red { background: var(--brand-red); color: var(--brand-on-brand); }
+
+  /* ── Split layout ─────────────────────────────────────── */
+  .split {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--spacing-px-64);
+    align-items: center;
+  }
+  .split--reverse .split__art { order: 2; }
+
+  /* Security meter */
+  .meter-card {
+    background: var(--color-white);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-xl);
+    padding: var(--spacing-px-32);
+    box-shadow: var(--shadow-sm);
+  }
+  .meter-card__head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--spacing-px-16);
+    margin-bottom: var(--spacing-px-16);
+  }
+  .meter-card__label { font-size: var(--font-size-sm); font-weight: var(--font-weight-semibold); color: var(--color-gray-700); }
+  .meter-card__value { font-size: var(--font-size-h3); font-weight: var(--font-weight-bold); color: var(--brand-navy); }
+  .progress {
+    height: 0.75rem;
+    border-radius: var(--radius-pill);
+    background: var(--color-gray-200);
+    overflow: hidden;
+  }
+  .progress__bar {
+    height: 100%;
+    border-radius: var(--radius-pill);
+    background: linear-gradient(90deg, var(--brand-blue), var(--color-success-500));
+  }
+  .checklist { display: flex; flex-direction: column; gap: var(--spacing-px-12); margin-top: var(--spacing-px-24); }
+  .checklist li {
+    display: flex;
+    gap: var(--spacing-px-12);
+    font-size: var(--font-size-sm);
+    color: var(--color-gray-700);
+    align-items: flex-start;
+  }
+  .checklist svg { width: 1.125rem; height: 1.125rem; flex: 0 0 auto; margin-top: var(--spacing-px-2); }
+  .checklist li[data-state="done"] svg { color: var(--color-success-500); }
+  .checklist li[data-state="todo"] svg { color: var(--color-gray-500); }
+
+  /* Phone mock */
+  .phone {
+    width: 100%;
+    max-width: 20rem;
+    margin-inline: auto;
+    background: var(--color-white);
+    border: 0.5rem solid var(--brand-navy-deep);
+    border-radius: 2rem;
+    padding: var(--spacing-px-16);
+    box-shadow: var(--shadow-lg);
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-px-12);
+  }
+  .phone__bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-semibold);
+    color: var(--color-gray-600);
+  }
+  .phone__balance {
+    background: var(--brand-navy);
+    color: var(--brand-on-brand);
+    border-radius: var(--radius-lg);
+    padding: var(--spacing-px-16);
+  }
+  .phone__balance small { display: block; font-size: var(--font-size-xs); opacity: 0.75; }
+  .phone__balance strong { font-size: var(--font-size-h4); font-weight: var(--font-weight-bold); }
+  .phone__row { display: flex; align-items: flex-start; gap: var(--spacing-px-12); }
+  .phone__avatar {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    flex: 0 0 auto;
+    border-radius: var(--radius-circle);
+    background: var(--brand-red);
+    color: var(--brand-on-brand);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-bold);
+  }
+  .phone__bubble {
+    background: var(--brand-surface);
+    border-radius: var(--radius-lg);
+    padding: var(--spacing-px-10) var(--spacing-px-12);
+    font-size: var(--font-size-sm);
+    color: var(--color-gray-800);
+    line-height: var(--line-height-snug);
+  }
+  .phone__bubble--self { background: var(--brand-blue-tint); color: var(--brand-navy); align-self: flex-end; }
+  .feature-list { display: flex; flex-direction: column; gap: var(--spacing-px-16); margin-block: var(--spacing-px-24); }
+  .feature-list li { display: flex; gap: var(--spacing-px-12); color: var(--color-gray-700); line-height: var(--line-height-relaxed); }
+  .feature-list svg { width: 1.25rem; height: 1.25rem; flex: 0 0 auto; color: var(--brand-red); margin-top: var(--spacing-px-4); }
+
+  /* ── App download panel ───────────────────────────────── */
+  .app-panel {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--spacing-px-56);
+    align-items: start;
+  }
+  .tabs__list {
+    display: flex;
+    gap: var(--spacing-px-8);
+    flex-wrap: wrap;
+    margin-bottom: var(--spacing-px-24);
+  }
+  .tabs__tab {
+    padding: var(--spacing-px-8) var(--spacing-px-20);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-pill);
+    background: var(--color-white);
+    color: var(--color-gray-700);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    cursor: pointer;
+    transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  }
+  .tabs__tab:hover { border-color: var(--brand-navy); color: var(--brand-navy); }
+  .tabs__tab[aria-selected="true"] {
+    background: var(--brand-navy);
+    border-color: var(--brand-navy);
+    color: var(--brand-on-brand);
+  }
+  .tabs__panel[hidden] { display: none; }
+  .store-badges { display: flex; flex-wrap: wrap; gap: var(--spacing-px-12); margin-bottom: var(--spacing-px-24); }
+  .store-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-px-12);
+    padding: var(--spacing-px-10) var(--spacing-px-20);
+    border-radius: var(--radius-lg);
+    background: var(--color-gray-900);
+    color: var(--color-white);
+    min-width: 10.5rem;
+  }
+  .store-badge:hover { text-decoration: none; background: var(--brand-navy-deep); }
+  .store-badge svg { width: 1.75rem; height: 1.75rem; flex: 0 0 auto; }
+  .store-badge small { display: block; font-size: var(--font-size-xs); opacity: 0.8; }
+  .store-badge strong { display: block; font-size: var(--font-size-base); font-weight: var(--font-weight-semibold); line-height: var(--line-height-tight); }
+  .send-form {
+    background: var(--color-white);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-xl);
+    padding: var(--spacing-px-32);
+  }
+  .send-form__row { display: flex; gap: var(--spacing-px-12); align-items: flex-start; flex-wrap: wrap; }
+  .send-form__row .field { flex: 1 1 12rem; margin-bottom: 0; }
+  .send-form__row .btn { margin-top: 1.6875rem; }
+  .send-form__or {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-px-12);
+    margin-block: var(--spacing-px-24);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-bold);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--color-text-muted);
+  }
+  .send-form__or::before, .send-form__or::after {
+    content: "";
+    flex: 1 1 auto;
+    height: 1px;
+    background: var(--color-border);
+  }
+  .disclaimer {
+    font-size: var(--font-size-xs);
+    line-height: var(--line-height-relaxed);
+    color: var(--color-text-muted);
+    margin-top: var(--spacing-px-24);
+  }
+
+  /* ── Connect with us ──────────────────────────────────── */
+  .connect-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: var(--spacing-px-24);
+  }
+  .connect-card {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-px-12);
+    padding: var(--spacing-px-32) var(--spacing-px-24);
+    border-radius: var(--radius-lg);
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    color: var(--brand-on-brand);
+    transition: background-color 0.15s ease, transform 0.15s ease;
+  }
+  .connect-card:hover { text-decoration: none; background: rgba(255, 255, 255, 0.12); transform: translateY(-0.1875rem); }
+  .connect-card__icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.75rem;
+    height: 2.75rem;
+    border-radius: var(--radius-circle);
+    background: var(--brand-red);
+    color: var(--brand-on-brand);
+  }
+  .connect-card__icon svg { width: 1.375rem; height: 1.375rem; }
+  .connect-card__title { font-size: var(--font-size-18); font-weight: var(--font-weight-semibold); }
+  .connect-card__text { font-size: var(--font-size-sm); color: rgba(255, 255, 255, 0.8); line-height: var(--line-height-relaxed); }
+
+  /* ── Footer ───────────────────────────────────────────── */
+  .footer {
+    background: var(--color-gray-900);
+    color: var(--color-gray-300);
+    padding-block: var(--spacing-px-56) var(--spacing-px-32);
+    font-size: var(--font-size-sm);
+  }
+  .footer__links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacing-px-12) var(--spacing-px-24);
+    margin-bottom: var(--spacing-px-32);
+  }
+  .footer__links a { color: var(--color-gray-300); }
+  .footer__links a:hover { color: var(--color-white); }
+  .footer__divider { height: 1px; background: var(--color-gray-700); margin-block: var(--spacing-px-32); border: 0; }
+
+  /* Disclosure tabs (footer, dark surface) */
+  .tabs--footer .tabs__list {
+    gap: 0;
+    margin-bottom: 0;
+    border-bottom: 1px solid var(--color-gray-700);
+  }
+  .tabs--footer .tabs__tab {
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    color: var(--color-gray-400);
+    padding: var(--spacing-px-12) var(--spacing-px-20);
+    box-shadow: inset 0 -0.125rem 0 transparent;
+  }
+  .tabs--footer .tabs__tab:hover { color: var(--color-white); }
+  .tabs--footer .tabs__tab[aria-selected="true"] {
+    background: transparent;
+    color: var(--color-white);
+    box-shadow: inset 0 -0.125rem 0 var(--brand-red);
+  }
+  .tabs--footer .tabs__panel {
+    padding-block: var(--spacing-px-20);
+    color: var(--color-gray-400);
+    line-height: var(--line-height-relaxed);
+    font-size: var(--font-size-sm);
+  }
+  .tabs--footer .tabs__panel p + p { margin-top: var(--spacing-px-12); }
+
+  /* Investment products disclosure table */
+  .disclosure-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-block: var(--spacing-px-16);
+    font-size: var(--font-size-xs);
+    color: var(--color-gray-300);
+  }
+  .disclosure-table caption {
+    text-align: start;
+    font-weight: var(--font-weight-bold);
+    color: var(--color-white);
+    padding-bottom: var(--spacing-px-8);
+    font-size: var(--font-size-sm);
+  }
+  .disclosure-table td {
+    border: 1px solid var(--color-gray-700);
+    padding: var(--spacing-px-10) var(--spacing-px-12);
+    width: 33.333%;
+  }
+
+  .footer__bottom {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--spacing-px-16);
+    font-size: var(--font-size-xs);
+    color: var(--color-gray-500);
+  }
+  .footer__badges { display: flex; align-items: center; gap: var(--spacing-px-16); flex-wrap: wrap; }
+  .footer__badge {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-px-8);
+    color: var(--color-gray-400);
+  }
+  .footer__badge svg { width: 1.25rem; height: 1.25rem; flex: 0 0 auto; }
+  .footer__social { display: flex; gap: var(--spacing-px-8); }
+  .footer__social a {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    border-radius: var(--radius-circle);
+    border: 1px solid var(--color-gray-700);
+    color: var(--color-gray-300);
+  }
+  .footer__social a:hover { background: var(--color-white); color: var(--color-gray-900); text-decoration: none; }
+  .footer__social svg { width: 1.125rem; height: 1.125rem; }
+
+  /* ── Responsive ───────────────────────────────────────── */
+  @media (max-width: 75rem) {
+    .navbar__link { padding-inline: var(--spacing-px-8); font-size: var(--font-size-xs); }
+    .hero__inner { grid-template-columns: minmax(0, 1fr) 20rem; gap: var(--spacing-px-32); }
+    .quicklinks__grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  }
+  @media (max-width: 62rem) {
+    :root { --section-pad-y: var(--spacing-px-56); }
+    .navbar { position: relative; }
+    .navbar__nav { display: none; }
+    .navbar__toggle { display: inline-flex; }
+    .navbar__nav.is-open {
+      display: flex;
+      position: absolute;
+      inset-inline: 0;
+      top: 100%;
+      z-index: 40;
+      flex-direction: column;
+      align-items: stretch;
+      gap: 0;
+      padding: var(--spacing-px-12) var(--page-gutter);
+      background: var(--color-white);
+      border-bottom: 1px solid var(--color-border);
+      box-shadow: var(--shadow-base);
+    }
+    .navbar__nav.is-open .navbar__link { padding-block: var(--spacing-px-12); font-size: var(--font-size-base); }
+    .hero__inner { grid-template-columns: minmax(0, 1fr); padding-block: var(--spacing-px-56); }
+    .hero__title { font-size: var(--font-size-display-5); }
+    .signin-card { max-width: 26rem; }
+    .card-grid, .connect-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .split, .app-panel { grid-template-columns: minmax(0, 1fr); gap: var(--spacing-px-40); }
+    .split--reverse .split__art { order: 0; }
+  }
+  @media (max-width: 40rem) {
+    :root { --page-gutter: var(--spacing-px-16); --section-pad-y: var(--spacing-px-48); }
+    .utility-bar__inner { justify-content: center; gap: var(--spacing-px-12); }
+    .brand__name { font-size: var(--font-size-base); }
+    .hero__title { font-size: var(--font-size-h1); }
+    .hero__text { font-size: var(--font-size-base); }
+    .section__title { font-size: var(--font-size-h3); }
+    .quicklinks__grid, .card-grid, .connect-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .signin-card, .send-form, .meter-card { padding: var(--spacing-px-20); }
+    .hero__ctas .btn, .section__foot .btn { width: 100%; }
+    .store-badge { width: 100%; }
+    .send-form__row .btn { margin-top: 0; width: 100%; }
+    .disclosure-table td { display: block; width: 100%; border-top: 0; }
+    .disclosure-table tr:first-child td:first-child { border-top: 1px solid var(--color-gray-700); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    *, *::before, *::after { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
+  }
+
+  /* ══════════════════════════════════════════════════════════════
+     Composed insertion — Better Money Habits card carousel
+     Reuses the page's existing .card / .badge / .btn / .progress /
+     .link-arrow styling; only the carousel chrome below is new.
+     ══════════════════════════════════════════════════════════════ */
+
+  /* ── Option 0 — Carousel: coverflow peek + drag ─────────────── */
+  .cf-carousel {
+    --cf-card-w: min(21rem, 78vw);
+    --cf-card-h: 23rem;
+    --cf-rail: min(100%, calc(var(--cf-card-w) * 2.3));
+    --cf-duration: 380ms;
+    --cf-ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--spacing-px-16);
+  }
+  .cf-viewport {
+    position: relative;
+    width: var(--cf-rail);
+    height: var(--cf-card-h);
+    overflow: hidden;
+    cursor: grab;
+    touch-action: pan-y;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  .cf-carousel[data-dragging="true"] .cf-viewport { cursor: grabbing; }
+  .cf-viewport:focus-visible { outline: 3px solid var(--brand-focus-ring); outline-offset: 4px; }
+  .cf-stage { position: absolute; inset: 0; perspective: 90rem; transform-style: preserve-3d; }
+  .cf-slide {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    width: var(--cf-card-w);
+    height: 100%;
+    margin-left: calc(var(--cf-card-w) / -2);
+    transition: transform var(--cf-duration) var(--cf-ease), opacity var(--cf-duration) var(--cf-ease);
+  }
+  .cf-carousel[data-dragging="true"] .cf-slide { transition: none; }
+  .cf-slide[data-active="false"] { pointer-events: none; }
+  .cf-slide .card { height: 100%; }
+  .cf-slide[data-active="true"] .card { box-shadow: var(--shadow-lg); border-color: var(--brand-blue); }
+  .cf-hints {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: var(--cf-rail);
+    color: var(--color-text-muted);
+    font-size: var(--font-size-sm);
+  }
+  .cf-hints span { display: inline-flex; align-items: center; gap: var(--spacing-px-8); }
+  .cf-hints svg { width: 1.5rem; height: 1rem; }
+  .cf-controls { display: flex; align-items: center; justify-content: space-between; gap: var(--spacing-px-12); width: var(--cf-rail); }
+  .cf-dots { display: flex; flex: 1 1 auto; align-items: center; justify-content: center; gap: var(--spacing-px-8); }
+  .cf-dot {
+    width: var(--spacing-px-10);
+    height: var(--spacing-px-10);
+    padding: 0;
+    border: 0;
+    border-radius: var(--radius-circle);
+    background: var(--color-gray-400);
+    cursor: pointer;
+    transition: background-color 0.15s ease, width 0.15s ease;
+  }
+  .cf-dot[aria-current="true"] { width: var(--spacing-px-24); background: var(--brand-navy); }
+  .cf-progress-wrap { width: var(--cf-rail); }
+  .btn--icon { width: 2.25rem; height: 2.25rem; padding: 0; flex: 0 0 auto; }
+
+  /* ── Option 1 — Carousel: scroll-snap track + ButtonGroup ───── */
+  .ss-carousel { display: flex; flex-direction: column; gap: var(--spacing-px-16); }
+  .ss-track {
+    display: flex;
+    gap: var(--spacing-px-24);
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    padding-block: var(--spacing-px-4);
+    scrollbar-width: none;
+  }
+  .ss-track::-webkit-scrollbar { display: none; }
+  .ss-track .card { flex: 0 0 auto; width: min(20rem, 82vw); scroll-snap-align: start; }
+  .ss-foot { display: flex; align-items: center; justify-content: space-between; gap: var(--spacing-px-16); flex-wrap: wrap; }
+  .ss-hint { color: var(--color-text-muted); font-size: var(--font-size-sm); }
+  .btn-group { display: inline-flex; border-radius: var(--radius-pill); overflow: hidden; border: 1px solid var(--brand-navy); }
+  .btn-group .btn {
+    border-radius: 0;
+    border: 0;
+    border-inline-end: 1px solid var(--brand-navy);
+    background: transparent;
+    color: var(--brand-navy);
+  }
+  .btn-group .btn:last-child { border-inline-end: 0; }
+  .btn-group .btn:hover { background: var(--brand-navy); color: var(--brand-on-brand); }
+
+  /* ── Option 2 — Carousel: single slide + Pagination ─────────── */
+  .sl-carousel { display: flex; flex-direction: column; align-items: center; gap: var(--spacing-px-24); width: 100%; }
+  .sl-viewport { position: relative; width: 100%; max-width: 40rem; overflow: hidden; }
+  .sl-track { display: flex; transition: transform var(--cf-duration, 380ms) ease; }
+  .sl-slide { flex: 0 0 100%; min-width: 0; padding-inline: var(--spacing-px-4); }
+  .sl-slide .card { height: 100%; }
+  .sl-slide[aria-hidden="true"] { visibility: hidden; }
+  .sl-controls { display: flex; align-items: center; gap: var(--spacing-px-16); }
+  .pagination { display: flex; list-style: none; margin: 0; padding: 0; gap: var(--spacing-px-8); }
+  .pagination__item { display: flex; }
+  .pagination__link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 2rem;
+    height: 2rem;
+    padding-inline: var(--spacing-px-8);
+    border-radius: var(--radius-base);
+    border: 1px solid var(--color-border);
+    background: var(--color-white);
+    color: var(--color-gray-700);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    cursor: pointer;
+  }
+  .pagination__link[aria-current="true"] { background: var(--brand-navy); border-color: var(--brand-navy); color: var(--brand-on-brand); }
+</style>
+</head>
+<body>
+
+<a class="skip-link" href="#main">Skip to main content</a>
+
+<!-- ══════════ Utility bar ══════════ -->
+<div class="utility-bar" data-component="Navbar">
+  <div class="container utility-bar__inner">
+    <a href="#locations">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0Z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+      Locations
+    </a>
+    <a href="#contact">Contact Us</a>
+    <a href="#help">Help &amp; Support</a>
+    <a href="#espanol">En español</a>
+    <a class="utility-bar__privacy" href="#privacy-choices">
+      <svg viewBox="0 0 30 14" aria-hidden="true"><rect x="0.5" y="0.5" width="29" height="13" rx="6.5" fill="#0066cc" stroke="currentColor"></rect><path d="M7 4.5h5.5L7 9.5h5.5" stroke="#fff" stroke-width="1.4" fill="none"></path><circle cx="21" cy="7" r="3.5" fill="#fff"></circle></svg>
+      Your Privacy Choices
+    </a>
+  </div>
+</div>
+
+<!-- ══════════ Navbar ══════════ -->
+<header class="navbar" data-component="Navbar" data-island="navbar-menu">
+  <div class="container navbar__inner">
+    <a class="brand" href="#main" aria-label="Bank of America home">
+      <svg class="brand__mark" viewBox="0 0 40 40" aria-hidden="true">
+        <rect width="40" height="40" rx="8" fill="#012169"></rect>
+        <path d="M8 25c4-3.4 8-5.6 12-6.8-3.4-1.6-6.6-2.5-9.6-2.9 3.6-2.4 7.6-4 11.8-4.6 4 1 7.6 2.9 10.6 5.7-3.4-.4-6.8-.2-10.2.6 3.4 1.3 6.6 3.2 9.4 5.7-4.2.4-8.4 1.5-12.4 3.4-3.8-.6-7.4-1-11.6-1.1Z" fill="#e31837"></path>
+        <path d="M12 29.4c4.6-2.3 9.2-3.7 13.8-4.2 2 1.2 3.8 2.6 5.4 4.2-6.6-.5-13.1 0-19.2 0Z" fill="#0073cf"></path>
+      </svg>
+      <span class="brand__name">Bank of America</span>
+    </a>
+
+    <nav class="navbar__nav" id="primary-nav" aria-label="Primary">
+      <a class="navbar__link" href="#checking">Checking</a>
+      <a class="navbar__link" href="#savings">Savings &amp; CDs</a>
+      <a class="navbar__link" href="#credit-cards">Credit Cards</a>
+      <a class="navbar__link" href="#home-loans">Home Loans</a>
+      <a class="navbar__link" href="#auto-loans">Auto Loans</a>
+      <a class="navbar__link" href="#investing">Investing</a>
+      <a class="navbar__link" href="#small-business">Small Business</a>
+      <a class="navbar__link" href="#goals">Better Money Habits<sup>®</sup></a>
+    </nav>
+
+    <div class="navbar__actions">
+      <button class="icon-btn" type="button" aria-label="Search bankofamerica.com">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
+      </button>
+      <a class="btn btn--primary btn--sm" href="#log-in" data-component="Button" style="width: fit-content; flex: 0 0 auto;">Log In</a>
+      <button class="icon-btn navbar__toggle" type="button" aria-expanded="false" aria-controls="primary-nav" aria-label="Open menu">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"></path></svg>
+      </button>
+    </div>
+  </div>
+</header>
+
+<main id="main">
+
+  <!-- ══════════ Hero — video background (the element carried over) ══════════ -->
+  <section class="hero" aria-labelledby="hero-title">
+    <!-- Decorative looping background video -->
+    <div class="hero__media" aria-hidden="true">
+      <video class="hero__video" data-island="hero-video" poster="assets/hero-nyc-sunset-poster.jpg" muted="" loop="" playsinline="" disablepictureinpicture="" preload="metadata" tabindex="-1">
+        <source src="assets/hero-nyc-sunset.mp4" type="video/mp4">
+      </video>
+    </div>
+
+    <div class="container hero__inner">
+      <div>
+        <span class="hero__eyebrow">Banking · Credit Cards · Home Loans · Investing</span>
+        <h1 class="hero__title" id="hero-title">Your financial goals matter</h1>
+        <p class="hero__text">
+          Whatever you're working toward — a first home, a stronger safety net, a business
+          of your own — we'll help you get there with everyday banking, guidance and tools
+          built around you.
+        </p>
+        <div class="hero__ctas">
+          
+          <a class="btn btn--outline-light" href="#appointment" data-component="Button">Schedule an appointment</a><a class="btn btn--primary" href="#open-account" data-component="Button">Open an account</a>
+        </div>
+        <p class="hero__note">Bank of America, N.A. Member FDIC. Equal Housing Lender</p>
+      </div>
+
+      <!-- Log in -->
+      <div class="signin-card" id="log-in" data-component="Card">
+        <h2 class="signin-card__title">Log In to Online Banking</h2>
+        <form action="#log-in" method="post" novalidate="">
+          <div class="field">
+            <label class="field__label" for="online-id">Online ID</label>
+            <input class="input" id="online-id" name="online-id" type="text" autocomplete="username" data-component="Input">
+          </div>
+          <div class="field">
+            <label class="field__label" for="passcode">Passcode</label>
+            <input class="input" id="passcode" name="passcode" type="password" autocomplete="current-password" data-component="Input">
+          </div>
+          <div class="check-row">
+            <input id="save-id" type="checkbox" data-component="Checkbox">
+            <label for="save-id">Save this Online ID</label>
+          </div>
+          <button class="btn btn--navy btn--block" type="submit" data-component="Button">Log In</button>
+        </form>
+        <div class="signin-card__links">
+          <a href="#forgot-id">Forgot ID/Passcode?</a>
+          <a href="#enroll">Enroll</a>
+          <a href="#security">Security</a>
+        </div>
+      </div>
+    </div>
+
+    <button class="hero__motion" type="button" data-island="hero-video-toggle" aria-pressed="false">
+      <svg viewBox="0 0 12 12" fill="currentColor" aria-hidden="true" data-icon="pause"><rect x="2" y="1.5" width="3" height="9" rx="1"></rect><rect x="7" y="1.5" width="3" height="9" rx="1"></rect></svg>
+      <svg viewBox="0 0 12 12" fill="currentColor" aria-hidden="true" data-icon="play" hidden=""><path d="M3 1.8v8.4a.6.6 0 0 0 .92.5l6.3-4.2a.6.6 0 0 0 0-1L3.92 1.3A.6.6 0 0 0 3 1.8Z"></path></svg>
+      <span data-label="">Pause background video</span>
+    </button>
+  </section>
+
+  <!-- ══════════ Quick links ══════════ -->
+  <section class="quicklinks" aria-label="Explore products and services">
+    <div class="container">
+      <ul class="quicklinks__grid" data-component="ListGroup">
+        
+        <li><a class="quicklink" href="#savings" id="savings" style="background-color: var(--color-text-muted);">
+          <span class="quicklink__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a7 7 0 0 1 7-7h3a7 7 0 0 1 7 7v3a3 3 0 0 1-3 3h-1l-1 2h-3l-1-2h-2l-1 2H6l-1-2a3 3 0 0 1-2-3Z"></path><circle cx="9" cy="11" r="1"></circle></svg></span>
+          Savings &amp; CDs
+        </a></li>
+        <li><a class="quicklink" href="#checking" id="checking">
+          <span class="quicklink__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="6" width="20" height="13" rx="2"></rect><path d="M2 11h20M6 15h4"></path></svg></span>
+          Checking
+        </a></li><li><a class="quicklink" href="#credit-cards" id="credit-cards">
+          <span class="quicklink__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="2"></rect><path d="M2 10h20M6 15h3"></path></svg></span>
+          Credit Cards
+        </a></li>
+        <li><a class="quicklink" href="#home-loans" id="home-loans">
+          <span class="quicklink__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 11 9-7 9 7"></path><path d="M5 10v10h14V10"></path><path d="M10 20v-6h4v6"></path></svg></span>
+          Home Loans
+        </a></li>
+        <li><a class="quicklink" href="#auto-loans" id="auto-loans">
+          <span class="quicklink__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 16h14M4 16v-3l2-5h12l2 5v3"></path><circle cx="7.5" cy="17.5" r="1.5"></circle><circle cx="16.5" cy="17.5" r="1.5"></circle></svg></span>
+          Auto Loans
+        </a></li>
+        <li><a class="quicklink" href="#small-business" id="small-business">
+          <span class="quicklink__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="7" width="18" height="13" rx="2"></rect><path d="M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2M3 12h18"></path></svg></span>
+          Small Business
+        </a></li>
+        <li><a class="quicklink" href="#investing" id="investing">
+          <span class="quicklink__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 18V9M10 18v-5M16 18v-9M22 18V6"></path><path d="M3 21h18"></path></svg></span>
+          Investing
+        </a></li>
+        <li><a class="quicklink" href="#students" id="students">
+          <span class="quicklink__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 4 10 5-10 5L2 9l10-5Z"></path><path d="M6 11v5c0 1.7 2.7 3 6 3s6-1.3 6-3v-5"></path></svg></span>
+          Banking for students and young adults
+        </a></li>
+        <li><a class="quicklink" href="#get-the-app">
+          <span class="quicklink__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="2" width="12" height="20" rx="3"></rect><path d="M11 18h2"></path></svg></span>
+          Get the free app
+        </a></li>
+        <li><a class="quicklink" href="#connect" id="appointment">
+          <span class="quicklink__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M8 3v4M16 3v4M3 11h18"></path><path d="m9.5 15.5 1.8 1.8 3.2-3.4"></path></svg></span>
+          Schedule an appointment
+        </a></li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ══════════ Your financial goals matter — Better Money Habits ══════════ -->
+  <section class="section" id="goals" aria-labelledby="goals-title">
+    <div class="container">
+      <div class="section__head">
+        <span class="section__eyebrow">Better Money Habits<sup>®</sup></span>
+        <h2 class="section__title" id="goals-title">Your financial goals matter</h2>
+        <p class="section__text">
+          Free, no-strings financial education from Bank of America — short reads and
+          videos to help you make confident decisions about your money.
+        </p>
+      </div>
+
+      <div class="card-grid">
+        <article class="card" data-component="Card">
+          <div class="card__media card__media--red" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2Z"></path><path d="M8 9h8M8 13h5"></path></svg>
+          </div>
+          <div class="card__body">
+            <span class="badge" data-component="Tag">Series</span>
+            <h3 class="card__title">Money Confessions</h3>
+            <p class="card__text">Real people share their experiences and get helpful guidance.</p>
+            <div class="card__foot">
+              <a class="link-arrow" href="#money-confessions">
+                Watch the series
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"></path></svg>
+              </a>
+            </div>
+          </div>
+        </article>
+
+        <article class="card" data-component="Card">
+          <div class="card__media" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="m3 11 9-7 9 7"></path><path d="M5 10v10h14V10"></path><path d="M10 20v-6h4v6"></path></svg>
+          </div>
+          <div class="card__body">
+            <span class="badge" data-component="Tag">Article</span>
+            <h3 class="card__title">How does a home equity line of credit work—and how can it help?</h3>
+            <p class="card__text">Understand how a HELOC lets you borrow against the value you've built in your home.</p>
+            <div class="card__foot">
+              <a class="link-arrow" href="#heloc">
+                Read the article
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"></path></svg>
+              </a>
+            </div>
+          </div>
+        </article>
+
+        <article class="card" data-component="Card">
+          <div class="card__media card__media--deep" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a7 7 0 0 1 7-7h3a7 7 0 0 1 7 7v3a3 3 0 0 1-3 3h-1l-1 2h-3l-1-2h-2l-1 2H6l-1-2a3 3 0 0 1-2-3Z"></path><circle cx="9" cy="11" r="1"></circle></svg>
+          </div>
+          <div class="card__body">
+            <span class="badge" data-component="Tag">Guide</span>
+            <h3 class="card__title">Savings accounts and CDs (certificates of deposit): Which should I choose?</h3>
+            <p class="card__text">Compare access, terms and rates so your savings sit in the right place.</p>
+            <div class="card__foot">
+              <a class="link-arrow" href="#savings-vs-cds">
+                Compare your options
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"></path></svg>
+              </a>
+            </div>
+          </div>
+        </article>
+
+        <article class="card" data-component="Card">
+          <div class="card__media card__media--tint" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0-4 10.5V17h8v-3.5A6 6 0 0 0 12 3Z"></path><path d="M10 20h4"></path></svg>
+          </div>
+          <div class="card__body">
+            <span class="badge" data-component="Tag">Challenge</span>
+            <h3 class="card__title">Retrain your brain for savings success with these money-saving challenges</h3>
+            <p class="card__text">Small, repeatable habits that make putting money aside feel automatic.</p>
+            <div class="card__foot">
+              <a class="link-arrow" href="#savings-challenges">
+                Take a challenge
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"></path></svg>
+              </a>
+            </div>
+          </div>
+        </article>
+      </div>
+
+      <div class="section__foot">
+        <a class="btn btn--outline" href="#better-money-habits" data-component="Button">Visit Better Money Habits<sup>®</sup></a>
+      </div>
+    </div>
+
+        <div class="container">
+      
+    </div>
+
+    <script>
+      (function () {
+        var root = document.getElementById('cfAcc');
+        if (!root) { return; }
+        var viewport = document.getElementById('cfViewport');
+        var slides = Array.prototype.slice.call(document.querySelectorAll('#cfStage .cf-slide'));
+        var dots = Array.prototype.slice.call(document.querySelectorAll('#cfDots .cf-dot'));
+        var prevBtn = document.getElementById('cfPrev');
+        var nextBtn = document.getElementById('cfNext');
+        var status = document.getElementById('cfStatus');
+        var progressBar = document.getElementById('cfProgressBar');
+        var progress = document.getElementById('cfProgress');
+        var last = slides.length - 1;
+        var index = 0;
+        var offset = 0;
+
+        function paint() {
+          var centre = Math.round(index + offset);
+          slides.forEach(function (slide, i) {
+            var rel = i - index - offset;
+            var dist = Math.abs(rel);
+            var clamped = Math.max(-2, Math.min(2, rel));
+            var translate = clamped * 56 + (rel - clamped) * 28;
+            var scale = Math.max(0.72, 1 - 0.12 * dist);
+            var rotate = -10 * clamped;
+            var opacity = Math.max(0.25, 1 - 0.4 * dist);
+            slide.style.transform = 'translateX(' + translate.toFixed(2) + '%) rotateY(' + rotate.toFixed(2) + 'deg) scale(' + scale.toFixed(3) + ')';
+            slide.style.opacity = opacity.toFixed(3);
+            slide.style.zIndex = String(Math.max(0, 30 - Math.round(dist * 10)));
+            slide.setAttribute('data-active', centre === i ? 'true' : 'false');
+          });
+          dots.forEach(function (dot, i) { dot.setAttribute('aria-current', i === index ? 'true' : 'false'); });
+          prevBtn.setAttribute('aria-disabled', index === 0 ? 'true' : 'false');
+          nextBtn.setAttribute('aria-disabled', index === last ? 'true' : 'false');
+          var pct = Math.round(((index + 1) / slides.length) * 100);
+          progressBar.style.width = pct + '%';
+          progress.setAttribute('aria-valuenow', String(pct));
+        }
+
+        function goTo(target) {
+          var clamped = Math.max(0, Math.min(last, target));
+          var changed = clamped !== index;
+          index = clamped;
+          offset = 0;
+          paint();
+          if (changed) { status.textContent = 'Card ' + (index + 1) + ' of ' + slides.length; }
+        }
+
+        prevBtn.addEventListener('click', function () { goTo(index - 1); });
+        nextBtn.addEventListener('click', function () { goTo(index + 1); });
+        dots.forEach(function (dot, i) { dot.addEventListener('click', function () { goTo(i); }); });
+
+        var pointerId = null;
+        var startX = 0;
+        viewport.addEventListener('pointerdown', function (event) {
+          if (event.button !== 0 || pointerId !== null) { return; }
+          pointerId = event.pointerId;
+          startX = event.clientX;
+          root.setAttribute('data-dragging', 'true');
+          viewport.setPointerCapture(pointerId);
+        });
+        viewport.addEventListener('pointermove', function (event) {
+          if (event.pointerId !== pointerId) { return; }
+          var width = viewport.getBoundingClientRect().width || 1;
+          offset = (startX - event.clientX) / width;
+          paint();
+        });
+        function endDrag(event) {
+          if (event.pointerId !== pointerId) { return; }
+          if (viewport.hasPointerCapture(pointerId)) { viewport.releasePointerCapture(pointerId); }
+          pointerId = null;
+          root.setAttribute('data-dragging', 'false');
+          var settled = offset > 0.33 ? Math.ceil(index + offset) : offset < -0.33 ? Math.floor(index + offset) : index;
+          goTo(settled);
+        }
+        viewport.addEventListener('pointerup', endDrag);
+        viewport.addEventListener('pointercancel', endDrag);
+        viewport.addEventListener('dragstart', function (event) { event.preventDefault(); });
+        viewport.addEventListener('keydown', function (event) {
+          if (event.key === 'ArrowLeft') { goTo(index - 1); event.preventDefault(); }
+          else if (event.key === 'ArrowRight') { goTo(index + 1); event.preventDefault(); }
+        });
+
+        goTo(0);
+      }());
+    </script>
+    
+
+    
+
+    
+  </section>
+
+  <!-- VORTSPEC:COMPOSE:BEGIN run=compose-1785433581640 option=0 -->
+  <section class="section" id="bento-highlights" aria-labelledby="bento-title">
+    <style>
+      .bento-wrap { display: flex; gap: var(--spacing-px-24); align-items: stretch; min-height: 26rem; }
+      .bento-hero { position: relative; flex: 1.4 1 0; border-radius: var(--radius-xl); overflow: hidden; background: var(--color-gray-900); }
+      .bento-hero__track { display: flex; height: 100%; transition: transform 380ms cubic-bezier(0.22, 0.61, 0.36, 1); }
+      .bento-hero__slide { flex: 0 0 100%; height: 100%; position: relative; }
+      .bento-hero__slide img { width: 100%; height: 100%; object-fit: cover; display: block; }
+      .bento-hero__caption {
+        position: absolute; inset-inline: 0; bottom: 0;
+        padding: var(--spacing-px-40) var(--spacing-px-24) var(--spacing-px-24);
+        background: linear-gradient(180deg, rgba(0, 12, 41, 0) 0%, rgba(0, 12, 41, 0.72) 100%);
+        color: var(--color-white); font-size: var(--font-size-18); font-weight: var(--font-weight-semibold);
+      }
+      .bento-hero__nav {
+        position: absolute; top: 50%; transform: translateY(-50%); z-index: 2;
+        background: rgba(0, 12, 41, 0.5); border: 1px solid rgba(255, 255, 255, 0.4); color: var(--color-white);
+        backdrop-filter: blur(0.25rem);
+      }
+      .bento-hero__nav:hover { background: rgba(0, 12, 41, 0.72); }
+      .bento-hero__nav[aria-disabled="true"] { opacity: 0.4; pointer-events: none; }
+      .bento-hero__nav--prev { left: var(--spacing-px-16); }
+      .bento-hero__nav--next { right: var(--spacing-px-16); }
+      .bento-hero__dots { position: absolute; bottom: var(--spacing-px-16); left: 50%; transform: translateX(-50%); z-index: 2; display: flex; gap: var(--spacing-px-8); }
+      .bento-hero__dot {
+        width: var(--spacing-px-10); height: var(--spacing-px-10); padding: 0; border: 0; border-radius: var(--radius-circle);
+        background: rgba(255, 255, 255, 0.55); cursor: pointer; transition: width 0.15s ease, background-color 0.15s ease;
+      }
+      .bento-hero__dot[aria-current="true"] { width: var(--spacing-px-24); background: var(--color-white); }
+      .bento-col { flex: 1 1 0; display: flex; flex-direction: column; gap: var(--spacing-px-24); }
+      .bento-tile { margin: 0; border-radius: var(--radius-xl); overflow: hidden; border: 1px solid var(--color-border); }
+      .bento-tile img { width: 100%; height: 100%; object-fit: cover; display: block; }
+      .bento-col--split .bento-tile { flex: 1 1 0; }
+      .bento-col--uneven .bento-tile:first-child { flex: 1.7 1 0; }
+      .bento-col--uneven .bento-tile:last-child { flex: 1 1 0; }
+    </style>
+
+    <div class="container">
+      <div class="section__head">
+        <span class="section__eyebrow">See it in action</span>
+        <h2 class="section__title" id="bento-title">A closer look at everyday banking</h2>
+        <p class="section__text">
+          Swipe through moments from the app, then explore the tools that make managing
+          your money simple.
+        </p>
+      </div>
+
+      <div class="bento-wrap" data-component="Carousel" id="bentoCarousel" aria-roledescription="carousel" aria-label="App feature highlights">
+        <div class="bento-hero">
+          <div class="bento-hero__track" id="bentoTrack" style="transform: translateX(0%);">
+            <div class="bento-hero__slide" aria-roledescription="slide" aria-label="1 of 3">
+              <img src="https://picsum.photos/seed/boa-hero-1/900/700" alt="Depositing a check with a phone camera" data-component="Image">
+              <p class="bento-hero__caption">Mobile check deposit</p>
+            </div>
+            <div class="bento-hero__slide" aria-roledescription="slide" aria-label="2 of 3">
+              <img src="https://picsum.photos/seed/boa-hero-2/900/700" alt="Locking a debit card from the app" data-component="Image">
+              <p class="bento-hero__caption">Lock your card in one tap</p>
+            </div>
+            <div class="bento-hero__slide" aria-roledescription="slide" aria-label="3 of 3">
+              <img src="https://picsum.photos/seed/boa-hero-3/900/700" alt="Sending money to a friend" data-component="Image">
+              <p class="bento-hero__caption">Send money fast with Zelle®</p>
+            </div>
+          </div>
+
+          <button class="btn btn--icon bento-hero__nav bento-hero__nav--prev" data-component="Button" type="button" id="bentoPrev" aria-disabled="true" aria-label="Previous highlight">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"></polyline></svg>
+          </button>
+          <button class="btn btn--icon bento-hero__nav bento-hero__nav--next" data-component="Button" type="button" id="bentoNext" aria-disabled="false" aria-label="Next highlight">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6"></polyline></svg>
+          </button>
+
+          <div class="bento-hero__dots" role="group" aria-label="Choose a highlight" id="bentoDots">
+            <button class="bento-hero__dot" type="button" aria-current="true" aria-label="Highlight 1" style="width: 10px; flex: 0 0 auto;"></button>
+            <button class="bento-hero__dot" type="button" aria-current="false" aria-label="Highlight 2" style="width: 10px; flex-grow: 0; flex-shrink: 0;"></button>
+            <button class="bento-hero__dot" type="button" aria-current="false" aria-label="Highlight 3" style="width: 10px; flex-grow: 0; flex-shrink: 0;"></button>
+          </div>
+
+          <p class="visually-hidden" role="status" aria-live="polite" id="bentoStatus">Highlight 3 of 3</p>
+        </div>
+
+        <div class="bento-col bento-col--split">
+          <figure class="bento-tile" data-component="Figure">
+            <img src="https://picsum.photos/seed/boa-bento-1/500/500" alt="Setting up a monthly budget" data-component="Image">
+          </figure>
+          <figure class="bento-tile" data-component="Figure">
+            <img src="https://picsum.photos/seed/boa-bento-2/500/500" alt="Reviewing a spending alert" data-component="Image">
+          </figure>
+        </div>
+
+        <div class="bento-col bento-col--uneven">
+          <figure class="bento-tile" data-component="Figure">
+            <img src="https://picsum.photos/seed/boa-bento-3/500/700" alt="Finding a nearby ATM" data-component="Image">
+          </figure>
+          <figure class="bento-tile" data-component="Figure">
+            <img src="https://picsum.photos/seed/boa-bento-4/500/300" alt="Tracking progress toward a savings goal" data-component="Image">
+          </figure>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      (function () {
+        var track = document.getElementById('bentoTrack');
+        var slides = track ? Array.prototype.slice.call(track.children) : [];
+        var dots = Array.prototype.slice.call(document.querySelectorAll('#bentoDots .bento-hero__dot'));
+        var prevBtn = document.getElementById('bentoPrev');
+        var nextBtn = document.getElementById('bentoNext');
+        var status = document.getElementById('bentoStatus');
+        if (!track || !slides.length) { return; }
+        var last = slides.length - 1;
+        var index = 0;
+
+        function paint() {
+          track.style.transform = 'translateX(-' + (index * 100) + '%)';
+          dots.forEach(function (dot, i) { dot.setAttribute('aria-current', i === index ? 'true' : 'false'); });
+          prevBtn.setAttribute('aria-disabled', index === 0 ? 'true' : 'false');
+          nextBtn.setAttribute('aria-disabled', index === last ? 'true' : 'false');
+        }
+
+        function goTo(target) {
+          var clamped = Math.max(0, Math.min(last, target));
+          var changed = clamped !== index;
+          index = clamped;
+          paint();
+          if (changed) { status.textContent = 'Highlight ' + (index + 1) + ' of ' + slides.length; }
+        }
+
+        prevBtn.addEventListener('click', function () { goTo(index - 1); });
+        nextBtn.addEventListener('click', function () { goTo(index + 1); });
+        dots.forEach(function (dot, i) { dot.addEventListener('click', function () { goTo(i); }); });
+
+        paint();
+      }());
+    </script>
+  </section>
+  <!-- VORTSPEC:COMPOSE:END run=compose-1785433581640 option=0 -->
+
+  <!-- ══════════ Level up your account security ══════════ -->
+  <section class="section section--tint" id="security" aria-labelledby="security-title">
+    <div class="container">
+      <div class="split">
+        <div>
+          <span class="section__eyebrow">Security Center</span>
+          <h2 class="section__title" id="security-title">Level up your account security</h2>
+          <p class="section__text">
+            Watch your security meter rise as you take action to help protect against fraud.
+            See it in the Security Center in Mobile and Online Banking.
+          </p>
+          <div class="section__foot">
+            <a class="btn btn--primary" href="#security-level" data-component="Button">Check your account security level</a>
+          </div>
+        </div>
+
+        <div class="split__art">
+          <div class="meter-card" data-component="Card">
+            <div class="meter-card__head">
+              <span class="meter-card__label">Your security meter</span>
+              <span class="meter-card__value">Strong</span>
+            </div>
+            <div class="progress" data-component="Progress" role="progressbar" aria-label="Account security level" aria-valuenow="80" aria-valuemin="0" aria-valuemax="100">
+              <div class="progress__bar" style="width: 80%"></div>
+            </div>
+
+            <ul class="checklist">
+              <li data-state="done">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="m8.5 12.5 2.4 2.4 4.6-5"></path></svg>
+                Sign-in alerts turned on
+              </li>
+              <li data-state="done">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="m8.5 12.5 2.4 2.4 4.6-5"></path></svg>
+                Contact information up to date
+              </li>
+              <li data-state="done">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="m8.5 12.5 2.4 2.4 4.6-5"></path></svg>
+                Card lock available in the app
+              </li>
+              <li data-state="todo">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 8v5M12 16h.01"></path></svg>
+                Add a passkey for faster, safer sign-in
+              </li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════ Convenient banking with our Mobile app ══════════ -->
+  <section class="section" id="mobile-app" aria-labelledby="mobile-title">
+    <div class="container">
+      <div class="split split--reverse">
+        <div class="split__art" data-component="Figure" aria-hidden="true">
+          <div class="phone">
+            <div class="phone__bar"><span>9:41</span><span>Bank of America</span></div>
+            <div class="phone__balance">
+              <small>Adv Plus Banking · …4821</small>
+              <strong>$4,286.10</strong>
+            </div>
+            <div class="phone__row">
+              <span class="phone__avatar" data-component="Avatar">E</span>
+              <span class="phone__bubble">Your paycheck posted this morning. Want me to move $200 to savings?</span>
+            </div>
+            <div class="phone__row" style="justify-content: flex-end">
+              <span class="phone__bubble phone__bubble--self">Yes, transfer it</span>
+            </div>
+            <div class="phone__row">
+              <span class="phone__avatar" data-component="Avatar">E</span>
+              <span class="phone__bubble">Done. That's 4 months in a row you've saved automatically.</span>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <span class="section__eyebrow">Mobile Banking</span>
+          <h2 class="section__title" id="mobile-title">Convenient banking with our Mobile app</h2>
+          <p class="section__text">
+            Check balances, deposit checks, pay bills, transfer money and get proactive
+            insights from Erica<sup>®</sup>, your virtual financial assistant — all from one
+            secure app.
+          </p>
+          <ul class="feature-list">
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg>
+              Deposit checks with your camera and see funds availability up front
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg>
+              Send and receive money with Zelle<sup>®</sup> using a phone number or email
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg>
+              Lock and unlock a lost debit card in seconds
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg>
+              Track spending and set goals with Erica insights
+            </li>
+          </ul>
+          <a class="btn btn--primary" href="#explore-app" data-component="Button">Explore our mobile app</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════ Get the free mobile app ══════════ -->
+  <section class="section section--tint" id="get-the-app" aria-labelledby="get-app-title">
+
+    <!-- VORTSPEC:COMPOSE:BEGIN run=compose-1785435942355 option=0 -->
+    <div class="sp" data-component="Carousel" aria-roledescription="carousel" aria-label="Customer stories, automatically scrolling" style="display: flex; flex-direction: column;">
+      <style>
+        /* Local token layer: color-warning-500 mirrors designer.md's token registry
+           (not yet mirrored into this page's :root) — used only for the decorative
+           quote mark accent below, kept fully token-referenced rather than a bare hex. */
+        :root { --color-warning-500: #ffc107; }
+
+        .sp__head { max-width: 40rem; margin-bottom: var(--spacing-px-32); }
+
+        .sp-viewport {
+          overflow-x: hidden;
+          overflow-y: visible;
+          padding-block: var(--spacing-px-48) var(--spacing-px-16);
+          -webkit-mask-image: linear-gradient(90deg, transparent 0, black 6%, black 94%, transparent 100%);
+          mask-image: linear-gradient(90deg, transparent 0, black 6%, black 94%, transparent 100%);
+        }
+        .sp-track {
+          display: flex;
+          align-items: flex-end;
+          gap: var(--spacing-px-24);
+          width: max-content;
+          animation: sp-drift 36s linear infinite;
+          will-change: transform;
+        }
+        [data-playing="false"] .sp-track { animation-play-state: paused; }
+        @keyframes sp-drift {
+          from { transform: translateX(0); }
+          to { transform: translateX(-50%); }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .sp-track { animation-play-state: paused; }
+        }
+
+        .sp-slot { flex: 0 0 auto; width: 15rem; display: flex; justify-content: center; align-items: flex-end; }
+
+        .sp-card {
+          --sp-scale: 0.85;
+          --sp-shift: 0rem;
+          width: 13.75rem;
+          min-height: 12rem;
+          display: flex;
+          flex-direction: column;
+          gap: var(--spacing-px-12);
+          background: var(--color-white);
+          border: 1px solid var(--color-border);
+          border-radius: var(--radius-lg);
+          padding: var(--spacing-px-20);
+          box-shadow: var(--shadow-sm);
+          transform: translateY(var(--sp-shift)) scale(var(--sp-scale));
+          transform-origin: center bottom;
+          transition: box-shadow 220ms ease-out;
+        }
+        .sp-card:hover, .sp-card:focus-within { box-shadow: var(--shadow-lg); }
+        .sp-card__quote-mark { width: 1.5rem; height: 1.5rem; color: var(--color-warning-500); flex: 0 0 auto; }
+        .sp-card__head { display: flex; align-items: center; gap: var(--spacing-px-12); }
+        .sp-avatar {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          width: 2.25rem;
+          height: 2.25rem;
+          flex: 0 0 auto;
+          border-radius: var(--radius-circle);
+          background: var(--brand-navy);
+          color: var(--brand-on-brand);
+          font-size: var(--font-size-xs);
+          font-weight: var(--font-weight-semibold);
+        }
+        .sp-avatar--alt { background: var(--brand-blue); }
+        .sp-card__name { font-size: var(--font-size-sm); font-weight: var(--font-weight-semibold); color: var(--brand-navy); }
+        .sp-card__meta { font-size: var(--font-size-xs); color: var(--color-text-muted); }
+        .sp-card__quote { font-size: var(--font-size-sm); line-height: var(--line-height-relaxed); color: var(--color-gray-700); flex: 1 1 auto; }
+
+        .sp-controls { display: flex; align-items: center; gap: var(--spacing-px-12); margin-top: var(--spacing-px-16); }
+        .sp-toggle svg { width: 0.75rem; height: 0.75rem; }
+        .sp-toggle svg[hidden] { display: none; }
+        .sp-hint { font-size: var(--font-size-sm); color: var(--color-text-muted); }
+      </style>
+
+      <div class="container">
+        <div class="sp__head">
+          <span class="section__eyebrow">Social Proof</span>
+          <h2 class="section__title" id="sp-title">Millions of members, one banking app</h2>
+          <p class="section__text">Real stories from Bank of America customers — the carousel drifts on its own, and whichever card nears the middle takes the spotlight.</p>
+        </div>
+      </div>
+
+      <div class="sp-viewport" id="spViewport" data-playing="true" style="height: 389px; padding-top: 63px; padding-bottom: 0px;">
+        <div class="sp-track" id="spTrack" style="animation-play-state: paused;">
+          <!-- set A -->
+          <div class="sp-slot" style="z-index: 3;"><article class="sp-card" data-component="Card" style="--sp-scale: 0.894; --sp-shift: 0.906rem; opacity: 0.671;"><svg class="sp-card__quote-mark" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M9.5 6C6.46 6 4 8.46 4 11.5S6.46 17 9.5 17c.34 0 .67-.03 1-.09-.6 1.6-2.1 2.77-3.9 2.94a1 1 0 0 0 .18 1.99c3.86-.35 6.72-3.6 6.72-7.34V11.5C13.5 8.46 11.04 6 9.5 6Zm9 0c-3.04 0-5.5 2.46-5.5 5.5S15.46 17 18.5 17c.34 0 .67-.03 1-.09-.6 1.6-2.1 2.77-3.9 2.94a1 1 0 0 0 .18 1.99c3.86-.35 6.72-3.6 6.72-7.34V11.5C22.5 8.46 20.04 6 18.5 6Z"></path></svg><div class="sp-card__head"><span class="sp-avatar" data-component="Avatar" aria-hidden="true">MR</span><div><p class="sp-card__name">Maya R.</p><p class="sp-card__meta">Member since 2019</p></div></div><p class="sp-card__quote">"Erica flagged a duplicate charge before it even posted to my account."</p><span class="badge" data-component="Tag">Verified customer</span></article></div>
+          <div class="sp-slot" style="z-index: 7;"><article class="sp-card" data-component="Card" style="--sp-scale: 1.057; --sp-shift: 0.479rem; opacity: 0.826;"><svg class="sp-card__quote-mark" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M9.5 6C6.46 6 4 8.46 4 11.5S6.46 17 9.5 17c.34 0 .67-.03 1-.09-.6 1.6-2.1 2.77-3.9 2.94a1 1 0 0 0 .18 1.99c3.86-.35 6.72-3.6 6.72-7.34V11.5C13.5 8.46 11.04 6 9.5 6Zm9 0c-3.04 0-5.5 2.46-5.5 5.5S15.46 17 18.5 17c.34 0 .67-.03 1-.09-.6 1.6-2.1 2.77-3.9 2.94a1 1 0 0 0 .18 1.99c3.86-.35 6.72-3.6 6.72-7.34V11.5C22.5 8.46 20.04 6 18.5 6Z"></path></svg><div class="sp-card__head"><span class="sp-avatar sp-avatar--alt" data-component="Avatar" aria-hidden="true">CT</span><div><p class="sp-card__name">Chris T.</p><p class="sp-card__meta">Member since 2015</p></div></div><p class="sp-card__quote">"Mobile check deposit takes less than a minute — I haven't visited a branch all year."</p><span class="badge" data-component="Tag">Verified customer</span></article></div>
+          <div class="sp-slot" style="z-index: 11;"><article class="sp-card" data-component="Card" style="--sp-scale: 1.220; --sp-shift: 0.052rem; opacity: 0.981;"><svg class="sp-card__quote-mark" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M9.5 6C6.46 6 4 8.46 4 11.5S6.46 17 9.5 17c.34 0 .67-.03 1-.09-.6 1.6-2.1 2.77-3.9 2.94a1 1 0 0 0 .18 1.99c3.86-.35 6.72-3.6 6.72-7.34V11.5C13.5 8.46 11.04 6 9.5 6Zm9 0c-3.04 0-5.5 2.46-5.5 5.5S15.46 17 18.5 17c.34 0 .67-.03 1-.09-.6 1.6-2.1 2.77-3.9 2.94a1 1 0 0 0 .18 1.99c3.86-.35 6.72-3.6 6.72-7.34V11.5C22.5 8.46 20.04 6 18.5 6Z"></path></svg><div class="sp-card__head"><span class="sp-avatar" data-component="Avatar" aria-hidden="true">PS</span><div><p class="sp-card__name">Priya S.</p><p class="sp-card__meta">Member since 2021</p></div></div><p class="sp-card__quote">"I locked my card from the app the moment I lost my wallet. No panic, no branch visit."</p><span class="badge" data-component="Tag">Verified customer</span></article></div>
+          <div class="sp-slot" style="z-index: 8;"><article class="sp-card" data-component="Card" style="--sp-scale: 1.097; --sp-shift: 0.375rem; opacity: 0.864;"><svg class="sp-card__quote-mark" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M9.5 6C6.46 6 4 8.46 4 11.5S6.46 17 9.5 17c.34 0 .67-.03 1-.09-.6 1.6-2.1 2.77-3.9 2.94a1 1 0 0 0 .18 1.99c3.86-.35 6.72-3.6 6.72-7.34V11.5C13.5 8.46 11.04 6 9.5 6Zm9 0c-3.04 0-5.5 2.46-5.5 5.5S15.46 17 18.5 17c.34 0 .67-.03 1-.09-.6 1.6-2.1 2.77-3.9 2.94a1 1 0 0 0 .18 1.99c3.86-.35 6.72-3.6 6.72-7.34V11.5C22.5 8.46 20.04 6 18.5 6Z"></path></svg><div class="sp-card__head"><span class="sp-avatar sp-avatar--alt" data-component="Avatar" aria-hidden="true">DK</span><div><p class="sp-card__name">Daniel K.</p><p class="sp-card__meta">Member since 2018</p></div></div><p class="sp-card__quote">"The security meter walked me through exactly what to fix, one step at a time."</p><span class="badge" data-component="Tag">Verified customer</span></article></div>
+          <div class="sp-slot" style="z-index: 4;"><article class="sp-card" data-component="Card" style="--sp-scale: 0.934; --sp-shift: 0.802rem; opacity: 0.708;"><svg class="sp-card__quote-mark" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M9.5 6C6.46 6 4 8.46 4 11.5S6.46 17 9.5 17c.34 0 .67-.03 1-.09-.6 1.6-2.1 2.77-3.9 2.94a1 1 0 0 0 .18 1.99c3.86-.35 6.72-3.6 6.72-7.34V11.5C13.5 8.46 11.04 6 9.5 6Zm9 0c-3.04 0-5.5 2.46-5.5 5.5S15.46 17 18.5 17c.34 0 .67-.03 1-.09-.6 1.6-2.1 2.77-3.9 2.94a1 1 0 0 0 .18 1.99c3.86-.35 6.72-3.6 6.72-7.34V11.5C22.5 8.46 20.04 6 18.5 6Z"></path></svg><div class="sp-card__head"><span class="sp-avatar" data-component="Avatar" aria-hidden="true">JL</span><div><p class="sp-card__name">Jordan L.</p><p class="sp-card__meta">Member since 2022</p></div></div><p class="sp-card__quote">"Splitting rent with Zelle takes seconds — my roommates get paid before I close the app."</p><span class="badge" data-component="Tag">Verified customer</span></article></div>
+          <div class="sp-slot" style="z-index: 1;"><article class="sp-card" data-component="Card" style="--sp-scale: 0.820; --sp-shift: 1.100rem; opacity: 0.6;"><svg class="sp-card__quote-mark" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M9.5 6C6.46 6 4 8.46 4 11.5S6.46 17 9.5 17c.34 0 .67-.03 1-.09-.6 1.6-2.1 2.77-3.9 2.94a1 1 0 0 0 .18 1.99c3.86-.35 6.72-3.6 6.72-7.34V11.5C13.5 8.46 11.04 6 9.5 6Zm9 0c-3.04 0-5.5 2.46-5.5 5.5S15.46 17 18.5 17c.34 0 .67-.03 1-.09-.6 1.6-2.1 2.77-3.9 2.94a1 1 0 0 0 .18 1.99c3.86-.35 6.72-3.6 6.72-7.34V11.5C22.5 8.46 20.04 6 18.5 6Z"></path></svg><div class="sp-card__head"><span class="sp-avatar sp-avatar--alt" data-component="Avatar" aria-hidden="true">SW</span><div><p class="sp-card__name">Sam W.</p><p class="sp-card__meta">Member since 2020</p></div></div><p class="sp-card__quote">"Goal tracking keeps my emergency fund growing on autopilot every payday."</p><span class="badge" data-component="Tag">Verified customer</span></article></div>
+          <div class="sp-slot" style="z-index: 1;"><article class="sp-card" data-component="Card" style="--sp-scale: 0.820; --sp-shift: 1.100rem; opacity: 0.6;"><svg class="sp-card__quote-mark" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M9.5 6C6.46 6 4 8.46 4 11.5S6.46 17 9.5 17c.34 0 .67-.03 1-.09-.6 1.6-2.1 2.77-3.9 2.94a1 1 0 0 0 .18 1.99c3.86-.35 6.72-3.6 6.72-7.34V11.5C13.5 8.46 11.04 6 9.5 6Zm9 0c-3.04 0-5.5 2.46-5.5 5.5S15.46 17 18.5 17c.34 0 .67-.03 1-.09-.6 1.6-2.1 2.77-3.9 2.94a1 1 0 0 0 .18 1.99c3.86-.35 6.72-3.6 6.72-7.34V11.5C22.5 8.46 20.04 6 18.5 6Z"></path></svg><div class="sp-card__head"><span class="sp-avatar" data-component="Avatar" aria-hidden="true">AN</span><div><p class="sp-card__name">Ava N.</p><p class="sp-card__meta">Member since 2017</p></div></div><p class="sp-card__quote">"Setting up autopay for every bill took less than five minutes, start to finish."</p><span class="badge" data-component="Tag">Verified customer</span></article></div>
+          <!-- set B (duplicate, hidden from assistive tech, drives the seamless loop) -->
+          <div class="sp-slot" aria-hidden="true" style="z-index: 1;"><article class="sp-card" data-component="Card" style="--sp-scale: 0.820; --sp-shift: 1.100rem; opacity: 0.6;"><svg class="sp-card__quote-mark" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M9.5 6C6.46 6 4 8.46 4 11.5S6.46 17 9.5 17c.34 0 .67-.03 1-.09-.6 1.6-2.1 2.77-3.9 2.94a1 1 0 0 0 .18 1.99c3.86-.35 6.72-3.6 6.72-7.34V11.5C13.5 8.46 11.04 6 9.5 6Zm9 0c-3.04 0-5.5 2.46-5.5 5.5S15.46 17 18.5 17c.34 0 .67-.03 1-.09-.6 1.6-2.1 2.77-3.9 2.94a1 1 0 0 0 .18 1.99c3.86-.35 6.72-3.6 6.72-7.34V11.5C22.5 8.46 20.04 6 18.5 6Z"></path></svg><div class="sp-card__head"><span class="sp-avatar" data-component="Avatar" aria-hidden="true">MR</span><div><p class="sp-card__name">Maya R.</p><p class="sp-card__meta">Member since 2019</p></div></div><p class="sp-card__quote">"Erica flagged a duplicate charge before it even posted to my account."</p><span class="badge" data-component="Tag">Verified customer</span></article></div>
+          <div class="sp-slot" aria-hidden="true" style="z-index: 1;"><article class="sp-card" data-component="Card" style="--sp-scale: 0.820; --sp-shift: 1.100rem; opacity: 0.6;"><svg class="sp-card__quote-mark" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M9.5 6C6.46 6 4 8.46 4 11.5S6.46 17 9.5 17c.34 0 .67-.03 1-.09-.6 1.6-2.1 2.77-3.9 2.94a1 1 0 0 0 .18 1.99c3.86-.35 6.72-3.6 6.72-7.34V11.5C13.5 8.46 11.04 6 9.5 6Zm9 0c-3.04 0-5.5 2.46-5.5 5.5S15.46 17 18.5 17c.34 0 .67-.03 1-.09-.6 1.6-2.1 2.77-3.9 2.94a1 1 0 0 0 .18 1.99c3.86-.35 6.72-3.6 6.72-7.34V11.5C22.5 8.46 20.04 6 18.5 6Z"></path></svg><div class="sp-card__head"><span class="sp-avatar sp-avatar--alt" data-component="Avatar" aria-hidden="true">CT</span><div><p class="sp-card__name">Chris T.</p><p class="sp-card__meta">Member since 2015</p></div></div><p class="sp-card__quote">"Mobile check deposit takes less than a minute — I haven't visited a branch all year."</p><span class="badge" data-component="Tag">Verified customer</span></article></div>
+          <div class="sp-slot" aria-hidden="true" style="z-index: 1;"><article class="sp-card" data-component="Card" style="--sp-scale: 0.820; --sp-shift: 1.100rem; opacity: 0.6;"><svg class="sp-card__quote-mark" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M9.5 6C6.46 6 4 8.46 4 11.5S6.46 17 9.5 17c.34 0 .67-.03 1-.09-.6 1.6-2.1 2.77-3.9 2.94a1 1 0 0 0 .18 1.99c3.86-.35 6.72-3.6 6.72-7.34V11.5C13.5 8.46 11.04 6 9.5 6Zm9 0c-3.04 0-5.5 2.46-5.5 5.5S15.46 17 18.5 17c.34 0 .67-.03 1-.09-.6 1.6-2.1 2.77-3.9 2.94a1 1 0 0 0 .18 1.99c3.86-.35 6.72-3.6 6.72-7.34V11.5C22.5 8.46 20.04 6 18.5 6Z"></path></svg><div class="sp-card__head"><span class="sp-avatar" data-component="Avatar" aria-hidden="true">PS</span><div><p class="sp-card__name">Priya S.</p><p class="sp-card__meta">Member since 2021</p></div></div><p class="sp-card__quote">"I locked my card from the app the moment I lost my wallet. No panic, no branch visit."</p><span class="badge" data-component="Tag">Verified customer</span></article></div>
+          <div class="sp-slot" aria-hidden="true" style="z-index: 1;"><article class="sp-card" data-component="Card" style="--sp-scale: 0.820; --sp-shift: 1.100rem; opacity: 0.6;"><svg class="sp-card__quote-mark" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M9.5 6C6.46 6 4 8.46 4 11.5S6.46 17 9.5 17c.34 0 .67-.03 1-.09-.6 1.6-2.1 2.77-3.9 2.94a1 1 0 0 0 .18 1.99c3.86-.35 6.72-3.6 6.72-7.34V11.5C13.5 8.46 11.04 6 9.5 6Zm9 0c-3.04 0-5.5 2.46-5.5 5.5S15.46 17 18.5 17c.34 0 .67-.03 1-.09-.6 1.6-2.1 2.77-3.9 2.94a1 1 0 0 0 .18 1.99c3.86-.35 6.72-3.6 6.72-7.34V11.5C22.5 8.46 20.04 6 18.5 6Z"></path></svg><div class="sp-card__head"><span class="sp-avatar sp-avatar--alt" data-component="Avatar" aria-hidden="true">DK</span><div><p class="sp-card__name">Daniel K.</p><p class="sp-card__meta">Member since 2018</p></div></div><p class="sp-card__quote">"The security meter walked me through exactly what to fix, one step at a time."</p><span class="badge" data-component="Tag">Verified customer</span></article></div>
+          <div class="sp-slot" aria-hidden="true" style="z-index: 1;"><article class="sp-card" data-component="Card" style="--sp-scale: 0.820; --sp-shift: 1.100rem; opacity: 0.6;"><svg class="sp-card__quote-mark" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M9.5 6C6.46 6 4 8.46 4 11.5S6.46 17 9.5 17c.34 0 .67-.03 1-.09-.6 1.6-2.1 2.77-3.9 2.94a1 1 0 0 0 .18 1.99c3.86-.35 6.72-3.6 6.72-7.34V11.5C13.5 8.46 11.04 6 9.5 6Zm9 0c-3.04 0-5.5 2.46-5.5 5.5S15.46 17 18.5 17c.34 0 .67-.03 1-.09-.6 1.6-2.1 2.77-3.9 2.94a1 1 0 0 0 .18 1.99c3.86-.35 6.72-3.6 6.72-7.34V11.5C22.5 8.46 20.04 6 18.5 6Z"></path></svg><div class="sp-card__head"><span class="sp-avatar" data-component="Avatar" aria-hidden="true">JL</span><div><p class="sp-card__name">Jordan L.</p><p class="sp-card__meta">Member since 2022</p></div></div><p class="sp-card__quote">"Splitting rent with Zelle takes seconds — my roommates get paid before I close the app."</p><span class="badge" data-component="Tag">Verified customer</span></article></div>
+          <div class="sp-slot" aria-hidden="true" style="z-index: 1;"><article class="sp-card" data-component="Card" style="--sp-scale: 0.820; --sp-shift: 1.100rem; opacity: 0.6;"><svg class="sp-card__quote-mark" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M9.5 6C6.46 6 4 8.46 4 11.5S6.46 17 9.5 17c.34 0 .67-.03 1-.09-.6 1.6-2.1 2.77-3.9 2.94a1 1 0 0 0 .18 1.99c3.86-.35 6.72-3.6 6.72-7.34V11.5C13.5 8.46 11.04 6 9.5 6Zm9 0c-3.04 0-5.5 2.46-5.5 5.5S15.46 17 18.5 17c.34 0 .67-.03 1-.09-.6 1.6-2.1 2.77-3.9 2.94a1 1 0 0 0 .18 1.99c3.86-.35 6.72-3.6 6.72-7.34V11.5C22.5 8.46 20.04 6 18.5 6Z"></path></svg><div class="sp-card__head"><span class="sp-avatar sp-avatar--alt" data-component="Avatar" aria-hidden="true">SW</span><div><p class="sp-card__name">Sam W.</p><p class="sp-card__meta">Member since 2020</p></div></div><p class="sp-card__quote">"Goal tracking keeps my emergency fund growing on autopilot every payday."</p><span class="badge" data-component="Tag">Verified customer</span></article></div>
+          <div class="sp-slot" aria-hidden="true" style="z-index: 1;"><article class="sp-card" data-component="Card" style="--sp-scale: 0.820; --sp-shift: 1.100rem; opacity: 0.6;"><svg class="sp-card__quote-mark" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M9.5 6C6.46 6 4 8.46 4 11.5S6.46 17 9.5 17c.34 0 .67-.03 1-.09-.6 1.6-2.1 2.77-3.9 2.94a1 1 0 0 0 .18 1.99c3.86-.35 6.72-3.6 6.72-7.34V11.5C13.5 8.46 11.04 6 9.5 6Zm9 0c-3.04 0-5.5 2.46-5.5 5.5S15.46 17 18.5 17c.34 0 .67-.03 1-.09-.6 1.6-2.1 2.77-3.9 2.94a1 1 0 0 0 .18 1.99c3.86-.35 6.72-3.6 6.72-7.34V11.5C22.5 8.46 20.04 6 18.5 6Z"></path></svg><div class="sp-card__head"><span class="sp-avatar" data-component="Avatar" aria-hidden="true">AN</span><div><p class="sp-card__name">Ava N.</p><p class="sp-card__meta">Member since 2017</p></div></div><p class="sp-card__quote">"Setting up autopay for every bill took less than five minutes, start to finish."</p><span class="badge" data-component="Tag">Verified customer</span></article></div>
+        </div>
+      </div>
+
+      <div class="container" style="display: flex; flex-direction: row; justify-content: center; align-items: flex-start; margin-bottom: var(--spacing-px-48);">
+        <div class="sp-controls">
+          <button type="button" class="icon-btn sp-toggle" data-component="Button" id="spToggle" aria-pressed="true" aria-label="Pause automatic scrolling">
+            <svg viewBox="0 0 12 12" fill="currentColor" aria-hidden="true" data-icon="pause"><rect x="2" y="1.5" width="3" height="9" rx="1"></rect><rect x="7" y="1.5" width="3" height="9" rx="1"></rect></svg>
+            <svg viewBox="0 0 12 12" fill="currentColor" aria-hidden="true" data-icon="play" hidden=""><path d="M3 1.8v8.4a.6.6 0 0 0 .92.5l6.3-4.2a.6.6 0 0 0 0-1L3.92 1.3A.6.6 0 0 0 3 1.8Z"></path></svg>
+          </button>
+          <span class="sp-hint">Auto-scrolling — hover, focus, or pause to take a closer look</span>
+        </div>
+      </div>
+
+      <script>
+        (function () {
+          var viewport = document.getElementById('spViewport');
+          var track = document.getElementById('spTrack');
+          var toggle = document.getElementById('spToggle');
+          if (!viewport || !track || !toggle) return;
+
+          var reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+          var playing = !reduceMotion;
+          var rafId = null;
+
+          function updateScales() {
+            var vRect = viewport.getBoundingClientRect();
+            var centerX = vRect.left + vRect.width / 2;
+            var half = (vRect.width / 2) || 1;
+            var slots = track.querySelectorAll('.sp-slot');
+            for (var i = 0; i < slots.length; i++) {
+              var slot = slots[i];
+              var card = slot.firstElementChild;
+              if (!card) continue;
+              var r = slot.getBoundingClientRect();
+              var dx = (r.left + r.width / 2) - centerX;
+              var norm = Math.max(-1, Math.min(1, dx / half));
+              var dist = Math.abs(norm);
+              card.style.setProperty('--sp-scale', (1.24 - dist * 0.42).toFixed(3));
+              card.style.setProperty('--sp-shift', (dist * 1.1).toFixed(3) + 'rem');
+              card.style.opacity = (1 - dist * 0.4).toFixed(3);
+              slot.style.zIndex = String(Math.round((1 - dist) * 10) + 1);
+            }
+          }
+
+          function tick() {
+            updateScales();
+            if (playing) { rafId = requestAnimationFrame(tick); }
+          }
+
+          function setPlaying(next) {
+            playing = next;
+            viewport.dataset.playing = String(playing);
+            toggle.setAttribute('aria-pressed', String(playing));
+            toggle.setAttribute('aria-label', playing ? 'Pause automatic scrolling' : 'Resume automatic scrolling');
+            toggle.querySelector('[data-icon="pause"]').hidden = !playing;
+            toggle.querySelector('[data-icon="play"]').hidden = playing;
+            if (playing && rafId === null) { rafId = requestAnimationFrame(tick); }
+            if (!playing && rafId !== null) { cancelAnimationFrame(rafId); rafId = null; }
+          }
+
+          viewport.addEventListener('mouseenter', function () { track.style.animationPlayState = 'paused'; });
+          viewport.addEventListener('mouseleave', function () { if (playing) { track.style.animationPlayState = 'running'; } });
+
+          toggle.addEventListener('click', function () {
+            var next = !playing;
+            track.style.animationPlayState = next ? 'running' : 'paused';
+            setPlaying(next);
+          });
+
+          setPlaying(playing);
+          updateScales();
+        })();
+      </script>
+    </div>
+    <!-- VORTSPEC:COMPOSE:END run=compose-1785435942355 option=0 -->
+
+    <!-- VORTSPEC:COMPOSE:BEGIN run=compose-1785430232416 option=0 -->
+    <div class="container">
+      <div style="max-width: 44rem; margin-bottom: var(--spacing-px-32)">
+        <span class="section__eyebrow">In the App</span>
+        <h2 class="section__title" id="app-highlights-title">See what you can do in the app</h2>
+        <p class="section__text">Drag through a few of the things Mobile Banking makes easy — then grab it below.</p>
+      </div>
+
+      <div class="cf-carousel" data-component="Carousel" id="cfApp" aria-roledescription="carousel" aria-label="App feature highlights" data-dragging="false" style="margin-bottom: var(--spacing-px-48); height: fit-content;">
+        <div class="cf-viewport" id="cfAppViewport" tabindex="0" role="group" aria-label="Feature cards — drag or use the arrow keys to change card" style="height: 444px;">
+          <div class="cf-stage" id="cfAppStage">
+
+            <div class="cf-slide" aria-roledescription="slide" aria-label="1 of 4" data-active="true" style="transform: translateX(0%) rotateY(0deg) scale(1); opacity: 1; z-index: 30; height: fit-content;">
+              <article class="card" data-component="Card">
+                <div class="card__media" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2Z"></path><circle cx="12" cy="13" r="4"></circle></svg>
+                </div>
+                <div class="card__body">
+                  <span class="badge" data-component="Tag">Deposit</span>
+                  <h3 class="card__title">Mobile Deposit</h3>
+                  <p class="card__text">Snap a photo of a check and see funds availability up front.</p>
+                  <div class="card__foot">
+                    <a class="link-arrow" href="#get-app-title">
+                      Get the app
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"></path></svg>
+                    </a>
+                  </div>
+                </div>
+              </article>
+            </div>
+
+            <div class="cf-slide" aria-roledescription="slide" aria-label="2 of 4" data-active="false" style="transform: translateX(56%) rotateY(-10deg) scale(0.88); opacity: 0.6; z-index: 20;">
+              <article class="card" data-component="Card">
+                <div class="card__media card__media--tint" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
+                </div>
+                <div class="card__body">
+                  <span class="badge" data-component="Tag">Transfer</span>
+                  <h3 class="card__title">Zelle<sup>®</sup> transfers</h3>
+                  <p class="card__text">Send and receive money in minutes with just a phone number or email.</p>
+                  <div class="card__foot">
+                    <a class="link-arrow" href="#get-app-title">
+                      Get the app
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"></path></svg>
+                    </a>
+                  </div>
+                </div>
+              </article>
+            </div>
+
+            <div class="cf-slide" aria-roledescription="slide" aria-label="3 of 4" data-active="false" style="transform: translateX(112%) rotateY(-20deg) scale(0.76); opacity: 0.25; z-index: 10;">
+              <article class="card" data-component="Card">
+                <div class="card__media card__media--deep" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"></rect><path d="M3 10h18M7 15h4"></path></svg>
+                </div>
+                <div class="card__body">
+                  <span class="badge" data-component="Tag">Security</span>
+                  <h3 class="card__title">Lock your card instantly</h3>
+                  <p class="card__text">Lock and unlock a lost or misplaced debit card in seconds.</p>
+                  <div class="card__foot">
+                    <a class="link-arrow" href="#get-app-title">
+                      Get the app
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"></path></svg>
+                    </a>
+                  </div>
+                </div>
+              </article>
+            </div>
+
+            <div class="cf-slide" aria-roledescription="slide" aria-label="4 of 4" data-active="false" style="transform: translateX(140%) rotateY(-20deg) scale(0.72); opacity: 0.25; z-index: 0;">
+              <article class="card" data-component="Card">
+                <div class="card__media card__media--red" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"></path><path d="M7 15l4-4 3 3 5-6"></path></svg>
+                </div>
+                <div class="card__body">
+                  <span class="badge" data-component="Tag">Insights</span>
+                  <h3 class="card__title">Spending insights from Erica<sup>®</sup></h3>
+                  <p class="card__text">Track spending and set goals with proactive help from your virtual assistant.</p>
+                  <div class="card__foot">
+                    <a class="link-arrow" href="#get-app-title">
+                      Get the app
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"></path></svg>
+                    </a>
+                  </div>
+                </div>
+              </article>
+            </div>
+
+          </div>
+        </div>
+
+        
+
+        <div class="cf-controls">
+          <button class="btn btn--outline btn--sm btn--icon" data-component="Button" type="button" id="cfAppPrev" aria-disabled="true" aria-label="Previous card">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+          </button>
+
+          <div class="cf-dots" role="group" aria-label="Choose a card" id="cfAppDots">
+            <button class="cf-dot" type="button" aria-current="true" aria-label="Card 1" style="width: 10px; flex-grow: 0; flex-shrink: 0;"></button>
+            <button class="cf-dot" type="button" aria-current="false" aria-label="Card 2" style="width: 10px; flex-grow: 0; flex-shrink: 0;"></button>
+            <button class="cf-dot" type="button" aria-current="false" aria-label="Card 3" style="width: 10px; flex-grow: 0; flex-shrink: 0;"></button>
+            <button class="cf-dot" type="button" aria-current="false" aria-label="Card 4" style="width: 10px; flex-grow: 0; flex-shrink: 0;"></button>
+          </div>
+
+          <button class="btn btn--outline btn--sm btn--icon" data-component="Button" type="button" id="cfAppNext" aria-disabled="false" aria-label="Next card">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+          </button>
+        </div>
+
+        
+
+        <p class="visually-hidden" role="status" aria-live="polite" id="cfAppStatus">Card 4 of 4</p>
+      </div>
+    </div>
+
+    <script>
+      (function () {
+        var root = document.getElementById('cfApp');
+        if (!root) { return; }
+        var viewport = document.getElementById('cfAppViewport');
+        var slides = Array.prototype.slice.call(document.querySelectorAll('#cfAppStage .cf-slide'));
+        var dots = Array.prototype.slice.call(document.querySelectorAll('#cfAppDots .cf-dot'));
+        var prevBtn = document.getElementById('cfAppPrev');
+        var nextBtn = document.getElementById('cfAppNext');
+        var status = document.getElementById('cfAppStatus');
+        var progressBar = document.getElementById('cfAppProgressBar');
+        var progress = document.getElementById('cfAppProgress');
+        var last = slides.length - 1;
+        var index = 0;
+        var offset = 0;
+
+        function paint() {
+          var centre = Math.round(index + offset);
+          slides.forEach(function (slide, i) {
+            var rel = i - index - offset;
+            var dist = Math.abs(rel);
+            var clamped = Math.max(-2, Math.min(2, rel));
+            var translate = clamped * 56 + (rel - clamped) * 28;
+            var scale = Math.max(0.72, 1 - 0.12 * dist);
+            var rotate = -10 * clamped;
+            var opacity = Math.max(0.25, 1 - 0.4 * dist);
+            slide.style.transform = 'translateX(' + translate.toFixed(2) + '%) rotateY(' + rotate.toFixed(2) + 'deg) scale(' + scale.toFixed(3) + ')';
+            slide.style.opacity = opacity.toFixed(3);
+            slide.style.zIndex = String(Math.max(0, 30 - Math.round(dist * 10)));
+            slide.setAttribute('data-active', centre === i ? 'true' : 'false');
+          });
+          dots.forEach(function (dot, i) { dot.setAttribute('aria-current', i === index ? 'true' : 'false'); });
+          prevBtn.setAttribute('aria-disabled', index === 0 ? 'true' : 'false');
+          nextBtn.setAttribute('aria-disabled', index === last ? 'true' : 'false');
+          var pct = Math.round(((index + 1) / slides.length) * 100);
+          progressBar.style.width = pct + '%';
+          progress.setAttribute('aria-valuenow', String(pct));
+        }
+
+        function goTo(target) {
+          var clamped = Math.max(0, Math.min(last, target));
+          var changed = clamped !== index;
+          index = clamped;
+          offset = 0;
+          paint();
+          if (changed) { status.textContent = 'Card ' + (index + 1) + ' of ' + slides.length; }
+        }
+
+        prevBtn.addEventListener('click', function () { goTo(index - 1); });
+        nextBtn.addEventListener('click', function () { goTo(index + 1); });
+        dots.forEach(function (dot, i) { dot.addEventListener('click', function () { goTo(i); }); });
+
+        var pointerId = null;
+        var startX = 0;
+        viewport.addEventListener('pointerdown', function (event) {
+          if (event.button !== 0 || pointerId !== null) { return; }
+          pointerId = event.pointerId;
+          startX = event.clientX;
+          root.setAttribute('data-dragging', 'true');
+          viewport.setPointerCapture(pointerId);
+        });
+        viewport.addEventListener('pointermove', function (event) {
+          if (event.pointerId !== pointerId) { return; }
+          var width = viewport.getBoundingClientRect().width || 1;
+          offset = (startX - event.clientX) / width;
+          paint();
+        });
+        function endDrag(event) {
+          if (event.pointerId !== pointerId) { return; }
+          if (viewport.hasPointerCapture(pointerId)) { viewport.releasePointerCapture(pointerId); }
+          pointerId = null;
+          root.setAttribute('data-dragging', 'false');
+          var settled = offset > 0.33 ? Math.ceil(index + offset) : offset < -0.33 ? Math.floor(index + offset) : index;
+          goTo(settled);
+        }
+        viewport.addEventListener('pointerup', endDrag);
+        viewport.addEventListener('pointercancel', endDrag);
+        viewport.addEventListener('dragstart', function (event) { event.preventDefault(); });
+        viewport.addEventListener('keydown', function (event) {
+          if (event.key === 'ArrowLeft') { goTo(index - 1); event.preventDefault(); }
+          else if (event.key === 'ArrowRight') { goTo(index + 1); event.preventDefault(); }
+        });
+
+        goTo(0);
+      }());
+    </script>
+    <!-- VORTSPEC:COMPOSE:END run=compose-1785430232416 option=0 -->
+
+    <div class="container">
+      <div class="app-panel">
+        <div>
+          <span class="section__eyebrow">Download</span>
+          <h2 class="section__title" id="get-app-title">Get the free Mobile Banking app</h2>
+          <p class="section__text">Choose your device, then download from your app store or send yourself a link.</p>
+
+          <div class="tabs" data-component="Tabs" data-island="app-device-tabs" style="margin-top: var(--spacing-px-32)">
+            <div class="tabs__list" role="tablist" aria-label="Choose your device">
+              <button class="tabs__tab" type="button" role="tab" id="tab-iphone" aria-controls="panel-iphone" aria-selected="true">iPhone</button>
+              <button class="tabs__tab" type="button" role="tab" id="tab-ipad" aria-controls="panel-ipad" aria-selected="false" tabindex="-1">iPad</button>
+              <button class="tabs__tab" type="button" role="tab" id="tab-android" aria-controls="panel-android" aria-selected="false" tabindex="-1">Android</button>
+              <button class="tabs__tab" type="button" role="tab" id="tab-other" aria-controls="panel-other" aria-selected="false" tabindex="-1">Other</button>
+            </div>
+
+            <div class="tabs__panel" role="tabpanel" id="panel-iphone" aria-labelledby="tab-iphone" tabindex="0">
+              <div class="store-badges">
+                <a class="store-badge" href="#app-store">
+                  <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16.4 12.6c0-2.3 1.9-3.4 2-3.5-1.1-1.6-2.8-1.8-3.4-1.8-1.4-.1-2.8.9-3.5.9-.7 0-1.8-.8-3-.8-1.5 0-2.9.9-3.7 2.3-1.6 2.7-.4 6.8 1.1 9 .8 1.1 1.7 2.3 2.9 2.2 1.2 0 1.6-.7 3-.7s1.8.7 3 .7c1.3 0 2.1-1.1 2.8-2.2.9-1.3 1.3-2.5 1.3-2.6 0 0-2.5-.9-2.5-3.5ZM14.1 5.5c.6-.8 1-1.9.9-3-.9 0-2 .6-2.7 1.4-.6.7-1.1 1.8-.9 2.9 1 .1 2-.5 2.7-1.3Z"></path></svg>
+                  <span><small>Get it on the</small><strong>App Store</strong></span>
+                </a>
+              </div>
+              <p class="card__text">Requires iOS 16 or later. Free from Bank of America; message and data rates may apply.</p>
+            </div>
+
+            <div class="tabs__panel" role="tabpanel" id="panel-ipad" aria-labelledby="tab-ipad" tabindex="0" hidden="">
+              <div class="store-badges">
+                <a class="store-badge" href="#app-store-ipad">
+                  <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16.4 12.6c0-2.3 1.9-3.4 2-3.5-1.1-1.6-2.8-1.8-3.4-1.8-1.4-.1-2.8.9-3.5.9-.7 0-1.8-.8-3-.8-1.5 0-2.9.9-3.7 2.3-1.6 2.7-.4 6.8 1.1 9 .8 1.1 1.7 2.3 2.9 2.2 1.2 0 1.6-.7 3-.7s1.8.7 3 .7c1.3 0 2.1-1.1 2.8-2.2.9-1.3 1.3-2.5 1.3-2.6 0 0-2.5-.9-2.5-3.5ZM14.1 5.5c.6-.8 1-1.9.9-3-.9 0-2 .6-2.7 1.4-.6.7-1.1 1.8-.9 2.9 1 .1 2-.5 2.7-1.3Z"></path></svg>
+                  <span><small>Get it on the</small><strong>App Store</strong></span>
+                </a>
+              </div>
+              <p class="card__text">Optimized for iPad with split-view support for balances and bill pay.</p>
+            </div>
+
+            <div class="tabs__panel" role="tabpanel" id="panel-android" aria-labelledby="tab-android" tabindex="0" hidden="">
+              <div class="store-badges">
+                <a class="store-badge" href="#google-play">
+                  <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3.6 2.3c-.3.3-.5.8-.5 1.4v16.6c0 .6.2 1.1.5 1.4l.1.1 9.3-9.3v-.2L3.7 2.2l-.1.1Zm12 6.2L4.7 2.2l8.4 8.4 2.5-2.1Zm1.9 1.1-2.4 1.4 2.4 2.4 3-1.7c.9-.5.9-1.9 0-2.4l-3-1.7Zm-4.4 3.9-8.4 8.4L15.5 15l-2.4-1.5Z"></path></svg>
+                  <span><small>Get it on</small><strong>Google Play</strong></span>
+                </a>
+              </div>
+              <p class="card__text">Requires Android 10 or later. Free from Bank of America; message and data rates may apply.</p>
+            </div>
+
+            <div class="tabs__panel" role="tabpanel" id="panel-other" aria-labelledby="tab-other" tabindex="0" hidden="">
+              <div class="store-badges">
+                <a class="store-badge" href="#app-store">
+                  <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16.4 12.6c0-2.3 1.9-3.4 2-3.5-1.1-1.6-2.8-1.8-3.4-1.8-1.4-.1-2.8.9-3.5.9-.7 0-1.8-.8-3-.8-1.5 0-2.9.9-3.7 2.3-1.6 2.7-.4 6.8 1.1 9 .8 1.1 1.7 2.3 2.9 2.2 1.2 0 1.6-.7 3-.7s1.8.7 3 .7c1.3 0 2.1-1.1 2.8-2.2.9-1.3 1.3-2.5 1.3-2.6 0 0-2.5-.9-2.5-3.5ZM14.1 5.5c.6-.8 1-1.9.9-3-.9 0-2 .6-2.7 1.4-.6.7-1.1 1.8-.9 2.9 1 .1 2-.5 2.7-1.3Z"></path></svg>
+                  <span><small>Get it on the</small><strong>App Store</strong></span>
+                </a>
+                <a class="store-badge" href="#google-play">
+                  <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3.6 2.3c-.3.3-.5.8-.5 1.4v16.6c0 .6.2 1.1.5 1.4l.1.1 9.3-9.3v-.2L3.7 2.2l-.1.1Zm12 6.2L4.7 2.2l8.4 8.4 2.5-2.1Zm1.9 1.1-2.4 1.4 2.4 2.4 3-1.7c.9-.5.9-1.9 0-2.4l-3-1.7Zm-4.4 3.9-8.4 8.4L15.5 15l-2.4-1.5Z"></path></svg>
+                  <span><small>Get it on</small><strong>Google Play</strong></span>
+                </a>
+              </div>
+              <p class="card__text">Not sure which device you have? Use Online Banking in your mobile browser at bankofamerica.com.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="send-form" data-component="Card">
+          <h3 class="signin-card__title">Send yourself a download link</h3>
+
+          <form action="#send-text" method="post" novalidate="">
+            <div class="send-form__row">
+              <div class="field">
+                <label class="field__label" for="phone-number">Phone Number <abbr title="required" aria-label="required">*</abbr></label>
+                <input class="input" id="phone-number" name="phone-number" type="tel" inputmode="tel" placeholder="999-999-9999" autocomplete="tel" data-component="Input">
+                <p class="field__hint">In 999-999-9999 Format</p>
+              </div>
+              <button class="btn btn--navy" type="submit" data-component="Button">Text me</button>
+            </div>
+          </form>
+
+          <p class="send-form__or">or</p>
+
+          <form action="#send-email" method="post" novalidate="">
+            <div class="send-form__row">
+              <div class="field">
+                <label class="field__label" for="email-address">Email Address <abbr title="required" aria-label="required">*</abbr></label>
+                <input class="input" id="email-address" name="email-address" type="email" placeholder="name@example.com" autocomplete="email" data-component="Input">
+              </div>
+              <button class="btn btn--navy" type="submit" data-component="Button">Email me</button>
+            </div>
+          </form>
+
+          <p class="disclaimer">
+            Before you leave our site, we want you to know your app store has its own privacy
+            practices and level of security which may be different from ours, so please review
+            their policies.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════ Connect with us ══════════ -->
+  <section class="section section--navy" id="connect" aria-labelledby="connect-title">
+    <div class="container">
+      <div class="section__head section__head--center">
+        <h2 class="section__title" id="connect-title">Connect with us</h2>
+        <p class="section__text">Talk to a specialist, stop by a financial center or get answers on your own time.</p>
+      </div>
+
+      <div class="connect-grid">
+        <a class="connect-card" href="#schedule" data-component="Card">
+          <span class="connect-card__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M8 3v4M16 3v4M3 11h18"></path><path d="m9.5 15.5 1.8 1.8 3.2-3.4"></path></svg></span>
+          <span class="connect-card__title">Schedule an appointment</span>
+          <span class="connect-card__text">Meet with a specialist in person, by phone or over video.</span>
+        </a>
+
+        <a class="connect-card" href="#locations" id="locations" data-component="Card">
+          <span class="connect-card__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0Z"></path><circle cx="12" cy="10" r="3"></circle></svg></span>
+          <span class="connect-card__title">Find a location</span>
+          <span class="connect-card__text">Search financial centers and ATMs near you, with hours and services.</span>
+        </a>
+
+        <a class="connect-card" href="#contact" id="contact" data-component="Card">
+          <span class="connect-card__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.3-1.2a2 2 0 0 1 2.1-.5c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2Z"></path></svg></span>
+          <span class="connect-card__title">Contact us</span>
+          <span class="connect-card__text">Call, message or write to us — we're here around the clock.</span>
+        </a>
+
+        <a class="connect-card" href="#help" id="help" data-component="Card">
+          <span class="connect-card__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M9.5 9.5a2.5 2.5 0 1 1 3.4 2.3c-.6.3-.9.8-.9 1.4v.3"></path><path d="M12 17h.01"></path></svg></span>
+          <span class="connect-card__title">Help center</span>
+          <span class="connect-card__text">Browse answers on payments, alerts, security and account settings.</span>
+        </a>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<!-- ══════════ Footer ══════════ -->
+<footer class="footer">
+  <div class="container">
+    
+
+    <hr class="footer__divider" data-component="Divider">
+
+    <div class="tabs tabs--footer" data-component="Tabs" data-island="disclosure-tabs">
+      <div class="tabs__list" role="tablist" aria-label="Important disclosures">
+        <button class="tabs__tab" type="button" role="tab" id="tab-disc-investing" aria-controls="disc-investing" aria-selected="true" tabindex="0">Investment products</button>
+        <button class="tabs__tab" type="button" role="tab" id="tab-disc-banking" aria-controls="disc-banking" aria-selected="false" tabindex="-1">Banking and brokerage products</button>
+        <button class="tabs__tab" type="button" role="tab" id="tab-disc-advertising" aria-controls="disc-advertising" aria-selected="false" tabindex="-1">Advertising practices</button>
+      </div>
+
+      <div class="tabs__panel" role="tabpanel" id="disc-investing" aria-labelledby="tab-disc-investing" tabindex="0" style="width: 1200px;">
+        <table class="disclosure-table" style="width: 1200px;">
+          <caption>Investment products:</caption>
+          <tbody>
+            <tr>
+              <td>Are not FDIC insured</td>
+              <td>Are not bank guaranteed</td>
+              <td>May lose value</td>
+            </tr>
+            <tr>
+              <td>Are not deposits</td>
+              <td>Are not insured by any federal government agency</td>
+              <td>Are not a condition to any banking service or activity</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="tabs__panel" role="tabpanel" id="disc-banking" aria-labelledby="tab-disc-banking" tabindex="0" hidden="">
+        <p>
+          Banking products are provided by Bank of America, N.A. and affiliated banks,
+          Members FDIC and wholly owned subsidiaries of Bank of America Corporation.
+        </p>
+        <p>
+          MLPF&amp;S is a registered broker-dealer, member SIPC and a wholly owned subsidiary
+          of Bank of America Corporation.
+        </p>
+      </div>
+
+      <div class="tabs__panel" role="tabpanel" id="disc-advertising" aria-labelledby="tab-disc-advertising" tabindex="0" hidden="">
+        <p>
+          We strive to provide you with information about products and services you might
+          find interesting and useful. Relationship-based ads and online behavioral
+          advertising help us do that.
+        </p>
+        <p>
+          Before you leave our site, we want you to know your app store has its own privacy
+          practices and level of security which may be different from ours, so please review
+          their policies.
+        </p>
+      </div>
+    </div>
+
+    <nav class="footer__links" aria-label="Footer" style="margin-top: var(--spacing-px-32);">
+      <a href="#locations">Locations</a>
+      <a href="#contact">Contact Us</a>
+      <a href="#help">Help &amp; Support</a>
+      <a href="#browse-with-specialist">Browse with Specialist</a>
+      <a href="#accessible-banking">Accessible Banking</a>
+      <a href="#privacy">Privacy</a>
+      <a href="#childrens-privacy">Children's Privacy</a>
+      <a href="#security">Security</a>
+      <a href="#service-agreement">Online Banking Service Agreement</a>
+      <a href="#advertising-practices">Advertising Practices</a>
+      <a href="#site-map">Site Map</a>
+      <a href="#careers">Careers</a>
+      <a href="#feedback">Share Your Feedback</a>
+    </nav><hr class="footer__divider" data-component="Divider">
+
+    <div class="footer__bottom">
+      <p>© 2026 Bank of America Corporation. All Rights Reserved.</p>
+
+      <div class="footer__badges">
+        <span class="footer__badge">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 4 6v6c0 5 3.4 8.4 8 9 4.6-.6 8-4 8-9V6l-8-3Z"></path></svg>
+          Bank of America, N.A. Member FDIC
+        </span>
+        <span class="footer__badge">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 11 9-7 9 7"></path><path d="M5 10v10h14V10"></path><path d="M10 20v-6h4v6"></path></svg>
+          Equal Housing Lender
+        </span>
+      </div>
+
+      <div class="footer__social">
+        <a href="#facebook" aria-label="Bank of America on Facebook">
+          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M13.5 21v-8h2.7l.4-3h-3.1V8.1c0-.9.3-1.5 1.5-1.5h1.7V3.9c-.3 0-1.3-.1-2.5-.1-2.5 0-4.2 1.5-4.2 4.3V10H7.3v3H10v8h3.5Z"></path></svg>
+        </a>
+        <a href="#x" aria-label="Bank of America on X">
+          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17.5 3h3l-6.6 7.5L21.8 21h-6l-4.7-6.1L5.7 21h-3l7-8-6.9-10h6.2l4.2 5.6L17.5 3Zm-1 16h1.7L7.6 4.8H5.8L16.5 19Z"></path></svg>
+        </a>
+        <a href="#linkedin" aria-label="Bank of America on LinkedIn">
+          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6.9 21H3.6V9.4h3.3V21ZM5.2 8A1.9 1.9 0 1 1 5.2 4.2 1.9 1.9 0 0 1 5.2 8ZM21 21h-3.3v-5.6c0-1.4 0-3.2-1.9-3.2s-2.2 1.5-2.2 3.1V21H10.3V9.4h3.2V11h.1c.4-.9 1.5-1.8 3.2-1.8 3.4 0 4.1 2.2 4.1 5.1V21Z"></path></svg>
+        </a>
+        <a href="#youtube" aria-label="Bank of America on YouTube">
+          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M22 12s0-3.2-.4-4.7a2.5 2.5 0 0 0-1.7-1.7C18.3 5.2 12 5.2 12 5.2s-6.3 0-7.9.4a2.5 2.5 0 0 0-1.7 1.7C2 8.8 2 12 2 12s0 3.2.4 4.7c.2.9.9 1.5 1.7 1.7 1.6.4 7.9.4 7.9.4s6.3 0 7.9-.4a2.5 2.5 0 0 0 1.7-1.7c.4-1.5.4-4.7.4-4.7Zm-11.9 3V9l5.2 3-5.2 3Z"></path></svg>
+        </a>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<!-- ══════════════════════════════════════════════════════════════
+     Islands — self-contained vanilla JS, one per interactive component
+     ══════════════════════════════════════════════════════════════ -->
+
+<!-- Island: hero background video (autoplay, reduced-motion + offscreen aware) -->
+<script data-island="hero-video">
+(function () {
+  var video = document.querySelector('[data-island="hero-video"]');
+  var toggle = document.querySelector('[data-island="hero-video-toggle"]');
+  if (!video || !toggle) return;
+
+  var pauseIcon = toggle.querySelector('[data-icon="pause"]');
+  var playIcon = toggle.querySelector('[data-icon="play"]');
+  var label = toggle.querySelector('[data-label]');
+  var reduced = window.matchMedia('(prefers-reduced-motion: reduce)');
+  var userPaused = false;
+  var visible = true;
+
+  function render(playing) {
+    pauseIcon.hidden = !playing;
+    playIcon.hidden = playing;
+    label.textContent = playing ? 'Pause background video' : 'Play background video';
+    toggle.setAttribute('aria-pressed', String(!playing));
+  }
+
+  function sync() {
+    if (userPaused || reduced.matches || !visible) {
+      video.pause();
+      render(false);
+      return;
+    }
+    var p = video.play();
+    if (p && p.catch) p.catch(function () { render(false); });
+    render(true);
+  }
+
+  toggle.addEventListener('click', function () {
+    userPaused = !userPaused;
+    sync();
+  });
+
+  if ('IntersectionObserver' in window) {
+    new IntersectionObserver(function (entries) {
+      visible = entries[0].isIntersecting;
+      sync();
+    }, { threshold: 0.05 }).observe(video);
+  }
+
+  if (reduced.addEventListener) reduced.addEventListener('change', sync);
+  sync();
+})();
+</script>
+
+<!-- Island: mobile navigation toggle -->
+<script data-island="navbar-menu">
+(function () {
+  var header = document.querySelector('[data-island="navbar-menu"]');
+  if (!header) return;
+  var toggle = header.querySelector('.navbar__toggle');
+  var nav = header.querySelector('#primary-nav');
+  if (!toggle || !nav) return;
+
+  toggle.addEventListener('click', function () {
+    var open = nav.classList.toggle('is-open');
+    toggle.setAttribute('aria-expanded', String(open));
+    toggle.setAttribute('aria-label', open ? 'Close menu' : 'Open menu');
+  });
+
+  nav.addEventListener('click', function (e) {
+    if (e.target.closest('.navbar__link')) {
+      nav.classList.remove('is-open');
+      toggle.setAttribute('aria-expanded', 'false');
+      toggle.setAttribute('aria-label', 'Open menu');
+    }
+  });
+})();
+</script>
+
+<!-- Island: Tabs — drives both the app-download device tabs and the footer disclosure tabs -->
+<script data-island="app-device-tabs disclosure-tabs">
+(function () {
+  var roots = document.querySelectorAll('[data-component="Tabs"]');
+
+  Array.prototype.forEach.call(roots, function (root) {
+    var tabs = Array.prototype.slice.call(root.querySelectorAll('[role="tab"]'));
+    if (!tabs.length) return;
+
+    function select(tab, focus) {
+      tabs.forEach(function (t) {
+        var on = t === tab;
+        t.setAttribute('aria-selected', String(on));
+        t.tabIndex = on ? 0 : -1;
+        document.getElementById(t.getAttribute('aria-controls')).hidden = !on;
+      });
+      if (focus) tab.focus();
+    }
+
+    root.addEventListener('click', function (e) {
+      var tab = e.target.closest('[role="tab"]');
+      if (tab) select(tab, false);
+    });
+
+    root.addEventListener('keydown', function (e) {
+      var i = tabs.indexOf(document.activeElement);
+      if (i < 0) return;
+      var next =
+        e.key === 'ArrowRight' ? (i + 1) % tabs.length :
+        e.key === 'ArrowLeft' ? (i - 1 + tabs.length) % tabs.length :
+        e.key === 'Home' ? 0 :
+        e.key === 'End' ? tabs.length - 1 : -1;
+      if (next > -1) { e.preventDefault(); select(tabs[next], true); }
+    });
+  });
+})();
+</script>
+
+</body></html>

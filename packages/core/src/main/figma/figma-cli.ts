@@ -4,7 +4,17 @@ import { existsSync } from "node:fs";
 import { readFile, writeFile, mkdir, rm } from "node:fs/promises";
 import { app } from "electron";
 import { execFileSafe } from "../util/exec";
-import { FIGMA_VARS_PATH, FIGMA_COMPONENTS_PATH } from "../inspector/figma-reconcile";
+import { FIGMA_COMPONENTS_PATH } from "../inspector/figma-reconcile";
+import { writeCanonicalTokens } from "../inspector/canonical-tokens";
+import { emitAfterIngest } from "../inspector/token-emit";
+import type { TokenEmitSummary } from "@vortspec/core/token-emit-ledger";
+import {
+  canonicalFromDtcgExport,
+  canonicalFromVariableModel,
+  projectCanonicalToVariables,
+  validateCanonicalTokens,
+} from "@vortspec/core/canonical-tokens";
+import type { DesignTokenDocument } from "@vortspec/core/design-tokens";
 import type {
   FigmaConnection,
   FigmaCliMode,
@@ -14,9 +24,7 @@ import type {
   FigmaSelection,
 } from "@vortspec/core/figma";
 import type {
-  FigmaVariable,
   FigmaVariableModel,
-  TokenType,
   PushPlan,
   FigmaPushResult,
 } from "@vortspec/core/inspector";
@@ -235,24 +243,14 @@ export async function ensureConnected(): Promise<FigmaConnection> {
 
 // ── Reading variables (step 1's primary reader) ──────────────────────
 
-/** Map a W3C DTCG `$type` (+ name hint) to VortSpec's token type. Pure. */
-export function mapDtcgType($type: string | undefined, name: string): TokenType {
-  const t = ($type ?? "").toLowerCase();
-  if (t === "color" || t === "gradient") return "color";
-  if (t === "shadow" || t === "boxshadow") return "shadow";
-  if (
-    t === "typography" ||
-    t === "fontfamily" ||
-    t === "fontweight" ||
-    t === "fontsize" ||
-    t === "lineheight" ||
-    t === "letterspacing"
-  )
-    return "typography";
-  if (/radius|corner|rounded/i.test(name)) return "radius";
-  if (t === "dimension" || t === "number" || t === "duration") return "spacing";
-  return "other";
-}
+/**
+ * `mapDtcgType` and `dtcgToVariables` now live in `shared/canonical-tokens.ts` and are re-exported
+ * here so every existing importer is untouched (OpenSpec change: agentic-design-system, task 7.3).
+ * They moved because flattening is no longer an INGEST step that happens to live next to the CLI —
+ * it is a read-time projection over the canonical artifact, and the projection has to stay fs-free
+ * to be usable from anywhere and testable on its own.
+ */
+export { mapDtcgType, projectCanonicalToVariables as dtcgToVariables } from "@vortspec/core/canonical-tokens";
 
 /**
  * Build the figma-cli `eval` that reads the full mode/group/alias-aware variable
@@ -332,50 +330,6 @@ export function parseVariablesFetch(raw: string): FigmaVariableModel | null {
   }
   const parsed = figmaVariableModelSchema.safeParse(data);
   return parsed.success ? parsed.data : null;
-}
-
-/** Stringify a DTCG `$value` to a concrete display value (objects → JSON). */
-function stringifyValue(value: unknown): string {
-  if (value == null) return "";
-  if (typeof value === "string") return value;
-  if (typeof value === "number" || typeof value === "boolean") return String(value);
-  try {
-    return JSON.stringify(value);
-  } catch {
-    return String(value);
-  }
-}
-
-/**
- * Flatten a W3C Design Tokens (DTCG) tree — as emitted by `figma-cli export
- * dtcg` — into flat FigmaVariable rows. A node is a leaf when it carries a
- * `$value`; its name is the slash-joined path. `$type` is inherited from the
- * nearest ancestor that declares one. Pure + exported for unit testing.
- */
-export function dtcgToVariables(dtcg: unknown): FigmaVariable[] {
-  const out: FigmaVariable[] = [];
-  const walk = (node: unknown, path: string[], inheritedType: string | undefined): void => {
-    if (!node || typeof node !== "object") return;
-    const obj = node as Record<string, unknown>;
-    const declaredType = typeof obj.$type === "string" ? obj.$type : inheritedType;
-    if ("$value" in obj) {
-      const name = path.join("/");
-      if (name) {
-        out.push({
-          name,
-          resolvedValue: stringifyValue(obj.$value),
-          type: mapDtcgType(declaredType, name),
-        });
-      }
-      return;
-    }
-    for (const [key, child] of Object.entries(obj)) {
-      if (key.startsWith("$")) continue; // $description, $extensions, etc.
-      walk(child, [...path, key], declaredType);
-    }
-  };
-  walk(dtcg, [], undefined);
-  return out;
 }
 
 // ── Reading the current selection (Wave 3 convenience) ───────────────
@@ -566,11 +520,63 @@ export async function syncComponentsToCache(projectPath: string): Promise<FigmaS
   }
 }
 
+/** How many dropped names to spell out before summarising the rest. */
+const DROPPED_NAMES_SHOWN = 5;
+
+/**
+ * The human sentence for a successful variable read — pure + exported so the reporting of a DROPPED
+ * variable is testable without a Figma connection.
+ *
+ * `dropped` is the list `canonicalFromVariableModel` returns for variables that cannot be
+ * represented as DTCG nesting (`color/primary` and `color/primary/500` cannot both be tokens). It
+ * MUST reach the user: a variable that vanishes between Figma and `.vortspec/tokens.json` while the
+ * sync reports "read N variables" is precisely the silent loss this change exists to remove. The
+ * names are spelled out, capped, because the fix is to rename one of them in Figma and that needs
+ * the name.
+ */
+export function variableSyncMessage(opts: {
+  written: number;
+  collections: number;
+  modeCount: number;
+  dropped: readonly string[];
+  mode: FigmaCliMode | null;
+  emit?: TokenEmitSummary;
+}): string {
+  const { written, collections, modeCount, dropped, mode, emit } = opts;
+  const head =
+    `Read ${written} Figma variable${written === 1 ? "" : "s"}` +
+    ` across ${collections} collection${collections === 1 ? "" : "s"}` +
+    `${modeCount > 1 ? ` (${modeCount} modes)` : ""}` +
+    ` via figma-cli${mode ? ` (${mode} mode)` : ""}.`;
+  const parts = [head];
+  if (dropped.length) {
+    const shown = dropped.slice(0, DROPPED_NAMES_SHOWN).join(", ");
+    const rest = dropped.length - DROPPED_NAMES_SHOWN;
+    parts.push(
+      `${dropped.length} variable${dropped.length === 1 ? "" : "s"} couldn't be written as a` +
+        ` design token because the name collides with another variable's group: ` +
+        `${shown}${rest > 0 ? `, +${rest} more` : ""}.`,
+    );
+  }
+  // The emit's outcome rides in the sync's own sentence, not only in a field the UI might not read.
+  // A `diverged` emit in particular is a CHOICE the user owes — reporting the read as a plain
+  // success while the token file silently stayed stale is the failure mode task 7.14 exists to close.
+  if (emit && emit.status !== "up-to-date" && emit.status !== "written") parts.push(emit.message);
+  return parts.join(" ");
+}
+
 /**
  * Step 1's PRIMARY reader: export the connected file's design variables through
- * figma-cli and write them to `.vortspec/figma-variables.json` (the same cache
- * the Inspector reconciles against). Returns `source: null` when the CLI isn't
- * available so the caller can fall back to the scoped-Claude MCP export.
+ * figma-cli into the canonical artifact `.vortspec/tokens.json` (W3C DTCG, the
+ * group tree intact — OpenSpec change: agentic-design-system, task 7.2), then
+ * emit the project's token file from it (task 7.14). Returns `source: null` when
+ * the CLI isn't available so the caller can fall back to the scoped-Claude MCP
+ * export.
+ *
+ * ONE artifact. The flat `.vortspec/figma-variables.json` cache is no longer
+ * written (task 7.13): every reader now projects the same data out of the
+ * canonical file, so there is nothing a second copy could add except the chance
+ * of disagreeing with the first.
  */
 export async function syncVariablesToCache(projectPath: string): Promise<FigmaSyncResult> {
   const conn = await ensureConnected();
@@ -599,18 +605,32 @@ export async function syncVariablesToCache(projectPath: string): Promise<FigmaSy
   const model = await fetchVariableModelViaEval();
   if (model) {
     await mkdir(join(projectPath, ".vortspec"), { recursive: true });
-    await writeFile(join(projectPath, FIGMA_VARS_PATH), `${JSON.stringify(model, null, 2)}\n`, "utf8");
+    const { document, dropped } = canonicalFromVariableModel(model, {
+      source: "figma",
+      generatedAt: new Date().toISOString(),
+    });
+    await writeCanonicalTokens(projectPath, document);
+    // Emit as the tail of the ingest (task 7.14) — this is what makes `token_file` derived rather
+    // than a file someone has to remember to regenerate. Never throws; a project with no styling
+    // configured comes back `skipped` and the sync still succeeds.
+    const emit = await emitAfterIngest(projectPath);
     const modeCount = new Set(model.collections.flatMap((c) => c.modes.map((m) => m.name))).size;
     return {
+      emit,
+      // `count` is what was PERSISTED, not what was read: a variable the canonical artifact could
+      // not represent is named in the message rather than counted as if it had landed.
       ok: true,
-      count: model.variables.length,
+      count: model.variables.length - dropped.length,
       source: "cli",
       mode: conn.mode,
-      message: `Read ${model.variables.length} Figma variable${
-        model.variables.length === 1 ? "" : "s"
-      } across ${model.collections.length} collection${model.collections.length === 1 ? "" : "s"}${
-        modeCount > 1 ? ` (${modeCount} modes)` : ""
-      } via figma-cli${conn.mode ? ` (${conn.mode} mode)` : ""}.`,
+      message: variableSyncMessage({
+        written: model.variables.length - dropped.length,
+        collections: model.collections.length,
+        modeCount,
+        dropped,
+        mode: conn.mode,
+        emit,
+      }),
     };
   }
 
@@ -630,28 +650,51 @@ export async function syncVariablesToCache(projectPath: string): Promise<FigmaSy
         message: `figma-cli couldn't export variables from the focused file.${detail ? ` (${detail.trim()})` : ""}`,
       };
     }
-    let vars: FigmaVariable[];
+    // The export tree is persisted UNMODIFIED as the canonical artifact (task 7.2) — nesting,
+    // aliases and descriptions intact — and the flat cache is DERIVED from it by the same read-time
+    // projection every other consumer uses, so the two can never disagree about what was read.
+    let document: DesignTokenDocument | null;
     try {
-      vars = dtcgToVariables(JSON.parse(raw));
+      document = canonicalFromDtcgExport(JSON.parse(raw), {
+        source: "figma",
+        generatedAt: new Date().toISOString(),
+      });
     } catch {
+      document = null;
+    }
+    if (!document) {
       return {
         ok: false,
         count: 0,
         source: "cli",
         mode: conn.mode,
-        message: "figma-cli returned an export VortSpec couldn't parse.",
+        message: "figma-cli returned an export that wasn't a token document.",
       };
     }
+    const vars = projectCanonicalToVariables(document);
     await mkdir(join(projectPath, ".vortspec"), { recursive: true });
-    await writeFile(join(projectPath, FIGMA_VARS_PATH), `${JSON.stringify(vars, null, 2)}\n`, "utf8");
+    await writeCanonicalTokens(projectPath, document);
+    const emit = await emitAfterIngest(projectPath); // task 7.14, as above
+    // The export is written whatever its shape — refusing it would leave the previous cache in place
+    // and lose every valid token over one non-token branch. Structural problems are REPORTED here
+    // instead, so the read stays honest without becoming destructive.
+    const violations = validateCanonicalTokens(document).violations;
     return {
+      emit,
       ok: true,
       count: vars.length,
       source: "cli",
       mode: conn.mode,
-      message: `Read ${vars.length} Figma variable${vars.length === 1 ? "" : "s"} via figma-cli${
-        conn.mode ? ` (${conn.mode} mode)` : ""
-      }.`,
+      message:
+        `Read ${vars.length} Figma variable${vars.length === 1 ? "" : "s"} via figma-cli${
+          conn.mode ? ` (${conn.mode} mode)` : ""
+        }.` +
+        (violations.length
+          ? ` The export has ${violations.length} structural issue${
+              violations.length === 1 ? "" : "s"
+            } (${violations[0].code}${violations[0].path ? ` at ${violations[0].path}` : ""}).`
+          : "") +
+        (emit.status !== "up-to-date" && emit.status !== "written" ? ` ${emit.message}` : ""),
     };
   } finally {
     await rm(tmp, { force: true }).catch(() => undefined);

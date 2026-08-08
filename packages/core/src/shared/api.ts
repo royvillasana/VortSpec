@@ -165,6 +165,15 @@ export interface VortSpecApi {
   litepagePrompt(projectPath: string, name: string, description: string): Promise<IpcResponse<"lite:pagePrompt">>;
   liteReadPage(projectPath: string, name: string): Promise<IpcResponse<"lite:page">>;
   litePages(projectPath: string): Promise<IpcResponse<"lite:pages">>;
+  /** The project's committed relay address (empty when the project has no live session). */
+  collabConfig(projectPath: string): Promise<IpcResponse<"collab:config">>;
+  /** Store the relay address. Rejects an address carrying a secret — it would be committed. */
+  collabSetConfig(projectPath: string, relayUrl: string): Promise<IpcResponse<"collab:setConfig">>;
+  /** Whether THIS machine holds a credential for a relay — never the credential itself. */
+  collabHasCredential(relayUrl: string): Promise<IpcResponse<"collab:hasCredential">>;
+  /** The credential itself, for opening the socket. Never written to the project. */
+  collabCredential(relayUrl: string): Promise<IpcResponse<"collab:credential">>;
+  collabSetCredential(relayUrl: string, secret: string): Promise<IpcResponse<"collab:setCredential">>;
   liteWritePage(projectPath: string, name: string, html: string): Promise<IpcResponse<"lite:writePage">>;
 
   // Draw tool — persist the drawing graph + Excalidraw scene, export a sketch PNG (docs/draw-to-component-graph.md).
@@ -389,6 +398,34 @@ export interface VortSpecApi {
   ): Promise<IpcResponse<"screenMap:upsert">>;
   /** Read design variables from Figma into the reconcile cache (figma-cli primary). */
   figmaSyncVariables(projectPath: string): Promise<IpcResponse<"figma:syncVariables">>;
+  /** Re-emit `token_file` from the canonical artifact — the styling-switch route (task 7.14). */
+  tokensEmit(
+    projectPath: string,
+    options?: { onDivergence?: "overwrite" | "keep"; tailwindVersion?: 3 | 4 },
+  ): Promise<IpcResponse<"tokens:emit">>;
+  /** Read the project's own token file as the design source, then emit (tasks 7.10 + 7.14). */
+  tokensIngest(projectPath: string): Promise<IpcResponse<"tokens:ingest">>;
+  /** Build `.vortspec/ai/*.toon` — the relationship index (group 2). */
+  indexBuild(projectPath: string): Promise<IpcResponse<"index:build">>;
+  /** Whether the index still describes the code, naming what changed (task 2.9). */
+  indexStaleness(projectPath: string): Promise<IpcResponse<"index:staleness">>;
+  /**
+   * Generate the adoption + token-violation reports. Deterministic and model-free, so the cost is a
+   * scan; the renderer fires it and shows the result when it lands (task 4.7).
+   */
+  generateReports(projectPath: string): Promise<IpcResponse<"reports:generate">>;
+  /** The AI-readiness level, recomputed from the current artifacts on every call (task 5.4). */
+  readinessLevel(projectPath: string): Promise<IpcResponse<"readiness:level">>;
+  /**
+   * Component adoption, READ from the committed index (never a rebuild). Null when no index exists —
+   * "we have not looked" is not "nothing is unused".
+   */
+  adoptionSummary(projectPath: string): Promise<IpcResponse<"adoption:summary">>;
+  /**
+   * Create the component's file set before a build run (task 6.9), so the model fills files in
+   * rather than deciding which exist. Safe to re-run; never overwrites.
+   */
+  scaffoldComponent(projectPath: string, name: string, tier?: string): Promise<IpcResponse<"scaffold:component">>;
   /** Read design-system components from Figma into the reconcile cache (figma-cli primary). */
   figmaSyncComponents(projectPath: string): Promise<IpcResponse<"figma:syncComponents">>;
   /** Read the node(s) currently selected in Figma Desktop (figma-cli). */

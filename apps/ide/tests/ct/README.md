@@ -88,3 +88,17 @@ Tightening it from completeness to shape caught a real harness bug immediately:
 `ready: false` is *not* equivalent — `??` stops falling back — so a fixture with
 components started reading as un-provisioned. Mock returns are now **derived from the
 fixture** rather than hardcoded, so they mirror what the real probe would say.
+
+## Components must live outside the test file, and the testid must not be on the root
+
+Two traps, both of which surface as "element(s) not found" rather than as themselves — the same
+disguise as the render-crash entry above.
+
+1. A component defined in the `.ct.tsx` file cannot be mounted: Playwright reports *"cannot be
+   mounted. Most likely, this component is defined in the test file."* Put it in `support/` and
+   import it. Support files need an explicit `React` import even with the automatic JSX runtime.
+2. `component.getByTestId(...)` searches the mounted root's **descendants**, not the root itself. A
+   probe that returns `<span data-testid="x">` bare is invisible; wrap it in an element.
+
+Trap 2 looks exactly like a crash. Before debugging the component, check whether the testid is on the
+element you mounted.

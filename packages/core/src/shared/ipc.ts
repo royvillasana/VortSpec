@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { collabConfigSchema } from "./collab-config";
 import type { DrawGraph } from "./draw-graph";
 import { agentRunOptionsSchema, lastRunSchema } from "./run-events";
 import { usageResultSchema } from "./usage";
@@ -76,6 +77,15 @@ import {
   figmaTokenStatusSchema,
   figmaSetTokenRequestSchema,
 } from "./figma";
+// The canonical token pipeline's on-demand routes (task 7.14).
+import { tokenEmitResultSchema } from "./token-emit-ledger";
+import { tokenIngestResultSchema } from "./canonical-ingest";
+import { indexStalenessSchema, reportResultSchema, readinessAssessmentSchema, scaffoldResultSchema, adoptionSummarySchema } from "./inspector";
+export { tokenEmitResultSchema } from "./token-emit-ledger";
+export { tokenIngestResultSchema } from "./canonical-ingest";
+export { indexStalenessSchema, reportResultSchema } from "./inspector";
+export type { ReportResultPayload, ReadinessAssessmentPayload, ScaffoldResultPayload, AdoptionSummary } from "./inspector";
+export { readinessAssessmentSchema } from "./inspector";
 export {
   figmaConnectionSchema,
   figmaCliModeSchema,
@@ -465,6 +475,34 @@ export const ipcContract = {
   "figma:connect": { request: figmaConnectRequestSchema, response: figmaConnectionSchema },
   "figma:syncVariables": { request: figmaSyncRequestSchema, response: figmaSyncResultSchema },
   "figma:syncComponents": { request: figmaSyncRequestSchema, response: figmaSyncResultSchema },
+  // Re-emit `token_file` from `.vortspec/tokens.json` — the styling-switch route, which reads the
+  // artifact and never the design source. `onDivergence` is how a reported divergence is resolved.
+  "tokens:emit": {
+    request: z.object({
+      projectPath: z.string(),
+      onDivergence: z.enum(["overwrite", "keep"]).optional(),
+      tailwindVersion: z.union([z.literal(3), z.literal(4)]).optional(),
+    }),
+    response: tokenEmitResultSchema,
+  },
+  // Read the project's own token file as the design source, then emit (tasks 7.10 + 7.14).
+  "tokens:ingest": { request: z.object({ projectPath: z.string() }), response: tokenIngestResultSchema },
+  // The relationship index (group 2): build it, and ask whether it still describes the code.
+  "index:build": {
+    request: z.object({ projectPath: z.string() }),
+    response: z.object({ written: z.array(z.string()).default([]), generatedAt: z.string() }),
+  },
+  "index:staleness": { request: z.object({ projectPath: z.string() }), response: indexStalenessSchema },
+  "reports:generate": { request: z.object({ projectPath: z.string() }), response: reportResultSchema },
+  "readiness:level": { request: z.object({ projectPath: z.string() }), response: readinessAssessmentSchema },
+  "adoption:summary": {
+    request: z.object({ projectPath: z.string() }),
+    response: adoptionSummarySchema.nullable(),
+  },
+  "scaffold:component": {
+    request: z.object({ projectPath: z.string(), name: z.string(), tier: z.string().optional() }),
+    response: scaffoldResultSchema,
+  },
   "figma:selection": { request: z.void(), response: figmaSelectionSchema },
   "figma:checkHealth": { request: figmaHealthRequestSchema, response: figmaHealthSchema },
   "figma:tokenStatus": { request: z.void(), response: figmaTokenStatusSchema },
@@ -654,6 +692,14 @@ export const ipcContract = {
   // light page authoring (task 5.1): compose a page from the light design system, then read/list them.
   "lite:pagePrompt": { request: z.object({ projectPath: z.string(), name: z.string(), description: z.string() }), response: z.string() },
   "lite:page": { request: z.object({ projectPath: z.string(), name: z.string() }), response: z.string() },
+  // Live-session configuration (change: live-playground). The relay ADDRESS is per-project and
+  // committed; the CREDENTIAL is per-machine and never enters the repository. The renderer does
+  // receive it — it opens the socket — so the boundary here is git, not the process.
+  "collab:config": { request: z.string(), response: collabConfigSchema },
+  "collab:setConfig": { request: z.object({ projectPath: z.string(), relayUrl: z.string() }), response: collabConfigSchema },
+  "collab:hasCredential": { request: z.string(), response: z.boolean() },
+  "collab:credential": { request: z.string(), response: z.string() },
+  "collab:setCredential": { request: z.object({ relayUrl: z.string(), secret: z.string() }), response: z.void() },
   "lite:pages": { request: z.string(), response: z.array(z.string()) },
   "lite:writePage": { request: z.object({ projectPath: z.string(), name: z.string(), html: z.string() }), response: z.void() },
   // Draw tool (docs/draw-to-component-graph.md): persist the project's drawing graph + Excalidraw scene

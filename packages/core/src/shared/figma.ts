@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { tokenEmitSummarySchema } from "./token-emit-ledger";
 
 /**
  * Figma connection via the local figma-cli (github.com/silships/figma-cli),
@@ -55,6 +56,12 @@ export const figmaSyncResultSchema = z.object({
   mode: figmaCliModeSchema.nullable(),
   /** a human, next-step message (e.g. why the CLI couldn't be used). */
   message: z.string(),
+  /**
+   * What the emit that follows the read did (task 7.14). Absent when the read never got far enough
+   * to write the canonical artifact — there is nothing to emit FROM after a failed sync, and an
+   * `emit` field reporting "skipped" there would suggest emission was attempted and declined.
+   */
+  emit: tokenEmitSummarySchema.optional(),
 });
 export type FigmaSyncResult = z.infer<typeof figmaSyncResultSchema>;
 

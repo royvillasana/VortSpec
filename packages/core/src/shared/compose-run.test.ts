@@ -331,3 +331,38 @@ describe("buildComposePrompt — light-native (Playground light pages)", () => {
     expect(p).not.toMatch(/framework-free HTML\/CSS, composed from the light stand-ins/);
   });
 });
+
+describe("the DESIGN.md hand-off no longer cuts mid-sentence (task 3.7)", () => {
+  const base = {
+    runId: "r1",
+    intent: "a pricing row",
+    roster: [] as InspectorComponent[],
+    tokens: [],
+    slot: {
+      position: "after" as const,
+      anchorLabel: "section",
+      anchorText: null,
+      axis: "column" as const,
+      file: "src/pages/Home.tsx",
+    },
+  };
+
+  it("passes short prose through untouched", () => {
+    const prompt = buildComposePrompt({ ...base, designMd: "# Design\n\nUse the tokens." });
+    expect(prompt).toContain("Use the tokens.");
+    expect(prompt).not.toContain("TRUNCATED");
+  });
+
+  it("cuts at a section boundary and SAYS how much it dropped", () => {
+    // The old behaviour sliced at byte 4000 — mid-sentence, silently. A model reads that as a
+    // document that simply ends, and answers from a design system it thinks it has all of.
+    const long = `# Intro\n\n${"a".repeat(4200)}\n\n# Later section\n\nThis part is dropped.`;
+    const prompt = buildComposePrompt({ ...base, designMd: long });
+    expect(prompt).toContain("TRUNCATED");
+    expect(prompt).toContain("characters of later sections are not shown");
+    expect(prompt).not.toContain("This part is dropped.");
+    expect(prompt).toContain("# Intro");
+    // The cut lands on the boundary, not inside the heading that follows it.
+    expect(prompt).not.toContain("# Later section");
+  });
+});

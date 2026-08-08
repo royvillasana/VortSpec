@@ -9,7 +9,9 @@ import {
   connectModeOrder,
   buildVariablesFetchScript,
   parseVariablesFetch,
+  variableSyncMessage,
 } from "./figma-cli";
+import { canonicalFromVariableModel } from "@vortspec/core/canonical-tokens";
 
 describe("connectModeOrder (auto-connect)", () => {
   it("prefers yolo by default and when yolo last worked", () => {
@@ -216,5 +218,60 @@ describe("parseVariablesFetch", () => {
   });
   it("returns null when there is no JSON object", () => {
     expect(parseVariablesFetch("no json here")).toBeNull();
+  });
+});
+
+describe("variableSyncMessage (a dropped variable is never silent)", () => {
+  it("reports only what was read when nothing was dropped", () => {
+    const message = variableSyncMessage({
+      written: 12,
+      collections: 2,
+      modeCount: 2,
+      dropped: [],
+      mode: "safe",
+    });
+    expect(message).toBe(
+      "Read 12 Figma variables across 2 collections (2 modes) via figma-cli (safe mode).",
+    );
+  });
+
+  it("names the variables the canonical artifact could not represent", () => {
+    // The colliding pair is ordinary Figma naming: `color/primary` and `color/primary/500` cannot
+    // both be DTCG tokens, so one of them does not reach `.vortspec/tokens.json`.
+    const { document, dropped } = canonicalFromVariableModel({
+      collections: [],
+      variables: [
+        { name: "color/primary", resolvedValue: "#000" },
+        { name: "color/primary/500", resolvedValue: "#111" },
+      ],
+    });
+    expect(Object.keys(document).filter((k) => !k.startsWith("$"))).toEqual(["color"]);
+
+    const written = 2 - dropped.length;
+    const message = variableSyncMessage({
+      written,
+      collections: 0,
+      modeCount: 1,
+      dropped,
+      mode: null,
+    });
+    expect(written).toBe(1);
+    expect(message).toContain("Read 1 Figma variable");
+    expect(message).toContain("color/primary/500");
+  });
+
+  it("caps the named list so a wholesale collision does not produce an unreadable message", () => {
+    const dropped = Array.from({ length: 9 }, (_, i) => `color/primary/${i}`);
+    const message = variableSyncMessage({
+      written: 1,
+      collections: 1,
+      modeCount: 1,
+      dropped,
+      mode: null,
+    });
+    expect(message).toContain("9 variables couldn't be written");
+    expect(message).toContain("color/primary/4");
+    expect(message).toContain("+4 more");
+    expect(message).not.toContain("color/primary/5,");
   });
 });

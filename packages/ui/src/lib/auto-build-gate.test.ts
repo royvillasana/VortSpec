@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { autoBuildGate } from "./auto-build-gate";
+import { autoBuildGate, unbuiltComponents} from "./auto-build-gate";
 
 describe("autoBuildGate — refuse to build, but stay re-checkable", () => {
   it("proceeds for a supported framework on an extract source", () => {
@@ -68,5 +68,61 @@ describe("autoBuildGate — refuse to build, but stay re-checkable", () => {
     expect(autoBuildGate(supported).kind).toBe("proceed");
     expect(autoBuildGate(unsupported).kind).toBe("setup-required");
     expect(autoBuildGate(supported).kind).toBe("proceed");
+  });
+});
+
+describe("what the auto-builder considers unbuilt", () => {
+  it("builds Figma-designed components when the coded roster is EMPTY", () => {
+    // The bug: a freshly extracted Figma project has an empty coded roster by definition, so the
+    // old `components.filter(status === "unknown")` returned [], auto-build concluded "design
+    // system not created yet", and polled forever while 51 components sat in `figmaOnly`.
+    const result = unbuiltComponents({
+      components: [],
+      figmaOnly: [{ name: "Button" }, { name: "Card" }, { name: "Alert" }],
+    });
+    expect(result.map((c) => c.name)).toEqual(["Button", "Card", "Alert"]);
+  });
+
+  it("still builds coded components whose status is unknown", () => {
+    const result = unbuiltComponents({
+      components: [{ name: "Badge", level: "atom", status: "unknown" }],
+      figmaOnly: [],
+    });
+    expect(result).toEqual([{ name: "Badge", level: "atom", status: "unknown" }]);
+  });
+
+  it("does not rebuild a component that is already coded", () => {
+    // Building it twice would overwrite the first build — an expensive way to find a reconciler bug.
+    const result = unbuiltComponents({
+      components: [{ name: "Button", level: "atom", status: "unknown" }],
+      figmaOnly: [{ name: "button" }, { name: "Card" }],
+    });
+    expect(result.map((c) => c.name)).toEqual(["Button", "Card"]);
+  });
+
+  it("matches names across casing and separators", () => {
+    const result = unbuiltComponents({
+      components: [{ name: "close-button", status: "unknown" }],
+      figmaOnly: [{ name: "Close Button" }],
+    });
+    expect(result).toHaveLength(1);
+  });
+
+  it("gives a Figma component NO invented tier", () => {
+    // Figma records no atomic level. Faking one would sort it into the wrong build chunk.
+    expect(unbuiltComponents({ components: [], figmaOnly: [{ name: "Button" }] })[0]?.level).toBeNull();
+  });
+
+  it("ignores a blank name and a missing figmaOnly", () => {
+    expect(unbuiltComponents({ components: [], figmaOnly: [{ name: "  " }] })).toEqual([]);
+    expect(unbuiltComponents({ components: [] })).toEqual([]);
+    expect(unbuiltComponents(null)).toEqual([]);
+  });
+
+  it("reports nothing to build for a design system that is fully built", () => {
+    // `status: "unknown"` is the unbuilt marker; a built component must not be rebuilt on every poll.
+    expect(
+      unbuiltComponents({ components: [{ name: "Button", status: "passed" }], figmaOnly: [] }),
+    ).toEqual([]);
   });
 });

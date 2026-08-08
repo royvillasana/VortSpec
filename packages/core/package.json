@@ -29,16 +29,18 @@
     "build:stamp": "esbuild src/main/canvas/stamp-standalone.ts --bundle --format=esm --platform=node --legal-comments=none --banner:js='import{createRequire}from\"module\";const require=createRequire(import.meta.url);' --outfile=resources/vortspec-stamp.mjs"
   },
   "dependencies": {
-    "zod": "^3.24.1",
     "node-pty": "^1.0.0",
-    "ts-morph": "^24.0.0"
+    "ts-morph": "^24.0.0",
+    "yjs": "^13.6.32",
+    "zod": "^3.24.1"
   },
   "devDependencies": {
     "@electron-toolkit/utils": "^3.0.0",
     "@types/node": "^22.10.0",
     "electron": "^36.4.0",
+    "esbuild": "^0.24.0",
+    "happy-dom": "^20.11.1",
     "typescript": "^5.9.0",
-    "vitest": "^3.2.0",
-    "esbuild": "^0.24.0"
+    "vitest": "^3.2.0"
   }
 }

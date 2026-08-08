@@ -1,0 +1,35 @@
+# Gate on the design-system relationship index still describing the code.
+#
+# A STALE index is worse than no index. Every reader — the grounded-run digest, the token reverse
+# index, the adoption report — treats it as authoritative, so a component added after the last build
+# reads as "does not exist" and an agent will confidently create a duplicate. That is precisely the
+# false negative the §1.6 benchmark measures (60% → 0%), arriving through the back door, and it is
+# invisible without a gate: nothing about a stale artifact LOOKS wrong.
+#
+# An ABSENT index passes. A project that has not opted into the index has nothing to be out of date
+# with, and failing there would make every repo without one red for a reason its authors never chose.
+# The check therefore only fails when the index EXISTS and no longer matches the sources.
+name: index-freshness
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # Prints the changed files by name — "the index is stale" is not actionable, "these four
+      # components changed" is.
+      - run: node scripts/check-index-freshness.mjs

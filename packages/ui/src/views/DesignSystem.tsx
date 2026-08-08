@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
-import { RotateCw, RefreshCw } from "lucide-react";
-import type { Project } from "@vortspec/core/ipc";
+import { RotateCw, RefreshCw, AlertTriangle } from "lucide-react";
+import type { AdoptionSummary, Project, ReadinessAssessmentPayload } from "@vortspec/core/ipc";
 import { ViewHeader } from "@vortspec/ui/ViewHeader";
 import { api } from "../lib/api";
 import { Button, Spinner } from "@vortspec/ui/ui";
 import { useAgentRun } from "../lib/useAgentRun";
+import { ReadinessLadder } from "@vortspec/ui/ReadinessLadder";
+import { AdoptionPanel } from "@vortspec/ui/AdoptionPanel";
 
 /**
  * The lightweight "design system" view (OpenSpec change: light-design-system, task 2.4). Renders the
@@ -27,6 +29,7 @@ export function DesignSystem({
   headerExtra,
   reloadSignal,
   extracting = false,
+  foundationOutcome = "idle",
 }: {
   project: Project;
   hideRail?: boolean;
@@ -37,6 +40,12 @@ export function DesignSystem({
   reloadSignal?: number;
   /** The foundation is extracting in the background — show a friendly "setting up" state, not an error. */
   extracting?: boolean;
+  /**
+   * What the last foundation run produced. `tokens-only` is the case this screen exists to make
+   * visible: the run succeeded, extracted tokens, and found no components — which blocks every
+   * downstream step while looking exactly like success.
+   */
+  foundationOutcome?: "idle" | "running" | "ready" | "tokens-only";
 }): React.JSX.Element {
   const [html, setHtml] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -44,6 +53,12 @@ export function DesignSystem({
   // Enterprise (Connect Enterprise Design System): re-reading the client's Storybook to refresh the
   // tokens + stand-ins ("Update snapshot") belongs HERE, on the design system, not in the Storybook view.
   const [isEnterprise, setIsEnterprise] = useState(false);
+  // The AI-readiness ladder (agentic-design-system, task 5.3). Recomputed on every load rather than
+  // cached, so it can never be the one thing on this screen disagreeing with everything beside it.
+  const [readiness, setReadiness] = useState<ReadinessAssessmentPayload | null>(null);
+  // Adoption READS the committed index rather than rebuilding it, so loading this screen costs a
+  // file read — the Inspector's report run is what pays for the build.
+  const [adoption, setAdoption] = useState<AdoptionSummary | null>(null);
   // Theme-object personalization ("Customize theme") lives in the design-system editor in the Variables
   // sidebar now (change: design-system-token-editor) — beside the levers whose edits it applies. This view
   // is the palette; it only owns the enterprise Storybook snapshot.
@@ -52,6 +67,8 @@ export function DesignSystem({
   async function load(): Promise<void> {
     setLoading(true);
     setError(null);
+    void api.readinessLevel(project.path).then(setReadiness).catch(() => setReadiness(null));
+    void api.adoptionSummary(project.path).then(setAdoption).catch(() => setAdoption(null));
     try {
       setHtml(await api.getLitePalette(project.path));
     } catch (e) {
@@ -136,6 +153,36 @@ export function DesignSystem({
           )}
         </div>
       </ViewHeader>
+
+      {foundationOutcome === "tokens-only" && (
+        <section
+          data-testid="foundation-tokens-only"
+          className="border-b border-vs-border-subtle bg-vs-bg-secondary px-4 py-2"
+        >
+          <p className="flex items-center gap-1.5 text-[12px] text-vs-warning">
+            <AlertTriangle size={13} className="flex-none" />
+            Tokens were extracted, but no components were found in the design source.
+          </p>
+          <p className="pt-0.5 text-[11px] text-vs-text-secondary">
+            The run finished successfully — there was simply nothing to read. A Figma file holding only a
+            foundations sheet (palettes, type scale, spacing) produces exactly this. Component detection needs
+            published components or component sets in the file.
+          </p>
+          <p className="pt-0.5 text-[11px] text-vs-text-muted">
+            Nothing downstream can proceed without components: no relationship index, no metadata, no screens
+            to compose from. Either add components to the design source and re-extract, or build them here from
+            the tokens you already have.
+          </p>
+        </section>
+      )}
+
+      <ReadinessLadder readiness={readiness} />
+      <AdoptionPanel
+        adoption={adoption}
+        onOpenReport={() =>
+          void api.revealPath(project.path, ".vortspec/ai/reports/adoption.md").catch(() => undefined)
+        }
+      />
 
       {/* Progress bar for the enterprise Storybook snapshot. */}
       {snapshot.running && (

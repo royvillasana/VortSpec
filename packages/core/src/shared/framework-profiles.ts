@@ -50,6 +50,17 @@ export interface FrameworkProfile {
   /** `storybook init --type` hint, or `null` to let Storybook auto-detect. */
   readonly storybookType: string | null;
   /**
+   * Directories a scan must walk to find components and the pages that render them, beyond the
+   * project's configured `component_dir`.
+   *
+   * Adopted from the reference `codebase-index` script, which carries the same per-framework list.
+   * A design system is not only what sits under `component_dir`: an Astro project keeps layouts in
+   * `src/layouts` and pages in `src/pages`, a SvelteKit project keeps routes in `src/routes`, and a
+   * Next app router lives in `app/`. Walking only `src` and `component_dir` makes every instance
+   * rendered in those directories invisible, which silently understates adoption.
+   */
+  readonly scanDirs: readonly string[];
+  /**
    * How completely VortSpec can verify this framework. `experimental` means a real check
    * exists but does not cover everything the framework can get wrong — the verify prompt
    * says so, so a pass is never read as broader than it is.
@@ -228,6 +239,7 @@ const RAW_PROFILES = {
     fileSuffixes: [],
     nonComponentSuffixes: [...NEVER_A_COMPONENT],
     storybookType: "react",
+    scanDirs: ["src/components", "src/pages", "components", "app"],
     supportLevel: "supported",
     typecheckScope: "project",
     idioms: {
@@ -243,6 +255,7 @@ const RAW_PROFILES = {
     fileSuffixes: [],
     nonComponentSuffixes: [...NEVER_A_COMPONENT],
     storybookType: "nextjs",
+    scanDirs: ["components", "app", "pages", "src/components", "src/app"],
     supportLevel: "supported",
     typecheckScope: "project",
     idioms: {
@@ -262,6 +275,7 @@ const RAW_PROFILES = {
     fileSuffixes: [],
     nonComponentSuffixes: [...NEVER_A_COMPONENT],
     storybookType: "vue3",
+    scanDirs: ["src/components", "src/views", "src/pages"],
     supportLevel: "supported",
     typecheckScope: "project",
     idioms: {
@@ -296,6 +310,7 @@ const RAW_PROFILES = {
     fileSuffixes: [],
     nonComponentSuffixes: [...NEVER_A_COMPONENT],
     storybookType: "vue3",
+    scanDirs: ["components", "pages", "layouts", "app"],
     supportLevel: "supported",
     typecheckScope: "project",
     idioms: {
@@ -322,6 +337,7 @@ const RAW_PROFILES = {
     fileSuffixes: [],
     nonComponentSuffixes: [...NEVER_A_COMPONENT],
     storybookType: "svelte",
+    scanDirs: ["src/components", "src/lib", "src/routes"],
     supportLevel: "supported",
     typecheckScope: "project",
     idioms: {
@@ -355,6 +371,7 @@ const RAW_PROFILES = {
     fileSuffixes: [],
     nonComponentSuffixes: [...NEVER_A_COMPONENT],
     storybookType: "sveltekit",
+    scanDirs: ["src/lib", "src/routes", "src/components"],
     supportLevel: "supported",
     typecheckScope: "project",
     idioms: {
@@ -403,6 +420,7 @@ const RAW_PROFILES = {
     fileSuffixes: [".component"],
     nonComponentSuffixes: [...NEVER_A_COMPONENT, ".module", ".service", ".routes", ".config", ".guard"],
     storybookType: "angular",
+    scanDirs: ["src/app"],
     supportLevel: "supported",
     typecheckScope: "project",
     idioms: {
@@ -440,6 +458,7 @@ const RAW_PROFILES = {
     fileSuffixes: [],
     nonComponentSuffixes: [...NEVER_A_COMPONENT],
     storybookType: "html",
+    scanDirs: ["src/components", "src/layouts", "src/pages"],
     supportLevel: "supported",
     typecheckScope: "project",
     idioms: {
@@ -472,6 +491,7 @@ const RAW_PROFILES = {
     fileSuffixes: [],
     nonComponentSuffixes: [...NEVER_A_COMPONENT],
     storybookType: "html",
+    scanDirs: ["src", "components"],
     supportLevel: "experimental",
     typecheckScope: "component-dir",
     // `node --check` cannot see an ES-MODULE syntax error unless the module mode is DECIDED.
@@ -527,6 +547,7 @@ export const FRAMEWORK_PROFILES: Readonly<Record<Framework, FrameworkProfile>> =
       Object.freeze({
         ...p,
         sourceExts: Object.freeze([...p.sourceExts]),
+        scanDirs: Object.freeze([...p.scanDirs]),
         fileSuffixes: Object.freeze([...p.fileSuffixes]),
         nonComponentSuffixes: Object.freeze([...p.nonComponentSuffixes]),
       }),

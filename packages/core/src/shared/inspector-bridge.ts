@@ -442,6 +442,25 @@ export const bridgeCommandSchema = z.discriminatedUnion("t", [
    * dev-stamp — a light page's DOM IS its source, so any element is a valid drop anchor.
    */
   z.object({ t: z.literal("setLightMode"), on: z.boolean() }),
+  /**
+   * Live document (change: live-playground). The host reads the light page's file, builds the CRDT
+   * from those exact bytes, and sends its state here; the guest pairs it with the DOM the browser
+   * already rendered. `state` and `update` are base64 Yjs updates — the bridge is a JSON channel, so
+   * the binary is encoded rather than sent raw.
+   *
+   * The host seeds because only the host can read the file, and because the CRDT has to be built
+   * from the source bytes rather than from the DOM: the served page is not the file (the light
+   * server injects a token stylesheet), and the DOM has lost the file's formatting either way.
+   */
+  z.object({ t: z.literal("liveInit"), state: z.string() }),
+  z.object({ t: z.literal("liveUpdate"), update: z.string() }),
+  z.object({ t: z.literal("liveStop") }),
+  /**
+   * Report the pointer's position for a live session, as an element + a fraction within it rather
+   * than a pixel (change: live-playground, task 2.4). Off by default: a page with nobody else in it
+   * has no reason to stream pointer traffic across the bridge.
+   */
+  z.object({ t: z.literal("setCursorReporting"), on: z.boolean() }),
 ]);
 export type BridgeCommand = z.infer<typeof bridgeCommandSchema>;
 
@@ -589,6 +608,20 @@ export const bridgeEventSchema = z.discriminatedUnion("t", [
    * `redo` true for Cmd/Ctrl+Shift+Z. Never fired while inline-editing text or in a form field.
    */
   z.object({ t: z.literal("undo"), redo: z.boolean().default(false) }),
+  /**
+   * Live document (change: live-playground). `liveAdopted` reports whether the guest managed to pair
+   * the CRDT with the rendered page — `ok: false` is a normal outcome, not an error: it means this
+   * page keeps working exactly as it does today, without a live session. `reason` says which of the
+   * two happened so the app can be honest about it rather than silently non-collaborative.
+   */
+  z.object({ t: z.literal("liveAdopted"), ok: z.boolean(), reason: z.string().optional() }),
+  z.object({ t: z.literal("liveUpdate"), update: z.string() }),
+  /**
+   * Where this user's pointer is, in document terms: the fingerprint of the element under it and the
+   * fraction across that element's box. `fp` empty means the pointer left the page, which clears the
+   * cursor for everyone else rather than freezing it where it was last seen.
+   */
+  z.object({ t: z.literal("cursor"), fp: z.string(), fx: z.number(), fy: z.number() }),
 ]);
 export type BridgeEvent = z.infer<typeof bridgeEventSchema>;
 

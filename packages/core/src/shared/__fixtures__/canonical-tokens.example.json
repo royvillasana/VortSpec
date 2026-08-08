@@ -1,0 +1,59 @@
+{
+  "$extensions": {
+    "com.vortspec.tokens": {
+      "source": "figma",
+      "generatedAt": "2026-08-07T10:14:22.000Z",
+      "collections": [
+        { "name": "Primitives", "modes": ["Light", "Dark"], "defaultMode": "Light" },
+        { "name": "Semantic",   "modes": ["Light", "Dark"], "defaultMode": "Light" }
+      ]
+    }
+  },
+
+  "primitive": {
+    "color": {
+      "primary": {
+        "$type": "color",
+        "$value": "#7C6FF0",
+        "$description": "Brand purple.",
+        "$extensions": {
+          "com.vortspec.tokens": {
+            "collection": "Primitives",
+            "defaultMode": "Light",
+            "modes": {
+              "Light": { "value": "#7C6FF0" },
+              "Dark":  { "value": "#9C93F5" }
+            },
+            "figma": {
+              "key": "b1c9f0a3e4d5678901234567890abcdef1234567",
+              "resolvedType": "COLOR"
+            }
+          }
+        }
+      }
+    }
+  },
+
+  "semantic": {
+    "color": {
+      "action": {
+        "$type": "color",
+        "$value": "{primitive.color.primary}",
+        "$extensions": {
+          "com.vortspec.tokens": {
+            "collection": "Semantic",
+            "defaultMode": "Light",
+            "modes": {
+              "Light": { "alias": "{primitive.color.primary}", "value": "#7C6FF0" },
+              "Dark":  { "alias": "{primitive.color.primary}", "value": "#9C93F5" }
+            },
+            "figma": {
+              "key": "c2da01b4f5e6789012345678901bcdef23456789",
+              "resolvedType": "COLOR"
+            }
+          }
+        }
+      }
+    }
+  }
+}

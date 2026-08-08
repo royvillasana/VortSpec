@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Project } from "@vortspec/core/ipc";
 import { chunkByLevel, buildChunkPrompt } from "@vortspec/core/sdd-prompts";
-import { autoBuildGate } from "./auto-build-gate";
+import { autoBuildGate, unbuiltComponents } from "./auto-build-gate";
 import { api } from "./api";
 import { useAgentRun } from "./useAgentRun";
 
@@ -95,7 +95,9 @@ export function useAutoComponentBuild(
       // just told to run /setup, so the next tick must be able to see that they did.
       if (gate.kind === "setup-required") return;
       if (!comps || active) return; // no data yet, or a run is in flight — re-check next tick
-      const unbuilt = comps.components.filter((c) => c.status === "unknown");
+      // Includes `figmaOnly` — the designed-but-not-yet-built components. Reading only the coded
+      // roster meant a freshly extracted Figma project always looked empty (see `unbuiltComponents`).
+      const unbuilt = unbuiltComponents(comps);
       if (unbuilt.length === 0) return; // design system not created yet — keep polling
       startedRef.current = project.path; // claim this project so we don't double-start
       frameworkRef.current = cfg?.framework ?? null; // captured here; every chunk prompt reads it

@@ -175,6 +175,11 @@ const api: VortSpecApi = {
     invoke("lite:pagePrompt", { projectPath, name, description }),
   liteReadPage: (projectPath: string, name: string) => invoke("lite:page", { projectPath, name }),
   litePages: (projectPath: string) => invoke("lite:pages", projectPath),
+  collabConfig: (projectPath: string) => invoke("collab:config", projectPath),
+  collabSetConfig: (projectPath: string, relayUrl: string) => invoke("collab:setConfig", { projectPath, relayUrl }),
+  collabHasCredential: (relayUrl: string) => invoke("collab:hasCredential", relayUrl),
+  collabCredential: (relayUrl: string) => invoke("collab:credential", relayUrl),
+  collabSetCredential: (relayUrl: string, secret: string) => invoke("collab:setCredential", { relayUrl, secret }),
   liteWritePage: (projectPath: string, name: string, html: string) =>
     invoke("lite:writePage", { projectPath, name, html }),
   canvasLoadGraph: (projectPath: string) => invoke("canvas:loadGraph", projectPath),
@@ -268,6 +273,22 @@ const api: VortSpecApi = {
   screenMapUpsert: (projectPath: string, screenKey: string, entry: ScreenEntry, fileKey?: string) =>
     invoke("screenMap:upsert", { projectPath, screenKey, entry, fileKey }),
   figmaSyncVariables: (projectPath: string) => invoke("figma:syncVariables", { projectPath }),
+  /** Re-emit `token_file` from the canonical artifact — the styling-switch route (task 7.14). */
+  tokensEmit: (
+    projectPath: string,
+    options?: { onDivergence?: "overwrite" | "keep"; tailwindVersion?: 3 | 4 },
+  ) => invoke("tokens:emit", { projectPath, ...options }),
+  /** Read the project's own token file as the design source, then emit (tasks 7.10 + 7.14). */
+  tokensIngest: (projectPath: string) => invoke("tokens:ingest", { projectPath }),
+  /** Build `.vortspec/ai/*.toon` — the relationship index (group 2). */
+  indexBuild: (projectPath: string) => invoke("index:build", { projectPath }),
+  /** Whether the index still describes the code, naming what changed (task 2.9). */
+  indexStaleness: (projectPath: string) => invoke("index:staleness", { projectPath }),
+  generateReports: (projectPath: string) => invoke("reports:generate", { projectPath }),
+  readinessLevel: (projectPath: string) => invoke("readiness:level", { projectPath }),
+  adoptionSummary: (projectPath: string) => invoke("adoption:summary", { projectPath }),
+  scaffoldComponent: (projectPath: string, name: string, tier?: string) =>
+    invoke("scaffold:component", { projectPath, name, tier }),
   figmaSyncComponents: (projectPath: string) => invoke("figma:syncComponents", { projectPath }),
   figmaSelection: () => invoke("figma:selection", undefined),
   checkFigmaHealth: (req) => invoke("figma:checkHealth", req),

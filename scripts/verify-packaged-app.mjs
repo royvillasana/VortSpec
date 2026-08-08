@@ -21,7 +21,13 @@ import { tmpdir } from "node:os";
 import { createRequire } from "node:module";
 
 /** How long to wait for a window. Cold first launch on a slow disk is the worst case. */
-const LAUNCH_TIMEOUT_MS = 45_000;
+/**
+ * Generous on purpose. The x64 build's FIRST launch on Apple Silicon is translated by Rosetta, which
+ * routinely takes longer than a minute cold and then a few seconds warm ever after. At 45s it failed
+ * cold and passed on retry — a red build that means nothing, which is worse than a slow one, because
+ * the next person learns to re-run it rather than read it.
+ */
+const LAUNCH_TIMEOUT_MS = 150_000;
 
 const requireFrom = createRequire(import.meta.url);
 const { extractAll } = requireFrom("@electron/asar");

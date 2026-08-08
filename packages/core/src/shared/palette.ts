@@ -86,6 +86,13 @@ function renderTokenGroup(group: TokenGroup, entries: LiteToken[]): string {
       case "radius":
         demo = `<span class="lp-radius" style="border-radius:${v}"></span>`;
         break;
+      // A duration and a z-index have no honest swatch — drawing one would invent a visual the token
+      // does not have. The value itself is the reference, so the demo slot is simply empty and the
+      // name/value pair carries the card (task 7.11: listed, never dropped).
+      case "motion":
+      case "other":
+        demo = "";
+        break;
     }
     return `<div class="lp-token">${demo}<code class="lp-name" title="${esc(t.name)}">${esc(t.name)}</code><code class="lp-val" title="${v}">${v}</code></div>`;
   };

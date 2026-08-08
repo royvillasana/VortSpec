@@ -11,6 +11,7 @@ import {
   newComponentFromFigmaNodePrompt,
   buildRemainingPrompt,
   RESCAN_PROMPT,
+  scaffoldClause,
 } from "./sdd-prompts";
 import { componentTokenExtractionClause, componentTokenName } from "./component-tokens";
 import { themeContractFor } from "./setup";
@@ -683,5 +684,33 @@ describe("buildOnePrompt — component-scoped variables bind by identity, not va
     const t = p();
     expect(t).toMatch(/match by link → exact name → resolved[\s\S]{0,20}VALUE → alias/);
     expect(t).toMatch(/never inline the literal/);
+  });
+});
+
+describe("the scaffolded file set reaches the build (task 6.9)", () => {
+  const files = ["src/components/Callout.tsx", "src/components/Callout.variants.ts", ".vortspec/metadata/callout.json"];
+
+  it("lists the files and forbids inventing or deleting others", () => {
+    const prompt = buildOnePrompt("Callout", "molecule", "react", files);
+    for (const file of files) expect(prompt).toContain(file);
+    expect(prompt).toContain("ALREADY EXIST");
+    expect(prompt).toContain("do not create additional files");
+    expect(prompt).toContain("do not delete or rename");
+  });
+
+  it("tells the model to complete the empty metadata sections", () => {
+    expect(buildOnePrompt("Callout", "atom", "react", files)).toContain("every analysis section empty");
+  });
+
+  it("asks for a deletion to be REPORTED rather than performed", () => {
+    // Silently removing a scaffolded file reintroduces exactly the per-run variation the fixed set
+    // exists to remove, and it does it invisibly.
+    expect(scaffoldClause(files)).toContain("say so in your result rather than deleting it");
+  });
+
+  it("adds nothing at all when no scaffold ran", () => {
+    expect(scaffoldClause()).toBe("");
+    expect(scaffoldClause([])).toBe("");
+    expect(buildOnePrompt("Callout", "atom", "react")).toBe(buildOnePrompt("Callout", "atom", "react", []));
   });
 });

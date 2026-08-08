@@ -49,3 +49,6 @@ apps/desktop/resources/vortspec-stamp.mjs
 # (this one was 84MB). The published clips are the GIFs, which are committed.
 *.mov
 *.mp4
+
+# Sandbox used by the scaffold runner test (removed in afterEach; ignored in case a run is killed)
+.scaffold-smoke/

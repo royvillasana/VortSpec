@@ -31,9 +31,48 @@ function frameworkSourceFileRe(): RegExp {
   return new RegExp(`\\.(${exts.join("|")})\\b`);
 }
 
-/** Token groups shown in the manifest + the visual-reference "design system" section. */
-export type TokenGroup = "colors" | "typography" | "spacing" | "shadows" | "radius";
-export const TOKEN_GROUPS: readonly TokenGroup[] = ["colors", "typography", "spacing", "shadows", "radius"];
+/**
+ * Token groups shown in the manifest + the visual-reference "design system" section.
+ *
+ * `motion` and `other` exist because the manifest must not DROP a token whose type it has no swatch
+ * for (OpenSpec change: agentic-design-system, task 7.11). The previous five groups were the ones
+ * the palette can draw, and anything else — a duration, a z-index, a `border` composite — mapped to
+ * null and vanished, so a light page could not reference a motion token the design system genuinely
+ * defines. `motion` is named rather than swallowed into `other` because durations and easings are a
+ * real, authorable axis of a design system; `other` is the honest catch-all that guarantees the
+ * manifest lists every token it was given.
+ */
+export type TokenGroup =
+  | "colors"
+  | "typography"
+  | "spacing"
+  | "shadows"
+  | "radius"
+  | "motion"
+  | "other";
+export const TOKEN_GROUPS: readonly TokenGroup[] = [
+  "colors",
+  "typography",
+  "spacing",
+  "shadows",
+  "radius",
+  "motion",
+  "other",
+];
+
+/**
+ * The groups the palette draws a meaningful swatch for. `foundations.groups` is the VISUAL reference
+ * index, so it stays the drawable five — a "motion" card of static bars would be a worse answer than
+ * no card. The tokens themselves are still listed in full under `tokens:`, which is what a light page
+ * author references.
+ */
+export const VISUAL_TOKEN_GROUPS: readonly TokenGroup[] = [
+  "colors",
+  "typography",
+  "spacing",
+  "shadows",
+  "radius",
+];
 
 /** A dual-keyed token: the NAME keeps discipline + drives compile-back; the VALUE renders light HTML. */
 export interface LiteToken {
@@ -61,6 +100,28 @@ export interface StandIn {
 export type ComponentTier = "atom" | "molecule" | "organism" | "template";
 export type Readiness = "light-only" | "framework-ready";
 
+/**
+ * The framework-free slice of a component's metadata that a light-authoring run needs
+ * (OpenSpec change: agentic-design-system, task 3.4).
+ *
+ * Deliberately NOT the whole record. `usage.commonPatterns[].code` is real JSX and
+ * `identity.importPath` is a module path — either one in `designer.md` is precisely the framework
+ * coupling the manifest exists to keep out, and `serializeLiteManifest` would (correctly) throw. What
+ * survives the trip is the reasoning: when to reach for this, why a variant exists, what not to do.
+ */
+export interface LiteHints {
+  /** `aiHints.selectionCriteria` — when this component is the right choice over its siblings. */
+  selectionCriteria?: string[];
+  /** `variants[].purpose` — why to pick a value, which the value name never says. */
+  variantPurpose?: { variant: string; purpose: string }[];
+  /**
+   * `usage.antiPatterns`, reduced to the two fields that change what gets generated. The `reason` is
+   * dropped on purpose: it explains the rule to a person, and this block is read by a composer that
+   * needs to know what to do instead.
+   */
+  avoid?: { scenario: string; instead: string }[];
+}
+
 export interface LiteComponent {
   name: string;
   tier: ComponentTier;
@@ -68,6 +129,8 @@ export interface LiteComponent {
   props?: { name: string; type: string; default?: string }[];
   readiness: Readiness;
   standIns: StandIn[];
+  /** Optional — a component with no metadata record still belongs in the manifest (task 3.6). */
+  hints?: LiteHints;
 }
 
 export interface LiteManifest {
@@ -95,9 +158,49 @@ export interface DeriveInput {
     variants: string[];
     props?: { name: string; type: string; default?: string }[];
     readiness?: Readiness;
+    hints?: LiteHints;
   }[];
   /** Stand-ins keyed by component name (harvested real renders or placeholders). */
   standIns?: Record<string, StandIn[]>;
+}
+
+/**
+ * A canonical `$type` (+ the token's name as a tiebreak) → the manifest group it belongs in.
+ *
+ * NEVER returns null, which is the whole change here (task 7.11). The old `mapTokenGroup` read
+ * VortSpec's coarse five-value `TokenType` — itself already a lossy projection, where `duration`
+ * had been folded into `spacing` on the way in — and returned null for anything left over, silently
+ * discarding the token. Reading the DTCG `$type` instead means the distinctions the design source
+ * actually made survive: a duration is motion, a dimension is spacing (or radius, when the name says
+ * so), and an unrecognised type lands in `other` rather than nowhere.
+ */
+export function mapCanonicalTokenGroup(type: string | undefined, name: string): TokenGroup {
+  const t = (type ?? "").toLowerCase();
+  const n = name.toLowerCase();
+  if (t === "color" || t === "gradient") return "colors";
+  if (t === "shadow" || t === "boxshadow") return "shadows";
+  if (t === "duration" || t === "cubicbezier" || t === "transition") return "motion";
+  if (
+    t === "fontfamily" ||
+    t === "fontweight" ||
+    t === "fontsize" ||
+    t === "lineheight" ||
+    t === "letterspacing" ||
+    t === "typography"
+  )
+    return "typography";
+  if (t === "dimension") return /radius|corner|rounded/.test(n) ? "radius" : "spacing";
+  // An untyped token — every token from a plain stylesheet whose value settled nothing — still has
+  // its name, which is how a design system that never declared types is nonetheless organised.
+  if (!t) {
+    if (/(^|[-/])(radius|corner|rounded)/.test(n)) return "radius";
+    if (/(^|[-/])(shadow|elevation)/.test(n)) return "shadows";
+    if (/(^|[-/])(duration|transition|delay|ease|animation)/.test(n)) return "motion";
+    if (/(font|leading|tracking|text|type)/.test(n)) return "typography";
+    if (/(^|[-/])(spacing|space|gap|size)/.test(n)) return "spacing";
+    if (/(color|colour|bg|background|foreground|border|fill|stroke)/.test(n)) return "colors";
+  }
+  return "other";
 }
 
 /** Build the manifest object from parsed sources. Pure — no fs, no re-derivation of values. */
@@ -107,14 +210,24 @@ export function deriveLiteManifest(input: DeriveInput): LiteManifest {
 
   // Foundations: spacing drives margins AND padding (one scale) — the visual-reference section.
   const spacing = tokens.spacing;
-  const usedGroups = TOKEN_GROUPS.filter((g) => tokens[g].length > 0);
+  const usedGroups = VISUAL_TOKEN_GROUPS.filter((g) => tokens[g].length > 0);
 
   const components: LiteComponent[] = input.components.map((c) => {
     const standIns = input.standIns?.[c.name] ?? placeholderStandIns(c.variants);
     // A component is framework-ready only when explicitly marked AND its stand-ins are harvested.
     const harvested = standIns.length > 0 && standIns.every((s) => s.source === "harvested");
     const readiness: Readiness = c.readiness === "framework-ready" && harvested ? "framework-ready" : "light-only";
-    return { name: c.name, tier: c.tier, variants: c.variants, props: c.props, readiness, standIns };
+    return {
+      name: c.name,
+      tier: c.tier,
+      variants: c.variants,
+      props: c.props,
+      readiness,
+      standIns,
+      // Spread rather than assigned, so a component with no metadata record carries no `hints` key
+      // at all instead of an empty one (task 3.6) — the manifest never implies a gap is a green light.
+      ...(c.hints ? { hints: c.hints } : {}),
+    };
   });
 
   return {
@@ -127,7 +240,7 @@ export function deriveLiteManifest(input: DeriveInput): LiteManifest {
 }
 
 function emptyGroups(): Record<TokenGroup, LiteToken[]> {
-  return { colors: [], typography: [], spacing: [], shadows: [], radius: [] };
+  return { colors: [], typography: [], spacing: [], shadows: [], radius: [], motion: [], other: [] };
 }
 
 /** Minimal placeholder stand-in per variant when no framework render exists yet. */
@@ -168,6 +281,35 @@ export function findFrameworkPointers(text: string): string[] {
  * component index) + a Markdown body of HTML stand-in sections. Throws if any framework pointer would
  * leak (e.g. a harvested stand-in carrying a real import), so a bad manifest never reaches the LLM.
  */
+/**
+ * Serialize a component's hints into the frontmatter, omitting anything empty.
+ *
+ * An empty `hints: {}` would be worse than absent: a composer reading it cannot tell "this component
+ * has no selection criteria recorded" from "this component may be used anywhere".
+ */
+function pushHints(lines: string[], hints: LiteHints | undefined): void {
+  if (!hints) return;
+  const criteria = hints.selectionCriteria?.filter((c) => c.trim()) ?? [];
+  const purposes = hints.variantPurpose?.filter((v) => v.variant.trim() && v.purpose.trim()) ?? [];
+  const avoid = hints.avoid?.filter((a) => a.scenario.trim() && a.instead.trim()) ?? [];
+  if (!criteria.length && !purposes.length && !avoid.length) return;
+  lines.push("    hints:");
+  if (criteria.length) {
+    lines.push("      selectionCriteria:");
+    for (const c of criteria) lines.push(`        - ${yamlStr(c)}`);
+  }
+  if (purposes.length) {
+    lines.push("      variantPurpose:");
+    for (const v of purposes)
+      lines.push(`        - { variant: ${yamlStr(v.variant)}, purpose: ${yamlStr(v.purpose)} }`);
+  }
+  if (avoid.length) {
+    lines.push("      avoid:");
+    for (const a of avoid)
+      lines.push(`        - { scenario: ${yamlStr(a.scenario)}, instead: ${yamlStr(a.instead)} }`);
+  }
+}
+
 export function serializeLiteManifest(m: LiteManifest): string {
   const lines: string[] = [];
   lines.push("---");
@@ -198,6 +340,7 @@ export function serializeLiteManifest(m: LiteManifest): string {
         lines.push(`      - { name: ${yamlStr(p.name)}, type: ${yamlStr(p.type)}${def} }`);
       }
     }
+    pushHints(lines, c.hints);
   }
   lines.push("---");
   lines.push("");

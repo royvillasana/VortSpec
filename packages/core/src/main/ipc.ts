@@ -64,6 +64,13 @@ import {
 } from "./inspector/token-parser";
 import { applyCanvasEdit } from "./canvas/write";
 import { getTokenSanitation } from "./inspector/token-sanitation";
+import { emitTokenFiles } from "./inspector/token-emit";
+import { ingestTokensFromProject } from "./inspector/token-ingest";
+import { buildRelationshipIndex, indexStaleness } from "./inspector/relationship-index";
+import { generateReports } from "./inspector/reports";
+import { projectReadiness } from "./inspector/readiness-level";
+import { adoptionSummary } from "./inspector/adoption";
+import { ScaffoldError, scaffoldComponent } from "./inspector/scaffold";
 import { writeTokenLink } from "./inspector/token-resolver";
 import { discoverRoutes } from "./routes/route-discovery";
 import { computePushPlan, computeOrphanPushPlan, VORTSPEC_COLLECTION } from "./inspector/figma-push";
@@ -156,6 +163,14 @@ import type { StageStatus } from "@vortspec/core/flow";
  * app threw `ReferenceError: __dirname is not defined` and opened no window at
  * all. Derive it instead; a bundler cannot move this.
  */
+import {
+  hasRelayCredential,
+  readCollabConfig,
+  relayCredential,
+  setRelayCredential,
+  writeCollabConfig,
+} from "./collab/collab-store";
+
 const here = (): string => dirname(fileURLToPath(import.meta.url));
 
 /**
@@ -310,6 +325,56 @@ const handlers: Record<IpcChannel, Handler> = {
   "figma:connect": ((r: { mode: FigmaCliMode }) => figmaCli.connect(r.mode)) as Handler,
   "figma:syncVariables": ((r: { projectPath: string }) =>
     figmaCli.syncVariablesToCache(r.projectPath)) as Handler,
+
+  // ── The canonical token pipeline (OpenSpec change: agentic-design-system, group 7) ──
+  //
+  // Ingest emits on its own tail, so these two exist for the cases an ingest does not cover:
+  // `tokens:emit` is the ON-DEMAND route — a styling switch, which changes what the token file
+  // should contain without changing the artifact, and therefore must not touch the design source
+  // (asserted in `one-scan-many-emits.test.ts`). It also carries `onDivergence`, which is how a
+  // reported divergence is finally resolved: the user's answer, never a default.
+  "tokens:emit": ((r: {
+    projectPath: string;
+    onDivergence?: "overwrite" | "keep";
+    tailwindVersion?: 3 | 4;
+  }) =>
+    emitTokenFiles(r.projectPath, {
+      onDivergence: r.onDivergence,
+      tailwindVersion: r.tailwindVersion,
+    })) as Handler,
+  // `tokens:ingest` reads the project's OWN token file as the design source (task 7.10) — the path
+  // for a project with no design tool attached, and the one that keeps a consumed library's
+  // artifact current.
+  "index:build": (async (r: { projectPath: string }) => {
+    const result = await buildRelationshipIndex(r.projectPath);
+    return { written: result.written, generatedAt: result.generatedAt };
+  }) as Handler,
+  "index:staleness": ((r: { projectPath: string }) => indexStaleness(r.projectPath)) as Handler,
+  "reports:generate": ((r: { projectPath: string }) => generateReports(r.projectPath)) as Handler,
+  "readiness:level": ((r: { projectPath: string }) => projectReadiness(r.projectPath)) as Handler,
+  "adoption:summary": ((r: { projectPath: string }) => adoptionSummary(r.projectPath)) as Handler,
+  // A refusal (consume source) is a RESULT, not a channel error: the caller carries on and builds
+  // without a scaffold, which is exactly right for a project that consumes its design system.
+  "scaffold:component": (async (r: { projectPath: string; name: string; tier?: string }) => {
+    try {
+      const result = await scaffoldComponent(r.projectPath, {
+        name: r.name,
+        tier: r.tier as "atom" | "molecule" | "organism" | "template" | undefined,
+      });
+      return {
+        written: result.written,
+        skipped: result.skipped,
+        files: result.files.map((file) => file.path),
+        refused: null,
+      };
+    } catch (error) {
+      if (error instanceof ScaffoldError)
+        return { written: [], skipped: [], files: [], refused: error.message };
+      throw error;
+    }
+  }) as Handler,
+  "tokens:ingest": ((r: { projectPath: string }) =>
+    ingestTokensFromProject(r.projectPath, { generatedAt: new Date().toISOString() })) as Handler,
   "figma:syncComponents": ((r: { projectPath: string }) =>
     figmaCli.syncComponentsToCache(r.projectPath)) as Handler,
   "figma:selection": (() => figmaCli.getSelection()) as Handler,
@@ -440,6 +505,13 @@ const handlers: Record<IpcChannel, Handler> = {
   "lite:pagePrompt": ((r: { projectPath: string; name: string; description: string }) =>
     buildProjectLightPagePrompt(r.projectPath, r.name, r.description)) as Handler,
   "lite:page": ((r: { projectPath: string; name: string }) => readLightPage(r.projectPath, r.name)) as Handler,
+  "collab:config": ((projectPath: string) => readCollabConfig(projectPath)) as Handler,
+  "collab:setConfig": ((r: { projectPath: string; relayUrl: string }) =>
+    writeCollabConfig(r.projectPath, { relayUrl: r.relayUrl })) as Handler,
+  "collab:hasCredential": ((relayUrl: string) => hasRelayCredential(relayUrl)) as Handler,
+  "collab:credential": ((relayUrl: string) => relayCredential(relayUrl)) as Handler,
+  "collab:setCredential": ((r: { relayUrl: string; secret: string }) =>
+    setRelayCredential(r.relayUrl, r.secret)) as Handler,
   "lite:pages": ((projectPath: string) => listLightPages(projectPath)) as Handler,
   "lite:writePage": ((r: { projectPath: string; name: string; html: string }) =>
     writeLightPage(r.projectPath, r.name, r.html)) as Handler,

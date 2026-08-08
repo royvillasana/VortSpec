@@ -651,6 +651,55 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
         mode: "yolo",
         message: "Read 12 Figma variables via figma-cli (yolo mode).",
       },
+    // The canonical token pipeline's on-demand routes (task 7.14). Stubbed as a no-op success: no
+    // component test drives them yet, and a mock that reported a divergence would put every
+    // consumer of this harness into an error path it never asked for.
+    tokensEmit: async () => ({
+      status: "up-to-date" as const,
+      styling: "css",
+      format: "css" as const,
+      files: [],
+      written: [],
+      diverged: [],
+      kept: [],
+    }),
+    indexBuild: async () => ({ written: [], generatedAt: "2026-08-07T12:00:00.000Z" }),
+    indexStaleness: async () => ({
+      stale: false,
+      built: false,
+      generatedAt: null,
+      changed: [],
+      changedCount: 0,
+      message: "No design-system index has been built yet (.vortspec/ai/index.toon is absent).",
+    }),
+    generateReports: async () => ({
+      written: [],
+      findings: [],
+      violations: 0,
+      deferred: 0,
+      unevaluable: 0,
+      rulesFrom: "defaults" as const,
+      consumeSource: false,
+    }),
+    readinessLevel: async () => ({
+      level: 1 as const,
+      levelName: "Libraries",
+      signals: [],
+      blocking: ["graph-connectedness"],
+      nextAction: "Build the index so relationships exist to read.",
+    }),
+    scaffoldComponent: async () => ({ written: [], skipped: [], files: [], refused: null }),
+    adoptionSummary: async () => null,
+    tokensIngest: async () => ({
+      ok: true,
+      tokenFile: "src/styles/tokens.css",
+      format: "css" as const,
+      count: 12,
+      dropped: [],
+      files: ["src/styles/tokens.css"],
+      readOnly: false,
+      message: "Read 12 design tokens from src/styles/tokens.css (css).",
+    }),
     figmaSyncComponents: async () =>
       cfg.figmaSyncComponents ?? {
         ok: true,
@@ -701,7 +750,9 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
     // above), so every one of these must exist even when a test doesn't exercise it.
     getSanitation: async () => cfg.sanitation ?? { orphans: [], duplicates: [] },
     designAudit: async () => cfg.designAudit ?? { findings: [], summary: { components: 0, findings: 0, drifted: 0 } },
-    metadataPlan: async () => cfg.metadataPlan ?? { total: 0, withMetadata: 0, missing: [], prompt: "" },
+    // Coverage is three-way now (task 1.5): missing / incomplete / complete.
+    metadataPlan: async () =>
+      cfg.metadataPlan ?? { total: 0, complete: 0, incomplete: [], missing: [], withMetadata: 0, prompt: "" },
     collapseToken: async () => cfg.tokens ?? EMPTY_TOKENS,
     createToken: async (_p: string, name: string, value: string) => {
       // Really adds the row, so a test can assert the OUTCOME (the token is now part of the design
@@ -792,7 +843,14 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
     liteReadiness: async () => [],
     litepagePrompt: async () => "",
     liteReadPage: async () => "",
-    litePages: async () => [],
+    // Live-session config (live-playground): no relay in a component test, which is the
+  // not-configured path the Playground must keep working on.
+  collabConfig: async () => ({ relayUrl: "" }),
+  collabSetConfig: async () => ({ relayUrl: "" }),
+  collabHasCredential: async () => false,
+  collabCredential: async () => "",
+  collabSetCredential: async () => undefined,
+  litePages: async () => [],
     liteWritePage: async () => undefined,
     canvasLoadGraph: async () => ({ schemaVersion: 1 as const, nodes: [], edges: [] }),
     canvasSaveGraph: async () => undefined,
