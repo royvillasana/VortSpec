@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { RotateCw, RefreshCw } from "lucide-react";
+import { RotateCw, RefreshCw, AlertTriangle } from "lucide-react";
 import type { AdoptionSummary, Project, ReadinessAssessmentPayload } from "@vortspec/core/ipc";
 import { ViewHeader } from "@vortspec/ui/ViewHeader";
 import { api } from "../lib/api";
@@ -29,6 +29,7 @@ export function DesignSystem({
   headerExtra,
   reloadSignal,
   extracting = false,
+  foundationOutcome = "idle",
 }: {
   project: Project;
   hideRail?: boolean;
@@ -39,6 +40,12 @@ export function DesignSystem({
   reloadSignal?: number;
   /** The foundation is extracting in the background — show a friendly "setting up" state, not an error. */
   extracting?: boolean;
+  /**
+   * What the last foundation run produced. `tokens-only` is the case this screen exists to make
+   * visible: the run succeeded, extracted tokens, and found no components — which blocks every
+   * downstream step while looking exactly like success.
+   */
+  foundationOutcome?: "idle" | "running" | "ready" | "tokens-only";
 }): React.JSX.Element {
   const [html, setHtml] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -146,6 +153,28 @@ export function DesignSystem({
           )}
         </div>
       </ViewHeader>
+
+      {foundationOutcome === "tokens-only" && (
+        <section
+          data-testid="foundation-tokens-only"
+          className="border-b border-vs-border-subtle bg-vs-bg-secondary px-4 py-2"
+        >
+          <p className="flex items-center gap-1.5 text-[12px] text-vs-warning">
+            <AlertTriangle size={13} className="flex-none" />
+            Tokens were extracted, but no components were found in the design source.
+          </p>
+          <p className="pt-0.5 text-[11px] text-vs-text-secondary">
+            The run finished successfully — there was simply nothing to read. A Figma file holding only a
+            foundations sheet (palettes, type scale, spacing) produces exactly this. Component detection needs
+            published components or component sets in the file.
+          </p>
+          <p className="pt-0.5 text-[11px] text-vs-text-muted">
+            Nothing downstream can proceed without components: no relationship index, no metadata, no screens
+            to compose from. Either add components to the design source and re-extract, or build them here from
+            the tokens you already have.
+          </p>
+        </section>
+      )}
 
       <ReadinessLadder readiness={readiness} />
       <AdoptionPanel

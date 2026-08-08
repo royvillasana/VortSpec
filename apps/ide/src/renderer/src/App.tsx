@@ -738,12 +738,12 @@ export default function App(): JSX.Element {
               {tokensTab === "tokens" ? (
                 <Inspector project={p} hideRail sidebarSlot={sectionSlot} onBack={go("explorer")} onOpenPreview={go("explorer")} onOpenRun={go("run")} onOpenHistory={go("explorer")} onOpenManifest={go("manifest")} onOpenFile={(path) => { void wf.openFile(path); dispatch({ type: "setActivity", activity: "explorer" }); }} />
               ) : (
-                <DesignSystem project={p} hideRail onBack={() => setTokensTab("tokens")} extracting={autoFoundation.extracting} reloadSignal={autoFoundation.justFinished + autoBuild.justFinished + leverEdits} />
+                <DesignSystem project={p} hideRail onBack={() => setTokensTab("tokens")} extracting={autoFoundation.extracting} foundationOutcome={autoFoundation.outcome} reloadSignal={autoFoundation.justFinished + autoBuild.justFinished + leverEdits} />
               )}
             </div>
           </div>
         ) : (
-          <DesignSystem project={p} hideRail onBack={go("explorer")} extracting={autoFoundation.extracting} reloadSignal={autoFoundation.justFinished + autoBuild.justFinished + leverEdits} />
+          <DesignSystem project={p} hideRail onBack={go("explorer")} extracting={autoFoundation.extracting} foundationOutcome={autoFoundation.outcome} reloadSignal={autoFoundation.justFinished + autoBuild.justFinished + leverEdits} />
         )
       ) : a === "tasks" ? (
         <Tasks project={p} hideRail onBack={go("explorer")} onFlow={go("flow")} onRun={go("run")} onPlayground={go("explorer")} onTokens={go("tokens")} onManifest={go("manifest")} onHistory={go("explorer")} onSource={go("source")} />
