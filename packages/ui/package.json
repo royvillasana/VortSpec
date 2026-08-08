@@ -185,6 +185,10 @@
       "types": "./src/components/run-canvas/Sitemap.tsx",
       "default": "./src/components/run-canvas/Sitemap.tsx"
     },
+    "./AdoptionPanel": {
+      "types": "./src/components/AdoptionPanel.tsx",
+      "default": "./src/components/AdoptionPanel.tsx"
+    },
     "./ReadinessLadder": {
       "types": "./src/components/ReadinessLadder.tsx",
       "default": "./src/components/ReadinessLadder.tsx"

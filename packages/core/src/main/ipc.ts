@@ -69,6 +69,7 @@ import { ingestTokensFromProject } from "./inspector/token-ingest";
 import { buildRelationshipIndex, indexStaleness } from "./inspector/relationship-index";
 import { generateReports } from "./inspector/reports";
 import { projectReadiness } from "./inspector/readiness-level";
+import { adoptionSummary } from "./inspector/adoption";
 import { ScaffoldError, scaffoldComponent } from "./inspector/scaffold";
 import { writeTokenLink } from "./inspector/token-resolver";
 import { discoverRoutes } from "./routes/route-discovery";
@@ -351,6 +352,7 @@ const handlers: Record<IpcChannel, Handler> = {
   "index:staleness": ((r: { projectPath: string }) => indexStaleness(r.projectPath)) as Handler,
   "reports:generate": ((r: { projectPath: string }) => generateReports(r.projectPath)) as Handler,
   "readiness:level": ((r: { projectPath: string }) => projectReadiness(r.projectPath)) as Handler,
+  "adoption:summary": ((r: { projectPath: string }) => adoptionSummary(r.projectPath)) as Handler,
   // A refusal (consume source) is a RESULT, not a channel error: the caller carries on and builds
   // without a scaffold, which is exactly right for a project that consumes its design system.
   "scaffold:component": (async (r: { projectPath: string; name: string; tier?: string }) => {

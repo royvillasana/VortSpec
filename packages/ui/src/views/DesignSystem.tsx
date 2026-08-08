@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 import { RotateCw, RefreshCw } from "lucide-react";
-import type { Project, ReadinessAssessmentPayload } from "@vortspec/core/ipc";
+import type { AdoptionSummary, Project, ReadinessAssessmentPayload } from "@vortspec/core/ipc";
 import { ViewHeader } from "@vortspec/ui/ViewHeader";
 import { api } from "../lib/api";
 import { Button, Spinner } from "@vortspec/ui/ui";
 import { useAgentRun } from "../lib/useAgentRun";
 import { ReadinessLadder } from "@vortspec/ui/ReadinessLadder";
+import { AdoptionPanel } from "@vortspec/ui/AdoptionPanel";
 
 /**
  * The lightweight "design system" view (OpenSpec change: light-design-system, task 2.4). Renders the
@@ -48,6 +49,9 @@ export function DesignSystem({
   // The AI-readiness ladder (agentic-design-system, task 5.3). Recomputed on every load rather than
   // cached, so it can never be the one thing on this screen disagreeing with everything beside it.
   const [readiness, setReadiness] = useState<ReadinessAssessmentPayload | null>(null);
+  // Adoption READS the committed index rather than rebuilding it, so loading this screen costs a
+  // file read — the Inspector's report run is what pays for the build.
+  const [adoption, setAdoption] = useState<AdoptionSummary | null>(null);
   // Theme-object personalization ("Customize theme") lives in the design-system editor in the Variables
   // sidebar now (change: design-system-token-editor) — beside the levers whose edits it applies. This view
   // is the palette; it only owns the enterprise Storybook snapshot.
@@ -57,6 +61,7 @@ export function DesignSystem({
     setLoading(true);
     setError(null);
     void api.readinessLevel(project.path).then(setReadiness).catch(() => setReadiness(null));
+    void api.adoptionSummary(project.path).then(setAdoption).catch(() => setAdoption(null));
     try {
       setHtml(await api.getLitePalette(project.path));
     } catch (e) {
@@ -143,6 +148,12 @@ export function DesignSystem({
       </ViewHeader>
 
       <ReadinessLadder readiness={readiness} />
+      <AdoptionPanel
+        adoption={adoption}
+        onOpenReport={() =>
+          void api.revealPath(project.path, ".vortspec/ai/reports/adoption.md").catch(() => undefined)
+        }
+      />
 
       {/* Progress bar for the enterprise Storybook snapshot. */}
       {snapshot.running && (

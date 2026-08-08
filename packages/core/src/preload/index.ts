@@ -286,6 +286,7 @@ const api: VortSpecApi = {
   indexStaleness: (projectPath: string) => invoke("index:staleness", { projectPath }),
   generateReports: (projectPath: string) => invoke("reports:generate", { projectPath }),
   readinessLevel: (projectPath: string) => invoke("readiness:level", { projectPath }),
+  adoptionSummary: (projectPath: string) => invoke("adoption:summary", { projectPath }),
   scaffoldComponent: (projectPath: string, name: string, tier?: string) =>
     invoke("scaffold:component", { projectPath, name, tier }),
   figmaSyncComponents: (projectPath: string) => invoke("figma:syncComponents", { projectPath }),

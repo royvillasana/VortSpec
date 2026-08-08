@@ -417,6 +417,11 @@ export interface VortSpecApi {
   /** The AI-readiness level, recomputed from the current artifacts on every call (task 5.4). */
   readinessLevel(projectPath: string): Promise<IpcResponse<"readiness:level">>;
   /**
+   * Component adoption, READ from the committed index (never a rebuild). Null when no index exists —
+   * "we have not looked" is not "nothing is unused".
+   */
+  adoptionSummary(projectPath: string): Promise<IpcResponse<"adoption:summary">>;
+  /**
    * Create the component's file set before a build run (task 6.9), so the model fills files in
    * rather than deciding which exist. Safe to re-run; never overwrites.
    */

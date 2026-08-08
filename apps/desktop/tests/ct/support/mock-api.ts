@@ -689,6 +689,7 @@ export function installMockVortspec(cfg: MockConfig = {}): void {
       nextAction: "Build the index so relationships exist to read.",
     }),
     scaffoldComponent: async () => ({ written: [], skipped: [], files: [], refused: null }),
+    adoptionSummary: async () => null,
     tokensIngest: async () => ({
       ok: true,
       tokenFile: "src/styles/tokens.css",

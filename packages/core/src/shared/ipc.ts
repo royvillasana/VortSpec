@@ -80,11 +80,11 @@ import {
 // The canonical token pipeline's on-demand routes (task 7.14).
 import { tokenEmitResultSchema } from "./token-emit-ledger";
 import { tokenIngestResultSchema } from "./canonical-ingest";
-import { indexStalenessSchema, reportResultSchema, readinessAssessmentSchema, scaffoldResultSchema } from "./inspector";
+import { indexStalenessSchema, reportResultSchema, readinessAssessmentSchema, scaffoldResultSchema, adoptionSummarySchema } from "./inspector";
 export { tokenEmitResultSchema } from "./token-emit-ledger";
 export { tokenIngestResultSchema } from "./canonical-ingest";
 export { indexStalenessSchema, reportResultSchema } from "./inspector";
-export type { ReportResultPayload, ReadinessAssessmentPayload, ScaffoldResultPayload } from "./inspector";
+export type { ReportResultPayload, ReadinessAssessmentPayload, ScaffoldResultPayload, AdoptionSummary } from "./inspector";
 export { readinessAssessmentSchema } from "./inspector";
 export {
   figmaConnectionSchema,
@@ -495,6 +495,10 @@ export const ipcContract = {
   "index:staleness": { request: z.object({ projectPath: z.string() }), response: indexStalenessSchema },
   "reports:generate": { request: z.object({ projectPath: z.string() }), response: reportResultSchema },
   "readiness:level": { request: z.object({ projectPath: z.string() }), response: readinessAssessmentSchema },
+  "adoption:summary": {
+    request: z.object({ projectPath: z.string() }),
+    response: adoptionSummarySchema.nullable(),
+  },
   "scaffold:component": {
     request: z.object({ projectPath: z.string(), name: z.string(), tier: z.string().optional() }),
     response: scaffoldResultSchema,

@@ -781,6 +781,46 @@ export const scaffoldResultSchema = z.object({
 });
 export type ScaffoldResultPayload = z.infer<typeof scaffoldResultSchema>;
 
+/**
+ * Adoption as the Design System screen shows it — a projection of the committed index, not a
+ * recomputation. Every list is present even when empty, so the UI can say "none" rather than hide a
+ * section: a vanished section reads as "not checked".
+ */
+const adoptionRowSchema = z.object({
+  name: z.string(),
+  path: z.string(),
+  tier: z.string().nullable().default(null),
+  imports: z.number().default(0),
+  instances: z.number().default(0),
+});
+
+export const adoptionSummarySchema = z.object({
+  generatedAt: z.string().nullable(),
+  /** The index no longer describes the code — the numbers are about a past state. */
+  stale: z.boolean().default(false),
+  total: z.number(),
+  adopted: z.array(adoptionRowSchema).default([]),
+  /** The unambiguous waste: imported on every build, rendering nothing. */
+  importedNeverRendered: z
+    .array(adoptionRowSchema.extend({ importedBy: z.array(z.string()).default([]) }))
+    .default([]),
+  /** Nothing imports these — new, or dead. The graph does not know which and does not guess. */
+  unimported: z.array(adoptionRowSchema).default([]),
+  shadows: z
+    .array(
+      z.object({
+        component: z.string(),
+        file: z.string(),
+        overlap: z.number(),
+        sharedTokens: z.array(z.string()).default([]),
+      }),
+    )
+    .default([]),
+  /** The scan hit its file cap, so the counts are a floor rather than a total. */
+  truncated: z.boolean().default(false),
+});
+export type AdoptionSummary = z.infer<typeof adoptionSummarySchema>;
+
 /** A captured file (project-relative path + content), for gated revert of a modify run. */
 export const fileSnapshotSchema = z.object({ path: z.string(), content: z.string() });
 export type FileSnapshot = z.infer<typeof fileSnapshotSchema>;
