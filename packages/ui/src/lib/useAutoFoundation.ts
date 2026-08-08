@@ -102,6 +102,38 @@ export function useAutoFoundation(
         if (poll) window.clearInterval(poll);
         return;
       }
+      // ── The DETERMINISTIC path first, for a Figma source ──────────────────────────────
+      //
+      // VortSpec ships its own Figma reader (`figma-cli`, driving Figma Desktop over CDP) and the
+      // automatic foundation never called it: the stage prompt asks the AGENT to read Figma through
+      // the Desktop Bridge plugin or the remote MCP. When the plugin is closed — its default state,
+      // since it must be started by hand every session — the agent finds nothing, writes an empty
+      // roster, and the run still reports success.
+      //
+      // Observed on a real 51-component file: 132 tokens extracted, `components.json` left as `[]`,
+      // `figma-components.json` never written, $2.23 spent, outcome "passed". The CLI daemon was
+      // running the whole time and would have returned all 51.
+      //
+      // So try the CLI BEFORE the agent run. It needs no plugin, costs no tokens, and is exact.
+      // Failure is not fatal: it falls through to the agent run exactly as before, which is the
+      // behaviour every non-Figma source keeps.
+      if (cfg.designSource === "figma") {
+        const [vars, comps] = await Promise.all([
+          api.figmaSyncVariables(project.path).catch(() => null),
+          api.figmaSyncComponents(project.path).catch(() => null),
+        ]);
+        if (!alive) return;
+        if (comps?.ok && comps.count > 0) {
+          // The design system is now readable from disk. Let the next poll observe it rather than
+          // duplicating the terminal logic here.
+          wasExtractingRef.current = true;
+          setExtracting(true);
+          setOutcome("running");
+          void vars; // variables are best-effort; components are what unblocked the flow
+          return;
+        }
+      }
+
       // Nothing running and not ready → kick the foundation once. Consume sources bring in an EXISTING
       // design system rather than extract+rebuild: enterprise validates → indexes → snapshots; a library
       // is provisioned (CLI copies source / package installed) so its REAL components are consumed. Every
